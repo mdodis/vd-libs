@@ -360,11 +360,11 @@ VD_INLINE VD(Str) VDF(str_from_cstr)(VD(cstr) s) { return (VD(Str)) { .s = s, .l
 
 /* ----SCRATCH------------------------------------------------------------------------------------------------------- */
 #ifndef VD_SCRATCH_PAGE_COUNT
-#define VD_SCRATCH_PAGE_COUNT 64
+#define VD_SCRATCH_PAGE_COUNT 8
 #endif // VD_SCRATCH_PAGE_COUNT
 
 #ifndef VD_SCRATCH_PAGE_SIZE
-#define VD_SCRATCH_PAGE_SIZE VD_KILOBYTES(24)
+#define VD_SCRATCH_PAGE_SIZE VD_KILOBYTES(64)
 #endif // VD_SCRATCH_PAGE_SIZE 
 
 typedef struct __VD_Scratch {
@@ -522,7 +522,7 @@ void *VDF(arena_alloc_align)(VD(Arena) *a, size_t size, size_t align)
         return ptr;
     }
 
-    return NULL;
+    VD_DEBUG_BREAK();
 }
 
 void *VDF(arena_resize_align)(VD(Arena) *a, void *old_memory, size_t old_size, size_t new_size, size_t align)
@@ -549,7 +549,7 @@ void *VDF(arena_resize_align)(VD(Arena) *a, void *old_memory, size_t old_size, s
             return new_memory;
         }
     } else {
-        return NULL;
+        VD_DEBUG_BREAK();
     }
 }
 

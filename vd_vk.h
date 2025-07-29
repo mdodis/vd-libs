@@ -110,6 +110,11 @@ typedef struct __VD_VK_QueueSetup {
     VD(i32)                     cached_index;
 } VD(VkQueueSetup);
 
+typedef struct __VD_VK_QueueGroup {
+    VD(u32)     queue_count;
+    VD(VkQueue) *queues;
+} VD(VkQueueGroup);
+
 typedef struct __VD_VK_PhysicalDeviceCharacteristics {
     VD(b32)             multi_draw_indirect;
     VD(b32)             buffer_device_addr;
@@ -141,18 +146,30 @@ typedef struct __VD_VK_PickPhysicalDeviceInfo {
     VD(usize)                                       num_compatible_characteristics;
     VD(VkPhysicalDeviceCharacteristics)             *compatible_characteristics;
     VD(VkProcGetPhysicalDevicePresentationSupport)  *get_physical_device_presentation_support;
-
+    VD(b32)                                         log;
     struct {
         VkPhysicalDevice                            *physical_device;
-        VkDevice                                    *device;
-        VD(usize)                                   selected_characteristics_index;
+        VD(usize)                                   *selected_characteristics_index;
     } result;
 } VD(VkPickPhysicalDeviceInfo);
 
-VD(b32)     VDF(vk_require_instance_extensions) (VD(Arena) *temp, VD(VkRequireInstanceExtensionsInfo) *info);
-VD(b32)     VDF(vk_require_instance_layers)     (VD(Arena) *temp, VD(VkRequireInstanceLayersInfo) *info);
-void        VDF(vk_create_instance_extended)    (VD(VkCreateInstanceExtendedInfo) *info);
-VD(b32)     VDF(vk_pick_physical_device)        (VD(Arena) *temp, VD(VkPickPhysicalDeviceInfo) *info);
+typedef struct __VD_VK_CreateDeviceAndQueuesInfo {
+    VkInstance                          instance;
+    VD(VkPhysicalDeviceCharacteristics) *characteristics;
+
+    struct {
+        VkDevice                        *device;
+        VD(u32)                         num_queue_groups;
+        VD(VkQueueGroup)                *queue_groups;
+    } result;
+} VD(VkCreateDeviceAndQueuesInfo);
+
+VD(b32)     VDF(vk_require_instance_extensions)         (VD(Arena) *temp, VD(VkRequireInstanceExtensionsInfo) *info);
+VD(b32)     VDF(vk_require_instance_layers)             (VD(Arena) *temp, VD(VkRequireInstanceLayersInfo) *info);
+void        VDF(vk_create_instance_extended)            (VD(VkCreateInstanceExtendedInfo) *info);
+void        VDF(vk_log_physical_device_characteristics) (VD(VkPhysicalDeviceCharacteristics) *characteristics);
+VD(b32)     VDF(vk_pick_physical_device)                (VD(Arena) *temp, VD(VkPickPhysicalDeviceInfo) *info);
+void        VDF(vk_create_device_and_queues)            (VD(Arena) *temp, VD(VkCreateDeviceAndQueuesInfo) *info);
 
 #endif // !VD_VK_H
 
@@ -267,6 +284,11 @@ VD(b32) VDF(vk_pick_physical_device)(VD(Arena) *temp, VD(VkPickPhysicalDeviceInf
     VkPhysicalDevice *physical_devices = VD_ARENA_PUSH_ARRAY(temp, VkPhysicalDevice, num_phyiscal_devices);
     vkEnumeratePhysicalDevices(info->instance, &num_phyiscal_devices, physical_devices);
 
+    VD(i32)             best_device_index   = -1;
+    VD(i32)             best_device_rank    = -1;
+    VkPhysicalDevice    best_device_physical_device;
+
+
     for (VD(u32) i = 0; i < num_phyiscal_devices; ++i) {
         VD(ArenaSave) save = VDF(arena_save)(temp);
 
@@ -318,14 +340,18 @@ VD(b32) VDF(vk_pick_physical_device)(VD(Arena) *temp, VD(VkPickPhysicalDeviceInf
                 .physical_device = physical_devices[i],
                 .queue_family_index = j,
             };
+
+            VkQueueCapabilities caps = 0;
+
+            if (queue_families[j].queueFlags & VK_QUEUE_GRAPHICS_BIT) caps |= VD_(VK_QUEUE_CAPABILITIES_GRAPHICS);
+            if (queue_families[j].queueFlags & VK_QUEUE_TRANSFER_BIT) caps |= VD_(VK_QUEUE_CAPABILITIES_TRANSFER);
+            if (queue_families[j].queueFlags & VK_QUEUE_COMPUTE_BIT) caps |= VD_(VK_QUEUE_CAPABILITIES_COMPUTE);
+            if (info->get_physical_device_presentation_support(&get_present_support_info)) caps |= VD_(VK_QUEUE_CAPABILITIES_PRESENT);
+
             queues[j] = (VD(VkQueueSetup)) {
-                .capabilities = 
-                    (queue_families[j].queueFlags & VK_QUEUE_GRAPHICS_BIT)                     ? VD_(VK_QUEUE_CAPABILITIES_GRAPHICS) : 0 |
-                    (queue_families[j].queueFlags & VK_QUEUE_TRANSFER_BIT)                     ? VD_(VK_QUEUE_CAPABILITIES_TRANSFER) : 0 |
-                    (queue_families[j].queueFlags & VK_QUEUE_COMPUTE_BIT)                      ? VD_(VK_QUEUE_CAPABILITIES_COMPUTE)  : 0 |
-                    info->get_physical_device_presentation_support(&get_present_support_info)  ? VD_(VK_QUEUE_CAPABILITIES_PRESENT)  : 0,
+                .capabilities = caps,
                 .present_count = queue_families[j].queueCount,
-                .cached_index = j,
+                .cached_index = 0,
             };
         }
 
@@ -336,16 +362,259 @@ VD(b32) VDF(vk_pick_physical_device)(VD(Arena) *temp, VD(VkPickPhysicalDeviceInf
             .descriptor_indexing = features12.descriptorIndexing,
             .synchronization2    = features13.synchronization2,
             .dynamic_rendering   = features13.dynamicRendering,
-            .num_extensions      = num_device_extensions,
-            .extensions          = device_extensions,
             .num_queue_setups    = num_queue_families,
             .queue_setups        = queues,
+            .num_extensions      = num_device_extensions,
+            .extensions          = device_extensions,
             .physical_device     = physical_devices[i],
         };
+
+        if (info->log) {
+            DBGF("vd_vk_pick_physical_device: Testing against candidate: %u", i);
+            VDF(vk_log_physical_device_characteristics)(&characteristics);
+        }
+
+        // For each avaiable set, compare and rank it
+        for (VD(usize) j = 0; j < info->num_compatible_characteristics; ++j)
+        {
+            if (info->log) {
+                DBGF("vd_vk_pick_physical_device: Checking compatible characteristics: %zu", j);
+            }
+
+            VkPhysicalDeviceCharacteristics *comparand = &info->compatible_characteristics[j];
+            VD(i32) rank = comparand->rank_baseline;
+            VD(b32) is_available = VD_TRUE;
+            comparand->physical_device = physical_devices[i];
+
+            // Check capabilities
+            #define CHECK_CAP(x) do { if (!(!comparand->x || characteristics.x)) is_available = VD_FALSE; } while (0)
+            CHECK_CAP(multi_draw_indirect);
+            CHECK_CAP(buffer_device_addr);
+            CHECK_CAP(descriptor_indexing);
+            CHECK_CAP(synchronization2);
+            CHECK_CAP(dynamic_rendering);
+            #undef CHECK_CAP
+
+            if (!is_available) {
+                if (info->log) {
+                    LOGF("vd_vk_pick_physical_device: Candidate device %u doesn't contain characteristic capabilities: %zu ", i, j);
+                }
+
+                continue;
+            }
+
+            // Check extensions
+            for (VD(usize) k = 0; k < comparand->num_extensions; ++k) {
+                VD(b32) found = VD_FALSE;
+                for (VD(usize) z = 0; z < num_device_extensions; ++z) {
+                    if (VD(cstr_cmp)(device_extension_properties[z].extensionName, comparand->extensions[k])) {
+                        found = VD_TRUE;
+                        break;
+                    }
+                }
+
+                if (!found) {
+                    is_available = VD_FALSE;
+                    break;
+                }
+            }
+
+            if (!is_available) {
+                if (info->log) {
+                    LOGF("vd_vk_pick_physical_device: Candidate device %u doesn't contain characteristic extensions: %zu ", i, j);
+                }
+
+                continue;
+            }
+
+            // Check queues
+            for (VD(usize) k = 0; k < comparand->num_queue_setups; ++k) {
+                VD(VkQueueSetup) *want_queue_family = &comparand->queue_setups[k];
+                VD(i32) queue_index = -1;
+
+                // Loop over all available queues
+                for (VD(usize) z = 0; z < characteristics.num_queue_setups; ++z) {
+
+                    // If this queue was already picked, don't bother checking
+                    if (characteristics.queue_setups[z].cached_index > 0) {
+                        if (info->log) {
+                            LOGF("vd_vk_pick_physical_device: Search queue family[%zu] family with index %zu is already used", k, z);
+                        }
+                        continue;
+                    }
+
+                    // If required_count > present_count then abort
+                    if (want_queue_family->required_count > characteristics.queue_setups[z].present_count) {
+                        if (info->log) {
+                            LOGF("vd_vk_pick_physical_device: Search queue family[%zu] family with index %zu doesn't contain enough queues", k, z);
+                        }
+                        continue;
+                    }
+
+                    // Any queue must match the required capabilities
+                    if (characteristics.queue_setups[z].capabilities & want_queue_family->capabilities) {
+                        queue_index = (VD(i32))z;
+                        characteristics.queue_setups[z].cached_index = 1;
+                        if (info->log) {
+                            LOGF("vd_vk_pick_physical_device: Search queue family[%zu] matched family with index %zu", k, z);
+                        }
+                        break;
+                    }
+                }
+
+                // If no queue family was found, then abort
+                if (queue_index == -1) {
+
+                    if (info->log) {
+                        LOGF("vd_vk_pick_physical_device: Queue family with index %zu could not be found", k);
+                    }
+
+                    is_available = false;
+                    break;
+                }
+
+                // Store queue family index for the user to create it
+                want_queue_family->cached_index = queue_index;
+                want_queue_family->present_count = characteristics.queue_setups[queue_index].present_count;
+            }
+
+            if (!is_available) {
+                if (info->log) {
+                    LOGF("vd_vk_pick_physical_device: Candidate device %u doesn't have any matching characteristic queue setup: %zu ", i, j);
+                }
+
+                continue;
+            }
+
+            if (comparand->prefer_discrete) {
+                rank += 10 * (device_properties.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ? 1 : 0);
+            }
+
+            if (comparand->prefer_integrated) {
+                rank += 10 * (device_properties.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ? 1 : 0);
+            }
+
+            if (info->log) {
+                LOGF("Compatible Device[%zu] Rank = %d", j, rank);
+            }
+
+            if (rank > best_device_rank) {
+                best_device_index = j;
+                best_device_physical_device = physical_devices[i];
+                best_device_rank = rank;
+            }
+        }
 
         VDF(arena_restore)(save);
     }
 
-    return VD_FALSE;
+    if (best_device_index < 0) {
+        return VD_FALSE;
+    }
+
+    *info->result.physical_device = best_device_physical_device;
+    *info->result.selected_characteristics_index = (VD(i32))best_device_index;
+
+    return VD_TRUE;
 }
+
+void VDF(vk_log_physical_device_characteristics)(VD(VkPhysicalDeviceCharacteristics) *characteristics)
+{
+    LOGF("%-30s", "Capabilities---------");
+    LOGF("%-30s= %d", "multi_draw_indirect",  characteristics->multi_draw_indirect);
+    LOGF("%-30s= %d", "buffer_device_addr",   characteristics->buffer_device_addr);
+    LOGF("%-30s= %d", "descriptor_indexing",  characteristics->descriptor_indexing);
+    LOGF("%-30s= %d", "synchronization2",     characteristics->synchronization2);
+    LOGF("%-30s= %d", "dynamic_rendering",    characteristics->dynamic_rendering);
+    LOGF("%-30s= %d", "prefer_discrete",      characteristics->prefer_discrete);
+    LOGF("%-30s= %d", "prefer_integrated",    characteristics->prefer_integrated);
+
+    LOGF("%-30s", "Extensions-----------");
+    for (VD(usize) i = 0; i < characteristics->num_extensions; ++i)
+        LOGF("%-30s", characteristics->extensions[i]);
+
+    LOGF("%-30s", "Queue Setups---------");
+    for (VD(usize) i = 0; i < characteristics->num_queue_setups; ++i) {
+        LOGF("[%zu].required_count: %u", i, characteristics->queue_setups[i].required_count);
+        LOGF("[%zu].present_count:  %u", i, characteristics->queue_setups[i].present_count);
+        LOGF("[%zu].cached_index:   %d", i, characteristics->queue_setups[i].cached_index);
+        LOGF("%s", "                      Graphics Compute Transfer Present");
+        LOGF("[%zu].capabilities:     %d        %d       %d        %d",
+            i,
+            characteristics->queue_setups[i].capabilities & VD_(VK_QUEUE_CAPABILITIES_GRAPHICS) ? 1 : 0,
+            characteristics->queue_setups[i].capabilities & VD_(VK_QUEUE_CAPABILITIES_COMPUTE)  ? 1 : 0,
+            characteristics->queue_setups[i].capabilities & VD_(VK_QUEUE_CAPABILITIES_TRANSFER) ? 1 : 0,
+            characteristics->queue_setups[i].capabilities & VD_(VK_QUEUE_CAPABILITIES_PRESENT   ? 1 : 0));
+    }
+
+}
+
+void VDF(vk_create_device_and_queues)(VD(Arena) *temp, VD(VkCreateDeviceAndQueuesInfo) *info)
+{
+    VD_ASSERT(info->characteristics->num_queue_setups == info->result.num_queue_groups);
+
+    VD(u32) num_queue_groups = (VD(u32))info->characteristics->num_queue_setups;
+
+    // Create arrays for VkDeviceQueueCreateInfo
+    VkDeviceQueueCreateInfo *queue_create_infos = ARENA_PUSH_ARRAY(temp, VkDeviceQueueCreateInfo, num_queue_groups); 
+    for (VD(u32) i = 0; i < num_queue_groups; ++i) {
+        VD_ASSERT(info->characteristics->queue_setups[i].required_count == info->result.queue_groups[i].queue_count);
+        VD_ASSERT(info->characteristics->queue_setups[i].cached_index >= 0);
+
+        VD(u32) queue_count = info->characteristics->queue_setups[i].required_count;
+
+        float *priorities = ARENA_PUSH_ARRAY(temp, float, queue_count);
+        for (VD(u32) j = 0; j < queue_count; ++j) {
+            priorities[j] = 1.0f;
+        }
+
+        queue_create_infos[i] = (VkDeviceQueueCreateInfo) {
+            .sType              = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+            .queueFamilyIndex   = info->characteristics->queue_setups[i].cached_index,
+            .queueCount         = queue_count,
+            .pQueuePriorities   = priorities,
+        };
+    }
+
+    VkPhysicalDeviceVulkan12Features features12 = {
+        .sType                  = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+        .bufferDeviceAddress    = info->characteristics->buffer_device_addr,
+        .descriptorIndexing     = info->characteristics->descriptor_indexing,
+    };
+
+    VkPhysicalDeviceVulkan13Features features13 = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+        .pNext = &features12,
+        .synchronization2       = info->characteristics->synchronization2,
+        .dynamicRendering       = info->characteristics->dynamic_rendering,
+    };
+
+    VkPhysicalDeviceFeatures2 features = {
+        .sType                  = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+        .pNext                  = &features13,
+        .features               = {
+            .multiDrawIndirect  = info->characteristics->multi_draw_indirect,
+        },
+    };
+
+    VD_VK_CHECK(vkCreateDevice(info->characteristics->physical_device, & (VkDeviceCreateInfo) {
+        .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+        .queueCreateInfoCount    = info->characteristics->num_queue_setups,
+        .pQueueCreateInfos       = queue_create_infos,
+        .enabledExtensionCount   = info->characteristics->num_extensions,
+        .ppEnabledExtensionNames = (const char * const *)info->characteristics->extensions,
+        .pNext                   = &features,
+    }, 0, info->result.device));
+
+    for (VD(u32) i = 0; i < num_queue_groups; ++i) {
+        for (VD(u32) q = 0; q < info->result.queue_groups[i].queue_count; ++q) {
+            vkGetDeviceQueue(
+                *info->result.device,
+                info->characteristics->queue_setups[i].cached_index, 
+                q,
+                &info->result.queue_groups[i].queues[q]);
+        }
+    }
+}
+
 #endif // VD_VK_IMPL
