@@ -116,11 +116,129 @@ typedef struct __VD_VK_QueueGroup {
 } VD(VkQueueGroup);
 
 typedef struct __VD_VK_PhysicalDeviceCharacteristics {
+    // VkPhysicalDeviceFeatures
+    VD(b32)             robust_buffer_access;
+    VD(b32)             full_draw_index_uint32;
+    VD(b32)             image_cube_array;
+    VD(b32)             independent_blend;
+    VD(b32)             geometry_shader;
+    VD(b32)             tessellation_shader;
+    VD(b32)             sample_rate_shading;
+    VD(b32)             dual_src_blend;
+    VD(b32)             logic_op;
     VD(b32)             multi_draw_indirect;
-    VD(b32)             buffer_device_addr;
+    VD(b32)             draw_indirect_first_instance;
+    VD(b32)             depth_clamp;
+    VD(b32)             depth_bias_clamp;
+    VD(b32)             fill_mode_non_solid;
+    VD(b32)             depth_bounds;
+    VD(b32)             wide_lines;
+    VD(b32)             large_points;
+    VD(b32)             alpha_to_one;
+    VD(b32)             multi_viewport;
+    VD(b32)             sampler_anisotropy;
+    VD(b32)             texture_compression_etc2;
+    VD(b32)             texture_compression_astc_ldr;
+    VD(b32)             texture_compression_bc;
+    VD(b32)             occlusion_query_precise;
+    VD(b32)             pipeline_statistics_query;
+    VD(b32)             vertex_pipeline_stores_and_atomics;
+    VD(b32)             fragment_stores_and_atomics;
+    VD(b32)             shader_tessellation_and_geometry_point_size;
+    VD(b32)             shader_image_gather_extended;
+    VD(b32)             shader_storage_image_extended_formats;
+    VD(b32)             shader_storage_image_multisample;
+    VD(b32)             shader_storage_image_read_without_format;
+    VD(b32)             shader_storage_image_write_without_format;
+    VD(b32)             shader_uniform_buffer_array_dynamic_indexing;
+    VD(b32)             shader_sampled_image_array_dynamic_indexing;
+    VD(b32)             shader_storage_buffer_array_dynamic_indexing;
+    VD(b32)             shader_storage_image_array_dynamic_indexing;
+    VD(b32)             shader_clip_distance;
+    VD(b32)             shader_cull_distance;
+    VD(b32)             shader_float64;
+    VD(b32)             shader_int64;
+    VD(b32)             shader_int16;
+    VD(b32)             shader_resource_residency;
+    VD(b32)             shader_resource_min_lod;
+    VD(b32)             sparse_binding;
+    VD(b32)             sparse_residency_buffer;
+    VD(b32)             sparse_residency_image2_d;
+    VD(b32)             sparse_residency_image3_d;
+    VD(b32)             sparse_residency2_samples;
+    VD(b32)             sparse_residency4_samples;
+    VD(b32)             sparse_residency8_samples;
+    VD(b32)             sparse_residency16_samples;
+    VD(b32)             sparse_residency_aliased;
+    VD(b32)             variable_multisample_rate;
+    VD(b32)             inherited_queries;
+
+    // VkPhysicalDeviceVulkan12Features
+    VD(b32)             sampler_mirror_clamp_to_edge;
+    VD(b32)             draw_indirect_count;
+    VD(b32)             storage_buffer8_bit_access;
+    VD(b32)             uniform_and_storage_buffer8_bit_access;
+    VD(b32)             storage_push_constant8;
+    VD(b32)             shader_buffer_int64_atomics;
+    VD(b32)             shader_shared_int64_atomics;
+    VD(b32)             shader_float16;
+    VD(b32)             shader_int8;
     VD(b32)             descriptor_indexing;
+    VD(b32)             shader_input_attachment_array_dynamic_indexing;
+    VD(b32)             shader_uniform_texel_buffer_array_dynamic_indexing;
+    VD(b32)             shader_storage_texel_buffer_array_dynamic_indexing;
+    VD(b32)             shader_uniform_buffer_array_non_uniform_indexing;
+    VD(b32)             shader_sampled_image_array_non_uniform_indexing;
+    VD(b32)             shader_storage_buffer_array_non_uniform_indexing;
+    VD(b32)             shader_storage_image_array_non_uniform_indexing;
+    VD(b32)             shader_input_attachment_array_non_uniform_indexing;
+    VD(b32)             shader_uniform_texel_buffer_array_non_uniform_indexing;
+    VD(b32)             shader_storage_texel_buffer_array_non_uniform_indexing;
+    VD(b32)             descriptor_binding_uniform_buffer_update_after_bind;
+    VD(b32)             descriptor_binding_sampled_image_update_after_bind;
+    VD(b32)             descriptor_binding_storage_image_update_after_bind;
+    VD(b32)             descriptor_binding_storage_buffer_update_after_bind;
+    VD(b32)             descriptor_binding_uniform_texel_buffer_update_after_bind;
+    VD(b32)             descriptor_binding_storage_texel_buffer_update_after_bind;
+    VD(b32)             descriptor_binding_update_unused_while_pending;
+    VD(b32)             descriptor_binding_partially_bound;
+    VD(b32)             descriptor_binding_variable_descriptor_count;
+    VD(b32)             runtime_descriptor_array;
+    VD(b32)             sampler_filter_minmax;
+    VD(b32)             scalar_block_layout;
+    VD(b32)             imageless_framebuffer;
+    VD(b32)             uniform_buffer_standard_layout;
+    VD(b32)             shader_subgroup_extended_types;
+    VD(b32)             separate_depth_stencil_layouts;
+    VD(b32)             host_query_reset;
+    VD(b32)             timeline_semaphore;
+    VD(b32)             buffer_device_address;
+    VD(b32)             buffer_device_address_capture_replay;
+    VD(b32)             buffer_device_address_multi_device;
+    VD(b32)             vulkan_memory_model;
+    VD(b32)             vulkan_memory_model_device_scope;
+    VD(b32)             vulkan_memory_model_availability_visibility_chains;
+    VD(b32)             shader_output_viewport_index;
+    VD(b32)             shader_output_layer;
+    VD(b32)             subgroup_broadcast_dynamic_id;
+
+    // VkPhysicalDeviceVulkan13Features
+    VD(b32)             robust_image_access;
+    VD(b32)             inline_uniform_block;
+    VD(b32)             descriptor_binding_inline_uniform_block_update_after_bind;
+    VD(b32)             pipeline_creation_cache_control;
+    VD(b32)             private_data;
+    VD(b32)             shader_demote_to_helper_invocation;
+    VD(b32)             shader_terminate_invocation;
+    VD(b32)             subgroup_size_control;
+    VD(b32)             compute_full_subgroups;
     VD(b32)             synchronization2;
+    VD(b32)             texture_compression_astc_hdr;
+    VD(b32)             shader_zero_initialize_workgroup_memory;
     VD(b32)             dynamic_rendering;
+    VD(b32)             shader_integer_dot_product;
+    VD(b32)             maintenance4;
+
     /** Multiplies rank by 2 to indicate preference */
     VD(b32)             prefer_discrete;
     VD(b32)             prefer_integrated;
@@ -357,16 +475,134 @@ VD(b32) VDF(vk_pick_physical_device)(VD(Arena) *temp, VD(VkPickPhysicalDeviceInf
 
         // Create @VkPhysicalDeviceCharacteristics
         VkPhysicalDeviceCharacteristics characteristics = {
-            .multi_draw_indirect = features.features.multiDrawIndirect,
-            .buffer_device_addr  = features12.bufferDeviceAddress,
-            .descriptor_indexing = features12.descriptorIndexing,
-            .synchronization2    = features13.synchronization2,
-            .dynamic_rendering   = features13.dynamicRendering,
-            .num_queue_setups    = num_queue_families,
-            .queue_setups        = queues,
-            .num_extensions      = num_device_extensions,
-            .extensions          = device_extensions,
-            .physical_device     = physical_devices[i],
+
+            // VkPhysicalDeviceFeatures
+            .robust_buffer_access                         = features.features.robustBufferAccess,
+            .full_draw_index_uint32                       = features.features.fullDrawIndexUint32,
+            .image_cube_array                             = features.features.imageCubeArray,
+            .independent_blend                            = features.features.independentBlend,
+            .geometry_shader                              = features.features.geometryShader,
+            .tessellation_shader                          = features.features.tessellationShader,
+            .sample_rate_shading                          = features.features.sampleRateShading,
+            .dual_src_blend                               = features.features.dualSrcBlend,
+            .logic_op                                     = features.features.logicOp,
+            .multi_draw_indirect                          = features.features.multiDrawIndirect,
+            .draw_indirect_first_instance                 = features.features.drawIndirectFirstInstance,
+            .depth_clamp                                  = features.features.depthClamp,
+            .depth_bias_clamp                             = features.features.depthBiasClamp,
+            .fill_mode_non_solid                          = features.features.fillModeNonSolid,
+            .depth_bounds                                 = features.features.depthBounds,
+            .wide_lines                                   = features.features.wideLines,
+            .large_points                                 = features.features.largePoints,
+            .alpha_to_one                                 = features.features.alphaToOne,
+            .multi_viewport                               = features.features.multiViewport,
+            .sampler_anisotropy                           = features.features.samplerAnisotropy,
+            .texture_compression_etc2                     = features.features.textureCompressionETC2,
+            .texture_compression_astc_ldr                 = features.features.textureCompressionASTC_LDR,
+            .texture_compression_bc                       = features.features.textureCompressionBC,
+            .occlusion_query_precise                      = features.features.occlusionQueryPrecise,
+            .pipeline_statistics_query                    = features.features.pipelineStatisticsQuery,
+            .vertex_pipeline_stores_and_atomics           = features.features.vertexPipelineStoresAndAtomics,
+            .fragment_stores_and_atomics                  = features.features.fragmentStoresAndAtomics,
+            .shader_tessellation_and_geometry_point_size  = features.features.shaderTessellationAndGeometryPointSize,
+            .shader_image_gather_extended                 = features.features.shaderImageGatherExtended,
+            .shader_storage_image_extended_formats        = features.features.shaderStorageImageExtendedFormats,
+            .shader_storage_image_multisample             = features.features.shaderStorageImageMultisample,
+            .shader_storage_image_read_without_format     = features.features.shaderStorageImageReadWithoutFormat,
+            .shader_storage_image_write_without_format    = features.features.shaderStorageImageWriteWithoutFormat,
+            .shader_uniform_buffer_array_dynamic_indexing = features.features.shaderUniformBufferArrayDynamicIndexing,
+            .shader_sampled_image_array_dynamic_indexing  = features.features.shaderSampledImageArrayDynamicIndexing,
+            .shader_storage_buffer_array_dynamic_indexing = features.features.shaderStorageBufferArrayDynamicIndexing,
+            .shader_storage_image_array_dynamic_indexing  = features.features.shaderStorageImageArrayDynamicIndexing,
+            .shader_clip_distance                         = features.features.shaderClipDistance,
+            .shader_cull_distance                         = features.features.shaderCullDistance,
+            .shader_float64                               = features.features.shaderFloat64,
+            .shader_int64                                 = features.features.shaderInt64,
+            .shader_int16                                 = features.features.shaderInt16,
+            .shader_resource_residency                    = features.features.shaderResourceResidency,
+            .shader_resource_min_lod                      = features.features.shaderResourceMinLod,
+            .sparse_binding                               = features.features.sparseBinding,
+            .sparse_residency_buffer                      = features.features.sparseResidencyBuffer,
+            .sparse_residency_image2_d                    = features.features.sparseResidencyImage2D,
+            .sparse_residency_image3_d                    = features.features.sparseResidencyImage3D,
+            .sparse_residency2_samples                    = features.features.sparseResidency2Samples,
+            .sparse_residency4_samples                    = features.features.sparseResidency4Samples,
+            .sparse_residency8_samples                    = features.features.sparseResidency8Samples,
+            .sparse_residency16_samples                   = features.features.sparseResidency16Samples,
+            .sparse_residency_aliased                     = features.features.sparseResidencyAliased,
+            .variable_multisample_rate                    = features.features.variableMultisampleRate,
+            .inherited_queries                            = features.features.inheritedQueries,
+
+            // VkPhysicalDeviceVulkan12Features
+            .sampler_mirror_clamp_to_edge                              = features12.samplerMirrorClampToEdge,
+            .draw_indirect_count                                       = features12.drawIndirectCount,
+            .storage_buffer8_bit_access                                = features12.storageBuffer8BitAccess,
+            .uniform_and_storage_buffer8_bit_access                    = features12.uniformAndStorageBuffer8BitAccess,
+            .storage_push_constant8                                    = features12.storagePushConstant8,
+            .shader_buffer_int64_atomics                               = features12.shaderBufferInt64Atomics,
+            .shader_shared_int64_atomics                               = features12.shaderSharedInt64Atomics,
+            .shader_float16                                            = features12.shaderFloat16,
+            .shader_int8                                               = features12.shaderInt8,
+            .descriptor_indexing                                       = features12.descriptorIndexing,
+            .shader_input_attachment_array_dynamic_indexing            = features12.shaderInputAttachmentArrayDynamicIndexing,
+            .shader_uniform_texel_buffer_array_dynamic_indexing        = features12.shaderUniformTexelBufferArrayDynamicIndexing,
+            .shader_storage_texel_buffer_array_dynamic_indexing        = features12.shaderStorageTexelBufferArrayDynamicIndexing,
+            .shader_uniform_buffer_array_non_uniform_indexing          = features12.shaderUniformBufferArrayNonUniformIndexing,
+            .shader_sampled_image_array_non_uniform_indexing           = features12.shaderSampledImageArrayNonUniformIndexing,
+            .shader_storage_buffer_array_non_uniform_indexing          = features12.shaderStorageBufferArrayNonUniformIndexing,
+            .shader_storage_image_array_non_uniform_indexing           = features12.shaderStorageImageArrayNonUniformIndexing,
+            .shader_input_attachment_array_non_uniform_indexing        = features12.shaderInputAttachmentArrayNonUniformIndexing,
+            .shader_uniform_texel_buffer_array_non_uniform_indexing    = features12.shaderUniformTexelBufferArrayNonUniformIndexing,
+            .shader_storage_texel_buffer_array_non_uniform_indexing    = features12.shaderStorageTexelBufferArrayNonUniformIndexing,
+            .descriptor_binding_uniform_buffer_update_after_bind       = features12.descriptorBindingUniformBufferUpdateAfterBind,
+            .descriptor_binding_sampled_image_update_after_bind        = features12.descriptorBindingSampledImageUpdateAfterBind,
+            .descriptor_binding_storage_image_update_after_bind        = features12.descriptorBindingStorageImageUpdateAfterBind,
+            .descriptor_binding_storage_buffer_update_after_bind       = features12.descriptorBindingStorageBufferUpdateAfterBind,
+            .descriptor_binding_uniform_texel_buffer_update_after_bind = features12.descriptorBindingUniformTexelBufferUpdateAfterBind,
+            .descriptor_binding_storage_texel_buffer_update_after_bind = features12.descriptorBindingStorageTexelBufferUpdateAfterBind,
+            .descriptor_binding_update_unused_while_pending            = features12.descriptorBindingUpdateUnusedWhilePending,
+            .descriptor_binding_partially_bound                        = features12.descriptorBindingPartiallyBound,
+            .descriptor_binding_variable_descriptor_count              = features12.descriptorBindingVariableDescriptorCount,
+            .runtime_descriptor_array                                  = features12.runtimeDescriptorArray,
+            .sampler_filter_minmax                                     = features12.samplerFilterMinmax,
+            .scalar_block_layout                                       = features12.scalarBlockLayout,
+            .imageless_framebuffer                                     = features12.imagelessFramebuffer,
+            .uniform_buffer_standard_layout                            = features12.uniformBufferStandardLayout,
+            .shader_subgroup_extended_types                            = features12.shaderSubgroupExtendedTypes,
+            .separate_depth_stencil_layouts                            = features12.separateDepthStencilLayouts,
+            .host_query_reset                                          = features12.hostQueryReset,
+            .timeline_semaphore                                        = features12.timelineSemaphore,
+            .buffer_device_address                                     = features12.bufferDeviceAddress,
+            .buffer_device_address_capture_replay                      = features12.bufferDeviceAddressCaptureReplay,
+            .buffer_device_address_multi_device                        = features12.bufferDeviceAddressMultiDevice,
+            .vulkan_memory_model                                       = features12.vulkanMemoryModel,
+            .vulkan_memory_model_device_scope                          = features12.vulkanMemoryModelDeviceScope,
+            .vulkan_memory_model_availability_visibility_chains        = features12.vulkanMemoryModelAvailabilityVisibilityChains,
+            .shader_output_viewport_index                              = features12.shaderOutputViewportIndex,
+            .shader_output_layer                                       = features12.shaderOutputLayer,
+            .subgroup_broadcast_dynamic_id                             = features12.subgroupBroadcastDynamicId,
+
+            // VkPhysicalDeviceVulkan13Features
+            .robust_image_access                                       = features13.robustImageAccess,
+            .inline_uniform_block                                      = features13.inlineUniformBlock,
+            .descriptor_binding_inline_uniform_block_update_after_bind = features13.descriptorBindingInlineUniformBlockUpdateAfterBind,
+            .pipeline_creation_cache_control                           = features13.pipelineCreationCacheControl,
+            .private_data                                              = features13.privateData,
+            .shader_demote_to_helper_invocation                        = features13.shaderDemoteToHelperInvocation,
+            .shader_terminate_invocation                               = features13.shaderTerminateInvocation,
+            .subgroup_size_control                                     = features13.subgroupSizeControl,
+            .compute_full_subgroups                                    = features13.computeFullSubgroups,
+            .synchronization2                                          = features13.synchronization2,
+            .texture_compression_astc_hdr                              = features13.textureCompressionASTC_HDR,
+            .shader_zero_initialize_workgroup_memory                   = features13.shaderZeroInitializeWorkgroupMemory,
+            .dynamic_rendering                                         = features13.dynamicRendering,
+            .shader_integer_dot_product                                = features13.shaderIntegerDotProduct,
+            .maintenance4                                              = features13.maintenance4,
+            .num_queue_setups       = num_queue_families,
+            .queue_setups           = queues,
+            .num_extensions         = num_device_extensions,
+            .extensions             = device_extensions,
+            .physical_device        = physical_devices[i],
         };
 
         if (info->log) {
@@ -388,9 +624,129 @@ VD(b32) VDF(vk_pick_physical_device)(VD(Arena) *temp, VD(VkPickPhysicalDeviceInf
 
             // Check capabilities
             #define CHECK_CAP(x) do { if (!(!comparand->x || characteristics.x)) is_available = VD_FALSE; } while (0)
+            // VkPhysicalDeviceFeatures
+            CHECK_CAP(robust_buffer_access);
+            CHECK_CAP(full_draw_index_uint32);
+            CHECK_CAP(image_cube_array);
+            CHECK_CAP(independent_blend);
+            CHECK_CAP(geometry_shader);
+            CHECK_CAP(tessellation_shader);
+            CHECK_CAP(sample_rate_shading);
+            CHECK_CAP(dual_src_blend);
+            CHECK_CAP(logic_op);
             CHECK_CAP(multi_draw_indirect);
-            CHECK_CAP(buffer_device_addr);
+            CHECK_CAP(draw_indirect_first_instance);
+            CHECK_CAP(depth_clamp);
+            CHECK_CAP(depth_bias_clamp);
+            CHECK_CAP(fill_mode_non_solid);
+            CHECK_CAP(depth_bounds);
+            CHECK_CAP(wide_lines);
+            CHECK_CAP(large_points);
+            CHECK_CAP(alpha_to_one);
+            CHECK_CAP(multi_viewport);
+            CHECK_CAP(sampler_anisotropy);
+            CHECK_CAP(texture_compression_etc2);
+            CHECK_CAP(texture_compression_astc_ldr);
+            CHECK_CAP(texture_compression_bc);
+            CHECK_CAP(occlusion_query_precise);
+            CHECK_CAP(pipeline_statistics_query);
+            CHECK_CAP(vertex_pipeline_stores_and_atomics);
+            CHECK_CAP(fragment_stores_and_atomics);
+            CHECK_CAP(shader_tessellation_and_geometry_point_size);
+            CHECK_CAP(shader_image_gather_extended);
+            CHECK_CAP(shader_storage_image_extended_formats);
+            CHECK_CAP(shader_storage_image_multisample);
+            CHECK_CAP(shader_storage_image_read_without_format);
+            CHECK_CAP(shader_storage_image_write_without_format);
+            CHECK_CAP(shader_uniform_buffer_array_dynamic_indexing);
+            CHECK_CAP(shader_sampled_image_array_dynamic_indexing);
+            CHECK_CAP(shader_storage_buffer_array_dynamic_indexing);
+            CHECK_CAP(shader_storage_image_array_dynamic_indexing);
+            CHECK_CAP(shader_clip_distance);
+            CHECK_CAP(shader_cull_distance);
+            CHECK_CAP(shader_float64);
+            CHECK_CAP(shader_int64);
+            CHECK_CAP(shader_int16);
+            CHECK_CAP(shader_resource_residency);
+            CHECK_CAP(shader_resource_min_lod);
+            CHECK_CAP(sparse_binding);
+            CHECK_CAP(sparse_residency_buffer);
+            CHECK_CAP(sparse_residency_image2_d);
+            CHECK_CAP(sparse_residency_image3_d);
+            CHECK_CAP(sparse_residency2_samples);
+            CHECK_CAP(sparse_residency4_samples);
+            CHECK_CAP(sparse_residency8_samples);
+            CHECK_CAP(sparse_residency16_samples);
+            CHECK_CAP(sparse_residency_aliased);
+            CHECK_CAP(variable_multisample_rate);
+            CHECK_CAP(inherited_queries);
+
+            // VkPhysicalDeviceVulkan12Features
+            CHECK_CAP(sampler_mirror_clamp_to_edge);
+            CHECK_CAP(draw_indirect_count);
+            CHECK_CAP(storage_buffer8_bit_access);
+            CHECK_CAP(uniform_and_storage_buffer8_bit_access);
+            CHECK_CAP(storage_push_constant8);
+            CHECK_CAP(shader_buffer_int64_atomics);
+            CHECK_CAP(shader_shared_int64_atomics);
+            CHECK_CAP(shader_float16);
+            CHECK_CAP(shader_int8);
             CHECK_CAP(descriptor_indexing);
+            CHECK_CAP(shader_input_attachment_array_dynamic_indexing);
+            CHECK_CAP(shader_uniform_texel_buffer_array_dynamic_indexing);
+            CHECK_CAP(shader_storage_texel_buffer_array_dynamic_indexing);
+            CHECK_CAP(shader_uniform_buffer_array_non_uniform_indexing);
+            CHECK_CAP(shader_sampled_image_array_non_uniform_indexing);
+            CHECK_CAP(shader_storage_buffer_array_non_uniform_indexing);
+            CHECK_CAP(shader_storage_image_array_non_uniform_indexing);
+            CHECK_CAP(shader_input_attachment_array_non_uniform_indexing);
+            CHECK_CAP(shader_uniform_texel_buffer_array_non_uniform_indexing);
+            CHECK_CAP(shader_storage_texel_buffer_array_non_uniform_indexing);
+            CHECK_CAP(descriptor_binding_uniform_buffer_update_after_bind);
+            CHECK_CAP(descriptor_binding_sampled_image_update_after_bind);
+            CHECK_CAP(descriptor_binding_storage_image_update_after_bind);
+            CHECK_CAP(descriptor_binding_storage_buffer_update_after_bind);
+            CHECK_CAP(descriptor_binding_uniform_texel_buffer_update_after_bind);
+            CHECK_CAP(descriptor_binding_storage_texel_buffer_update_after_bind);
+            CHECK_CAP(descriptor_binding_update_unused_while_pending);
+            CHECK_CAP(descriptor_binding_partially_bound);
+            CHECK_CAP(descriptor_binding_variable_descriptor_count);
+            CHECK_CAP(runtime_descriptor_array);
+            CHECK_CAP(sampler_filter_minmax);
+            CHECK_CAP(scalar_block_layout);
+            CHECK_CAP(imageless_framebuffer);
+            CHECK_CAP(uniform_buffer_standard_layout);
+            CHECK_CAP(shader_subgroup_extended_types);
+            CHECK_CAP(separate_depth_stencil_layouts);
+            CHECK_CAP(host_query_reset);
+            CHECK_CAP(timeline_semaphore);
+            CHECK_CAP(buffer_device_address);
+            CHECK_CAP(buffer_device_address_capture_replay);
+            CHECK_CAP(buffer_device_address_multi_device);
+            CHECK_CAP(vulkan_memory_model);
+            CHECK_CAP(vulkan_memory_model_device_scope);
+            CHECK_CAP(vulkan_memory_model_availability_visibility_chains);
+            CHECK_CAP(shader_output_viewport_index);
+            CHECK_CAP(shader_output_layer);
+            CHECK_CAP(subgroup_broadcast_dynamic_id);
+
+            // VkPhysicalDeviceVulkan13Features
+            CHECK_CAP(robust_image_access);
+            CHECK_CAP(inline_uniform_block);
+            CHECK_CAP(descriptor_binding_inline_uniform_block_update_after_bind);
+            CHECK_CAP(pipeline_creation_cache_control);
+            CHECK_CAP(private_data);
+            CHECK_CAP(shader_demote_to_helper_invocation);
+            CHECK_CAP(shader_terminate_invocation);
+            CHECK_CAP(subgroup_size_control);
+            CHECK_CAP(compute_full_subgroups);
+            CHECK_CAP(synchronization2);
+            CHECK_CAP(texture_compression_astc_hdr);
+            CHECK_CAP(shader_zero_initialize_workgroup_memory);
+            CHECK_CAP(dynamic_rendering);
+            CHECK_CAP(shader_integer_dot_product);
+            CHECK_CAP(maintenance4);
+
             CHECK_CAP(synchronization2);
             CHECK_CAP(dynamic_rendering);
             #undef CHECK_CAP
@@ -520,20 +876,138 @@ VD(b32) VDF(vk_pick_physical_device)(VD(Arena) *temp, VD(VkPickPhysicalDeviceInf
 
 void VDF(vk_log_physical_device_characteristics)(VD(VkPhysicalDeviceCharacteristics) *characteristics)
 {
-    LOGF("%-30s", "Capabilities---------");
-    LOGF("%-30s= %d", "multi_draw_indirect",  characteristics->multi_draw_indirect);
-    LOGF("%-30s= %d", "buffer_device_addr",   characteristics->buffer_device_addr);
-    LOGF("%-30s= %d", "descriptor_indexing",  characteristics->descriptor_indexing);
-    LOGF("%-30s= %d", "synchronization2",     characteristics->synchronization2);
-    LOGF("%-30s= %d", "dynamic_rendering",    characteristics->dynamic_rendering);
-    LOGF("%-30s= %d", "prefer_discrete",      characteristics->prefer_discrete);
-    LOGF("%-30s= %d", "prefer_integrated",    characteristics->prefer_integrated);
+    LOGF("%-60s", "Capabilities---------");
+    LOGF("%-60s", "VkPhysicalDeviceFeatures {");
+    LOGF("%-60s= %d,", "\trobustBufferAccess",                      characteristics->robust_buffer_access);
+    LOGF("%-60s= %d,", "\tfullDrawIndexUint32",                     characteristics->full_draw_index_uint32);
+    LOGF("%-60s= %d,", "\timageCubeArray",                          characteristics->image_cube_array);
+    LOGF("%-60s= %d,", "\tindependentBlend",                        characteristics->independent_blend);
+    LOGF("%-60s= %d,", "\tgeometryShader",                          characteristics->geometry_shader);
+    LOGF("%-60s= %d,", "\ttessellationShader",                      characteristics->tessellation_shader);
+    LOGF("%-60s= %d,", "\tsampleRateShading",                       characteristics->sample_rate_shading);
+    LOGF("%-60s= %d,", "\tdualSrcBlend",                            characteristics->dual_src_blend);
+    LOGF("%-60s= %d,", "\tlogicOp",                                 characteristics->logic_op);
+    LOGF("%-60s= %d,", "\tmultiDrawIndirect",                       characteristics->multi_draw_indirect);
+    LOGF("%-60s= %d,", "\tdrawIndirectFirstInstance",               characteristics->draw_indirect_first_instance);
+    LOGF("%-60s= %d,", "\tdepthClamp",                              characteristics->depth_clamp);
+    LOGF("%-60s= %d,", "\tdepthBiasClamp",                          characteristics->depth_bias_clamp);
+    LOGF("%-60s= %d,", "\tfillModeNonSolid",                        characteristics->fill_mode_non_solid);
+    LOGF("%-60s= %d,", "\tdepthBounds",                             characteristics->depth_bounds);
+    LOGF("%-60s= %d,", "\twideLines",                               characteristics->wide_lines);
+    LOGF("%-60s= %d,", "\tlargePoints",                             characteristics->large_points);
+    LOGF("%-60s= %d,", "\talphaToOne",                              characteristics->alpha_to_one);
+    LOGF("%-60s= %d,", "\tmultiViewport",                           characteristics->multi_viewport);
+    LOGF("%-60s= %d,", "\tsamplerAnisotropy",                       characteristics->sampler_anisotropy);
+    LOGF("%-60s= %d,", "\ttextureCompressionETC2",                  characteristics->texture_compression_etc2);
+    LOGF("%-60s= %d,", "\ttextureCompressionASTC_LDR",              characteristics->texture_compression_astc_ldr);
+    LOGF("%-60s= %d,", "\ttextureCompressionBC",                    characteristics->texture_compression_bc);
+    LOGF("%-60s= %d,", "\tocclusionQueryPrecise",                   characteristics->occlusion_query_precise);
+    LOGF("%-60s= %d,", "\tpipelineStatisticsQuery",                 characteristics->pipeline_statistics_query);
+    LOGF("%-60s= %d,", "\tvertexPipelineStoresAndAtomics",          characteristics->vertex_pipeline_stores_and_atomics);
+    LOGF("%-60s= %d,", "\tfragmentStoresAndAtomics",                characteristics->fragment_stores_and_atomics);
+    LOGF("%-60s= %d,", "\tshaderTessellationAndGeometryPointSize",  characteristics->shader_tessellation_and_geometry_point_size);
+    LOGF("%-60s= %d,", "\tshaderImageGatherExtended",               characteristics->shader_image_gather_extended);
+    LOGF("%-60s= %d,", "\tshaderStorageImageExtendedFormats",       characteristics->shader_storage_image_extended_formats);
+    LOGF("%-60s= %d,", "\tshaderStorageImageMultisample",           characteristics->shader_storage_image_multisample);
+    LOGF("%-60s= %d,", "\tshaderStorageImageReadWithoutFormat",     characteristics->shader_storage_image_read_without_format);
+    LOGF("%-60s= %d,", "\tshaderStorageImageWriteWithoutFormat",    characteristics->shader_storage_image_write_without_format);
+    LOGF("%-60s= %d,", "\tshaderUniformBufferArrayDynamicIndexing", characteristics->shader_uniform_buffer_array_dynamic_indexing);
+    LOGF("%-60s= %d,", "\tshaderSampledImageArrayDynamicIndexing",  characteristics->shader_sampled_image_array_dynamic_indexing);
+    LOGF("%-60s= %d,", "\tshaderStorageBufferArrayDynamicIndexing", characteristics->shader_storage_buffer_array_dynamic_indexing);
+    LOGF("%-60s= %d,", "\tshaderStorageImageArrayDynamicIndexing",  characteristics->shader_storage_image_array_dynamic_indexing);
+    LOGF("%-60s= %d,", "\tshaderClipDistance",                      characteristics->shader_clip_distance);
+    LOGF("%-60s= %d,", "\tshaderCullDistance",                      characteristics->shader_cull_distance);
+    LOGF("%-60s= %d,", "\tshaderFloat64",                           characteristics->shader_float64);
+    LOGF("%-60s= %d,", "\tshaderInt64",                             characteristics->shader_int64);
+    LOGF("%-60s= %d,", "\tshaderInt16",                             characteristics->shader_int16);
+    LOGF("%-60s= %d,", "\tshaderResourceResidency",                 characteristics->shader_resource_residency);
+    LOGF("%-60s= %d,", "\tshaderResourceMinLod",                    characteristics->shader_resource_min_lod);
+    LOGF("%-60s= %d,", "\tsparseBinding",                           characteristics->sparse_binding);
+    LOGF("%-60s= %d,", "\tsparseResidencyBuffer",                   characteristics->sparse_residency_buffer);
+    LOGF("%-60s= %d,", "\tsparseResidencyImage2D",                  characteristics->sparse_residency_image2_d);
+    LOGF("%-60s= %d,", "\tsparseResidencyImage3D",                  characteristics->sparse_residency_image3_d);
+    LOGF("%-60s= %d,", "\tsparseResidency2Samples",                 characteristics->sparse_residency2_samples);
+    LOGF("%-60s= %d,", "\tsparseResidency4Samples",                 characteristics->sparse_residency4_samples);
+    LOGF("%-60s= %d,", "\tsparseResidency8Samples",                 characteristics->sparse_residency8_samples);
+    LOGF("%-60s= %d,", "\tsparseResidency16Samples",                characteristics->sparse_residency16_samples);
+    LOGF("%-60s= %d,", "\tsparseResidencyAliased",                  characteristics->sparse_residency_aliased);
+    LOGF("%-60s= %d,", "\tvariableMultisampleRate",                 characteristics->variable_multisample_rate);
+    LOGF("%-60s= %d,", "\tinheritedQueries",                        characteristics->inherited_queries);
+    LOGF("%-60s", "} // VkPhysicalDeviceFeatures");
 
-    LOGF("%-30s", "Extensions-----------");
+    LOGF("%-60s", "VkPhysicalDeviceVulkan12Features {");
+    LOGF("%-60s= %d", "\tsamplerMirrorClampToEdge",                           characteristics->sampler_mirror_clamp_to_edge);
+    LOGF("%-60s= %d", "\tdrawIndirectCount",                                  characteristics->draw_indirect_count);
+    LOGF("%-60s= %d", "\tstorageBuffer8BitAccess",                            characteristics->storage_buffer8_bit_access);
+    LOGF("%-60s= %d", "\tuniformAndStorageBuffer8BitAccess",                  characteristics->uniform_and_storage_buffer8_bit_access);
+    LOGF("%-60s= %d", "\tstoragePushConstant8",                               characteristics->storage_push_constant8);
+    LOGF("%-60s= %d", "\tshaderBufferInt64Atomics",                           characteristics->shader_buffer_int64_atomics);
+    LOGF("%-60s= %d", "\tshaderSharedInt64Atomics",                           characteristics->shader_shared_int64_atomics);
+    LOGF("%-60s= %d", "\tshaderFloat16",                                      characteristics->shader_float16);
+    LOGF("%-60s= %d", "\tshaderInt8",                                         characteristics->shader_int8);
+    LOGF("%-60s= %d", "\tdescriptorIndexing",                                 characteristics->descriptor_indexing);
+    LOGF("%-60s= %d", "\tshaderInputAttachmentArrayDynamicIndexing",          characteristics->shader_input_attachment_array_dynamic_indexing);
+    LOGF("%-60s= %d", "\tshaderUniformTexelBufferArrayDynamicIndexing",       characteristics->shader_uniform_texel_buffer_array_dynamic_indexing);
+    LOGF("%-60s= %d", "\tshaderStorageTexelBufferArrayDynamicIndexing",       characteristics->shader_storage_texel_buffer_array_dynamic_indexing);
+    LOGF("%-60s= %d", "\tshaderUniformBufferArrayNonUniformIndexing",         characteristics->shader_uniform_buffer_array_non_uniform_indexing);
+    LOGF("%-60s= %d", "\tshaderSampledImageArrayNonUniformIndexing",          characteristics->shader_sampled_image_array_non_uniform_indexing);
+    LOGF("%-60s= %d", "\tshaderStorageBufferArrayNonUniformIndexing",         characteristics->shader_storage_buffer_array_non_uniform_indexing);
+    LOGF("%-60s= %d", "\tshaderStorageImageArrayNonUniformIndexing",          characteristics->shader_storage_image_array_non_uniform_indexing);
+    LOGF("%-60s= %d", "\tshaderInputAttachmentArrayNonUniformIndexing",       characteristics->shader_input_attachment_array_non_uniform_indexing);
+    LOGF("%-60s= %d", "\tshaderUniformTexelBufferArrayNonUniformIndexing",    characteristics->shader_uniform_texel_buffer_array_non_uniform_indexing);
+    LOGF("%-60s= %d", "\tshaderStorageTexelBufferArrayNonUniformIndexing",    characteristics->shader_storage_texel_buffer_array_non_uniform_indexing);
+    LOGF("%-60s= %d", "\tdescriptorBindingUniformBufferUpdateAfterBind",      characteristics->descriptor_binding_uniform_buffer_update_after_bind);
+    LOGF("%-60s= %d", "\tdescriptorBindingSampledImageUpdateAfterBind",       characteristics->descriptor_binding_sampled_image_update_after_bind);
+    LOGF("%-60s= %d", "\tdescriptorBindingStorageImageUpdateAfterBind",       characteristics->descriptor_binding_storage_image_update_after_bind);
+    LOGF("%-60s= %d", "\tdescriptorBindingStorageBufferUpdateAfterBind",      characteristics->descriptor_binding_storage_buffer_update_after_bind);
+    LOGF("%-60s= %d", "\tdescriptorBindingUniformTexelBufferUpdateAfterBind", characteristics->descriptor_binding_uniform_texel_buffer_update_after_bind);
+    LOGF("%-60s= %d", "\tdescriptorBindingStorageTexelBufferUpdateAfterBind", characteristics->descriptor_binding_storage_texel_buffer_update_after_bind);
+    LOGF("%-60s= %d", "\tdescriptorBindingUpdateUnusedWhilePending",          characteristics->descriptor_binding_update_unused_while_pending);
+    LOGF("%-60s= %d", "\tdescriptorBindingPartiallyBound",                    characteristics->descriptor_binding_partially_bound);
+    LOGF("%-60s= %d", "\tdescriptorBindingVariableDescriptorCount",           characteristics->descriptor_binding_variable_descriptor_count);
+    LOGF("%-60s= %d", "\truntimeDescriptorArray",                             characteristics->runtime_descriptor_array);
+    LOGF("%-60s= %d", "\tsamplerFilterMinmax",                                characteristics->sampler_filter_minmax);
+    LOGF("%-60s= %d", "\tscalarBlockLayout",                                  characteristics->scalar_block_layout);
+    LOGF("%-60s= %d", "\timagelessFramebuffer",                               characteristics->imageless_framebuffer);
+    LOGF("%-60s= %d", "\tuniformBufferStandardLayout",                        characteristics->uniform_buffer_standard_layout);
+    LOGF("%-60s= %d", "\tshaderSubgroupExtendedTypes",                        characteristics->shader_subgroup_extended_types);
+    LOGF("%-60s= %d", "\tseparateDepthStencilLayouts",                        characteristics->separate_depth_stencil_layouts);
+    LOGF("%-60s= %d", "\thostQueryReset",                                     characteristics->host_query_reset);
+    LOGF("%-60s= %d", "\ttimelineSemaphore",                                  characteristics->timeline_semaphore);
+    LOGF("%-60s= %d", "\tbufferDeviceAddress",                                characteristics->buffer_device_address);
+    LOGF("%-60s= %d", "\tbufferDeviceAddressCaptureReplay",                   characteristics->buffer_device_address_capture_replay);
+    LOGF("%-60s= %d", "\tbufferDeviceAddressMultiDevice",                     characteristics->buffer_device_address_multi_device);
+    LOGF("%-60s= %d", "\tvulkanMemoryModel",                                  characteristics->vulkan_memory_model);
+    LOGF("%-60s= %d", "\tvulkanMemoryModelDeviceScope",                       characteristics->vulkan_memory_model_device_scope);
+    LOGF("%-60s= %d", "\tvulkanMemoryModelAvailabilityVisibilityChains",      characteristics->vulkan_memory_model_availability_visibility_chains);
+    LOGF("%-60s= %d", "\tshaderOutputViewportIndex",                          characteristics->shader_output_viewport_index);
+    LOGF("%-60s= %d", "\tshaderOutputLayer",                                  characteristics->shader_output_layer);
+    LOGF("%-60s= %d", "\tsubgroupBroadcastDynamicId",                         characteristics->subgroup_broadcast_dynamic_id);
+    LOGF("%-60s", "} // VkPhysicalDeviceVulkan12Features");
+
+    LOGF("%-60s", "VkPhysicalDeviceVulkan13Features {");
+    LOGF("%-60s= %d", "\trobustImageAccess",                                  characteristics->robust_image_access);
+    LOGF("%-60s= %d", "\tinlineUniformBlock",                                 characteristics->inline_uniform_block);
+    LOGF("%-60s= %d", "\tdescriptorBindingInlineUniformBlockUpdateAfterBind", characteristics->descriptor_binding_inline_uniform_block_update_after_bind);
+    LOGF("%-60s= %d", "\tpipelineCreationCacheControl",                       characteristics->pipeline_creation_cache_control);
+    LOGF("%-60s= %d", "\tprivateData",                                        characteristics->private_data);
+    LOGF("%-60s= %d", "\tshaderDemoteToHelperInvocation",                     characteristics->shader_demote_to_helper_invocation);
+    LOGF("%-60s= %d", "\tshaderTerminateInvocation",                          characteristics->shader_terminate_invocation);
+    LOGF("%-60s= %d", "\tsubgroupSizeControl",                                characteristics->subgroup_size_control);
+    LOGF("%-60s= %d", "\tcomputeFullSubgroups",                               characteristics->compute_full_subgroups);
+    LOGF("%-60s= %d", "\tsynchronization2",                                   characteristics->synchronization2);
+    LOGF("%-60s= %d", "\ttextureCompressionASTC_HDR",                         characteristics->texture_compression_astc_hdr);
+    LOGF("%-60s= %d", "\tshaderZeroInitializeWorkgroupMemory",                characteristics->shader_zero_initialize_workgroup_memory);
+    LOGF("%-60s= %d", "\tdynamicRendering",                                   characteristics->dynamic_rendering);
+    LOGF("%-60s= %d", "\tshaderIntegerDotProduct",                            characteristics->shader_integer_dot_product);
+    LOGF("%-60s= %d", "\tmaintenance4",                                       characteristics->maintenance4);
+    LOGF("%-60s", "} // VkPhysicalDeviceVulkan13Features");
+
+    LOGF("%-60s", "Extensions-----------");
     for (VD(usize) i = 0; i < characteristics->num_extensions; ++i)
-        LOGF("%-30s", characteristics->extensions[i]);
+        LOGF("%-60s", characteristics->extensions[i]);
 
-    LOGF("%-30s", "Queue Setups---------");
+    LOGF("%-60s", "Queue Setups---------");
     for (VD(usize) i = 0; i < characteristics->num_queue_setups; ++i) {
         LOGF("[%zu].required_count: %u", i, characteristics->queue_setups[i].required_count);
         LOGF("[%zu].present_count:  %u", i, characteristics->queue_setups[i].present_count);
@@ -577,23 +1051,135 @@ void VDF(vk_create_device_and_queues)(VD(Arena) *temp, VD(VkCreateDeviceAndQueue
     }
 
     VkPhysicalDeviceVulkan12Features features12 = {
-        .sType                  = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
-        .bufferDeviceAddress    = info->characteristics->buffer_device_addr,
-        .descriptorIndexing     = info->characteristics->descriptor_indexing,
+        .sType                                              = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+        .samplerMirrorClampToEdge                           = info->characteristics->sampler_mirror_clamp_to_edge,
+        .drawIndirectCount                                  = info->characteristics->draw_indirect_count,
+        .storageBuffer8BitAccess                            = info->characteristics->storage_buffer8_bit_access,
+        .uniformAndStorageBuffer8BitAccess                  = info->characteristics->uniform_and_storage_buffer8_bit_access,
+        .storagePushConstant8                               = info->characteristics->storage_push_constant8,
+        .shaderBufferInt64Atomics                           = info->characteristics->shader_buffer_int64_atomics,
+        .shaderSharedInt64Atomics                           = info->characteristics->shader_shared_int64_atomics,
+        .shaderFloat16                                      = info->characteristics->shader_float16,
+        .shaderInt8                                         = info->characteristics->shader_int8,
+        .descriptorIndexing                                 = info->characteristics->descriptor_indexing,
+        .shaderInputAttachmentArrayDynamicIndexing          = info->characteristics->shader_input_attachment_array_dynamic_indexing,
+        .shaderUniformTexelBufferArrayDynamicIndexing       = info->characteristics->shader_uniform_texel_buffer_array_dynamic_indexing,
+        .shaderStorageTexelBufferArrayDynamicIndexing       = info->characteristics->shader_storage_texel_buffer_array_dynamic_indexing,
+        .shaderUniformBufferArrayNonUniformIndexing         = info->characteristics->shader_uniform_buffer_array_non_uniform_indexing,
+        .shaderSampledImageArrayNonUniformIndexing          = info->characteristics->shader_sampled_image_array_non_uniform_indexing,
+        .shaderStorageBufferArrayNonUniformIndexing         = info->characteristics->shader_storage_buffer_array_non_uniform_indexing,
+        .shaderStorageImageArrayNonUniformIndexing          = info->characteristics->shader_storage_image_array_non_uniform_indexing,
+        .shaderInputAttachmentArrayNonUniformIndexing       = info->characteristics->shader_input_attachment_array_non_uniform_indexing,
+        .shaderUniformTexelBufferArrayNonUniformIndexing    = info->characteristics->shader_uniform_texel_buffer_array_non_uniform_indexing,
+        .shaderStorageTexelBufferArrayNonUniformIndexing    = info->characteristics->shader_storage_texel_buffer_array_non_uniform_indexing,
+        .descriptorBindingUniformBufferUpdateAfterBind      = info->characteristics->descriptor_binding_uniform_buffer_update_after_bind,
+        .descriptorBindingSampledImageUpdateAfterBind       = info->characteristics->descriptor_binding_sampled_image_update_after_bind,
+        .descriptorBindingStorageImageUpdateAfterBind       = info->characteristics->descriptor_binding_storage_image_update_after_bind,
+        .descriptorBindingStorageBufferUpdateAfterBind      = info->characteristics->descriptor_binding_storage_buffer_update_after_bind,
+        .descriptorBindingUniformTexelBufferUpdateAfterBind = info->characteristics->descriptor_binding_uniform_texel_buffer_update_after_bind,
+        .descriptorBindingStorageTexelBufferUpdateAfterBind = info->characteristics->descriptor_binding_storage_texel_buffer_update_after_bind,
+        .descriptorBindingUpdateUnusedWhilePending          = info->characteristics->descriptor_binding_update_unused_while_pending,
+        .descriptorBindingPartiallyBound                    = info->characteristics->descriptor_binding_partially_bound,
+        .descriptorBindingVariableDescriptorCount           = info->characteristics->descriptor_binding_variable_descriptor_count,
+        .runtimeDescriptorArray                             = info->characteristics->runtime_descriptor_array,
+        .samplerFilterMinmax                                = info->characteristics->sampler_filter_minmax,
+        .scalarBlockLayout                                  = info->characteristics->scalar_block_layout,
+        .imagelessFramebuffer                               = info->characteristics->imageless_framebuffer,
+        .uniformBufferStandardLayout                        = info->characteristics->uniform_buffer_standard_layout,
+        .shaderSubgroupExtendedTypes                        = info->characteristics->shader_subgroup_extended_types,
+        .separateDepthStencilLayouts                        = info->characteristics->separate_depth_stencil_layouts,
+        .hostQueryReset                                     = info->characteristics->host_query_reset,
+        .timelineSemaphore                                  = info->characteristics->timeline_semaphore,
+        .bufferDeviceAddress                                = info->characteristics->buffer_device_address,
+        .bufferDeviceAddressCaptureReplay                   = info->characteristics->buffer_device_address_capture_replay,
+        .bufferDeviceAddressMultiDevice                     = info->characteristics->buffer_device_address_multi_device,
+        .vulkanMemoryModel                                  = info->characteristics->vulkan_memory_model,
+        .vulkanMemoryModelDeviceScope                       = info->characteristics->vulkan_memory_model_device_scope,
+        .vulkanMemoryModelAvailabilityVisibilityChains      = info->characteristics->vulkan_memory_model_availability_visibility_chains,
+        .shaderOutputViewportIndex                          = info->characteristics->shader_output_viewport_index,
+        .shaderOutputLayer                                  = info->characteristics->shader_output_layer,
+        .subgroupBroadcastDynamicId                         = info->characteristics->subgroup_broadcast_dynamic_id,
     };
 
     VkPhysicalDeviceVulkan13Features features13 = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
         .pNext = &features12,
-        .synchronization2       = info->characteristics->synchronization2,
-        .dynamicRendering       = info->characteristics->dynamic_rendering,
+        .robustImageAccess                                  = info->characteristics->robust_image_access,
+        .inlineUniformBlock                                 = info->characteristics->inline_uniform_block,
+        .descriptorBindingInlineUniformBlockUpdateAfterBind = info->characteristics->descriptor_binding_inline_uniform_block_update_after_bind,
+        .pipelineCreationCacheControl                       = info->characteristics->pipeline_creation_cache_control,
+        .privateData                                        = info->characteristics->private_data,
+        .shaderDemoteToHelperInvocation                     = info->characteristics->shader_demote_to_helper_invocation,
+        .shaderTerminateInvocation                          = info->characteristics->shader_terminate_invocation,
+        .subgroupSizeControl                                = info->characteristics->subgroup_size_control,
+        .computeFullSubgroups                               = info->characteristics->compute_full_subgroups,
+        .synchronization2                                   = info->characteristics->synchronization2,
+        .textureCompressionASTC_HDR                         = info->characteristics->texture_compression_astc_hdr,
+        .shaderZeroInitializeWorkgroupMemory                = info->characteristics->shader_zero_initialize_workgroup_memory,
+        .dynamicRendering                                   = info->characteristics->dynamic_rendering,
+        .shaderIntegerDotProduct                            = info->characteristics->shader_integer_dot_product,
+        .maintenance4                                       = info->characteristics->maintenance4,
     };
 
     VkPhysicalDeviceFeatures2 features = {
         .sType                  = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
         .pNext                  = &features13,
         .features               = {
-            .multiDrawIndirect  = info->characteristics->multi_draw_indirect,
+            .robustBufferAccess                      = info->characteristics->robust_buffer_access,
+            .fullDrawIndexUint32                     = info->characteristics->full_draw_index_uint32,
+            .imageCubeArray                          = info->characteristics->image_cube_array,
+            .independentBlend                        = info->characteristics->independent_blend,
+            .geometryShader                          = info->characteristics->geometry_shader,
+            .tessellationShader                      = info->characteristics->tessellation_shader,
+            .sampleRateShading                       = info->characteristics->sample_rate_shading,
+            .dualSrcBlend                            = info->characteristics->dual_src_blend,
+            .logicOp                                 = info->characteristics->logic_op,
+            .multiDrawIndirect                       = info->characteristics->multi_draw_indirect,
+            .drawIndirectFirstInstance               = info->characteristics->draw_indirect_first_instance,
+            .depthClamp                              = info->characteristics->depth_clamp,
+            .depthBiasClamp                          = info->characteristics->depth_bias_clamp,
+            .fillModeNonSolid                        = info->characteristics->fill_mode_non_solid,
+            .depthBounds                             = info->characteristics->depth_bounds,
+            .wideLines                               = info->characteristics->wide_lines,
+            .largePoints                             = info->characteristics->large_points,
+            .alphaToOne                              = info->characteristics->alpha_to_one,
+            .multiViewport                           = info->characteristics->multi_viewport,
+            .samplerAnisotropy                       = info->characteristics->sampler_anisotropy,
+            .textureCompressionETC2                  = info->characteristics->texture_compression_etc2,
+            .textureCompressionASTC_LDR              = info->characteristics->texture_compression_astc_ldr,
+            .textureCompressionBC                    = info->characteristics->texture_compression_bc,
+            .occlusionQueryPrecise                   = info->characteristics->occlusion_query_precise,
+            .pipelineStatisticsQuery                 = info->characteristics->pipeline_statistics_query,
+            .vertexPipelineStoresAndAtomics          = info->characteristics->vertex_pipeline_stores_and_atomics,
+            .fragmentStoresAndAtomics                = info->characteristics->fragment_stores_and_atomics,
+            .shaderTessellationAndGeometryPointSize  = info->characteristics->shader_tessellation_and_geometry_point_size,
+            .shaderImageGatherExtended               = info->characteristics->shader_image_gather_extended,
+            .shaderStorageImageExtendedFormats       = info->characteristics->shader_storage_image_extended_formats,
+            .shaderStorageImageMultisample           = info->characteristics->shader_storage_image_multisample,
+            .shaderStorageImageReadWithoutFormat     = info->characteristics->shader_storage_image_read_without_format,
+            .shaderStorageImageWriteWithoutFormat    = info->characteristics->shader_storage_image_write_without_format,
+            .shaderUniformBufferArrayDynamicIndexing = info->characteristics->shader_uniform_buffer_array_dynamic_indexing,
+            .shaderSampledImageArrayDynamicIndexing  = info->characteristics->shader_sampled_image_array_dynamic_indexing,
+            .shaderStorageBufferArrayDynamicIndexing = info->characteristics->shader_storage_buffer_array_dynamic_indexing,
+            .shaderStorageImageArrayDynamicIndexing  = info->characteristics->shader_storage_image_array_dynamic_indexing,
+            .shaderClipDistance                      = info->characteristics->shader_clip_distance,
+            .shaderCullDistance                      = info->characteristics->shader_cull_distance,
+            .shaderFloat64                           = info->characteristics->shader_float64,
+            .shaderInt64                             = info->characteristics->shader_int64,
+            .shaderInt16                             = info->characteristics->shader_int16,
+            .shaderResourceResidency                 = info->characteristics->shader_resource_residency,
+            .shaderResourceMinLod                    = info->characteristics->shader_resource_min_lod,
+            .sparseBinding                           = info->characteristics->sparse_binding,
+            .sparseResidencyBuffer                   = info->characteristics->sparse_residency_buffer,
+            .sparseResidencyImage2D                  = info->characteristics->sparse_residency_image2_d,
+            .sparseResidencyImage3D                  = info->characteristics->sparse_residency_image3_d,
+            .sparseResidency2Samples                 = info->characteristics->sparse_residency2_samples,
+            .sparseResidency4Samples                 = info->characteristics->sparse_residency4_samples,
+            .sparseResidency8Samples                 = info->characteristics->sparse_residency8_samples,
+            .sparseResidency16Samples                = info->characteristics->sparse_residency16_samples,
+            .sparseResidencyAliased                  = info->characteristics->sparse_residency_aliased,
+            .variableMultisampleRate                 = info->characteristics->variable_multisample_rate,
+            .inheritedQueries                        = info->characteristics->inherited_queries,
         },
     };
 
