@@ -9,7 +9,8 @@
 #include <stddef.h>
 
 /* ----MACRO HELPERS------------------------------------------------------------------------------------------------- */
-#define VD_STRING_JOIN2(x, y) x##y
+#define _VD_STRING_JOIN2(x, y) x##y
+#define VD_STRING_JOIN2(x, y) _VD_STRING_JOIN2(x, y)
 
 /* ----NAMESPACE----------------------------------------------------------------------------------------------------- */
 #ifndef VD_NAMESPACE_OVERRIDE
@@ -23,33 +24,41 @@
 /* ----HOST COMPILER------------------------------------------------------------------------------------------------- */
 #if defined(__GNUC__) || defined(__clang__)
 #define VD_HOST_COMPILER_CLANG 1
-#endif
+#endif // defined(__GNUC__) || defined(__clang__)
 
 #if defined(_MSC_VER)
 #define VD_HOST_COMPILER_MSVC 1
-#endif
+#endif // defined(_MSC_VER)
 
 #ifndef VD_HOST_COMPILER_CLANG
 #define VD_HOST_COMPILER_CLANG 0
-#endif
+#endif // !VD_HOST_COMPILER_CLANG
 
 #ifndef VD_HOST_COMPILER_MSVC
 #define VD_HOST_COMPILER_MSVC 0
-#endif
+#endif // !VD_HOST_COMPILER_MSVC
+
+#if !VD_HOST_COMPILER_CLANG && !VD_HOST_COMPILER_MSVC
+#define VD_HOST_COMPILER_UNKNOWN 1
+#endif // !VD_HOST_COMPILER_CLANG && !VD_HOST_COMPILER_MSVC
+
+#ifndef VD_HOST_COMPILER_UNKNOWN
+#define VD_HOST_COMPILER_UNKNOWN 0
+#endif // !VD_HOST_COMPILER_UNKNOWN
 
 #if defined(__cplusplus)
 #define VD_CPP 1
-#endif
+#endif // defined(__cplusplus)
 
 #ifndef VD_CPP
 #define VD_CPP 0
-#endif
+#endif // !VD_CPP
 
 #if VD_CPP
 #define VD_C 0
 #else
 #define VD_C 1
-#endif
+#endif // VD_CPP
 
 /* ----PLATFORM------------------------------------------------------------------------------------------------------ */
 #if defined(_WIN32) || defined(_WIN64)
@@ -133,6 +142,8 @@ typedef int32_t       VD(b32);
  * @brief Indicates this parameter is unused.
  */
 #define VD_UNUSED(x) (void)(x)
+
+#define VD_OFFSET_OF(type, element) ((VD(usize)) & (((type*)0)->element))
 
 /* ----LIMITS-------------------------------------------------------------------------------------------------------- */
 #define VD_U8_MAX    UINT8_MAX
@@ -260,6 +271,8 @@ VD_INLINE void*             VDF(arena_alloc)(VD(Arena) *a, size_t size)         
 VD_INLINE void*             VDF(arena_resize)(VD(Arena) *a, void *old_memory, size_t old_size, size_t new_size) { return VDF(arena_resize_align)(a, old_memory, old_size, new_size, VD_ARENA_DEFAULT_ALIGNMENT); }
 
 #define VD_ARENA_PUSH_ARRAY(a, x, count) (x*)arena_alloc(a, sizeof(x) * count)
+#define VD_ARENA_FROM_SYSTEM(a, size)    (arena_init(a, VD_MALLOC(size), size))
+#define VD_ARENA_FREE_SYSTEM(a)          (VD_FREE(a->buf))
 
 #if VD_MACRO_ABBREVIATIONS
 #define ARENA_PUSH_ARRAY(a, x, count) VD_ARENA_PUSH_ARRAY(a, x, count)
@@ -278,7 +291,7 @@ VD_INLINE void *VDI(array_concat)(VD(Arena) *a, void *a1, VD(usize) na1, void *a
 
 #define VD_ARRAY_CONCAT(a, a1, na1, a2, na2) VDI(array_concat)((a), (a1), (na1), (void*)(a2), (na2), sizeof(*a1))
 
-/* ----BUFFER-------------------------------------------------------------------------------------------------------- */
+/* ----FIXED ARRAY--------------------------------------------------------------------------------------------------- */
 typedef struct {
     VD(u32) len;
     VD(u32) cap;
@@ -291,9 +304,9 @@ typedef struct {
 #define VD_FIXEDARRAY_ADDN(a, n)                        (VD_ASSERT(VD_FIXEDARRAY_CHECK(a, n)), VD_ARRAY_HEADER(a)->len += n)
 #define VD_FIXEDARRAY_ADD(a, v)                         (VD_ASSERT(VD_FIXEDARRAY_CHECK(a, 1)), (a)[VD_FIXEDARRAY_HEADER(a)->len++] = (v))
 #define VD_FIXEDARRAY_LEN(a)                            (VD_FIXEDARRAY_HEADER(a)->len)
+#define VD_FIXEDARRAY_CAP(a)                            (VD_FIXEDARRAY_HEADER(a)->cap)
 #define VD_FIXEDARRAY_CLEAR(a)                          (VD_FIXEDARRAY_HEADER(a)->len = 0)
-#define VD_FIXEDARRAY_POP(a)                            ((a)[VD_FIXEDARRAY_HEADER(a)->len--])
-#define VD_FIXEDARRAY_FREE(a, allocator)                (release(allocator, VD_FIXEDARRAY_HEADER(a), VD_FIXEDARRAY_HEADER(a)->cap * sizeof(*(a)) + sizeof(VD(FixedArrayHeader))))
+#define VD_FIXEDARRAY_POP(a)                            ((a)[--VD_FIXEDARRAY_HEADER(a)->len])
 #define VD_FIXEDARRAY
 
 VD_INLINE void* VDI(buffer_allocate)(VD(Arena) *arena, VD(u32) capacity, VD(usize) isize, VD(b32) mark)
@@ -320,20 +333,102 @@ VD_INLINE void* VDI(buffer_allocate)(VD(Arena) *arena, VD(u32) capacity, VD(usiz
 #define fixedarray
 #endif
 
+/* ----DYNAMIC ARRAY------------------------------------------------------------------------------------------------- */
+typedef struct {
+    VD(u32)     len;
+    VD(u32)     cap;
+    VD(Arena)   *arena;
+} VD(DynArrayHeader);
+
+#define VD_DYNARRAY_HEADER(a)       ((VD(DynArrayHeader)*)(((VD(u8)*)a) - sizeof(VD(DynArrayHeader))))
+#define VD_DYNARRAY_INIT(a, arena)  ((a) = VDI(dynarray_grow)(a, sizeof(*(a)), 1, 0, arena))
+#define VD_DYNARRAY_ADD(a, v)       (VD_DYNARRAY_CHECKGROW(a, 1), (a)[VD_DYNARRAY_HEADER(a)->len++] = (v))
+#define VD_DYNARRAY_PUSH(a, v)      (VD_DYNARRAY_CHECKGROW(a, 1), &((a)[VD_DYNARRAY_HEADER(a)->len++]))
+#define VD_DYNARRAY_ADDN(a, n)      (VD_DYNARRAY_CHECKGROW(a, n), VD_DYNARRAY_HEADER(a)->len += (n))
+#define VD_DYNARRAY_CLEAR(a)        ((a) ? VD_DYNARRAY_HEADER(a)->len = 0 : 0)
+#define VD_DYNARRAY_POP(a)          (VD_DYNARRAY_HEADER(a)->len--, (a)[VD_DYNARRAY_HEADER(a)->len])
+#define VD_DYNARRAY_LAST(a)         ((a)[VD_DYNARRAY_HEADER(a)->len - 1])
+#define VD_DYNARRAY_LEN(a)          ((a) ? VD_DYNARRAY_HEADER(a)->len : 0)
+#define VD_DYNARRAY_CAP(a)          ((a) ? VD_DYNARRAY_HEADER(a)->cap : 0)
+#define VD_DYNARRAY_ARENAP(a)       ((a) ? VD_DYNARRAY_HEADER(a)->arena : 0)
+#define VD_DYNARRAY_GROW(a, b, c)   ((a) = VDF(dynarray_grow)((a), sizeof(*(a)), (b), (c), VD_DYNARRAY_ARENAP(a)))
+#define VD_DYNARRAY_CHECKGROW(a, n)                      \
+    ((!(a) || VD_ARRAY_HEADER(a)->len + (n) > VD_ARRAY_HEADER(a)->cap) \
+    ? (VD_ARRAY_GROW(a, n, 0), 0) : 0)
+
+#define VD_DYNARRAY
+
+VD_INLINE void *VDI(dynarray_grow)(void *a, VD(usize) tsize, VD(u32) addlen, VD(u32) mincap, VD(Arena) *arena)
+{
+    VD(usize) min_len = VD_DYNARRAY_LEN(a) + addlen;
+    #define VD_DYNARRAY_LAST(a)         ((a)[VD_DYNARRAY_HEADER(a)->len - 1])
+
+    if (min_len > mincap) {
+        mincap = min_len;
+    }
+
+    if (mincap <= VD_DYNARRAY_CAP(a)) {
+        return a;
+    }
+
+    if (mincap < (2 * VD_DYNARRAY_CAP(a))) {
+        mincap = 2 * VD_DYNARRAY_CAP(a);
+    } else {
+        mincap = 4;
+    }
+
+    void *b = VDF(arena_resize)(arena, 
+        a ? VD_DYNARRAY_HEADER(a) : 0,
+        VD_DYNARRAY_CAP(a) == 0 ? 0 : tsize * VD_DYNARRAY_CAP(a) + sizeof(VD(DynArrayHeader)),
+        tsize * mincap * sizeof(VD(DynArrayHeader)));
+
+    b = (VD(u8)*)b + sizeof(VD(DynArrayHeader));
+
+    if (a == 0) {
+        VD_DYNARRAY_HEADER(a)->len = 0;
+        VD_DYNARRAY_HEADER(a)->arena = arena;
+    }
+
+    VD_DYNARRAY_HEADER(a)->cap = mincap;
+    return b;
+}
+
+#if VD_MACRO_ABBREVIATIONS
+#define dynarray_init(a, arena) VD_DYNARRAY_INIT(a, arena)
+#define dynarray_add(a, v)      VD_DYNARRAY_ADD(a, v)
+#define dynarray_push(a, v)     VD_DYNARRAY_PUSH(a, v)
+#define dynarray_addn(a, n)     VD_DYNARRAY_ADDN(a, n)
+#define dynarray_clear(a)       VD_DYNARRAY_CLEAR(a)
+#define dynarray_pop(a)         VD_DYNARRAY_POP(a)
+#define dynarray_last(a)        VD_DYNARRAY_LAST(a)
+#define dynarray_len(a)         VD_DYNARRAY_LEN(a)
+#define dynarray_cap(a)         VD_DYNARRAY_CAP(a)
+#endif
+
 /* ----STR----------------------------------------------------------------------------------------------------------- */
 typedef struct __VD_Str {
     char        *s;
     VD(usize)   len;
 } VD(Str);
 
-VD_INLINE VD(usize)    VDF(cstr_len)(VD(cstr) a)
-{
-    VD(usize) result = 0;
-    while (*a++) result++;
-    return result;
-}
+VD_INLINE VD(b32)      VDF(cstr_cmp)(VD(cstr) _a, VD(cstr) _b);
+VD_INLINE VD(usize)    VDF(cstr_len)(VD(cstr) a);
+VD_INLINE VD(cstr)     VDF(cstr_dup)(VD(Arena) *arena, VD(cstr) s);
+VD_INLINE VD(cstr)     VDF(cstr_cncat)(VD(Arena) *arena, VD(cstr) a, VD(cstr) b);
+VD_INLINE VD(cstr)     VDF(cstr_ncncat)(VD(Arena) *arena, VD(usize) *num_strings, VD(cstr) *strings);
 
-VD_INLINE VD(b32)      VDF(cstr_cmp)(VD(cstr) _a, VD(cstr) _b)
+VD_INLINE VD(Str)      VDF(str_from_cstr)(VD(cstr) s) { return (VD(Str)) { .s = s, .len = VDF(cstr_len)(s) }; }
+VD_INLINE VD(Str)      VDF(str_dup)(VD(Arena) *a, VD(Str) s);
+VD_INLINE VD(Str)      VDF(str_dup_from_cstr)(VD(Arena) *a, VD(cstr) s);
+VD_INLINE VD(usize)    VDF(str_first_of)(VD(Str) s, VD(Str) q, VD(u64) start);
+VD_INLINE VD(b32)      VDF(str_split)(VD(Str) s, VD(usize) at, VD(Str) *left, VD(Str) *right);
+VD_INLINE VD(Str)      VDF(str_chop_left)(VD(Str) s, VD(usize) at) { VD(Str) left, right; return VDF(str_split)(s, at, &left, &right) ? right : (VD(Str)){0, 0}; }
+VD_INLINE VD(Str)      VDF(str_chop_right)(VD(Str) s, VD(usize) at) { VD(Str) left, right; return VDF(str_split)(s, at, &left, &right) ? left : (VD(Str)){0, 0}; }
+VD_INLINE VD(b32)      VDF(str_eq)(VD(Str) a, VD(Str) b);
+VD_INLINE VD(Str)      VDF(str_join)(VD(Arena) *arena, VD(Str) a, VD(Str) b, VD(b32) null_sep);
+VD_INLINE VD(b32)      VDF(str_ends_with_char)(VD(Str) a, char c) { return a.len > 0 ? a.s[a.len - 1] == c : VD_FALSE; }
+
+VD_INLINE VD(b32) VDF(cstr_cmp)(VD(cstr) _a, VD(cstr) _b)
 {
     VD(cstr) a = _a;
     VD(cstr) b = _b;
@@ -348,15 +443,275 @@ VD_INLINE VD(b32)      VDF(cstr_cmp)(VD(cstr) _a, VD(cstr) _b)
     return VD_FALSE;
 }
 
-#define VD_LIT(string)  (VD(Str)) { .s = (string), .len = sizeof(string), }
+VD_INLINE VD(usize) VDF(cstr_len)(VD(cstr) a)
+{
+    VD(usize) result = 0;
+    while (*a++) result++;
+    return result;
+}
+
+VD_INLINE VD(Str) VDF(str_dup)(VD(Arena) *a, VD(Str) s) {
+    VD(Str) result;
+    result.s = VDF(arena_alloc)(a, s.len);
+    result.len = s.len;
+    VD_MEMCPY(result.s, s.s, s.len);
+    return result;
+}
+
+VD_INLINE VD(Str) VDF(str_dup_from_cstr)(VD(Arena) *a, VD(cstr) s) {
+    return VDF(str_dup)(a, VDF(str_from_cstr)(s));
+}
+
+VD_INLINE VD(usize) VDF(str_first_of)(VD(Str) s, VD(Str) q, VD(u64) start) {
+    if (s.len == 0) return 0;
+    if (q.len == 0) return 0;
+
+    VD(usize) qindex = 0;
+    VD(usize) i;
+    for (i = start; i < s.len; ++i) {
+        if (s.s[i] == q.s[qindex]) {
+            qindex++;
+        } else {
+            qindex = 0;
+        }
+
+        if (qindex == q.len) {
+            return i - q.len + 1;
+        }
+    }
+
+    return s.len;
+}
+
+VD_INLINE VD(b32) VDF(str_split)(VD(Str) s, VD(usize) at, VD(Str) *left, VD(Str) *right)
+{
+    if ((s.len < at) || (at >= s.len)) {
+        return VD_FALSE;
+    }
+
+    left->s    = s.s;
+    left->len  = at + 1;
+    right->s   = s.s + at + 1;
+    right->len = s.len - (at + 1);
+
+    return VD_TRUE;
+}
+
+VD_INLINE VD(b32) VDF(str_eq)(VD(Str) a, VD(Str) b)
+{
+    if (a.len != b.len) return VD_FALSE;
+
+    for (VD(usize) i = 0; i < a.len; ++i) {
+        if (a.s[i] != b.s[i]) return VD_FALSE;        
+    }
+
+    return VD_TRUE;
+}
+
+VD_INLINE VD(cstr) VDF(cstr_cncat)(VD(Arena) *arena, VD(cstr) a, VD(cstr) b) {
+    VD(usize) la = VDF(cstr_len)(a);
+    VD(usize) lb = VDF(cstr_len)(b);
+
+    VD(cstr) result = (VD(cstr))VDF(arena_alloc)(arena, la + lb + 1);
+
+    VD_MEMCPY(result, a, la);
+    VD_MEMCPY(result + la, b, lb);
+    result[la + lb] = 0;
+    return result;
+}
+
+VD_INLINE VD(cstr) VDF(cstr_dup)(VD(Arena) *arena, VD(cstr) s) {
+    VD(usize) ls = VDF(cstr_len)(s);
+    VD(cstr) result = (VD(cstr))VDF(arena_alloc)(arena, ls + 1);
+    VD_MEMCPY(result, s, ls);
+    result[ls] = 0;
+    return result;
+}
+
+VD_INLINE VD(Str) VDF(str_join)(VD(Arena) *arena, VD(Str) a, VD(Str) b, VD(b32) null_sep)
+{
+    VD(usize) final_size = a.len + b.len + (null_sep ? 1 : 0);
+    char *result = (char*)VDF(arena_alloc)(arena, final_size);
+
+    VD_MEMCPY(result, a.s, a.len);
+    VD_MEMCPY(result + a.len, b.s, b.len);
+    if (null_sep) {
+        result[a.len + b.len] = 0;
+    }
+
+    return (VD(Str)) { result, final_size };
+}
+
+#define VD_LIT(string)  (VD(Str)) { .s = (string), .len = (sizeof(string) - 1), }
+
+#define VD_STR_EXPAND(string) (int)(string).len, (string).s
 
 #if VD_MACRO_ABBREVIATIONS
-#define LIT(string)     VD_LIT(string)
+#define LIT(string)         VD_LIT(string)
+#define STR_EXPAND(string)  VD_STR_EXPAND(string)
 #endif
 
-VD_INLINE VD(Str) VDF(str_from_cstr)(VD(cstr) s) { return (VD(Str)) { .s = s, .len = VDF(cstr_len)(s),}; }
+/* ----PARSING------------------------------------------------------------------------------------------------------- */
+VD_INLINE VD(b32)      VDF(is_ascii_digit)(char c);
+VD_INLINE VD(b32)      VDF(is_letter)(char c);
+VD_INLINE VD(b32)      VDF(is_cdecl_start)(char c);
+VD_INLINE VD(b32)      VDF(is_cdecl_continue)(char c);
+VD(b32)                VDF(parse_u64)(VD(Str) s, VD(u64) *r);
 
-/* ----STR BUILDER--------------------------------------------------------------------------------------------------- */
+VD_INLINE VD(b32) VDF(is_ascii_digit)(char c)
+{
+    return (c >= '0') && (c <= '9');
+}
+
+VD_INLINE VD(b32) VDF(is_letter)(char c)
+{
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+}
+
+VD_INLINE VD(b32) VDF(is_cdecl_start)(char c)
+{
+    return VDF(is_letter)(c) || c == '_';
+}
+
+VD_INLINE VD(b32) VDF(is_cdecl_continue)(char c)
+{
+    return VDF(is_cdecl_start)(c) || VDF(is_ascii_digit)(c);
+}
+
+/* ----ARG----------------------------------------------------------------------------------------------------------- */
+typedef struct __VD_Arg {
+    int argc;
+    char **argv;
+
+    int argi;
+    int ci;
+} VD(Arg);
+
+VD(Arg) VDF(arg_new)(int argc, char **argv);
+void    VDF(arg_skip_program_name)(VD(Arg) *arg);
+void    VDF(arg_skip)(VD(Arg) *arg);
+VD(b32) VDF(arg_at_end)(VD(Arg) *arg);
+VD(b32) VDF(arg_get_name)(VD(Arg) *arg, VD(Str) *name);
+VD(b32) VDF(arg_get_uint)(VD(Arg) *arg, VD(u64) *i);
+VD(b32) VDF(arg_get_str)(VD(Arg) *arg, VD(Str) *str);
+VD(b32) VDF(arg_expect_char)(VD(Arg) *arg, char c);
+
+/* ----HASH---------------------------------------------------------------------------------------------------------- */
+#ifndef VD_HASH64_CUSTOM
+#define VD_HASH64_CUSTOM 0
+#endif // !VD_HASH64_CUSTOM
+
+#if !VD_HASH64_CUSTOM
+#define VD_HASH64_DEFAULT_SEED (0x9747b28c)
+
+VD_INLINE VD(u64) VDF(hash64)(const void *data, VD(u64) len, VD(u32) seed)
+{
+    const VD(u64) m = 0x5bd1e995;
+    const VD(u64) r = 24;
+
+    VD(u64) h = seed ^ len;
+
+    const VD(u8) *bytes = (const VD(u8)*)data;
+
+    while (len >= 4)
+    {
+        VD(u32) k = *(VD(u32)*)bytes;
+
+        k *= m;
+        k ^= k >> r;
+        k *= m;
+
+        h *= m;
+        h ^= k;
+
+        bytes += 4;
+        len -= 4;   
+    }
+
+    switch (len) {
+        case 3: h ^= bytes[2] << 16;
+        case 2: h ^= bytes[1] << 8;
+        case 1: h ^= bytes[0];
+                h *= m;
+    }
+
+    h ^= h >> 13;
+    h *= m;
+    h ^= h >> 15;
+
+    return h;
+}
+
+VD_INLINE VD(u64) VDF(dhash64)(const void *data, VD(u64) len) { return VDF(hash64)(data, len, VD_HASH64_DEFAULT_SEED); }
+#endif // !VD_HASH64_CUSTOM
+
+/* ----HANDLEMAP----------------------------------------------------------------------------------------------------- */
+typedef struct {
+    VD(u32)   cap;
+    VD(u32)   cap_total;
+    VD(u32)   tsize;
+    VD(Arena) *arena;
+} VDI(StrMapHeader);
+
+typedef struct VDI(StrMapBinPrefix) VDI(StrMapBinPrefix);
+
+struct VDI(StrMapBinPrefix) {
+    VDI(StrMapBinPrefix) *next;             //  8 bytes
+    VD(u32)              key_len;           //  4 bytes
+    VD(u8)               used;              //  1 byte
+    char                 *key_rest;         //  8 bytes
+    char                 key_prefix[43];    // 43 bytes
+};                                          // = 64 bytes
+
+typedef enum {
+    VDI(STRMAP_GET_BIN_FLAGS_CREATE)     = 1 << 1,
+    VDI(STRMAP_GET_BIN_FLAGS_SET_UNUSED) = 1 << 2,
+} VDI(StrMapGetBinFlags);
+
+/* ----HANDLEMAP----------------------------------------------------------------------------------------------------- */
+typedef struct __VD_HdlMap {
+    VD(u64)     initial_cap;
+    VD(Arena)   arena;
+    void        (*on_free_object)(void *object, void *c);
+} VD(HdlMap);
+
+typedef struct __VD_Handle {
+    VD(u64)    id;
+    VD(HdlMap) *map; 
+} VD(Hdl);
+
+
+/* ----FILESYSTEM---------------------------------------------------------------------------------------------------- */
+#include <stdio.h>
+VD_INLINE VD(u8)*  VDF(dump_file_to_bytes)(VD(Arena) *arena, VD(cstr) file_path, VD(usize) *len)
+{
+    FILE *f = fopen(file_path, "rb");
+    fseek(f, 0, SEEK_END);
+    VD(usize) size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    VD(u8) *result = arena_alloc(arena, size);
+    fread(result, size, 1, f);
+    *len = size;
+    return result;
+}
+
+VD_INLINE VD(cstr) VDF(dump_file_to_cstr)(VD(Arena) *arena, VD(cstr) file_path, VD(usize) *len)
+{
+    FILE *f = fopen(file_path, "rb");
+    if (f == 0) return 0;
+    
+    fseek(f, 0, SEEK_END);
+    VD(usize) size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    char *result = arena_alloc(arena, size + 1);
+    fread(result, size, 1, f);
+    result[size] = 0;
+    *len = size;
+    return result;
+}
+
 
 /* ----SCRATCH------------------------------------------------------------------------------------------------------- */
 #ifndef VD_SCRATCH_PAGE_COUNT
@@ -432,12 +787,79 @@ extern VD_THREAD_CONTEXT_TYPE * VD_THREAD_CONTEXT_VARNAME;
 #define VD_INCLUDE_TESTS 0
 #endif // VD_INCLUDE_TESTS
 
-#if VD_INCLUDE_TESTS
-#define VD_TEST(name) VD(b32) name(void)
-typedef VD_TEST(VD(ProcTest));
-#else
-#define VD_TEST(name)
-#endif
+#if VD_INCLUDE_TESTS && !VD_HOST_COMPILER_UNKNOWN
+extern VD(Arena) *Test_Arena;
+
+typedef struct __VD_TestResult {
+    int         ok;
+    const char  *err;
+} VD(TestResult);
+
+#define VD_PROC_TEST(name) VD(TestResult) name(void)
+typedef VD_PROC_TEST(VD(ProcTest));
+
+typedef struct __VD_TestEntry {
+    const char   *name;
+    VD(ProcTest) *test;
+} VD(TestEntry);
+
+#if VD_HOST_COMPILER_MSVC
+
+#pragma section(".vdtests$a", read)
+__declspec(allocate(".vdtests$a")) static VD(TestEntry) *VDI(Test_Start) = 0;
+
+#pragma section(".vdtests$z", read)
+__declspec(allocate(".vdtests$z")) static VD(TestEntry) *VDI(Test_End)   = 0;
+
+#define VD_TEST_SECTION __declspec(allocate(".vdtests$m"))
+#define VD_TEST_USED
+
+#elif VD_HOST_COMPILER_CLANG
+
+#if VD_PLATFORM_MACOS
+#define VD_TEST_SECTION __attribute__((used, section("__DATA,vdtests")))
+#define VD_TEST_USED    __attribute__((used))
+#else 
+#define VD_TEST_SECTION __attribute__((section("vdtests"), used))
+#define VD_TEST_USED    __attribute__((used))
+#endif // VD_PLATFORM_LINUX, VD_PLATFORM_MACOS
+
+extern VD(TestEntry) *__start_vdtests;
+extern VD(TestEntry) *__end_vdtests;
+
+#endif  // VD_HOST_COMPILER_MSVC, VD_HOST_COMPILER_CLANG
+
+#define VD_TEST_PROC_ID(counter)  VD_STRING_JOIN2(vd_test_proc_, counter)
+#define VD_TEST_ENTRY_ID(counter) VD_STRING_JOIN2(vd_test_entry_, counter)
+
+#define VD_TEST_IMPL(string, counter) \
+    static VD_PROC_TEST(VD_TEST_PROC_ID(counter)); \
+    static VD_TEST_SECTION VD_TEST_USED VD(TestEntry) VD_TEST_ENTRY_ID(counter) = {string, VD_TEST_PROC_ID(counter)}; \
+    static VD_PROC_TEST(VD_TEST_PROC_ID(counter))
+
+#define VD_TEST(string) VD_TEST_IMPL(string, __COUNTER__)
+
+extern void VDF(test_main)(int argc, char **argv);
+
+#define VD_TEST_ERR(msg)          return((VD(TestResult)) {.ok = 0, .err = msg })
+#define VD_TEST_OK()              return((VD(TestResult)) {.ok = 1, .err = 0 })
+#define VD_TEST_ASSERT(desc, x)   do { if (!(x))       { VD_TEST_ERR(desc "\nExpected: " #x " would be true");  } } while (0)
+#define VD_TEST_TRUE(desc, x, y)  do { if (!(x))       { VD_TEST_ERR(desc "\nExpected: " #x " == true");        } } while (0)
+#define VD_TEST_FALSE(desc, x, y) do { if ( (x))       { VD_TEST_ERR(desc "\nExpected: " #x " == false");       } } while (0)
+#define VD_TEST_EQ(desc, x, y)    do { if ((x) != (y)) { VD_TEST_ERR(desc "\nExpected: " #x " == " #y );        } } while (0)
+#define VD_TEST_NEQ(desc, x, y)   do { if ((x) == (y)) { VD_TEST_ERR(desc "\nExpected: " #x " != " #y );        } } while (0)
+#define VD_TEST_LT(desc, x, y)    do { if ((x) >= (y)) { VD_TEST_ERR(desc "\nExpected: " #x " < " #y );         } } while (0)
+#define VD_TEST_GT(desc, x, y)    do { if ((x) <= (y)) { VD_TEST_ERR(desc "\nExpected: " #x " > " #y );         } } while (0)
+#define VD_TEST_LE(desc, x, y)    do { if ((x) >  (y)) { VD_TEST_ERR(desc "\nExpected: " #x " <= " #y );        } } while (0) 
+#define VD_TEST_GE(desc, x, y)    do { if ((x) <  (y)) { VD_TEST_ERR(desc "\nExpected: " #x " >= " #y );        } } while (0) 
+
+#endif // VD_INCLUDE_TESTS && !VD_HOST_COMPILER_UNKNOWN
+
+// Set this to 1 to include vd.h tests
+#ifndef VD_INCLUDE_INTERNAL_TESTS
+#define VD_INCLUDE_INTERNAL_TESTS 0
+#endif // !VD_INCLUDE_INTERNAL_TESTS
+
 
 #endif // !VD_H
 
@@ -591,4 +1013,231 @@ void VDF(scratch_return_arena)(VD(Scratch) *scratch, VD(Arena) *arena)
 /* ----THREAD CONTEXT IMPL------------------------------------------------------------------------------------------- */
 VD_THREAD_CONTEXT_TYPE * VD_THREAD_CONTEXT_VARNAME;
 
+/* ----PARSING IMPL-------------------------------------------------------------------------------------------------- */
+VD(b32) VDF(parse_u64)(VD(Str) s, VD(u64) *r)
+{
+    VD(u64) result = 0;
+    VD(usize) i = 0;
+    while (i < s.len && VDF(is_ascii_digit)(s.s[i])) {
+        result = result * 10 + (s.s[i] - '0');
+        i++;
+    } 
+
+    if (i != s.len) {
+        return VD_FALSE;
+    }
+
+    *r = result;
+
+    return VD_TRUE;
+}
+
+/* ----ARG IMPL------------------------------------------------------------------------------------------------------ */
+VD(b32) VDI(arg_advance)(VD(Arg) *arg) {
+    if ((arg->argi + 1) == arg->argc) {
+        return VD_FALSE;
+    } else {
+        arg->argi++;
+        arg->ci = 0;
+        return VD_TRUE;
+    }
+}
+
+#define VD_ARG_CHECK_NEXT(arg) do {                      \
+        if (arg->ci != 0) {                              \
+            if (VDF(arg_at_end)(arg)) return VD_FALSE;   \
+            if (!VDI(arg_advance)(arg)) return VD_FALSE; \
+        }                                                \
+    } while(0)
+
+VD(Arg) VDF(arg_new)(int argc, char **argv)
+{
+    return (VD(Arg)) {
+        .argc    = argc,
+        .argv    = argv,
+        .argi    = 0,
+        .ci      = 0,
+    };
+}
+
+void VDF(arg_skip_program_name)(VD(Arg) *arg)
+{
+   arg->argi++;
+   arg->ci = 0;
+}
+
+VD(b32) VDF(arg_at_end)(VD(Arg) *arg)
+{
+    return (arg->argi == arg->argc) ||
+           (arg->argi == (arg->argc - 1) &&
+            arg->argv[arg->argi][arg->ci] == 0);
+}
+
+void VDF(arg_skip)(VD(Arg) *arg)
+{
+    arg->argi++;
+    arg->ci = 0;    
+}
+
+VD(b32) VDF(arg_get_name)(VD(Arg) *arg, VD(Str) *name)
+{
+    VD_ARG_CHECK_NEXT(arg);
+
+    if (arg->argv[arg->argi][arg->ci] != '-') {
+        return VD_FALSE;
+    }
+
+    arg->ci = 1;
+
+    VD(Str) result;
+    result.s = &arg->argv[arg->argi][1];
+    result.len = 0;
+
+    while (arg->argv[arg->argi][arg->ci] != 0) {
+        arg->ci++;
+        result.len++;
+    }
+
+    if (result.len == 0) {
+        return VD_FALSE;
+    }
+
+    *name = result;
+
+    return VD_TRUE;
+}
+
+VD(b32) VDF(arg_get_uint)(VD(Arg) *arg, VD(u64) *i) {
+    VD_ARG_CHECK_NEXT(arg);
+
+    return VD_FALSE;
+}
+
+VD(b32) VDF(arg_get_str)(VD(Arg) *arg, VD(Str) *str) {
+    VD_ARG_CHECK_NEXT(arg);
+
+    VD(Str) result;
+    result.s = &arg->argv[arg->argi][0];
+    result.len = 0;
+
+    while (arg->argv[arg->argi][arg->ci] != 0) {
+        arg->ci++;
+        result.len++;
+    }
+
+    *str = result;
+    return VD_TRUE;
+}
+
+VD(b32) VDF(arg_expect_char)(VD(Arg) *arg, char c);
+
+#undef VD_ARG_CHECK_NEXT
+
+#if VD_INCLUDE_TESTS
+
+#if VD_PLATFORM_MACOS
+#include <mach-o/getsect.h>
+#include <mach-o/dyld.h>
+#endif // VD_PLATFORM_MACOS
+
+static int VDI(run_test)(VD(TestEntry)* e) {
+    VDF(arena_clear)(Test_Arena);
+
+    printf("[%-60s]", e->name);
+    VD(TestResult) r = e->test();
+    if (r.ok) {
+        printf(" OK     \n");
+        return 1;
+    } else {
+        printf(" FAILED \n");
+        printf("%s\n", r.err);
+        return 0;
+    }
+}
+
+VD(Arena) *Test_Arena;
+
+#include <stdio.h>
+void VDF(test_main)(int argc, char **argv)
+{
+    VD(Arena) a;
+    Test_Arena = &a;
+
+    VD_ARENA_FROM_SYSTEM(Test_Arena, VD_MEGABYTES(64));
+
+    int passed = 0, total = 0;
+#if VD_HOST_COMPILER_MSVC 
+    VD(TestEntry) **start = &__start_vdtests + 1;
+    VD(TestEntry) **end = &__end_vdtests;
+
+    for (VD(TestEntry) **p = start; p < end; ++p) {
+        VD(TestEntry) *t = *p;
+        if (VDI(run_test)(t)) {
+            passed++;
+        }
+        total++;
+    }
+#elif VD_HOST_COMPILER_CLANG
+#if VD_PLATFORM_MACOS
+    unsigned long size;
+    const struct mach_header *mh = (const struct mach_header *)_dyld_get_image_header(0);
+    VD(TestEntry) *tests = (VD(TestEntry)*)getsectiondata((struct mach_header_64 *)mh, "__DATA", "vdtests", &size);
+    VD(usize) count = size / sizeof(VD(TestEntry));
+    for (VD(usize) i = 0; i < count; ++i) {
+        if (VDI(run_test)(&tests[i])) {
+            passed++;
+        }
+        total++;
+    }
+#else
+    for (VD(TestEntry) **p = &__start_vdtests; p < &VDI(Test_End); ++p) {
+        VD(TestEntry) *t = *p;
+        if (VDI(run_test)(t)) {
+            passed++;
+        }
+        total++;
+    }
+#endif // VD_PLATFORM_MACOS, else
+    printf("Finished: %d/%d\n", passed, total);
+#else
+#error "Cannot produce tests for unknown compiler!"
+#endif // VD_HOST_COMPILER_MSVC, VD_HOST_COMPILER_CLANG
+}
+
+#if VD_INCLUDE_INTERNAL_TESTS
+
+VD_TEST("FixedArray/Basic")
+{
+    VD_FIXEDARRAY int *array = 0;
+    VD_FIXEDARRAY_INIT(array, 30, Test_Arena);
+
+    VD_TEST_EQ("Fixed array has correct capacity", VD_FIXEDARRAY_CAP(array), 30);
+
+    for (int i = 0; i < 30; ++i) {
+        VD_FIXEDARRAY_ADD(array, i);
+        VD_TEST_EQ("Fixed array insertion is correct", array[i], i);
+    }
+    VD_TEST_EQ("Fixed array has correct length", VD_FIXEDARRAY_LEN(array), 30);
+
+    VD_FIXEDARRAY_CLEAR(array);
+    VD_TEST_EQ("Fixed array has correct length when cleared", VD_FIXEDARRAY_LEN(array), 0);
+
+    for (int i = 0; i < 30; ++i) {
+        VD_FIXEDARRAY_ADD(array, i);
+        VD_TEST_EQ("Fixed array insertion after clear is ok", array[i], i);
+    }
+    VD_TEST_EQ("Fixed array has correct length after clear and repopulate", VD_FIXEDARRAY_LEN(array), 30);
+
+    for (int i = 29; i >= 0; --i) {
+        int c = VD_FIXEDARRAY_POP(array);
+        VD_TEST_EQ("Array pop i is correct", c, i);
+    }
+
+    VD_TEST_EQ("Fixed array has correct length after n pops", VD_FIXEDARRAY_LEN(array), 0);
+
+    VD_TEST_OK();
+}
+
+#endif // VD_INCLUDE_INTERNAL_TESTS
+#endif // VD_INCLUDE_TESTS
 #endif // VD_IMPL

@@ -18,6 +18,10 @@
 #define VD_VK_MACRO_ABBREVIATIONS VD_MACRO_ABBREVIATIONS
 #endif // !VD_VK_MACRO_ABBREVIATIONS
 
+#ifndef VD_VK_VMA_TRACKING
+#define VD_VK_VMA_TRACKING 0
+#endif // !VD_VK_VMA_TRACKING
+
 #ifndef VD_VK_CHECK
 #define VD_VK_CHECK(x)                                                                                                           \
     do {                                                                                                                         \
@@ -116,6 +120,9 @@ typedef struct __VD_VK_QueueGroup {
 } VD(VkQueueGroup);
 
 typedef struct __VD_VK_PhysicalDeviceCharacteristics {
+    // VkPhysicalDeviceProperties
+    VD(u32)             api_version;
+
     // VkPhysicalDeviceFeatures
     VD(b32)             robust_buffer_access;
     VD(b32)             full_draw_index_uint32;
@@ -249,7 +256,14 @@ typedef struct __VD_VK_PhysicalDeviceCharacteristics {
     VD(usize)           num_queue_setups;
     VD(VkQueueSetup)    *queue_setups;
 
+    /** The baseline preference for this compatible device adapter */
     VD(i32)             rank_baseline;
+
+    VD(usize)           num_surface_formats;
+
+    /** At least one of these formats must be supported. The first supported one will be written to @first_supported_surface_format */
+    VkSurfaceFormatKHR  *surface_formats;
+
     /** Internal use only; Used to store rank of 
      * @VkPickPhysicalDeviceInfo.compatible_characteristics
      * computed_rank <= 0: physical device with characteristics is not available
@@ -257,10 +271,13 @@ typedef struct __VD_VK_PhysicalDeviceCharacteristics {
      */
     VD(i32)             computed_rank;
     VkPhysicalDevice    physical_device;
+
+    VD(usize)           first_supported_surface_format;
 } VD(VkPhysicalDeviceCharacteristics);
 
 typedef struct __VD_VK_PickPhysicalDeviceInfo {
     VkInstance                                      instance;
+    VkSurfaceKHR                                    surface;
     VD(usize)                                       num_compatible_characteristics;
     VD(VkPhysicalDeviceCharacteristics)             *compatible_characteristics;
     VD(VkProcGetPhysicalDevicePresentationSupport)  *get_physical_device_presentation_support;
@@ -282,12 +299,71 @@ typedef struct __VD_VK_CreateDeviceAndQueuesInfo {
     } result;
 } VD(VkCreateDeviceAndQueuesInfo);
 
+typedef struct __VD_VK_CreateSwapchainAndFetchImagesInfo {
+    VkDevice           device;
+    VkPhysicalDevice   physical_device;
+    VkSurfaceKHR       surface;
+    VkSurfaceFormatKHR surface_format;
+    VkExtent2D         extent;
+
+    struct {
+        VkSwapchainKHR  *swapchain;
+        VD(u32)         *num_images;
+        VkImage         **images;
+    } result;
+} VD(VkCreateSwapchainAndFetchImagesInfo);
+
+typedef struct __VD_VK_CreateImageViewsInfo {
+    VkDevice              device;
+    VD(u32)               num_images;
+    VkImage               *images;
+    VkFormat              image_format;
+
+    VkImageViewCreateInfo *override_info;
+
+    struct {
+        VkImageView       **image_views;
+    } result;
+
+} VD(VkCreateImageViewsInfo);
+
 VD(b32)     VDF(vk_require_instance_extensions)         (VD(Arena) *temp, VD(VkRequireInstanceExtensionsInfo) *info);
 VD(b32)     VDF(vk_require_instance_layers)             (VD(Arena) *temp, VD(VkRequireInstanceLayersInfo) *info);
 void        VDF(vk_create_instance_extended)            (VD(VkCreateInstanceExtendedInfo) *info);
 void        VDF(vk_log_physical_device_characteristics) (VD(VkPhysicalDeviceCharacteristics) *characteristics);
 VD(b32)     VDF(vk_pick_physical_device)                (VD(Arena) *temp, VD(VkPickPhysicalDeviceInfo) *info);
 void        VDF(vk_create_device_and_queues)            (VD(Arena) *temp, VD(VkCreateDeviceAndQueuesInfo) *info);
+void        VDF(vk_create_image_views)                  (VD(Arena) *a, VD(VkCreateImageViewsInfo) *info);
+void        VDF(vk_destroy_image_views)                 (VkDevice device, VD(u32) num_image_views, VkImageView *image_views);
+void        VDF(vk_destroy_framebuffers)                (VkDevice device, VD(u32) num_framebuffers, VkFramebuffer *framebuffers);
+void        VDF(vk_destroy_semaphores)                  (VkDevice device, VD(u32) num_semaphores, VkSemaphore *semaphores);
+
+#if VD_VK_VMA_TRACKING
+#ifndef AMD_VULKAN_MEMORY_ALLOCATOR_H
+#error "VD_VK_VMA_TRACKING requires vk_mem_alloc.h"
+#endif // !AMD_VULKAN_MEMORY_ALLOCATOR_H
+
+#define VD_VK_VMA_TRACK_ALLOCATION(allocator, allocation)   VDI(vk_vma_track_allocation)(allocator, allocation, __FILE__, sizeof(__FILE__), __LINE__)
+#define VD_VK_VMA_RELEASE_ALLOCATION(allocator, allocation) VDI(vk_vma_release_allocation)(allocator, allocation)
+#define VD_VK_VMA_CHECK_ALLOCATIONS()                       VDI(vk_vma_check_allocations)()
+
+void VDI(vk_vma_track_allocation)(VmaAllocator allocator, VmaAllocation allocation, const char *file, int filelen, int line);
+void VDI(vk_vma_release_allocation)(VmaAllocator allocator, VmaAllocation allocation);
+void VDI(vk_vma_check_allocations)();
+
+#else
+
+#define VD_VK_VMA_TRACK_ALLOCATION(allocator, allocation)   do {} while (0)
+#define VD_VK_VMA_RELEASE_ALLOCATION(allocator, allocation) do {} while (0)
+#define VD_VK_VMA_CHECK_ALLOCATIONS()                       do {} while (0)
+
+#endif // VD_VK_VMA_TRACKING
+
+/**
+ * Create the swapchain and fetch
+ * @param a The arena to allocate the images
+ */
+void        VDF(vk_create_swapchain_and_fetch_images)   (VD(Arena) *a, VD(VkCreateSwapchainAndFetchImagesInfo) *info);
 
 #endif // !VD_VK_H
 
@@ -420,6 +496,11 @@ VD(b32) VDF(vk_pick_physical_device)(VD(Arena) *temp, VD(VkPickPhysicalDeviceInf
         VD(cstr) *device_extensions = VD_ARENA_PUSH_ARRAY(temp, VD(cstr), num_device_extensions);
         for (VD(u32) j = 0; j < num_device_extensions; ++j) {
             device_extensions[j] = device_extension_properties[j].extensionName;
+
+            // VUID-VkDeviceCreateInfo-pProperties-04451
+            if (VDF(cstr_cmp)(device_extensions[j], "VK_KHR_portability_subset")) {
+
+            }
         }
 
         // Get physical device properties
@@ -473,8 +554,15 @@ VD(b32) VDF(vk_pick_physical_device)(VD(Arena) *temp, VD(VkPickPhysicalDeviceInf
             };
         }
 
+        VD(u32) num_surface_formats;
+        vkGetPhysicalDeviceSurfaceFormatsKHR(physical_devices[i], info->surface, &num_surface_formats, 0);
+        VkSurfaceFormatKHR *surface_formats = VD_ARENA_PUSH_ARRAY(temp, VkSurfaceFormatKHR, num_surface_formats);
+        vkGetPhysicalDeviceSurfaceFormatsKHR(physical_devices[i], info->surface, &num_surface_formats, surface_formats);
+
         // Create @VkPhysicalDeviceCharacteristics
         VkPhysicalDeviceCharacteristics characteristics = {
+            // VkPhysicalDeviceProperties
+            .api_version                                  = device_properties.properties.apiVersion,
 
             // VkPhysicalDeviceFeatures
             .robust_buffer_access                         = features.features.robustBufferAccess,
@@ -602,6 +690,10 @@ VD(b32) VDF(vk_pick_physical_device)(VD(Arena) *temp, VD(VkPickPhysicalDeviceInf
             .queue_setups           = queues,
             .num_extensions         = num_device_extensions,
             .extensions             = device_extensions,
+
+            .num_surface_formats    = num_surface_formats,
+            .surface_formats        = surface_formats,
+
             .physical_device        = physical_devices[i],
         };
 
@@ -621,6 +713,19 @@ VD(b32) VDF(vk_pick_physical_device)(VD(Arena) *temp, VD(VkPickPhysicalDeviceInf
             VD(i32) rank = comparand->rank_baseline;
             VD(b32) is_available = VD_TRUE;
             comparand->physical_device = physical_devices[i];
+
+            // Check api version minimum
+            if (comparand->api_version > characteristics.api_version) {
+                is_available = false;
+            }
+
+            if (!is_available) {
+                if (info->log) {
+                    LOGF("vd_vk_pick_physical_device: Candidate device %u doesn't contain characteristic minimum api version: %zu ", i, j);
+                }
+
+                continue;
+            }
 
             // Check capabilities
             #define CHECK_CAP(x) do { if (!(!comparand->x || characteristics.x)) is_available = VD_FALSE; } while (0)
@@ -781,6 +886,37 @@ VD(b32) VDF(vk_pick_physical_device)(VD(Arena) *temp, VD(VkPickPhysicalDeviceInf
                 }
 
                 continue;
+            }
+
+            // Check surface formats
+            if (info->surface != VK_NULL_HANDLE) {
+                VD(usize) first_compatible_surface_format_index = comparand->num_surface_formats;
+
+                for (VD(usize) k = 0; k < comparand->num_surface_formats; ++k) {
+                    VD(b32) found = VD_FALSE;
+                    for (VD(usize) z = 0; z < characteristics.num_surface_formats; ++z) {
+                        if (comparand->surface_formats[k].format == characteristics.surface_formats[z].format &&
+                            comparand->surface_formats[k].colorSpace == characteristics.surface_formats[z].colorSpace)
+                        {
+                            found = VD_TRUE;
+                            break;
+                        }
+                    }
+
+                    if (found) {
+                        first_compatible_surface_format_index = k;
+                        break;
+                    }
+                }
+
+                if (first_compatible_surface_format_index == comparand->num_surface_formats) {
+                    if (info->log) {
+                        LOGF("vd_vk_pick_physical_device: Candidate device %u doesn't contain characteristic surface format: %zu ", i, j);
+                        continue;
+                    }
+                }
+
+                comparand->first_supported_surface_format = first_compatible_surface_format_index;
             }
 
             // Check queues
@@ -1021,6 +1157,12 @@ void VDF(vk_log_physical_device_characteristics)(VD(VkPhysicalDeviceCharacterist
             characteristics->queue_setups[i].capabilities & VD_(VK_QUEUE_CAPABILITIES_PRESENT   ? 1 : 0));
     }
 
+    LOGF("%-60s", "Surface Formats------");
+    for (VD(usize) i = 0; i < characteristics->num_surface_formats; ++i) {
+        LOGF("%-50s %30s",
+            string_VkFormat(characteristics->surface_formats[i].format),
+            string_VkColorSpaceKHR(characteristics->surface_formats[i].colorSpace));
+    }
 }
 
 void VDF(vk_create_device_and_queues)(VD(Arena) *temp, VD(VkCreateDeviceAndQueuesInfo) *info)
@@ -1202,5 +1344,205 @@ void VDF(vk_create_device_and_queues)(VD(Arena) *temp, VD(VkCreateDeviceAndQueue
         }
     }
 }
+
+void VDF(vk_create_swapchain_and_fetch_images)(VD(Arena) *a, VD(VkCreateSwapchainAndFetchImagesInfo) *info)
+{
+    VkSurfaceCapabilitiesKHR surface_caps;
+
+    // Query swapchain capabilities
+    VD_VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(info->physical_device, info->surface, &surface_caps));
+
+    VD(u32) result_image_count = surface_caps.minImageCount + 1;
+    if (surface_caps.maxImageCount > 0 && surface_caps.maxImageCount < result_image_count) {
+        result_image_count = surface_caps.maxImageCount;
+    }
+
+    VD_VK_CHECK(vkCreateSwapchainKHR(info->device, &(VkSwapchainCreateInfoKHR) {
+        .sType                 = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        .surface               = info->surface,
+        .minImageCount         = result_image_count,
+        .imageFormat           = info->surface_format.format,
+        .imageColorSpace       = info->surface_format.colorSpace,
+        .imageExtent           = info->extent,
+        .imageArrayLayers      = 1,
+        .imageUsage            = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        // @note(mdodis): This could be VK_SHARING_MODE_CONCURRENT if present and graphics queue families are the same
+        .imageSharingMode      = VK_SHARING_MODE_EXCLUSIVE,
+        .queueFamilyIndexCount = 0,
+        .pQueueFamilyIndices   = NULL,
+        .preTransform          = surface_caps.currentTransform,
+        .compositeAlpha        = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+        // @todo(mdodis): pick best present mode based on user preference (or if on mobile use the same)
+        .presentMode           = VK_PRESENT_MODE_FIFO_KHR,
+        .clipped               = VK_TRUE,
+        .oldSwapchain          = VK_NULL_HANDLE,
+    }, 0, info->result.swapchain));
+
+    VD(u32) num_swapchain_images;
+    VD_VK_CHECK(vkGetSwapchainImagesKHR(info->device, *info->result.swapchain, &num_swapchain_images, 0));
+    VkImage *swapchain_images = VD_ARENA_PUSH_ARRAY(a, VkImage, num_swapchain_images);
+    VD_VK_CHECK(vkGetSwapchainImagesKHR(info->device, *info->result.swapchain, &num_swapchain_images, swapchain_images));
+
+    *info->result.num_images = num_swapchain_images;
+    *info->result.images = swapchain_images;
+}
+
+void VDF(vk_create_image_views)(VD(Arena) *a, VD(VkCreateImageViewsInfo) *info)
+{
+    VkImageViewCreateInfo default_create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = info->image_format,
+        .components = {
+            .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .a = VK_COMPONENT_SWIZZLE_IDENTITY,
+        },
+        .subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1,
+        },
+    };
+
+    VkImageViewCreateInfo *create_info = info->override_info;    
+    if (create_info == NULL) {
+        create_info = &default_create_info;
+    }
+
+    VkImageView *views = VD_ARENA_PUSH_ARRAY(a, VkImageView, info->num_images);
+
+    for (VD(u32) i = 0; i < info->num_images; ++i) {
+        create_info->image = info->images[i];
+        VD_VK_CHECK(vkCreateImageView(info->device, create_info, 0, &views[i]));
+    }
+
+    *info->result.image_views = views;
+}
+
+void VDF(vk_destroy_image_views)(VkDevice device, VD(u32) num_image_views, VkImageView *image_views)
+{
+    for (VD(u32) i = 0; i < num_image_views; ++i) {
+        vkDestroyImageView(device, image_views[i], 0);
+    }
+}
+
+void VDF(vk_destroy_framebuffers)(VkDevice device, VD(u32) num_framebuffers, VkFramebuffer *framebuffers)
+{
+    for (VD(u32) i = 0; i < num_framebuffers; ++i) {
+        vkDestroyFramebuffer(device, framebuffers[i], 0);
+    }
+}
+
+void VDF(vk_destroy_semaphores)(VkDevice device, VD(u32) num_semaphores, VkSemaphore *semaphores)
+{
+    for (VD(u32) i = 0; i < num_semaphores; ++i) {
+        vkDestroySemaphore(device, semaphores[i], 0);
+    }
+}
+
+#if VD_VK_VMA_TRACKING
+
+#ifndef VD_VK_VMA_TRACKING_MAX_FILEPATH_CUSTOM
+#define VD_VK_VMA_TRACKING_MAX_FILEPATH_CUSTOM 0
+#endif // !VD_VK_VMA_TRACKING_MAX_FILEPATH_CUSTOM
+
+#if !VD_VK_VMA_TRACKING_MAX_FILEPATH_CUSTOM
+#define VD_VK_VMA_MAX_FILEPATH 128
+#endif // !VD_VK_VMA_TRACKING_MAX_FILEPATH_CUSTOM
+
+#ifndef VD_VK_VMA_TRACKING_MAX_ENTRIES_CUSTOM
+#define VD_VK_VMA_TRACKING_MAX_ENTRIES_CUSTOM 0
+#endif // !VD_VK_VMA_TRACKING_MAX_ENTRIES_CUSTOM
+
+#if !VD_VK_VMA_TRACKING_MAX_ENTRIES_CUSTOM
+#define VD_VK_VMA_MAX_ENTRIES 1024
+#endif // !VD_VK_VMA_TRACKING_MAX_ENTRIES_CUSTOM
+
+typedef struct VDI(VkVmaTrackingEntry) VDI(VkVmaTrackingEntry);
+
+struct VDI(VkVmaTrackingEntry) {
+    char                    filepath[VD_VK_VMA_MAX_FILEPATH];
+    VD(i32)                 line;
+    VD(b32)                 used;
+    VDI(VkVmaTrackingEntry) *n;
+    VDI(VkVmaTrackingEntry) *p;
+};
+
+struct {
+    VDI(VkVmaTrackingEntry)     sentinel;
+    VDI(VkVmaTrackingEntry)     *entries;
+    VD(usize)                   num_used;
+} VDI(Vk_Vma_Tracking) = {
+    .entries = 0,
+    .num_used = 0,
+};
+
+void VDI(vk_vma_track_allocation)(VmaAllocator allocator, VmaAllocation allocation, const char *file, int filelen, int line)
+{
+    const VD(usize) allocation_size = sizeof(VDI(VkVmaTrackingEntry)) * VD_VK_VMA_MAX_ENTRIES;
+    if (VDI(Vk_Vma_Tracking).entries == 0) {
+        VDI(Vk_Vma_Tracking).sentinel.n = &VDI(Vk_Vma_Tracking).sentinel;
+        VDI(Vk_Vma_Tracking).sentinel.p = &VDI(Vk_Vma_Tracking).sentinel;
+        VDI(Vk_Vma_Tracking).entries = VD_MEMSET(VD_MALLOC(allocation_size), 0, allocation_size);
+    }
+
+    VD_ASSERT((VDI(Vk_Vma_Tracking).num_used < VD_VK_VMA_MAX_ENTRIES) &&
+              (VDI(Vk_Vma_Tracking).sentinel.n != VDI(Vk_Vma_Tracking).sentinel.p));
+
+    // Allocate the entry
+    VDI(VkVmaTrackingEntry) *entry;
+
+    if (VDI(Vk_Vma_Tracking).num_used < VD_VK_VMA_MAX_ENTRIES) {
+        // We can just bump the pointer and then allocate
+        VD(u64) entry_index = VDI(Vk_Vma_Tracking).num_used++;
+        entry = &VDI(Vk_Vma_Tracking).entries[entry_index];
+    } else {
+        // We can get one from the free list
+        VDI(VkVmaTrackingEntry) *S = &VDI(Vk_Vma_Tracking).sentinel;
+        VDI(VkVmaTrackingEntry) *R = S->n;
+        VDI(VkVmaTrackingEntry) *N = R->n;
+
+        S->n = N;
+        N->p = S;
+
+        entry = R;
+    }
+
+    // Populate the entry
+    VD_MEMCPY(entry->filepath, file, (VD_VK_VMA_MAX_FILEPATH > filelen) ? filelen : (VD_VK_VMA_MAX_FILEPATH - 1));
+    entry->line = line;
+    entry->used = VD_TRUE;
+}
+
+void VDI(vk_vma_release_allocation)(VmaAllocator allocator, VmaAllocation allocation)
+{
+    VmaAllocationInfo info;
+    vmaGetAllocationInfo(allocator, allocation, &info);
+    VDI(VkVmaTrackingEntry) *entry = (VDI(VkVmaTrackingEntry)*)info.pUserData;
+    entry->used = VD_FALSE;
+
+    VDI(VkVmaTrackingEntry) *S = &VDI(Vk_Vma_Tracking).sentinel;
+    VDI(VkVmaTrackingEntry) *R = entry;
+    VDI(VkVmaTrackingEntry) *N = S->n;
+
+    N->p = R;
+    R->n = N;
+    S->n = R;
+}
+
+void VDI(vk_vma_check_allocations)() {
+    VDI(VkVmaTrackingEntry) *S = &VDI(Vk_Vma_Tracking).sentinel;
+    VDI(VkVmaTrackingEntry) *n = VDI(Vk_Vma_Tracking).sentinel.n;
+    while (n != S) {
+        ERRF("VMA: Failed to release allocation at: %s:%d", n->filepath, n->line);
+        n = n->n;
+    }    
+}
+
+#endif // VD_VK_VMA_TRACKING
 
 #endif // VD_VK_IMPL
