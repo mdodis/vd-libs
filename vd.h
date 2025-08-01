@@ -1,3 +1,26 @@
+/**
+ * vd.h - A 'batteries-included' header file to use with C99
+ * 
+ * zlib License
+ * 
+ * (C) Copyright 2025-2026 Michael Dodis (michaeldodisgr@gmail.com)
+ *
+ * This software is provided 'as-is', without any express or implied
+ * warranty.  In no event will the authors be held liable for any damages
+ * arising from the use of this software.
+ * 
+ * Permission is granted to anyone to use this software for any purpose,
+ * including commercial applications, and to alter it and redistribute it
+ * freely, subject to the following restrictions:
+ * 
+ * 1. The origin of this software must not be misrepresented; you must not
+ *    claim that you wrote the original software. If you use this software
+ *    in a product, an acknowledgment in the product documentation would be
+ *    appreciated but is not required.
+ * 2. Altered source versions must be plainly marked as such, and must not be
+ *    misrepresented as being the original software.
+ * 3. This notice may not be removed or altered from any source distribution.
+ */
 #ifndef VD_H
 #define VD_H
 #define VD_VERSION_MAJOR    0
@@ -165,22 +188,27 @@ typedef int32_t       VD(b32);
 #ifndef VD_ASSERT
 #include <assert.h>
 #define VD_ASSERT(x) assert(x)
-#endif // VD_ASSERT
+#endif // !VD_ASSERT
 
 #ifndef VD_MEMSET
 #include <string.h>
-#define VD_MEMSET(p, v, s) memset(p, v, s)
-#endif // VD_MEMSET
+#define VD_MEMSET(p, v, s) memset((p), (v), (s))
+#endif // !VD_MEMSET
 
 #ifndef VD_MEMCPY
 #include <string.h>
-#define VD_MEMCPY(d, s, c) memcpy(d, s, c)
-#endif // VD_MEMCPY
+#define VD_MEMCPY(d, s, c) memcpy((d), (s), (c))
+#endif // !VD_MEMCPY
+
+#ifndef VD_MEMCMP
+#include <string.h>
+#define VD_MEMCMP(l, r, c) memcmp((l), (r), (c))
+#endif // !VD_MEMCMP
 
 #ifndef VD_MEMMOVE
 #include <string.h>
-#define VD_MEMMOVE(d, s, c) memmove(d, s, c)
-#endif // VD_MEMMOVE
+#define VD_MEMMOVE(d, s, c) memmove((d), (s), (c))
+#endif // !VD_MEMMOVE
 
 /* ----SIZES--------------------------------------------------------------------------------------------------------- */
 #define VD_KILOBYTES(x) (((VD(usize))x) * 1024)
@@ -298,6 +326,15 @@ typedef struct {
 } VD(FixedArrayHeader);
 
 #define VD_FIXEDARRAY_HEADER(a)                         ((VD(FixedArrayHeader)*)(((VD(u8)*)a) - sizeof(VD(FixedArrayHeader))))
+
+/**
+ * @sym VD_FIXEDARRAY_INIT
+ * Initialize the fixed array as empty with a set count
+ *
+ * @param a         Array pointer (must be 0 initially)
+ * @param count     The maximum capacity of the fixed array
+ * @param allocator The arena to use to allocate the fixed array
+ */
 #define VD_FIXEDARRAY_INIT(a, count, allocator)         ((a) = VDI(buffer_allocate)((allocator), (count), sizeof(*(a)), 0))
 #define VD_FIXEDARRAY_INIT_RESERVE(a, len, allocator)   ((a) = VDI(buffer_allocate)((allocator), (len),   sizeof(*(a)), 1))
 #define VD_FIXEDARRAY_CHECK(a, n)                       ((VD_FIXEDARRAY_HEADER(a)->len + (n)) <= VD_FIXEDARRAY_HEADER(a)->cap)
@@ -325,11 +362,16 @@ VD_INLINE void* VDI(buffer_allocate)(VD(Arena) *arena, VD(u32) capacity, VD(usiz
 
 
 #if VD_MACRO_ABBREVIATIONS
+/** @sym fixedarray_init Shorthand for @see VD_FIXEDARRAY_INIT */
 #define fixedarray_init(a, count, allocator)         VD_FIXEDARRAY_INIT(a, count, allocator)
+/** @sym fixedarray_init_reserve Shorthand for @see VD_FIXEDARRAY_INIT_RESERVE */
 #define fixedarray_init_reserve(a, len, allocator)   VD_FIXEDARRAY_INIT_RESERVE(a, len, allocator)
 #define fixedarray_addn(a, n)                        VD_FIXEDARRAY_ADDN(a, n)
 #define fixedarray_add(a, v)                         VD_FIXEDARRAY_ADD(a, v)
 #define fixedarray_len(a)                            VD_FIXEDARRAY_LEN(a)
+#define fixedarray_cap(a)                            VD_FIXEDARRAY_CAP(a)
+#define fixedarray_clear(a)                          VD_FIXEDARRAY_CLEAR(a)
+#define fixedarray_pop(a)                            VD_FIXEDARRAY_POP(a)
 #define fixedarray
 #endif
 
@@ -645,18 +687,20 @@ VD_INLINE VD(u64) VDF(hash64)(const void *data, VD(u64) len, VD(u32) seed)
 VD_INLINE VD(u64) VDF(dhash64)(const void *data, VD(u64) len) { return VDF(hash64)(data, len, VD_HASH64_DEFAULT_SEED); }
 #endif // !VD_HASH64_CUSTOM
 
-/* ----HANDLEMAP----------------------------------------------------------------------------------------------------- */
+VD_INLINE VD(u64) VDF(dhash64_str)(VD(Str) s) { return VDF(dhash64)(s.s, s.len); }
+
+/* ----STRMAP-------------------------------------------------------------------------------------------------------- */
 typedef struct {
     VD(u32)   cap;
     VD(u32)   cap_total;
     VD(u32)   tsize;
     VD(Arena) *arena;
-} VDI(StrMapHeader);
+} VDI(StrmapHeader);
 
-typedef struct VDI(StrMapBinPrefix) VDI(StrMapBinPrefix);
+typedef struct VDI(StrmapBinPrefix) VDI(StrmapBinPrefix);
 
-struct VDI(StrMapBinPrefix) {
-    VDI(StrMapBinPrefix) *next;             //  8 bytes
+struct VDI(StrmapBinPrefix) {
+    VDI(StrmapBinPrefix) *next;             //  8 bytes
     VD(u32)              key_len;           //  4 bytes
     VD(u8)               used;              //  1 byte
     char                 *key_rest;         //  8 bytes
@@ -666,7 +710,40 @@ struct VDI(StrMapBinPrefix) {
 typedef enum {
     VDI(STRMAP_GET_BIN_FLAGS_CREATE)     = 1 << 1,
     VDI(STRMAP_GET_BIN_FLAGS_SET_UNUSED) = 1 << 2,
-} VDI(StrMapGetBinFlags);
+} VDI(StrmapGetBinFlags);
+
+#define VD_STRMAP_DEFAULT_CAP              2048
+#define VD_STRMAP_HEADER(m)                ((VDI(StrmapHeader)*)(((VD(u8)*)(m)) - sizeof(VDI(StrmapHeader))))
+#define VD_STRMAP_INIT(m, arena, cap)      ((m) = (VDI(strmap_init)((arena), sizeof(*m), (cap))))
+#define VD_STRMAP_INIT_DEFAULT(m, arena)   VD_STRMAP_INIT((m), (arena), VD_STRMAP_DEFAULT_CAP)
+#define VD_STRMAP_SET(m, k, v)             VDI(strmap_set)((m), (k), (void*)(v))
+#define VD_STRMAP_GET(m, k, v)             VDI(strmap_get)((m), (k), (void*)(v))
+#define VD_STRMAP_RM(m, k)                 (VDI(strmap_get_bin)((m), (k), VDI(STRMAP_GET_BIN_FLAGS_SET_UNUSED)) != 0)
+
+void*                   VDI(strmap_init)(VD(Arena) *arena, VD(u32) tsize, VD(u32) cap);
+VDI(StrmapBinPrefix)*   VDI(strmap_get_bin)(void *map, VD(Str) key, VDI(StrmapGetBinFlags) op);
+VD_INLINE VD(b32)       VDI(strmap_get)(void *map, VD(Str) key, void *value);
+VD_INLINE VD(b32)       VDI(strmap_set)(void *map, VD(Str) key, void *value);
+
+VD_INLINE VD(b32) VDI(strmap_get)(void *map, VD(Str) key, void *value)
+{
+    VDI(StrmapBinPrefix) *bin = VDI(strmap_get_bin)(map, key, 0);
+    if (bin == 0) return VD_FALSE;
+
+    VD(u8) *bin_data = ((VD(u8)*)bin) + sizeof(VDI(StrmapBinPrefix));
+    VD_MEMCPY(value, bin_data, VD_STRMAP_HEADER(map)->tsize);
+    return VD_TRUE;
+}
+
+VD_INLINE VD(b32) VDI(strmap_set)(void *map, VD(Str) key, void *value)
+{
+    VDI(StrmapBinPrefix) *bin = VDI(strmap_get_bin)(map, key, VDI(STRMAP_GET_BIN_FLAGS_CREATE));
+    if (bin == 0) return VD_FALSE;
+
+    VD(u8) *bin_data = ((VD(u8)*)bin) + sizeof(VDI(StrmapBinPrefix));
+    VD_MEMCPY(bin_data, value, VD_STRMAP_HEADER(map)->tsize);
+    return VD_TRUE;
+}
 
 /* ----HANDLEMAP----------------------------------------------------------------------------------------------------- */
 typedef struct __VD_HdlMap {
@@ -1134,6 +1211,117 @@ VD(b32) VDF(arg_expect_char)(VD(Arg) *arg, char c);
 
 #undef VD_ARG_CHECK_NEXT
 
+/* ----STRMAP IMPL--------------------------------------------------------------------------------------------------- */
+#define VD_STRMAP_GET_BIN_AT(m, i) \
+    ((VDI(StrmapBinPrefix)*)((VD(u8)*)m) + (VD_STRMAP_HEADER(m)->tsize + sizeof(VDI(StrmapBinPrefix)) * i))
+
+static VD(b32) VDI(strmap_check_key)(VD(Str) check, VDI(StrmapBinPrefix) *against) {
+    VD(u32) prefix_len       = sizeof(against->key_prefix);    
+    VD(u32) first_check_len  = prefix_len < check.len ? prefix_len : check.len;
+    VD(u32) second_check_len = check.len - prefix_len;
+
+    if (against->key_len != check.len) {
+        return VD_FALSE;
+    }
+
+    if (VD_MEMCMP(against->key_prefix, check.s, first_check_len)) {
+        return VD_FALSE;
+    }
+
+    return check.len < prefix_len
+        ? VD_TRUE
+        : (VD_MEMCMP(against->key_rest, check.s + prefix_len, second_check_len) == 0);
+}
+
+static void VDI(strmap_copy_key)(void *map, VD(Str) key, VDI(StrmapBinPrefix) *bin)
+{
+    VD(u32) prefix_len = sizeof(bin->key_prefix);
+    VD(u32) key_len    = key.len;
+    bin->key_len       = key_len;
+
+    VD(u32) first_copy_len = prefix_len < key_len ? prefix_len : key_len;
+
+    VD_MEMCPY(bin->key_prefix, key.s, first_copy_len);
+
+    if (key_len < prefix_len) {
+        bin->key_rest = (char*)VDF(arena_alloc)(VD_STRMAP_HEADER(map)->arena, key_len - prefix_len);
+        VD_MEMCPY(bin->key_rest, key.s + prefix_len, key_len - prefix_len);
+    }
+}
+
+void* VDI(strmap_init)(VD(Arena) *arena, VD(u32) tsize, VD(u32) cap)
+{
+    VDI(StrmapHeader) *map;
+    const VD(u32) bin_size = sizeof(VDI(StrmapBinPrefix)) + tsize;
+
+    map = VDF(arena_alloc)(arena, sizeof(VDI(StrmapHeader)) + bin_size * cap);
+
+    map->cap_total  = cap;
+    map->cap        = (VD(u32)) (((VD(f32))cap) * (0.863f));
+    map->tsize      = tsize;
+    map->arena      = arena;
+
+    return (void*)((VD(u8)*)map + sizeof(VDI(StrmapHeader)));
+}
+
+VDI(StrmapBinPrefix)* VDI(strmap_get_bin)(void *map, VD(Str) key, VDI(StrmapGetBinFlags) op)
+{
+    VD(u64) hash = VDF(dhash64_str)(key);
+    VD(u64) bin_index = hash % VD_STRMAP_HEADER(map)->cap;
+
+    VDI(StrmapBinPrefix) *existing_bin = VD_STRMAP_GET_BIN_AT(map, bin_index);
+
+    if (existing_bin->used) {
+        VD(b32) found = VD_FALSE;
+
+        if (VDI(strmap_check_key)(key, existing_bin)) {
+            found = VD_TRUE;
+        }
+
+        while (!found && (existing_bin->next != 0)) {
+            existing_bin = existing_bin->next;
+
+            if (VDI(strmap_check_key)(key, existing_bin)) {
+                found = VD_TRUE;
+                break;
+            }
+        }
+
+        if (found) {
+            if (op & VDI(STRMAP_GET_BIN_FLAGS_SET_UNUSED)) {
+                existing_bin->used = false;
+            }
+
+            return existing_bin;
+        }
+    }
+
+    if (!(op & VDI(STRMAP_GET_BIN_FLAGS_CREATE))) {
+        return 0;
+    }
+
+    if (!existing_bin->used) {
+        VDI(strmap_copy_key)(map, key, existing_bin);
+        existing_bin->used = VD_TRUE;
+        existing_bin->next = 0;
+        return existing_bin;
+    }
+
+    VD(u32) cursor = VD_STRMAP_HEADER(map)->cap_total;
+    while ((cursor > 0) && (VD_STRMAP_GET_BIN_AT(map, cursor)->used)) {
+        cursor--;
+    }
+
+    VDI(StrmapBinPrefix) *new_bin = VD_STRMAP_GET_BIN_AT(map, cursor);
+    new_bin->used = VD_TRUE;
+    new_bin->next = 0;
+    VDI(strmap_copy_key)(map, key, new_bin);
+
+    return new_bin;
+}
+
+#undef VD_STRMAP_GET_BIN_AT
+/* ----TESTING IMPL-------------------------------------------------------------------------------------------------- */
 #if VD_INCLUDE_TESTS
 
 #if VD_PLATFORM_MACOS
