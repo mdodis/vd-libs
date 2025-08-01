@@ -190,11 +190,11 @@ void VDI(inix_eat_spaces)(VDI(InixContext) *c) {
 }
 
 void VDI(inix_eat_comments)(VDI(InixContext) *context) {
-    if (!VDI(inix_char_n)(context, LIT("/*"))) {
+    if (!VDI(inix_char_n)(context, VD_LIT("/*"))) {
         return;
     }
 
-    while (!VDI(inix_char_n)(context, LIT("*/"))) {
+    while (!VDI(inix_char_n)(context, VD_LIT("*/"))) {
         VDI(inix_advance)(context); 
     }
 }
@@ -230,13 +230,13 @@ VD(b32) VDI(inix_try_parse_integer)(VDI(InixContext) *context, VD(u64) *cursor_b
 VD(b32) VDI(inix_try_parse_simple_string)(VDI(InixContext) *context, VD(u64) *cursor_begin, VD(u64) *cursor_end)
 {
     *cursor_begin = context->lex.cursor;
-    if (!VDI(inix_char_n)(context, LIT("\""))) {
+    if (!VDI(inix_char_n)(context, VD_LIT("\""))) {
         return VD_FALSE;
     }
 
     VDI(inix_advance)(context);
 
-    while (!VDI(inix_char_n)(context, LIT("\""))) {
+    while (!VDI(inix_char_n)(context, VD_LIT("\""))) {
         if (!VDI(inix_advance)(context)) {
             return VD_FALSE;
         }
@@ -249,11 +249,11 @@ VD(b32) VDI(inix_try_parse_simple_string)(VDI(InixContext) *context, VD(u64) *cu
 VD(b32) VDI(inix_try_parse_raw_string)(VDI(InixContext) *context, VD(u64) *cursor_begin, VD(u64) *cursor_end)
 {
     *cursor_begin = context->lex.cursor;
-    if (!VDI(inix_char_n)(context, LIT("@>"))) {
+    if (!VDI(inix_char_n)(context, VD_LIT("@>"))) {
         return VD_FALSE;
     }
 
-    while (!VDI(inix_char_n)(context, LIT("@<"))) {
+    while (!VDI(inix_char_n)(context, VD_LIT("@<"))) {
         if (!VDI(inix_advance)(context)) {
             return VD_FALSE;
         }
@@ -265,7 +265,6 @@ VD(b32) VDI(inix_try_parse_raw_string)(VDI(InixContext) *context, VD(u64) *curso
 
 VD(b32) VDI(inix_try_parse_cdecl)(VDI(InixContext) *context, VD(u64) *cursor_begin)
 {
-    int num_chars = 0;
     int c = VDI(inix_char)(context);
     *cursor_begin = context->lex.cursor;
 
@@ -275,12 +274,10 @@ VD(b32) VDI(inix_try_parse_cdecl)(VDI(InixContext) *context, VD(u64) *cursor_beg
 
     VDI(inix_advance)(context);
     c = VDI(inix_char)(context);
-    num_chars += 1;
 
     while (VDF(is_cdecl_continue)(c)) {
         VDI(inix_advance)(context);
         c = VDI(inix_char)(context);
-        num_chars++;
     }
 
     return VD_TRUE;
@@ -354,24 +351,24 @@ void VDI(inix_consume_token)(VDI(InixContext) *context, VDI(InixLexToken) token)
         VD(Str) s = {&context->contents.s[token.lexstate.cursor_from] , token.lexstate.cursor - token.lexstate.cursor_from};
         VD(Str) tstr;
         switch (token.type) {
-            case VDI(INIX_LEX_TOKEN_INVALID):       tstr = LIT("INIX_LEX_TOKEN_INVALID"); break;
-            case VDI(INIX_LEX_TOKEN_BEGIN_SECTION): tstr = LIT("INIX_LEX_TOKEN_BEGIN_SECTION"); break;
-            case VDI(INIX_LEX_TOKEN_END_SECTION):   tstr = LIT("INIX_LEX_TOKEN_END_SECTION"); break;
-            case VDI(INIX_LEX_TOKEN_ASSIGNMENT):    tstr = LIT("INIX_LEX_TOKEN_ASSIGNMENT"); break;
-            case VDI(INIX_LEX_TOKEN_END_STATEMENT): tstr = LIT("INIX_LEX_TOKEN_END_STATEMENT"); break;
-            case VDI(INIX_LEX_TOKEN_ENUMERATION):   tstr = LIT("INIX_LEX_TOKEN_ENUMERATION"); break;
-            case VDI(INIX_LEX_TOKEN_INTEGER):       tstr = LIT("INIX_LEX_TOKEN_INTEGER"); break;
-            case VDI(INIX_LEX_TOKEN_RAW_STRING):    tstr = LIT("INIX_LEX_TOKEN_RAW_STRING"); break;
-            case VDI(INIX_LEX_TOKEN_END):           tstr = LIT("INIX_LEX_TOKEN_END"); break;
+            case VDI(INIX_LEX_TOKEN_INVALID):       tstr = VD_LIT("INIX_LEX_TOKEN_INVALID"); break;
+            case VDI(INIX_LEX_TOKEN_BEGIN_SECTION): tstr = VD_LIT("INIX_LEX_TOKEN_BEGIN_SECTION"); break;
+            case VDI(INIX_LEX_TOKEN_END_SECTION):   tstr = VD_LIT("INIX_LEX_TOKEN_END_SECTION"); break;
+            case VDI(INIX_LEX_TOKEN_ASSIGNMENT):    tstr = VD_LIT("INIX_LEX_TOKEN_ASSIGNMENT"); break;
+            case VDI(INIX_LEX_TOKEN_END_STATEMENT): tstr = VD_LIT("INIX_LEX_TOKEN_END_STATEMENT"); break;
+            case VDI(INIX_LEX_TOKEN_ENUMERATION):   tstr = VD_LIT("INIX_LEX_TOKEN_ENUMERATION"); break;
+            case VDI(INIX_LEX_TOKEN_INTEGER):       tstr = VD_LIT("INIX_LEX_TOKEN_INTEGER"); break;
+            case VDI(INIX_LEX_TOKEN_RAW_STRING):    tstr = VD_LIT("INIX_LEX_TOKEN_RAW_STRING"); break;
+            case VDI(INIX_LEX_TOKEN_END):           tstr = VD_LIT("INIX_LEX_TOKEN_END"); break;
             default: break;
 
         }
         if (token.type == VDI(INIX_LEX_TOKEN_RAW_STRING)) {
-            LOGF("Consume %2d:%2d :: %.*s: {{%.*s}}", 1 + token.lexstate.line, token.lexstate.column, VD_STR_EXPAND(tstr), VD_STR_EXPAND(token.raw_string));
+            VD_LOGF("Consume %2d:%2d :: %.*s: {{%.*s}}", 1 + token.lexstate.line, token.lexstate.column, VD_STR_EXPAND(tstr), VD_STR_EXPAND(token.raw_string));
         } else if (token.type != VDI(INIX_LEX_TOKEN_END)) {
-            LOGF("Consume %2d:%2d :: %.*s: %.*s", 1 + token.lexstate.line, token.lexstate.column, VD_STR_EXPAND(tstr), VD_STR_EXPAND(s));
+            VD_LOGF("Consume %2d:%2d :: %.*s: %.*s", 1 + token.lexstate.line, token.lexstate.column, VD_STR_EXPAND(tstr), VD_STR_EXPAND(s));
         } else {
-            LOGF("Consume %.*s", VD_STR_EXPAND(tstr));
+            VD_LOGF("Consume %.*s", VD_STR_EXPAND(tstr));
         }
     }
 
@@ -423,7 +420,7 @@ VD(b32) VDI(inix_parse_section)(VDI(InixContext) *context)
 
         VDI(InixLexToken) enumeration;
         if (!VDI(inix_expect_type)(context, VDI(INIX_LEX_TOKEN_ENUMERATION), &enumeration)) {
-            ERRF("%d:%d: Expected INIX_LEX_TOKEN_ENUMERATION, instead got: %s",
+            VD_ERRF("%d:%d: Expected INIX_LEX_TOKEN_ENUMERATION, instead got: %s",
                 enumeration.lexstate.line, enumeration.lexstate.column,
                 VDI(inix_lex_token_type_str)(enumeration.type));
             return VD_FALSE;
@@ -433,7 +430,7 @@ VD(b32) VDI(inix_parse_section)(VDI(InixContext) *context)
         VDI(InixLexToken) end_section;
         if (!VDI(inix_expect_type)(context, VDI(INIX_LEX_TOKEN_END_SECTION), &end_section)) {
 
-            ERRF("%d:%d: Expected INIX_LEX_TOKEN_END_SECTION, instead got: %s",
+            VD_ERRF("%d:%d: Expected INIX_LEX_TOKEN_END_SECTION, instead got: %s",
                 enumeration.lexstate.line, enumeration.lexstate.column,
                 VDI(inix_lex_token_type_str)(enumeration.type));
 
@@ -469,7 +466,7 @@ VD(b32) VDI(inix_parse_expression)(VDI(InixContext) *context)
 
         VDI(InixLexToken) assignment;
         if (!VDI(inix_expect_type)(context, VDI(INIX_LEX_TOKEN_ASSIGNMENT), &assignment)) {
-            ERRF("%d:%d: Expected INIX_LEX_TOKEN_ASSIGNMENT, instead got: %s",
+            VD_ERRF("%d:%d: Expected INIX_LEX_TOKEN_ASSIGNMENT, instead got: %s",
                 assignment.lexstate.line, assignment.lexstate.column,
                 VDI(inix_lex_token_type_str)(assignment.type));
 
@@ -507,11 +504,6 @@ VD(b32) VDI(inix_parse_expression)(VDI(InixContext) *context)
         } else if (val.type == VDI(INIX_LEX_TOKEN_ENUMERATION)) {
             VDI(inix_consume_token)(context, val);
 
-            VD(Str) val_string = {
-                &context->contents.s[val.lexstate.cursor_from],
-                val.lexstate.cursor - val.lexstate.cursor_from,
-            };
-
             VD(InixEntry) *entry = VDI(inix_push_entry)(context, VD_(INIX_ENTRY_TYPE_ENUMERATION));
             entry->name = first_string;
             entry->val.enumeration = 100;
@@ -529,7 +521,7 @@ VD(b32) VDI(inix_parse_expression)(VDI(InixContext) *context)
 
             VD(u64) number;
             if (!VDF(parse_u64)(val_string, &number)) {
-                ERRF("%d:%d: Failed to parse integer: %s",
+                VD_ERRF("%d:%d: Failed to parse integer: %s",
                     val.lexstate.line, val.lexstate.column,
                     VDI(inix_lex_token_type_str)(val.type));
                 return VD_FALSE;
@@ -542,7 +534,7 @@ VD(b32) VDI(inix_parse_expression)(VDI(InixContext) *context)
             // LOGF("Integer assignment: %.*s = %llu", VD_STR_EXPAND(first_string), number);
             return VD_TRUE;
         } else {
-            ERRF("%d:%d: Expected INIX_LEX_TOKEN_ENUMERATION or INIX_LEX_TOKEN_INTEGER, instead got: %s",
+            VD_ERRF("%d:%d: Expected INIX_LEX_TOKEN_ENUMERATION or INIX_LEX_TOKEN_INTEGER, instead got: %s",
                 val.lexstate.line, val.lexstate.column,
                 VDI(inix_lex_token_type_str)(val.type));
             return VD_FALSE;
@@ -575,14 +567,14 @@ VD(b32) VDI(inix_parse_statement)(VDI(InixContext) *context)
     }
 
 
-    ERRF("%d:%d: Expected INIX_LEX_TOKEN_BEGIN_SECTION or INIX_LEX_TOKEN_ENUMERATION, instead got: %s",
+    VD_ERRF("%d:%d: Expected INIX_LEX_TOKEN_BEGIN_SECTION or INIX_LEX_TOKEN_ENUMERATION, instead got: %s",
         first.lexstate.line, first.lexstate.column,
         VDI(inix_lex_token_type_str)(first.type));
 
     return VD_FALSE;
 }
 
-static VD(Str) VDI(Inix_Global_Section_Name) = LIT(".global");
+static VD(Str) VDI(Inix_Global_Section_Name) = VD_LIT(".global");
 
 VD(InixResult) VDF(inix_parse)(VD(Arena) *arena, VD(InixParseInfo) *info)
 {

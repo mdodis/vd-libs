@@ -270,8 +270,8 @@ VD_INLINE void              VDF(arena_restore)(VD(ArenaSave) save)              
 VD_INLINE void*             VDF(arena_alloc)(VD(Arena) *a, size_t size)                                         { return VDF(arena_alloc_align)(a, size, VD_ARENA_DEFAULT_ALIGNMENT);}
 VD_INLINE void*             VDF(arena_resize)(VD(Arena) *a, void *old_memory, size_t old_size, size_t new_size) { return VDF(arena_resize_align)(a, old_memory, old_size, new_size, VD_ARENA_DEFAULT_ALIGNMENT); }
 
-#define VD_ARENA_PUSH_ARRAY(a, x, count) (x*)arena_alloc(a, sizeof(x) * count)
-#define VD_ARENA_FROM_SYSTEM(a, size)    (arena_init(a, VD_MALLOC(size), size))
+#define VD_ARENA_PUSH_ARRAY(a, x, count) (x*)VDF(arena_alloc)(a, sizeof(x) * count)
+#define VD_ARENA_FROM_SYSTEM(a, size)    (VDF(arena_init)(a, VD_MALLOC(size), size))
 #define VD_ARENA_FREE_SYSTEM(a)          (VD_FREE(a->buf))
 
 #if VD_MACRO_ABBREVIATIONS
@@ -312,7 +312,7 @@ typedef struct {
 VD_INLINE void* VDI(buffer_allocate)(VD(Arena) *arena, VD(u32) capacity, VD(usize) isize, VD(b32) mark)
 {
     VD(usize) alloc_size = sizeof(VD(FixedArrayHeader)) + capacity * isize;
-    void *result = VD_MEMSET(arena_alloc(arena, alloc_size), 0, alloc_size);
+    void *result = VD_MEMSET(VDF(arena_alloc)(arena, alloc_size), 0, alloc_size);
     VD(FixedArrayHeader) *hdr = result;
 
     hdr->cap = capacity;
@@ -690,7 +690,7 @@ VD_INLINE VD(u8)*  VDF(dump_file_to_bytes)(VD(Arena) *arena, VD(cstr) file_path,
     VD(usize) size = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    VD(u8) *result = arena_alloc(arena, size);
+    VD(u8) *result = (VD(u8)*)VDF(arena_alloc)(arena, size);
     fread(result, size, 1, f);
     *len = size;
     return result;
@@ -705,7 +705,7 @@ VD_INLINE VD(cstr) VDF(dump_file_to_cstr)(VD(Arena) *arena, VD(cstr) file_path, 
     VD(usize) size = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    char *result = arena_alloc(arena, size + 1);
+    char *result = VDF(arena_alloc)(arena, size + 1);
     fread(result, size, 1, f);
     result[size] = 0;
     *len = size;
@@ -731,7 +731,7 @@ VD(Arena)*                  VDF(scratch_get_arena)(VD(Scratch) *scratch);
 void                        VDF(scratch_return_arena)(VD(Scratch) *scratch, VD(Arena) *arena);
 
 /* ----LOG----------------------------------------------------------------------------------------------------------- */
-#define VD_PROC_LOG(name) void name(int verbosity, cstr string)
+#define VD_PROC_LOG(name) void name(int verbosity, VD(cstr) string)
 typedef VD_PROC_LOG(VD(ProcLog));
 
 #define VD_LOG_VERBOSITY_ERROR      (-10)
@@ -875,10 +875,11 @@ extern void VDF(test_main)(int argc, char **argv);
 #if VD_PLATFORM_MACOS
 #include <sys/mman.h>
 #include <errno.h>
+#include <unistd.h>
 
 VD(usize) VDF(vm_get_page_size)()
 {
-    return PAGE_SIZE;
+    return _SC_PAGE_SIZE;
 }
 
 void *VDF(vm_reserve)(VD(usize) len)
@@ -985,7 +986,7 @@ void VDF(arena_clear)(VD(Arena) *a)
 /* ----SCRATCH IMPL-------------------------------------------------------------------------------------------------- */
 void VDF(scratch_init)(VD(Scratch) *scratch)
 {
-    for (usize i = 0; i < VD_SCRATCH_PAGE_COUNT; ++i)
+    for (VD(usize) i = 0; i < VD_SCRATCH_PAGE_COUNT; ++i)
     {
         void *a = VD_MALLOC(VD_SCRATCH_PAGE_SIZE);
         VD_MEMSET(a, 0, VD_SCRATCH_PAGE_SIZE);
