@@ -60,6 +60,7 @@
 #define VK_CHECK(x) VD_VK_CHECK(x)
 #endif // VD_VK_MACRO_ABBREVIATIONS
 
+/* ----INITIALIZATION------------------------------------------------------------------------------------------------ */
 typedef struct __VD_VK_GetPhysicalDevicePresentationSupportInfo {
     VkInstance          instance;
     VkPhysicalDevice    physical_device;
@@ -361,6 +362,47 @@ void        VDF(vk_destroy_image_views)                 (VkDevice device, VD(u32
 void        VDF(vk_destroy_framebuffers)                (VkDevice device, VD(u32) num_framebuffers, VkFramebuffer *framebuffers);
 void        VDF(vk_destroy_semaphores)                  (VkDevice device, VD(u32) num_semaphores, VkSemaphore *semaphores);
 
+/**
+ * @sym vk_create_swapchain_and_fetch_images
+ * Create the swapchain and fetch
+ * @param a The arena to allocate the images
+ */
+void        VDF(vk_create_swapchain_and_fetch_images)   (VD(Arena) *a, VD(VkCreateSwapchainAndFetchImagesInfo) *info);
+
+/* ----GROWABLE DESCRIPTOR ALLOCATOR--------------------------------------------------------------------------------- */
+typedef struct __VDI_VK_GrowableDescriptorAllocatorPool {
+    VkDescriptorPool pool;
+    VD(DListNode)    node;
+} VDI(VkGrowableDescriptorAllocatorPool);
+
+typedef struct __VD_VK_GrowableDescriptorAllocatorPoolSizeRatio {
+    VkDescriptorType type;
+    VD(f32)          ratio;
+} VD(VkGrowableDescriptorAllocatorPoolSizeRatio);
+
+typedef struct __VD_VK_GrowableDescriptorAllocator {
+    VD(Arena)                                      *arena;
+    VkDevice                                       device;
+    VDI(VkGrowableDescriptorAllocatorPool)         *current_pool;
+    VD(DList)                                      used_pool_list;
+    VD(DList)                                      free_pool_list;
+    VD(usize)                                      num_ratios;
+    VD(VkGrowableDescriptorAllocatorPoolSizeRatio) *ratios;
+} VD(VkGrowableDescriptorAllocator);
+
+typedef struct __VD_VK_GrowableDescriptorAllocatorInitInfo {
+    VD(Arena)                                      *arena;
+    VkDevice                                       device;
+    VD(usize)                                      num_override_pool_sizes;
+    VD(VkGrowableDescriptorAllocatorPoolSizeRatio) *override_pool_sizes;
+} VD(VkGrowableDescriptorAllocatorInitInfo);
+
+void     VDF(vk_growable_descriptor_allocator_init)(VD(VkGrowableDescriptorAllocator) *desc_alloc, VD(VkGrowableDescriptorAllocatorInitInfo) *info);
+VkResult VDF(vk_growable_descriptor_allocator_get)(VD(VkGrowableDescriptorAllocator) *desc_alloc, VkDescriptorSetLayout layout, VkDescriptorSet *set);
+void     VDF(vk_growable_descriptor_allocator_reset)(VD(VkGrowableDescriptorAllocator) *desc_alloc);
+void     VDF(vk_growable_descriptor_allocator_deinit)(VD(VkGrowableDescriptorAllocator) *desc_alloc);
+
+/* ----AMD VMA TRACKING---------------------------------------------------------------------------------------------- */
 #if VD_VK_VMA_TRACKING
 #ifndef AMD_VULKAN_MEMORY_ALLOCATOR_H
 #error "VD_VK_VMA_TRACKING requires vk_mem_alloc.h"
@@ -381,16 +423,13 @@ void VDI(vk_vma_check_allocations)();
 #define VD_VK_VMA_CHECK_ALLOCATIONS()                       do {} while (0)
 
 #endif // VD_VK_VMA_TRACKING
-
-/**
- * Create the swapchain and fetch
- * @param a The arena to allocate the images
- */
-void        VDF(vk_create_swapchain_and_fetch_images)   (VD(Arena) *a, VD(VkCreateSwapchainAndFetchImagesInfo) *info);
+/* ----AMD VMA TRACKING---------------------------------------------------------------------------------------------- */
 
 #endif // !VD_VK_H
 
 #ifdef VD_VK_IMPL
+
+/* ----INITIALIZATION IMPL------------------------------------------------------------------------------------------- */
 VD(b32) VDF(vk_require_instance_extensions)(VD(Arena) *temp, VD(VkRequireInstanceExtensionsInfo) *info)
 {
     VD(u32) num_instance_extensions;
@@ -1467,6 +1506,7 @@ void VDF(vk_destroy_semaphores)(VkDevice device, VD(u32) num_semaphores, VkSemap
     }
 }
 
+/* ----AMD VMA TRACKING IMPL----------------------------------------------------------------------------------------- */
 #if VD_VK_VMA_TRACKING
 
 #ifndef VD_VK_VMA_TRACKING_MAX_FILEPATH_CUSTOM
@@ -1567,5 +1607,144 @@ void VDI(vk_vma_check_allocations)() {
 }
 
 #endif // VD_VK_VMA_TRACKING
+
+/* ----GROWABLE DESCRIPTOR ALLOCATOR IMPL---------------------------------------------------------------------------- */
+
+static VDI(VkGrowableDescriptorAllocatorPool)* VDI(vk_growable_descriptor_allocator_grab_pool)(VD(VkGrowableDescriptorAllocator) *desc_alloc);
+
+static VD(VkGrowableDescriptorAllocatorPoolSizeRatio) VDI(Growable_Descriptor_Allocator_Default_Pool_Sizes)[] = {
+    { VK_DESCRIPTOR_TYPE_SAMPLER,                0.5f},
+    { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4.f},
+    { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,          4.f},
+    { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          1.f},
+    { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,   1.f},
+    { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,   1.f},
+    { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         2.f},
+    { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,         2.f},
+    { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1.f},
+    { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1.f},
+    { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,       0.5f},
+};
+
+void VDF(vk_growable_descriptor_allocator_init)(VD(VkGrowableDescriptorAllocator) *desc_alloc, VD(VkGrowableDescriptorAllocatorInitInfo) *info)
+{
+    desc_alloc->arena        = info->arena;
+    desc_alloc->device       = info->device;
+    desc_alloc->current_pool = 0;
+
+    VDF(dlist_init)(&desc_alloc->used_pool_list);
+    VDF(dlist_init)(&desc_alloc->free_pool_list);
+
+    if (info->override_pool_sizes != 0) {
+        desc_alloc->num_ratios = info->num_override_pool_sizes;
+        desc_alloc->ratios     = info->override_pool_sizes;
+    } else {
+        desc_alloc->num_ratios = VD_ARRAY_COUNT(VDI(Growable_Descriptor_Allocator_Default_Pool_Sizes));
+        desc_alloc->ratios     = VDI(Growable_Descriptor_Allocator_Default_Pool_Sizes);
+    }
+}
+
+VkResult VDF(vk_growable_descriptor_allocator_get)(VD(VkGrowableDescriptorAllocator) *desc_alloc, VkDescriptorSetLayout layout, VkDescriptorSet *set)
+{
+    if (desc_alloc->current_pool == 0) {
+        VDI(VkGrowableDescriptorAllocatorPool) *p;
+        p = VDI(vk_growable_descriptor_allocator_grab_pool)(desc_alloc);
+        desc_alloc->current_pool = p;
+        VD(dlist_append)(&desc_alloc->used_pool_list, &p->node);
+    }
+
+    VkResult result = vkAllocateDescriptorSets(desc_alloc->device, & (VkDescriptorSetAllocateInfo) {
+        .sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool     = desc_alloc->current_pool->pool,
+        .descriptorSetCount = 1,
+        .pSetLayouts        = &layout,
+    }, set);
+
+    if ((result == VK_ERROR_FRAGMENTED_POOL) || (result == VK_ERROR_OUT_OF_POOL_MEMORY)) {
+
+        VDI(VkGrowableDescriptorAllocatorPool) *p;
+        p = VDI(vk_growable_descriptor_allocator_grab_pool)(desc_alloc);
+        desc_alloc->current_pool = p;
+        VD(dlist_append)(&desc_alloc->used_pool_list, &p->node);
+
+        result = vkAllocateDescriptorSets(desc_alloc->device, & (VkDescriptorSetAllocateInfo) {
+            .sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+            .descriptorPool     = desc_alloc->current_pool->pool,
+            .descriptorSetCount = 1,
+            .pSetLayouts        = &layout,
+        }, set);
+
+        return result;
+    }
+
+    return result;
+}
+
+void VDF(vk_growable_descriptor_allocator_reset)(VD(VkGrowableDescriptorAllocator) *desc_alloc)
+{
+    VD_DLIST_FOR_EACH(&desc_alloc->used_pool_list, n) {
+        VDI(VkGrowableDescriptorAllocatorPool) *p = VD_CONTAINER_OF(n, VDI(VkGrowableDescriptorAllocatorPool), node);
+
+        VD_VK_CHECK(vkResetDescriptorPool(desc_alloc->device, p->pool, 0));
+    }
+
+    while (!VDF(dlist_is_empty)(&desc_alloc->used_pool_list)) {
+        VD(DListNode) *n = VDF(dlist_rm_first)(&desc_alloc->used_pool_list);
+        VDF(dlist_append)(&desc_alloc->free_pool_list, n);
+    }
+}
+
+void VDF(vk_growable_descriptor_allocator_deinit)(VD(VkGrowableDescriptorAllocator) *desc_alloc)
+{
+    VD_DLIST_FOR_EACH(&desc_alloc->used_pool_list, n) {
+        VDI(VkGrowableDescriptorAllocatorPool) *p = VD_CONTAINER_OF(n, VDI(VkGrowableDescriptorAllocatorPool), node);
+        vkDestroyDescriptorPool(desc_alloc->device, p->pool, 0);
+    }
+
+    VD_DLIST_FOR_EACH(&desc_alloc->free_pool_list, n) {
+        VDI(VkGrowableDescriptorAllocatorPool) *p = VD_CONTAINER_OF(n, VDI(VkGrowableDescriptorAllocatorPool), node);
+        vkDestroyDescriptorPool(desc_alloc->device, p->pool, 0);
+    }
+}
+
+static VDI(VkGrowableDescriptorAllocatorPool) *VDI(vk_growable_descriptor_allocator_grab_pool)(VD(VkGrowableDescriptorAllocator) *desc_alloc)
+{
+    // Try to get one from 
+    VD(DListNode) *result = VDF(dlist_rm_first)(&desc_alloc->free_pool_list);
+    if (result != 0) {
+        return VD_CONTAINER_OF(result, VDI(VkGrowableDescriptorAllocatorPool), node);
+    }
+
+    // Create a pool
+    VDI(VkGrowableDescriptorAllocatorPool) *pool = VD_ARENA_PUSH_STRUCT(desc_alloc->arena, VDI(VkGrowableDescriptorAllocatorPool));
+    VDF(dlist_node_init)(&pool->node);
+
+    VD(ArenaSave) save = VDF(arena_save)(desc_alloc->arena);
+
+    VD(u32) num_pool_sizes = (VD(u32))desc_alloc->num_ratios;
+    VkDescriptorPoolSize *pool_sizes = VD_ARENA_PUSH_ARRAY(desc_alloc->arena, VkDescriptorPoolSize, desc_alloc->num_ratios);
+
+    // @todo(mdodis): Customize this in the future
+    const VD(u32) max_sets = 1000;
+
+    for (VD(u32) i = 0; i < num_pool_sizes; ++i) {
+        pool_sizes[i]        = (VkDescriptorPoolSize) {
+            .type            = desc_alloc->ratios[i].type,
+            .descriptorCount = desc_alloc->ratios[i].ratio * max_sets,
+        };
+    }
+
+    VD_VK_CHECK(vkCreateDescriptorPool(desc_alloc->device, & (VkDescriptorPoolCreateInfo) {
+        .sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .flags         = 0,
+        .maxSets       = max_sets,
+        .poolSizeCount = num_pool_sizes,
+        .pPoolSizes    = pool_sizes,
+    }, 0, &pool->pool));
+
+    VDF(arena_restore)(save);
+
+    return pool;
+}
 
 #endif // VD_VK_IMPL

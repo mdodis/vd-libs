@@ -20,20 +20,51 @@
  * 2. Altered source versions must be plainly marked as such, and must not be
  *    misrepresented as being the original software.
  * 3. This notice may not be removed or altered from any source distribution.
+ *
+ * @table Sections
+ * | Name              | Description                                     | Status |
+ * | ----------------- | ----------------------------------------------- | ------ |
+ * | MACRO HELPERS     | Various macros for building other ones          | DONE   |
+ * | ----------------  | ----------------------------------------------- | ------ |
+ * | NAMESPACE         | Allows for customizable namespacing. Everything | DONE   |
+ * |                   | in the codebase is tagged with:                 |        |
+ * |                   |                                                 |        |
+ * |                   | - VD():  Public structs, typedefs and enums     |        |
+ * |                   | - VDF(): Public functions                       |        |
+ * |                   | - VDI(): Internal structs, functions, typedefs, |        |
+ * |                   |          and enums                              |        |
+ * |                   | - VD_(): Enum members                           |        |
+ * | ----------------  | ----------------------------------------------- | ------ |
+ * | HOST COMPILER     |                                                 |        |
+ * | ----------------  | ----------------------------------------------- | ------ |
  */
 #ifndef VD_H
 #define VD_H
 #define VD_VERSION_MAJOR    0
 #define VD_VERSION_MINOR    0
-#define VD_VERSION_PATCH    2
+#define VD_VERSION_PATCH    3
 #define VD_VERSION          ((VD_VERSION_MAJOR << 16) | (VD_VERSION_MINOR << 8) | (VD_VERSION_PATCH))
 
 #include <stdint.h>
 #include <stddef.h>
 
 /* ----MACRO HELPERS------------------------------------------------------------------------------------------------- */
+#ifndef VD_MACRO_ABBREVIATIONS
+#define VD_MACRO_ABBREVIATIONS 0
+#endif // !VD_MACRO_ABBREVIATIONS
+
 #define _VD_STRING_JOIN2(x, y) x##y
 #define VD_STRING_JOIN2(x, y) _VD_STRING_JOIN2(x, y)
+
+/**
+ * @brief Indicates this parameter is unused.
+ */
+#define VD_UNUSED(x) (void)(x)
+
+#define VD_OFFSET_OF(type, element) ((VD(usize)) & (((type*)0)->element))
+
+#define VD_CONTAINER_OF(ptr, type, member) \
+    (type*)(((VD(u8ptr))ptr) - ((VD(usize))VD_OFFSET_OF(type, member)))
 
 /* ----NAMESPACE----------------------------------------------------------------------------------------------------- */
 #ifndef VD_NAMESPACE_OVERRIDE
@@ -41,7 +72,6 @@
 #define VDF(x) VD_STRING_JOIN2(vd_, x)
 #define VDI(x) VD_STRING_JOIN2(vd__, x)
 #define VD_(x) VD_STRING_JOIN2(VD_, x)
-#define VD_MACRO_ABBREVIATIONS 0
 #endif // VD_NAMESPACE_OVERRIDE
 
 /* ----HOST COMPILER------------------------------------------------------------------------------------------------- */
@@ -86,27 +116,34 @@
 /* ----PLATFORM------------------------------------------------------------------------------------------------------ */
 #if defined(_WIN32) || defined(_WIN64)
 #define VD_PLATFORM_WINDOWS 1
-#endif
+#define VD_PLATFORM_KNOWN 1
+#endif // defined(_WIN32) || defined(_WIN64)
 
 #if defined(__linux__)
 #define VD_PLATFORM_LINUX 1
-#endif
+#define VD_PLATFORM_KNOWN 1
+#endif // defined(__linux__)
 
 #if defined(__APPLE__)
 #define VD_PLATFORM_MACOS 1
-#endif
+#define VD_PLATFORM_KNOWN 1
+#endif // defined(__APPLE__)
 
 #ifndef VD_PLATFORM_WINDOWS
 #define VD_PLATFORM_WINDOWS 0
-#endif
+#endif // !VD_PLATFORM_WINDOWS
 
 #ifndef VD_PLATFORM_LINUX
 #define VD_PLATFORM_LINUX 0
-#endif
+#endif // !VD_PLATFORM_LINUX
 
 #ifndef VD_PLATFORM_MACOS
 #define VD_PLATFORM_MACOS 0
-#endif
+#endif // !VD_PLATFORM_MACOS
+
+#ifndef VD_PLATFORM_KNOWN
+#define VD_PLATFORM_KNOWN 0
+#endif // !VD_PLATFORM_KNOWN
 
 /* ----TYPES--------------------------------------------------------------------------------------------------------- */
 typedef uint8_t       VD(u8);
@@ -169,14 +206,8 @@ typedef int32_t       VD(b32);
  */
 #define VD_INTERNAL static
 
-/**
- * @brief Indicates this parameter is unused.
- */
-#define VD_UNUSED(x) (void)(x)
-
-#define VD_OFFSET_OF(type, element) ((VD(usize)) & (((type*)0)->element))
-
 /* ----LIMITS-------------------------------------------------------------------------------------------------------- */
+
 #define VD_U8_MAX    UINT8_MAX
 #define VD_U16_MAX   UINT16_MAX
 #define VD_U32_MAX   UINT32_MAX
@@ -247,16 +278,25 @@ VD_INLINE uintptr_t VDF(vd_align_forward)(uintptr_t ptr, size_t align) {
     return p;
 }
 
+#if VD_MACRO_ABBREVIATIONS
+#define ARRAY_COUNT(a) VD_ARRAY_COUNT(a)
+#define KILOBYTES(x)   VD_KILOBYTES(x)
+#define MEGABYTES(x)   VD_MEGABYTES(x)
+#define GIGABYTES(x)   VD_GIGABYTES(x)
+#endif
+
 /* ----VIRTUAL MEMORY------------------------------------------------------------------------------------------------ */
 #ifndef VD_VM_CUSTOM
 #define VD_VM_CUSTOM 0
 #endif // !VD_VM_CUSTOM
 
+#if VD_PLATFORM_KNOWN
 VD(usize)   VDF(vm_get_page_size)();
 void*       VDF(vm_reserve)(VD(usize) len);
 void*       VDF(vm_commit)(void *addr, VD(usize) len);
 void*       VDF(vm_decommit)(void *addr, VD(usize) len);
 void        VDF(vm_release)(void *addr, VD(usize) len);
+#endif // VD_PLATFORM_KNOWN
 
 /* ----SYSTEM ALLOCATOR---------------------------------------------------------------------------------------------- */
 #ifndef VD_ALLOC_OVERRIDE
@@ -316,6 +356,7 @@ VD_INLINE void*             VDF(arena_alloc)(VD(Arena) *a, size_t size)         
 VD_INLINE void*             VDF(arena_resize)(VD(Arena) *a, void *old_memory, size_t old_size, size_t new_size) { return VDF(arena_resize_align)(a, old_memory, old_size, new_size, VD_ARENA_DEFAULT_ALIGNMENT); }
 
 #define VD_ARENA_PUSH_ARRAY(a, x, count) (x*)VDF(arena_alloc)(a, sizeof(x) * count)
+#define VD_ARENA_PUSH_STRUCT(a, x)       VD_ARENA_PUSH_ARRAY(a, x, 1)
 #define VD_ARENA_FROM_SYSTEM(a, size)    (VDF(arena_init)(a, VD_MALLOC(size), size))
 #define VD_ARENA_FREE_SYSTEM(a)          (VD_FREE(a->buf))
 
@@ -335,6 +376,91 @@ VD_INLINE void *VDI(array_concat)(VD(Arena) *a, void *a1, VD(usize) na1, void *a
 }
 
 #define VD_ARRAY_CONCAT(a, a1, na1, a2, na2) VDI(array_concat)((a), (a1), (na1), (void*)(a2), (na2), sizeof(*a1))
+
+/* ----DLIST--------------------------------------------------------------------------------------------------------- */
+typedef struct VD(DListNode) VD(DListNode);
+
+struct VD(DListNode) {
+    VD(DListNode) *next;
+    VD(DListNode) *prev;
+};
+
+typedef struct __VD_DList {
+    VD(DListNode) sentinel;
+} VD(DList);
+
+VD_INLINE void            VDF(dlist_init)(VD(DList) *list);
+VD_INLINE void            VDF(dlist_append)(VD(DList) *list, VD(DListNode) *node);
+VD_INLINE VD(usize)       VDF(dlist_count)(VD(DList) *list);
+VD_INLINE void            VDF(dlist_rm)(VD(DList) *list, VD(DListNode) *node);
+VD_INLINE VD(DListNode)*  VDF(dlist_rm_first)(VD(DList) *list);
+VD_INLINE VD(DListNode)*  VDF(dlist_rm_last)(VD(DList) *list);
+VD_INLINE void            VDF(dlist_node_link)(VD(DListNode) *node, VD(DListNode) *prev, VD(DListNode) *next);
+VD_INLINE void            VDF(dlist_node_unlink)(VD(DListNode) *node);
+
+VD_INLINE void           VDF(dlist_append)(VD(DList) *list, VD(DListNode) *node)            { VDF(dlist_node_link)(node, list->sentinel.prev, &list->sentinel); }
+VD_INLINE void           VDF(dlist_node_init)(VD(DListNode) *node)                          { node->next = node; node->prev = node; }
+VD_INLINE VD(b32)        VDF(dlist_node_is_empty)(VD(DListNode) *node)                      { return (node->next == node) && (node->prev == node); }
+VD_INLINE VD(b32)        VDF(dlist_is_empty)(VD(DList) *list)                               { return VDF(dlist_node_is_empty)(&list->sentinel); }
+VD_INLINE VD(DListNode)* VDF(dlist_first)(VD(DList) *list)                                  { return VDF(dlist_is_empty)(list) ? 0 : list->sentinel.next; }
+VD_INLINE VD(DListNode)* VDF(dlist_last)(VD(DList) *list)                                   { return VDF(dlist_is_empty)(list) ? 0 : list->sentinel.prev; }
+VD_INLINE void           VDF(dlist_node_append)(VD(DListNode) *node, VD(DListNode) *target) { VDF(dlist_node_link)(node, target, target->next); }
+
+#define VD_DLIST_FOR_EACH(listp, nodename)                       for (VD(DListNode) *nodename = &(listp)->sentinel; (nodename = nodename->next) != &(listp)->sentinel;)
+#define VD_DLIST_FOR_EACH_WITH_INDEX(listp, nodename, indexname) VD(usize) indexname = 0; for (VD(DListNode) *nodename = &(listp)->sentinel; (nodename = nodename->next) != &(listp)->sentinel; indexname++)
+
+VD_INLINE void VDF(dlist_init)(VD(DList) *list)
+{
+    VDF(dlist_node_init)(&list->sentinel);
+}
+
+VD_INLINE void VDF(dlist_rm)(VD(DList) *list, VD(DListNode) *node)
+{
+    VD_ASSERT(node != &list->sentinel);
+    VDF(dlist_node_unlink)(node);
+}
+
+VD_INLINE VD(DListNode) *VDF(dlist_rm_first)(VD(DList) *list)
+{
+    if (VDF(dlist_is_empty)(list)) return 0;
+
+    VD(DListNode) *result = VDF(dlist_first)(list);
+    VDF(dlist_rm)(list, result);
+    return result;
+}
+
+VD_INLINE VD(DListNode) *VDF(dlist_rm_last)(VD(DList) *list)
+{
+    if (VDF(dlist_is_empty)(list)) return 0;
+
+    VD(DListNode) *result = VDF(dlist_last)(list);
+    VDF(dlist_rm)(list, result);
+    return result;
+}
+
+VD_INLINE void VDF(dlist_node_link)(VD(DListNode) *node, VD(DListNode) *prev, VD(DListNode) *next)
+{
+    next->prev = node;
+    node->next = next;
+    node->prev = prev;
+    prev->next = node;
+}
+
+VD_INLINE void VDF(dlist_node_unlink)(VD(DListNode) *node)
+{
+    node->next->prev = node->prev;
+    node->prev->next = node->next;
+    VDF(dlist_node_init)(node);
+}
+
+VD_INLINE VD(usize) VDF(dlist_count)(VD(DList) *list)
+{
+    VD(usize) count = 0;
+    VD_DLIST_FOR_EACH(list, n) {
+        count++;
+    }
+    return count;
+}
 
 /* ----FIXED ARRAY--------------------------------------------------------------------------------------------------- */
 typedef struct {
@@ -828,19 +954,6 @@ VD_INLINE VD(b32) VDI(strmap_set)(void *map, VD(Str) key, void *value, VDI(Strma
     }
 }
 
-/* ----HANDLEMAP----------------------------------------------------------------------------------------------------- */
-typedef struct __VD_HdlMap {
-    VD(u64)     initial_cap;
-    VD(Arena)   arena;
-    void        (*on_free_object)(void *object, void *c);
-} VD(HdlMap);
-
-typedef struct __VD_Handle {
-    VD(u64)    id;
-    VD(HdlMap) *map; 
-} VD(Hdl);
-
-
 /* ----FILESYSTEM---------------------------------------------------------------------------------------------------- */
 #include <stdio.h>
 VD_INLINE VD(u8)*  VDF(dump_file_to_bytes)(VD(Arena) *arena, VD(cstr) file_path, VD(usize) *len)
@@ -911,10 +1024,10 @@ typedef VD_PROC_LOG(VD(ProcLog));
     } while (0)
 
 #define VD_LOG_ADD_NEWLINE(s) s "\n"
-#define VD_ERRF(fmt, ...) VD_LOG_IMPL(VD_LOG_VERBOSITY_ERROR,   VD_LOG_ADD_NEWLINE(fmt), __VA_ARGS__)
-#define VD_WRNF(fmt, ...) VD_LOG_IMPL(VD_LOG_VERBOSITY_WARNING, VD_LOG_ADD_NEWLINE(fmt), __VA_ARGS__)
-#define VD_LOGF(fmt, ...) VD_LOG_IMPL(VD_LOG_VERBOSITY_LOG,     VD_LOG_ADD_NEWLINE(fmt), __VA_ARGS__)
-#define VD_DBGF(fmt, ...) VD_LOG_IMPL(VD_LOG_VERBOSITY_DEBUG,   VD_LOG_ADD_NEWLINE(fmt), __VA_ARGS__)
+#define VD_ERRF(fmt, ...)      VD_LOG_IMPL(VD_LOG_VERBOSITY_ERROR,   VD_LOG_ADD_NEWLINE(fmt), __VA_ARGS__)
+#define VD_WRNF(fmt, ...)      VD_LOG_IMPL(VD_LOG_VERBOSITY_WARNING, VD_LOG_ADD_NEWLINE(fmt), __VA_ARGS__)
+#define VD_LOGF(fmt, ...)      VD_LOG_IMPL(VD_LOG_VERBOSITY_LOG,     VD_LOG_ADD_NEWLINE(fmt), __VA_ARGS__)
+#define VD_DBGF(fmt, ...)      VD_LOG_IMPL(VD_LOG_VERBOSITY_DEBUG,   VD_LOG_ADD_NEWLINE(fmt), __VA_ARGS__)
 
 #if VD_MACRO_ABBREVIATIONS
 #define ERRF(fmt, ...)    VD_ERRF(fmt, __VA_ARGS__)
@@ -1363,23 +1476,6 @@ static VD(b32) VDI(strmap_check_key)(VD(Str) check, VDI(StrmapBinPrefix) *agains
         : (VD_MEMCMP(against->key_rest, check.s + prefix_len, second_check_len) == 0);
 }
 
-
-static void VDI(strmap_copy_key_old)(void *map, VD(Str) key, VDI(StrmapBinPrefix) *bin)
-{
-    VD(u32) prefix_len = sizeof(bin->key_prefix);
-    VD(u32) key_len    = key.len;
-    bin->key_len       = key_len;
-
-    VD(u32) first_copy_len = prefix_len < key_len ? prefix_len : key_len;
-
-    VD_MEMCPY(bin->key_prefix, key.s, first_copy_len);
-
-    if (key_len > prefix_len) {
-        bin->key_rest = (char*)VDF(arena_alloc)(VD_STRMAP_HEADER(map)->arena, key_len - prefix_len);
-        VD_MEMCPY(bin->key_rest, key.s + prefix_len, key_len - prefix_len);
-    }
-}
-
 static void VDI(strmap_emplace_key)(void *map, VDI(StrmapBinPrefix) *dst, char *src_key_prefix, char *src_key_rest, VD(u32) src_key_len)
 {
     VD(u32) prefix_len     = sizeof(dst->key_prefix);
@@ -1730,6 +1826,61 @@ void VDF(test_main)(int argc, char **argv)
 
 #if VD_INCLUDE_INTERNAL_TESTS
 
+typedef struct {
+    int           value;
+    VD(DListNode) node;
+} VDI(TestListStruct);
+
+VD_TEST("DList/Basic/No Sentinel") {
+    int num_nodes = 5;
+    VD(DList) list;
+    VDF(dlist_init)(&list);
+
+    VDI(TestListStruct) *structs = VD_ARENA_PUSH_ARRAY(Test_Arena, VDI(TestListStruct), num_nodes);
+
+    for (int i = 0; i < num_nodes; ++i) {
+        VDI(TestListStruct) *s = &structs[i];
+        s->value = i;
+        VDF(dlist_node_init)(&s->node);
+    }
+
+    for (int i = 0; i < num_nodes; ++i) {
+        VDI(TestListStruct) *s = &structs[i];
+        VD_TEST_EQ("Each node's next when initialized is linked to itself", s->node.next, &s->node);
+        VD_TEST_EQ("Each node's prev when initialized is linked to itself", s->node.prev, &s->node);
+        VDF(dlist_node_init)(&s->node);
+
+        VD_TEST_TRUE("dlist_node_is_empty is true", VDF(dlist_node_is_empty)(&s->node));
+    }
+
+
+    for (int i = 0; i < num_nodes; ++i) {
+        VDI(TestListStruct) *s = &structs[i];
+        VDF(dlist_append)(&list, &s->node);
+    }
+
+    {
+        VD_DLIST_FOR_EACH_WITH_INDEX(&list, n, i) {
+            VDI(TestListStruct) *s = VD_CONTAINER_OF(n, VDI(TestListStruct), node);
+            VD_TEST_EQ("Iterating all nodes in order and getting struct value is correct", s->value, (int)i);
+        }
+        VD_TEST_EQ("After iterating all nodes, the index should be equal to the last node's index + 1", i, (VD(usize))(num_nodes));
+    }
+
+    int i = 0;
+    while (!VDF(dlist_is_empty)(&list)) {
+        VD(DListNode) *n = VDF(dlist_first)(&list);
+        VDF(dlist_rm)(&list, n);
+
+        VDI(TestListStruct) *s = VD_CONTAINER_OF(n, VDI(TestListStruct), node);
+
+        VD_TEST_EQ("Removing first node while list is not empty happens in correct order", s->value, i);
+        i++;
+    }
+
+    VD_TEST_OK();
+}
+
 VD_TEST("FixedArray/Basic")
 {
     VD_FIXEDARRAY int *array = 0;
@@ -1762,33 +1913,37 @@ VD_TEST("FixedArray/Basic")
     VD_TEST_OK();
 }
 
-static void print_map(int *map) {
-    puts("// ----------------------");
-    for (int i = 0; i < (int)VD_STRMAP_TOTAL_CAP(map); ++i) {
-        if (!VD_STRMAP_GET_BIN_USED(map, i)) {
-            size_t index = 0;
-            void *n = VD_STRMAP_GET_BIN_NEXT(map, i);
-            if (n != 0) {
-                index = VD_STRMAP_GET_BIN_INDEX(map, n);
-                printf("// %d: [      ] -> %zu = _\n", i, index);
-            } else {
-                printf("// %d: [      ] -> _ = _\n", i);
-            }
-        } else {
-            size_t index = 0;
-            void *n = VD_STRMAP_GET_BIN_NEXT(map, i);
-            if (n != 0) {
-                index = VD_STRMAP_GET_BIN_INDEX(map, n);
-                int *v = (int*) VD_STRMAP_GET_BIN_VPTR(map, i);
-                printf("// %d: [%6.*s] -> %zu = %d\n", i, VD_STRMAP_GET_KEY_LEN(map, i), VD_STRMAP_GET_KEY_PREFIX(map, i), index, *v);
-            } else {
-                int *v = (int*) VD_STRMAP_GET_BIN_VPTR(map, i);
-                printf("// %d: [%6.*s] -> _ = %d\n", i, VD_STRMAP_GET_KEY_LEN(map, i), VD_STRMAP_GET_KEY_PREFIX(map, i), *v);
-            }
-        }
-    } 
-    puts("// ----------------------");
-}
+/**
+ * @note: Uncomment this line to print the map for debugging purposes
+ * 
+ *  static void print_map(int *map) {
+ *      puts("// ----------------------");
+ *      for (int i = 0; i < (int)VD_STRMAP_TOTAL_CAP(map); ++i) {
+ *          if (!VD_STRMAP_GET_BIN_USED(map, i)) {
+ *              size_t index = 0;
+ *              void *n = VD_STRMAP_GET_BIN_NEXT(map, i);
+ *              if (n != 0) {
+ *                  index = VD_STRMAP_GET_BIN_INDEX(map, n);
+ *                  printf("// %d: [      ] -> %zu = _\n", i, index);
+ *              } else {
+ *                  printf("// %d: [      ] -> _ = _\n", i);
+ *              }
+ *          } else {
+ *              size_t index = 0;
+ *              void *n = VD_STRMAP_GET_BIN_NEXT(map, i);
+ *              if (n != 0) {
+ *                  index = VD_STRMAP_GET_BIN_INDEX(map, n);
+ *                  int *v = (int*) VD_STRMAP_GET_BIN_VPTR(map, i);
+ *                  printf("// %d: [%6.*s] -> %zu = %d\n", i, VD_STRMAP_GET_KEY_LEN(map, i), VD_STRMAP_GET_KEY_PREFIX(map, i), index, *v);
+ *              } else {
+ *                  int *v = (int*) VD_STRMAP_GET_BIN_VPTR(map, i);
+ *                  printf("// %d: [%6.*s] -> _ = %d\n", i, VD_STRMAP_GET_KEY_LEN(map, i), VD_STRMAP_GET_KEY_PREFIX(map, i), *v);
+ *              }
+ *          }
+ *      } 
+ *      puts("// ----------------------");
+ *  }
+ */
 
 typedef struct {
     VD(Str) key;
@@ -1816,9 +1971,13 @@ static VD(b32) VDI(map_check_entries)(int *map, VDI(TestCheckMapEntry) *entries,
     return VD_TRUE;
 }
 
+/**
+ * @todo(mdodis): Separate test case with large strings
+ */
 VD_TEST("Strmap/Basic") {
 
-    Test_Arena->flags |= VD_(ARENA_FLAGS_USE_MALLOC);
+    // @note(mdodis): Uncomment this line to use asan properly
+    // Test_Arena->flags |= VD_(ARENA_FLAGS_USE_MALLOC);
 
     VD_STRMAP int *map = 0;
     VD_STRMAP_INIT(map, Test_Arena, 8, 0);

@@ -38,7 +38,7 @@ typedef struct VD(InixEntry)   VD(InixEntry);
 typedef enum {
     VD_(INIX_ENTRY_TYPE_ENUMERATION),
     VD_(INIX_ENTRY_TYPE_INTEGER),
-    VD_(INIX_ENTRY_RAW_STRING),
+    VD_(INIX_ENTRY_TYPE_RAW_STRING),
 } VD(InixEntryType);
 
 struct VD(InixEntry) {
@@ -134,6 +134,9 @@ typedef struct {
     VD(InixSection)   *global_section;
     VD(InixSection)   *curr_section;
     VD(InixEntry)     *curr_entry;
+
+    VD(usize)         num_mappings;
+    VD(InixMapping)   *mappings;
 
 } VDI(InixContext);
 
@@ -382,11 +385,14 @@ void VDI(inix_consume_token)(VDI(InixContext) *context, VDI(InixLexToken) token)
             case VDI(INIX_LEX_TOKEN_ENUMERATION):   tstr = VD_LIT("INIX_LEX_TOKEN_ENUMERATION"); break;
             case VDI(INIX_LEX_TOKEN_INTEGER):       tstr = VD_LIT("INIX_LEX_TOKEN_INTEGER"); break;
             case VDI(INIX_LEX_TOKEN_RAW_STRING):    tstr = VD_LIT("INIX_LEX_TOKEN_RAW_STRING"); break;
+            case VDI(INIX_LEX_TOKEN_STRING):        tstr = VD_LIT("INIX_LEX_TOKEN_STRING"); break;
             case VDI(INIX_LEX_TOKEN_END):           tstr = VD_LIT("INIX_LEX_TOKEN_END"); break;
             default: break;
 
         }
         if (token.type == VDI(INIX_LEX_TOKEN_RAW_STRING)) {
+            VD_LOGF("Consume %2d:%2d :: %.*s: {{%.*s}}", 1 + token.lexstate.line, token.lexstate.column, VD_STR_EXPAND(tstr), VD_STR_EXPAND(token.raw_string));
+        } else if (token.type == VDI(INIX_LEX_TOKEN_STRING)) {
             VD_LOGF("Consume %2d:%2d :: %.*s: {{%.*s}}", 1 + token.lexstate.line, token.lexstate.column, VD_STR_EXPAND(tstr), VD_STR_EXPAND(token.raw_string));
         } else if (token.type != VDI(INIX_LEX_TOKEN_END)) {
             VD_LOGF("Consume %2d:%2d :: %.*s: %.*s", 1 + token.lexstate.line, token.lexstate.column, VD_STR_EXPAND(tstr), VD_STR_EXPAND(s));
@@ -424,6 +430,7 @@ VD(InixSection) *VDI(inix_push_section)(VDI(InixContext) *context) {
 VD(InixEntry) *VDI(inix_push_entry)(VDI(InixContext) *context, VD(InixEntryType) type) {
     VD(InixEntry) *result = VDF(arena_alloc)(context->arena, sizeof(VD(InixEntry)));
 
+    result->type = type;
     if (context->curr_entry) {
         context->curr_entry->next = result;
         context->curr_entry = result;
@@ -476,6 +483,18 @@ VD(b32) VDI(inix_parse_section)(VDI(InixContext) *context)
     return VD_FALSE;
 }
 
+static VD(b32) VDI(inix_get_enumeration)(VDI(InixContext) *context, VD(Str) name, VD(u64) *out_enumeration)
+{
+    for (VD(usize) i = 0; i < context->num_mappings; ++i) {
+        if (VD(str_eq)(name, context->mappings[i].key)) {
+            *out_enumeration = context->mappings[i].value;
+            return VD_TRUE;
+        }
+    }
+
+    return VD_FALSE;
+}
+
 VD(b32) VDI(inix_parse_expression)(VDI(InixContext) *context)
 {
     VDI(InixLexToken) first = VDI(inix_peek_token)(context);    
@@ -505,7 +524,7 @@ VD(b32) VDI(inix_parse_expression)(VDI(InixContext) *context)
 
             VD(Str) raw_string = val.raw_string;
 
-            VD(InixEntry) *entry = VDI(inix_push_entry)(context, VD_(INIX_ENTRY_RAW_STRING));
+            VD(InixEntry) *entry = VDI(inix_push_entry)(context, VD_(INIX_ENTRY_TYPE_RAW_STRING));
             entry->name = first_string;
             entry->val.raw_string = raw_string;
 
@@ -517,7 +536,7 @@ VD(b32) VDI(inix_parse_expression)(VDI(InixContext) *context)
 
             VD(Str) raw_string = val.raw_string;
 
-            VD(InixEntry) *entry = VDI(inix_push_entry)(context, VD_(INIX_ENTRY_RAW_STRING));
+            VD(InixEntry) *entry = VDI(inix_push_entry)(context, VD_(INIX_ENTRY_TYPE_RAW_STRING));
             entry->name = first_string;
             entry->val.raw_string = raw_string;
 
@@ -529,7 +548,18 @@ VD(b32) VDI(inix_parse_expression)(VDI(InixContext) *context)
 
             VD(InixEntry) *entry = VDI(inix_push_entry)(context, VD_(INIX_ENTRY_TYPE_ENUMERATION));
             entry->name = first_string;
-            entry->val.enumeration = 100;
+
+            VD(Str) val_string = {
+                &context->contents.s[val.lexstate.cursor_from],
+                val.lexstate.cursor - val.lexstate.cursor_from,
+            };
+
+            if (!VDI(inix_get_enumeration)(context, val_string, &entry->val.enumeration)) {
+                VD_ERRF("%d:%d: Enumeration '%.*s' is not a valid enumeration",
+                    val.lexstate.line, val.lexstate.column,
+                    VD_STR_EXPAND(entry->name));
+                return VD_FALSE;
+            }
 
             // LOGF("Enumeration assignment: %.*s = %.*s", VD_STR_EXPAND(first_string), VD_STR_EXPAND(val_string));
 
@@ -608,7 +638,10 @@ VD(InixResult) VDF(inix_parse)(VD(Arena) *arena, VD(InixParseInfo) *info)
         .contents            = info->contents,
         .arena               = arena,
         .global_section      = global_section,
-        .curr_section         = global_section,
+        .curr_section        = global_section,
+        .num_mappings        = info->num_mappings,
+        .mappings            = info->mappings,
+        .debug_log_tokens    = 0,
     };
 
     while (!VDI(inix_at_end)(&context)) {
