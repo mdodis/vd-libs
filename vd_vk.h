@@ -402,6 +402,29 @@ VkResult VDF(vk_growable_descriptor_allocator_get)(VD(VkGrowableDescriptorAlloca
 void     VDF(vk_growable_descriptor_allocator_reset)(VD(VkGrowableDescriptorAllocator) *desc_alloc);
 void     VDF(vk_growable_descriptor_allocator_deinit)(VD(VkGrowableDescriptorAllocator) *desc_alloc);
 
+/* ----DESCRIPTOR SET LAYOUT CACHE----------------------------------------------------------------------------------- */
+#ifndef VD_VK_DESCRIPTOR_SET_LAYOUT_CACHE_CUSTOM
+#define VD_VK_DESCRIPTOR_SET_LAYOUT_CACHE_CUSTOM 0
+#endif // !VD_VK_DESCRIPTOR_SET_LAYOUT_CACHE_CUSTOM
+
+#if !VD_VK_DESCRIPTOR_SET_LAYOUT_CACHE_CUSTOM
+#define VD_VK_DESCRIPTOR_SET_LAYOUT_CACHE_MAX_BINDINGS 8
+#endif // !VD_VK_DESCRIPTOR_SET_LAYOUT_CACHE_CUSTOM
+
+typedef struct __VD_VK_DescriptorSetLayoutCacheKey {
+    u32                          num_bindings;
+    VkDescriptorSetLayoutBinding bindings[VD_VK_DESCRIPTOR_SET_LAYOUT_CACHE_MAX_BINDINGS];
+} VDI(VkDescriptorSetLayoutCacheKey);
+
+typedef struct __VD_VK_DescriptorSetLayoutCacheKV {
+    VDI(VkDescriptorSetLayoutCacheKey) k;
+    VkDescriptorSetLayout              v;
+} VDI(VkDescriptorSetLayoutCacheKV);
+
+typedef struct __VD_VK_DescriptorSetLayoutCache {
+    VD_KVMAP VDI(VkDescriptorSetLayoutCacheKV) *map;
+} VD(VkDescriptorSetLayoutCache);
+
 /* ----AMD VMA TRACKING---------------------------------------------------------------------------------------------- */
 #if VD_VK_VMA_TRACKING
 #ifndef AMD_VULKAN_MEMORY_ALLOCATOR_H
@@ -1692,6 +1715,8 @@ void VDF(vk_growable_descriptor_allocator_reset)(VD(VkGrowableDescriptorAllocato
         VD(DListNode) *n = VDF(dlist_rm_first)(&desc_alloc->used_pool_list);
         VDF(dlist_append)(&desc_alloc->free_pool_list, n);
     }
+
+    desc_alloc->current_pool = 0;
 }
 
 void VDF(vk_growable_descriptor_allocator_deinit)(VD(VkGrowableDescriptorAllocator) *desc_alloc)

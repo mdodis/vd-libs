@@ -249,7 +249,7 @@ typedef int32_t       VD(b32);
 #define VD_MEMMOVE(d, s, c) memmove((d), (s), (c))
 #endif // !VD_MEMMOVE
 
-#define VD_IMPOSSIBLE() VD_ASSERT(false)
+#define VD_IMPOSSIBLE() VD_ASSERT(VD_FALSE)
 
 /* ----SIZES--------------------------------------------------------------------------------------------------------- */
 #define VD_KILOBYTES(x) (((VD(usize))x) * 1024)
@@ -534,28 +534,31 @@ typedef struct {
     VD(Arena)   *arena;
 } VD(DynArrayHeader);
 
-#define VD_DYNARRAY_HEADER(a)       ((VD(DynArrayHeader)*)(((VD(u8)*)a) - sizeof(VD(DynArrayHeader))))
-#define VD_DYNARRAY_INIT(a, arena)  ((a) = VDI(dynarray_grow)(a, sizeof(*(a)), 1, 0, arena))
-#define VD_DYNARRAY_ADD(a, v)       (VD_DYNARRAY_CHECKGROW(a, 1), (a)[VD_DYNARRAY_HEADER(a)->len++] = (v))
-#define VD_DYNARRAY_PUSH(a, v)      (VD_DYNARRAY_CHECKGROW(a, 1), &((a)[VD_DYNARRAY_HEADER(a)->len++]))
-#define VD_DYNARRAY_ADDN(a, n)      (VD_DYNARRAY_CHECKGROW(a, n), VD_DYNARRAY_HEADER(a)->len += (n))
-#define VD_DYNARRAY_CLEAR(a)        ((a) ? VD_DYNARRAY_HEADER(a)->len = 0 : 0)
-#define VD_DYNARRAY_POP(a)          (VD_DYNARRAY_HEADER(a)->len--, (a)[VD_DYNARRAY_HEADER(a)->len])
-#define VD_DYNARRAY_LAST(a)         ((a)[VD_DYNARRAY_HEADER(a)->len - 1])
-#define VD_DYNARRAY_LEN(a)          ((a) ? VD_DYNARRAY_HEADER(a)->len : 0)
-#define VD_DYNARRAY_CAP(a)          ((a) ? VD_DYNARRAY_HEADER(a)->cap : 0)
-#define VD_DYNARRAY_ARENAP(a)       ((a) ? VD_DYNARRAY_HEADER(a)->arena : 0)
-#define VD_DYNARRAY_GROW(a, b, c)   ((a) = VDF(dynarray_grow)((a), sizeof(*(a)), (b), (c), VD_DYNARRAY_ARENAP(a)))
+#define VD_DYNARRAY_HEADER(a)                      ((VD(DynArrayHeader)*)(((VD(u8)*)a) - sizeof(VD(DynArrayHeader))))
+#define VD_DYNARRAY_INIT(a, arena)                 ((a) = VDI(dynarray_grow)(a, sizeof(*(a)), 1, 0, arena))
+#define VD_DYNARRAY_INIT_WITH_CAP(a, arena, cap)   ((a) = VDI(dynarray_grow)(a, sizeof(*(a)), cap, 0, arena))
+#define VD_DYNARRAY_ADD(a, v)                      (VD_DYNARRAY_CHECKGROW(a, 1), (a)[VD_DYNARRAY_HEADER(a)->len++] = (v))
+#define VD_DYNARRAY_PUSH(a)                        (VD_DYNARRAY_CHECKGROW(a, 1), &((a)[VD_DYNARRAY_HEADER(a)->len++]))
+#define VD_DYNARRAY_ADDN(a, n)                     (VD_DYNARRAY_CHECKGROW(a, n), VD_DYNARRAY_HEADER(a)->len += (n))
+#define VD_DYNARRAY_CLEAR(a)                       ((a) ? VD_DYNARRAY_HEADER(a)->len = 0 : 0)
+#define VD_DYNARRAY_POP(a)                         (VD_DYNARRAY_HEADER(a)->len--, (a)[VD_DYNARRAY_HEADER(a)->len])
+#define VD_DYNARRAY_LAST(a)                        ((a)[VD_DYNARRAY_HEADER(a)->len - 1])
+#define VD_DYNARRAY_LEN(a)                         ((a) ? VD_DYNARRAY_HEADER(a)->len : 0)
+#define VD_DYNARRAY_CAP(a)                         ((a) ? VD_DYNARRAY_HEADER(a)->cap : 0)
+#define VD_DYNARRAY_ARENAP(a)                      ((a) ? VD_DYNARRAY_HEADER(a)->arena : 0)
+#define VD_DYNARRAY_GROW(a, b, c)                  ((a) = VDI(dynarray_grow)((a), sizeof(*(a)), (b), (c), VD_DYNARRAY_ARENAP(a)))
+#define VD_DYNARRAY_PTR_CHECKED(a, i)              ((i < VD_DYNARRAY_LEN(a)) ? &(a)[i] : 0)
+
+// @todo(mdodis): fix & check dynarray & fixedarray (they use invalid macros and dynarray is not tested)
 #define VD_DYNARRAY_CHECKGROW(a, n)                      \
-    ((!(a) || VD_ARRAY_HEADER(a)->len + (n) > VD_ARRAY_HEADER(a)->cap) \
-    ? (VD_ARRAY_GROW(a, n, 0), 0) : 0)
+    ((!(a) || VD_DYNARRAY_HEADER(a)->len + (n) > VD_DYNARRAY_HEADER(a)->cap) \
+    ? (VD_DYNARRAY_GROW(a, n, 0), 0) : 0)
 
 #define VD_DYNARRAY
 
 VD_INLINE void *VDI(dynarray_grow)(void *a, VD(usize) tsize, VD(u32) addlen, VD(u32) mincap, VD(Arena) *arena)
 {
     VD(usize) min_len = VD_DYNARRAY_LEN(a) + addlen;
-    #define VD_DYNARRAY_LAST(a)         ((a)[VD_DYNARRAY_HEADER(a)->len - 1])
 
     if (min_len > mincap) {
         mincap = min_len;
@@ -579,24 +582,27 @@ VD_INLINE void *VDI(dynarray_grow)(void *a, VD(usize) tsize, VD(u32) addlen, VD(
     b = (VD(u8)*)b + sizeof(VD(DynArrayHeader));
 
     if (a == 0) {
-        VD_DYNARRAY_HEADER(a)->len = 0;
-        VD_DYNARRAY_HEADER(a)->arena = arena;
+        VD_DYNARRAY_HEADER(b)->len = 0;
+        VD_DYNARRAY_HEADER(b)->arena = arena;
     }
 
-    VD_DYNARRAY_HEADER(a)->cap = mincap;
+    VD_DYNARRAY_HEADER(b)->cap = mincap;
     return b;
 }
 
 #if VD_MACRO_ABBREVIATIONS
-#define dynarray_init(a, arena) VD_DYNARRAY_INIT(a, arena)
-#define dynarray_add(a, v)      VD_DYNARRAY_ADD(a, v)
-#define dynarray_push(a, v)     VD_DYNARRAY_PUSH(a, v)
-#define dynarray_addn(a, n)     VD_DYNARRAY_ADDN(a, n)
-#define dynarray_clear(a)       VD_DYNARRAY_CLEAR(a)
-#define dynarray_pop(a)         VD_DYNARRAY_POP(a)
-#define dynarray_last(a)        VD_DYNARRAY_LAST(a)
-#define dynarray_len(a)         VD_DYNARRAY_LEN(a)
-#define dynarray_cap(a)         VD_DYNARRAY_CAP(a)
+#define dynarray_init(a, arena)               VD_DYNARRAY_INIT(a, arena)
+#define dynarray_init_with_cap(a, arena, cap) VD_DYNARRAY_INIT_WITH_CAP(a, arena, cap)
+#define dynarray_add(a, v)                    VD_DYNARRAY_ADD(a, v)
+#define dynarray_push(a)                      VD_DYNARRAY_PUSH(a)
+#define dynarray_addn(a, n)                   VD_DYNARRAY_ADDN(a, n)
+#define dynarray_clear(a)                     VD_DYNARRAY_CLEAR(a)
+#define dynarray_pop(a)                       VD_DYNARRAY_POP(a)
+#define dynarray_last(a)                      VD_DYNARRAY_LAST(a)
+#define dynarray_len(a)                       VD_DYNARRAY_LEN(a)
+#define dynarray_cap(a)                       VD_DYNARRAY_CAP(a)
+#define dynarray_ptr_checked(a, i)            VD_DYNARRAY_PTR_CHECKED(a, i)
+#define dynarray
 #endif
 
 /* ----STR----------------------------------------------------------------------------------------------------------- */
@@ -610,6 +616,7 @@ VD_INLINE VD(usize)    VDF(cstr_len)(VD(cstr) a);
 VD_INLINE VD(cstr)     VDF(cstr_dup)(VD(Arena) *arena, VD(cstr) s);
 VD_INLINE VD(cstr)     VDF(cstr_cncat)(VD(Arena) *arena, VD(cstr) a, VD(cstr) b);
 VD_INLINE VD(cstr)     VDF(cstr_ncncat)(VD(Arena) *arena, VD(usize) *num_strings, VD(cstr) *strings);
+VD_INLINE VD(cstr)     VDF(cstr_from_str)(VD(Arena) *arena, VD(Str) s);
 
 VD_INLINE VD(Str)      VDF(str_from_cstr)(VD(cstr) s) { return (VD(Str)) { .s = s, .len = VDF(cstr_len)(s) }; }
 VD_INLINE VD(Str)      VDF(str_dup)(VD(Arena) *a, VD(Str) s);
@@ -736,6 +743,14 @@ VD_INLINE VD(Str) VDF(str_join)(VD(Arena) *arena, VD(Str) a, VD(Str) b, VD(b32) 
     return (VD(Str)) { result, final_size };
 }
 
+VD_INLINE VD(cstr) VDF(cstr_from_str)(VD(Arena) *arena, VD(Str) s)
+{
+    char *result = (char*)VDF(arena_alloc)(arena, s.len + 1);
+    VD_MEMCPY(result, s.s, s.len);
+    result[s.len] = 0;
+    return result;
+}
+
 #define VD_LIT(string)  (VD(Str)) { .s = (string), .len = (sizeof(string) - 1), }
 
 #define VD_STR_EXPAND(string) (int)(string).len, (string).s
@@ -744,6 +759,8 @@ VD_INLINE VD(Str) VDF(str_join)(VD(Arena) *arena, VD(Str) a, VD(Str) b, VD(b32) 
 #define LIT(string)         VD_LIT(string)
 #define STR_EXPAND(string)  VD_STR_EXPAND(string)
 #endif
+
+/* ----STR BUILDER--------------------------------------------------------------------------------------------------- */
 
 /* ----PARSING------------------------------------------------------------------------------------------------------- */
 VD_INLINE VD(b32)      VDF(is_ascii_digit)(char c);
@@ -898,9 +915,10 @@ typedef struct __VD_StrmapInitOptions {
 #define VD_STRMAP_DEFAULT_CAP              1024
 #define VD_STRMAP_HEADER(m)                ((VDI(StrmapHeader)*)(((VD(u8)*)(m)) - sizeof(VDI(StrmapHeader))))
 #define VD_STRMAP_INIT(m, arena, cap, o)   ((m) = (VDI(strmap_init)((arena), sizeof(*m), (cap), (o))))
-#define VD_STRMAP_INIT_DEFAULT(m, arena)   VD_STRMAP_INIT((m), (arena), VD_STRMAP_DEFAULT_CAP)
+#define VD_STRMAP_INIT_DEFAULT(m, arena)   VD_STRMAP_INIT((m), (arena), VD_STRMAP_DEFAULT_CAP, 0)
 #define VD_STRMAP_SET(m, k, v)             VDI(strmap_set)((m), (k), (void*)(v), VDI(STRMAP_SET_NEW_ONLY))
 #define VD_STRMAP_GET(m, k, v)             VDI(strmap_get)((m), (k), (void*)(v))
+#define VD_STRMAP_GET_PTR(m, k)            VDI(strmap_get_ptr)((m), (k))
 #define VD_STRMAP_RM(m, k)                 (VDI(strmap_get_bin)((m), (k), VDI(STRMAP_GET_BIN_FLAGS_SET_UNUSED)) != 0)
 #define VD_STRMAP_OVERWRITE(m, k, v)       VDI(strmap_set)((m), (k), (void*)(v), VDI(STRMAP_SET_OVERWRITE))
 #define VD_STRMAP_COUNT(m)                 ((m) == 0 ? 0 : VD_STRMAP_HEADER(m)->taken)
@@ -921,6 +939,7 @@ typedef struct __VD_StrmapInitOptions {
 void*                   VDI(strmap_init)(VD(Arena) *arena, VD(u32) tsize, VD(u32) cap, VD(StrmapInitOptions) *options);
 VDI(StrmapBinPrefix)*   VDI(strmap_get_bin)(void *map, VD(Str) key, VDI(StrmapGetBinFlags) op);
 VD_INLINE VD(b32)       VDI(strmap_get)(void *map, VD(Str) key, void *value);
+VD_INLINE void*         VDI(strmap_get_ptr)(void *map, VD(Str) key);
 VD_INLINE VD(b32)       VDI(strmap_set)(void *map, VD(Str) key, void *value, VDI(StrmapSetMode) mode);
 
 VD_INLINE VD(b32) VDI(strmap_get)(void *map, VD(Str) key, void *value)
@@ -933,6 +952,17 @@ VD_INLINE VD(b32) VDI(strmap_get)(void *map, VD(Str) key, void *value)
     VD(u8) *bin_data = ((VD(u8)*)bin) + sizeof(VDI(StrmapBinPrefix));
     VD_MEMCPY(value, bin_data, VD_STRMAP_HEADER(map)->tsize);
     return VD_TRUE;
+}
+
+VD_INLINE void *VDI(strmap_get_ptr)(void *map, VD(Str) key)
+{
+    // Look for bin 
+    VDI(StrmapBinPrefix) *bin = VDI(strmap_get_bin)(map, key, VDI(STRMAP_GET_BIN_FLAGS_GET_EXISTING));
+    if (bin == 0) return 0;
+
+    // If found the copy over the data
+    VD(u8) *bin_data = ((VD(u8)*)bin) + sizeof(VDI(StrmapBinPrefix));
+    return (void*)bin_data;
 }
 
 VD_INLINE VD(b32) VDI(strmap_set)(void *map, VD(Str) key, void *value, VDI(StrmapSetMode) mode)
@@ -950,6 +980,123 @@ VD_INLINE VD(b32) VDI(strmap_set)(void *map, VD(Str) key, void *value, VDI(Strma
 
         VD(u8) *bin_data = ((VD(u8)*)bin) + sizeof(VDI(StrmapBinPrefix));
         VD_MEMCPY(bin_data, value, VD_STRMAP_HEADER(map)->tsize);
+        return VD_TRUE;
+    }
+}
+
+#if VD_MACRO_ABBREVIATIONS
+#define strmap
+#define strmap_init(m, arena, cap, o) VD_STRMAP_INIT(m, arena, cap, o)
+#define strmap_init_default(m, arena) VD_STRMAP_INIT_DEFAULT(m, arena)
+#define strmap_set(m, k, v)           VD_STRMAP_SET(m, k, v)
+#define strmap_get(m, k, v)           VD_STRMAP_GET(m, k, v)
+#define strmap_get_ptr(m, k)          VD_STRMAP_GET_PTR(m, k)
+#define strmap_rm(m, k)               VD_STRMAP_RM(m, k)
+#define strmap_overwrite(m, k, v)     VD_STRMAP_OVERWRITE(m, k, v)
+#endif // VD_MACRO_ABBREVIATIONS
+
+/* ----KVMAP--------------------------------------------------------------------------------------------------------- */
+typedef struct {
+    VD(u32)   cap;
+    VD(u32)   cap_total;
+    VD(u32)   taken;
+    VD(u32)   ksize;
+    VD(u32)   vsize;
+} VDI(KVMapHeader);
+
+typedef struct VDI(KVMapBinPrefix) VDI(KVMapBinPrefix);
+
+struct VDI(KVMapBinPrefix) {
+    VDI(KVMapBinPrefix) *next;
+    VDI(KVMapBinPrefix) *insq;
+    VD(usize)            used;
+};
+
+typedef enum {
+    VDI(KVMAP_GET_BIN_FLAGS_CREATE)       = 1 << 1,
+    VDI(KVMAP_GET_BIN_FLAGS_SET_UNUSED)   = 1 << 2,
+    VDI(KVMAP_GET_BIN_FLAGS_GET_EXISTING) = 1 << 3,
+} VDI(KVMapGetBinFlags);
+
+typedef enum {
+    VDI(KVMAP_SET_NEW_ONLY)  = 0,
+    VDI(KVMAP_SET_OVERWRITE) = 1,
+} VDI(KVMapSetMode);
+
+
+/**
+ * @sym VD(KVMapInitOptions)
+ *
+ * @brief Options to modify KVMap behavior, allocation strategy, etc.
+ */
+typedef struct __VD_KVMapInitOptions {
+    /** A value from [0.3, 0.9] that determines the amount of slots assigned to the addressable region. */
+    float address_scale;
+} VD(KVMapInitOptions);
+
+
+/**
+ * Expect T: struct { TKey k; TValue v; };
+ */
+
+#define VD_KVMAP
+#define VD_KVMAP_DEFAULT_CAP              1024
+#define VD_KVMAP_HEADER(m)                ((VDI(KVMapHeader)*)(((VD(u8)*)(m)) - sizeof(VDI(KVMapHeader))))
+#define VD_KVMAP_INIT(m, arena, cap, o)   ((m) = (VDI(kvmap_init)((arena), sizeof(m->k), sizeof(m->v), (cap), (o))))
+#define VD_KVMAP_INIT_DEFAULT(m, arena)   VD_KVMAP_INIT((m), (arena), VD_KVMAP_DEFAULT_CAP)
+#define VD_KVMAP_SET(m, k, v)             VDI(kvmap_set)((m), (k), (void*)(v), VDI(KVMAP_SET_NEW_ONLY))
+#define VD_KVMAP_GET(m, k, v)             VDI(kvmap_get)((m), (k), (void*)(v))
+#define VD_KVMAP_RM(m, k)                 (VDI(kvmap_get_bin)((m), (k), VDI(KVMAP_GET_BIN_FLAGS_SET_UNUSED)) != 0)
+#define VD_KVMAP_OVERWRITE(m, k, v)       VDI(kvmap_set)((m), (k), (void*)(v), VDI(KVMAP_SET_OVERWRITE))
+#define VD_KVMAP_COUNT(m)                 ((m) == 0 ? 0 : VD_KVMAP_HEADER(m)->taken)
+#define VD_KVMAP_TOTAL_CAP(m)             ((m) == 0 ? 0 : VD_KVMAP_HEADER(m)->cap_total)
+#define VD_KVMAP_ARENAP(m)                ((m) == 0 ? 0 : VD_KVMAP_HEADER(m)->arena)
+#define VD_KVMAP_KSIZE(m)                 (VD_KVMAP_HEADER(m)->ksize)
+#define VD_KVMAP_VSIZE(m)                 (VD_KVMAP_HEADER(m)->vsize)
+#define VD_KVMAP_ENTRY_SIZE(m)            (VD_KVMAP_KSIZE(m) + VD_KVMAP_VSIZE(m) + sizeof(VDI(KVMapBinPrefix)))
+#define VD_KVMAP_GET_BIN(m, i)            ((VDI(KVMapBinPrefix)*) (((VD(u8)*)m) + (VD_KVMAP_ENTRY_SIZE(m) * (i))))
+#define VD_KVMAP_GET_KEY(m, i)            ((void*)((VD(u8)*)VD_KVMAP_GET_BIN(m, i) + sizeof(VDI(KVMapBinPrefix))))
+#define VD_KVMAP_GET_VAL(m, i)            ((void*)((VD(u8)*)VD_KVMAP_GET_BIN(m, i) + sizeof(VDI(KVMapBinPrefix) + VD_KVMAP_KSIZE(m))))
+#define VD_KVMAP_GET_BIN_USED(m, i)       VD_KVMAP_GET_BIN(m, i)->used
+#define VD_KVMAP_GET_BIN_NEXT(m, i)       VD_KVMAP_GET_BIN(m, i)->next
+#define VD_KVMAP_GET_BIN_INDEX(m, b)      (size_t)(((uintptr_t)b - (uintptr_t)m) / (uintptr_t)(VD_KVMAP_ENTRY_SIZE(m)))
+#define VD_KVMAP_GET_BIN_KPTR(m, i)       ((void*)(((VD(u8)*)VD_KVMAP_GET_BIN(m, i)) + sizeof(VDI(KVMapBinPrefix))))
+#define VD_KVMAP_GET_BIN_VPTR(m, i)       ((void*)(((VD(u8)*)VD_KVMAP_GET_BIN(m, i)) + sizeof(VDI(KVMapBinPrefix)) + VD_KVMAP_KSIZE(m)))
+#define VD_KVMAP_BIN_MOVE_TO_KPTR(b)      ((void*)(((VD(u8)*)(b)) + sizeof(VDI(KVMapBinPrefix))))
+#define VD_KVMAP_BIN_MOVE_TO_VPTR(m, b)   ((void*)(((VD(u8)*)(b)) + sizeof(VDI(KVMapBinPrefix)) + VD_KVMAP_KSIZE(map)))
+
+void*                   VDI(kvmap_init)(VD(Arena) *arena, VD(u32) ksize, VD(u32) vsize, VD(u32) cap, VD(KVMapInitOptions) *options);
+VDI(KVMapBinPrefix)*    VDI(kvmap_get_bin)(void *map, void *key, VDI(KVMapGetBinFlags) op);
+VD_INLINE VD(b32)       VDI(kvmap_get)(void *map, void *key, void *value);
+VD_INLINE VD(b32)       VDI(kvmap_set)(void *map, void *key, void *value, VDI(KVMapSetMode) mode);
+
+VD_INLINE VD(b32) VDI(kvmap_get)(void *map, void *key, void *value)
+{
+    // Look for bin 
+    VDI(KVMapBinPrefix) *bin = VDI(kvmap_get_bin)(map, key, VDI(KVMAP_GET_BIN_FLAGS_GET_EXISTING));
+    if (bin == 0) return VD_FALSE;
+
+    // If found the copy over the data
+    VD(u8) *bin_data = VD_KVMAP_BIN_MOVE_TO_VPTR(map, bin);
+    VD_MEMCPY(value, bin_data, VD_KVMAP_HEADER(map)->vsize);
+    return VD_TRUE;
+}
+
+VD_INLINE VD(b32) VDI(kvmap_set)(void *map, void *key, void *value, VDI(KVMapSetMode) mode)
+{
+    if (mode == VDI(KVMAP_SET_NEW_ONLY)) {
+        VDI(KVMapBinPrefix) *bin = VDI(kvmap_get_bin)(map, key, VDI(KVMAP_GET_BIN_FLAGS_CREATE));
+        if (bin == 0) return VD_FALSE;
+
+        VD(u8) *bin_data = VD_KVMAP_BIN_MOVE_TO_VPTR(map, bin);
+        VD_MEMCPY(bin_data, value, VD_KVMAP_VSIZE(map));
+        return VD_TRUE;
+    } else {
+        VDI(KVMapBinPrefix) *bin = VDI(kvmap_get_bin)(map, key, VDI(KVMAP_GET_BIN_FLAGS_CREATE) | VDI(KVMAP_GET_BIN_FLAGS_GET_EXISTING));
+        if (bin == 0) return VD_FALSE;
+
+        VD(u8) *bin_data = VD_KVMAP_BIN_MOVE_TO_VPTR(map, bin);
+        VD_MEMCPY(bin_data, value, VD_KVMAP_HEADER(map)->vsize);
         return VD_TRUE;
     }
 }
@@ -1453,11 +1600,6 @@ VD(b32) VDF(arg_expect_char)(VD(Arg) *arg, char c);
 #undef VD_ARG_CHECK_NEXT
 
 /* ----STRMAP IMPL--------------------------------------------------------------------------------------------------- */
-// #define VD_STRMAP_GET_BIN_AT(m, i) \
-//     ((VDI(StrmapBinPrefix)*)((VD(u8)*)m) + (VD_STRMAP_HEADER(m)->tsize + sizeof(VDI(StrmapBinPrefix)) * i))
-
-#define VD_STRMAP_GET_BIN_AT(m, i) VD_STRMAP_GET_BIN(m, i)
-
 static VD(b32) VDI(strmap_check_key)(VD(Str) check, VDI(StrmapBinPrefix) *against) {
     VD(u32) prefix_len       = sizeof(against->key_prefix);    
     VD(u32) first_check_len  = prefix_len < check.len ? prefix_len : check.len;
@@ -1616,7 +1758,7 @@ static void VDI(strmap_reinsert_chain)(void *map, VDI(StrmapBinPrefix) *start)
                 }
 
                 VD(u32) cursor = VD_STRMAP_HEADER(map)->cap_total;
-                while ((cursor > 0) && (VD_STRMAP_GET_BIN_AT(map, cursor - 1)->used)) {
+                while ((cursor > 0) && (VD_STRMAP_GET_BIN(map, cursor - 1)->used)) {
                     cursor--;
                 }
 
@@ -1627,7 +1769,7 @@ static void VDI(strmap_reinsert_chain)(void *map, VDI(StrmapBinPrefix) *start)
                 }
 
                 cursor--;
-                VDI(StrmapBinPrefix) *new_bin = VD_STRMAP_GET_BIN_AT(map, cursor);
+                VDI(StrmapBinPrefix) *new_bin = VD_STRMAP_GET_BIN(map, cursor);
 
                 // Allocate the bin
                 new_bin->used = VD_TRUE;
@@ -1658,7 +1800,7 @@ VDI(StrmapBinPrefix)* VDI(strmap_get_bin)(void *map, VD(Str) key, VDI(StrmapGetB
     VD(u64) bin_index = hash % VD_STRMAP_HEADER(map)->cap;
 
     // Find existing bin if any
-    VDI(StrmapBinPrefix) *existing_bin = VD_STRMAP_GET_BIN_AT(map, bin_index);
+    VDI(StrmapBinPrefix) *existing_bin = VD_STRMAP_GET_BIN(map, bin_index);
 
     // If:
     // (existing_bin->used == 0) AND
@@ -1674,7 +1816,6 @@ VDI(StrmapBinPrefix)* VDI(strmap_get_bin)(void *map, VD(Str) key, VDI(StrmapGetB
     //        to the newly allocated bin
     if (existing_bin->used || !(op & VDI(STRMAP_GET_BIN_FLAGS_CREATE))) {
         VD(b32) found = VD_FALSE;
-
 
         // Make sure that the hash didn't put us in a bin where the key is equal to the query key
         if (VDI(strmap_check_key)(key, existing_bin)) {
@@ -1731,7 +1872,7 @@ VDI(StrmapBinPrefix)* VDI(strmap_get_bin)(void *map, VD(Str) key, VDI(StrmapGetB
 
     // Otherwise search starting from the cellar for an unused bin
     VD(u32) cursor = VD_STRMAP_HEADER(map)->cap_total;
-    while ((cursor > 0) && (VD_STRMAP_GET_BIN_AT(map, cursor - 1)->used)) {
+    while ((cursor > 0) && (VD_STRMAP_GET_BIN(map, cursor - 1)->used)) {
         cursor--;
     }
 
@@ -1742,7 +1883,7 @@ VDI(StrmapBinPrefix)* VDI(strmap_get_bin)(void *map, VD(Str) key, VDI(StrmapGetB
     }
 
     cursor--;
-    VDI(StrmapBinPrefix) *new_bin = VD_STRMAP_GET_BIN_AT(map, cursor);
+    VDI(StrmapBinPrefix) *new_bin = VD_STRMAP_GET_BIN(map, cursor);
 
     // Allocate the bin
     new_bin->used = VD_TRUE;
@@ -1759,7 +1900,238 @@ VDI(StrmapBinPrefix)* VDI(strmap_get_bin)(void *map, VD(Str) key, VDI(StrmapGetB
     return new_bin;
 }
 
-#undef VD_STRMAP_GET_BIN_AT
+/* ----KVMAP IMPL---------------------------------------------------------------------------------------------------- */
+static VD(b32) VDI(kvmap_check_key)(VD(usize) ksize, void *check, VDI(KVMapBinPrefix) *against)
+{
+    void *key_against = (void *)(((VD(u8ptr))against) + sizeof(VDI(KVMapBinPrefix)));
+    return VD_MEMCMP(check, key_against, ksize) == 0;
+}
+
+static void VDI(kvmap_copy_key)(void *map, void *key, VDI(KVMapBinPrefix) *bin)
+{
+    void *dst = (void *)(((VD(u8ptr))bin) + sizeof(VDI(KVMapBinPrefix)));
+    VD_MEMCPY(dst, key, VD_KVMAP_KSIZE(map));
+}
+
+// @todo(mdodis): Speed this up if VD_ENABLE_SCRATCH_USE_IN_LIBRARY is enabled
+//                by using a simple queue to store re-inserted bins
+static void VDI(kvmap_reinsert_chain)(void *map, VDI(KVMapBinPrefix) *start)
+{
+    // Build the insertion queue
+    VDI(KVMapBinPrefix) *bin = start;
+    VDI(KVMapBinPrefix) *bin_next = start->next;
+    while (bin_next != 0) {
+        bin->insq = bin_next;
+
+        bin       = bin_next;
+        bin_next  = bin->next;
+    }
+
+    // Traverse the queue and for each item, set its bin to be unused, then re-add it
+    VDI(KVMapBinPrefix) *q = start->insq;
+    bin = start;
+
+    start->insq = 0;
+
+    while (q != 0) {
+        q->used = VD_FALSE;
+        VDI(KVMapBinPrefix) *nextq = q->insq;
+        q->insq = 0;
+
+        // Compose the key for q into a VD(Str)
+        VD(u64) key_hash;
+        {
+            void *k = (void *)(((VD(u8ptr))q) + sizeof(VDI(KVMapBinPrefix)));
+            key_hash = VDF(dhash64)(k, VD_KVMAP_KSIZE(map));
+        }
+
+        VD(usize) bin_index = key_hash % VD_KVMAP_HEADER(map)->cap;
+
+        VDI(KVMapBinPrefix) *existing_bin = VD_KVMAP_GET_BIN(map, bin_index);
+
+        // if the key for some reason hashes to the same place, then ignore it
+        if (existing_bin != q) {
+
+            if (!existing_bin->used) {
+                VDI(KVMapBinPrefix) *new_bin = existing_bin;
+                void *sptr = VD_KVMAP_BIN_MOVE_TO_VPTR(map, q);
+                void *dptr = VD_KVMAP_BIN_MOVE_TO_VPTR(map, new_bin);
+
+                new_bin->used = VD_TRUE;
+                new_bin->next = 0;
+
+                // Copy key
+                VDI(kvmap_copy_key)(map, VD_KVMAP_BIN_MOVE_TO_KPTR(q), new_bin);
+
+                // Copy over value
+                VD_MEMCPY(dptr, sptr, VD_KVMAP_VSIZE(map));
+            } else {
+                // Attempt to traverse the chain, if any
+                VDI(KVMapBinPrefix) *chain_head = existing_bin;
+                while (chain_head->next == 0) {
+                    chain_head = chain_head->next;
+                }
+
+                VD(u32) cursor = VD_KVMAP_HEADER(map)->cap_total;
+                while ((cursor > 0) && (VD_KVMAP_GET_BIN(map, cursor - 1)->used)) {
+                    cursor--;
+                }
+
+                // After n iterations, if no bin was found we should be at a bin that's still used
+                // (i.e bin 0). In this case, return null.
+                if (cursor == 0) {
+                    VD_IMPOSSIBLE();
+                }
+
+                cursor--;
+                VDI(KVMapBinPrefix) *new_bin = VD_KVMAP_GET_BIN(map, cursor);
+
+                // Allocate the bin
+                new_bin->used = VD_TRUE;
+                new_bin->next = 0;
+                chain_head->next = new_bin;
+
+                void *sptr = VD_KVMAP_BIN_MOVE_TO_VPTR(map, q);
+                void *dptr = VD_KVMAP_BIN_MOVE_TO_VPTR(map, new_bin);
+
+                // Copy key
+                VDI(kvmap_copy_key)(map, VD_KVMAP_BIN_MOVE_TO_KPTR(q), new_bin);
+
+                // Copy over value
+                VD_MEMCPY(dptr, sptr, VD_KVMAP_VSIZE(map));
+            }
+        } else {
+            q->used = VD_TRUE;
+        }
+
+        q = nextq;
+    }
+}
+void *VDI(kvmap_init)(VD(Arena) *arena, VD(u32) ksize, VD(u32) vsize, VD(u32) cap, VD(KVMapInitOptions) *options)
+{
+    VDI(KVMapHeader) *map;
+    const VD(u32) bin_size = sizeof(VDI(KVMapBinPrefix)) + ksize + vsize;    
+
+    map = VDF(arena_alloc)(arena, sizeof(VDI(KVMapHeader)) + bin_size * cap);
+    float address_scale = 0.863f;
+    if (options != 0) address_scale = options->address_scale;
+
+    map->cap_total    = cap;
+    map->cap          = (VD(u32)) (((VD(f32))cap) * address_scale);
+    map->taken        = 0;
+    map->ksize        = ksize;
+    map->vsize        = vsize;
+
+    return (void*)(((VD(u8)*)map) + sizeof(VDI(KVMapHeader)));
+}
+
+VDI(KVMapBinPrefix) *VDI(kvmap_get_bin)(void *map, void *key, VDI(KVMapGetBinFlags) op)
+{
+    // Get hash
+    VD(u64) hash = VDF(dhash64)(key, VD_KVMAP_KSIZE(map));
+    VD(u64) bin_index = hash % VD_KVMAP_HEADER(map)->cap;
+
+    // Find existing bin if any
+    VDI(KVMapBinPrefix) *existing_bin = VD_KVMAP_GET_BIN(map, bin_index);
+
+    // If:
+    // (existing_bin->used == 0) AND
+    //      - We don't need to create a new bin then we want to search anyway since we'll do an early
+    //        return after this if statement
+    //      - We do need to create a new bin then we stop here, because we found it
+    //
+    // (existing_bin->used == 1) AND
+    //      - We don't need to create a new bin, then go inside this statement to see if we can find
+    //        the bin matching the query
+    //      - We do need to create a new bin, then go inside anyway because at the end (meaning if
+    //        we actually find a place to allocate the bin), we'll want to link the collided bin chain
+    //        to the newly allocated bin
+    if (existing_bin->used || !(op & VDI(KVMAP_GET_BIN_FLAGS_CREATE))) {
+        VD(b32) found = VD_FALSE;
+
+        // Make sure that the hash didn't put us in a bin where the key is equal to the query key
+        if (VDI(kvmap_check_key)(VD_KVMAP_KSIZE(map), key, existing_bin)) {
+            found = VD_TRUE;
+        }
+
+        // If the bin isn't what we searched for, traverse the chain until the end to find it.
+        while (!found && (existing_bin->next != 0)) {
+            existing_bin = existing_bin->next;
+
+            if (VDI(kvmap_check_key)(VD_KVMAP_KSIZE(map), key, existing_bin)) {
+                found = VD_TRUE;
+                break;
+            }
+        }
+
+        if (found) {
+            if (op & VDI(KVMAP_GET_BIN_FLAGS_SET_UNUSED)) {
+                // if found is true the bin must be unused, set its flag and return
+                existing_bin->used = VD_FALSE;
+                VD_KVMAP_HEADER(map)->taken--;
+                VDI(kvmap_reinsert_chain)(map, existing_bin);
+                return existing_bin;
+
+            } else if (op & VDI(KVMAP_GET_BIN_FLAGS_GET_EXISTING)) {
+                // If the user wants to create a new bin, overwrite existing one, or just get it, and found is true, 
+                // this means that the user queried with an existing key. Return the existing bin in thie case.
+                return existing_bin;
+            } else if (op & VDI(KVMAP_GET_BIN_FLAGS_CREATE)) {
+                // If the user wants to create a new bin, and found is true, this means that the user
+                // queried with the same key. Return null in this case.
+                return 0;
+            }
+        }
+    }
+
+    // At this point, no bin that matched our key was found so if the user doesn't want a new bin, then
+    // fail
+    if (!(op & VDI(KVMAP_GET_BIN_FLAGS_CREATE))) {
+        return 0;
+    }
+
+    // If this bin is not used then allocate it
+    if (!existing_bin->used) {
+        VDI(kvmap_copy_key)(map, key, existing_bin);
+        existing_bin->used = VD_TRUE;
+        existing_bin->next = 0;
+        VD_KVMAP_HEADER(map)->taken++;
+        return existing_bin;
+    }
+
+    // At this point, we handle a hash collision either for allocating a bin, or traversing the chain
+    // due to a previous collision
+
+    // Otherwise search starting from the cellar for an unused bin
+    VD(u32) cursor = VD_KVMAP_HEADER(map)->cap_total;
+    while ((cursor > 0) && (VD_KVMAP_GET_BIN(map, cursor - 1)->used)) {
+        cursor--;
+    }
+
+    // After n iterations, if no bin was found we should be at a bin that's still used
+    // (i.e bin 0). In this case, return null.
+    if (cursor == 0) {
+        return 0;
+    }
+
+    cursor--;
+    VDI(KVMapBinPrefix) *new_bin = VD_KVMAP_GET_BIN(map, cursor);
+
+    // Allocate the bin
+    new_bin->used = VD_TRUE;
+    new_bin->next = 0;
+
+    VD_KVMAP_HEADER(map)->taken++;
+
+    // Mark bin as next. At this point, the previous search through the chain means that existing_bin
+    // is now at the end of the chain 
+    existing_bin->next = new_bin;
+
+    // Copy new key and return
+    VDI(kvmap_copy_key)(map, key, new_bin);
+    return new_bin;
+}
+
 /* ----TESTING IMPL-------------------------------------------------------------------------------------------------- */
 #if VD_INCLUDE_TESTS
 
@@ -1831,7 +2203,7 @@ typedef struct {
     VD(DListNode) node;
 } VDI(TestListStruct);
 
-VD_TEST("DList/Basic/No Sentinel") {
+VD_TEST("DList/Basic") {
     int num_nodes = 5;
     VD(DList) list;
     VDF(dlist_init)(&list);
@@ -1913,6 +2285,35 @@ VD_TEST("FixedArray/Basic")
     VD_TEST_OK();
 }
 
+VD_TEST("DynArray/Basic") {
+    VD_DYNARRAY int *array = 0; 
+    VD_DYNARRAY_INIT(array, Test_Arena);
+
+    for (int i = 0; i < 30; ++i) {
+        VD_DYNARRAY_ADD(array, i);
+        VD_TEST_EQ("Dynamic array insertion is correct", array[i], i);
+    }
+    VD_TEST_EQ("Dynamic array has correct length", VD_DYNARRAY_LEN(array), 30);
+
+    VD_DYNARRAY_CLEAR(array);
+    VD_TEST_EQ("Dynamic array has correct length when cleared", VD_DYNARRAY_LEN(array), 0);
+
+    for (int i = 0; i < 30; ++i) {
+        VD_DYNARRAY_ADD(array, i);
+        VD_TEST_EQ("Dynamic array insertion after clear is ok", array[i], i);
+    }
+    VD_TEST_EQ("Dynamic array has correct length after clear and repopulate", VD_DYNARRAY_LEN(array), 30);
+
+    for (int i = 29; i >= 0; --i) {
+        int c = VD_DYNARRAY_POP(array);
+        VD_TEST_EQ("Array pop i is correct", c, i);
+    }
+
+    VD_TEST_EQ("Dynamic array has correct length after n pops", VD_DYNARRAY_LEN(array), 0);
+
+    VD_TEST_OK();
+}
+
 /**
  * @note: Uncomment this line to print the map for debugging purposes
  * 
@@ -1950,10 +2351,10 @@ typedef struct {
     int     val;
 } VDI(TestCheckMapEntry);
 
-#define VD__TEST_MAP_CHECK_ENTRIES_(map, entryarray) do { if (!VDI(map_check_entries)(map, (entryarray), VD_ARRAY_COUNT(entryarray), __FILE__, __LINE__)) { VD_TEST_ERR("Map value check failed."); } }while(0)
+#define VD__TEST_MAP_CHECK_ENTRIES_(map, entryarray) do { if (!VDI(strmap_check_entries)(map, (entryarray), VD_ARRAY_COUNT(entryarray), __FILE__, __LINE__)) { VD_TEST_ERR("Map value check failed."); } }while(0)
 #define VD__TEST_MAP_CHECK_ENTRIES(map, ...) VD__TEST_MAP_CHECK_ENTRIES_(map, (((VDI(TestCheckMapEntry) []){ __VA_ARGS__ })))
 
-static VD(b32) VDI(map_check_entries)(int *map, VDI(TestCheckMapEntry) *entries, int num_entries, const char *f, int l)
+static VD(b32) VDI(strmap_check_entries)(int *map, VDI(TestCheckMapEntry) *entries, int num_entries, const char *f, int l)
 {
     for (int i = 0; i < num_entries; ++i) {
         int v;
@@ -2441,6 +2842,121 @@ VD_TEST("Strmap/Basic") {
     // 7: [      ] -> 0 = _
     // ----------------------
     VD_TEST_TRUE("Remove 8 should work", VD_STRMAP_RM(map, LIT("8")));
+
+    VD_TEST_OK();
+}
+
+#undef VD__TEST_MAP_CHECK_ENTRIES
+
+#pragma pack(push, 1)
+typedef struct {
+    int a;
+    int b;
+} VDI(TestKVMapKey);
+
+typedef struct {
+    VDI(TestKVMapKey) k;
+    int               v;
+} VDI(TestKVMapKV);
+#pragma pack(pop)
+
+
+static void print_kvmap(VDI(TestKVMapKV) *map) {
+    puts("// ----------------------");
+    for (int i = 0; i < (int)VD_KVMAP_TOTAL_CAP(map); ++i) {
+        if (!VD_KVMAP_GET_BIN_USED(map, i)) {
+            size_t index = 0;
+            void *n = VD_KVMAP_GET_BIN_NEXT(map, i);
+            if (n != 0) {
+                index = VD_KVMAP_GET_BIN_INDEX(map, n);
+                printf("// %d: [      ] -> %zu = _\n", i, index);
+            } else {
+                printf("// %d: [      ] -> _ = _\n", i);
+            }
+        } else {
+            size_t index = 0;
+            void *n = VD_KVMAP_GET_BIN_NEXT(map, i);
+            if (n != 0) {
+                index = VD_KVMAP_GET_BIN_INDEX(map, n);
+                VDI(TestKVMapKey) *k = VD_KVMAP_GET_BIN_KPTR(map, i);
+                int *v = (int*) VD_KVMAP_GET_BIN_VPTR(map, i);
+                printf("// %d: [%-2d  %2d] -> %zu = %d\n", i, k->a, k->b, index, *v);
+            } else {
+                VDI(TestKVMapKey) *k = VD_KVMAP_GET_BIN_KPTR(map, i);
+                int *v = (int*) VD_KVMAP_GET_BIN_VPTR(map, i);
+                printf("// %d: [%-2d  %2d] -> _ = %d\n", i, k->a, k->b, *v);
+            }
+        }
+    } 
+    puts("// ----------------------");
+}
+
+
+
+VD_TEST("KVMap/Basic") {
+    // @todo(mdodis): Finish test just like Strmap/Basic
+
+    VD_KVMAP VDI(TestKVMapKV) *map = 0;
+    VD_KVMAP_INIT(map, Test_Arena, 8, 0);
+
+    VD_TEST_EQ("Map total capacity should be 8", VD_KVMAP_TOTAL_CAP(map), 8);
+
+    puts("----");
+    {
+        VDI(TestKVMapKey) key = { .a = 1, .b = 1, };
+        int value = key.a + key.b;
+        VD_TEST_TRUE("Set 1, 1 : 1 + 1 should work on non full map", VD_KVMAP_SET(map, &key, &value));
+        print_kvmap(map);
+    }
+
+    {
+        VDI(TestKVMapKey) key = { .a = 2, .b = 1, };
+        int value = key.a + key.b;
+        VD_TEST_TRUE("Set 2, 1 : 2 + 1 should work on non full map", VD_KVMAP_SET(map, &key, &value));
+        print_kvmap(map);
+    }
+
+    {
+        VDI(TestKVMapKey) key = { .a = 2, .b = 2, };
+        int value = key.a + key.b;
+        VD_TEST_TRUE("Set 2, 2 : 2 + 2 should work on non full map", VD_KVMAP_SET(map, &key, &value));
+        print_kvmap(map);
+    }
+
+    {
+        VDI(TestKVMapKey) key = { .a = 3, .b = 2, };
+        int value = key.a + key.b;
+        VD_TEST_TRUE("Set 3, 2 : 3 + 2 should work on non full map", VD_KVMAP_SET(map, &key, &value));
+        print_kvmap(map);
+    }
+
+    {
+        VDI(TestKVMapKey) key = { .a = 3, .b = 3, };
+        int value = key.a + key.b;
+        VD_TEST_TRUE("Set 3, 3 : 3 + 3 should work on non full map", VD_KVMAP_SET(map, &key, &value));
+        print_kvmap(map);
+    }
+
+    {
+        VDI(TestKVMapKey) key = { .a = 4, .b = 3, };
+        int value = key.a + key.b;
+        VD_TEST_TRUE("Set 4, 3 : 4 + 3 should work on non full map", VD_KVMAP_SET(map, &key, &value));
+        print_kvmap(map);
+    }
+
+    {
+        VDI(TestKVMapKey) key = { .a = 3, .b = 4, };
+        int value = key.a + key.b;
+        VD_TEST_TRUE("Set 3, 4 : 3 + 4 should work on non full map", VD_KVMAP_SET(map, &key, &value));
+        print_kvmap(map);
+    }
+
+    {
+        VDI(TestKVMapKey) key = { .a = 4, .b = 4, };
+        int value = key.a + key.b;
+        VD_TEST_TRUE("Set 4, 4 : 4 + 4 should work on non full map", VD_KVMAP_SET(map, &key, &value));
+        print_kvmap(map);
+    }
 
     VD_TEST_OK();
 }

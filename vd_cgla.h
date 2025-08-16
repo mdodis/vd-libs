@@ -1,0 +1,517 @@
+/**
+ * vd_cgla.h - Common Graphics Library Aliases
+ * 
+ * zlib License
+ * 
+ * (C) Copyright 2025-2026 Michael Dodis (michaeldodisgr@gmail.com)
+ *
+ * This software is provided 'as-is', without any express or implied
+ * warranty.  In no event will the authors be held liable for any damages
+ * arising from the use of this software.
+ * 
+ * Permission is granted to anyone to use this software for any purpose,
+ * including commercial applications, and to alter it and redistribute it
+ * freely, subject to the following restrictions:
+ * 
+ * 1. The origin of this software must not be misrepresented; you must not
+ *    claim that you wrote the original software. If you use this software
+ *    in a product, an acknowledgment in the product documentation would be
+ *    appreciated but is not required.
+ * 2. Altered source versions must be plainly marked as such, and must not be
+ *    misrepresented as being the original software.
+ * 3. This notice may not be removed or altered from any source distribution.
+ */
+#ifndef VD_CGLA_H
+#define VD_CGLA_H
+#define VD_CGLA_VERSION_MAJOR 0
+#define VD_CGLA_VERSION_MINOR 0
+#define VD_CGLA_VERSION_PATCH 1
+#define VD_CGLA_VERSION       ((VD_CGLA_VERSION_MAJOR << 16) | (VD_CGLA_VERSION_MINOR << 8) | (VD_CGLA_VERSION_PATCH))
+
+#ifndef VD_H
+#error "vd_cgla.h requires vd.h"
+#endif // !VD_H
+
+/* ----FORMATS------------------------------------------------------------------------------------------------------- */
+#ifndef VD_CGLA_FORMAT_NAME
+#define VD_CGLA_FORMAT_NAME(f) VD_(VD_STRING_JOIN2(CGLA_,f))
+#endif // !VD_CGLA_FORMAT_NAME
+
+#ifndef VD_CGLA_FORMAT_TYPE
+#define VD_CGLA_FORMAT_TYPE VD(CGLAFormat)
+#endif // !VD_CGLA_FORMAT_TYPE
+
+#define VD_CGLA_ALL_FORMATS \
+    X(FORMAT_UNKNOWN) \
+    X(FORMAT_R4G4_UNORM_PACK8) \
+    X(FORMAT_R4G4B4A4_UNORM_PACK16) \
+    X(FORMAT_B4G4R4A4_UNORM_PACK16) \
+    X(FORMAT_R5G6B5_UNORM_PACK16) \
+    X(FORMAT_B5G6R5_UNORM_PACK16) \
+    X(FORMAT_R5G5B5A1_UNORM_PACK16) \
+    X(FORMAT_B5G5R5A1_UNORM_PACK16) \
+    X(FORMAT_A1R5G5B5_UNORM_PACK16) \
+    X(FORMAT_R8_UNORM) \
+    X(FORMAT_R8_SNORM) \
+    X(FORMAT_R8_USCALED) \
+    X(FORMAT_R8_SSCALED) \
+    X(FORMAT_R8_UINT) \
+    X(FORMAT_R8_SINT) \
+    X(FORMAT_R8_SRGB) \
+    X(FORMAT_R8G8_UNORM) \
+    X(FORMAT_R8G8_SNORM) \
+    X(FORMAT_R8G8_USCALED) \
+    X(FORMAT_R8G8_SSCALED) \
+    X(FORMAT_R8G8_UINT) \
+    X(FORMAT_R8G8_SINT) \
+    X(FORMAT_R8G8_SRGB) \
+    X(FORMAT_R8G8B8_UNORM) \
+    X(FORMAT_R8G8B8_SNORM) \
+    X(FORMAT_R8G8B8_USCALED) \
+    X(FORMAT_R8G8B8_SSCALED) \
+    X(FORMAT_R8G8B8_UINT) \
+    X(FORMAT_R8G8B8_SINT) \
+    X(FORMAT_R8G8B8_SRGB) \
+    X(FORMAT_B8G8R8_UNORM) \
+    X(FORMAT_B8G8R8_SNORM) \
+    X(FORMAT_B8G8R8_USCALED) \
+    X(FORMAT_B8G8R8_SSCALED) \
+    X(FORMAT_B8G8R8_UINT) \
+    X(FORMAT_B8G8R8_SINT) \
+    X(FORMAT_B8G8R8_SRGB) \
+    X(FORMAT_R8G8B8A8_UNORM) \
+    X(FORMAT_R8G8B8A8_SNORM) \
+    X(FORMAT_R8G8B8A8_USCALED) \
+    X(FORMAT_R8G8B8A8_SSCALED) \
+    X(FORMAT_R8G8B8A8_UINT) \
+    X(FORMAT_R8G8B8A8_SINT) \
+    X(FORMAT_R8G8B8A8_SRGB) \
+    X(FORMAT_B8G8R8A8_UNORM) \
+    X(FORMAT_B8G8R8A8_SNORM) \
+    X(FORMAT_B8G8R8A8_USCALED) \
+    X(FORMAT_B8G8R8A8_SSCALED) \
+    X(FORMAT_B8G8R8A8_UINT) \
+    X(FORMAT_B8G8R8A8_SINT) \
+    X(FORMAT_B8G8R8A8_SRGB) \
+    X(FORMAT_A8B8G8R8_UNORM_PACK32) \
+    X(FORMAT_A8B8G8R8_SNORM_PACK32) \
+    X(FORMAT_A8B8G8R8_USCALED_PACK32) \
+    X(FORMAT_A8B8G8R8_SSCALED_PACK32) \
+    X(FORMAT_A8B8G8R8_UINT_PACK32) \
+    X(FORMAT_A8B8G8R8_SINT_PACK32) \
+    X(FORMAT_A8B8G8R8_SRGB_PACK32) \
+    X(FORMAT_A2R10G10B10_UNORM_PACK32) \
+    X(FORMAT_A2R10G10B10_SNORM_PACK32) \
+    X(FORMAT_A2R10G10B10_USCALED_PACK32) \
+    X(FORMAT_A2R10G10B10_SSCALED_PACK32) \
+    X(FORMAT_A2R10G10B10_UINT_PACK32) \
+    X(FORMAT_A2R10G10B10_SINT_PACK32) \
+    X(FORMAT_A2B10G10R10_UNORM_PACK32) \
+    X(FORMAT_A2B10G10R10_SNORM_PACK32) \
+    X(FORMAT_A2B10G10R10_USCALED_PACK32) \
+    X(FORMAT_A2B10G10R10_SSCALED_PACK32) \
+    X(FORMAT_A2B10G10R10_UINT_PACK32) \
+    X(FORMAT_A2B10G10R10_SINT_PACK32) \
+    X(FORMAT_R16_UNORM) \
+    X(FORMAT_R16_SNORM) \
+    X(FORMAT_R16_USCALED) \
+    X(FORMAT_R16_SSCALED) \
+    X(FORMAT_R16_UINT) \
+    X(FORMAT_R16_SINT) \
+    X(FORMAT_R16_SFLOAT) \
+    X(FORMAT_R16G16_UNORM) \
+    X(FORMAT_R16G16_SNORM) \
+    X(FORMAT_R16G16_USCALED) \
+    X(FORMAT_R16G16_SSCALED) \
+    X(FORMAT_R16G16_UINT) \
+    X(FORMAT_R16G16_SINT) \
+    X(FORMAT_R16G16_SFLOAT) \
+    X(FORMAT_R16G16B16_UNORM) \
+    X(FORMAT_R16G16B16_SNORM) \
+    X(FORMAT_R16G16B16_USCALED) \
+    X(FORMAT_R16G16B16_SSCALED) \
+    X(FORMAT_R16G16B16_UINT) \
+    X(FORMAT_R16G16B16_SINT) \
+    X(FORMAT_R16G16B16_SFLOAT) \
+    X(FORMAT_R16G16B16A16_UNORM) \
+    X(FORMAT_R16G16B16A16_SNORM) \
+    X(FORMAT_R16G16B16A16_USCALED) \
+    X(FORMAT_R16G16B16A16_SSCALED) \
+    X(FORMAT_R16G16B16A16_UINT) \
+    X(FORMAT_R16G16B16A16_SINT) \
+    X(FORMAT_R16G16B16A16_SFLOAT) \
+    X(FORMAT_R32_UINT) \
+    X(FORMAT_R32_SINT) \
+    X(FORMAT_R32_SFLOAT) \
+    X(FORMAT_R32G32_UINT) \
+    X(FORMAT_R32G32_SINT) \
+    X(FORMAT_R32G32_SFLOAT) \
+    X(FORMAT_R32G32B32_UINT) \
+    X(FORMAT_R32G32B32_SINT) \
+    X(FORMAT_R32G32B32_SFLOAT) \
+    X(FORMAT_R32G32B32A32_UINT) \
+    X(FORMAT_R32G32B32A32_SINT) \
+    X(FORMAT_R32G32B32A32_SFLOAT) \
+    X(FORMAT_R64_UINT) \
+    X(FORMAT_R64_SINT) \
+    X(FORMAT_R64_SFLOAT) \
+    X(FORMAT_R64G64_UINT) \
+    X(FORMAT_R64G64_SINT) \
+    X(FORMAT_R64G64_SFLOAT) \
+    X(FORMAT_R64G64B64_UINT) \
+    X(FORMAT_R64G64B64_SINT) \
+    X(FORMAT_R64G64B64_SFLOAT) \
+    X(FORMAT_R64G64B64A64_UINT) \
+    X(FORMAT_R64G64B64A64_SINT) \
+    X(FORMAT_R64G64B64A64_SFLOAT) \
+    X(FORMAT_B10G11R11_UFLOAT_PACK32) \
+    X(FORMAT_E5B9G9R9_UFLOAT_PACK32) \
+    X(FORMAT_D16_UNORM) \
+    X(FORMAT_X8_D24_UNORM_PACK32) \
+    X(FORMAT_D32_SFLOAT) \
+    X(FORMAT_S8_UINT) \
+    X(FORMAT_MAX)
+
+typedef enum {
+#define X(f) VD_CGLA_FORMAT_NAME(f),
+    VD_CGLA_ALL_FORMATS
+#undef X
+} VD_CGLA_FORMAT_TYPE;
+
+static VD_INLINE VD(Str) VDF(cgla_format_to_str)(VD_CGLA_FORMAT_TYPE type)
+{
+    static VD(Str) table[VD_CGLA_FORMAT_NAME(FORMAT_MAX) + 1] = {
+#define X(f) VD_LIT(#f),
+        VD_CGLA_ALL_FORMATS
+#undef X
+    };
+    return table[type];
+}
+
+/* ----PRIMITIVE TOPOLOGIES------------------------------------------------------------------------------------------ */
+#ifndef VD_CGLA_PRIMITIVE_TOPOLOGY_NAME
+#define VD_CGLA_PRIMITIVE_TOPOLOGY_NAME(f) VD_(VD_STRING_JOIN2(CGLA_, f))
+#endif // !VD_CGLA_PRIMITIVE_TOPOLOGY_NAME
+
+#ifndef VD_CGLA_PRIMITIVE_TOPOLOGY_TYPE
+#define VD_CGLA_PRIMITIVE_TOPOLOGY_TYPE VD(CGLAPrimitiveTopology)
+#endif // !VD_CGLA_PRIMITIVE_TOPOLOGY_TYPE
+
+#define VD_CGLA_ALL_PRIMITIVE_TOPOLOGIES \
+    X(PRIMITIVE_TOPOLOGY_UNKNOWN) \
+    X(PRIMITIVE_TOPOLOGY_POINT_LIST) \
+    X(PRIMITIVE_TOPOLOGY_LINE_LIST) \
+    X(PRIMITIVE_TOPOLOGY_LINE_STRIP) \
+    X(PRIMITIVE_TOPOLOGY_TRIANGLE_LIST) \
+    X(PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP) \
+    X(PRIMITIVE_TOPOLOGY_TRIANGLE_FAN) \
+    X(PRIMITIVE_TOPOLOGY_MAX)
+
+typedef enum {
+#define X(f) VD_CGLA_PRIMITIVE_TOPOLOGY_NAME(f),
+    VD_CGLA_ALL_PRIMITIVE_TOPOLOGIES
+#undef X
+} VD_CGLA_PRIMITIVE_TOPOLOGY_TYPE;
+
+static VD_INLINE VD(Str) VDF(cgla_primitive_topology_to_str)(VD_CGLA_PRIMITIVE_TOPOLOGY_TYPE type)
+{
+    static VD(Str) table[VD_CGLA_PRIMITIVE_TOPOLOGY_NAME(PRIMITIVE_TOPOLOGY_MAX) + 1] = {
+#define X(f) VD_LIT(#f),
+        VD_CGLA_ALL_PRIMITIVE_TOPOLOGIES
+#undef X
+    };
+    return table[type];
+}
+
+/* ----POLYGON MODES------------------------------------------------------------------------------------------------- */
+#ifndef VD_CGLA_POLYGON_MODE_NAME
+#define VD_CGLA_POLYGON_MODE_NAME(f) VD_(VD_STRING_JOIN2(CGLA_, f))
+#endif // !VD_CGLA_POLYGON_MODE_NAME
+
+#ifndef VD_CGLA_POLYGON_MODE_TYPE
+#define VD_CGLA_POLYGON_MODE_TYPE VD(CGLAPolygonMode)
+#endif // !VD_CGLA_POLYGON_MODE_TYPE
+
+#define VD_CGLA_ALL_POLYGON_MODES \
+    X(POLYGON_MODE_UNKNOWN) \
+    X(POLYGON_MODE_FILL) \
+    X(POLYGON_MODE_LINE) \
+    X(POLYGON_MODE_POINT) \
+    X(POLYGON_MODE_MAX)
+
+typedef enum {
+#define X(f) VD_CGLA_POLYGON_MODE_NAME(f),
+    VD_CGLA_ALL_POLYGON_MODES
+#undef X
+} VD_CGLA_POLYGON_MODE_TYPE;
+
+static VD_INLINE VD(Str) VDF(cgla_polygon_mode_to_str)(VD_CGLA_POLYGON_MODE_TYPE type)
+{
+    static VD(Str) table[VD_CGLA_POLYGON_MODE_NAME(POLYGON_MODE_MAX) + 1] = {
+#define X(f) VD_LIT(#f),
+        VD_CGLA_ALL_POLYGON_MODES
+#undef X
+    };
+    return table[type];
+}
+
+/* ----CULL MODES---------------------------------------------------------------------------------------------------- */
+#ifndef VD_CGLA_CULL_MODE_NAME
+#define VD_CGLA_CULL_MODE_NAME(f) VD_(VD_STRING_JOIN2(CGLA_,f))
+#endif // !VD_CGLA_CULL_MODE_NAME
+
+#ifndef VD_CGLA_CULL_MODE_TYPE
+#define VD_CGLA_CULL_MODE_TYPE VD(CGLACullMode)
+#endif // !VD_CGLA_CULL_MODE_TYPE
+
+#define VD_CGLA_ALL_CULL_MODES \
+    X(CULL_MODE_UNKNOWN) \
+    X(CULL_MODE_NONE) \
+    X(CULL_MODE_FRONT) \
+    X(CULL_MODE_BACK) \
+    X(CULL_MODE_FRONT_AND_BACK) \
+    X(CULL_MODE_MAX)
+
+typedef enum {
+#define X(f) VD_CGLA_CULL_MODE_NAME(f),
+    VD_CGLA_ALL_CULL_MODES
+#undef X
+} VD_CGLA_CULL_MODE_TYPE;
+
+static VD_INLINE VD(Str) VDF(cgla_cull_mode_to_str)(VD_CGLA_CULL_MODE_TYPE type)
+{
+    static VD(Str) table[VD_CGLA_CULL_MODE_NAME(CULL_MODE_MAX) + 1] = {
+#define X(f) VD_LIT(#f),
+        VD_CGLA_ALL_CULL_MODES
+#undef X
+    };
+    return table[type];
+}
+
+/* ----FRONT FACES--------------------------------------------------------------------------------------------------- */
+#ifndef VD_CGLA_FRONT_FACE_NAME
+#define VD_CGLA_FRONT_FACE_NAME(f) VD_(VD_STRING_JOIN2(CGLA_,f))
+#endif // !VD_CGLA_FRONT_FACE_NAME
+
+#ifndef VD_CGLA_FRONT_FACE_TYPE
+#define VD_CGLA_FRONT_FACE_TYPE VD(CGLAFrontFace)
+#endif // !VD_CGLA_FRONT_FACE_TYPE
+
+#define VD_CGLA_ALL_FRONT_FACES \
+    X(FRONT_FACE_UNKNOWN) \
+    X(FRONT_FACE_COUNTER_CLOCKWISE) \
+    X(FRONT_FACE_CLOCKWISE) \
+    X(FRONT_FACE_MAX)
+
+typedef enum {
+#define X(f) VD_CGLA_FRONT_FACE_NAME(f),
+    VD_CGLA_ALL_FRONT_FACES
+#undef X
+} VD_CGLA_FRONT_FACE_TYPE;
+
+static VD_INLINE VD(Str) VDF(cgla_front_face_to_str)(VD_CGLA_FRONT_FACE_TYPE type)
+{
+    static VD(Str) table[VD_CGLA_FRONT_FACE_NAME(FRONT_FACE_MAX) + 1] = {
+#define X(f) VD_LIT(#f),
+        VD_CGLA_ALL_FRONT_FACES
+#undef X
+    };
+    return table[type];
+}
+
+#endif // !VD_CGLA_H
+
+#ifdef VD_CGLA_VK_IMPL
+#ifndef VULKAN_CORE_H_
+#warning "vd_cgla.h with VD_CGLA_VK_IMPL requires vulkan/vulkan.h"
+#endif
+
+/* ----VK FORMAT----------------------------------------------------------------------------------------------------- */
+static VD_INLINE VkFormat VDF(cgla_format_to_vk_format)(VD_CGLA_FORMAT_TYPE format)
+{
+    static VkFormat translation_table[VD_CGLA_FORMAT_NAME(FORMAT_MAX)] = {
+        VK_FORMAT_UNDEFINED,
+        VK_FORMAT_R4G4_UNORM_PACK8,
+        VK_FORMAT_R4G4B4A4_UNORM_PACK16,
+        VK_FORMAT_B4G4R4A4_UNORM_PACK16,
+        VK_FORMAT_R5G6B5_UNORM_PACK16,
+        VK_FORMAT_B5G6R5_UNORM_PACK16,
+        VK_FORMAT_R5G5B5A1_UNORM_PACK16,
+        VK_FORMAT_B5G5R5A1_UNORM_PACK16,
+        VK_FORMAT_A1R5G5B5_UNORM_PACK16,
+        VK_FORMAT_R8_UNORM,
+        VK_FORMAT_R8_SNORM,
+        VK_FORMAT_R8_USCALED,
+        VK_FORMAT_R8_SSCALED,
+        VK_FORMAT_R8_UINT,
+        VK_FORMAT_R8_SINT,
+        VK_FORMAT_R8_SRGB,
+        VK_FORMAT_R8G8_UNORM,
+        VK_FORMAT_R8G8_SNORM,
+        VK_FORMAT_R8G8_USCALED,
+        VK_FORMAT_R8G8_SSCALED,
+        VK_FORMAT_R8G8_UINT,
+        VK_FORMAT_R8G8_SINT,
+        VK_FORMAT_R8G8_SRGB,
+        VK_FORMAT_R8G8B8_UNORM,
+        VK_FORMAT_R8G8B8_SNORM,
+        VK_FORMAT_R8G8B8_USCALED,
+        VK_FORMAT_R8G8B8_SSCALED,
+        VK_FORMAT_R8G8B8_UINT,
+        VK_FORMAT_R8G8B8_SINT,
+        VK_FORMAT_R8G8B8_SRGB,
+        VK_FORMAT_B8G8R8_UNORM,
+        VK_FORMAT_B8G8R8_SNORM,
+        VK_FORMAT_B8G8R8_USCALED,
+        VK_FORMAT_B8G8R8_SSCALED,
+        VK_FORMAT_B8G8R8_UINT,
+        VK_FORMAT_B8G8R8_SINT,
+        VK_FORMAT_B8G8R8_SRGB,
+        VK_FORMAT_R8G8B8A8_UNORM,
+        VK_FORMAT_R8G8B8A8_SNORM,
+        VK_FORMAT_R8G8B8A8_USCALED,
+        VK_FORMAT_R8G8B8A8_SSCALED,
+        VK_FORMAT_R8G8B8A8_UINT,
+        VK_FORMAT_R8G8B8A8_SINT,
+        VK_FORMAT_R8G8B8A8_SRGB,
+        VK_FORMAT_B8G8R8A8_UNORM,
+        VK_FORMAT_B8G8R8A8_SNORM,
+        VK_FORMAT_B8G8R8A8_USCALED,
+        VK_FORMAT_B8G8R8A8_SSCALED,
+        VK_FORMAT_B8G8R8A8_UINT,
+        VK_FORMAT_B8G8R8A8_SINT,
+        VK_FORMAT_B8G8R8A8_SRGB,
+        VK_FORMAT_A8B8G8R8_UNORM_PACK32,
+        VK_FORMAT_A8B8G8R8_SNORM_PACK32,
+        VK_FORMAT_A8B8G8R8_USCALED_PACK32,
+        VK_FORMAT_A8B8G8R8_SSCALED_PACK32,
+        VK_FORMAT_A8B8G8R8_UINT_PACK32,
+        VK_FORMAT_A8B8G8R8_SINT_PACK32,
+        VK_FORMAT_A8B8G8R8_SRGB_PACK32,
+        VK_FORMAT_A2R10G10B10_UNORM_PACK32,
+        VK_FORMAT_A2R10G10B10_SNORM_PACK32,
+        VK_FORMAT_A2R10G10B10_USCALED_PACK32,
+        VK_FORMAT_A2R10G10B10_SSCALED_PACK32,
+        VK_FORMAT_A2R10G10B10_UINT_PACK32,
+        VK_FORMAT_A2R10G10B10_SINT_PACK32,
+        VK_FORMAT_A2B10G10R10_UNORM_PACK32,
+        VK_FORMAT_A2B10G10R10_SNORM_PACK32,
+        VK_FORMAT_A2B10G10R10_USCALED_PACK32,
+        VK_FORMAT_A2B10G10R10_SSCALED_PACK32,
+        VK_FORMAT_A2B10G10R10_UINT_PACK32,
+        VK_FORMAT_A2B10G10R10_SINT_PACK32,
+        VK_FORMAT_R16_UNORM,
+        VK_FORMAT_R16_SNORM,
+        VK_FORMAT_R16_USCALED,
+        VK_FORMAT_R16_SSCALED,
+        VK_FORMAT_R16_UINT,
+        VK_FORMAT_R16_SINT,
+        VK_FORMAT_R16_SFLOAT,
+        VK_FORMAT_R16G16_UNORM,
+        VK_FORMAT_R16G16_SNORM,
+        VK_FORMAT_R16G16_USCALED,
+        VK_FORMAT_R16G16_SSCALED,
+        VK_FORMAT_R16G16_UINT,
+        VK_FORMAT_R16G16_SINT,
+        VK_FORMAT_R16G16_SFLOAT,
+        VK_FORMAT_R16G16B16_UNORM,
+        VK_FORMAT_R16G16B16_SNORM,
+        VK_FORMAT_R16G16B16_USCALED,
+        VK_FORMAT_R16G16B16_SSCALED,
+        VK_FORMAT_R16G16B16_UINT,
+        VK_FORMAT_R16G16B16_SINT,
+        VK_FORMAT_R16G16B16_SFLOAT,
+        VK_FORMAT_R16G16B16A16_UNORM,
+        VK_FORMAT_R16G16B16A16_SNORM,
+        VK_FORMAT_R16G16B16A16_USCALED,
+        VK_FORMAT_R16G16B16A16_SSCALED,
+        VK_FORMAT_R16G16B16A16_UINT,
+        VK_FORMAT_R16G16B16A16_SINT,
+        VK_FORMAT_R16G16B16A16_SFLOAT,
+        VK_FORMAT_R32_UINT,
+        VK_FORMAT_R32_SINT,
+        VK_FORMAT_R32_SFLOAT,
+        VK_FORMAT_R32G32_UINT,
+        VK_FORMAT_R32G32_SINT,
+        VK_FORMAT_R32G32_SFLOAT,
+        VK_FORMAT_R32G32B32_UINT,
+        VK_FORMAT_R32G32B32_SINT,
+        VK_FORMAT_R32G32B32_SFLOAT,
+        VK_FORMAT_R32G32B32A32_UINT,
+        VK_FORMAT_R32G32B32A32_SINT,
+        VK_FORMAT_R32G32B32A32_SFLOAT,
+        VK_FORMAT_R64_UINT,
+        VK_FORMAT_R64_SINT,
+        VK_FORMAT_R64_SFLOAT,
+        VK_FORMAT_R64G64_UINT,
+        VK_FORMAT_R64G64_SINT,
+        VK_FORMAT_R64G64_SFLOAT,
+        VK_FORMAT_R64G64B64_UINT,
+        VK_FORMAT_R64G64B64_SINT,
+        VK_FORMAT_R64G64B64_SFLOAT,
+        VK_FORMAT_R64G64B64A64_UINT,
+        VK_FORMAT_R64G64B64A64_SINT,
+        VK_FORMAT_R64G64B64A64_SFLOAT,
+        VK_FORMAT_B10G11R11_UFLOAT_PACK32,
+        VK_FORMAT_E5B9G9R9_UFLOAT_PACK32,
+        VK_FORMAT_D16_UNORM,
+        VK_FORMAT_X8_D24_UNORM_PACK32,
+        VK_FORMAT_D32_SFLOAT,
+        VK_FORMAT_S8_UINT,
+    };
+
+    return translation_table[format];
+}
+
+/* ----VK PRIMITIVE TOPOLOGY----------------------------------------------------------------------------------------- */
+static VD_INLINE VkPrimitiveTopology VDF(cgla_primitive_topology_to_vk_primitive_topology)(VD_CGLA_PRIMITIVE_TOPOLOGY_TYPE type)
+{
+    static VkPrimitiveTopology translation_table[VD_CGLA_PRIMITIVE_TOPOLOGY_NAME(PRIMITIVE_TOPOLOGY_MAX)] = {
+        [VD_CGLA_PRIMITIVE_TOPOLOGY_NAME(PRIMITIVE_TOPOLOGY_POINT_LIST)] = VK_PRIMITIVE_TOPOLOGY_POINT_LIST,
+        [VD_CGLA_PRIMITIVE_TOPOLOGY_NAME(PRIMITIVE_TOPOLOGY_LINE_LIST)] = VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
+        [VD_CGLA_PRIMITIVE_TOPOLOGY_NAME(PRIMITIVE_TOPOLOGY_LINE_STRIP)] = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP,
+        [VD_CGLA_PRIMITIVE_TOPOLOGY_NAME(PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)] = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        [VD_CGLA_PRIMITIVE_TOPOLOGY_NAME(PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP)] = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
+        [VD_CGLA_PRIMITIVE_TOPOLOGY_NAME(PRIMITIVE_TOPOLOGY_TRIANGLE_FAN)] = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN,
+    };
+
+    return translation_table[type];
+}
+
+/* ----VK POLYGON MODE----------------------------------------------------------------------------------------------- */
+static VD_INLINE VkPolygonMode VDF(cgla_polygon_mode_to_vk_polygon_mode)(VD_CGLA_POLYGON_MODE_TYPE type)
+{
+    static VkPolygonMode translation_table[VD_CGLA_POLYGON_MODE_NAME(POLYGON_MODE_MAX)] = {
+        [VD_CGLA_POLYGON_MODE_NAME(POLYGON_MODE_FILL)] = VK_POLYGON_MODE_FILL,
+        [VD_CGLA_POLYGON_MODE_NAME(POLYGON_MODE_LINE)] = VK_POLYGON_MODE_LINE,
+        [VD_CGLA_POLYGON_MODE_NAME(POLYGON_MODE_POINT)] = VK_POLYGON_MODE_POINT,
+    };
+
+    return translation_table[type];
+}
+
+/* ----VK CULL MODE FLAGS-------------------------------------------------------------------------------------------- */
+static VD_INLINE VkCullModeFlags VDF(cgla_cull_mode_to_vk_cull_mode_flags)(VD_CGLA_CULL_MODE_TYPE type)
+{
+    static VkCullModeFlags translation_table[VD_CGLA_CULL_MODE_NAME(CULL_MODE_MAX)] = {
+        [VD_CGLA_CULL_MODE_NAME(CULL_MODE_NONE)] = VK_CULL_MODE_NONE,
+        [VD_CGLA_CULL_MODE_NAME(CULL_MODE_FRONT)] = VK_CULL_MODE_FRONT_BIT,
+        [VD_CGLA_CULL_MODE_NAME(CULL_MODE_BACK)] = VK_CULL_MODE_BACK_BIT,
+        [VD_CGLA_CULL_MODE_NAME(CULL_MODE_FRONT_AND_BACK)] = VK_CULL_MODE_FRONT_AND_BACK,
+    };
+
+    return translation_table[type];
+}
+
+/* ----VK FRONT FACE------------------------------------------------------------------------------------------------- */
+static VD_INLINE VkFrontFace VDF(cgla_front_face_to_vk_front_face)(VD_CGLA_FRONT_FACE_TYPE type)
+{
+    static VkFrontFace translation_table[VD_CGLA_FRONT_FACE_NAME(FRONT_FACE_MAX)] = {
+        [VD_CGLA_FRONT_FACE_NAME(FRONT_FACE_COUNTER_CLOCKWISE)] = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+        [VD_CGLA_FRONT_FACE_NAME(FRONT_FACE_CLOCKWISE)] = VK_FRONT_FACE_CLOCKWISE,
+    };
+
+    return translation_table[type];
+}
+
+#endif // VD_CGLA_VK_IMPL
