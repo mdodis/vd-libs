@@ -56,6 +56,9 @@
 #define _VD_STRING_JOIN2(x, y) x##y
 #define VD_STRING_JOIN2(x, y) _VD_STRING_JOIN2(x, y)
 
+#define _VD_STRINGIFY(x) #x
+#define VD_STRINGIFY(x) _VD_STRINGIFY(x)
+
 /**
  * @brief Indicates this parameter is unused.
  */
@@ -144,6 +147,10 @@
 #ifndef VD_PLATFORM_KNOWN
 #define VD_PLATFORM_KNOWN 0
 #endif // !VD_PLATFORM_KNOWN
+
+#ifndef VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
+#define VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY 0
+#endif // !VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
 
 /* ----TYPES--------------------------------------------------------------------------------------------------------- */
 typedef uint8_t       VD(u8);
@@ -250,6 +257,7 @@ typedef int32_t       VD(b32);
 #endif // !VD_MEMMOVE
 
 #define VD_IMPOSSIBLE() VD_ASSERT(VD_FALSE)
+#define VD_TODO()       VD_ASSERT(VD_FALSE)
 
 /* ----SIZES--------------------------------------------------------------------------------------------------------- */
 #define VD_KILOBYTES(x) (((VD(usize))x) * 1024)
@@ -285,19 +293,106 @@ VD_INLINE uintptr_t VDF(vd_align_forward)(uintptr_t ptr, size_t align) {
 #define GIGABYTES(x)   VD_GIGABYTES(x)
 #endif
 
+/* ----UTILITY------------------------------------------------------------------------------------------------------- */
+static VD_INLINE VD(i32) VDF(ipow32)(VD(i32) base, VD(u8) exp);
+// static VD_INLINE VD(u32) VDF(upow32)(VD(u32) base, VD(u8) exp);
+static VD_INLINE VD(i64) VDF(ipow64)(VD(i64) base, VD(u8) exp);
+
+static VD_INLINE VD(i32) VDF(ipow32)(VD(i32) base, VD(u8) exp)
+{
+    static const VD(u8) highest_bit_set[] = {
+        0,1,2,2,3,3,3,3,4,4,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+        255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+        255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+        255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+    };
+
+    VD(i32) result = 1;
+    switch (highest_bit_set[exp]) {
+        case 255:
+            if (base == 1) return 1;
+            if (base == -1) return 1 - 2 * (exp & 1);
+            return 0;
+        case 5:
+            if (exp & 1) result *= base;
+            exp >>= 1;
+            base *= base;
+        case 4:
+            if (exp & 1) result *= base;
+            exp >>= 1;
+            base *= base;
+        case 3:
+            if (exp & 1) result *= base;
+            exp >>= 1;
+            base *= base;
+        case 2:
+            if (exp & 1) result *= base;
+            exp >>= 1;
+            base *= base;
+        case 1:
+            if (exp & 1) result *= base;
+        default:
+            return result;
+    }
+}
+
+static VD_INLINE VD(i64) VDF(ipow64)(VD(i64) base, VD(u8) exp)
+{
+    static const VD(u8) highest_bit_set[] = {
+        0,1,2,2,3,3,3,3,4,4,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+        255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+        255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+        255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+    };
+
+    VD(i64) result = 1;
+
+    switch (highest_bit_set[exp]) {
+        case 255:
+            if (base == 1) return 1;
+            if (base == -1) return 1 - 2 * (exp & 1);
+            return 0;
+        case 6:
+            if (exp & 1) result *= base;
+            exp >>= 1;
+            base *= base;
+        case 5:
+            if (exp & 1) result *= base;
+            exp >>= 1;
+            base *= base;
+        case 4:
+            if (exp & 1) result *= base;
+            exp >>= 1;
+            base *= base;
+        case 3:
+            if (exp & 1) result *= base;
+            exp >>= 1;
+            base *= base;
+        case 2:
+            if (exp & 1) result *= base;
+            exp >>= 1;
+            base *= base;
+        case 1:
+            if (exp & 1) result *= base;
+        default:
+            return result;
+    }
+}
+
 /* ----VIRTUAL MEMORY------------------------------------------------------------------------------------------------ */
+#if VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
 #ifndef VD_VM_CUSTOM
 #define VD_VM_CUSTOM 0
 #endif // !VD_VM_CUSTOM
 
 #if VD_PLATFORM_KNOWN
-VD(usize)   VDF(vm_get_page_size)();
+VD(usize)   VDF(vm_get_page_size)(void);
 void*       VDF(vm_reserve)(VD(usize) len);
 void*       VDF(vm_commit)(void *addr, VD(usize) len);
 void*       VDF(vm_decommit)(void *addr, VD(usize) len);
 void        VDF(vm_release)(void *addr, VD(usize) len);
 #endif // VD_PLATFORM_KNOWN
-
+#endif // VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
 /* ----SYSTEM ALLOCATOR---------------------------------------------------------------------------------------------- */
 #ifndef VD_ALLOC_OVERRIDE
 #define VD_ALLOC_OVERRIDE 0
@@ -325,9 +420,11 @@ void        VDF(vm_release)(void *addr, VD(usize) len);
 #define VD_ARENA_ZERO_ON_CLEAR 1
 #endif // VD_ARENA_ZERO_ON_CLEAR 
 
-typedef enum : VD(u8) {
+enum {
     VD_(ARENA_FLAGS_USE_MALLOC) = 1 << 7,
-} VD(ArenaFlags);
+};
+
+typedef VD(u8) VD(ArenaFlags);
 
 typedef struct __VD_Arena {
     VD(u8)         *buf;
@@ -335,7 +432,7 @@ typedef struct __VD_Arena {
     VD(usize)      prev_offset;
     VD(usize)      curr_offset;
     VD(ArenaFlags) flags;
-    VD(u8)         reserved[3];
+    VD(u8)         reserved[7];
 } VD(Arena);
 
 typedef struct __VD_ArenaSave {
@@ -350,7 +447,7 @@ void*                   VDF(arena_resize_align)(VD(Arena) *a, void *old_memory, 
 void                    VDF(arena_clear)(VD(Arena) *a);
 VD(b32)                 VDF(arena_free)(VD(Arena) *a, void *memory, size_t size);
 
-VD_INLINE VD(ArenaSave)     VDF(arena_save)(VD(Arena) *a)                                                       { return (VD(ArenaSave)) { .arena = a, .prev_offset = a->prev_offset, .curr_offset = a->curr_offset, }; }
+VD_INLINE VD(ArenaSave)     VDF(arena_save)(VD(Arena) *a)                                                       { VD(ArenaSave) result = { a, a->prev_offset, a->curr_offset }; return result; }
 VD_INLINE void              VDF(arena_restore)(VD(ArenaSave) save)                                              { save.arena->prev_offset = save.prev_offset; save.arena->curr_offset = save.curr_offset; }
 VD_INLINE void*             VDF(arena_alloc)(VD(Arena) *a, size_t size)                                         { return VDF(arena_alloc_align)(a, size, VD_ARENA_DEFAULT_ALIGNMENT);}
 VD_INLINE void*             VDF(arena_resize)(VD(Arena) *a, void *old_memory, size_t old_size, size_t new_size) { return VDF(arena_resize_align)(a, old_memory, old_size, new_size, VD_ARENA_DEFAULT_ALIGNMENT); }
@@ -502,7 +599,7 @@ VD_INLINE void* VDI(buffer_allocate)(VD(Arena) *arena, VD(u32) capacity, VD(usiz
 {
     VD(usize) alloc_size = sizeof(VD(FixedArrayHeader)) + capacity * isize;
     void *result = VD_MEMSET(VDF(arena_alloc)(arena, alloc_size), 0, alloc_size);
-    VD(FixedArrayHeader) *hdr = result;
+    VD(FixedArrayHeader) *hdr = (VD(FixedArrayHeader)*)result;
 
     hdr->cap = capacity;
     if (mark) {
@@ -561,7 +658,7 @@ VD_INLINE void *VDI(dynarray_grow)(void *a, VD(usize) tsize, VD(u32) addlen, VD(
     VD(usize) min_len = VD_DYNARRAY_LEN(a) + addlen;
 
     if (min_len > mincap) {
-        mincap = min_len;
+        mincap = (VD(u32))min_len;
     }
 
     if (mincap <= VD_DYNARRAY_CAP(a)) {
@@ -618,16 +715,17 @@ VD_INLINE VD(cstr)     VDF(cstr_cncat)(VD(Arena) *arena, VD(cstr) a, VD(cstr) b)
 VD_INLINE VD(cstr)     VDF(cstr_ncncat)(VD(Arena) *arena, VD(usize) *num_strings, VD(cstr) *strings);
 VD_INLINE VD(cstr)     VDF(cstr_from_str)(VD(Arena) *arena, VD(Str) s);
 
-VD_INLINE VD(Str)      VDF(str_from_cstr)(VD(cstr) s) { return (VD(Str)) { .s = s, .len = VDF(cstr_len)(s) }; }
+VD_INLINE VD(Str)      VDF(str_null)(void)                                                      { VD(Str) result = {0, 0}; return result; }
+VD_INLINE VD(Str)      VDF(str_from_cstr)(VD(cstr) s)                                           { VD(Str) result = { s, VDF(cstr_len)(s) }; return result; }
 VD_INLINE VD(Str)      VDF(str_dup)(VD(Arena) *a, VD(Str) s);
 VD_INLINE VD(Str)      VDF(str_dup_from_cstr)(VD(Arena) *a, VD(cstr) s);
 VD_INLINE VD(usize)    VDF(str_first_of)(VD(Str) s, VD(Str) q, VD(u64) start);
 VD_INLINE VD(b32)      VDF(str_split)(VD(Str) s, VD(usize) at, VD(Str) *left, VD(Str) *right);
-VD_INLINE VD(Str)      VDF(str_chop_left)(VD(Str) s, VD(usize) at) { VD(Str) left, right; return VDF(str_split)(s, at, &left, &right) ? right : (VD(Str)){0, 0}; }
-VD_INLINE VD(Str)      VDF(str_chop_right)(VD(Str) s, VD(usize) at) { VD(Str) left, right; return VDF(str_split)(s, at, &left, &right) ? left : (VD(Str)){0, 0}; }
+VD_INLINE VD(Str)      VDF(str_chop_left)(VD(Str) s, VD(usize) at)                              { VD(Str) left, right; return VDF(str_split)(s, at, &left, &right) ? right : VDF(str_null)(); }
+VD_INLINE VD(Str)      VDF(str_chop_right)(VD(Str) s, VD(usize) at)                             { VD(Str) left, right; return VDF(str_split)(s, at, &left, &right) ? left : VDF(str_null)(); }
 VD_INLINE VD(b32)      VDF(str_eq)(VD(Str) a, VD(Str) b);
 VD_INLINE VD(Str)      VDF(str_join)(VD(Arena) *arena, VD(Str) a, VD(Str) b, VD(b32) null_sep);
-VD_INLINE VD(b32)      VDF(str_ends_with_char)(VD(Str) a, char c) { return a.len > 0 ? a.s[a.len - 1] == c : VD_FALSE; }
+VD_INLINE VD(b32)      VDF(str_ends_with_char)(VD(Str) a, char c)                               { return a.len > 0 ? a.s[a.len - 1] == c : VD_FALSE; }
 
 VD_INLINE VD(b32) VDF(cstr_cmp)(VD(cstr) _a, VD(cstr) _b)
 {
@@ -653,7 +751,7 @@ VD_INLINE VD(usize) VDF(cstr_len)(VD(cstr) a)
 
 VD_INLINE VD(Str) VDF(str_dup)(VD(Arena) *a, VD(Str) s) {
     VD(Str) result;
-    result.s = VDF(arena_alloc)(a, s.len);
+    result.s = (char*)VDF(arena_alloc)(a, s.len);
     result.len = s.len;
     VD_MEMCPY(result.s, s.s, s.len);
     return result;
@@ -740,7 +838,8 @@ VD_INLINE VD(Str) VDF(str_join)(VD(Arena) *arena, VD(Str) a, VD(Str) b, VD(b32) 
         result[a.len + b.len] = 0;
     }
 
-    return (VD(Str)) { result, final_size };
+    VD(Str) _r = { result, final_size };
+    return _r;
 }
 
 VD_INLINE VD(cstr) VDF(cstr_from_str)(VD(Arena) *arena, VD(Str) s)
@@ -751,40 +850,58 @@ VD_INLINE VD(cstr) VDF(cstr_from_str)(VD(Arena) *arena, VD(Str) s)
     return result;
 }
 
-#define VD_LIT(string)  (VD(Str)) { .s = (string), .len = (sizeof(string) - 1), }
+#define VD_LIT(string)        (VD(Str)) { .s = (string), .len = (sizeof(string) - 1), }
+#define VD_LIT_INLINE(string) {(string), (sizeof(string) - 1)}
 
 #define VD_STR_EXPAND(string) (int)(string).len, (string).s
 
 #if VD_MACRO_ABBREVIATIONS
 #define LIT(string)         VD_LIT(string)
+#define LIT_INLINE(string)  VD_LIT_INLINE(string)
 #define STR_EXPAND(string)  VD_STR_EXPAND(string)
 #endif
+
+/* ----UTF8---------------------------------------------------------------------------------------------------------- */
+static VD_INLINE VD(u8) VDF(utf8_codepoint_len)(VD(u32) codepoint);
+
+static VD_INLINE VD(u8) VDF(utf8_codepoint_len)(VD(u32) codepoint)
+{
+    VD(cstr) s = (VD(cstr))&codepoint;    
+    VD(u8) b = s[0];
+
+    if ((b & 0x80) == 0x00) return 1;
+    if ((b & 0xE0) == 0xC0) return 2;
+    if ((b & 0xF0) == 0xE0) return 3;
+    if ((b & 0xF8) == 0xF0) return 4;
+
+    return VD_U8_MAX;
+}
 
 /* ----STR BUILDER--------------------------------------------------------------------------------------------------- */
 
 /* ----PARSING------------------------------------------------------------------------------------------------------- */
-VD_INLINE VD(b32)      VDF(is_ascii_digit)(char c);
-VD_INLINE VD(b32)      VDF(is_letter)(char c);
-VD_INLINE VD(b32)      VDF(is_cdecl_start)(char c);
-VD_INLINE VD(b32)      VDF(is_cdecl_continue)(char c);
+VD_INLINE VD(b32)      VDF(is_ascii_digit)(int c);
+VD_INLINE VD(b32)      VDF(is_letter)(int c);
+VD_INLINE VD(b32)      VDF(is_cdecl_start)(int c);
+VD_INLINE VD(b32)      VDF(is_cdecl_continue)(int c);
 VD(b32)                VDF(parse_u64)(VD(Str) s, VD(u64) *r);
 
-VD_INLINE VD(b32) VDF(is_ascii_digit)(char c)
+VD_INLINE VD(b32) VDF(is_ascii_digit)(int c)
 {
     return (c >= '0') && (c <= '9');
 }
 
-VD_INLINE VD(b32) VDF(is_letter)(char c)
+VD_INLINE VD(b32) VDF(is_letter)(int c)
 {
     return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
 }
 
-VD_INLINE VD(b32) VDF(is_cdecl_start)(char c)
+VD_INLINE VD(b32) VDF(is_cdecl_start)(int c)
 {
     return VDF(is_letter)(c) || c == '_';
 }
 
-VD_INLINE VD(b32) VDF(is_cdecl_continue)(char c)
+VD_INLINE VD(b32) VDF(is_cdecl_continue)(int c)
 {
     return VDF(is_cdecl_start)(c) || VDF(is_ascii_digit)(c);
 }
@@ -817,8 +934,8 @@ VD(b32) VDF(arg_expect_char)(VD(Arg) *arg, char c);
 
 VD_INLINE VD(u64) VDF(hash64)(const void *data, VD(u64) len, VD(u32) seed)
 {
-    const VD(u64) m = 0x5bd1e995;
-    const VD(u64) r = 24;
+    const VD(u32) m = 0x5bd1e995;
+    const VD(u32) r = 24;
 
     VD(u64) h = seed ^ len;
 
@@ -880,15 +997,19 @@ typedef enum {
     VDI(STRMAP_SET_OVERWRITE) = 1,
 } VDI(StrmapSetMode);
 
+#ifndef VD_STRMAP_KEY_PREFIX_LEN_CUSTOM
+#define VD_STRMAP_KEY_PREFIX_LEN 31
+#endif // !VD_STRMAP_KEY_PREFIX_LEN_CUSTOM
+
 struct VDI(StrmapBinPrefix) {
-    VDI(StrmapBinPrefix) *next;             //  8 bytes
-    VDI(StrmapBinPrefix) *insq;             //  8 bytes
-    VD(u32)              key_len;           //  4 bytes
-    VD(u32)              key_rest_cap;      //  4 bytes
-    VD(u8)               used;              //  1 byte
-    char                 *key_rest;         //  8 bytes
-    char                 key_prefix[47];    // 47 bytes
-};                                          // = 80 bytes
+    VDI(StrmapBinPrefix) *next;                                   //  8 bytes
+    VDI(StrmapBinPrefix) *insq;                                   //  8 bytes
+    char                 *key_rest;                               //  8 bytes
+    VD(u32)              key_len;                                 //  4 bytes
+    VD(u32)              key_rest_cap;                            //  4 bytes
+    VD(u8)               used;                                    //  1 byte
+    char                 key_prefix[VD_STRMAP_KEY_PREFIX_LEN];    // 31 bytes (default)
+};                                                                // = 64 bytes
 
 /**
  * @sym VD(StrmapInitOptions)
@@ -899,7 +1020,7 @@ typedef struct __VD_StrmapInitOptions {
     /** A value from [0.3, 0.9] that determines the amount of slots assigned to the addressable region. */
     float address_scale;
 
-    /** The estimated key length in bytes. If this is higher than 47, then more space will be allocated for key storage. */
+    /** The estimated key length in bytes. If this is higher than VD_STRMAP_KEY_PREFIX_LEN, then more space will be allocated up front for key storage. */
     VD(u32) average_key_len;
 } VD(StrmapInitOptions);
 
@@ -975,7 +1096,7 @@ VD_INLINE VD(b32) VDI(strmap_set)(void *map, VD(Str) key, void *value, VDI(Strma
         VD_MEMCPY(bin_data, value, VD_STRMAP_HEADER(map)->tsize);
         return VD_TRUE;
     } else {
-        VDI(StrmapBinPrefix) *bin = VDI(strmap_get_bin)(map, key, VDI(STRMAP_GET_BIN_FLAGS_CREATE) | VDI(STRMAP_GET_BIN_FLAGS_GET_EXISTING));
+        VDI(StrmapBinPrefix) *bin = VDI(strmap_get_bin)(map, key, (VDI(StrmapGetBinFlags))(VDI(STRMAP_GET_BIN_FLAGS_CREATE) | VDI(STRMAP_GET_BIN_FLAGS_GET_EXISTING)));
         if (bin == 0) return VD_FALSE;
 
         VD(u8) *bin_data = ((VD(u8)*)bin) + sizeof(VDI(StrmapBinPrefix));
@@ -1077,7 +1198,7 @@ VD_INLINE VD(b32) VDI(kvmap_get)(void *map, void *key, void *value)
     if (bin == 0) return VD_FALSE;
 
     // If found the copy over the data
-    VD(u8) *bin_data = VD_KVMAP_BIN_MOVE_TO_VPTR(map, bin);
+    VD(u8) *bin_data = (VD(u8)*)VD_KVMAP_BIN_MOVE_TO_VPTR(map, bin);
     VD_MEMCPY(value, bin_data, VD_KVMAP_HEADER(map)->vsize);
     return VD_TRUE;
 }
@@ -1088,18 +1209,28 @@ VD_INLINE VD(b32) VDI(kvmap_set)(void *map, void *key, void *value, VDI(KVMapSet
         VDI(KVMapBinPrefix) *bin = VDI(kvmap_get_bin)(map, key, VDI(KVMAP_GET_BIN_FLAGS_CREATE));
         if (bin == 0) return VD_FALSE;
 
-        VD(u8) *bin_data = VD_KVMAP_BIN_MOVE_TO_VPTR(map, bin);
+        VD(u8ptr) bin_data = (VD(u8ptr))VD_KVMAP_BIN_MOVE_TO_VPTR(map, bin);
         VD_MEMCPY(bin_data, value, VD_KVMAP_VSIZE(map));
         return VD_TRUE;
     } else {
-        VDI(KVMapBinPrefix) *bin = VDI(kvmap_get_bin)(map, key, VDI(KVMAP_GET_BIN_FLAGS_CREATE) | VDI(KVMAP_GET_BIN_FLAGS_GET_EXISTING));
+        VDI(KVMapBinPrefix) *bin = (VDI(KVMapBinPrefix)*)VDI(kvmap_get_bin)(map, key, (VDI(KVMapGetBinFlags))(VDI(KVMAP_GET_BIN_FLAGS_CREATE) | VDI(KVMAP_GET_BIN_FLAGS_GET_EXISTING)));
         if (bin == 0) return VD_FALSE;
 
-        VD(u8) *bin_data = VD_KVMAP_BIN_MOVE_TO_VPTR(map, bin);
+        VD(u8ptr) bin_data = (VD(u8ptr))VD_KVMAP_BIN_MOVE_TO_VPTR(map, bin);
         VD_MEMCPY(bin_data, value, VD_KVMAP_HEADER(map)->vsize);
         return VD_TRUE;
     }
 }
+
+#if VD_MACRO_ABBREVIATIONS
+#define kvmap
+#define kvmap_init(m, arena, cap, o)      VD_KVMAP_INIT(m, arena, cap, o)
+#define kvmap_init_default(m, arena)      VD_KVMAP_INIT_DEFAULT(m, arena)
+#define kvmap_set(m, k, v)                VD_KVMAP_SET(m, k, v)
+#define kvmap_get(m, k, v)                VD_KVMAP_GET(m, k, v)
+#define kvmap_rm(m ,k)                    VD_KVMAP_RM(m, k)
+#define kvmap_overwrite(m, k, v)          VD_KVMAP_OVERWRITE(m, k, v)
+#endif // VD_MACRO_ABBREVIATIONS
 
 /* ----FILESYSTEM---------------------------------------------------------------------------------------------------- */
 #include <stdio.h>
@@ -1125,13 +1256,12 @@ VD_INLINE VD(cstr) VDF(dump_file_to_cstr)(VD(Arena) *arena, VD(cstr) file_path, 
     VD(usize) size = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    char *result = VDF(arena_alloc)(arena, size + 1);
+    char *result = (char*)VDF(arena_alloc)(arena, size + 1);
     fread(result, size, 1, f);
     result[size] = 0;
     *len = size;
     return result;
 }
-
 
 /* ----SCRATCH------------------------------------------------------------------------------------------------------- */
 #ifndef VD_SCRATCH_PAGE_COUNT
@@ -1170,7 +1300,7 @@ typedef VD_PROC_LOG(VD(ProcLog));
         VD_LOG_CALL(verbosity, VD_LOG_BUFFER); \
     } while (0)
 
-#define VD_LOG_ADD_NEWLINE(s) s "\n"
+#define VD_LOG_ADD_NEWLINE(s)  s "\n"
 #define VD_ERRF(fmt, ...)      VD_LOG_IMPL(VD_LOG_VERBOSITY_ERROR,   VD_LOG_ADD_NEWLINE(fmt), __VA_ARGS__)
 #define VD_WRNF(fmt, ...)      VD_LOG_IMPL(VD_LOG_VERBOSITY_WARNING, VD_LOG_ADD_NEWLINE(fmt), __VA_ARGS__)
 #define VD_LOGF(fmt, ...)      VD_LOG_IMPL(VD_LOG_VERBOSITY_LOG,     VD_LOG_ADD_NEWLINE(fmt), __VA_ARGS__)
@@ -1227,33 +1357,39 @@ typedef struct __VD_TestEntry {
     VD(ProcTest) *test;
 } VD(TestEntry);
 
-#define VD_TEST_PROC_ID(counter)  VD_STRING_JOIN2(vd_test_proc_, counter)
-#define VD_TEST_ENTRY_ID(counter) VD_STRING_JOIN2(vd_test_entry_, counter)
-#define VD_TEST_REG_ID(counter)   VD_STRING_JOIN2(vd_test_reg_, counter)
+#define VD_TEST_PROC_ID(counter)        VD_STRING_JOIN2(vd_test_proc_, counter)
+#define VD_TEST_ENTRY_ID(counter)       VD_STRING_JOIN2(vd_test_entry_, counter)
+#define VD_TEST_REG_ID(counter)         VD_STRING_JOIN2(vd_test_reg_, counter)
+#define VD_TEST_REG_PTR_ID(counter)     VD_STRING_JOIN2(vd_test_reg_ptr_, counter)
 
 #if VD_HOST_COMPILER_MSVC
-
-#pragma section(".vdtests$a", read)
-__declspec(allocate(".vdtests$a")) static VD(TestEntry) *VDI(Test_Start) = 0;
-
-#pragma section(".vdtests$z", read)
-__declspec(allocate(".vdtests$z")) static VD(TestEntry) *VDI(Test_End)   = 0;
-
-#define VD_TEST_SECTION __declspec(allocate(".vdtests$m"))
-#define VD_TEST_USED
+#pragma section(".CRT$XCU", read)
 
 #define VD_TEST_IMPL(string, counter) \
     static VD_PROC_TEST(VD_TEST_PROC_ID(counter)); \
-    static VD_TEST_SECTION VD_TEST_USED VD(TestEntry) VD_TEST_ENTRY_ID(counter) = {string, VD_TEST_PROC_ID(counter)}; \
+    static void VD_TEST_REG_ID(counter)(void); \
+    __declspec(allocate(".CRT$XCU")) void (*VD_TEST_REG_PTR_ID(counter))(void) = VD_TEST_REG_ID(counter); \
+    __pragma(comment(linker, "/include:" VD_STRINGIFY(VD_TEST_REG_PTR_ID(counter)))) \
+    static void VD_TEST_REG_ID(counter)(void) {\
+        VDI(test_register)(string, VD_TEST_PROC_ID(counter)); \
+    } \
     static VD_PROC_TEST(VD_TEST_PROC_ID(counter))
 
 #elif VD_HOST_COMPILER_CLANG
+#define VD_TEST_IMPL(string, counter) \
+    static VD_PROC_TEST(VD_TEST_PROC_ID(counter)); \
+    static void __attribute__((constructor)) VD_TEST_REG_ID(counter)() { \
+        VDI(test_register)(string, VD_TEST_PROC_ID(counter)); \
+    } \
+    static VD_PROC_TEST(VD_TEST_PROC_ID(counter))
+
+#endif  // VD_HOST_COMPILER_MSVC, VD_HOST_COMPILER_CLANG
 
 extern VD(TestEntry) *VDI(Test_Entries);
-extern VD(usize)      VDI(Cap_Test_Entries);
-extern VD(usize)      VDI(Len_Test_Entries);
+extern VD(usize)     VDI(Cap_Test_Entries);
+extern VD(u32)       VDI(Len_Test_Entries);
 
-VD_INLINE void VDI(test_register)(const char *name, VD(ProcTest) *proc)
+static VD_INLINE void VDI(test_register)(const char *name, VD(ProcTest) *proc)
 {
     if ((VDI(Len_Test_Entries) + 1) > VDI(Cap_Test_Entries)) {
         VD(usize) old_cap = VDI(Cap_Test_Entries);
@@ -1264,7 +1400,7 @@ VD_INLINE void VDI(test_register)(const char *name, VD(ProcTest) *proc)
             new_cap = 2 * old_cap;
         }
 
-        VDI(Test_Entries) = VD_REALLOC(VDI(Test_Entries), old_cap * sizeof(VD(TestEntry)), new_cap * sizeof(VD(TestEntry)));
+        VDI(Test_Entries) = (VD(TestEntry)*)VD_REALLOC(VDI(Test_Entries), old_cap * sizeof(VD(TestEntry)), new_cap * sizeof(VD(TestEntry)));
         VDI(Cap_Test_Entries) = new_cap;
     }
 
@@ -1273,19 +1409,24 @@ VD_INLINE void VDI(test_register)(const char *name, VD(ProcTest) *proc)
     e->test = proc;
 }
 
-#define VD_TEST_IMPL(string, counter) \
-    static VD_PROC_TEST(VD_TEST_PROC_ID(counter)); \
-    static void __attribute__((constructor)) VD_TEST_REG_ID(counter)() { \
-        VDI(test_register)(string, VD_TEST_PROC_ID(counter)); \
-    } \
-    static VD_PROC_TEST(VD_TEST_PROC_ID(counter))
-
-#endif  // VD_HOST_COMPILER_MSVC, VD_HOST_COMPILER_CLANG
-
-
 #define VD_TEST(string) VD_TEST_IMPL(string, __COUNTER__)
 
-extern void VDF(test_main)(int argc, char **argv);
+typedef struct {
+    VD(ProcLog) *log_impl;
+    char        buf[1024];
+} VD(TestContext);
+
+extern VD(TestContext) *VDI(Global_Test_Context);
+
+#define VD_TEST_LOG_IMPL(fmt, ...) \
+        snprintf(VDI(Global_Test_Context)->buf, 1024, fmt "\n", __VA_ARGS__); \
+        VDI(Global_Test_Context)->log_impl(VD_LOG_VERBOSITY_LOG, VDI(Global_Test_Context)->buf); \
+
+#define VD_TEST_LOG(fmt, ...) VD_TEST_LOG_IMPL(fmt, __VA_ARGS__)
+
+extern void VDF(test_set_context)(VD(TestContext) *context);
+extern void VDF(test_get_tests)(VD(TestEntry) **out_entries, VD(u32) *out_num_entries);
+extern void VDF(test_main)(void);
 
 #define VD_TEST_ERR(msg)          return ((VD(TestResult)) { .ok = 0, .err = msg })
 #define VD_TEST_OK()              return ((VD(TestResult)) { .ok = 1, .err = 0 })
@@ -1316,6 +1457,7 @@ extern void VDF(test_main)(int argc, char **argv);
 #ifdef VD_IMPL
 
 /* ----VIRTUAL MEMORY IMPL------------------------------------------------------------------------------------------- */
+#if VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
 #if !VD_VM_CUSTOM
 
 #if VD_PLATFORM_MACOS
@@ -1323,7 +1465,7 @@ extern void VDF(test_main)(int argc, char **argv);
 #include <errno.h>
 #include <unistd.h>
 
-VD(usize) VDF(vm_get_page_size)()
+VD(usize) VDF(vm_get_page_size)(void)
 {
     return _SC_PAGE_SIZE;
 }
@@ -1363,10 +1505,52 @@ void VDF(vm_release)(void *addr, VD(usize) len)
     munmap(addr, len);
 }
 
-#endif // VD_PLATFORM_MACOS
+#elif VD_PLATFORM_WINDOWS
+#include <windows.h>
+
+VD(usize) VDF(vm_get_page_size)(void)
+{
+    return _SC_PAGE_SIZE;
+}
+
+void *VDF(vm_reserve)(VD(usize) len)
+{
+    void *result = map(0, len, PROT_NONE, MAP_ANON | MAP_PRIVATE, -1, 0);
+    if (result == MAP_FAILED) {
+        fprintf(stderr, "vm_decommit failed: %d\n", errno);
+        VD_ASSERT(VD_FALSE);
+    }
+    return result;
+}
+
+void *VDF(vm_commit)(void *addr, VD(usize) len)
+{
+    void *result = mmap(addr, len, PROT_READ | PROT_WRITE, MAP_FIXED | MAP_PRIVATE | MAP_ANON, -1, 0);
+    if (result == MAP_FAILED) {
+        fprintf(stderr, "vm_decommit failed: %d\n", errno);
+        VD_ASSERT(VD_FALSE);
+    }
+    return result;
+}
+
+void *VDF(vm_decommit)(void *addr, VD(usize) len)
+{
+    void *result = mmap(addr, len, PROT_NONE, MAP_FIXED | MAP_PRIVATE | MAP_ANON, -1, 0);
+    if (result == MAP_FAILED) {
+        fprintf(stderr, "vm_decommit failed: %d\n", errno);
+        VD_ASSERT(VD_FALSE);
+    }
+    return result;
+}
+
+void VDF(vm_release)(void *addr, VD(usize) len)
+{
+    munmap(addr, len);
+}
+#endif // VD_PLATFORM_MACOS, VD_PLATFORM_WINDOWS
 
 #endif // !VD_VM_CUSTOM
-
+#endif // VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
 /* ----ARENA IMPL---------------------------------------------------------------------------------------------------- */
 void VDF(arena_init)(VD(Arena) *a, void *buf, size_t len)
 {
@@ -1397,6 +1581,7 @@ void *VDF(arena_alloc_align)(VD(Arena) *a, size_t size, size_t align)
     }
 
     VD_DEBUG_BREAK();
+    return 0;
 }
 
 void *VDF(arena_resize_align)(VD(Arena) *a, void *old_memory, size_t old_size, size_t new_size, size_t align)
@@ -1425,6 +1610,7 @@ void *VDF(arena_resize_align)(VD(Arena) *a, void *old_memory, size_t old_size, s
     } else {
         VD_DEBUG_BREAK();
     }
+    return 0;
 }
 
 void VDF(arena_clear)(VD(Arena) *a)
@@ -1436,6 +1622,8 @@ void VDF(arena_clear)(VD(Arena) *a)
 
 VD(b32) VDF(arena_free)(VD(Arena) *a, void *memory, size_t size)
 {
+    VD_UNUSED(size);
+
     VD(uptr) last_ptr = (VD(uptr)) (a->buf + a->prev_offset);
     VD(uptr) mptr     = (VD(uptr))memory;
 
@@ -1574,6 +1762,9 @@ VD(b32) VDF(arg_get_name)(VD(Arg) *arg, VD(Str) *name)
 }
 
 VD(b32) VDF(arg_get_uint)(VD(Arg) *arg, VD(u64) *i) {
+    VD_UNUSED(i);
+    VD_TODO();
+
     VD_ARG_CHECK_NEXT(arg);
 
     return VD_FALSE;
@@ -1602,8 +1793,8 @@ VD(b32) VDF(arg_expect_char)(VD(Arg) *arg, char c);
 /* ----STRMAP IMPL--------------------------------------------------------------------------------------------------- */
 static VD(b32) VDI(strmap_check_key)(VD(Str) check, VDI(StrmapBinPrefix) *against) {
     VD(u32) prefix_len       = sizeof(against->key_prefix);    
-    VD(u32) first_check_len  = prefix_len < check.len ? prefix_len : check.len;
-    VD(u32) second_check_len = check.len - prefix_len;
+    VD(u32) first_check_len  = prefix_len < (VD(u32))check.len ? prefix_len : (VD(u32))check.len;
+    VD(u32) second_check_len = (VD(u32))check.len - prefix_len;
 
     if (against->key_len != check.len) {
         return VD_FALSE;
@@ -1651,7 +1842,7 @@ static void VDI(strmap_copy_key)(void *map, VD(Str) key, VDI(StrmapBinPrefix) *b
 {
     char *key_prefix_part = key.s;
     char *key_rest_part = key.len > sizeof(bin->key_prefix) ? key.s + sizeof(bin->key_prefix) : 0;
-    VDI(strmap_emplace_key)(map, bin, key_prefix_part, key_rest_part, key.len);
+    VDI(strmap_emplace_key)(map, bin, key_prefix_part, key_rest_part, (VD(u32))key.len);
 }
 
 void* VDI(strmap_init)(VD(Arena) *arena, VD(u32) tsize, VD(u32) cap, VD(StrmapInitOptions) *options)
@@ -2135,35 +2326,46 @@ VDI(KVMapBinPrefix) *VDI(kvmap_get_bin)(void *map, void *key, VDI(KVMapGetBinFla
 /* ----TESTING IMPL-------------------------------------------------------------------------------------------------- */
 #if VD_INCLUDE_TESTS
 
-
 static int VDI(run_test)(VD(TestEntry)* e) {
     VDF(arena_clear)(Test_Arena);
     Test_Arena->flags = 0;
 
     if (!e || !e->name || !e->test) return -1;
 
-    printf("[%-60s]", e->name);
     VD(TestResult) r = e->test();
     if (r.ok) {
-        printf(" OK     \n");
+        VD_TEST_LOG("[%-60s]   OK", e->name);
         return 1;
     } else {
-        printf(" FAILED \n");
-        printf("%s\n", r.err);
+        VD_TEST_LOG("[%-60s]   FAILED", e->name);
+        VD_TEST_LOG("%s", r.err);
         return 0;
     }
 }
 
 VD(Arena) *Test_Arena;
 
-#if VD_HOST_COMPILER_CLANG
-VD(TestEntry) *VDI(Test_Entries);
-VD(usize)      VDI(Cap_Test_Entries);
-VD(usize)      VDI(Len_Test_Entries);
-#endif // VD_HOST_COMPILER_CLANG
+#if !VD_HOST_COMPILER_UNKNOWN
+
+VD(TestContext) *VDI(Global_Test_Context);
+VD(TestEntry)   *VDI(Test_Entries);
+VD(usize)        VDI(Cap_Test_Entries);
+VD(u32)          VDI(Len_Test_Entries);
+#endif // VD_HOST_COMPILER_UNKNOWN
+
+void VDF(test_set_context)(VD(TestContext) *context)
+{
+    VDI(Global_Test_Context) = context;
+}
+
+void VDF(test_get_tests)(VD(TestEntry) **out_entries, VD(u32) *out_num_entries)
+{
+    *out_entries = VDI(Test_Entries);
+    *out_num_entries = VDI(Len_Test_Entries);
+}
 
 #include <stdio.h>
-void VDF(test_main)(int argc, char **argv)
+void VDF(test_main)(void)
 {
     VD(Arena) a;
     Test_Arena = &a;
@@ -2171,18 +2373,7 @@ void VDF(test_main)(int argc, char **argv)
     VD_ARENA_FROM_SYSTEM(Test_Arena, VD_MEGABYTES(64));
 
     int passed = 0, total = 0;
-#if VD_HOST_COMPILER_MSVC 
-    VD(TestEntry) **start = &__start_vdtests + 1;
-    VD(TestEntry) **end = &__end_vdtests;
-
-    for (VD(TestEntry) **p = start; p < end; ++p) {
-        VD(TestEntry) *t = *p;
-        if (VDI(run_test)(t)) {
-            passed++;
-        }
-        total++;
-    }
-#elif VD_HOST_COMPILER_CLANG
+#if !VD_HOST_COMPILER_UNKNOWN 
     for (VD(usize) i = 0; i < VDI(Len_Test_Entries); ++i) {
         if (VDI(run_test)(&VDI(Test_Entries)[i])) {
             passed++;
@@ -2193,10 +2384,14 @@ void VDF(test_main)(int argc, char **argv)
     printf("[%d/%d]\n", passed, total);
 #else
 #error "Cannot produce tests for unknown compiler!"
-#endif // VD_HOST_COMPILER_MSVC, VD_HOST_COMPILER_CLANG
+#endif // !VD_HOST_COMPILER_UNKNOWN
 }
 
 #if VD_INCLUDE_INTERNAL_TESTS
+
+VD_TEST("ipow64u8") {
+    VD_TEST_OK();    
+}
 
 typedef struct {
     int           value;
@@ -2318,16 +2513,16 @@ VD_TEST("DynArray/Basic") {
  * @note: Uncomment this line to print the map for debugging purposes
  * 
  *  static void print_map(int *map) {
- *      puts("// ----------------------");
+ *      VD_TEST_LOG("%s","// ----------------------");
  *      for (int i = 0; i < (int)VD_STRMAP_TOTAL_CAP(map); ++i) {
  *          if (!VD_STRMAP_GET_BIN_USED(map, i)) {
  *              size_t index = 0;
  *              void *n = VD_STRMAP_GET_BIN_NEXT(map, i);
  *              if (n != 0) {
  *                  index = VD_STRMAP_GET_BIN_INDEX(map, n);
- *                  printf("// %d: [      ] -> %zu = _\n", i, index);
+ *                  printf("// %d: [      ] -> %zu = _", i, index);
  *              } else {
- *                  printf("// %d: [      ] -> _ = _\n", i);
+ *                  printf("// %d: [      ] -> _ = _", i);
  *              }
  *          } else {
  *              size_t index = 0;
@@ -2335,14 +2530,14 @@ VD_TEST("DynArray/Basic") {
  *              if (n != 0) {
  *                  index = VD_STRMAP_GET_BIN_INDEX(map, n);
  *                  int *v = (int*) VD_STRMAP_GET_BIN_VPTR(map, i);
- *                  printf("// %d: [%6.*s] -> %zu = %d\n", i, VD_STRMAP_GET_KEY_LEN(map, i), VD_STRMAP_GET_KEY_PREFIX(map, i), index, *v);
+ *                  printf("// %d: [%6.*s] -> %zu = %d", i, VD_STRMAP_GET_KEY_LEN(map, i), VD_STRMAP_GET_KEY_PREFIX(map, i), index, *v);
  *              } else {
  *                  int *v = (int*) VD_STRMAP_GET_BIN_VPTR(map, i);
- *                  printf("// %d: [%6.*s] -> _ = %d\n", i, VD_STRMAP_GET_KEY_LEN(map, i), VD_STRMAP_GET_KEY_PREFIX(map, i), *v);
+ *                  printf("// %d: [%6.*s] -> _ = %d", i, VD_STRMAP_GET_KEY_LEN(map, i), VD_STRMAP_GET_KEY_PREFIX(map, i), *v);
  *              }
  *          }
  *      } 
- *      puts("// ----------------------");
+ *      VD_TEST_LOG("%s","// ----------------------");
  *  }
  */
 
@@ -2359,12 +2554,12 @@ static VD(b32) VDI(strmap_check_entries)(int *map, VDI(TestCheckMapEntry) *entri
     for (int i = 0; i < num_entries; ++i) {
         int v;
         if (!VD_STRMAP_GET(map, entries[i].key, &v)) {
-            printf("VDI(map_check_entries): %s:%d Key not found: %.*s\n", f, l, VD_STR_EXPAND(entries[i].key));
+            VD_TEST_LOG("VDI(map_check_entries): %s:%d Key not found: %.*s\n", f, l, VD_STR_EXPAND(entries[i].key));
             return VD_FALSE;
         }
 
         if (v != entries[i].val) {
-            printf("VDI(map_check_entries): %s:%d Key '%.*s' value expected: %d, got: %d found: \n", f, l, VD_STR_EXPAND(entries[i].key), entries[i].val, v);
+            VD_TEST_LOG("VDI(map_check_entries): %s:%d Key '%.*s' value expected: %d, got: %d found: \n", f, l, VD_STR_EXPAND(entries[i].key), entries[i].val, v);
             return VD_FALSE;    
         }
     }
@@ -2862,16 +3057,16 @@ typedef struct {
 
 
 static void print_kvmap(VDI(TestKVMapKV) *map) {
-    puts("// ----------------------");
+    VD_TEST_LOG("%s", "// ----------------------");
     for (int i = 0; i < (int)VD_KVMAP_TOTAL_CAP(map); ++i) {
         if (!VD_KVMAP_GET_BIN_USED(map, i)) {
             size_t index = 0;
             void *n = VD_KVMAP_GET_BIN_NEXT(map, i);
             if (n != 0) {
                 index = VD_KVMAP_GET_BIN_INDEX(map, n);
-                printf("// %d: [      ] -> %zu = _\n", i, index);
+                VD_TEST_LOG("// %d: [      ] -> %zu = _", i, index);
             } else {
-                printf("// %d: [      ] -> _ = _\n", i);
+                VD_TEST_LOG("// %d: [      ] -> _ = _", i);
             }
         } else {
             size_t index = 0;
@@ -2880,18 +3075,16 @@ static void print_kvmap(VDI(TestKVMapKV) *map) {
                 index = VD_KVMAP_GET_BIN_INDEX(map, n);
                 VDI(TestKVMapKey) *k = VD_KVMAP_GET_BIN_KPTR(map, i);
                 int *v = (int*) VD_KVMAP_GET_BIN_VPTR(map, i);
-                printf("// %d: [%-2d  %2d] -> %zu = %d\n", i, k->a, k->b, index, *v);
+                VD_TEST_LOG("// %d: [%-2d  %2d] -> %zu = %d", i, k->a, k->b, index, *v);
             } else {
                 VDI(TestKVMapKey) *k = VD_KVMAP_GET_BIN_KPTR(map, i);
                 int *v = (int*) VD_KVMAP_GET_BIN_VPTR(map, i);
-                printf("// %d: [%-2d  %2d] -> _ = %d\n", i, k->a, k->b, *v);
+                VD_TEST_LOG("// %d: [%-2d  %2d] -> _ = %d", i, k->a, k->b, *v);
             }
         }
     } 
-    puts("// ----------------------");
+    VD_TEST_LOG("%s", "// ----------------------");
 }
-
-
 
 VD_TEST("KVMap/Basic") {
     // @todo(mdodis): Finish test just like Strmap/Basic

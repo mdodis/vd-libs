@@ -20,6 +20,11 @@
  * 2. Altered source versions must be plainly marked as such, and must not be
  *    misrepresented as being the original software.
  * 3. This notice may not be removed or altered from any source distribution.
+ *
+ *
+ * @todo(mdodis): Introduce VkQueueConfiguration with multiple possible queue
+ *                setups, which will allow the user to use dedicated or same
+ *                queue for transfer compute etc.
  */
 #ifndef VD_VK_H
 #define VD_VK_H
@@ -110,8 +115,11 @@ typedef struct __VD_VK_CreateInstanceExtendedInfo {
     } debug_utils;
 
     struct {
-        VkInstance                  *instance;
-        VkDebugUtilsMessengerEXT    *debug_messenger;
+        VkInstance                       *instance;
+        VkDebugUtilsMessengerEXT         *debug_messenger;
+        PFN_vkSetDebugUtilsObjectNameEXT *set_object_name;
+        PFN_vkCmdBeginDebugUtilsLabelEXT *cmd_begin_label;
+        PFN_vkCmdEndDebugUtilsLabelEXT   *cmd_end_label;
     } result;
 } VD(VkCreateInstanceExtendedInfo);
 
@@ -329,6 +337,7 @@ typedef struct __VD_VK_CreateSwapchainAndFetchImagesInfo {
     VkSurfaceKHR       surface;
     VkSurfaceFormatKHR surface_format;
     VkExtent2D         extent;
+    VkImageUsageFlags  image_usage;
 
     struct {
         VkSwapchainKHR  *swapchain;
@@ -351,6 +360,17 @@ typedef struct __VD_VK_CreateImageViewsInfo {
 
 } VD(VkCreateImageViewsInfo);
 
+typedef struct __VD_VK_CmdImageTransitionInfo {
+    VkImage            image;
+    VkImageLayout      current_layout;
+    VkImageLayout      target_layout;
+    VkImageAspectFlags aspect;
+    VD(u32)            base_mip_level;
+    VD(u32)            level_count;
+    VD(u32)            base_array_layer;
+    VD(u32)            layer_count;
+} VD(VkCmdImageTransitionInfo);
+
 VD(b32)     VDF(vk_require_instance_extensions)         (VD(Arena) *temp, VD(VkRequireInstanceExtensionsInfo) *info);
 VD(b32)     VDF(vk_require_instance_layers)             (VD(Arena) *temp, VD(VkRequireInstanceLayersInfo) *info);
 void        VDF(vk_create_instance_extended)            (VD(VkCreateInstanceExtendedInfo) *info);
@@ -358,6 +378,7 @@ void        VDF(vk_log_physical_device_characteristics) (VD(VkPhysicalDeviceChar
 VD(b32)     VDF(vk_pick_physical_device)                (VD(Arena) *temp, VD(VkPickPhysicalDeviceInfo) *info);
 void        VDF(vk_create_device_and_queues)            (VD(Arena) *temp, VD(VkCreateDeviceAndQueuesInfo) *info);
 void        VDF(vk_create_image_views)                  (VD(Arena) *a, VD(VkCreateImageViewsInfo) *info);
+void        VDF(vk_cmd_image_transition)                (VkCommandBuffer cmd, VD(VkCmdImageTransitionInfo) *info);
 void        VDF(vk_destroy_image_views)                 (VkDevice device, VD(u32) num_image_views, VkImageView *image_views);
 void        VDF(vk_destroy_framebuffers)                (VkDevice device, VD(u32) num_framebuffers, VkFramebuffer *framebuffers);
 void        VDF(vk_destroy_semaphores)                  (VkDevice device, VD(u32) num_semaphores, VkSemaphore *semaphores);
@@ -425,6 +446,27 @@ typedef struct __VD_VK_DescriptorSetLayoutCache {
     VD_KVMAP VDI(VkDescriptorSetLayoutCacheKV) *map;
 } VD(VkDescriptorSetLayoutCache);
 
+/* ----IMMEDIATE COMMANDS-------------------------------------------------------------------------------------------- */
+typedef struct __VD_VK_ImmediateCommands {
+    VkDevice        device;
+    VkCommandPool   pool;
+    VkCommandBuffer buffer;
+    VkFence         fence;
+    VkQueue         queue;
+    VD(b32)         recording;
+} VD(VkImmediateCommands);
+
+typedef struct __VD_VK_ImmediateCommandsInitInfo {
+    VkDevice device;
+    VD(u32)  queue_family_index;
+    VkQueue  queue;
+} VD(VkImmediateCommandsInitInfo);
+
+void            VDF(vk_immediate_commands_init)(VD(VkImmediateCommands) *cmds, VD(VkImmediateCommandsInitInfo) *info);
+VkCommandBuffer VDF(vk_immediate_commands_begin)(VD(VkImmediateCommands) *cmds);
+void            VDF(vk_immediate_commands_end)(VD(VkImmediateCommands) *cmds);
+void            VDF(vk_immediate_commands_deinit)(VD(VkImmediateCommands) *cmds);
+
 /* ----AMD VMA TRACKING---------------------------------------------------------------------------------------------- */
 #if VD_VK_VMA_TRACKING
 #ifndef AMD_VULKAN_MEMORY_ALLOCATOR_H
@@ -437,7 +479,7 @@ typedef struct __VD_VK_DescriptorSetLayoutCache {
 
 void VDI(vk_vma_track_allocation)(VmaAllocator allocator, VmaAllocation allocation, const char *file, int filelen, int line);
 void VDI(vk_vma_release_allocation)(VmaAllocator allocator, VmaAllocation allocation);
-void VDI(vk_vma_check_allocations)();
+void VDI(vk_vma_check_allocations)(void);
 
 #else
 
@@ -531,9 +573,9 @@ void VDF(vk_create_instance_extended)(VD(VkCreateInstanceExtendedInfo) *info)
             .engineVersion          = info->engine_version,
             .apiVersion             = info->api_version,
         },
-        .enabledLayerCount          = info->num_instance_layers,
+        .enabledLayerCount          = (VD(u32))info->num_instance_layers,
         .ppEnabledLayerNames        = (const char * const *)info->instance_layers,
-        .enabledExtensionCount      = info->num_instance_extensions,
+        .enabledExtensionCount      = (VD(u32))info->num_instance_extensions,
         .ppEnabledExtensionNames    = (const char * const *)info->instance_extensions,
     }, 0, &result));
 
@@ -552,6 +594,19 @@ void VDF(vk_create_instance_extended)(VD(VkCreateInstanceExtendedInfo) *info)
                                     VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
             .pfnUserCallback    = info->debug_utils.messenger_callback,
         }, 0, info->result.debug_messenger));
+
+        if (info->result.set_object_name != 0) {
+            PFN_vkSetDebugUtilsObjectNameEXT set_object_name;
+            set_object_name = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetInstanceProcAddr(result, "vkSetDebugUtilsObjectNameEXT");
+            *info->result.set_object_name = set_object_name;
+        }
+
+        if (info->result.cmd_begin_label != 0) {
+            PFN_vkCmdBeginDebugUtilsLabelEXT cmd_begin_label = (PFN_vkCmdBeginDebugUtilsLabelEXT )vkGetInstanceProcAddr(result, "vkCmdBeginDebugUtilsLabelEXT");
+            PFN_vkCmdEndDebugUtilsLabelEXT   cmd_end_label   = (PFN_vkCmdEndDebugUtilsLabelEXT   )vkGetInstanceProcAddr(result, "vkCmdEndDebugUtilsLabelEXT");
+            *info->result.cmd_begin_label = cmd_begin_label;
+            *info->result.cmd_end_label   = cmd_end_label;
+        }
     }
 }
 
@@ -565,7 +620,7 @@ VD(b32) VDF(vk_pick_physical_device)(VD(Arena) *temp, VD(VkPickPhysicalDeviceInf
 
     VD(i32)             best_device_index   = -1;
     VD(i32)             best_device_rank    = -1;
-    VkPhysicalDevice    best_device_physical_device;
+    VkPhysicalDevice    best_device_physical_device = VK_NULL_HANDLE;
 
 
     for (VD(u32) i = 0; i < num_phyiscal_devices; ++i) {
@@ -783,7 +838,7 @@ VD(b32) VDF(vk_pick_physical_device)(VD(Arena) *temp, VD(VkPickPhysicalDeviceInf
         };
 
         if (info->log) {
-            DBGF("vd_vk_pick_physical_device: Testing against candidate: %u", i);
+            DBGF("vd_vk_pick_physical_device: Testing against candidate: %u: %s", i, device_properties.properties.deviceName);
             VDF(vk_log_physical_device_characteristics)(&characteristics);
         }
 
@@ -996,7 +1051,7 @@ VD(b32) VDF(vk_pick_physical_device)(VD(Arena) *temp, VD(VkPickPhysicalDeviceInf
 
                 if (first_compatible_surface_format_index == comparand->num_surface_formats) {
                     if (info->log) {
-                        LOGF("vd_vk_pick_physical_device: Candidate device %u doesn't contain characteristic surface format: %zu ", i, j);
+                        LOGF("vd_vk_pick_physical_device: Candidate device %u doesn't contain characteristic[%zu] compatible surface formats", i, j);
                         continue;
                     }
                 }
@@ -1076,7 +1131,7 @@ VD(b32) VDF(vk_pick_physical_device)(VD(Arena) *temp, VD(VkPickPhysicalDeviceInf
             }
 
             if (rank > best_device_rank) {
-                best_device_index = j;
+                best_device_index = (VD(i32))j;
                 best_device_physical_device = physical_devices[i];
                 best_device_rank = rank;
             }
@@ -1088,6 +1143,8 @@ VD(b32) VDF(vk_pick_physical_device)(VD(Arena) *temp, VD(VkPickPhysicalDeviceInf
     if (best_device_index < 0) {
         return VD_FALSE;
     }
+
+    LOGF("vd_vk_pick_physical_device: Selected device: %d", (VD(i32))best_device_index);
 
     *info->result.physical_device = best_device_physical_device;
     *info->result.selected_characteristics_index = (VD(i32))best_device_index;
@@ -1412,9 +1469,9 @@ void VDF(vk_create_device_and_queues)(VD(Arena) *temp, VD(VkCreateDeviceAndQueue
 
     VD_VK_CHECK(vkCreateDevice(info->characteristics->physical_device, & (VkDeviceCreateInfo) {
         .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .queueCreateInfoCount    = info->characteristics->num_queue_setups,
+        .queueCreateInfoCount    = (VD(u32))info->characteristics->num_queue_setups,
         .pQueueCreateInfos       = queue_create_infos,
-        .enabledExtensionCount   = info->characteristics->num_extensions,
+        .enabledExtensionCount   = (VD(u32))info->characteristics->num_extensions,
         .ppEnabledExtensionNames = (const char * const *)info->characteristics->extensions,
         .pNext                   = &features,
     }, 0, info->result.device));
@@ -1450,7 +1507,7 @@ void VDF(vk_create_swapchain_and_fetch_images)(VD(Arena) *a, VD(VkCreateSwapchai
         .imageColorSpace       = info->surface_format.colorSpace,
         .imageExtent           = info->extent,
         .imageArrayLayers      = 1,
-        .imageUsage            = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .imageUsage            = info->image_usage,
         // @note(mdodis): This could be VK_SHARING_MODE_CONCURRENT if present and graphics queue families are the same
         .imageSharingMode      = VK_SHARING_MODE_EXCLUSIVE,
         .queueFamilyIndexCount = 0,
@@ -1508,6 +1565,39 @@ void VDF(vk_create_image_views)(VD(Arena) *a, VD(VkCreateImageViewsInfo) *info)
     *info->result.image_views = views;
 }
 
+void VDF(vk_cmd_image_transition)(VkCommandBuffer cmd, VD(VkCmdImageTransitionInfo) *info)
+{
+    vkCmdPipelineBarrier(
+        cmd,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        0,                           // VkDependencyFlagBits
+        0,                           // memoryBarrierCount,
+        0,                           // pMemoryBarriers,
+        0,                           // bufferMemoryBarrierCount,
+        0,                           // pBufferMemoryBarriers,
+        1,                           // imageMemoryBarrierCount,
+        (VkImageMemoryBarrier []) {
+            {
+                .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                .srcAccessMask       = VK_ACCESS_MEMORY_WRITE_BIT,
+                .dstAccessMask       = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT,
+                .oldLayout           = info->current_layout,
+                .newLayout           = info->target_layout,
+                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .image               = info->image,
+                .subresourceRange    = {
+                    .aspectMask      = info->aspect,
+                    .baseMipLevel    = info->base_mip_level,
+                    .levelCount      = info->level_count,
+                    .baseArrayLayer  = info->base_array_layer,
+                    .layerCount      = info->layer_count,
+                },
+            },
+        });
+}
+
 void VDF(vk_destroy_image_views)(VkDevice device, VD(u32) num_image_views, VkImageView *image_views)
 {
     for (VD(u32) i = 0; i < num_image_views; ++i) {
@@ -1527,6 +1617,76 @@ void VDF(vk_destroy_semaphores)(VkDevice device, VD(u32) num_semaphores, VkSemap
     for (VD(u32) i = 0; i < num_semaphores; ++i) {
         vkDestroySemaphore(device, semaphores[i], 0);
     }
+}
+
+/* ----IMMEDIATE COMMANDS IMPL--------------------------------------------------------------------------------------- */
+void VDF(vk_immediate_commands_init)(VD(VkImmediateCommands) *cmds, VD(VkImmediateCommandsInitInfo) *info)
+{
+    cmds->device = info->device;
+    cmds->recording = VD_FALSE;
+    cmds->queue = info->queue;
+
+    VD_VK_CHECK(vkCreateCommandPool(info->device, & (VkCommandPoolCreateInfo) {
+        .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .queueFamilyIndex = info->queue_family_index,
+    }, 0, &cmds->pool));
+
+    VD_VK_CHECK(vkAllocateCommandBuffers(info->device, & (VkCommandBufferAllocateInfo) {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = cmds->pool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1,
+    }, &cmds->buffer));
+
+    VD_VK_CHECK(vkCreateFence(info->device, & (VkFenceCreateInfo) {
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        .flags = 0,
+    }, 0, &cmds->fence));
+}
+
+VkCommandBuffer VDF(vk_immediate_commands_begin)(VD(VkImmediateCommands) *cmds)
+{
+    if (cmds->recording) {
+        VD_ASSERT(0 && "Cannot call vk_immediate_commands_begin without having called vk_immediate_commands_end in the past!");
+    }
+    VD_VK_CHECK(vkResetFences(cmds->device, 1, &cmds->fence));
+    VD_VK_CHECK(vkResetCommandBuffer(cmds->buffer, 0));
+
+    VD_VK_CHECK(vkBeginCommandBuffer(cmds->buffer, & (VkCommandBufferBeginInfo) {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+    }));
+
+    cmds->recording = VD_TRUE;
+    return cmds->buffer;
+}
+
+void VDF(vk_immediate_commands_end)(VD(VkImmediateCommands) *cmds)
+{
+    if (!cmds->recording) {
+        VD_ASSERT(0 && "Cannot call vk_immediate_commands_end without having called vk_immediate_commands_begin in the past!");
+    }
+
+    VD_VK_CHECK(vkEndCommandBuffer(cmds->buffer));
+
+    VD_VK_CHECK(vkQueueSubmit(cmds->queue, 1, & (VkSubmitInfo) {
+        .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount   = 1,
+        .pCommandBuffers       = (VkCommandBuffer[]) {
+            cmds->buffer,
+        },
+    }, cmds->fence));
+
+    VD_VK_CHECK(vkWaitForFences(cmds->device, 1, &cmds->fence, 1, 99999999));
+
+    cmds->recording = VD_FALSE;
+}
+
+void VDF(vk_immediate_commands_deinit)(VD(VkImmediateCommands) *cmds)
+{
+    vkDestroyCommandPool(cmds->device, cmds->pool, 0);
+    vkDestroyFence(cmds->device, cmds->fence, 0);
 }
 
 /* ----AMD VMA TRACKING IMPL----------------------------------------------------------------------------------------- */
@@ -1569,6 +1729,10 @@ struct {
 
 void VDI(vk_vma_track_allocation)(VmaAllocator allocator, VmaAllocation allocation, const char *file, int filelen, int line)
 {
+    VD_UNUSED(allocator);
+    VD_UNUSED(allocation);
+    VD_TODO();
+
     const VD(usize) allocation_size = sizeof(VDI(VkVmaTrackingEntry)) * VD_VK_VMA_MAX_ENTRIES;
     if (VDI(Vk_Vma_Tracking).entries == 0) {
         VDI(Vk_Vma_Tracking).sentinel.n = &VDI(Vk_Vma_Tracking).sentinel;
@@ -1620,7 +1784,7 @@ void VDI(vk_vma_release_allocation)(VmaAllocator allocator, VmaAllocation alloca
     S->n = R;
 }
 
-void VDI(vk_vma_check_allocations)() {
+void VDI(vk_vma_check_allocations)(void) {
     VDI(VkVmaTrackingEntry) *S = &VDI(Vk_Vma_Tracking).sentinel;
     VDI(VkVmaTrackingEntry) *n = VDI(Vk_Vma_Tracking).sentinel.n;
     while (n != S) {
@@ -1755,7 +1919,7 @@ static VDI(VkGrowableDescriptorAllocatorPool) *VDI(vk_growable_descriptor_alloca
     for (VD(u32) i = 0; i < num_pool_sizes; ++i) {
         pool_sizes[i]        = (VkDescriptorPoolSize) {
             .type            = desc_alloc->ratios[i].type,
-            .descriptorCount = desc_alloc->ratios[i].ratio * max_sets,
+            .descriptorCount = (VD(u32))(desc_alloc->ratios[i].ratio * max_sets),
         };
     }
 

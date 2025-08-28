@@ -209,7 +209,7 @@ void VDI(inix_advance_n)(VDI(InixContext) *c, VD(usize) n) {
 
 void VDI(inix_eat_spaces)(VDI(InixContext) *c) {
     int i = VDI(inix_char)(c);
-    while (i == ' ' || i == '\t') {
+    while (i == ' ' || i == '\t' || i == '\r') {
         VDI(inix_advance)(c);
         i = VDI(inix_char)(c);
     }
@@ -312,6 +312,7 @@ VD(b32) VDI(inix_try_parse_cdecl)(VDI(InixContext) *context, VD(u64) *cursor_beg
 VDI(InixLexToken) VDI(inix_peek_token)(VDI(InixContext) *context) {
     VDI(inix_eat_spaces)(context);
     VDI(inix_eat_comments)(context);
+    VDI(inix_eat_spaces)(context);
 
     VDI(InixLexState) save = VDI(inix_save_state)(context);
 
@@ -375,7 +376,8 @@ VDI(InixLexToken) VDI(inix_peek_token)(VDI(InixContext) *context) {
 void VDI(inix_consume_token)(VDI(InixContext) *context, VDI(InixLexToken) token) {
     if (context->debug_log_tokens) {
         VD(Str) s = {&context->contents.s[token.lexstate.cursor_from] , token.lexstate.cursor - token.lexstate.cursor_from};
-        VD(Str) tstr;
+        VD(Str) tstr = {0};
+        
         switch (token.type) {
             case VDI(INIX_LEX_TOKEN_INVALID):       tstr = VD_LIT("INIX_LEX_TOKEN_INVALID"); break;
             case VDI(INIX_LEX_TOKEN_BEGIN_SECTION): tstr = VD_LIT("INIX_LEX_TOKEN_BEGIN_SECTION"); break;
@@ -601,6 +603,11 @@ VD(b32) VDI(inix_parse_statement)(VDI(InixContext) *context)
 {
     VDI(InixLexToken) first = VDI(inix_peek_token)(context);    
 
+    VD(Str) first_string = {
+        &context->contents.s[first.lexstate.cursor_from],
+        first.lexstate.cursor - first.lexstate.cursor_from,
+    };
+
     if (first.type == VDI(INIX_LEX_TOKEN_END)) {
         VDI(inix_consume_token)(context, first);
         return VD_TRUE;
@@ -620,14 +627,15 @@ VD(b32) VDI(inix_parse_statement)(VDI(InixContext) *context)
     }
 
 
-    VD_ERRF("%d:%d: Expected INIX_LEX_TOKEN_BEGIN_SECTION or INIX_LEX_TOKEN_ENUMERATION, instead got: %s",
+    VD_ERRF("%d:%d: Expected INIX_LEX_TOKEN_BEGIN_SECTION or INIX_LEX_TOKEN_ENUMERATION, instead got: %s, %.*s",
         first.lexstate.line, first.lexstate.column,
-        VDI(inix_lex_token_type_str)(first.type));
+        VDI(inix_lex_token_type_str)(first.type),
+        VD_STR_EXPAND(first_string));
 
     return VD_FALSE;
 }
 
-static VD(Str) VDI(Inix_Global_Section_Name) = VD_LIT(".global");
+static VD(Str) VDI(Inix_Global_Section_Name) = VD_LIT_INLINE(".global");
 
 VD(InixResult) VDF(inix_parse)(VD(Arena) *arena, VD(InixParseInfo) *info)
 {
