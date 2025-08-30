@@ -1,3 +1,7 @@
 build-*/
 **/*.sublime-project
 **/*.sublime-workspace
+*.ilk
+*.pdb
+*.obj
+*.exe
