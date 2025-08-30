@@ -34,11 +34,11 @@
 
 /* ----FORMATS------------------------------------------------------------------------------------------------------- */
 #ifndef VD_CGLA_FORMAT_NAME
-#define VD_CGLA_FORMAT_NAME(f) VD_(VD_STRING_JOIN2(CGLA_,f))
+#define VD_CGLA_FORMAT_NAME(f) VD_STRING_JOIN2(VD_CGLA_,f)
 #endif // !VD_CGLA_FORMAT_NAME
 
 #ifndef VD_CGLA_FORMAT_TYPE
-#define VD_CGLA_FORMAT_TYPE VD(CGLAFormat)
+#define VD_CGLA_FORMAT_TYPE VdCGLAFormat
 #endif // !VD_CGLA_FORMAT_TYPE
 
 #define VD_CGLA_ALL_FORMATS \
@@ -315,9 +315,9 @@ typedef enum {
 #undef X
 } VD_CGLA_FORMAT_TYPE;
 
-static VD_INLINE VD(Str) VDF(cgla_format_to_str)(VD_CGLA_FORMAT_TYPE type)
+static VD_INLINE VdStr vd_cgla_format_to_str(VD_CGLA_FORMAT_TYPE type)
 {
-    static VD(Str) table[VD_CGLA_FORMAT_NAME(FORMAT_MAX) + 1] = {
+    static VdStr table[VD_CGLA_FORMAT_NAME(FORMAT_MAX) + 1] = {
 #define X(f) VD_LIT_INLINE(#f),
         VD_CGLA_ALL_FORMATS
 #undef X
@@ -325,13 +325,17 @@ static VD_INLINE VD(Str) VDF(cgla_format_to_str)(VD_CGLA_FORMAT_TYPE type)
     return table[type];
 }
 
+#if VD_MACRO_ABBREVIATIONS
+#define cgla_format_to_str  vd_cgla_format_to_str 
+#endif
+
 /* ----PRIMITIVE TOPOLOGIES------------------------------------------------------------------------------------------ */
 #ifndef VD_CGLA_PRIMITIVE_TOPOLOGY_NAME
-#define VD_CGLA_PRIMITIVE_TOPOLOGY_NAME(f) VD_(VD_STRING_JOIN2(CGLA_, f))
+#define VD_CGLA_PRIMITIVE_TOPOLOGY_NAME(f) VD_STRING_JOIN2(VD_CGLA_, f)
 #endif // !VD_CGLA_PRIMITIVE_TOPOLOGY_NAME
 
 #ifndef VD_CGLA_PRIMITIVE_TOPOLOGY_TYPE
-#define VD_CGLA_PRIMITIVE_TOPOLOGY_TYPE VD(CGLAPrimitiveTopology)
+#define VD_CGLA_PRIMITIVE_TOPOLOGY_TYPE VdCGLAPrimitiveTopology
 #endif // !VD_CGLA_PRIMITIVE_TOPOLOGY_TYPE
 
 #define VD_CGLA_ALL_PRIMITIVE_TOPOLOGIES \
@@ -350,9 +354,9 @@ typedef enum {
 #undef X
 } VD_CGLA_PRIMITIVE_TOPOLOGY_TYPE;
 
-static VD_INLINE VD(Str) VDF(cgla_primitive_topology_to_str)(VD_CGLA_PRIMITIVE_TOPOLOGY_TYPE type)
+static VD_INLINE VdStr vd_cgla_primitive_topology_to_str(VD_CGLA_PRIMITIVE_TOPOLOGY_TYPE type)
 {
-    static VD(Str) table[VD_CGLA_PRIMITIVE_TOPOLOGY_NAME(PRIMITIVE_TOPOLOGY_MAX) + 1] = {
+    static VdStr table[VD_CGLA_PRIMITIVE_TOPOLOGY_NAME(PRIMITIVE_TOPOLOGY_MAX) + 1] = {
 #define X(f) VD_LIT_INLINE(#f),
         VD_CGLA_ALL_PRIMITIVE_TOPOLOGIES
 #undef X
@@ -360,13 +364,17 @@ static VD_INLINE VD(Str) VDF(cgla_primitive_topology_to_str)(VD_CGLA_PRIMITIVE_T
     return table[type];
 }
 
+#if VD_MACRO_ABBREVIATIONS
+#define cgla_primitive_topology_to_str  vd_cgla_primitive_topology_to_str 
+#endif // VD_MACRO_ABBREVIATIONS
+
 /* ----POLYGON MODES------------------------------------------------------------------------------------------------- */
 #ifndef VD_CGLA_POLYGON_MODE_NAME
-#define VD_CGLA_POLYGON_MODE_NAME(f) VD_(VD_STRING_JOIN2(CGLA_, f))
+#define VD_CGLA_POLYGON_MODE_NAME(f) VD_STRING_JOIN2(VD_CGLA_, f)
 #endif // !VD_CGLA_POLYGON_MODE_NAME
 
 #ifndef VD_CGLA_POLYGON_MODE_TYPE
-#define VD_CGLA_POLYGON_MODE_TYPE VD(CGLAPolygonMode)
+#define VD_CGLA_POLYGON_MODE_TYPE VdCGLAPolygonMode
 #endif // !VD_CGLA_POLYGON_MODE_TYPE
 
 #define VD_CGLA_ALL_POLYGON_MODES \
@@ -382,9 +390,9 @@ typedef enum {
 #undef X
 } VD_CGLA_POLYGON_MODE_TYPE;
 
-static VD_INLINE VD(Str) VDF(cgla_polygon_mode_to_str)(VD_CGLA_POLYGON_MODE_TYPE type)
+static VD_INLINE VdStr vd_cgla_polygon_mode_to_str(VD_CGLA_POLYGON_MODE_TYPE type)
 {
-    static VD(Str) table[VD_CGLA_POLYGON_MODE_NAME(POLYGON_MODE_MAX) + 1] = {
+    static VdStr table[VD_CGLA_POLYGON_MODE_NAME(POLYGON_MODE_MAX) + 1] = {
 #define X(f) VD_LIT_INLINE(#f),
         VD_CGLA_ALL_POLYGON_MODES
 #undef X
@@ -392,13 +400,17 @@ static VD_INLINE VD(Str) VDF(cgla_polygon_mode_to_str)(VD_CGLA_POLYGON_MODE_TYPE
     return table[type];
 }
 
+#if VD_MACRO_ABBREVIATIONS
+#define cgla_polygon_mode_to_str  vd_cgla_polygon_mode_to_str 
+#endif // VD_MACRO_ABBREVIATIONS
+
 /* ----CULL MODES---------------------------------------------------------------------------------------------------- */
 #ifndef VD_CGLA_CULL_MODE_NAME
-#define VD_CGLA_CULL_MODE_NAME(f) VD_(VD_STRING_JOIN2(CGLA_,f))
+#define VD_CGLA_CULL_MODE_NAME(f) VD_STRING_JOIN2(VD_CGLA_,f)
 #endif // !VD_CGLA_CULL_MODE_NAME
 
 #ifndef VD_CGLA_CULL_MODE_TYPE
-#define VD_CGLA_CULL_MODE_TYPE VD(CGLACullMode)
+#define VD_CGLA_CULL_MODE_TYPE VdCGLACullMode
 #endif // !VD_CGLA_CULL_MODE_TYPE
 
 #define VD_CGLA_ALL_CULL_MODES \
@@ -415,9 +427,9 @@ typedef enum {
 #undef X
 } VD_CGLA_CULL_MODE_TYPE;
 
-static VD_INLINE VD(Str) VDF(cgla_cull_mode_to_str)(VD_CGLA_CULL_MODE_TYPE type)
+static VD_INLINE VdStr vd_cgla_cull_mode_to_str(VD_CGLA_CULL_MODE_TYPE type)
 {
-    static VD(Str) table[VD_CGLA_CULL_MODE_NAME(CULL_MODE_MAX) + 1] = {
+    static VdStr table[VD_CGLA_CULL_MODE_NAME(CULL_MODE_MAX) + 1] = {
 #define X(f) VD_LIT_INLINE(#f),
         VD_CGLA_ALL_CULL_MODES
 #undef X
@@ -425,13 +437,17 @@ static VD_INLINE VD(Str) VDF(cgla_cull_mode_to_str)(VD_CGLA_CULL_MODE_TYPE type)
     return table[type];
 }
 
+#if VD_MACRO_ABBREVIATIONS
+#define cgla_cull_mode_to_str  vd_cgla_cull_mode_to_str 
+#endif // VD_MACRO_ABBREVIATIONS
+
 /* ----FRONT FACES--------------------------------------------------------------------------------------------------- */
 #ifndef VD_CGLA_FRONT_FACE_NAME
-#define VD_CGLA_FRONT_FACE_NAME(f) VD_(VD_STRING_JOIN2(CGLA_,f))
+#define VD_CGLA_FRONT_FACE_NAME(f) VD_STRING_JOIN2(VD_CGLA_,f)
 #endif // !VD_CGLA_FRONT_FACE_NAME
 
 #ifndef VD_CGLA_FRONT_FACE_TYPE
-#define VD_CGLA_FRONT_FACE_TYPE VD(CGLAFrontFace)
+#define VD_CGLA_FRONT_FACE_TYPE VdCGLAFrontFace
 #endif // !VD_CGLA_FRONT_FACE_TYPE
 
 #define VD_CGLA_ALL_FRONT_FACES \
@@ -446,9 +462,9 @@ typedef enum {
 #undef X
 } VD_CGLA_FRONT_FACE_TYPE;
 
-static VD_INLINE VD(Str) VDF(cgla_front_face_to_str)(VD_CGLA_FRONT_FACE_TYPE type)
+static VD_INLINE VdStr vd_cgla_front_face_to_str(VD_CGLA_FRONT_FACE_TYPE type)
 {
-    static VD(Str) table[VD_CGLA_FRONT_FACE_NAME(FRONT_FACE_MAX) + 1] = {
+    static VdStr table[VD_CGLA_FRONT_FACE_NAME(FRONT_FACE_MAX) + 1] = {
 #define X(f) VD_LIT_INLINE(#f),
         VD_CGLA_ALL_FRONT_FACES
 #undef X
@@ -456,13 +472,17 @@ static VD_INLINE VD(Str) VDF(cgla_front_face_to_str)(VD_CGLA_FRONT_FACE_TYPE typ
     return table[type];
 }
 
+#if VD_MACRO_ABBREVIATIONS
+#define cgla_front_face_to_str  vd_cgla_front_face_to_str 
+#endif // VD_MACRO_ABBREVIATIONS
+
 /* ----COMPARE OPERATORS--------------------------------------------------------------------------------------------- */
 #ifndef VD_CGLA_COMPARE_OPERATOR_NAME
-#define VD_CGLA_COMPARE_OPERATOR_NAME(f) VD_(VD_STRING_JOIN2(CGLA_,f))
+#define VD_CGLA_COMPARE_OPERATOR_NAME(f) VD_STRING_JOIN2(VD_CGLA_,f)
 #endif // !VD_CGLA_COMPARE_OPERATOR_NAME
 
 #ifndef VD_CGLA_COMPARE_OPERATOR_TYPE
-#define VD_CGLA_COMPARE_OPERATOR_TYPE VD(CGLACompareOperator)
+#define VD_CGLA_COMPARE_OPERATOR_TYPE VdCGLACompareOperator
 #endif // !VD_CGLA_COMPARE_OPERATOR_TYPE
 
 #define VD_CGLA_ALL_COMPARE_OPERATORS \
@@ -482,9 +502,9 @@ typedef enum {
 #undef X
 } VD_CGLA_COMPARE_OPERATOR_TYPE;
 
-static VD_INLINE VD(Str) VDF(cgla_depth_compare_operator_to_str)(VD_CGLA_COMPARE_OPERATOR_TYPE type)
+static VD_INLINE VdStr vd_cgla_depth_compare_operator_to_str(VD_CGLA_COMPARE_OPERATOR_TYPE type)
 {
-    static VD(Str) table[VD_CGLA_COMPARE_OPERATOR_NAME(COMPARE_OPERATOR_MAX) + 1] = {
+    static VdStr table[VD_CGLA_COMPARE_OPERATOR_NAME(COMPARE_OPERATOR_MAX) + 1] = {
 #define X(f) VD_LIT_INLINE(#f),
         VD_CGLA_ALL_COMPARE_OPERATORS
 #undef X
@@ -492,13 +512,17 @@ static VD_INLINE VD(Str) VDF(cgla_depth_compare_operator_to_str)(VD_CGLA_COMPARE
     return table[type];
 }
 
+#if VD_MACRO_ABBREVIATIONS
+#define cgla_depth_compare_operator_to_str  vd_cgla_depth_compare_operator_to_str 
+#endif // VD_MACRO_ABBREVIATIONS
+
 /* ----IMAGE LAYOUTS------------------------------------------------------------------------------------------------- */
 #ifndef VD_CGLA_IMAGE_LAYOUT_NAME
-#define VD_CGLA_IMAGE_LAYOUT_NAME(f) VD_(VD_STRING_JOIN2(CGLA_, f))
+#define VD_CGLA_IMAGE_LAYOUT_NAME(f) VD_STRING_JOIN2(VD_CGLA_, f)
 #endif // !VD_CGLA_IMAGE_LAYOUT_NAME
 
 #ifndef VD_CGLA_IMAGE_LAYOUT_TYPE
-#define VD_CGLA_IMAGE_LAYOUT_TYPE VD(CGLAImageLayout)
+#define VD_CGLA_IMAGE_LAYOUT_TYPE VdCGLAImageLayout
 #endif // !VD_CGLA_IMAGE_LAYOUT_TYPE
 
 #define VD_CGLA_ALL_IMAGE_LAYOUTS                              \
@@ -521,10 +545,10 @@ static VD_INLINE VD(Str) VDF(cgla_depth_compare_operator_to_str)(VD_CGLA_COMPARE
     X(IMAGE_LAYOUT_READ_ONLY_OPTIMAL)                          \
     X(IMAGE_LAYOUT_ATTACHMENT_OPTIMAL)                         \
     X(IMAGE_LAYOUT_RENDERING_LOCAL_READ)                       \
-    X(IMAGE_LAYOUT_PRESENT_SRC_KHR)                            \
-    X(IMAGE_LAYOUT_VIDEO_DECODE_DST_KHR)                       \
-    X(IMAGE_LAYOUT_VIDEO_DECODE_SRC_KHR)                       \
-    X(IMAGE_LAYOUT_VIDEO_DECODE_DPB_KHR)                       \
+    X(IMAGE_LAYOUT_PRESENT_SRC)                                \
+    X(IMAGE_LAYOUT_VIDEO_DECODE_DST)                           \
+    X(IMAGE_LAYOUT_VIDEO_DECODE_SRC)                           \
+    X(IMAGE_LAYOUT_VIDEO_DECODE_DPB)                           \
     X(IMAGE_LAYOUT_MAX)
 
 typedef enum {
@@ -533,15 +557,19 @@ typedef enum {
 #undef X
 } VD_CGLA_IMAGE_LAYOUT_TYPE;
 
-static VD_INLINE VD(Str) VDF(cgla_image_layout_to_str)(VD_CGLA_IMAGE_LAYOUT_TYPE type)
+static VD_INLINE VdStr vd_cgla_image_layout_to_str(VD_CGLA_IMAGE_LAYOUT_TYPE type)
 {
-    static VD(Str) table[VD_CGLA_IMAGE_LAYOUT_NAME(IMAGE_LAYOUT_MAX) + 1] = {
+    static VdStr table[VD_CGLA_IMAGE_LAYOUT_NAME(IMAGE_LAYOUT_MAX) + 1] = {
 #define X(f) VD_LIT_INLINE(#f),
         VD_CGLA_ALL_IMAGE_LAYOUTS
 #undef X
     };
     return table[type];
 }
+
+#if VD_MACRO_ABBREVIATIONS
+#define cgla_image_layout_to_str  vd_cgla_image_layout_to_str 
+#endif // VD_MACRO_ABBREVIATIONS
 
 #endif // !VD_CGLA_H
 
@@ -551,7 +579,7 @@ static VD_INLINE VD(Str) VDF(cgla_image_layout_to_str)(VD_CGLA_IMAGE_LAYOUT_TYPE
 #endif
 
 /* ----VK FORMAT----------------------------------------------------------------------------------------------------- */
-static VD_INLINE VkFormat VDF(cgla_format_to_vk_format)(VD_CGLA_FORMAT_TYPE format)
+static VD_INLINE VkFormat vd_cgla_format_to_vk_format(VD_CGLA_FORMAT_TYPE format)
 {
     static VkFormat translation_table[VD_CGLA_FORMAT_NAME(FORMAT_MAX)] = {
         [VD_CGLA_FORMAT_NAME(FORMAT_UNKNOWN)]                                       = VK_FORMAT_UNDEFINED,
@@ -824,8 +852,12 @@ static VD_INLINE VkFormat VDF(cgla_format_to_vk_format)(VD_CGLA_FORMAT_TYPE form
     return translation_table[format];
 }
 
+#if VD_MACRO_ABBREVIATIONS
+#define cgla_format_to_vk_format  vd_cgla_format_to_vk_format 
+#endif // VD_MACRO_ABBREVIATIONS
+
 /* ----VK PRIMITIVE TOPOLOGY----------------------------------------------------------------------------------------- */
-static VD_INLINE VkPrimitiveTopology VDF(cgla_primitive_topology_to_vk_primitive_topology)(VD_CGLA_PRIMITIVE_TOPOLOGY_TYPE type)
+static VD_INLINE VkPrimitiveTopology vd_cgla_primitive_topology_to_vk_primitive_topology(VD_CGLA_PRIMITIVE_TOPOLOGY_TYPE type)
 {
     static VkPrimitiveTopology translation_table[VD_CGLA_PRIMITIVE_TOPOLOGY_NAME(PRIMITIVE_TOPOLOGY_MAX)] = {
         [VD_CGLA_PRIMITIVE_TOPOLOGY_NAME(PRIMITIVE_TOPOLOGY_POINT_LIST)]     = VK_PRIMITIVE_TOPOLOGY_POINT_LIST,
@@ -839,8 +871,12 @@ static VD_INLINE VkPrimitiveTopology VDF(cgla_primitive_topology_to_vk_primitive
     return translation_table[type];
 }
 
+#if VD_MACRO_ABBREVIATIONS
+#define cgla_primitive_topology_to_vk_primitive_topology  vd_cgla_primitive_topology_to_vk_primitive_topology 
+#endif // VD_MACRO_ABBREVIATIONS
+
 /* ----VK POLYGON MODE----------------------------------------------------------------------------------------------- */
-static VD_INLINE VkPolygonMode VDF(cgla_polygon_mode_to_vk_polygon_mode)(VD_CGLA_POLYGON_MODE_TYPE type)
+static VD_INLINE VkPolygonMode vd_cgla_polygon_mode_to_vk_polygon_mode(VD_CGLA_POLYGON_MODE_TYPE type)
 {
     static VkPolygonMode translation_table[VD_CGLA_POLYGON_MODE_NAME(POLYGON_MODE_MAX)] = {
         [VD_CGLA_POLYGON_MODE_NAME(POLYGON_MODE_FILL)]  = VK_POLYGON_MODE_FILL,
@@ -851,8 +887,12 @@ static VD_INLINE VkPolygonMode VDF(cgla_polygon_mode_to_vk_polygon_mode)(VD_CGLA
     return translation_table[type];
 }
 
+#if VD_MACRO_ABBREVIATIONS
+#define cgla_polygon_mode_to_vk_polygon_mode  vd_cgla_polygon_mode_to_vk_polygon_mode 
+#endif // VD_MACRO_ABBREVIATIONS
+
 /* ----VK CULL MODE FLAGS-------------------------------------------------------------------------------------------- */
-static VD_INLINE VkCullModeFlags VDF(cgla_cull_mode_to_vk_cull_mode_flags)(VD_CGLA_CULL_MODE_TYPE type)
+static VD_INLINE VkCullModeFlags vd_cgla_cull_mode_to_vk_cull_mode_flags(VD_CGLA_CULL_MODE_TYPE type)
 {
     static VkCullModeFlags translation_table[VD_CGLA_CULL_MODE_NAME(CULL_MODE_MAX)] = {
         [VD_CGLA_CULL_MODE_NAME(CULL_MODE_NONE)]           = VK_CULL_MODE_NONE,
@@ -864,8 +904,12 @@ static VD_INLINE VkCullModeFlags VDF(cgla_cull_mode_to_vk_cull_mode_flags)(VD_CG
     return translation_table[type];
 }
 
+#if VD_MACRO_ABBREVIATIONS
+#define cgla_cull_mode_to_vk_cull_mode_flags  vd_cgla_cull_mode_to_vk_cull_mode_flags 
+#endif // VD_MACRO_ABBREVIATIONS
+
 /* ----VK FRONT FACE------------------------------------------------------------------------------------------------- */
-static VD_INLINE VkFrontFace VDF(cgla_front_face_to_vk_front_face)(VD_CGLA_FRONT_FACE_TYPE type)
+static VD_INLINE VkFrontFace vd_cgla_front_face_to_vk_front_face(VD_CGLA_FRONT_FACE_TYPE type)
 {
     static VkFrontFace translation_table[VD_CGLA_FRONT_FACE_NAME(FRONT_FACE_MAX)] = {
         [VD_CGLA_FRONT_FACE_NAME(FRONT_FACE_COUNTER_CLOCKWISE)] = VK_FRONT_FACE_COUNTER_CLOCKWISE,
@@ -875,8 +919,12 @@ static VD_INLINE VkFrontFace VDF(cgla_front_face_to_vk_front_face)(VD_CGLA_FRONT
     return translation_table[type];
 }
 
+#if VD_MACRO_ABBREVIATIONS
+#define cgla_front_face_to_vk_front_face  vd_cgla_front_face_to_vk_front_face 
+#endif // VD_MACRO_ABBREVIATIONS
+
 /* ----VK COMPARE OP------------------------------------------------------------------------------------------------- */
-static VD_INLINE VkCompareOp VDF(cgla_compare_operator_to_vk_compare_op)(VD_CGLA_COMPARE_OPERATOR_TYPE type)
+static VD_INLINE VkCompareOp vd_cgla_compare_operator_to_vk_compare_op(VD_CGLA_COMPARE_OPERATOR_TYPE type)
 {
     static VkCompareOp translation_table[VD_CGLA_COMPARE_OPERATOR_NAME(COMPARE_OPERATOR_MAX)] = {
         [VD_CGLA_COMPARE_OPERATOR_NAME(COMPARE_OPERATOR_NEVER)]   = VK_COMPARE_OP_NEVER,
@@ -891,8 +939,12 @@ static VD_INLINE VkCompareOp VDF(cgla_compare_operator_to_vk_compare_op)(VD_CGLA
     return translation_table[type];
 }
 
+#if VD_MACRO_ABBREVIATIONS
+#define cgla_compare_operator_to_vk_compare_op  vd_cgla_compare_operator_to_vk_compare_op 
+#endif // VD_MACRO_ABBREVIATIONS
+
 /* ----VK IMAGE LAYOUT----------------------------------------------------------------------------------------------- */
-static VD_INLINE VkImageLayout VDF(cgla_image_layout_to_vk_image_layout)(VD_CGLA_IMAGE_LAYOUT_TYPE type)
+static VD_INLINE VkImageLayout vd_cgla_image_layout_to_vk_image_layout(VD_CGLA_IMAGE_LAYOUT_TYPE type)
 {
     static VkImageLayout translation_table[VD_CGLA_IMAGE_LAYOUT_NAME(IMAGE_LAYOUT_MAX)] = {
         [VD_CGLA_IMAGE_LAYOUT_NAME(IMAGE_LAYOUT_UNDEFINED)]                                  = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -913,13 +965,17 @@ static VD_INLINE VkImageLayout VDF(cgla_image_layout_to_vk_image_layout)(VD_CGLA
         [VD_CGLA_IMAGE_LAYOUT_NAME(IMAGE_LAYOUT_READ_ONLY_OPTIMAL)]                          = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
         [VD_CGLA_IMAGE_LAYOUT_NAME(IMAGE_LAYOUT_ATTACHMENT_OPTIMAL)]                         = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
         [VD_CGLA_IMAGE_LAYOUT_NAME(IMAGE_LAYOUT_RENDERING_LOCAL_READ)]                       = VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ,
-        [VD_CGLA_IMAGE_LAYOUT_NAME(IMAGE_LAYOUT_PRESENT_SRC_KHR)]                            = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        [VD_CGLA_IMAGE_LAYOUT_NAME(IMAGE_LAYOUT_VIDEO_DECODE_DST_KHR)]                       = VK_IMAGE_LAYOUT_VIDEO_DECODE_DST_KHR,
-        [VD_CGLA_IMAGE_LAYOUT_NAME(IMAGE_LAYOUT_VIDEO_DECODE_SRC_KHR)]                       = VK_IMAGE_LAYOUT_VIDEO_DECODE_SRC_KHR,
-        [VD_CGLA_IMAGE_LAYOUT_NAME(IMAGE_LAYOUT_VIDEO_DECODE_DPB_KHR)]                       = VK_IMAGE_LAYOUT_VIDEO_DECODE_DPB_KHR,
+        [VD_CGLA_IMAGE_LAYOUT_NAME(IMAGE_LAYOUT_PRESENT_SRC)]                                = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        [VD_CGLA_IMAGE_LAYOUT_NAME(IMAGE_LAYOUT_VIDEO_DECODE_DST)]                           = VK_IMAGE_LAYOUT_VIDEO_DECODE_DST_KHR,
+        [VD_CGLA_IMAGE_LAYOUT_NAME(IMAGE_LAYOUT_VIDEO_DECODE_SRC)]                           = VK_IMAGE_LAYOUT_VIDEO_DECODE_SRC_KHR,
+        [VD_CGLA_IMAGE_LAYOUT_NAME(IMAGE_LAYOUT_VIDEO_DECODE_DPB)]                           = VK_IMAGE_LAYOUT_VIDEO_DECODE_DPB_KHR,
     };
 
     return translation_table[type];
 }
+
+#if VD_MACRO_ABBREVIATIONS
+#define cgla_image_layout_to_vk_image_layout  vd_cgla_image_layout_to_vk_image_layout 
+#endif // VD_MACRO_ABBREVIATIONS
 
 #endif // VD_CGLA_VK_IMPL

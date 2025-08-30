@@ -42,6 +42,14 @@
 #warning "vd_vulkan.h requires vulkan/vk_enum_string_helper.h"
 #endif
 
+#ifndef VD_VK_PROFILE_SCOPE_BEGIN
+#define VD_VK_PROFILE_SCOPE_BEGIN(name)
+#endif // !VD_VK_PROFILE_SCOPE_BEGIN
+
+#ifndef VD_VK_PROFILE_SCOPE_END
+#define VD_VK_PROFILE_SCOPE_END(name)
+#endif // !VD_VK_PROFILE_SCOPE_END
+
 #ifndef VD_VK_MACRO_ABBREVIATIONS
 #define VD_VK_MACRO_ABBREVIATIONS VD_MACRO_ABBREVIATIONS
 #endif // !VD_VK_MACRO_ABBREVIATIONS
@@ -69,49 +77,50 @@
 typedef struct __VD_VK_GetPhysicalDevicePresentationSupportInfo {
     VkInstance          instance;
     VkPhysicalDevice    physical_device;
-    VD(u32)             queue_family_index;
-} VD(VkGetPhysicalDevicePresentationSupportInfo);
+    Vdu32             queue_family_index;
+} VdVkGetPhysicalDevicePresentationSupportInfo;
 
-#define VD_VK_PROC_GET_PHYSICAL_DEVICE_PRESENTATION_SUPPORT(name) VD(b32) name(VD(VkGetPhysicalDevicePresentationSupportInfo) *info)
-typedef VD_VK_PROC_GET_PHYSICAL_DEVICE_PRESENTATION_SUPPORT(VD(VkProcGetPhysicalDevicePresentationSupport));
+#define VD_VK_PROC_GET_PHYSICAL_DEVICE_PRESENTATION_SUPPORT(name) Vdb32 name(VdVkGetPhysicalDevicePresentationSupportInfo *info)
+typedef VD_VK_PROC_GET_PHYSICAL_DEVICE_PRESENTATION_SUPPORT(VdVkProcGetPhysicalDevicePresentationSupport);
 
 typedef struct __VD_VK_CreateWSISurfaceInfo {
     VkInstance instance;
-} VD(VkCreateWSISurfaceInfo);
+} VdVkCreateWSISurfaceInfo;
 
-#define VD_VK_PROC_CREATE_WSI_SURFACE(name) VkResult name(VD(VkCreateWSISurfaceInfo) *info, VkSurfaceKHR *surface)
-typedef VD_VK_PROC_CREATE_WSI_SURFACE(VD(VkProcCreateWSISurface));
+#define VD_VK_PROC_CREATE_WSI_SURFACE(name) VkResult name(VdVkCreateWSISurfaceInfo *info, VkSurfaceKHR *surface)
+typedef VD_VK_PROC_CREATE_WSI_SURFACE(VdVkProcCreateWSISurface);
 
 typedef struct __VD_VK_RequireInstanceExtensionsInfo {
-    VD(usize)       count;
-    const VD(cstr)  *extensions;
-    VD(b32)         log;
-} VD(VkRequireInstanceExtensionsInfo);
+    Vdusize       count;
+    const Vdcstr  *extensions;
+    Vdb32         log;
+} VdVkRequireInstanceExtensionsInfo;
 
 typedef struct __VD_VK_RequireInstanceLayersInfo {
-    VD(usize)       count;
-    const VD(cstr)  *layers;
-} VD(VkRequireInstanceLayersInfo);
+    Vdusize       count;
+    const Vdcstr  *layers;
+} VdVkRequireInstanceLayersInfo;
 
 typedef struct __VD_VK_CreateInstanceExtendedInfo {
-    const VD(cstr)                              app_name;
-    VD(u32)                                     app_version;
-    const VD(cstr)                              engine_name;
-    VD(u32)                                     engine_version; 
-    VD(u32)                                     api_version;
+    const Vdcstr                              app_name;
+    Vdu32                                     app_version;
+    const Vdcstr                              engine_name;
+    Vdu32                                     engine_version; 
+    Vdu32                                     api_version;
 
-    VD(usize)                                   num_instance_extensions;
-    const VD(cstr)                              *instance_extensions;
+    Vdusize                                   num_instance_extensions;
+    const Vdcstr                              *instance_extensions;
 
-    VD(usize)                                   num_instance_layers;
-    const VD(cstr)                              *instance_layers;
+    Vdusize                                   num_instance_layers;
+    const Vdcstr                              *instance_layers;
+    Vdb32                                     enable_validation;
 
-    VkFlags                                     flags;
+    VkFlags                                   flags;
 
     /** Enables debug utils. For this to work "VK_EXT_debug_utils" must in @instance_extensions */
     struct {
-        VD(b32)                                 on;
-        PFN_vkDebugUtilsMessengerCallbackEXT    messenger_callback;
+        Vdb32                                 on;
+        PFN_vkDebugUtilsMessengerCallbackEXT  messenger_callback;
     } debug_utils;
 
     struct {
@@ -121,14 +130,14 @@ typedef struct __VD_VK_CreateInstanceExtendedInfo {
         PFN_vkCmdBeginDebugUtilsLabelEXT *cmd_begin_label;
         PFN_vkCmdEndDebugUtilsLabelEXT   *cmd_end_label;
     } result;
-} VD(VkCreateInstanceExtendedInfo);
+} VdVkCreateInstanceExtendedInfo;
 
 typedef enum {
-    VD_(VK_QUEUE_CAPABILITIES_GRAPHICS) = 1 << 0,
-    VD_(VK_QUEUE_CAPABILITIES_COMPUTE)  = 1 << 1,
-    VD_(VK_QUEUE_CAPABILITIES_TRANSFER) = 1 << 2,
-    VD_(VK_QUEUE_CAPABILITIES_PRESENT)  = 1 << 3,
-} VD(VkQueueCapabilities);
+    VD_VK_QUEUE_CAPABILITIES_GRAPHICS = 1 << 0,
+    VD_VK_QUEUE_CAPABILITIES_COMPUTE  = 1 << 1,
+    VD_VK_QUEUE_CAPABILITIES_TRANSFER = 1 << 2,
+    VD_VK_QUEUE_CAPABILITIES_PRESENT  = 1 << 3,
+} VdVkQueueCapabilities;
 
 /** @doc VkQueueSetup
  * Describes a queue setup that is applied when:
@@ -137,161 +146,161 @@ typedef enum {
  */
 typedef struct __VD_VK_QueueSetup {
     /** The capability bits of the queue family required (or present) */
-    VD(VkQueueCapabilities)     capabilities;
+    VdVkQueueCapabilities     capabilities;
     /** The amount of queues required (or present) */
-    VD(u32)                     required_count;
+    Vdu32                     required_count;
     /** The amount of queues present */
-    VD(u32)                     present_count;
+    Vdu32                     present_count;
     /** The queue family index that matches these requirements */
-    VD(i32)                     cached_index;
-} VD(VkQueueSetup);
+    Vdi32                     cached_index;
+} VdVkQueueSetup;
 
 typedef struct __VD_VK_QueueGroup {
-    VD(u32)     queue_count;
-    VD(VkQueue) *queues;
-} VD(VkQueueGroup);
+    Vdu32     queue_count;
+    VkQueue   *queues;
+} VdVkQueueGroup;
 
 typedef struct __VD_VK_PhysicalDeviceCharacteristics {
     // VkPhysicalDeviceProperties
-    VD(u32)             api_version;
+    Vdu32             api_version;
 
     // VkPhysicalDeviceFeatures
-    VD(b32)             robust_buffer_access;
-    VD(b32)             full_draw_index_uint32;
-    VD(b32)             image_cube_array;
-    VD(b32)             independent_blend;
-    VD(b32)             geometry_shader;
-    VD(b32)             tessellation_shader;
-    VD(b32)             sample_rate_shading;
-    VD(b32)             dual_src_blend;
-    VD(b32)             logic_op;
-    VD(b32)             multi_draw_indirect;
-    VD(b32)             draw_indirect_first_instance;
-    VD(b32)             depth_clamp;
-    VD(b32)             depth_bias_clamp;
-    VD(b32)             fill_mode_non_solid;
-    VD(b32)             depth_bounds;
-    VD(b32)             wide_lines;
-    VD(b32)             large_points;
-    VD(b32)             alpha_to_one;
-    VD(b32)             multi_viewport;
-    VD(b32)             sampler_anisotropy;
-    VD(b32)             texture_compression_etc2;
-    VD(b32)             texture_compression_astc_ldr;
-    VD(b32)             texture_compression_bc;
-    VD(b32)             occlusion_query_precise;
-    VD(b32)             pipeline_statistics_query;
-    VD(b32)             vertex_pipeline_stores_and_atomics;
-    VD(b32)             fragment_stores_and_atomics;
-    VD(b32)             shader_tessellation_and_geometry_point_size;
-    VD(b32)             shader_image_gather_extended;
-    VD(b32)             shader_storage_image_extended_formats;
-    VD(b32)             shader_storage_image_multisample;
-    VD(b32)             shader_storage_image_read_without_format;
-    VD(b32)             shader_storage_image_write_without_format;
-    VD(b32)             shader_uniform_buffer_array_dynamic_indexing;
-    VD(b32)             shader_sampled_image_array_dynamic_indexing;
-    VD(b32)             shader_storage_buffer_array_dynamic_indexing;
-    VD(b32)             shader_storage_image_array_dynamic_indexing;
-    VD(b32)             shader_clip_distance;
-    VD(b32)             shader_cull_distance;
-    VD(b32)             shader_float64;
-    VD(b32)             shader_int64;
-    VD(b32)             shader_int16;
-    VD(b32)             shader_resource_residency;
-    VD(b32)             shader_resource_min_lod;
-    VD(b32)             sparse_binding;
-    VD(b32)             sparse_residency_buffer;
-    VD(b32)             sparse_residency_image2_d;
-    VD(b32)             sparse_residency_image3_d;
-    VD(b32)             sparse_residency2_samples;
-    VD(b32)             sparse_residency4_samples;
-    VD(b32)             sparse_residency8_samples;
-    VD(b32)             sparse_residency16_samples;
-    VD(b32)             sparse_residency_aliased;
-    VD(b32)             variable_multisample_rate;
-    VD(b32)             inherited_queries;
+    Vdb32             robust_buffer_access;
+    Vdb32             full_draw_index_uint32;
+    Vdb32             image_cube_array;
+    Vdb32             independent_blend;
+    Vdb32             geometry_shader;
+    Vdb32             tessellation_shader;
+    Vdb32             sample_rate_shading;
+    Vdb32             dual_src_blend;
+    Vdb32             logic_op;
+    Vdb32             multi_draw_indirect;
+    Vdb32             draw_indirect_first_instance;
+    Vdb32             depth_clamp;
+    Vdb32             depth_bias_clamp;
+    Vdb32             fill_mode_non_solid;
+    Vdb32             depth_bounds;
+    Vdb32             wide_lines;
+    Vdb32             large_points;
+    Vdb32             alpha_to_one;
+    Vdb32             multi_viewport;
+    Vdb32             sampler_anisotropy;
+    Vdb32             texture_compression_etc2;
+    Vdb32             texture_compression_astc_ldr;
+    Vdb32             texture_compression_bc;
+    Vdb32             occlusion_query_precise;
+    Vdb32             pipeline_statistics_query;
+    Vdb32             vertex_pipeline_stores_and_atomics;
+    Vdb32             fragment_stores_and_atomics;
+    Vdb32             shader_tessellation_and_geometry_point_size;
+    Vdb32             shader_image_gather_extended;
+    Vdb32             shader_storage_image_extended_formats;
+    Vdb32             shader_storage_image_multisample;
+    Vdb32             shader_storage_image_read_without_format;
+    Vdb32             shader_storage_image_write_without_format;
+    Vdb32             shader_uniform_buffer_array_dynamic_indexing;
+    Vdb32             shader_sampled_image_array_dynamic_indexing;
+    Vdb32             shader_storage_buffer_array_dynamic_indexing;
+    Vdb32             shader_storage_image_array_dynamic_indexing;
+    Vdb32             shader_clip_distance;
+    Vdb32             shader_cull_distance;
+    Vdb32             shader_float64;
+    Vdb32             shader_int64;
+    Vdb32             shader_int16;
+    Vdb32             shader_resource_residency;
+    Vdb32             shader_resource_min_lod;
+    Vdb32             sparse_binding;
+    Vdb32             sparse_residency_buffer;
+    Vdb32             sparse_residency_image2_d;
+    Vdb32             sparse_residency_image3_d;
+    Vdb32             sparse_residency2_samples;
+    Vdb32             sparse_residency4_samples;
+    Vdb32             sparse_residency8_samples;
+    Vdb32             sparse_residency16_samples;
+    Vdb32             sparse_residency_aliased;
+    Vdb32             variable_multisample_rate;
+    Vdb32             inherited_queries;
 
     // VkPhysicalDeviceVulkan12Features
-    VD(b32)             sampler_mirror_clamp_to_edge;
-    VD(b32)             draw_indirect_count;
-    VD(b32)             storage_buffer8_bit_access;
-    VD(b32)             uniform_and_storage_buffer8_bit_access;
-    VD(b32)             storage_push_constant8;
-    VD(b32)             shader_buffer_int64_atomics;
-    VD(b32)             shader_shared_int64_atomics;
-    VD(b32)             shader_float16;
-    VD(b32)             shader_int8;
-    VD(b32)             descriptor_indexing;
-    VD(b32)             shader_input_attachment_array_dynamic_indexing;
-    VD(b32)             shader_uniform_texel_buffer_array_dynamic_indexing;
-    VD(b32)             shader_storage_texel_buffer_array_dynamic_indexing;
-    VD(b32)             shader_uniform_buffer_array_non_uniform_indexing;
-    VD(b32)             shader_sampled_image_array_non_uniform_indexing;
-    VD(b32)             shader_storage_buffer_array_non_uniform_indexing;
-    VD(b32)             shader_storage_image_array_non_uniform_indexing;
-    VD(b32)             shader_input_attachment_array_non_uniform_indexing;
-    VD(b32)             shader_uniform_texel_buffer_array_non_uniform_indexing;
-    VD(b32)             shader_storage_texel_buffer_array_non_uniform_indexing;
-    VD(b32)             descriptor_binding_uniform_buffer_update_after_bind;
-    VD(b32)             descriptor_binding_sampled_image_update_after_bind;
-    VD(b32)             descriptor_binding_storage_image_update_after_bind;
-    VD(b32)             descriptor_binding_storage_buffer_update_after_bind;
-    VD(b32)             descriptor_binding_uniform_texel_buffer_update_after_bind;
-    VD(b32)             descriptor_binding_storage_texel_buffer_update_after_bind;
-    VD(b32)             descriptor_binding_update_unused_while_pending;
-    VD(b32)             descriptor_binding_partially_bound;
-    VD(b32)             descriptor_binding_variable_descriptor_count;
-    VD(b32)             runtime_descriptor_array;
-    VD(b32)             sampler_filter_minmax;
-    VD(b32)             scalar_block_layout;
-    VD(b32)             imageless_framebuffer;
-    VD(b32)             uniform_buffer_standard_layout;
-    VD(b32)             shader_subgroup_extended_types;
-    VD(b32)             separate_depth_stencil_layouts;
-    VD(b32)             host_query_reset;
-    VD(b32)             timeline_semaphore;
-    VD(b32)             buffer_device_address;
-    VD(b32)             buffer_device_address_capture_replay;
-    VD(b32)             buffer_device_address_multi_device;
-    VD(b32)             vulkan_memory_model;
-    VD(b32)             vulkan_memory_model_device_scope;
-    VD(b32)             vulkan_memory_model_availability_visibility_chains;
-    VD(b32)             shader_output_viewport_index;
-    VD(b32)             shader_output_layer;
-    VD(b32)             subgroup_broadcast_dynamic_id;
+    Vdb32             sampler_mirror_clamp_to_edge;
+    Vdb32             draw_indirect_count;
+    Vdb32             storage_buffer8_bit_access;
+    Vdb32             uniform_and_storage_buffer8_bit_access;
+    Vdb32             storage_push_constant8;
+    Vdb32             shader_buffer_int64_atomics;
+    Vdb32             shader_shared_int64_atomics;
+    Vdb32             shader_float16;
+    Vdb32             shader_int8;
+    Vdb32             descriptor_indexing;
+    Vdb32             shader_input_attachment_array_dynamic_indexing;
+    Vdb32             shader_uniform_texel_buffer_array_dynamic_indexing;
+    Vdb32             shader_storage_texel_buffer_array_dynamic_indexing;
+    Vdb32             shader_uniform_buffer_array_non_uniform_indexing;
+    Vdb32             shader_sampled_image_array_non_uniform_indexing;
+    Vdb32             shader_storage_buffer_array_non_uniform_indexing;
+    Vdb32             shader_storage_image_array_non_uniform_indexing;
+    Vdb32             shader_input_attachment_array_non_uniform_indexing;
+    Vdb32             shader_uniform_texel_buffer_array_non_uniform_indexing;
+    Vdb32             shader_storage_texel_buffer_array_non_uniform_indexing;
+    Vdb32             descriptor_binding_uniform_buffer_update_after_bind;
+    Vdb32             descriptor_binding_sampled_image_update_after_bind;
+    Vdb32             descriptor_binding_storage_image_update_after_bind;
+    Vdb32             descriptor_binding_storage_buffer_update_after_bind;
+    Vdb32             descriptor_binding_uniform_texel_buffer_update_after_bind;
+    Vdb32             descriptor_binding_storage_texel_buffer_update_after_bind;
+    Vdb32             descriptor_binding_update_unused_while_pending;
+    Vdb32             descriptor_binding_partially_bound;
+    Vdb32             descriptor_binding_variable_descriptor_count;
+    Vdb32             runtime_descriptor_array;
+    Vdb32             sampler_filter_minmax;
+    Vdb32             scalar_block_layout;
+    Vdb32             imageless_framebuffer;
+    Vdb32             uniform_buffer_standard_layout;
+    Vdb32             shader_subgroup_extended_types;
+    Vdb32             separate_depth_stencil_layouts;
+    Vdb32             host_query_reset;
+    Vdb32             timeline_semaphore;
+    Vdb32             buffer_device_address;
+    Vdb32             buffer_device_address_capture_replay;
+    Vdb32             buffer_device_address_multi_device;
+    Vdb32             vulkan_memory_model;
+    Vdb32             vulkan_memory_model_device_scope;
+    Vdb32             vulkan_memory_model_availability_visibility_chains;
+    Vdb32             shader_output_viewport_index;
+    Vdb32             shader_output_layer;
+    Vdb32             subgroup_broadcast_dynamic_id;
 
     // VkPhysicalDeviceVulkan13Features
-    VD(b32)             robust_image_access;
-    VD(b32)             inline_uniform_block;
-    VD(b32)             descriptor_binding_inline_uniform_block_update_after_bind;
-    VD(b32)             pipeline_creation_cache_control;
-    VD(b32)             private_data;
-    VD(b32)             shader_demote_to_helper_invocation;
-    VD(b32)             shader_terminate_invocation;
-    VD(b32)             subgroup_size_control;
-    VD(b32)             compute_full_subgroups;
-    VD(b32)             synchronization2;
-    VD(b32)             texture_compression_astc_hdr;
-    VD(b32)             shader_zero_initialize_workgroup_memory;
-    VD(b32)             dynamic_rendering;
-    VD(b32)             shader_integer_dot_product;
-    VD(b32)             maintenance4;
+    Vdb32             robust_image_access;
+    Vdb32             inline_uniform_block;
+    Vdb32             descriptor_binding_inline_uniform_block_update_after_bind;
+    Vdb32             pipeline_creation_cache_control;
+    Vdb32             private_data;
+    Vdb32             shader_demote_to_helper_invocation;
+    Vdb32             shader_terminate_invocation;
+    Vdb32             subgroup_size_control;
+    Vdb32             compute_full_subgroups;
+    Vdb32             synchronization2;
+    Vdb32             texture_compression_astc_hdr;
+    Vdb32             shader_zero_initialize_workgroup_memory;
+    Vdb32             dynamic_rendering;
+    Vdb32             shader_integer_dot_product;
+    Vdb32             maintenance4;
 
     /** Multiplies rank by 2 to indicate preference */
-    VD(b32)             prefer_discrete;
-    VD(b32)             prefer_integrated;
+    Vdb32             prefer_discrete;
+    Vdb32             prefer_integrated;
 
-    VD(usize)           num_extensions;
-    const VD(cstr)      *extensions;
+    Vdusize           num_extensions;
+    const Vdcstr      *extensions;
 
-    VD(usize)           num_queue_setups;
-    VD(VkQueueSetup)    *queue_setups;
+    Vdusize           num_queue_setups;
+    VdVkQueueSetup    *queue_setups;
 
     /** The baseline preference for this compatible device adapter */
-    VD(i32)             rank_baseline;
+    Vdi32             rank_baseline;
 
-    VD(usize)           num_surface_formats;
+    Vdusize           num_surface_formats;
 
     /** At least one of these formats must be supported. The first supported one will be written to @first_supported_surface_format */
     VkSurfaceFormatKHR  *surface_formats;
@@ -301,35 +310,35 @@ typedef struct __VD_VK_PhysicalDeviceCharacteristics {
      * computed_rank <= 0: physical device with characteristics is not available
      * computed_rank  > 0: physical device is available; higher rank is more preferential
      */
-    VD(i32)             computed_rank;
+    Vdi32             computed_rank;
     VkPhysicalDevice    physical_device;
 
-    VD(usize)           first_supported_surface_format;
-} VD(VkPhysicalDeviceCharacteristics);
+    Vdusize           first_supported_surface_format;
+} VdVkPhysicalDeviceCharacteristics;
 
 typedef struct __VD_VK_PickPhysicalDeviceInfo {
     VkInstance                                      instance;
     VkSurfaceKHR                                    surface;
-    VD(usize)                                       num_compatible_characteristics;
-    VD(VkPhysicalDeviceCharacteristics)             *compatible_characteristics;
-    VD(VkProcGetPhysicalDevicePresentationSupport)  *get_physical_device_presentation_support;
-    VD(b32)                                         log;
+    Vdusize                                       num_compatible_characteristics;
+    VdVkPhysicalDeviceCharacteristics             *compatible_characteristics;
+    VdVkProcGetPhysicalDevicePresentationSupport  *get_physical_device_presentation_support;
+    Vdb32                                         log;
     struct {
-        VkPhysicalDevice                            *physical_device;
-        VD(usize)                                   *selected_characteristics_index;
+        VkPhysicalDevice                          *physical_device;
+        Vdusize                                   *selected_characteristics_index;
     } result;
-} VD(VkPickPhysicalDeviceInfo);
+} VdVkPickPhysicalDeviceInfo;
 
 typedef struct __VD_VK_CreateDeviceAndQueuesInfo {
     VkInstance                          instance;
-    VD(VkPhysicalDeviceCharacteristics) *characteristics;
+    VdVkPhysicalDeviceCharacteristics *characteristics;
 
     struct {
         VkDevice                        *device;
-        VD(u32)                         num_queue_groups;
-        VD(VkQueueGroup)                *queue_groups;
+        Vdu32                         num_queue_groups;
+        VdVkQueueGroup                *queue_groups;
     } result;
-} VD(VkCreateDeviceAndQueuesInfo);
+} VdVkCreateDeviceAndQueuesInfo;
 
 typedef struct __VD_VK_CreateSwapchainAndFetchImagesInfo {
     VkDevice           device;
@@ -341,14 +350,14 @@ typedef struct __VD_VK_CreateSwapchainAndFetchImagesInfo {
 
     struct {
         VkSwapchainKHR  *swapchain;
-        VD(u32)         *num_images;
+        Vdu32         *num_images;
         VkImage         **images;
     } result;
-} VD(VkCreateSwapchainAndFetchImagesInfo);
+} VdVkCreateSwapchainAndFetchImagesInfo;
 
 typedef struct __VD_VK_CreateImageViewsInfo {
     VkDevice              device;
-    VD(u32)               num_images;
+    Vdu32               num_images;
     VkImage               *images;
     VkFormat              image_format;
 
@@ -358,70 +367,70 @@ typedef struct __VD_VK_CreateImageViewsInfo {
         VkImageView       **image_views;
     } result;
 
-} VD(VkCreateImageViewsInfo);
+} VdVkCreateImageViewsInfo;
 
 typedef struct __VD_VK_CmdImageTransitionInfo {
     VkImage            image;
     VkImageLayout      current_layout;
     VkImageLayout      target_layout;
     VkImageAspectFlags aspect;
-    VD(u32)            base_mip_level;
-    VD(u32)            level_count;
-    VD(u32)            base_array_layer;
-    VD(u32)            layer_count;
-} VD(VkCmdImageTransitionInfo);
+    Vdu32            base_mip_level;
+    Vdu32            level_count;
+    Vdu32            base_array_layer;
+    Vdu32            layer_count;
+} VdVkCmdImageTransitionInfo;
 
-VD(b32)     VDF(vk_require_instance_extensions)         (VD(Arena) *temp, VD(VkRequireInstanceExtensionsInfo) *info);
-VD(b32)     VDF(vk_require_instance_layers)             (VD(Arena) *temp, VD(VkRequireInstanceLayersInfo) *info);
-void        VDF(vk_create_instance_extended)            (VD(VkCreateInstanceExtendedInfo) *info);
-void        VDF(vk_log_physical_device_characteristics) (VD(VkPhysicalDeviceCharacteristics) *characteristics);
-VD(b32)     VDF(vk_pick_physical_device)                (VD(Arena) *temp, VD(VkPickPhysicalDeviceInfo) *info);
-void        VDF(vk_create_device_and_queues)            (VD(Arena) *temp, VD(VkCreateDeviceAndQueuesInfo) *info);
-void        VDF(vk_create_image_views)                  (VD(Arena) *a, VD(VkCreateImageViewsInfo) *info);
-void        VDF(vk_cmd_image_transition)                (VkCommandBuffer cmd, VD(VkCmdImageTransitionInfo) *info);
-void        VDF(vk_destroy_image_views)                 (VkDevice device, VD(u32) num_image_views, VkImageView *image_views);
-void        VDF(vk_destroy_framebuffers)                (VkDevice device, VD(u32) num_framebuffers, VkFramebuffer *framebuffers);
-void        VDF(vk_destroy_semaphores)                  (VkDevice device, VD(u32) num_semaphores, VkSemaphore *semaphores);
+Vdb32     vd_vk_require_instance_extensions         (VdArena *temp, VdVkRequireInstanceExtensionsInfo *info);
+Vdb32     vd_vk_require_instance_layers             (VdArena *temp, VdVkRequireInstanceLayersInfo *info);
+void      vd_vk_create_instance_extended            (VdVkCreateInstanceExtendedInfo *info);
+void      vd_vk_log_physical_device_characteristics (VdVkPhysicalDeviceCharacteristics *characteristics);
+Vdb32     vd_vk_pick_physical_device                (VdArena *temp, VdVkPickPhysicalDeviceInfo *info);
+void      vd_vk_create_device_and_queues            (VdArena *temp, VdVkCreateDeviceAndQueuesInfo *info);
+void      vd_vk_create_image_views                  (VdArena *a, VdVkCreateImageViewsInfo *info);
+void      vd_vk_cmd_image_transition                (VkCommandBuffer cmd, VdVkCmdImageTransitionInfo *info);
+void      vd_vk_destroy_image_views                 (VkDevice device, Vdu32 num_image_views, VkImageView *image_views);
+void      vd_vk_destroy_framebuffers                (VkDevice device, Vdu32 num_framebuffers, VkFramebuffer *framebuffers);
+void      vd_vk_destroy_semaphores                  (VkDevice device, Vdu32 num_semaphores, VkSemaphore *semaphores);
 
 /**
  * @sym vk_create_swapchain_and_fetch_images
  * Create the swapchain and fetch
  * @param a The arena to allocate the images
  */
-void        VDF(vk_create_swapchain_and_fetch_images)   (VD(Arena) *a, VD(VkCreateSwapchainAndFetchImagesInfo) *info);
+void      vd_vk_create_swapchain_and_fetch_images   (VdArena *a, VdVkCreateSwapchainAndFetchImagesInfo *info);
 
 /* ----GROWABLE DESCRIPTOR ALLOCATOR--------------------------------------------------------------------------------- */
 typedef struct __VDI_VK_GrowableDescriptorAllocatorPool {
     VkDescriptorPool pool;
-    VD(DListNode)    node;
-} VDI(VkGrowableDescriptorAllocatorPool);
+    VdDListNode    node;
+} VdVk__GrowableDescriptorAllocatorPool;
 
 typedef struct __VD_VK_GrowableDescriptorAllocatorPoolSizeRatio {
     VkDescriptorType type;
-    VD(f32)          ratio;
-} VD(VkGrowableDescriptorAllocatorPoolSizeRatio);
+    Vdf32          ratio;
+} VdVkGrowableDescriptorAllocatorPoolSizeRatio;
 
 typedef struct __VD_VK_GrowableDescriptorAllocator {
-    VD(Arena)                                      *arena;
+    VdArena                                      *arena;
     VkDevice                                       device;
-    VDI(VkGrowableDescriptorAllocatorPool)         *current_pool;
-    VD(DList)                                      used_pool_list;
-    VD(DList)                                      free_pool_list;
-    VD(usize)                                      num_ratios;
-    VD(VkGrowableDescriptorAllocatorPoolSizeRatio) *ratios;
-} VD(VkGrowableDescriptorAllocator);
+    VdVk__GrowableDescriptorAllocatorPool         *current_pool;
+    VdDList                                      used_pool_list;
+    VdDList                                      free_pool_list;
+    Vdusize                                      num_ratios;
+    VdVkGrowableDescriptorAllocatorPoolSizeRatio *ratios;
+} VdVkGrowableDescriptorAllocator;
 
 typedef struct __VD_VK_GrowableDescriptorAllocatorInitInfo {
-    VD(Arena)                                      *arena;
+    VdArena                                      *arena;
     VkDevice                                       device;
-    VD(usize)                                      num_override_pool_sizes;
-    VD(VkGrowableDescriptorAllocatorPoolSizeRatio) *override_pool_sizes;
-} VD(VkGrowableDescriptorAllocatorInitInfo);
+    Vdusize                                      num_override_pool_sizes;
+    VdVkGrowableDescriptorAllocatorPoolSizeRatio *override_pool_sizes;
+} VdVkGrowableDescriptorAllocatorInitInfo;
 
-void     VDF(vk_growable_descriptor_allocator_init)(VD(VkGrowableDescriptorAllocator) *desc_alloc, VD(VkGrowableDescriptorAllocatorInitInfo) *info);
-VkResult VDF(vk_growable_descriptor_allocator_get)(VD(VkGrowableDescriptorAllocator) *desc_alloc, VkDescriptorSetLayout layout, VkDescriptorSet *set);
-void     VDF(vk_growable_descriptor_allocator_reset)(VD(VkGrowableDescriptorAllocator) *desc_alloc);
-void     VDF(vk_growable_descriptor_allocator_deinit)(VD(VkGrowableDescriptorAllocator) *desc_alloc);
+void     vd_vk_growable_descriptor_allocator_init(VdVkGrowableDescriptorAllocator *desc_alloc, VdVkGrowableDescriptorAllocatorInitInfo *info);
+VkResult vd_vk_growable_descriptor_allocator_get(VdVkGrowableDescriptorAllocator *desc_alloc, VkDescriptorSetLayout layout, VkDescriptorSet *set);
+void     vd_vk_growable_descriptor_allocator_reset(VdVkGrowableDescriptorAllocator *desc_alloc);
+void     vd_vk_growable_descriptor_allocator_deinit(VdVkGrowableDescriptorAllocator *desc_alloc);
 
 /* ----DESCRIPTOR SET LAYOUT CACHE----------------------------------------------------------------------------------- */
 #ifndef VD_VK_DESCRIPTOR_SET_LAYOUT_CACHE_CUSTOM
@@ -435,16 +444,16 @@ void     VDF(vk_growable_descriptor_allocator_deinit)(VD(VkGrowableDescriptorAll
 typedef struct __VD_VK_DescriptorSetLayoutCacheKey {
     u32                          num_bindings;
     VkDescriptorSetLayoutBinding bindings[VD_VK_DESCRIPTOR_SET_LAYOUT_CACHE_MAX_BINDINGS];
-} VDI(VkDescriptorSetLayoutCacheKey);
+} VdVk__DescriptorSetLayoutCacheKey;
 
 typedef struct __VD_VK_DescriptorSetLayoutCacheKV {
-    VDI(VkDescriptorSetLayoutCacheKey) k;
+    VdVk__DescriptorSetLayoutCacheKey k;
     VkDescriptorSetLayout              v;
-} VDI(VkDescriptorSetLayoutCacheKV);
+} VdVk__DescriptorSetLayoutCacheKV;
 
 typedef struct __VD_VK_DescriptorSetLayoutCache {
-    VD_KVMAP VDI(VkDescriptorSetLayoutCacheKV) *map;
-} VD(VkDescriptorSetLayoutCache);
+    VD_KVMAP VdVk__DescriptorSetLayoutCacheKV *map;
+} VdVkDescriptorSetLayoutCache;
 
 /* ----IMMEDIATE COMMANDS-------------------------------------------------------------------------------------------- */
 typedef struct __VD_VK_ImmediateCommands {
@@ -453,19 +462,19 @@ typedef struct __VD_VK_ImmediateCommands {
     VkCommandBuffer buffer;
     VkFence         fence;
     VkQueue         queue;
-    VD(b32)         recording;
-} VD(VkImmediateCommands);
+    Vdb32         recording;
+} VdVkImmediateCommands;
 
 typedef struct __VD_VK_ImmediateCommandsInitInfo {
     VkDevice device;
-    VD(u32)  queue_family_index;
+    Vdu32  queue_family_index;
     VkQueue  queue;
-} VD(VkImmediateCommandsInitInfo);
+} VdVkImmediateCommandsInitInfo;
 
-void            VDF(vk_immediate_commands_init)(VD(VkImmediateCommands) *cmds, VD(VkImmediateCommandsInitInfo) *info);
-VkCommandBuffer VDF(vk_immediate_commands_begin)(VD(VkImmediateCommands) *cmds);
-void            VDF(vk_immediate_commands_end)(VD(VkImmediateCommands) *cmds);
-void            VDF(vk_immediate_commands_deinit)(VD(VkImmediateCommands) *cmds);
+void            vd_vk_immediate_commands_init(VdVkImmediateCommands *cmds, VdVkImmediateCommandsInitInfo *info);
+VkCommandBuffer vd_vk_immediate_commands_begin(VdVkImmediateCommands *cmds);
+void            vd_vk_immediate_commands_end(VdVkImmediateCommands *cmds);
+void            vd_vk_immediate_commands_deinit(VdVkImmediateCommands *cmds);
 
 /* ----AMD VMA TRACKING---------------------------------------------------------------------------------------------- */
 #if VD_VK_VMA_TRACKING
@@ -473,13 +482,13 @@ void            VDF(vk_immediate_commands_deinit)(VD(VkImmediateCommands) *cmds)
 #error "VD_VK_VMA_TRACKING requires vk_mem_alloc.h"
 #endif // !AMD_VULKAN_MEMORY_ALLOCATOR_H
 
-#define VD_VK_VMA_TRACK_ALLOCATION(allocator, allocation)   VDI(vk_vma_track_allocation)(allocator, allocation, __FILE__, sizeof(__FILE__), __LINE__)
-#define VD_VK_VMA_RELEASE_ALLOCATION(allocator, allocation) VDI(vk_vma_release_allocation)(allocator, allocation)
-#define VD_VK_VMA_CHECK_ALLOCATIONS()                       VDI(vk_vma_check_allocations)()
+#define VD_VK_VMA_TRACK_ALLOCATION(allocator, allocation)   vd_vk__vma_track_allocation(allocator, allocation, __FILE__, sizeof(__FILE__), __LINE__)
+#define VD_VK_VMA_RELEASE_ALLOCATION(allocator, allocation) vd_vk__vma_release_allocation(allocator, allocation)
+#define VD_VK_VMA_CHECK_ALLOCATIONS()                       vd_vk__vma_check_allocations()
 
-void VDI(vk_vma_track_allocation)(VmaAllocator allocator, VmaAllocation allocation, const char *file, int filelen, int line);
-void VDI(vk_vma_release_allocation)(VmaAllocator allocator, VmaAllocation allocation);
-void VDI(vk_vma_check_allocations)(void);
+void vd_vk__vma_track_allocation(VmaAllocator allocator, VmaAllocation allocation, const char *file, int filelen, int line);
+void vd_vk__vma_release_allocation(VmaAllocator allocator, VmaAllocation allocation);
+void vd_vk__vma_check_allocations(void);
 
 #else
 
@@ -490,14 +499,68 @@ void VDI(vk_vma_check_allocations)(void);
 #endif // VD_VK_VMA_TRACKING
 /* ----AMD VMA TRACKING---------------------------------------------------------------------------------------------- */
 
-#endif // !VD_VK_H
+#if VD_VK_MACRO_ABBREVIATIONS
+#define VkGetPhysicalDevicePresentationSupportInfo  VdVkGetPhysicalDevicePresentationSupportInfo
+#define VkProcGetPhysicalDevicePresentationSupport  VdVkProcGetPhysicalDevicePresentationSupport
+#define VkCreateWSISurfaceInfo                      VdVkCreateWSISurfaceInfo
+#define VkProcCreateWSISurface                      VdVkProcCreateWSISurface
+#define VkRequireInstanceExtensionsInfo             VdVkRequireInstanceExtensionsInfo
+#define VkRequireInstanceLayersInfo                 VdVkRequireInstanceLayersInfo
+#define VkCreateInstanceExtendedInfo                VdVkCreateInstanceExtendedInfo
+#define VkQueueCapabilities                         VdVkQueueCapabilities
+#define VK_QUEUE_CAPABILITIES_GRAPHICS              VD_VK_QUEUE_CAPABILITIES_GRAPHICS
+#define VK_QUEUE_CAPABILITIES_COMPUTE               VD_VK_QUEUE_CAPABILITIES_COMPUTE
+#define VK_QUEUE_CAPABILITIES_TRANSFER              VD_VK_QUEUE_CAPABILITIES_TRANSFER
+#define VK_QUEUE_CAPABILITIES_PRESENT               VD_VK_QUEUE_CAPABILITIES_PRESENT
+#define VkQueueSetup                                VdVkQueueSetup
+#define VkQueueGroup                                VdVkQueueGroup
+#define VkPhysicalDeviceCharacteristics             VdVkPhysicalDeviceCharacteristics
+#define VkPickPhysicalDeviceInfo                    VdVkPickPhysicalDeviceInfo
+#define VkCreateDeviceAndQueuesInfo                 VdVkCreateDeviceAndQueuesInfo
+#define VkCreateSwapchainAndFetchImagesInfo         VdVkCreateSwapchainAndFetchImagesInfo
+#define VkCreateImageViewsInfo                      VdVkCreateImageViewsInfo
+#define VkCmdImageTransitionInfo                    VdVkCmdImageTransitionInfo
+#define vk_require_instance_extensions              vd_vk_require_instance_extensions
+#define vk_require_instance_layers                  vd_vk_require_instance_layers
+#define vk_create_instance_extended                 vd_vk_create_instance_extended
+#define vk_log_physical_device_characteristics      vd_vk_log_physical_device_characteristics
+#define vk_pick_physical_device                     vd_vk_pick_physical_device
+#define vk_create_device_and_queues                 vd_vk_create_device_and_queues
+#define vk_create_image_views                       vd_vk_create_image_views
+#define vk_cmd_image_transition                     vd_vk_cmd_image_transition
+#define vk_destroy_image_views                      vd_vk_destroy_image_views
+#define vk_destroy_framebuffers                     vd_vk_destroy_framebuffers
+#define vk_destroy_semaphores                       vd_vk_destroy_semaphores
+#define vk_create_swapchain_and_fetch_images        vd_vk_create_swapchain_and_fetch_images
+#define VkGrowableDescriptorAllocatorPoolSizeRatio  VdVkGrowableDescriptorAllocatorPoolSizeRatio
+#define VkGrowableDescriptorAllocator               VdVkGrowableDescriptorAllocator
+#define VkGrowableDescriptorAllocatorInitInfo       VdVkGrowableDescriptorAllocatorInitInfo
+#define vk_growable_descriptor_allocator_init       vd_vk_growable_descriptor_allocator_init
+#define vk_growable_descriptor_allocator_get        vd_vk_growable_descriptor_allocator_get
+#define vk_growable_descriptor_allocator_reset      vd_vk_growable_descriptor_allocator_reset
+#define vk_growable_descriptor_allocator_deinit     vd_vk_growable_descriptor_allocator_deinit
+#define VkDescriptorSetLayoutCache                  VdVkDescriptorSetLayoutCache
+#define VkImmediateCommands                         VdVkImmediateCommands
+#define VkImmediateCommandsInitInfo                 VdVkImmediateCommandsInitInfo
+#define vk_immediate_commands_init                  vd_vk_immediate_commands_init
+#define vk_immediate_commands_begin                 vd_vk_immediate_commands_begin
+#define vk_immediate_commands_end                   vd_vk_immediate_commands_end
+#define vk_immediate_commands_deinit                vd_vk_immediate_commands_deinit
+#endif // VD_VK_MACRO_ABBREVIATIONS
+
+#endif // VD_VK_H
 
 #ifdef VD_VK_IMPL
 
 /* ----INITIALIZATION IMPL------------------------------------------------------------------------------------------- */
-VD(b32) VDF(vk_require_instance_extensions)(VD(Arena) *temp, VD(VkRequireInstanceExtensionsInfo) *info)
+Vdb32 vd_vk_require_instance_extensions(VdArena *temp, VdVkRequireInstanceExtensionsInfo *info)
 {
-    VD(u32) num_instance_extensions;
+    VD_VK_PROFILE_SCOPE_BEGIN(Vd_Vk_Require_Instance_Extensions);
+    VdArenaSave save = vd_arena_save(temp);
+
+    Vdb32 result = VD_TRUE;
+
+    Vdu32 num_instance_extensions;
     VkExtensionProperties *instance_extensions = 0;
 
     // Get all available extensions
@@ -506,35 +569,49 @@ VD(b32) VDF(vk_require_instance_extensions)(VD(Arena) *temp, VD(VkRequireInstanc
     VD_VK_CHECK(vkEnumerateInstanceExtensionProperties(0, &num_instance_extensions, instance_extensions));
 
     if (info->log) {
-        for (VD(usize) i = 0; i < info->count; ++i) {
+        for (Vdusize i = 0; i < info->count; ++i) {
             VD_DBGF("Required Extension       [%2zu] = %s", i, info->extensions[i]);
         }
 
-        for (VD(usize) i = 0; i < num_instance_extensions; ++i) {
+        for (Vdusize i = 0; i < num_instance_extensions; ++i) {
             VD_DBGF("Vulkan Instance extension[%2zu] = %s", i, instance_extensions[i].extensionName);
         }
     }
 
-    // Check each require extension against all available ones and make sure they exist
-    for (VD(usize) i = 0; i < info->count; ++i) {
-        VD(b32) found = VD_FALSE;
-        for (VD(usize) j = 0; j < num_instance_extensions; ++j) {
-            if (VDF(cstr_cmp)(info->extensions[i], instance_extensions[j].extensionName)) {
-                found = VD_TRUE;
-                break;
+
+    Vdb32 *ext_index_to_found = (Vdb32*)VD_ARENA_PUSH_ARRAY(temp, Vdb32, info->count);
+
+    for (Vdusize i = 0; i < num_instance_extensions; ++i) {
+        for (Vdusize j = 0; j < info->count; ++j) {
+            if (ext_index_to_found[j]) {
+                continue;
+            }
+
+            if (vd_cstr_cmp(info->extensions[j], instance_extensions[i].extensionName)) {
+                ext_index_to_found[j] = VD_TRUE;
             }
         }
-
-        if (!found) return VD_FALSE;
     }
 
-    return VD_TRUE;
+    for (Vdusize i = 0; i < info->count; ++i) {
+        if (!ext_index_to_found[i]) {
+            result = VD_FALSE;
+            break;
+        }
+    }
+
+    vd_arena_restore(save);
+    VD_VK_PROFILE_SCOPE_END(Vd_Vk_Require_Instance_Extensions);
+    return result;
 }
 
 
-VD(b32) VDF(vk_require_instance_layers)(VD(Arena) *temp, VD(VkRequireInstanceLayersInfo) *info)
+Vdb32 vd_vk_require_instance_layers(VdArena *temp, VdVkRequireInstanceLayersInfo *info)
 {
-    VD(u32) num_instance_layers;
+    VD_VK_PROFILE_SCOPE_BEGIN(Vd_Vk_Require_Instance_layers);
+
+    Vdb32 result = VD_TRUE;
+    Vdu32 num_instance_layers;
     VkLayerProperties *instance_layers = 0;
 
     // Get all available extensions
@@ -543,27 +620,44 @@ VD(b32) VDF(vk_require_instance_layers)(VD(Arena) *temp, VD(VkRequireInstanceLay
     VD_VK_CHECK(vkEnumerateInstanceLayerProperties(&num_instance_layers, instance_layers));
 
     // Check each require layer against all available ones and make sure they exist
-    for (VD(usize) i = 0; i < info->count; ++i) {
-        VD(b32) found = VD_FALSE;
-        for (VD(usize) j = 0; j < num_instance_layers; ++j) {
-            if (VDF(cstr_cmp)(info->layers[i], instance_layers[j].layerName)) {
+    for (Vdusize i = 0; i < info->count; ++i) {
+        Vdb32 found = VD_FALSE;
+        for (Vdusize j = 0; j < num_instance_layers; ++j) {
+            if (vd_cstr_cmp(info->layers[i], instance_layers[j].layerName)) {
                 found = VD_TRUE;
                 break;
             }
         }
 
-        if (!found) return VD_FALSE;
+        if (!found) {
+            result = VD_FALSE;
+            break;
+        }
     }
 
-    return VD_TRUE;
+    VD_VK_PROFILE_SCOPE_END(Vd_Vk_Require_Instance_layers);
+    return result;
 }
 
-void VDF(vk_create_instance_extended)(VD(VkCreateInstanceExtendedInfo) *info)
+void vd_vk_create_instance_extended(VdVkCreateInstanceExtendedInfo *info)
 {
     VkInstance result;
 
+    VkValidationFlagsEXT validation_flags = {
+        .sType = VK_STRUCTURE_TYPE_VALIDATION_FLAGS_EXT,
+        .disabledValidationCheckCount = 1,
+        .pDisabledValidationChecks = (VkValidationCheckEXT[])
+        {
+            {
+                VK_VALIDATION_CHECK_ALL_EXT,
+            }
+        },
+    };
+
+    VD_VK_PROFILE_SCOPE_BEGIN(Vd_Vk_Call_vkCreateInstance);
     VD_VK_CHECK(vkCreateInstance(& (VkInstanceCreateInfo){
         .sType                      = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+        .pNext                      = info->enable_validation ? (0) : (&validation_flags),
         .flags                      = info->flags,
         .pApplicationInfo = & (VkApplicationInfo) {
             .sType                  = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -573,14 +667,15 @@ void VDF(vk_create_instance_extended)(VD(VkCreateInstanceExtendedInfo) *info)
             .engineVersion          = info->engine_version,
             .apiVersion             = info->api_version,
         },
-        .enabledLayerCount          = (VD(u32))info->num_instance_layers,
+        .enabledLayerCount          = (Vdu32)info->num_instance_layers,
         .ppEnabledLayerNames        = (const char * const *)info->instance_layers,
-        .enabledExtensionCount      = (VD(u32))info->num_instance_extensions,
+        .enabledExtensionCount      = (Vdu32)info->num_instance_extensions,
         .ppEnabledExtensionNames    = (const char * const *)info->instance_extensions,
     }, 0, &result));
-
     *info->result.instance = result;
+    VD_VK_PROFILE_SCOPE_END(Vd_Vk_Call_vkCreateInstance);
 
+    VD_VK_PROFILE_SCOPE_BEGIN(Vd_Vk_Enable_DebugUtils);
     if (info->debug_utils.on) {
         PFN_vkCreateDebugUtilsMessengerEXT create_messenger;
         create_messenger = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(result, "vkCreateDebugUtilsMessengerEXT");
@@ -608,37 +703,38 @@ void VDF(vk_create_instance_extended)(VD(VkCreateInstanceExtendedInfo) *info)
             *info->result.cmd_end_label   = cmd_end_label;
         }
     }
+    VD_VK_PROFILE_SCOPE_END(Vd_Vk_Enable_DebugUtils);
 }
 
-VD(b32) VDF(vk_pick_physical_device)(VD(Arena) *temp, VD(VkPickPhysicalDeviceInfo) *info)
+Vdb32 vd_vk_pick_physical_device(VdArena *temp, VdVkPickPhysicalDeviceInfo *info)
 {
     // Get all physical devices
-    VD(u32) num_phyiscal_devices;
+    Vdu32 num_phyiscal_devices;
     vkEnumeratePhysicalDevices(info->instance, &num_phyiscal_devices, 0);
     VkPhysicalDevice *physical_devices = VD_ARENA_PUSH_ARRAY(temp, VkPhysicalDevice, num_phyiscal_devices);
     vkEnumeratePhysicalDevices(info->instance, &num_phyiscal_devices, physical_devices);
 
-    VD(i32)             best_device_index   = -1;
-    VD(i32)             best_device_rank    = -1;
+    Vdi32             best_device_index   = -1;
+    Vdi32             best_device_rank    = -1;
     VkPhysicalDevice    best_device_physical_device = VK_NULL_HANDLE;
 
 
-    for (VD(u32) i = 0; i < num_phyiscal_devices; ++i) {
-        VD(ArenaSave) save = VDF(arena_save)(temp);
+    for (Vdu32 i = 0; i < num_phyiscal_devices; ++i) {
+        VdArenaSave save = vd_arena_save(temp);
 
         // Get all physical device extensions
-        VD(u32) num_device_extensions;
+        Vdu32 num_device_extensions;
         vkEnumerateDeviceExtensionProperties(physical_devices[i], 0, &num_device_extensions, 0);
         VkExtensionProperties *device_extension_properties = VD_ARENA_PUSH_ARRAY(temp, VkExtensionProperties, num_device_extensions);
         vkEnumerateDeviceExtensionProperties(physical_devices[i], 0, &num_device_extensions, device_extension_properties);
 
         // Parse physical device extensions into plain cstr array
-        VD(cstr) *device_extensions = VD_ARENA_PUSH_ARRAY(temp, VD(cstr), num_device_extensions);
-        for (VD(u32) j = 0; j < num_device_extensions; ++j) {
+        Vdcstr *device_extensions = VD_ARENA_PUSH_ARRAY(temp, Vdcstr, num_device_extensions);
+        for (Vdu32 j = 0; j < num_device_extensions; ++j) {
             device_extensions[j] = device_extension_properties[j].extensionName;
 
             // VUID-VkDeviceCreateInfo-pProperties-04451
-            if (VDF(cstr_cmp)(device_extensions[j], "VK_KHR_portability_subset")) {
+            if (vd_cstr_cmp(device_extensions[j], "VK_KHR_portability_subset")) {
 
             }
         }
@@ -672,9 +768,9 @@ VD(b32) VDF(vk_pick_physical_device)(VD(Arena) *temp, VD(VkPickPhysicalDeviceInf
         vkGetPhysicalDeviceQueueFamilyProperties(physical_devices[i], &num_queue_families, queue_families);
 
         // Parse queue families into @VkQueueSetup array
-        VD(VkQueueSetup) *queues = VD_ARENA_PUSH_ARRAY(temp, VD(VkQueueSetup), num_queue_families);
+        VdVkQueueSetup *queues = VD_ARENA_PUSH_ARRAY(temp, VdVkQueueSetup, num_queue_families);
         for (u32 j = 0; j < num_queue_families; ++j) {
-            VD(VkGetPhysicalDevicePresentationSupportInfo) get_present_support_info = {
+            VdVkGetPhysicalDevicePresentationSupportInfo get_present_support_info = {
                 .instance = info->instance,
                 .physical_device = physical_devices[i],
                 .queue_family_index = j,
@@ -682,19 +778,19 @@ VD(b32) VDF(vk_pick_physical_device)(VD(Arena) *temp, VD(VkPickPhysicalDeviceInf
 
             VkQueueCapabilities caps = 0;
 
-            if (queue_families[j].queueFlags & VK_QUEUE_GRAPHICS_BIT) caps |= VD_(VK_QUEUE_CAPABILITIES_GRAPHICS);
-            if (queue_families[j].queueFlags & VK_QUEUE_TRANSFER_BIT) caps |= VD_(VK_QUEUE_CAPABILITIES_TRANSFER);
-            if (queue_families[j].queueFlags & VK_QUEUE_COMPUTE_BIT) caps |= VD_(VK_QUEUE_CAPABILITIES_COMPUTE);
-            if (info->get_physical_device_presentation_support(&get_present_support_info)) caps |= VD_(VK_QUEUE_CAPABILITIES_PRESENT);
+            if (queue_families[j].queueFlags & VK_QUEUE_GRAPHICS_BIT) caps |= VD_VK_QUEUE_CAPABILITIES_GRAPHICS;
+            if (queue_families[j].queueFlags & VK_QUEUE_TRANSFER_BIT) caps |= VD_VK_QUEUE_CAPABILITIES_TRANSFER;
+            if (queue_families[j].queueFlags & VK_QUEUE_COMPUTE_BIT) caps |= VD_VK_QUEUE_CAPABILITIES_COMPUTE;
+            if (info->get_physical_device_presentation_support(&get_present_support_info)) caps |= VD_VK_QUEUE_CAPABILITIES_PRESENT;
 
-            queues[j] = (VD(VkQueueSetup)) {
+            queues[j] = (VdVkQueueSetup) {
                 .capabilities = caps,
                 .present_count = queue_families[j].queueCount,
                 .cached_index = 0,
             };
         }
 
-        VD(u32) num_surface_formats;
+        Vdu32 num_surface_formats;
         vkGetPhysicalDeviceSurfaceFormatsKHR(physical_devices[i], info->surface, &num_surface_formats, 0);
         VkSurfaceFormatKHR *surface_formats = VD_ARENA_PUSH_ARRAY(temp, VkSurfaceFormatKHR, num_surface_formats);
         vkGetPhysicalDeviceSurfaceFormatsKHR(physical_devices[i], info->surface, &num_surface_formats, surface_formats);
@@ -839,19 +935,19 @@ VD(b32) VDF(vk_pick_physical_device)(VD(Arena) *temp, VD(VkPickPhysicalDeviceInf
 
         if (info->log) {
             DBGF("vd_vk_pick_physical_device: Testing against candidate: %u: %s", i, device_properties.properties.deviceName);
-            VDF(vk_log_physical_device_characteristics)(&characteristics);
+            vd_vk_log_physical_device_characteristics(&characteristics);
         }
 
         // For each avaiable set, compare and rank it
-        for (VD(usize) j = 0; j < info->num_compatible_characteristics; ++j)
+        for (Vdusize j = 0; j < info->num_compatible_characteristics; ++j)
         {
             if (info->log) {
                 DBGF("vd_vk_pick_physical_device: Checking compatible characteristics: %zu", j);
             }
 
             VkPhysicalDeviceCharacteristics *comparand = &info->compatible_characteristics[j];
-            VD(i32) rank = comparand->rank_baseline;
-            VD(b32) is_available = VD_TRUE;
+            Vdi32 rank = comparand->rank_baseline;
+            Vdb32 is_available = VD_TRUE;
             comparand->physical_device = physical_devices[i];
 
             // Check api version minimum
@@ -1005,10 +1101,10 @@ VD(b32) VDF(vk_pick_physical_device)(VD(Arena) *temp, VD(VkPickPhysicalDeviceInf
             }
 
             // Check extensions
-            for (VD(usize) k = 0; k < comparand->num_extensions; ++k) {
-                VD(b32) found = VD_FALSE;
-                for (VD(usize) z = 0; z < num_device_extensions; ++z) {
-                    if (VD(cstr_cmp)(device_extension_properties[z].extensionName, comparand->extensions[k])) {
+            for (Vdusize k = 0; k < comparand->num_extensions; ++k) {
+                Vdb32 found = VD_FALSE;
+                for (Vdusize z = 0; z < num_device_extensions; ++z) {
+                    if (vd_cstr_cmp(device_extension_properties[z].extensionName, comparand->extensions[k])) {
                         found = VD_TRUE;
                         break;
                     }
@@ -1030,11 +1126,11 @@ VD(b32) VDF(vk_pick_physical_device)(VD(Arena) *temp, VD(VkPickPhysicalDeviceInf
 
             // Check surface formats
             if (info->surface != VK_NULL_HANDLE) {
-                VD(usize) first_compatible_surface_format_index = comparand->num_surface_formats;
+                Vdusize first_compatible_surface_format_index = comparand->num_surface_formats;
 
-                for (VD(usize) k = 0; k < comparand->num_surface_formats; ++k) {
-                    VD(b32) found = VD_FALSE;
-                    for (VD(usize) z = 0; z < characteristics.num_surface_formats; ++z) {
+                for (Vdusize k = 0; k < comparand->num_surface_formats; ++k) {
+                    Vdb32 found = VD_FALSE;
+                    for (Vdusize z = 0; z < characteristics.num_surface_formats; ++z) {
                         if (comparand->surface_formats[k].format == characteristics.surface_formats[z].format &&
                             comparand->surface_formats[k].colorSpace == characteristics.surface_formats[z].colorSpace)
                         {
@@ -1060,12 +1156,12 @@ VD(b32) VDF(vk_pick_physical_device)(VD(Arena) *temp, VD(VkPickPhysicalDeviceInf
             }
 
             // Check queues
-            for (VD(usize) k = 0; k < comparand->num_queue_setups; ++k) {
-                VD(VkQueueSetup) *want_queue_family = &comparand->queue_setups[k];
-                VD(i32) queue_index = -1;
+            for (Vdusize k = 0; k < comparand->num_queue_setups; ++k) {
+                VdVkQueueSetup *want_queue_family = &comparand->queue_setups[k];
+                Vdi32 queue_index = -1;
 
                 // Loop over all available queues
-                for (VD(usize) z = 0; z < characteristics.num_queue_setups; ++z) {
+                for (Vdusize z = 0; z < characteristics.num_queue_setups; ++z) {
 
                     // If this queue was already picked, don't bother checking
                     if (characteristics.queue_setups[z].cached_index > 0) {
@@ -1085,7 +1181,7 @@ VD(b32) VDF(vk_pick_physical_device)(VD(Arena) *temp, VD(VkPickPhysicalDeviceInf
 
                     // Any queue must match the required capabilities
                     if (characteristics.queue_setups[z].capabilities & want_queue_family->capabilities) {
-                        queue_index = (VD(i32))z;
+                        queue_index = (Vdi32)z;
                         characteristics.queue_setups[z].cached_index = 1;
                         if (info->log) {
                             LOGF("vd_vk_pick_physical_device: Search queue family[%zu] matched family with index %zu", k, z);
@@ -1131,28 +1227,28 @@ VD(b32) VDF(vk_pick_physical_device)(VD(Arena) *temp, VD(VkPickPhysicalDeviceInf
             }
 
             if (rank > best_device_rank) {
-                best_device_index = (VD(i32))j;
+                best_device_index = (Vdi32)j;
                 best_device_physical_device = physical_devices[i];
                 best_device_rank = rank;
             }
         }
 
-        VDF(arena_restore)(save);
+        vd_arena_restore(save);
     }
 
     if (best_device_index < 0) {
         return VD_FALSE;
     }
 
-    LOGF("vd_vk_pick_physical_device: Selected device: %d", (VD(i32))best_device_index);
+    LOGF("vd_vk_pick_physical_device: Selected device: %d", (Vdi32)best_device_index);
 
     *info->result.physical_device = best_device_physical_device;
-    *info->result.selected_characteristics_index = (VD(i32))best_device_index;
+    *info->result.selected_characteristics_index = (Vdi32)best_device_index;
 
     return VD_TRUE;
 }
 
-void VDF(vk_log_physical_device_characteristics)(VD(VkPhysicalDeviceCharacteristics) *characteristics)
+void vd_vk_log_physical_device_characteristics(VdVkPhysicalDeviceCharacteristics *characteristics)
 {
     LOGF("%-60s", "Capabilities---------");
     LOGF("%-60s", "VkPhysicalDeviceFeatures {");
@@ -1282,47 +1378,47 @@ void VDF(vk_log_physical_device_characteristics)(VD(VkPhysicalDeviceCharacterist
     LOGF("%-60s", "} // VkPhysicalDeviceVulkan13Features");
 
     LOGF("%-60s", "Extensions-----------");
-    for (VD(usize) i = 0; i < characteristics->num_extensions; ++i)
+    for (Vdusize i = 0; i < characteristics->num_extensions; ++i)
         LOGF("%-60s", characteristics->extensions[i]);
 
     LOGF("%-60s", "Queue Setups---------");
-    for (VD(usize) i = 0; i < characteristics->num_queue_setups; ++i) {
+    for (Vdusize i = 0; i < characteristics->num_queue_setups; ++i) {
         LOGF("[%zu].required_count: %u", i, characteristics->queue_setups[i].required_count);
         LOGF("[%zu].present_count:  %u", i, characteristics->queue_setups[i].present_count);
         LOGF("[%zu].cached_index:   %d", i, characteristics->queue_setups[i].cached_index);
         LOGF("%s", "                      Graphics Compute Transfer Present");
         LOGF("[%zu].capabilities:     %d        %d       %d        %d",
             i,
-            characteristics->queue_setups[i].capabilities & VD_(VK_QUEUE_CAPABILITIES_GRAPHICS) ? 1 : 0,
-            characteristics->queue_setups[i].capabilities & VD_(VK_QUEUE_CAPABILITIES_COMPUTE)  ? 1 : 0,
-            characteristics->queue_setups[i].capabilities & VD_(VK_QUEUE_CAPABILITIES_TRANSFER) ? 1 : 0,
-            characteristics->queue_setups[i].capabilities & VD_(VK_QUEUE_CAPABILITIES_PRESENT   ? 1 : 0));
+            characteristics->queue_setups[i].capabilities & VD_VK_QUEUE_CAPABILITIES_GRAPHICS ? 1 : 0,
+            characteristics->queue_setups[i].capabilities & VD_VK_QUEUE_CAPABILITIES_COMPUTE  ? 1 : 0,
+            characteristics->queue_setups[i].capabilities & VD_VK_QUEUE_CAPABILITIES_TRANSFER ? 1 : 0,
+            characteristics->queue_setups[i].capabilities & VD_VK_QUEUE_CAPABILITIES_PRESENT  ? 1 : 0);
     }
 
     LOGF("%-60s", "Surface Formats------");
-    for (VD(usize) i = 0; i < characteristics->num_surface_formats; ++i) {
+    for (Vdusize i = 0; i < characteristics->num_surface_formats; ++i) {
         LOGF("%-50s %30s",
             string_VkFormat(characteristics->surface_formats[i].format),
             string_VkColorSpaceKHR(characteristics->surface_formats[i].colorSpace));
     }
 }
 
-void VDF(vk_create_device_and_queues)(VD(Arena) *temp, VD(VkCreateDeviceAndQueuesInfo) *info)
+void vd_vk_create_device_and_queues(VdArena *temp, VdVkCreateDeviceAndQueuesInfo *info)
 {
     VD_ASSERT(info->characteristics->num_queue_setups == info->result.num_queue_groups);
 
-    VD(u32) num_queue_groups = (VD(u32))info->characteristics->num_queue_setups;
+    Vdu32 num_queue_groups = (Vdu32)info->characteristics->num_queue_setups;
 
     // Create arrays for VkDeviceQueueCreateInfo
     VkDeviceQueueCreateInfo *queue_create_infos = ARENA_PUSH_ARRAY(temp, VkDeviceQueueCreateInfo, num_queue_groups); 
-    for (VD(u32) i = 0; i < num_queue_groups; ++i) {
+    for (Vdu32 i = 0; i < num_queue_groups; ++i) {
         VD_ASSERT(info->characteristics->queue_setups[i].required_count == info->result.queue_groups[i].queue_count);
         VD_ASSERT(info->characteristics->queue_setups[i].cached_index >= 0);
 
-        VD(u32) queue_count = info->characteristics->queue_setups[i].required_count;
+        Vdu32 queue_count = info->characteristics->queue_setups[i].required_count;
 
         float *priorities = ARENA_PUSH_ARRAY(temp, float, queue_count);
-        for (VD(u32) j = 0; j < queue_count; ++j) {
+        for (Vdu32 j = 0; j < queue_count; ++j) {
             priorities[j] = 1.0f;
         }
 
@@ -1469,15 +1565,15 @@ void VDF(vk_create_device_and_queues)(VD(Arena) *temp, VD(VkCreateDeviceAndQueue
 
     VD_VK_CHECK(vkCreateDevice(info->characteristics->physical_device, & (VkDeviceCreateInfo) {
         .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .queueCreateInfoCount    = (VD(u32))info->characteristics->num_queue_setups,
+        .queueCreateInfoCount    = (Vdu32)info->characteristics->num_queue_setups,
         .pQueueCreateInfos       = queue_create_infos,
-        .enabledExtensionCount   = (VD(u32))info->characteristics->num_extensions,
+        .enabledExtensionCount   = (Vdu32)info->characteristics->num_extensions,
         .ppEnabledExtensionNames = (const char * const *)info->characteristics->extensions,
         .pNext                   = &features,
     }, 0, info->result.device));
 
-    for (VD(u32) i = 0; i < num_queue_groups; ++i) {
-        for (VD(u32) q = 0; q < info->result.queue_groups[i].queue_count; ++q) {
+    for (Vdu32 i = 0; i < num_queue_groups; ++i) {
+        for (Vdu32 q = 0; q < info->result.queue_groups[i].queue_count; ++q) {
             vkGetDeviceQueue(
                 *info->result.device,
                 info->characteristics->queue_setups[i].cached_index, 
@@ -1487,14 +1583,14 @@ void VDF(vk_create_device_and_queues)(VD(Arena) *temp, VD(VkCreateDeviceAndQueue
     }
 }
 
-void VDF(vk_create_swapchain_and_fetch_images)(VD(Arena) *a, VD(VkCreateSwapchainAndFetchImagesInfo) *info)
+void vd_vk_create_swapchain_and_fetch_images(VdArena *a, VdVkCreateSwapchainAndFetchImagesInfo *info)
 {
     VkSurfaceCapabilitiesKHR surface_caps;
 
     // Query swapchain capabilities
     VD_VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(info->physical_device, info->surface, &surface_caps));
 
-    VD(u32) result_image_count = surface_caps.minImageCount + 1;
+    Vdu32 result_image_count = surface_caps.minImageCount + 1;
     if (surface_caps.maxImageCount > 0 && surface_caps.maxImageCount < result_image_count) {
         result_image_count = surface_caps.maxImageCount;
     }
@@ -1520,7 +1616,7 @@ void VDF(vk_create_swapchain_and_fetch_images)(VD(Arena) *a, VD(VkCreateSwapchai
         .oldSwapchain          = VK_NULL_HANDLE,
     }, 0, info->result.swapchain));
 
-    VD(u32) num_swapchain_images;
+    Vdu32 num_swapchain_images;
     VD_VK_CHECK(vkGetSwapchainImagesKHR(info->device, *info->result.swapchain, &num_swapchain_images, 0));
     VkImage *swapchain_images = VD_ARENA_PUSH_ARRAY(a, VkImage, num_swapchain_images);
     VD_VK_CHECK(vkGetSwapchainImagesKHR(info->device, *info->result.swapchain, &num_swapchain_images, swapchain_images));
@@ -1529,7 +1625,7 @@ void VDF(vk_create_swapchain_and_fetch_images)(VD(Arena) *a, VD(VkCreateSwapchai
     *info->result.images = swapchain_images;
 }
 
-void VDF(vk_create_image_views)(VD(Arena) *a, VD(VkCreateImageViewsInfo) *info)
+void vd_vk_create_image_views(VdArena *a, VdVkCreateImageViewsInfo *info)
 {
     VkImageViewCreateInfo default_create_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -1557,7 +1653,7 @@ void VDF(vk_create_image_views)(VD(Arena) *a, VD(VkCreateImageViewsInfo) *info)
 
     VkImageView *views = VD_ARENA_PUSH_ARRAY(a, VkImageView, info->num_images);
 
-    for (VD(u32) i = 0; i < info->num_images; ++i) {
+    for (Vdu32 i = 0; i < info->num_images; ++i) {
         create_info->image = info->images[i];
         VD_VK_CHECK(vkCreateImageView(info->device, create_info, 0, &views[i]));
     }
@@ -1565,7 +1661,7 @@ void VDF(vk_create_image_views)(VD(Arena) *a, VD(VkCreateImageViewsInfo) *info)
     *info->result.image_views = views;
 }
 
-void VDF(vk_cmd_image_transition)(VkCommandBuffer cmd, VD(VkCmdImageTransitionInfo) *info)
+void vd_vk_cmd_image_transition(VkCommandBuffer cmd, VdVkCmdImageTransitionInfo *info)
 {
     vkCmdPipelineBarrier(
         cmd,
@@ -1598,29 +1694,29 @@ void VDF(vk_cmd_image_transition)(VkCommandBuffer cmd, VD(VkCmdImageTransitionIn
         });
 }
 
-void VDF(vk_destroy_image_views)(VkDevice device, VD(u32) num_image_views, VkImageView *image_views)
+void vd_vk_destroy_image_views(VkDevice device, Vdu32 num_image_views, VkImageView *image_views)
 {
-    for (VD(u32) i = 0; i < num_image_views; ++i) {
+    for (Vdu32 i = 0; i < num_image_views; ++i) {
         vkDestroyImageView(device, image_views[i], 0);
     }
 }
 
-void VDF(vk_destroy_framebuffers)(VkDevice device, VD(u32) num_framebuffers, VkFramebuffer *framebuffers)
+void vd_vk_destroy_framebuffers(VkDevice device, Vdu32 num_framebuffers, VkFramebuffer *framebuffers)
 {
-    for (VD(u32) i = 0; i < num_framebuffers; ++i) {
+    for (Vdu32 i = 0; i < num_framebuffers; ++i) {
         vkDestroyFramebuffer(device, framebuffers[i], 0);
     }
 }
 
-void VDF(vk_destroy_semaphores)(VkDevice device, VD(u32) num_semaphores, VkSemaphore *semaphores)
+void vd_vk_destroy_semaphores(VkDevice device, Vdu32 num_semaphores, VkSemaphore *semaphores)
 {
-    for (VD(u32) i = 0; i < num_semaphores; ++i) {
+    for (Vdu32 i = 0; i < num_semaphores; ++i) {
         vkDestroySemaphore(device, semaphores[i], 0);
     }
 }
 
 /* ----IMMEDIATE COMMANDS IMPL--------------------------------------------------------------------------------------- */
-void VDF(vk_immediate_commands_init)(VD(VkImmediateCommands) *cmds, VD(VkImmediateCommandsInitInfo) *info)
+void vd_vk_immediate_commands_init(VdVkImmediateCommands *cmds, VdVkImmediateCommandsInitInfo *info)
 {
     cmds->device = info->device;
     cmds->recording = VD_FALSE;
@@ -1645,7 +1741,7 @@ void VDF(vk_immediate_commands_init)(VD(VkImmediateCommands) *cmds, VD(VkImmedia
     }, 0, &cmds->fence));
 }
 
-VkCommandBuffer VDF(vk_immediate_commands_begin)(VD(VkImmediateCommands) *cmds)
+VkCommandBuffer vd_vk_immediate_commands_begin(VdVkImmediateCommands *cmds)
 {
     if (cmds->recording) {
         VD_ASSERT(0 && "Cannot call vk_immediate_commands_begin without having called vk_immediate_commands_end in the past!");
@@ -1662,7 +1758,7 @@ VkCommandBuffer VDF(vk_immediate_commands_begin)(VD(VkImmediateCommands) *cmds)
     return cmds->buffer;
 }
 
-void VDF(vk_immediate_commands_end)(VD(VkImmediateCommands) *cmds)
+void vd_vk_immediate_commands_end(VdVkImmediateCommands *cmds)
 {
     if (!cmds->recording) {
         VD_ASSERT(0 && "Cannot call vk_immediate_commands_end without having called vk_immediate_commands_begin in the past!");
@@ -1683,7 +1779,7 @@ void VDF(vk_immediate_commands_end)(VD(VkImmediateCommands) *cmds)
     cmds->recording = VD_FALSE;
 }
 
-void VDF(vk_immediate_commands_deinit)(VD(VkImmediateCommands) *cmds)
+void vd_vk_immediate_commands_deinit(VdVkImmediateCommands *cmds)
 {
     vkDestroyCommandPool(cmds->device, cmds->pool, 0);
     vkDestroyFence(cmds->device, cmds->fence, 0);
@@ -1708,53 +1804,53 @@ void VDF(vk_immediate_commands_deinit)(VD(VkImmediateCommands) *cmds)
 #define VD_VK_VMA_MAX_ENTRIES 1024
 #endif // !VD_VK_VMA_TRACKING_MAX_ENTRIES_CUSTOM
 
-typedef struct VDI(VkVmaTrackingEntry) VDI(VkVmaTrackingEntry);
+typedef struct VdVk__VmaTrackingEntry VdVk__VmaTrackingEntry;
 
-struct VDI(VkVmaTrackingEntry) {
+struct VdVk__VmaTrackingEntry {
     char                    filepath[VD_VK_VMA_MAX_FILEPATH];
-    VD(i32)                 line;
-    VD(b32)                 used;
-    VDI(VkVmaTrackingEntry) *n;
-    VDI(VkVmaTrackingEntry) *p;
+    Vdi32                 line;
+    Vdb32                 used;
+    VdVk__VmaTrackingEntry *n;
+    VdVk__VmaTrackingEntry *p;
 };
 
 struct {
-    VDI(VkVmaTrackingEntry)     sentinel;
-    VDI(VkVmaTrackingEntry)     *entries;
-    VD(usize)                   num_used;
-} VDI(Vk_Vma_Tracking) = {
+    VdVk__VmaTrackingEntry     sentinel;
+    VdVk__VmaTrackingEntry     *entries;
+    Vdusize                   num_used;
+} VdVk___Vma_Tracking = {
     .entries = 0,
     .num_used = 0,
 };
 
-void VDI(vk_vma_track_allocation)(VmaAllocator allocator, VmaAllocation allocation, const char *file, int filelen, int line)
+void vd_vk__vma_track_allocation(VmaAllocator allocator, VmaAllocation allocation, const char *file, int filelen, int line)
 {
     VD_UNUSED(allocator);
     VD_UNUSED(allocation);
     VD_TODO();
 
-    const VD(usize) allocation_size = sizeof(VDI(VkVmaTrackingEntry)) * VD_VK_VMA_MAX_ENTRIES;
-    if (VDI(Vk_Vma_Tracking).entries == 0) {
-        VDI(Vk_Vma_Tracking).sentinel.n = &VDI(Vk_Vma_Tracking).sentinel;
-        VDI(Vk_Vma_Tracking).sentinel.p = &VDI(Vk_Vma_Tracking).sentinel;
-        VDI(Vk_Vma_Tracking).entries = VD_MEMSET(VD_MALLOC(allocation_size), 0, allocation_size);
+    const Vdusize allocation_size = sizeof(VdVk__VmaTrackingEntry) * VD_VK_VMA_MAX_ENTRIES;
+    if (VdVk___Vma_Tracking.entries == 0) {
+        VdVk___Vma_Tracking.sentinel.n = &VdVk___Vma_Tracking.sentinel;
+        VdVk___Vma_Tracking.sentinel.p = &VdVk___Vma_Tracking.sentinel;
+        VdVk___Vma_Tracking.entries = VD_MEMSET(VD_MALLOC(allocation_size), 0, allocation_size);
     }
 
-    VD_ASSERT((VDI(Vk_Vma_Tracking).num_used < VD_VK_VMA_MAX_ENTRIES) &&
-              (VDI(Vk_Vma_Tracking).sentinel.n != VDI(Vk_Vma_Tracking).sentinel.p));
+    VD_ASSERT((VdVk___Vma_Tracking.num_used < VD_VK_VMA_MAX_ENTRIES) &&
+              (VdVk___Vma_Tracking.sentinel.n != VdVk___Vma_Tracking.sentinel.p));
 
     // Allocate the entry
-    VDI(VkVmaTrackingEntry) *entry;
+    VdVk__VmaTrackingEntry *entry;
 
-    if (VDI(Vk_Vma_Tracking).num_used < VD_VK_VMA_MAX_ENTRIES) {
+    if (VdVk___Vma_Tracking.num_used < VD_VK_VMA_MAX_ENTRIES) {
         // We can just bump the pointer and then allocate
-        VD(u64) entry_index = VDI(Vk_Vma_Tracking).num_used++;
-        entry = &VDI(Vk_Vma_Tracking).entries[entry_index];
+        Vdu64 entry_index = VdVk___Vma_Tracking.num_used++;
+        entry = &VdVk___Vma_Tracking.entries[entry_index];
     } else {
         // We can get one from the free list
-        VDI(VkVmaTrackingEntry) *S = &VDI(Vk_Vma_Tracking).sentinel;
-        VDI(VkVmaTrackingEntry) *R = S->n;
-        VDI(VkVmaTrackingEntry) *N = R->n;
+        VdVk__VmaTrackingEntry *S = &VdVk___Vma_Tracking.sentinel;
+        VdVk__VmaTrackingEntry *R = S->n;
+        VdVk__VmaTrackingEntry *N = R->n;
 
         S->n = N;
         N->p = S;
@@ -1768,25 +1864,25 @@ void VDI(vk_vma_track_allocation)(VmaAllocator allocator, VmaAllocation allocati
     entry->used = VD_TRUE;
 }
 
-void VDI(vk_vma_release_allocation)(VmaAllocator allocator, VmaAllocation allocation)
+void vd_vk__vma_release_allocation(VmaAllocator allocator, VmaAllocation allocation)
 {
     VmaAllocationInfo info;
     vmaGetAllocationInfo(allocator, allocation, &info);
-    VDI(VkVmaTrackingEntry) *entry = (VDI(VkVmaTrackingEntry)*)info.pUserData;
+    VdVk__VmaTrackingEntry *entry = (VdVk__VmaTrackingEntry*)info.pUserData;
     entry->used = VD_FALSE;
 
-    VDI(VkVmaTrackingEntry) *S = &VDI(Vk_Vma_Tracking).sentinel;
-    VDI(VkVmaTrackingEntry) *R = entry;
-    VDI(VkVmaTrackingEntry) *N = S->n;
+    VdVk__VmaTrackingEntry *S = &VdVk___Vma_Tracking.sentinel;
+    VdVk__VmaTrackingEntry *R = entry;
+    VdVk__VmaTrackingEntry *N = S->n;
 
     N->p = R;
     R->n = N;
     S->n = R;
 }
 
-void VDI(vk_vma_check_allocations)(void) {
-    VDI(VkVmaTrackingEntry) *S = &VDI(Vk_Vma_Tracking).sentinel;
-    VDI(VkVmaTrackingEntry) *n = VDI(Vk_Vma_Tracking).sentinel.n;
+void vd_vk__vma_check_allocations(void) {
+    VdVk__VmaTrackingEntry *S = &VdVk___Vma_Tracking.sentinel;
+    VdVk__VmaTrackingEntry *n = VdVk___Vma_Tracking.sentinel.n;
     while (n != S) {
         ERRF("VMA: Failed to release allocation at: %s:%d", n->filepath, n->line);
         n = n->n;
@@ -1797,9 +1893,9 @@ void VDI(vk_vma_check_allocations)(void) {
 
 /* ----GROWABLE DESCRIPTOR ALLOCATOR IMPL---------------------------------------------------------------------------- */
 
-static VDI(VkGrowableDescriptorAllocatorPool)* VDI(vk_growable_descriptor_allocator_grab_pool)(VD(VkGrowableDescriptorAllocator) *desc_alloc);
+static VdVk__GrowableDescriptorAllocatorPool* vd_vk__growable_descriptor_allocator_grab_pool(VdVkGrowableDescriptorAllocator *desc_alloc);
 
-static VD(VkGrowableDescriptorAllocatorPoolSizeRatio) VDI(Growable_Descriptor_Allocator_Default_Pool_Sizes)[] = {
+static VdVkGrowableDescriptorAllocatorPoolSizeRatio Vd__Growable_Descriptor_Allocator_Default_Pool_Sizes[] = {
     { VK_DESCRIPTOR_TYPE_SAMPLER,                0.5f},
     { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4.f},
     { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,          4.f},
@@ -1813,31 +1909,31 @@ static VD(VkGrowableDescriptorAllocatorPoolSizeRatio) VDI(Growable_Descriptor_Al
     { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,       0.5f},
 };
 
-void VDF(vk_growable_descriptor_allocator_init)(VD(VkGrowableDescriptorAllocator) *desc_alloc, VD(VkGrowableDescriptorAllocatorInitInfo) *info)
+void vd_vk_growable_descriptor_allocator_init(VdVkGrowableDescriptorAllocator *desc_alloc, VdVkGrowableDescriptorAllocatorInitInfo *info)
 {
     desc_alloc->arena        = info->arena;
     desc_alloc->device       = info->device;
     desc_alloc->current_pool = 0;
 
-    VDF(dlist_init)(&desc_alloc->used_pool_list);
-    VDF(dlist_init)(&desc_alloc->free_pool_list);
+    vd_dlist_init(&desc_alloc->used_pool_list);
+    vd_dlist_init(&desc_alloc->free_pool_list);
 
     if (info->override_pool_sizes != 0) {
         desc_alloc->num_ratios = info->num_override_pool_sizes;
         desc_alloc->ratios     = info->override_pool_sizes;
     } else {
-        desc_alloc->num_ratios = VD_ARRAY_COUNT(VDI(Growable_Descriptor_Allocator_Default_Pool_Sizes));
-        desc_alloc->ratios     = VDI(Growable_Descriptor_Allocator_Default_Pool_Sizes);
+        desc_alloc->num_ratios = VD_ARRAY_COUNT(Vd__Growable_Descriptor_Allocator_Default_Pool_Sizes);
+        desc_alloc->ratios     = Vd__Growable_Descriptor_Allocator_Default_Pool_Sizes;
     }
 }
 
-VkResult VDF(vk_growable_descriptor_allocator_get)(VD(VkGrowableDescriptorAllocator) *desc_alloc, VkDescriptorSetLayout layout, VkDescriptorSet *set)
+VkResult vd_vk_growable_descriptor_allocator_get(VdVkGrowableDescriptorAllocator *desc_alloc, VkDescriptorSetLayout layout, VkDescriptorSet *set)
 {
     if (desc_alloc->current_pool == 0) {
-        VDI(VkGrowableDescriptorAllocatorPool) *p;
-        p = VDI(vk_growable_descriptor_allocator_grab_pool)(desc_alloc);
+        VdVk__GrowableDescriptorAllocatorPool *p;
+        p = vd_vk__growable_descriptor_allocator_grab_pool(desc_alloc);
         desc_alloc->current_pool = p;
-        VD(dlist_append)(&desc_alloc->used_pool_list, &p->node);
+        vd_dlist_append(&desc_alloc->used_pool_list, &p->node);
     }
 
     VkResult result = vkAllocateDescriptorSets(desc_alloc->device, & (VkDescriptorSetAllocateInfo) {
@@ -1849,10 +1945,10 @@ VkResult VDF(vk_growable_descriptor_allocator_get)(VD(VkGrowableDescriptorAlloca
 
     if ((result == VK_ERROR_FRAGMENTED_POOL) || (result == VK_ERROR_OUT_OF_POOL_MEMORY)) {
 
-        VDI(VkGrowableDescriptorAllocatorPool) *p;
-        p = VDI(vk_growable_descriptor_allocator_grab_pool)(desc_alloc);
+        VdVk__GrowableDescriptorAllocatorPool *p;
+        p = vd_vk__growable_descriptor_allocator_grab_pool(desc_alloc);
         desc_alloc->current_pool = p;
-        VD(dlist_append)(&desc_alloc->used_pool_list, &p->node);
+        vd_dlist_append(&desc_alloc->used_pool_list, &p->node);
 
         result = vkAllocateDescriptorSets(desc_alloc->device, & (VkDescriptorSetAllocateInfo) {
             .sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -1867,59 +1963,59 @@ VkResult VDF(vk_growable_descriptor_allocator_get)(VD(VkGrowableDescriptorAlloca
     return result;
 }
 
-void VDF(vk_growable_descriptor_allocator_reset)(VD(VkGrowableDescriptorAllocator) *desc_alloc)
+void vd_vk_growable_descriptor_allocator_reset(VdVkGrowableDescriptorAllocator *desc_alloc)
 {
     VD_DLIST_FOR_EACH(&desc_alloc->used_pool_list, n) {
-        VDI(VkGrowableDescriptorAllocatorPool) *p = VD_CONTAINER_OF(n, VDI(VkGrowableDescriptorAllocatorPool), node);
+        VdVk__GrowableDescriptorAllocatorPool *p = VD_CONTAINER_OF(n, VdVk__GrowableDescriptorAllocatorPool, node);
 
         VD_VK_CHECK(vkResetDescriptorPool(desc_alloc->device, p->pool, 0));
     }
 
-    while (!VDF(dlist_is_empty)(&desc_alloc->used_pool_list)) {
-        VD(DListNode) *n = VDF(dlist_rm_first)(&desc_alloc->used_pool_list);
-        VDF(dlist_append)(&desc_alloc->free_pool_list, n);
+    while (!vd_dlist_is_empty(&desc_alloc->used_pool_list)) {
+        VdDListNode *n = vd_dlist_rm_first(&desc_alloc->used_pool_list);
+        vd_dlist_append(&desc_alloc->free_pool_list, n);
     }
 
     desc_alloc->current_pool = 0;
 }
 
-void VDF(vk_growable_descriptor_allocator_deinit)(VD(VkGrowableDescriptorAllocator) *desc_alloc)
+void vd_vk_growable_descriptor_allocator_deinit(VdVkGrowableDescriptorAllocator *desc_alloc)
 {
     VD_DLIST_FOR_EACH(&desc_alloc->used_pool_list, n) {
-        VDI(VkGrowableDescriptorAllocatorPool) *p = VD_CONTAINER_OF(n, VDI(VkGrowableDescriptorAllocatorPool), node);
+        VdVk__GrowableDescriptorAllocatorPool *p = VD_CONTAINER_OF(n, VdVk__GrowableDescriptorAllocatorPool, node);
         vkDestroyDescriptorPool(desc_alloc->device, p->pool, 0);
     }
 
     VD_DLIST_FOR_EACH(&desc_alloc->free_pool_list, n) {
-        VDI(VkGrowableDescriptorAllocatorPool) *p = VD_CONTAINER_OF(n, VDI(VkGrowableDescriptorAllocatorPool), node);
+        VdVk__GrowableDescriptorAllocatorPool *p = VD_CONTAINER_OF(n, VdVk__GrowableDescriptorAllocatorPool, node);
         vkDestroyDescriptorPool(desc_alloc->device, p->pool, 0);
     }
 }
 
-static VDI(VkGrowableDescriptorAllocatorPool) *VDI(vk_growable_descriptor_allocator_grab_pool)(VD(VkGrowableDescriptorAllocator) *desc_alloc)
+static VdVk__GrowableDescriptorAllocatorPool *vd_vk__growable_descriptor_allocator_grab_pool(VdVkGrowableDescriptorAllocator *desc_alloc)
 {
     // Try to get one from 
-    VD(DListNode) *result = VDF(dlist_rm_first)(&desc_alloc->free_pool_list);
+    VdDListNode *result = vd_dlist_rm_first(&desc_alloc->free_pool_list);
     if (result != 0) {
-        return VD_CONTAINER_OF(result, VDI(VkGrowableDescriptorAllocatorPool), node);
+        return VD_CONTAINER_OF(result, VdVk__GrowableDescriptorAllocatorPool, node);
     }
 
     // Create a pool
-    VDI(VkGrowableDescriptorAllocatorPool) *pool = VD_ARENA_PUSH_STRUCT(desc_alloc->arena, VDI(VkGrowableDescriptorAllocatorPool));
-    VDF(dlist_node_init)(&pool->node);
+    VdVk__GrowableDescriptorAllocatorPool *pool = VD_ARENA_PUSH_STRUCT(desc_alloc->arena, VdVk__GrowableDescriptorAllocatorPool);
+    vd_dlist_node_init(&pool->node);
 
-    VD(ArenaSave) save = VDF(arena_save)(desc_alloc->arena);
+    VdArenaSave save = vd_arena_save(desc_alloc->arena);
 
-    VD(u32) num_pool_sizes = (VD(u32))desc_alloc->num_ratios;
+    Vdu32 num_pool_sizes = (Vdu32)desc_alloc->num_ratios;
     VkDescriptorPoolSize *pool_sizes = VD_ARENA_PUSH_ARRAY(desc_alloc->arena, VkDescriptorPoolSize, desc_alloc->num_ratios);
 
     // @todo(mdodis): Customize this in the future
-    const VD(u32) max_sets = 1000;
+    const Vdu32 max_sets = 1000;
 
-    for (VD(u32) i = 0; i < num_pool_sizes; ++i) {
+    for (Vdu32 i = 0; i < num_pool_sizes; ++i) {
         pool_sizes[i]        = (VkDescriptorPoolSize) {
             .type            = desc_alloc->ratios[i].type,
-            .descriptorCount = (VD(u32))(desc_alloc->ratios[i].ratio * max_sets),
+            .descriptorCount = (Vdu32)(desc_alloc->ratios[i].ratio * max_sets),
         };
     }
 
@@ -1931,7 +2027,7 @@ static VDI(VkGrowableDescriptorAllocatorPool) *VDI(vk_growable_descriptor_alloca
         .pPoolSizes    = pool_sizes,
     }, 0, &pool->pool));
 
-    VDF(arena_restore)(save);
+    vd_arena_restore(save);
 
     return pool;
 }
