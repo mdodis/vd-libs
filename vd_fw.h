@@ -2241,7 +2241,11 @@ int vd_fw_init(VdFwInitInfo *info)
 
     VD_FW_G.proc_swapInterval = (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
 
-    vd_fw__load_opengl(info->gl.version);
+    VdFwGlVersion version = VD_FW_GL_VERSION_3_3;
+    if (info && info->gl.version != VD_FW_GL_VERSION_BASIC) {
+        version = info->gl.version;
+    }
+    vd_fw__load_opengl(version);
 
     if (info != 0) {
 #if VD_FW_WIN32_SUBSYSTEM == VD_FW_WIN32_SUBSYSTEM_WINDOWS
@@ -2913,6 +2917,16 @@ LRESULT WinMainCRTStartup(void)
     ExitProcess(result);
 }
 #endif // VD_FW_WIN32_SUBSYSTEM == VD_FW_WIN32_SUBSYSTEM_CONSOLE
+#else
+int wWinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPWSTR cmdline, int nshowcmd)
+{
+    VD_UNUSED(hinstance);
+    VD_UNUSED(prev_instance);
+    VD_UNUSED(cmdline);
+    VD_UNUSED(nshowcmd);
+    int result = main(0, 0);
+    ExitProcess(result);
+}
 #endif // VD_FW_NO_CRT
 
 #undef VD_FW_G
@@ -3728,9 +3742,6 @@ void vd_fw_draw_window_border(void)
 
         int widthi, heighti;
         vd_fw_get_size(&widthi, &heighti);
-
-        data.window[0] = width;
-        data.window[1] = height;
 
         width  = (float)widthi;
         height = (float)heighti;

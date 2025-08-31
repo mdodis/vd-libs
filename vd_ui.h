@@ -32,21 +32,65 @@
 #error "vd_ui.h requires vd.h"
 #endif // !VD_H
 
-typedef struct VdUiContext *VdUiContext;
+typedef struct VdUiContext VdUiContext;
+
+typedef struct VdUiDiv VdUiDiv;
+struct VdUiDiv {
+    VdUiDiv *first;
+    VdUiDiv *last;
+    VdUiDiv *next;
+    VdUiDiv *prev;
+    VdUiDiv *parent;
+};
 
 typedef struct {
     int a;
 } VdUiContextCreateInfo;
 
-VdUiContext *vd_ui_context_create(VdUiContextCreateInfo *info);
+extern void         vd_ui_init(void);
+extern VdUiContext* vd_ui_context_create(VdUiContextCreateInfo *info);
+extern void         vd_ui_context_set(VdUiContext *context);
+extern VdUiContext* vd_ui_context_get(void);
+extern VdUiDiv*     vd_ui_div_new(VdStr string);
+extern VdUiDiv*     vd_ui_push_parent(VdUiDiv *div);
+extern VdUiDiv*     vd_ui_pop_parent(void);
 
 #endif // !VD_UI_H
 
 #ifdef VD_UI_IMPL
 
+static VdUiContext *Vd_Ui_Global_Context = 0;
+
+#define VD_UI_PARENT_STACK_MAX 256
+
+struct VdUiContext {
+    VD_STRMAP VdUiDiv *map;
+    VdUiDiv           *parents[VD_UI_PARENT_STACK_MAX];
+    VdUiDiv           root;
+};
+
+void vd_ui_init(void)
+{
+    vd_ui_context_set(vd_ui_context_create(0));
+}
+
 VdUiContext *vd_ui_context_create(VdUiContextCreateInfo *info)
 {
     VD_UNUSED(info);
-    return 0;
+
+    VdUiContext *result = VD_MALLOC(sizeof(VdUiContext));
+    VD_MEMSET(result, 0, sizeof(*result));
+    return result;
 }
+
+void vd_ui_context_set(VdUiContext *context)
+{
+    Vd_Ui_Global_Context = context;
+}
+
+VdUiContext* vd_ui_context_get(void)
+{
+    return Vd_Ui_Global_Context;
+}
+
 #endif // VD_UI_IMPL
