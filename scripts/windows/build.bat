@@ -47,10 +47,16 @@ if %SAMPLE_TO_COMPILE%==ui_basic (
     cl /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %SRC_DIR%\ui_basic.c /Fe:ui_basic.exe 
 )
 
+REM --SAMPLES - GL WINDOW-----------------------------------------------------------------------------------------------
+if %SAMPLE_TO_COMPILE%==gl_window (
+    cl /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %SRC_DIR%\gl_window.c /Fe:gl_window.exe 
+)
+
 REM --SAMPLES - GL CUBE-------------------------------------------------------------------------------------------------
 if %SAMPLE_TO_COMPILE%==gl_cube (
     cl /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %SRC_DIR%\gl_cube.c /Fe:gl_cube.exe 
 )
+
 
 popd
 popd

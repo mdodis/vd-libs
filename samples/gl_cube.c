@@ -52,11 +52,7 @@ int main(int argc, char const *argv[])
 
     while (vd_fw_running()) {
 
-        unsigned long long ns = vd_fw_delta_ns();
-        double milliseconds = (double)ns / 1000000.0;
-        double delta_seconds64 = milliseconds / 1000.0;
-        float delta_seconds = (float)delta_seconds64;
-
+        // float delta_seconds = vd_fw_delta_s();
         int w, h;
         vd_fw_get_size(&w, &h);
 
@@ -64,8 +60,7 @@ int main(int argc, char const *argv[])
         glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-
-
+        vd_fw_draw_window_border();
         vd_fw_swap_buffers();
     }
     return 0;

@@ -60,6 +60,46 @@ extern int                vd_fw_swap_buffers(void);
 extern int                vd_fw_get_size(int *w, int *h);
 extern unsigned long long vd_fw_delta_ns(void);
 extern int                vd_fw_set_vsync_on(int on);
+extern void               vd_fw_draw_window_border(void);
+extern int                vd_fw_get_mouse_state(int *x, int *y);
+inline int                vd_fw_get_mouse_statef(float *x, float *y);
+inline float              vd_fw_delta_s(void);
+inline void               vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16]);
+inline int                vd_fw_u_point_in_rect(float x, float y, float rx, float ry, float rw, float rh);
+
+inline float vd_fw_delta_s(void)
+{
+    unsigned long long ns  = vd_fw_delta_ns();
+    double ms              = (double)ns / 1000000.0;
+    double s64             = ms         / 1000.0;
+    float s                = (float)s64;
+    return s;
+}
+
+inline int vd_fw_u_point_in_rect(float x, float y, float rx, float ry, float rw, float rh)
+{
+    return (x >= rx) && (x <= (rx + rw)) &&
+           (y >= ry) && (y <= (ry + rh));
+}
+
+inline int vd_fw_get_mouse_statef(float *x, float *y)
+{
+    int xi, yi;
+    int result = vd_fw_get_mouse_state(&xi, &yi);
+
+    if (x) *x = (float)xi;
+    if (y) *y = (float)yi;
+
+    return result;
+}
+
+inline void vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16])
+{
+    out[0]  = 2.0f / (right - left);               out[1]  = 0.0f;                              out[2]  = 0.0f;                          out[3]  = 0.0f;
+    out[4]  = 0.0f;                                out[5]  = 2.0f / (top - bottom);             out[6]  = 0.0f;                          out[7]  = 0.0f;
+    out[8]  = 0.0f;                                out[9]  = 0.0f;                              out[10] = -2.0f / (far - near);          out[11] = 0.0f;
+    out[12] = - (right + left) / (right - left);   out[13] = - (top + bottom) / (top - bottom); out[14] = - (far + near) / (far - near); out[15] = 1.0f;
+}
 
 #if _WIN32
 #define VD_FW_WIN32_SUBSYSTEM_CONSOLE 1
@@ -2276,6 +2316,19 @@ int vd_fw_set_vsync_on(int on)
     return result == TRUE ? on : 0;
 }
 
+int vd_fw_get_mouse_state(int *x, int *y)
+{
+    POINT p;
+    GetCursorPos(&p);
+
+    ScreenToClient(VD_FW_G.hwnd, &p);
+
+    if (x) *x = p.x;
+    if (y) *y = p.y;
+
+    return 0;
+}
+
 unsigned long long vd_fw_delta_ns(void)
 {
     LARGE_INTEGER now_performance_counter;
@@ -2350,6 +2403,12 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
 
 static void vd_fw__gl_debug_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam)
 {
+    (void)userParam;
+    (void)severity;
+    (void)id;
+    (void)type;
+    (void)source;
+
     DWORD written;
     WriteConsole(
         GetStdHandle(STD_OUTPUT_HANDLE),
@@ -3438,6 +3497,124 @@ static void vd_fw__load_opengl(VdFwGlVersion version)
         LOAD(PFNGLVERTEXATTRIBP4UIVPROC,           glVertexAttribP4uiv);
     }
 #undef LOAD
+}
+
+typedef struct {
+    int     initialized;
+    GLint   projection_location;
+    GLint   rect_location;
+    GLint   color_location;
+    GLuint  vao;
+    GLuint  program;
+    GLuint  vbo;
+    GLuint  ibo;
+} VdFw__GenericInternalData;
+
+#define VD_FW_GL_VERSION_3_3_INTERNAL_VERTEX_SHADER_SOURCE                                                             \
+    "#version 330 core                                                                                             \n" \
+    "uniform mat4 uProjection;                                                                                     \n" \
+    "uniform vec4 uRect;                                                                                           \n" \
+    "void main() {                                                                                                 \n" \
+    "   vec2 positions[6] = vec2[](                                                                                \n" \
+    "       vec2(0.0, 0.0), // top-left                                                                            \n" \
+    "       vec2(1.0, 0.0), // top-right                                                                           \n" \
+    "       vec2(1.0, 1.0), // bottom-right                                                                        \n" \
+    "       vec2(1.0, 1.0), // bottom-right                                                                        \n" \
+    "       vec2(0.0, 1.0), // bottom-left                                                                         \n" \
+    "       vec2(0.0, 0.0)  // top-left                                                                            \n" \
+    "   );                                                                                                         \n" \
+    "   vec2 p = vec2(positions[gl_VertexID].x * uRect.z + uRect.x, positions[gl_VertexID].y * uRect.w + uRect.y); \n" \
+    "   gl_Position = uProjection * vec4(p, 0.0, 1.0);                                                             \n" \
+    "}                                                                                                             \n" \
+
+#define VD_FW_GL_VERSION_3_3_INTERNAL_FRAGMENT_SHADER_SOURCE                                                           \
+    "#version 330 core                                                                                             \n" \
+    "uniform vec4 uColor;                                                                                          \n" \
+    "out vec4 FragColor;                                                                                           \n" \
+    "void main() {                                                                                                 \n" \
+    "   FragColor = uColor;                                                                                        \n" \
+    "}                                                                                                             \n" \
+
+void vd_fw_draw_window_border(void)
+{
+    static VdFw__GenericInternalData data = {0};
+
+    if (!data.initialized) {
+        data.initialized = 1;
+        glGenVertexArrays(1, &data.vao);
+        glBindVertexArray(data.vao);
+
+        const char *vertex_shader = VD_FW_GL_VERSION_3_3_INTERNAL_VERTEX_SHADER_SOURCE;
+        GLuint vshd = glCreateShader(GL_VERTEX_SHADER);
+        glShaderSource(vshd, 1, &vertex_shader, 0);
+        glCompileShader(vshd);
+
+        const char *fragment_shader = VD_FW_GL_VERSION_3_3_INTERNAL_FRAGMENT_SHADER_SOURCE;
+        GLuint fshd = glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(fshd, 1, &fragment_shader, 0);
+        glCompileShader(fshd);
+
+        data.program = glCreateProgram();
+        glAttachShader(data.program, vshd);
+        glAttachShader(data.program, fshd);
+        glLinkProgram(data.program);
+
+        data.projection_location = glGetUniformLocation(data.program, "uProjection");
+        data.rect_location       = glGetUniformLocation(data.program, "uRect");
+        data.color_location      = glGetUniformLocation(data.program, "uColor");
+
+        glBindVertexArray(0);
+    }
+    glUseProgram(data.program);
+
+    int widthi, heighti;
+    vd_fw_get_size(&widthi, &heighti);
+
+    float width  = (float)widthi;
+    float height = (float)heighti;
+
+    float projection[16];
+    vd_fw_u_ortho(0.0f, width, height, 0.0f, -1.0f, 1.0f, projection);
+    glUniformMatrix4fv(data.projection_location, 1, GL_FALSE, projection);
+
+    glBindVertexArray(data.vao);
+
+#define PUT_RECT(x, y, w, h, r, g, b, a) do {     \
+    glUniform4f(data.rect_location, x, y, w, h);  \
+    glUniform4f(data.color_location, r, g, b, a); \
+    glDrawArrays(GL_TRIANGLES, 0, 6);             \
+} while(0)
+
+    float mouse_x, mouse_y;
+    vd_fw_get_mouse_statef(&mouse_x, &mouse_y);
+
+    float button_size = 24.f;
+    float offset = width - button_size;
+
+    float close_color_r = 0.7f;
+    if (vd_fw_u_point_in_rect(mouse_x, mouse_y, offset, 0.f, button_size, button_size)) {
+        close_color_r = 1.0f;
+    }
+
+    PUT_RECT(
+        offset, 0.f, button_size, button_size,
+        close_color_r, 0.0f, 0.0f, 1.0f);
+    offset -= button_size;
+
+    PUT_RECT(
+        offset, 0.f, button_size, button_size,
+        0.0f, 1.0f, 0.0f, 1.0f);
+    offset -= button_size;
+
+    PUT_RECT(
+        offset, 0.f, button_size, button_size,
+        0.0f, 0.0f, 1.0f, 1.0f);
+    offset -= button_size;
+    
+    glBindVertexArray(0);
+
+    glUseProgram(0);
+#undef PUT_RECT
 }
 
 #endif // VD_FW_IMPL
