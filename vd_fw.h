@@ -28,7 +28,13 @@
 #define VD_FW_VERSION_PATCH    1
 #define VD_FW_VERSION          ((VD_FW_VERSION_MAJOR << 16) | (VD_FW_VERSION_MINOR << 8) | (VD_FW_VERSION_PATCH))
 
-extern int                vd_fw_init(void);
+typedef struct __VD_FW_InitInfo {
+    struct {
+        int draw_default_borders;
+    } window_options;
+} VdFwInitInfo;
+
+extern int                vd_fw_init(VdFwInitInfo *info);
 extern int                vd_fw_running(void);
 extern int                vd_fw_swap_buffers(void);
 extern int                vd_fw_get_size(int *w, int *h);
@@ -1269,6 +1275,7 @@ typedef struct {
     PFNWGLSWAPINTERVALEXTPROC   proc_swapInterval;
     HANDLE                      sem_closed;
     volatile BOOL               t_running;
+    BOOL                        draw_decorations;
 } VdFw__Win32InternalData;
 
 static VdFw__Win32InternalData Vd_Fw_Globals = {0};
@@ -1319,8 +1326,12 @@ static DWORD   vd_fw__win_thread_proc(LPVOID param);
 
 #define VD_FW_G Vd_Fw_Globals
 
-int vd_fw_init(void)
+int vd_fw_init(VdFwInitInfo *info)
 {
+    if (info != NULL) {
+        VD_FW_G.draw_decorations = info->window_options.draw_default_borders;
+    }
+
     VD_FW_G.main_thread_id = GetCurrentThreadId();
 
     VD_FW_G.sem_window_ready = CreateSemaphoreA(
@@ -1619,8 +1630,10 @@ static void vd_fw__theme_changed(void)
 
 static void vd_fw__nccalcsize(WPARAM wparam, LPARAM lparam)
 {
-    if (wparam == TRUE) {
-        return;
+    if (!VD_FW_G.draw_decorations) {
+        if (wparam == TRUE) {
+            return;
+        }
     }
 
     union {

@@ -9,7 +9,8 @@ int main(int argc, char const *argv[])
     (void)argc;
     (void)argv;
 
-    vd_fw_init();
+    vd_fw_init(0);
+
     vd_fw_set_vsync_on(1);
     float d = 0.f;
 
