@@ -2,15 +2,53 @@
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS
 #include "vd_fw.h"
 
+const char *Vertex_Shader_Source =
+"#version 330 core                       \n"
+"layout (location = 0) in vec3 aPos;     \n"
+"void main()                             \n"
+"{                                       \n"
+"   gl_Position = vec4(aPos.xyz, 1.0);   \n"
+"}                                       \n"
+;
+
+const char *Fragment_Shader_Source =
+"#version 330 core                             \n"
+"out vec3 FragColor;                           \n"
+"void main()                                   \n"
+"{                                             \n"
+"   FragColor = vec3(1.0f, 0.5f, 0.2f);        \n"
+"}                                             \n"
+;
+
 int main(int argc, char const *argv[])
 {
     (void)argc;
     (void)argv;
 
-    vd_fw_init(0);
-
+    vd_fw_init(& (VdFwInitInfo) {
+        .gl = {
+            .version = VD_FW_GL_VERSION_3_3,
+            .debug_on = 1,
+        }
+    });
     vd_fw_set_vsync_on(1);
-    float d = 0.f;
+
+    GLuint program;
+    {
+
+        GLuint vshd = glCreateShader(GL_VERTEX_SHADER);
+        glShaderSource(vshd, 1, &Vertex_Shader_Source, 0);
+        glCompileShader(vshd);
+
+        GLuint fshd = glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(fshd, 1, &Fragment_Shader_Source, 0);
+        glCompileShader(fshd);
+
+        program = glCreateProgram();
+        glAttachShader(program, vshd);
+        glAttachShader(program, fshd);
+        glLinkProgram(program);
+    }
 
     while (vd_fw_running()) {
 
@@ -22,21 +60,11 @@ int main(int argc, char const *argv[])
         int w, h;
         vd_fw_get_size(&w, &h);
 
-        d += delta_seconds * 2.f;
-
-        if (d > 1.f) {
-            d = 0.f;
-        }
         glViewport(0, 0, w, h);
-        glClearColor(d, 0.2f, 0.9f, 0.5f);
+        glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        glBegin(GL_TRIANGLES);
-        glColor3f(1.f, 0.3f, 0.4f);
-        glVertex2f(0.f, 0.f);
-        glVertex2f(0.5f, 1.f);
-        glVertex2f(1.f, 1.f);
-        glEnd();
+
 
         vd_fw_swap_buffers();
     }
