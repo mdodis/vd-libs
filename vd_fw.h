@@ -28,13 +28,27 @@
 #define VD_FW_VERSION_PATCH    1
 #define VD_FW_VERSION          ((VD_FW_VERSION_MAJOR << 16) | (VD_FW_VERSION_MINOR << 8) | (VD_FW_VERSION_PATCH))
 
-extern int vd_fw_init(void);
-extern int vd_fw_running(void);
-extern int vd_fw_begin_render(void);
-extern int vd_fw_end_render(void);
-extern int vd_fw_poll_events(void);
-extern int vd_fw_swap_buffers(void);
-extern int vd_fw_get_size(int *w, int *h);
+extern int                vd_fw_init(void);
+extern int                vd_fw_running(void);
+extern int                vd_fw_swap_buffers(void);
+extern int                vd_fw_get_size(int *w, int *h);
+extern unsigned long long vd_fw_delta_ns(void);
+extern int                vd_fw_set_vsync_on(int on);
+
+#if _WIN32
+#define VD_FW_WIN32_SUBSYSTEM_CONSOLE 1
+#define VD_FW_WIN32_SUBSYSTEM_WINDOWS 2
+
+#ifndef VD_FW_WIN32_SUBSYSTEM
+#define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_CONSOLE
+#endif // !VD_FW_WIN32_SUBSYSTEM
+
+#ifndef VD_FW_NO_CRT
+#define VD_FW_NO_CRT 0
+#endif
+
+#endif // _WIN32
+
 /* AccumOp */
 #define GL_ACCUM                          0x0100
 #define GL_LOAD                           0x0101
@@ -1159,6 +1173,19 @@ extern void glColor3f(GLfloat red, GLfloat green, GLfloat blue);
 #pragma comment(lib, "Gdi32.lib")
 #pragma comment(lib, "uxtheme.lib")
 #pragma comment(lib, "shell32.lib")
+#pragma comment(lib, "kernel32.lib")
+#if VD_FW_WIN32_SUBSYSTEM == VD_FW_WIN32_SUBSYSTEM_CONSOLE
+#pragma comment(linker, "/subsystem:console")
+#else
+#pragma comment(linker, "/subsystem:windows")
+#endif // VD_FW_WIN32_SUBSYSTEM == VD_FW_WIN32_SUBSYSTEM_CONSOLE
+#if VD_FW_NO_CRT
+#pragma comment(linker, "/NODEFAULTLIB:libcmt.lib")
+#pragma comment(linker, "/NODEFAULTLIB:libcmtd.lib")
+#pragma comment(linker, "/NODEFAULTLIB:msvcrt.lib")
+#pragma comment(linker, "/NODEFAULTLIB:msvcrtd.lib")
+#pragma comment(linker, "/NODEFAULTLIB:oldnames.lib")
+#endif // VD_FW_NO_CRT
 // #define WIN32_LEAN_AND_MEAN
 #define NOGDICAPMASKS
 // #define NOSYSMETRICS
@@ -1224,18 +1251,24 @@ extern void glColor3f(GLfloat red, GLfloat green, GLfloat blue);
 #define WM_NCUAHDRAWFRAME (0x00AF)
 #endif
 
+typedef BOOL (WINAPI * PFNWGLSWAPINTERVALEXTPROC) (int interval);
+
 typedef struct {
-    HWND              hwnd;
-    HDC               hdc;
-    HGLRC             hglrc;
-    RECT              rgn;
-    BOOL              theme_enabled;
-    BOOL              composition_enabled;
-    HANDLE            win_thread;
-    DWORD             win_thread_id;
-    DWORD             main_thread_id;
-    CRITICAL_SECTION  render_section;
-    HANDLE            sem_window_ready;
+    HWND                        hwnd;
+    HDC                         hdc;
+    HGLRC                       hglrc;
+    RECT                        rgn;
+    BOOL                        theme_enabled;
+    BOOL                        composition_enabled;
+    HANDLE                      win_thread;
+    DWORD                       win_thread_id;
+    DWORD                       main_thread_id;
+    HANDLE                      sem_window_ready;
+    LARGE_INTEGER               frequency;
+    LARGE_INTEGER               performance_counter;
+    PFNWGLSWAPINTERVALEXTPROC   proc_swapInterval;
+    HANDLE                      sem_closed;
+    volatile BOOL               t_running;
 } VdFw__Win32InternalData;
 
 static VdFw__Win32InternalData Vd_Fw_Globals = {0};
@@ -1249,6 +1282,14 @@ static void    vd_fw__window_pos_changed(WINDOWPOS *pos);
 static LRESULT vd_fw__handle_invisible(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 static DWORD   vd_fw__win_thread_proc(LPVOID param);
 
+#if VD_FW_NO_CRT
+#define VD_FW__CHECK_HRESULT(expr) expr
+#define VD_FW__CHECK_INT(expr) expr
+#define VD_FW__CHECK_NONZERO(expr) expr
+#define VD_FW_SANITY_CHECK()
+#define VD_FW__CHECK_NULL(expr) expr
+#define VD_FW__CHECK_TRUE(expr) expr
+#else
 #include <stdio.h>
 #define VD_FW__CHECK_HRESULT(expr) do {\
     if ((expr) != S_OK) { printf("Failed at: %s\n", #expr); DebugBreak(); } \
@@ -1274,6 +1315,7 @@ static DWORD   vd_fw__win_thread_proc(LPVOID param);
 #define VD_FW__CHECK_TRUE(expr) do {\
     if ((expr) != TRUE) { printf("Failed at: %s\n GetLastError: %d", #expr, GetLastError()); DebugBreak(); } \
 } while (0)
+#endif // VD_FW_NO_CRT
 
 #define VD_FW_G Vd_Fw_Globals
 
@@ -1287,10 +1329,16 @@ int vd_fw_init(void)
         1,
         NULL);
 
-    DWORD spin_count = 0;
-    VD_FW__CHECK_TRUE(InitializeCriticalSectionAndSpinCount(
-        &VD_FW_G.render_section,
-        spin_count));
+    VD_FW_G.sem_closed = CreateSemaphoreA(
+        NULL,
+        0,
+        1,
+        NULL);
+
+    // DWORD spin_count = 0;
+    // VD_FW__CHECK_TRUE(InitializeCriticalSectionAndSpinCount(
+    //     &VD_FW_G.render_section,
+    //     spin_count));
 
     VD_FW_G.win_thread = CreateThread(
         NULL,
@@ -1300,7 +1348,6 @@ int vd_fw_init(void)
         0,
         &VD_FW_G.win_thread_id);
 
-    EnterCriticalSection(&VD_FW_G.render_section);
     WaitForSingleObject(VD_FW_G.sem_window_ready, INFINITE);
 
     VD_FW_G.hdc = GetDC(VD_FW_G.hwnd);
@@ -1310,7 +1357,7 @@ int vd_fw_init(void)
       1,                                // Version Number
       PFD_DRAW_TO_WINDOW |              // Format Must Support Window
       PFD_SUPPORT_OPENGL |              // Format Must Support OpenGL
-      // PFD_SUPPORT_COMPOSITION |         // Format Must Support Composition
+      PFD_SUPPORT_COMPOSITION |      // Format Must Support Composition
       PFD_DOUBLEBUFFER,                 // Must Support Double Buffering
       PFD_TYPE_RGBA,                    // Request An RGBA Format
       32,                               // Select Our Color Depth
@@ -1334,35 +1381,28 @@ int vd_fw_init(void)
     VD_FW__CHECK_NULL(VD_FW_G.hglrc);
     VD_FW__CHECK_TRUE(wglMakeCurrent(VD_FW_G.hdc, VD_FW_G.hglrc));
 
-    LeaveCriticalSection(&VD_FW_G.render_section);
+    VD_FW_G.proc_swapInterval = (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
 
+    QueryPerformanceFrequency(&VD_FW_G.frequency);
+    QueryPerformanceCounter(&VD_FW_G.performance_counter);
     return 1;
 }
 
 int vd_fw_running(void)
 {
-    return !(VD_FW_G.hwnd == 0);
-}
-
-int vd_fw_begin_render(void)
-{
-    // EnterCriticalSection(&VD_FW_G.render_section);
-    return 1;
-}
-
-int vd_fw_end_render(void)
-{
-    // LeaveCriticalSection(&VD_FW_G.render_section);
-    return 1;
-}
-
-int vd_fw_poll_events(void)
-{
-    return 1;
+    DWORD result = WaitForSingleObject(VD_FW_G.sem_closed, 0);
+    if (result == WAIT_OBJECT_0) {
+        return 0;
+    } else if (result == WAIT_TIMEOUT) {
+        return 1;
+    } else {
+        return 0;
+    }
 }
 
 int vd_fw_swap_buffers(void)
 {
+    QueryPerformanceCounter(&VD_FW_G.performance_counter);
     SwapBuffers(VD_FW_G.hdc);
     return 1;
 }
@@ -1376,11 +1416,30 @@ int vd_fw_get_size(int *w, int *h)
     return 0;
 }
 
+int vd_fw_set_vsync_on(int on)
+{
+    BOOL result = VD_FW_G.proc_swapInterval(on);
+
+    return result == TRUE ? on : 0;
+}
+
+unsigned long long vd_fw_delta_ns(void)
+{
+    LARGE_INTEGER now_performance_counter;
+    QueryPerformanceCounter(&now_performance_counter);
+    LARGE_INTEGER delta;
+    delta.QuadPart = now_performance_counter.QuadPart - VD_FW_G.performance_counter.QuadPart;
+    unsigned long long q  =  delta.QuadPart / VD_FW_G.frequency.QuadPart;
+    unsigned long long r  =  delta.QuadPart % VD_FW_G.frequency.QuadPart;
+    unsigned long long ns =  q * 1000000000ULL;
+    ns                    += (r * 1000000000ULL) / VD_FW_G.frequency.QuadPart;
+    return ns;
+}
+
 static DWORD vd_fw__win_thread_proc(LPVOID param)
 {
     (void)param;
-    DWORD *p_main_thread_id = (DWORD*)param;
-
+    VD_FW_G.t_running = TRUE;
 
     SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
     VD_FW_SANITY_CHECK();
@@ -1425,20 +1484,12 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
 
     VD_FW__CHECK_TRUE(ReleaseSemaphore(VD_FW_G.sem_window_ready, 1, NULL));
 
-    EnterCriticalSection(&VD_FW_G.render_section);
-    LeaveCriticalSection(&VD_FW_G.render_section);
-
-    // VD_FW__CHECK_TRUE(AttachThreadInput(*p_main_thread_id, GetCurrentThreadId(), TRUE));
-    while (VD_FW_G.hwnd != 0) {
+    while (VD_FW_G.t_running) {
         MSG message;
         while (GetMessage(&message, VD_FW_G.hwnd, 0, 0)) {
             TranslateMessage(&message);
             DispatchMessageW(&message);
         }
-
-        // EnterCriticalSection(&VD_FW_G.render_section);
-        // SwapBuffers(VD_FW_G.hdc);
-        // LeaveCriticalSection(&VD_FW_G.render_section);
     }
 
     return 0;
@@ -1507,11 +1558,9 @@ static void vd_fw__composition_changed(void)
     VD_FW__CHECK_HRESULT(DwmIsCompositionEnabled(&enabled));
     VD_FW_G.composition_enabled = enabled;
 
-    printf("Composition Enabled: %d\n", enabled);
-
     if (enabled) {
-        // MARGINS m = {0, 0, 1, 0};
-        MARGINS m = {-1};
+        MARGINS m = {0, 0, 1, 0};
+        // MARGINS m = {-1};
         VD_FW__CHECK_HRESULT(DwmExtendFrameIntoClientArea(VD_FW_G.hwnd, &m));
         DWORD value = DWMNCRP_ENABLED;
         VD_FW__CHECK_HRESULT(DwmSetWindowAttribute(VD_FW_G.hwnd, DWMWA_NCRENDERING_POLICY, &value, sizeof(value)));
@@ -1557,9 +1606,9 @@ static void vd_fw__update_region(void)
 
     RECT zero_rect = {0};
     if (EqualRect(&VD_FW_G.rgn, &zero_rect)) {
-        VD_FW__CHECK_INT(SetWindowRgn(VD_FW_G.hwnd, NULL, TRUE));
+        SetWindowRgn(VD_FW_G.hwnd, NULL, TRUE);
     } else {
-        VD_FW__CHECK_INT(SetWindowRgn(VD_FW_G.hwnd, CreateRectRgnIndirect(&VD_FW_G.rgn), TRUE));
+        SetWindowRgn(VD_FW_G.hwnd, CreateRectRgnIndirect(&VD_FW_G.rgn), TRUE);
     }
 }
 
@@ -1692,8 +1741,9 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         } break;
 
         case WM_DESTROY: {
+            ReleaseSemaphore(VD_FW_G.sem_closed, 1, NULL);
             PostQuitMessage(0);
-            VD_FW_G.hwnd = (HWND)0;
+            VD_FW_G.t_running = FALSE;
         } break;
 
         case WM_DWMCOMPOSITIONCHANGED: {
@@ -1759,24 +1809,24 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         } break;
 
         case WM_ENTERSIZEMOVE: {
-            VD_FW__CHECK_NULL(SetTimer(VD_FW_G.hwnd, (UINT_PTR)&timer_id, USER_TIMER_MINIMUM, NULL));
+            // VD_FW__CHECK_NULL(SetTimer(VD_FW_G.hwnd, (UINT_PTR)&timer_id, USER_TIMER_MINIMUM, NULL));
 
         } break;
 
         case WM_EXITSIZEMOVE: {
-            KillTimer(VD_FW_G.hwnd, (UINT_PTR)&timer_id);
+            // KillTimer(VD_FW_G.hwnd, (UINT_PTR)&timer_id);
         } break;
 
         case WM_TIMER: {
             // render();
             // vd_fw_swap_buffers();
-            DwmFlush();
+            // DwmFlush();
             result = 1;
         } break;
 
         case WM_MOVING:
         case WM_SIZING: {
-            // DwmFlush();
+            DwmFlush();
         } break;
 
         // case WM_SYSCOMMAND: {
@@ -1822,6 +1872,89 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
     return result;
 }
 
+#if VD_FW_NO_CRT
+#pragma function(memset)
+void *__cdecl memset(void *dest, int value, size_t num)
+{
+    __stosb((unsigned char *)dest, (unsigned char)value, num);
+    return dest;
+}
+
+int _fltused;
+#ifdef _M_IX86
+
+    // float to int64 cast
+    // on /arch:IA32
+    // on /arch:SSE
+    // on /arch:SSE2 with /d2noftol3 compiler switch
+    __declspec(naked) void _ftol2()
+    {
+        __asm
+        {
+            fistp qword ptr[esp - 8]
+            mov   edx, [esp - 4]
+            mov   eax, [esp - 8]
+            ret
+        }
+    }
+
+    // float to int64 cast on /arch:IA32
+    __declspec(naked) void _ftol2_sse()
+    {
+        __asm
+        {
+            fistp dword ptr[esp - 4]
+            mov   eax, [esp - 4]
+            ret
+        }
+    }
+
+    // float to uint32 cast on / arch:SSE2
+    __declspec(naked) void _ftoui3()
+    {
+
+    }
+
+    // float to int64 cast on / arch:SSE2
+    __declspec(naked) void _ftol3()
+    {
+        
+    }
+
+    // float to uint64 cast on / arch:SSE2
+    __declspec(naked) void _ftoul3()
+    {
+
+    }
+
+    // int64 to float cast on / arch:SSE2
+    __declspec(naked) void _ltod3()
+    {
+
+    }
+
+    // uint64 to float cast on / arch:SSE2
+    __declspec(naked) void _ultod3()
+    {
+
+    }
+
+#endif
+
+#if VD_FW_WIN32_SUBSYSTEM == VD_FW_WIN32_SUBSYSTEM_CONSOLE
+int mainCRTStartup(void)
+{
+    int result = main(0, 0);
+    ExitProcess(result);
+}
+#else
+LRESULT WinMainCRTStartup(void)
+{
+    int result = main(0, 0);
+    ExitProcess(result);
+}
+#endif // VD_FW_WIN32_SUBSYSTEM == VD_FW_WIN32_SUBSYSTEM_CONSOLE
+#endif // VD_FW_NO_CRT
 
 #undef VD_FW_G
 #endif // _WIN32
