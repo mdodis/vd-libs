@@ -132,7 +132,7 @@
 #endif // !VD_PLATFORM_KNOWN
 
 #ifndef VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
-#define VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY 0
+#define VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY 1
 #endif // !VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
 
 /* ----TYPES--------------------------------------------------------------------------------------------------------- */
@@ -208,6 +208,8 @@ typedef int32_t       Vdb32;
 #define VD_SANITY_CHECKS 0
 #endif
 
+#define VD_API extern
+
 /* ----KEYWORDS------------------------------------------------------------------------------------------------------ */
 #if VD_HOST_COMPILER_CLANG
 #define VD_INLINE __attribute__((always_inline)) inline
@@ -234,41 +236,82 @@ typedef int32_t       Vdb32;
 #define VD_SIZET_MAX SIZE_MAX
 
 /* ----COMMON FUNCTIONS---------------------------------------------------------------------------------------------- */
-#ifndef VD_DEBUG_BREAK
+#ifndef VD_USE_CRT
+#define VD_USE_CRT 0
+#endif // VD_USE_CRT
+
+#if VD_USE_CRT
 #include <assert.h>
-#define VD_DEBUG_BREAK() assert(0)
-#endif // VD_DEBUG_BREAK
-
-#ifndef VD_ASSERT
-#include <assert.h>
-#define VD_ASSERT(x) assert(x)
-#endif // !VD_ASSERT
-
-#ifndef VD_MEMSET
 #include <string.h>
-#define VD_MEMSET(p, v, s) memset((p), (v), (s))
-#endif // !VD_MEMSET
 
-#ifndef VD_MEMCPY
-#include <string.h>
-#define VD_MEMCPY(d, s, c) memcpy((d), (s), (c))
-#endif // !VD_MEMCPY
-
-#ifndef VD_MEMCMP
-#include <string.h>
-#define VD_MEMCMP(l, r, c) memcmp((l), (r), (c))
-#endif // !VD_MEMCMP
-
-#ifndef VD_MEMMOVE
-#include <string.h>
+#define VD_DEBUG_BREAK()    assert(0)
+#define VD_ASSERT(x)        assert(x)
+#define VD_MEMSET(p, v, s)  memset((p), (v), (s))
+#define VD_MEMCPY(d, s, c)  memcpy((d), (s), (c))
+#define VD_MEMCMP(l, r, c)  memcmp((l), (r), (c))
 #define VD_MEMMOVE(d, s, c) memmove((d), (s), (c))
-#endif // !VD_MEMMOVE
+#else
+
+static VD_INLINE void *vd_memset(void *dest, int value, size_t num)
+{
+    for (size_t i = 0; i < num; ++i) ((Vdi8ptr)dest)[i] = (Vdi8)value;
+    return dest;
+}
+
+static VD_INLINE void *vd_memcpy(void *dest, const void *src, size_t num)
+{
+    for (size_t i = 0; i < num; ++i) ((Vdu8ptr)dest)[i] = ((Vdu8ptr)src)[i];
+    return dest;
+}
+
+static VD_INLINE int vd_memcmp(const void *lhs, const void *rhs, size_t num)
+{
+    size_t i = 0;
+    while (i < num) {
+        Vdu8 lhs_c = ((Vdu8ptr)lhs)[i];
+        Vdu8 rhs_c = ((Vdu8ptr)rhs)[i];
+        if (lhs_c < rhs_c) {
+            return -1;
+        } else if (lhs_c > rhs_c) {
+            return 1;
+        }
+
+        i++;
+    }
+
+    return 0;
+}
+
+static VD_INLINE void *vd_memmove(void *dest, void *src, size_t num) {
+    Vdu8ptr d = (Vdu8ptr)dest;
+    Vdu8ptr s = (Vdu8ptr)src;
+
+    if (d < s) {
+        for (size_t i = 0; i < num; ++i) {
+            d[i] = s[i];
+        }
+    } else if (s < d) {
+        for (size_t i = num; i > 0; --i) {
+            d[i - 1] = s[i - 1];
+        }
+    }
+
+    return d;
+}
+
+#define VD_DEBUG_BREAK()    (*((char*)0) = 1)
+#define VD_ASSERT(x)        do { if (!(x)) { VD_DEBUG_BREAK(); } } while(0)
+#define VD_MEMSET(p, v, s)  vd_memset((p), (v), (s))
+#define VD_MEMCPY(d, s, c)  vd_memcpy((d), (s), (c))
+#define VD_MEMCMP(l, r, c)  vd_memcmp((l), (r), (c))
+#define VD_MEMMOVE(d, s, c) vd_memmove((d), (s), (c))
+
+#endif // VD_USE_CRT
 
 #define VD_IMPOSSIBLE() VD_ASSERT(VD_FALSE)
 #define VD_TODO()       VD_ASSERT(VD_FALSE)
-
 /* ----SIZES--------------------------------------------------------------------------------------------------------- */
-#define VD_KILOBYTES(x) (((Vdusize)x) * 1024)
+#define VD_KILOBYTES(x) (((Vdusize)(x)) * 1024)
 #define VD_MEGABYTES(x) (VD_KILOBYTES(x) * 1024)
 #define VD_GIGABYTES(x) (VD_MEGABYTES(x) * 1024)
 
@@ -446,17 +489,58 @@ void        vd_vm_release(void *addr, Vdusize len);
 #endif // VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
 
 /* ----SYSTEM ALLOCATOR---------------------------------------------------------------------------------------------- */
+typedef struct {
+    Vduptr  buf;
+    Vdusize offset;
+    Vdusize page_size;
+    Vdusize reserved;
+    Vdusize committed;
+} VdSystemHeap;
+
+VD_API VdSystemHeap* vd_system_heap_global(void);
+VD_API void          vd_system_heap_set_reserve_page_count(VdSystemHeap *h, Vdusize page_count);
+VD_API void*         vd_system_heap_alloc(VdSystemHeap *h, Vdusize size, Vdusize align);
+VD_API void          vd_system_heap_empty(VdSystemHeap *h);
+
+
+
 #ifndef VD_ALLOC_OVERRIDE
 #define VD_ALLOC_OVERRIDE 0
 #endif // VD_ALLOC_OVERRIDE
 
+#if VD_USE_CRT
 #if !VD_ALLOC_OVERRIDE
 #include <stdlib.h>
 #define VD_REALLOC(ptr, old_size, new_size) realloc(ptr, new_size)
 #define VD_FREE(ptr, old_size)              free(ptr)
 #endif // !VD_ALLOC_OVERRIDE
+#else
+#define VD_REALLOC(ptr, old_size, new_size) vd_realloc(ptr, old_size, new_size);
+#define VD_FREE(ptr, old_size)              vd_free(ptr, new_size);
 
-#define VD_MALLOC(size)                     VD_REALLOC(0, 0, size)
+static VD_INLINE void *vd_realloc(void *ptr, Vdusize old_size, Vdusize new_size)
+{
+    VdSystemHeap *h = vd_system_heap_global();
+    void *result = vd_system_heap_alloc(h, new_size, 0);
+
+    if (ptr) {
+        VD_MEMCPY(result, ptr, old_size);
+    }
+
+    return result;
+}
+
+static VD_INLINE void *vd_free(void *ptr, Vdusize old_size)
+{
+    VD_UNUSED(ptr);
+    VD_UNUSED(old_size);
+
+    return 0;
+}
+
+#endif // VD_USE_CRT
+
+#define VD_MALLOC(size) VD_REALLOC(0, 0, size)
 
 /* ----ALLOCATOR----------------------------------------------------------------------------------------------------- */
 #ifndef VD_ALLOC_DEFAULT_ALIGNMENT 
@@ -506,7 +590,6 @@ VD_INLINE void*             vd_arena_resize(VdArena *a, void *old_memory, size_t
 #define VD_ARENA_PUSH_ARRAY(a, x, count) (x*)vd_arena_alloc(a, sizeof(x) * count)
 #define VD_ARENA_PUSH_STRUCT(a, x)       VD_ARENA_PUSH_ARRAY(a, x, 1)
 #define VD_ARENA_FROM_SYSTEM(a, size)    (vd_arena_init(a, VD_MALLOC(size), size))
-#define VD_ARENA_FREE_SYSTEM(a)          (VD_FREE(a->buf))
 
 #if VD_MACRO_ABBREVIATIONS
 #define Arena                                                        VdArena
@@ -1619,35 +1702,7 @@ extern void vd_test_main(void);
 
 #ifdef VD_IMPL
 
-/* ----TIMING IMPL--------------------------------------------------------------------------------------------------- */
-#if VD_PLATFORM_WINDOWS
-
-#ifndef _PROFILEAPI_H_
-#if VD_CPP
-extern "C" {
-#endif // VD_CPP
-
-extern int QueryPerformanceCounter(Vdi64 *perf_count);
-extern int QueryPerformanceFrequency(Vdi64 *perf_freq);
-
-#if VD_CPP
-}
-#endif // VD_CPP
-#endif // !_PROFILEAPI_H_
-
-static Vdi64 Vd__Windows_Performance_Frequency = 0;
-
-VdHiTime vd_hitime_get(void)
-{
-    Vdu64 counter;
-    QueryPerformanceCounter((LARGE_INTEGER*)&counter);
-
-    VdHiTime result = { counter };
-    return result;
-}
-
-VdHiTime vd_hitime_sub(VdHiTime a, VdHiTime b)
-{
+/* ----{
     VdHiTime result = { a.performance_counter - b.performance_counter };
     return result;
 }
@@ -1739,47 +1794,125 @@ void vd_vm_release(void *addr, Vdusize len)
 
 Vdusize vd_vm_get_page_size(void)
 {
-    return _SC_PAGE_SIZE;
+    // @todo(mdodis): GetSystemInfo
+    SYSTEM_INFO system_info;
+    GetSystemInfo(&system_info);
+    return system_info.dwPageSize;
 }
 
 void *vd_vm_reserve(Vdusize len)
 {
-    void *result = map(0, len, PROT_NONE, MAP_ANON | MAP_PRIVATE, -1, 0);
-    if (result == MAP_FAILED) {
-        fprintf(stderr, "vm_decommit failed: %d\n", errno);
-        VD_ASSERT(VD_FALSE);
-    }
-    return result;
+    return VirtualAlloc(0, len, MEM_RESERVE, PAGE_READWRITE);
 }
 
 void *vd_vm_commit(void *addr, Vdusize len)
 {
-    void *result = mmap(addr, len, PROT_READ | PROT_WRITE, MAP_FIXED | MAP_PRIVATE | MAP_ANON, -1, 0);
-    if (result == MAP_FAILED) {
-        fprintf(stderr, "vm_decommit failed: %d\n", errno);
-        VD_ASSERT(VD_FALSE);
-    }
-    return result;
+    return VirtualAlloc(addr, len, MEM_COMMIT, PAGE_READWRITE);
 }
 
 void *vd_vm_decommit(void *addr, Vdusize len)
 {
-    void *result = mmap(addr, len, PROT_NONE, MAP_FIXED | MAP_PRIVATE | MAP_ANON, -1, 0);
-    if (result == MAP_FAILED) {
-        fprintf(stderr, "vm_decommit failed: %d\n", errno);
-        VD_ASSERT(VD_FALSE);
-    }
-    return result;
+    return VirtualFree(addr, len, MEM_DECOMMIT) ? 0 : addr;
 }
 
 void vd_vm_release(void *addr, Vdusize len)
 {
-    munmap(addr, len);
+    VD_UNUSED(len);
+
+    VirtualFree(addr, 0, MEM_RELEASE);
 }
 #endif // VD_PLATFORM_MACOS, VD_PLATFORM_WINDOWS
 
 #endif // !VD_VM_CUSTOM
 #endif // VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
+
+/* ----SYSTEM ALLOCATOR IMPL----------------------------------------------------------------------------------------- */
+#define VD_SYSTEM_HEAP_RESERVE_PAGE_COUNT 16777216
+
+static VdSystemHeap Vd_System_Heap_Global = {0};
+
+VD_API VdSystemHeap *vd_system_heap_global(void)
+{
+    return &Vd_System_Heap_Global;
+}
+
+VD_API void vd_system_heap_set_reserve_page_count(VdSystemHeap *h, Vdusize page_count)
+{
+    VD_ASSERT(h->buf != 0 && "Heap has already been allocated!");
+    if (h->page_size == 0) {
+        h->page_size = vd_vm_get_page_size();
+    }
+
+    h->reserved = h->page_size * page_count;
+}
+
+VD_API void *vd_system_heap_alloc(VdSystemHeap *h, Vdusize size, Vdusize align)
+{
+    if (h->buf == 0) {
+        if (h->page_size == 0) {
+            h->page_size = vd_vm_get_page_size();
+        }
+
+        if (h->reserved == 0) {
+            h->reserved = h->page_size * VD_SYSTEM_HEAP_RESERVE_PAGE_COUNT;
+        }
+
+        h->buf = (Vduptr)vd_vm_reserve(h->reserved);
+    }
+
+    // PAGE  0 |---------|
+    //         [+++++++++|
+    //         |+++++++++|
+    //         |+++++++++|
+    //         |+++++]   | -> h->buf + h->offset (curr_ptr)
+    // PAGE  1 |---------| -> h->buf + h->committed (now)
+    //         |*        | -> desired
+    //         |         |
+    //         |         |
+    //         |         |
+    // PAGE  2 |---------|
+    //         |         |
+    //         |  *      | -> desired_end
+    //         |         |
+    //         |         |
+    // PAGE  3 |---------| -> h->buf + h->reserved
+
+    Vduptr now      = (Vduptr)h->buf + (Vduptr)h->committed;
+    Vduptr end      = (Vduptr)h->buf + (Vduptr)h->reserved;
+
+    Vduptr curr_ptr    = (Vduptr)h->buf + (Vduptr)h->offset;
+    Vduptr desired     = vd_align_forward(curr_ptr, align);
+    Vduptr desired_end = desired + size;
+    Vduptr offset   = desired - (Vduptr)h->buf;
+
+    if (desired_end > end) {
+        VD_DEBUG_BREAK();
+    }
+
+    if ((desired_end - curr_ptr) <= now) {
+        // Allocation fits inside the page(s)
+        // no need to commit more
+        h->offset += offset;
+
+        return (void*)desired;
+    } else {
+        // Need to allocate n pages
+        Vdusize num_pages = (desired_end - now) / h->page_size;
+        num_pages += ((desired_end - now) % h->page_size) != 0 ? 1 : 0;
+
+        h->committed += num_pages * h->page_size;
+        VD_ASSERT(h->committed % h->page_size == 0);
+        VD_ASSERT(vd_vm_commit((void*)(h->buf + h->committed), num_pages * h->page_size) != 0);
+
+        h->offset += offset;
+        return (void*)desired;
+    }
+}
+
+VD_API void vd_system_heap_empty(VdSystemHeap *h)
+{
+    vd_vm_release((void*)h->buf, h->reserved * h->page_size);
+}
 
 /* ----ARENA IMPL---------------------------------------------------------------------------------------------------- */
 void vd_arena_init(VdArena *a, void *buf, size_t len)
@@ -1797,9 +1930,11 @@ void *vd_arena_alloc_align(VdArena *a, size_t size, size_t align)
     offset -= (Vduptr)a->buf;
 
     if (offset + size <= a->buf_len) {
-        void *ptr;
+        void *ptr = 0;
         if (a->flags & VD_ARENA_FLAGS_USE_MALLOC) {
+#if VD_USE_CRT
             ptr = VD_MALLOC(size);
+#endif // VD_USE_CRT
         } else {
             ptr = &a->buf[offset];
             a->prev_offset = offset;
@@ -1871,7 +2006,7 @@ void vd_scratch_init(VdScratch *scratch)
 {
     for (Vdusize i = 0; i < VD_SCRATCH_PAGE_COUNT; ++i)
     {
-        void *a = VD_MALLOC(VD_SCRATCH_PAGE_SIZE);
+        void *a = (void*)VD_MALLOC(VD_SCRATCH_PAGE_SIZE);
         VD_MEMSET(a, 0, VD_SCRATCH_PAGE_SIZE);
         vd_arena_init(&scratch->arenas[i], a, VD_SCRATCH_PAGE_SIZE);
     }
@@ -2577,7 +2712,7 @@ VdArena *Test_Arena;
 
 #if !VD_HOST_COMPILER_UNKNOWN
 
-VdTestContext *Vd__Global_Test_Context;
+VdTestContext *Vd__Global_Test_Context = 0;
 VdTestEntry   *Vd__Test_Entries;
 Vdusize        Vd__Cap_Test_Entries;
 Vdu32          Vd__Len_Test_Entries;
@@ -2594,11 +2729,28 @@ void vd_test_get_tests(VdTestEntry **out_entries, Vdu32 *out_num_entries)
     *out_num_entries = Vd__Len_Test_Entries;
 }
 
+#if VD_USE_CRT
+static VD_PROC_LOG(vd__test_log) {
+    VD_UNUSED(verbosity);
+    fputs(string, stdout);
+}
+
 #include <stdio.h>
+#endif // VD_USE_CRT
+
 void vd_test_main(void)
 {
     VdArena a;
     Test_Arena = &a;
+
+#if VD_USE_CRT
+    VdTestContext context;
+    context.log_impl = vd__test_log;
+
+    if (Vd__Global_Test_Context == 0) {
+        vd_test_set_context(&context);
+    }
+#endif // VD_USE_CRT
 
     VD_ARENA_FROM_SYSTEM(Test_Arena, VD_MEGABYTES(64));
 
@@ -2611,7 +2763,7 @@ void vd_test_main(void)
         total++;
     }
 
-    printf("[%d/%d]\n", passed, total);
+    VD_TEST_LOG("[%d/%d]\n", passed, total);
 #else
 #error "Cannot produce tests for unknown compiler!"
 #endif // !VD_HOST_COMPILER_UNKNOWN
@@ -2819,37 +2971,37 @@ VD_TEST("Strmap/Basic") {
     // 6: [      ] -> 0 = _
     // 7: [      ] -> 0 = _
     // ----------------------
-    VD_TEST_TRUE("Setting a value in the map works", VD_STRMAP_SET(map, LIT("my_123"), &my_123));
+    VD_TEST_TRUE("Setting a value in the map works", VD_STRMAP_SET(map, VD_LIT("my_123"), &my_123));
 
     VD__TEST_MAP_CHECK_ENTRIES(map, 
 
 
 
 
-        { LIT("my_123"), 123 },
+        { VD_LIT("my_123"), 123 },
 
 
 
     );
 
-    VD_TEST_TRUE("Getting a value from the map works", VD_STRMAP_GET(map, LIT("my_123"), &my_123));
+    VD_TEST_TRUE("Getting a value from the map works", VD_STRMAP_GET(map, VD_LIT("my_123"), &my_123));
     VD_TEST_EQ("The fetched value from the map should be 123", my_123, 123);
 
     my_123 = 100;
-    VD_TEST_FALSE("Writing to the same value should print an error", VD_STRMAP_SET(map, LIT("my_123"), &my_123));
+    VD_TEST_FALSE("Writing to the same value should print an error", VD_STRMAP_SET(map, VD_LIT("my_123"), &my_123));
 
     VD__TEST_MAP_CHECK_ENTRIES(map, 
 
 
 
 
-        { LIT("my_123"), 123 },
+        { VD_LIT("my_123"), 123 },
 
 
         
     );
 
-    VD_TEST_TRUE("Getting a value from the map works after attempting to write", VD_STRMAP_GET(map, LIT("my_123"), &my_123));
+    VD_TEST_TRUE("Getting a value from the map works after attempting to write", VD_STRMAP_GET(map, VD_LIT("my_123"), &my_123));
     VD_TEST_EQ("The fetched value from the map should be 123 even after an invalid operation", my_123, 123);
 
     // ----------------------
@@ -2863,8 +3015,8 @@ VD_TEST("Strmap/Basic") {
     // 7: [      ] -> 0 = _
     // ----------------------
     my_123 = 321;
-    VD_TEST_TRUE("Overwriting a value with same key should work", VD_STRMAP_OVERWRITE(map, LIT("my_123"), &my_123));
-    VD_TEST_TRUE("Getting a value from the map works after overwrite", VD_STRMAP_GET(map, LIT("my_123"), &my_123));
+    VD_TEST_TRUE("Overwriting a value with same key should work", VD_STRMAP_OVERWRITE(map, VD_LIT("my_123"), &my_123));
+    VD_TEST_TRUE("Getting a value from the map works after overwrite", VD_STRMAP_GET(map, VD_LIT("my_123"), &my_123));
     VD_TEST_EQ("The fetched value from the map should be 321 after overwrite", my_123, 321);
 
     VD__TEST_MAP_CHECK_ENTRIES(map, 
@@ -2872,7 +3024,7 @@ VD_TEST("Strmap/Basic") {
 
 
 
-        { LIT("my_123"), 321 },
+        { VD_LIT_INLINE("my_123"), 321 },
 
 
         
@@ -2889,16 +3041,16 @@ VD_TEST("Strmap/Basic") {
     // 7: [      ] -> 0 = _
     // ----------------------
     int other = -40;
-    VD_TEST_TRUE("Overwriting a value with a new key should work", VD_STRMAP_OVERWRITE(map, LIT("other"), &other));
-    VD_TEST_TRUE("Getting a value from the map works after overwrite to a new key", VD_STRMAP_GET(map, LIT("other"), &other));
+    VD_TEST_TRUE("Overwriting a value with a new key should work", VD_STRMAP_OVERWRITE(map, VD_LIT("other"), &other));
+    VD_TEST_TRUE("Getting a value from the map works after overwrite to a new key", VD_STRMAP_GET(map, VD_LIT("other"), &other));
     VD_TEST_EQ("The fetched value from the map should be -40 after overwrite", other, -40);
 
     VD__TEST_MAP_CHECK_ENTRIES(map, 
-        { LIT("other"),  -40 },
+        { VD_LIT("other"),  -40 },
 
 
 
-        { LIT("my_123"), 321 },
+        { VD_LIT("my_123"), 321 },
 
 
 
@@ -2915,15 +3067,15 @@ VD_TEST("Strmap/Basic") {
     // 7: [      ] -> 0 = _
     // ----------------------
     int num = 3;
-    VD_TEST_TRUE("Writing 3rd value to a map with size 2/8 should work", VD_STRMAP_SET(map, LIT("3"), &num));
+    VD_TEST_TRUE("Writing 3rd value to a map with size 2/8 should work", VD_STRMAP_SET(map, VD_LIT("3"), &num));
     num++;
 
     VD__TEST_MAP_CHECK_ENTRIES(map, 
-        { LIT("other"),  -40 },
+        { VD_LIT("other"),  -40 },
 
 
-        {     LIT("3"),    3 },
-        { LIT("my_123"), 321 },
+        {     VD_LIT("3"),    3 },
+        { VD_LIT("my_123"), 321 },
 
 
 
@@ -2939,18 +3091,18 @@ VD_TEST("Strmap/Basic") {
     // 6: [      ] -> 0 = _
     // 7: [     4] -> 0 = 4
     // ----------------------
-    VD_TEST_TRUE("Writing 4th value to a map with size 3/8 should work", VD_STRMAP_SET(map, LIT("4"), &num));
+    VD_TEST_TRUE("Writing 4th value to a map with size 3/8 should work", VD_STRMAP_SET(map, VD_LIT("4"), &num));
     num++;
 
     VD__TEST_MAP_CHECK_ENTRIES(map, 
-        { LIT("other"),  -40 },
+        { VD_LIT("other"),  -40 },
 
 
-        {     LIT("3"),    3 },
-        { LIT("my_123"), 321 },
+        {     VD_LIT("3"),    3 },
+        { VD_LIT("my_123"), 321 },
 
 
-        {     LIT("4"),    4 },
+        {     VD_LIT("4"),    4 },
     );
 
     // ----------------------
@@ -2963,18 +3115,18 @@ VD_TEST("Strmap/Basic") {
     // 6: [      ] -> 0 = _
     // 7: [     4] -> 0 = 4
     // ----------------------
-    VD_TEST_TRUE("Writing 5th value to a map with size 4/8 should work", VD_STRMAP_SET(map, LIT("5"), &num));
+    VD_TEST_TRUE("Writing 5th value to a map with size 4/8 should work", VD_STRMAP_SET(map, VD_LIT("5"), &num));
     num++;
 
     VD__TEST_MAP_CHECK_ENTRIES(map, 
-        { LIT("other"),  -40 },
+        { VD_LIT("other"),  -40 },
 
-        {     LIT("5"),    5 },
-        {     LIT("3"),    3 },
-        { LIT("my_123"), 321 },
+        {     VD_LIT("5"),    5 },
+        {     VD_LIT("3"),    3 },
+        { VD_LIT("my_123"), 321 },
 
 
-        {     LIT("4"),    4 },
+        {     VD_LIT("4"),    4 },
     );
 
     // ----------------------
@@ -2987,18 +3139,18 @@ VD_TEST("Strmap/Basic") {
     // 6: [     6] -> 0 = 6
     // 7: [     4] -> 0 = 4    
     // ----------------------
-    VD_TEST_TRUE("Writing 6th value to a map with size 5/8 should work", VD_STRMAP_SET(map, LIT("6"), &num));
+    VD_TEST_TRUE("Writing 6th value to a map with size 5/8 should work", VD_STRMAP_SET(map, VD_LIT("6"), &num));
     num++;
 
     VD__TEST_MAP_CHECK_ENTRIES(map, 
-        { LIT("other"),  -40 },
+        { VD_LIT("other"),  -40 },
 
-        {     LIT("5"),    5 },
-        {     LIT("3"),    3 },
-        { LIT("my_123"), 321 },
+        {     VD_LIT("5"),    5 },
+        {     VD_LIT("3"),    3 },
+        { VD_LIT("my_123"), 321 },
 
-        {     LIT("6"),    6 },
-        {     LIT("4"),    4 },
+        {     VD_LIT("6"),    6 },
+        {     VD_LIT("4"),    4 },
     );
 
     // ----------------------
@@ -3011,18 +3163,18 @@ VD_TEST("Strmap/Basic") {
     // 6: [     6] -> 0 = 6
     // 7: [     4] -> 0 = 4
     // ----------------------
-    VD_TEST_TRUE("Writing 7th value to a map with size 6/8 should work", VD_STRMAP_SET(map, LIT("7"), &num));
+    VD_TEST_TRUE("Writing 7th value to a map with size 6/8 should work", VD_STRMAP_SET(map, VD_LIT("7"), &num));
     num++;
 
     VD__TEST_MAP_CHECK_ENTRIES(map, 
-        { LIT("other"),  -40 },
+        { VD_LIT("other"),  -40 },
 
-        {     LIT("5"),    5 },
-        {     LIT("3"),    3 },
-        { LIT("my_123"), 321 },
-        {     LIT("7"),    7 },
-        {     LIT("6"),    6 },
-        {     LIT("4"),    4 },
+        {     VD_LIT("5"),    5 },
+        {     VD_LIT("3"),    3 },
+        { VD_LIT("my_123"), 321 },
+        {     VD_LIT("7"),    7 },
+        {     VD_LIT("6"),    6 },
+        {     VD_LIT("4"),    4 },
     );
 
     // ----------------------
@@ -3035,18 +3187,18 @@ VD_TEST("Strmap/Basic") {
     // 6: [     6] -> 0 = 6
     // 7: [     4] -> 0 = 4    
     // ----------------------
-    VD_TEST_TRUE("Writing 8th value to a map with size 7/8 should work", VD_STRMAP_SET(map, LIT("8"), &num));
+    VD_TEST_TRUE("Writing 8th value to a map with size 7/8 should work", VD_STRMAP_SET(map, VD_LIT("8"), &num));
     num++;
 
     VD__TEST_MAP_CHECK_ENTRIES(map, 
-        { LIT("other"),  -40 },
-        {     LIT("8"),    8 },
-        {     LIT("5"),    5 },
-        {     LIT("3"),    3 },
-        { LIT("my_123"), 321 },
-        {     LIT("7"),    7 },
-        {     LIT("6"),    6 },
-        {     LIT("4"),    4 },
+        { VD_LIT("other"),  -40 },
+        {     VD_LIT("8"),    8 },
+        {     VD_LIT("5"),    5 },
+        {     VD_LIT("3"),    3 },
+        { VD_LIT("my_123"), 321 },
+        {     VD_LIT("7"),    7 },
+        {     VD_LIT("6"),    6 },
+        {     VD_LIT("4"),    4 },
     );
 
     // ----------------------
@@ -3059,17 +3211,17 @@ VD_TEST("Strmap/Basic") {
     // 6: [     6] -> 0 = 6
     // 7: [     4] -> 0 = 4
     // ----------------------
-    VD_TEST_FALSE("Writing 9th value to a map with size 8/8 should fail", VD_STRMAP_SET(map, LIT("9"), &num));
+    VD_TEST_FALSE("Writing 9th value to a map with size 8/8 should fail", VD_STRMAP_SET(map, VD_LIT("9"), &num));
 
     VD__TEST_MAP_CHECK_ENTRIES(map, 
-        { LIT("other"),  -40 },
-        {     LIT("8"),    8 },
-        {     LIT("5"),    5 },
-        {     LIT("3"),    3 },
-        { LIT("my_123"), 321 },
-        {     LIT("7"),    7 },
-        {     LIT("6"),    6 },
-        {     LIT("4"),    4 },
+        { VD_LIT("other"),  -40 },
+        {     VD_LIT("8"),    8 },
+        {     VD_LIT("5"),    5 },
+        {     VD_LIT("3"),    3 },
+        { VD_LIT("my_123"), 321 },
+        {     VD_LIT("7"),    7 },
+        {     VD_LIT("6"),    6 },
+        {     VD_LIT("4"),    4 },
     );
 
     // ----------------------
@@ -3082,17 +3234,17 @@ VD_TEST("Strmap/Basic") {
     // 6: [     6] -> 0 = 6
     // 7: [     4] -> 0 = 4
     // ----------------------
-    VD_TEST_TRUE("Remove my_123 should work", VD_STRMAP_RM(map, LIT("my_123")));
+    VD_TEST_TRUE("Remove my_123 should work", VD_STRMAP_RM(map, VD_LIT("my_123")));
 
     VD__TEST_MAP_CHECK_ENTRIES(map, 
-        { LIT("other"),  -40 },
-        {     LIT("8"),    8 },
-        {     LIT("5"),    5 },
-        {     LIT("3"),    3 },
+        { VD_LIT("other"),  -40 },
+        {     VD_LIT("8"),    8 },
+        {     VD_LIT("5"),    5 },
+        {     VD_LIT("3"),    3 },
 
-        {     LIT("7"),    7 },
-        {     LIT("6"),    6 },
-        {     LIT("4"),    4 },
+        {     VD_LIT("7"),    7 },
+        {     VD_LIT("6"),    6 },
+        {     VD_LIT("4"),    4 },
     );
 
     // ----------------------
@@ -3105,17 +3257,17 @@ VD_TEST("Strmap/Basic") {
     // 6: [     6] -> 0 = 6
     // 7: [     4] -> 0 = 4
     // ----------------------
-    VD_TEST_FALSE("Remove non existing key should fail", VD_STRMAP_RM(map, LIT("non")));
+    VD_TEST_FALSE("Remove non existing key should fail", VD_STRMAP_RM(map, VD_LIT("non")));
 
     VD__TEST_MAP_CHECK_ENTRIES(map, 
-        { LIT("other"),  -40 },
-        {     LIT("8"),    8 },
-        {     LIT("5"),    5 },
-        {     LIT("3"),    3 },
+        { VD_LIT("other"),  -40 },
+        {     VD_LIT("8"),    8 },
+        {     VD_LIT("5"),    5 },
+        {     VD_LIT("3"),    3 },
 
-        {     LIT("7"),    7 },
-        {     LIT("6"),    6 },
-        {     LIT("4"),    4 },
+        {     VD_LIT("7"),    7 },
+        {     VD_LIT("6"),    6 },
+        {     VD_LIT("4"),    4 },
     );
 
     // ----------------------
@@ -3128,17 +3280,17 @@ VD_TEST("Strmap/Basic") {
     // 6: [     6] -> 0 = 6
     // 7: [     4] -> 0 = 4
     // ----------------------
-    VD_TEST_TRUE("Remove other should work", VD_STRMAP_RM(map, LIT("other")));
+    VD_TEST_TRUE("Remove other should work", VD_STRMAP_RM(map, VD_LIT("other")));
 
     VD__TEST_MAP_CHECK_ENTRIES(map, 
 
-        {     LIT("8"),    8 },
-        {     LIT("5"),    5 },
-        {     LIT("3"),    3 },
+        {     VD_LIT("8"),    8 },
+        {     VD_LIT("5"),    5 },
+        {     VD_LIT("3"),    3 },
 
-        {     LIT("7"),    7 },
-        {     LIT("6"),    6 },
-        {     LIT("4"),    4 },
+        {     VD_LIT("7"),    7 },
+        {     VD_LIT("6"),    6 },
+        {     VD_LIT("4"),    4 },
     );
 
     // ----------------------
@@ -3151,17 +3303,17 @@ VD_TEST("Strmap/Basic") {
     // 6: [     6] -> 0 = 6
     // 7: [     4] -> 0 = 4
     // ----------------------
-    VD_TEST_TRUE("Remove 3 should work", VD_STRMAP_RM(map, LIT("3")));
+    VD_TEST_TRUE("Remove 3 should work", VD_STRMAP_RM(map, VD_LIT("3")));
 
     VD__TEST_MAP_CHECK_ENTRIES(map, 
 
-        {     LIT("8"),    8 },
-        {     LIT("5"),    5 },
+        {     VD_LIT("8"),    8 },
+        {     VD_LIT("5"),    5 },
 
 
-        {     LIT("7"),    7 },
-        {     LIT("6"),    6 },
-        {     LIT("4"),    4 },
+        {     VD_LIT("7"),    7 },
+        {     VD_LIT("6"),    6 },
+        {     VD_LIT("4"),    4 },
     );
 
     // ----------------------
@@ -3174,16 +3326,16 @@ VD_TEST("Strmap/Basic") {
     // 6: [     6] -> 0 = 6
     // 7: [      ] -> 0 = _
     // ----------------------
-    VD_TEST_TRUE("Remove 4 should work", VD_STRMAP_RM(map, LIT("4")));
+    VD_TEST_TRUE("Remove 4 should work", VD_STRMAP_RM(map, VD_LIT("4")));
 
     VD__TEST_MAP_CHECK_ENTRIES(map, 
 
-        {     LIT("8"),    8 },
-        {     LIT("5"),    5 },
+        {     VD_LIT("8"),    8 },
+        {     VD_LIT("5"),    5 },
 
 
-        {     LIT("7"),    7 },
-        {     LIT("6"),    6 },
+        {     VD_LIT("7"),    7 },
+        {     VD_LIT("6"),    6 },
 
     );
 
@@ -3197,16 +3349,16 @@ VD_TEST("Strmap/Basic") {
     // 6: [     6] -> 0 = 6
     // 7: [      ] -> 0 = _
     // ----------------------
-    VD_TEST_TRUE("Remove 5 should work", VD_STRMAP_RM(map, LIT("5")));
+    VD_TEST_TRUE("Remove 5 should work", VD_STRMAP_RM(map, VD_LIT("5")));
 
     VD__TEST_MAP_CHECK_ENTRIES(map, 
 
-        {     LIT("8"),    8 },
+        {     VD_LIT("8"),    8 },
 
 
 
-        {     LIT("7"),    7 },
-        {     LIT("6"),    6 },
+        {     VD_LIT("7"),    7 },
+        {     VD_LIT("6"),    6 },
 
     );
 
@@ -3220,15 +3372,15 @@ VD_TEST("Strmap/Basic") {
     // 6: [      ] -> 0 = _
     // 7: [      ] -> 0 = _
     // ----------------------
-    VD_TEST_TRUE("Remove 6 should work", VD_STRMAP_RM(map, LIT("6")));
+    VD_TEST_TRUE("Remove 6 should work", VD_STRMAP_RM(map, VD_LIT("6")));
 
     VD__TEST_MAP_CHECK_ENTRIES(map, 
 
-        {     LIT("8"),    8 },
+        {     VD_LIT("8"),    8 },
 
 
 
-        {     LIT("7"),    7 },
+        {     VD_LIT("7"),    7 },
 
 
     );
@@ -3243,11 +3395,11 @@ VD_TEST("Strmap/Basic") {
     // 6: [      ] -> 0 = _
     // 7: [      ] -> 0 = _
     // ----------------------
-    VD_TEST_TRUE("Remove 7 should work", VD_STRMAP_RM(map, LIT("7")));
+    VD_TEST_TRUE("Remove 7 should work", VD_STRMAP_RM(map, VD_LIT("7")));
 
     VD__TEST_MAP_CHECK_ENTRIES(map, 
 
-        {     LIT("8"),    8 },
+        {     VD_LIT("8"),    8 },
 
 
 
@@ -3266,7 +3418,7 @@ VD_TEST("Strmap/Basic") {
     // 6: [      ] -> 0 = _
     // 7: [      ] -> 0 = _
     // ----------------------
-    VD_TEST_TRUE("Remove 8 should work", VD_STRMAP_RM(map, LIT("8")));
+    VD_TEST_TRUE("Remove 8 should work", VD_STRMAP_RM(map, VD_LIT("8")));
 
     VD_TEST_OK();
 }
