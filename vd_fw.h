@@ -2124,7 +2124,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 static void    vd_fw__composition_changed(void);
 static void    vd_fw__update_region(void);
 static void    vd_fw__theme_changed(void);
-static void    vd_fw__nccalcsize(WPARAM wparam, LPARAM lparam);
+static LRESULT vd_fw__nccalcsize(WPARAM wparam, LPARAM lparam);
 static BOOL    vd_fw__has_autohide_taskbar(UINT edge, RECT monitor);
 static void    vd_fw__window_pos_changed(WINDOWPOS *pos);
 static LRESULT vd_fw__handle_invisible(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
@@ -2441,6 +2441,10 @@ static int vd_fw__hit_test(int x, int y)
     /* The diagonal size handles are wider than the frame */
     int diagonal_width = frame_size * 2 + GetSystemMetrics(SM_CXBORDER);
 
+    if (!PtInRect(&client, mouse)) {
+        return HTNOWHERE;
+    }
+
     if (mouse.y < frame_size) {
         if (mouse.x < diagonal_width) {
             return HTTOPLEFT;
@@ -2472,7 +2476,11 @@ static int vd_fw__hit_test(int x, int y)
     if (mouse.x >= width - frame_size) {
         return HTRIGHT;
     }
-    return HTCLIENT;
+
+    if (mouse.y < 30) {
+        return HTCLIENT;
+    }
+    return HTNOWHERE;
 }
 
 static void vd_fw__composition_changed(void)
@@ -2482,8 +2490,8 @@ static void vd_fw__composition_changed(void)
     VD_FW_G.composition_enabled = enabled;
 
     if (enabled) {
-        MARGINS m = {0, 0, 1, 0};
-        // MARGINS m = {-1};
+        // MARGINS m = {0, 0, 1, 0};
+        MARGINS m = {-1};
         VD_FW__CHECK_HRESULT(DwmExtendFrameIntoClientArea(VD_FW_G.hwnd, &m));
         DWORD value = DWMNCRP_ENABLED;
         VD_FW__CHECK_HRESULT(DwmSetWindowAttribute(VD_FW_G.hwnd, DWMWA_NCRENDERING_POLICY, &value, sizeof(value)));
@@ -2540,55 +2548,81 @@ static void vd_fw__theme_changed(void)
     VD_FW_G.theme_enabled = IsThemeActive();
 }
 
-static void vd_fw__nccalcsize(WPARAM wparam, LPARAM lparam)
+static LRESULT vd_fw__nccalcsize(WPARAM wparam, LPARAM lparam)
 {
-    if (!VD_FW_G.draw_decorations) {
-        if (wparam == TRUE) {
-            return;
-        }
-    }
+    int borderless = 1;
+    if (wparam && borderless) {
 
-    union {
-        LPARAM lparam;
-        RECT   *rect;
-    } params = { .lparam = lparam };
-
-    RECT non_client = *params.rect;
-    DefWindowProcW(VD_FW_G.hwnd, WM_NCCALCSIZE, wparam, params.lparam);
-
-    RECT client = *params.rect;
-
-    if (IsMaximized(VD_FW_G.hwnd)) {
-        WINDOWINFO window_info = {0};
-        window_info.cbSize = sizeof(window_info);
-        GetWindowInfo(VD_FW_G.hwnd, &window_info);
-
-        *params.rect = (RECT) {
-            .left   = client.left,
-            .top    = non_client.top + window_info.cyWindowBorders,
-            .right  = client.right,
-            .bottom = client.bottom,
-        };
-
-        HMONITOR monitor = MonitorFromWindow(VD_FW_G.hwnd, MONITOR_DEFAULTTOPRIMARY);
-        MONITORINFO monitor_info = {0};
-        monitor_info.cbSize = sizeof(monitor_info);
-        GetMonitorInfoW(monitor, &monitor_info);
-
-        if (EqualRect(params.rect, &monitor_info.rcMonitor)) {
-            if (vd_fw__has_autohide_taskbar(ABE_BOTTOM, monitor_info.rcMonitor)) {
-                params.rect->bottom--;
-            } else if (vd_fw__has_autohide_taskbar(ABE_LEFT, monitor_info.rcMonitor)) {
-                params.rect->left++;
-            } else if (vd_fw__has_autohide_taskbar(ABE_TOP, monitor_info.rcMonitor)) {
-                params.rect->top++;
-            } else if (vd_fw__has_autohide_taskbar(ABE_RIGHT, monitor_info.rcMonitor)) {
-                params.rect->right--;
+        NCCALCSIZE_PARAMS *params = (NCCALCSIZE_PARAMS*)lparam;
+        if (IsMaximized(VD_FW_G.hwnd)) {
+            HMONITOR monitor = MonitorFromWindow(VD_FW_G.hwnd, MONITOR_DEFAULTTONULL);
+            if (!monitor) {
+                return 0;
             }
+
+            MONITORINFO monitor_info = {0};
+            monitor_info.cbSize = sizeof(monitor_info);
+            if (!GetMonitorInfoW(monitor, &monitor_info)) {
+                return 0;
+            }
+
+            params->rgrc[0] = monitor_info.rcWork;
+            return 0;
         } else {
-            *params.rect = non_client;
+            params->rgrc[0].bottom += 1;
+            return WVR_VALIDRECTS;
         }
+
+    } else {
+        return DefWindowProcW(VD_FW_G.hwnd, WM_NCCALCSIZE, wparam, lparam);
     }
+    // if (!VD_FW_G.draw_decorations) {
+    //     if (wparam == TRUE) {
+    //         return;
+    //     }
+    // }
+
+    // union {
+    //     LPARAM lparam;
+    //     RECT   *rect;
+    // } params = { .lparam = lparam };
+
+    // RECT non_client = *params.rect;
+    // DefWindowProcW(VD_FW_G.hwnd, WM_NCCALCSIZE, wparam, params.lparam);
+
+    // RECT client = *params.rect;
+
+    // if (IsMaximized(VD_FW_G.hwnd)) {
+    //     WINDOWINFO window_info = {0};
+    //     window_info.cbSize = sizeof(window_info);
+    //     GetWindowInfo(VD_FW_G.hwnd, &window_info);
+
+    //     *params.rect = (RECT) {
+    //         .left   = client.left,
+    //         .top    = non_client.top + window_info.cyWindowBorders,
+    //         .right  = client.right,
+    //         .bottom = client.bottom,
+    //     };
+
+    //     HMONITOR monitor = MonitorFromWindow(VD_FW_G.hwnd, MONITOR_DEFAULTTOPRIMARY);
+    //     MONITORINFO monitor_info = {0};
+    //     monitor_info.cbSize = sizeof(monitor_info);
+    //     GetMonitorInfoW(monitor, &monitor_info);
+
+    //     if (EqualRect(params.rect, &monitor_info.rcMonitor)) {
+    //         if (vd_fw__has_autohide_taskbar(ABE_BOTTOM, monitor_info.rcMonitor)) {
+    //             params.rect->bottom--;
+    //         } else if (vd_fw__has_autohide_taskbar(ABE_LEFT, monitor_info.rcMonitor)) {
+    //             params.rect->left++;
+    //         } else if (vd_fw__has_autohide_taskbar(ABE_TOP, monitor_info.rcMonitor)) {
+    //             params.rect->top++;
+    //         } else if (vd_fw__has_autohide_taskbar(ABE_RIGHT, monitor_info.rcMonitor)) {
+    //             params.rect->right--;
+    //         }
+    //     } else {
+    //         *params.rect = non_client;
+    //     }
+    // }
 }
 
 static BOOL vd_fw__has_autohide_taskbar(UINT edge, RECT monitor)
