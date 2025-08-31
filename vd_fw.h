@@ -3499,16 +3499,137 @@ static void vd_fw__load_opengl(VdFwGlVersion version)
 #undef LOAD
 }
 
+enum {
+    VD_FW__CLOSE_BUTTON_ID = 0,
+    VD_FW__MAXIMIZE_BUTTON_ID = 1,
+    VD_FW__MAX_IDS,
+};
+
 typedef struct {
-    int     initialized;
-    GLint   projection_location;
-    GLint   rect_location;
-    GLint   color_location;
-    GLuint  vao;
-    GLuint  program;
-    GLuint  vbo;
-    GLuint  ibo;
+    int   is_hovered;
+    int   was_hovered;
+    float location[4];
+    float color[4];
+} VdFw__Elem;
+
+typedef struct {
+    float start_color[4];
+    float end_color[4];
+    float now_color[4];
+    float timer;
+    float time;
+    int ease_mode;
+} VdFw__Tween;
+
+typedef struct {
+    VdFw__Elem  e[VD_FW__MAX_IDS];
+    VdFw__Tween t[VD_FW__MAX_IDS];
+
+    int        initialized;
+    GLint      projection_location;
+    GLint      rect_location;
+    GLint      color_location;
+    GLuint     vao;
+    GLuint     program;
+    GLuint     vbo;
+    GLuint     ibo;
+    float      mouse[2];
+    float      window[2];
 } VdFw__GenericInternalData;
+
+static void vd_fw__write_location(VdFw__GenericInternalData *data, int id, float location[4])
+{
+    VdFw__Elem *e = &data->e[id];
+    e->location[0] = location[0];
+    e->location[1] = location[1];
+    e->location[2] = location[2];
+    e->location[3] = location[3];
+
+    int inside = vd_fw_u_point_in_rect(data->mouse[0], data->mouse[1], location[0], location[1], location[2], location[3]);
+
+    e->was_hovered = e->is_hovered;
+    e->is_hovered = inside;
+}
+
+static void vd_fw__write_color(VdFw__GenericInternalData *data, int id, float color[4])
+{
+    VdFw__Elem *e = &data->e[id];
+    e->color[0] = color[0];
+    e->color[1] = color[1];
+    e->color[2] = color[2];
+    e->color[3] = color[3];
+}
+
+static int vd_fw__was_hovered(VdFw__GenericInternalData *data, int id) {
+    return data->e[id].was_hovered;
+}
+
+static int vd_fw__is_hovered(VdFw__GenericInternalData *data, int id) {
+    return data->e[id].is_hovered;
+}
+
+static int vd_fw__was_unhovered(VdFw__GenericInternalData *data, int id) {
+    return data->e[id].was_hovered && !data->e[id].is_hovered;
+}
+
+static void vd_fw__anim_update(VdFw__GenericInternalData *data, int id, float new_color[4], float time, int mode) {
+    VdFw__Tween *w = &data->t[id];
+    w->timer = 0.f;
+    w->time = time;
+    w->ease_mode = mode;
+
+    w->start_color[0] = w->end_color[0];
+    w->start_color[1] = w->end_color[1];
+    w->start_color[2] = w->end_color[2];
+    w->start_color[3] = w->end_color[3];
+
+    w->end_color[0] = new_color[0];
+    w->end_color[1] = new_color[1];
+    w->end_color[2] = new_color[2];
+    w->end_color[3] = new_color[3];
+}
+
+static float vd_fw__ease(VdFw__Tween *w, float x) {
+    if (w->ease_mode == 0) {
+        return x;
+    } else if (w->ease_mode == 1) {
+        float p = (-2.f * x + 2.f);
+        return x < 0.5f ? 16.f * x * x * x * x * x : 1.f - (p*p*p*p*p) / 2.f;
+    }
+
+    return x;
+}
+
+static void vd_fw__animate(VdFw__GenericInternalData *data, int id) {
+
+    // VdFw__Elem  *e = &data->e[id];
+    VdFw__Tween *w = &data->t[id];
+
+    float s = vd_fw_delta_s();
+
+    if (w->time <= 0.000001f) {
+        return;
+    }
+
+    w->timer += s;
+
+    if (w->timer > w->time) {
+        w->timer = w->time;
+        vd_fw__write_color(data, id, w->end_color);
+    } else {
+
+        float t = w->timer / w->time;
+
+        float now[4] = {
+            (1.f - vd_fw__ease(w, t)) * w->start_color[0] + vd_fw__ease(w, t) * w->end_color[0],
+            (1.f - vd_fw__ease(w, t)) * w->start_color[1] + vd_fw__ease(w, t) * w->end_color[1],
+            (1.f - vd_fw__ease(w, t)) * w->start_color[2] + vd_fw__ease(w, t) * w->end_color[2],
+            (1.f - vd_fw__ease(w, t)) * w->start_color[3] + vd_fw__ease(w, t) * w->end_color[3],
+        };
+        vd_fw__write_color(data, id, now);
+    }
+
+}
 
 #define VD_FW_GL_VERSION_3_3_INTERNAL_VERTEX_SHADER_SOURCE                                                             \
     "#version 330 core                                                                                             \n" \
@@ -3567,15 +3688,24 @@ void vd_fw_draw_window_border(void)
     }
     glUseProgram(data.program);
 
-    int widthi, heighti;
-    vd_fw_get_size(&widthi, &heighti);
+    float width;
+    float height;
+    {
 
-    float width  = (float)widthi;
-    float height = (float)heighti;
+        int widthi, heighti;
+        vd_fw_get_size(&widthi, &heighti);
 
-    float projection[16];
-    vd_fw_u_ortho(0.0f, width, height, 0.0f, -1.0f, 1.0f, projection);
-    glUniformMatrix4fv(data.projection_location, 1, GL_FALSE, projection);
+        data.window[0] = width;
+        data.window[1] = height;
+
+        width  = (float)widthi;
+        height = (float)heighti;
+        float projection[16];
+        vd_fw_u_ortho(0.0f, width, height, 0.0f, -1.0f, 1.0f, projection);
+        glUniformMatrix4fv(data.projection_location, 1, GL_FALSE, projection);
+
+        vd_fw_get_mouse_statef(&data.mouse[0], &data.mouse[1]);
+    }
 
     glBindVertexArray(data.vao);
 
@@ -3585,31 +3715,47 @@ void vd_fw_draw_window_border(void)
     glDrawArrays(GL_TRIANGLES, 0, 6);             \
 } while(0)
 
-    float mouse_x, mouse_y;
-    vd_fw_get_mouse_statef(&mouse_x, &mouse_y);
-
     float button_size = 24.f;
     float offset = width - button_size;
 
-    float close_color_r = 0.7f;
-    if (vd_fw_u_point_in_rect(mouse_x, mouse_y, offset, 0.f, button_size, button_size)) {
-        close_color_r = 1.0f;
+    float close_button_normal[4] = {.7f, 0.f, 0.f, 1.f};
+    float close_button_hover[4]  = {1.f, 0.f, 0.f, 1.f};
+
+    vd_fw__write_location(&data, VD_FW__CLOSE_BUTTON_ID, (float[]){offset, 0.f, button_size, button_size});
+    offset -= button_size;
+
+    if (!vd_fw__was_hovered(&data, VD_FW__CLOSE_BUTTON_ID) && vd_fw__is_hovered(&data, VD_FW__CLOSE_BUTTON_ID)) {
+        vd_fw__anim_update(&data, VD_FW__CLOSE_BUTTON_ID, close_button_hover, 0.16f, 1);
+    } else if (vd_fw__was_hovered(&data, VD_FW__CLOSE_BUTTON_ID) && !vd_fw__is_hovered(&data, VD_FW__CLOSE_BUTTON_ID)) {
+        vd_fw__anim_update(&data, VD_FW__CLOSE_BUTTON_ID, close_button_normal, 0.32f, 1);
+    } else {
+        vd_fw__write_color(&data, VD_FW__CLOSE_BUTTON_ID, close_button_normal);
     }
 
-    PUT_RECT(
-        offset, 0.f, button_size, button_size,
-        close_color_r, 0.0f, 0.0f, 1.0f);
+    float maximize_button_normal[4] = {0.2f, 0.7f, 0.2f, 1.f};
+    float maximize_button_hover[4]  = {0.3f, 0.5f, 0.3f, 1.f};
+    vd_fw__write_location(&data, VD_FW__MAXIMIZE_BUTTON_ID, (float[]){offset, 0.f, button_size, button_size});
     offset -= button_size;
 
-    PUT_RECT(
-        offset, 0.f, button_size, button_size,
-        0.0f, 1.0f, 0.0f, 1.0f);
-    offset -= button_size;
+    if (!vd_fw__was_hovered(&data, VD_FW__MAXIMIZE_BUTTON_ID) && vd_fw__is_hovered(&data, VD_FW__MAXIMIZE_BUTTON_ID)) {
+        vd_fw__anim_update(&data, VD_FW__MAXIMIZE_BUTTON_ID, maximize_button_hover, 0.16f, 1);
+        // OutputDebugStringA("HOVER\n");
+    } else if (vd_fw__was_hovered(&data, VD_FW__MAXIMIZE_BUTTON_ID) && !vd_fw__is_hovered(&data, VD_FW__MAXIMIZE_BUTTON_ID)) {
+        vd_fw__anim_update(&data, VD_FW__MAXIMIZE_BUTTON_ID, maximize_button_normal, 0.32f, 1);
+    } else {
+        vd_fw__write_color(&data, VD_FW__MAXIMIZE_BUTTON_ID, maximize_button_normal);
+    }
 
-    PUT_RECT(
-        offset, 0.f, button_size, button_size,
-        0.0f, 0.0f, 1.0f, 1.0f);
-    offset -= button_size;
+    vd_fw__animate(&data, VD_FW__CLOSE_BUTTON_ID);
+    vd_fw__animate(&data, VD_FW__MAXIMIZE_BUTTON_ID);
+    for (int i = 0; i < VD_FW__MAX_IDS; ++i) {
+
+
+        VdFw__Elem *e = &data.e[i];
+        PUT_RECT(
+            e->location[0], e->location[1], e->location[2], e->location[3],
+            e->color[0], e->color[1], e->color[2], e->color[3]);
+    }
     
     glBindVertexArray(0);
 
