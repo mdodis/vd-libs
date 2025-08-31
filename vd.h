@@ -1731,7 +1731,8 @@ VdHiTime vd_hitime_get(void)
 }
 
 VdHiTime vd_hitime_sub(VdHiTime a, VdHiTime b)
-{    VdHiTime result = { a.performance_counter - b.performance_counter };
+{
+    VdHiTime result = { a.performance_counter - b.performance_counter };
     return result;
 }
 
