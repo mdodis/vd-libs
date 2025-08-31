@@ -11,7 +11,7 @@ REM samples/ui_basic.c------------------
 set INC_DIR=%PRJ_DIR%
 set SRC_DIR=%PRJ_DIR%\samples
 
-cl /Zi /Od /I %INC_DIR% /W4  /nologo %SRC_DIR%\ui_basic.c /Fe:ui_basic.exe /link User32.lib OpenGL32.lib
+cl /Zi /Od /I %INC_DIR% /W4 /nologo %SRC_DIR%\ui_basic.c /Fe:ui_basic.exe 
 REM samples/ui_basic.c------------------
 
 popd

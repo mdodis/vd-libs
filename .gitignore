@@ -6,3 +6,4 @@ build-*/
 *.obj
 *.exe
 *.rdi
+**/*.vs

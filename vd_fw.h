@@ -23,16 +23,23 @@
  */
 #ifndef VD_FW_H
 #define VD_FW_H
+#define VD_FW_VERSION_MAJOR    0
+#define VD_FW_VERSION_MINOR    0
+#define VD_FW_VERSION_PATCH    1
+#define VD_FW_VERSION          ((VD_FW_VERSION_MAJOR << 16) | (VD_FW_VERSION_MINOR << 8) | (VD_FW_VERSION_PATCH))
+
 typedef void         GLvoid;
 typedef unsigned int GLenum;
 
-extern void glClear(int mask);
-extern void glClearColor(float r, float g, float b, float a);
-
 extern int vd_fw_init(void);
 extern int vd_fw_running(void);
+extern int vd_fw_begin_render(void);
+extern int vd_fw_end_render(void);
 extern int vd_fw_poll_events(void);
 extern int vd_fw_swap_buffers(void);
+
+extern void glClear(int mask);
+extern void glClearColor(float r, float g, float b, float a);
 #endif // !VD_FW_H
 
 #ifdef VD_FW_IMPL
@@ -45,37 +52,37 @@ extern int vd_fw_swap_buffers(void);
 #pragma comment(lib, "uxtheme.lib")
 #pragma comment(lib, "shell32.lib")
 // #define WIN32_LEAN_AND_MEAN
-// #define NOGDICAPMASKS
+#define NOGDICAPMASKS
 // #define NOSYSMETRICS
-// #define NOMENUS
-// #define NOICONS
-// #define NOSYSCOMMANDS
-// #define NORASTEROPS
-// #define OEMRESOURCE
-// #define NOATOM
-// #define NOCLIPBOARD
-// #define NOCOLOR
+#define NOMENUS
+#define NOICONS
+#define NOSYSCOMMANDS
+#define NORASTEROPS
+#define OEMRESOURCE
+#define NOATOM
+#define NOCLIPBOARD
+#define NOCOLOR
 // #define NOCTLMGR
-// #define NODRAWTEXT
-// #define NOKERNEL
-// #define NONLS
-// #define NOMEMMGR
-// #define NOMETAFILE
-// #define NOOPENFILE
-// #define NOSCROLL
-// #define NOSERVICE
-// #define NOSOUND
-// #define NOTEXTMETRIC
-// #define NOWH
-// #define NOCOMM
-// #define NOKANJI
-// #define NOHELP
-// #define NOPROFILER
-// #define NODEFERWINDOWPOS
-// #define NOMCX
-// #define NORPC
-// #define NOPROXYSTUB
-// #define NOIMAGE
+#define NODRAWTEXT
+#define NOKERNEL
+#define NONLS
+#define NOMEMMGR
+#define NOMETAFILE
+#define NOOPENFILE
+#define NOSCROLL
+#define NOSERVICE
+#define NOSOUND
+#define NOTEXTMETRIC
+#define NOWH
+#define NOCOMM
+#define NOKANJI
+#define NOHELP
+#define NOPROFILER
+#define NODEFERWINDOWPOS
+#define NOMCX
+#define NORPC
+#define NOPROXYSTUB
+#define NOIMAGE
 #define NOTAPE
 #include <windows.h>
 #include <windowsx.h>
@@ -109,6 +116,31 @@ extern int vd_fw_swap_buffers(void);
 #define WM_NCUAHDRAWFRAME (0x00AF)
 #endif
 
+typedef struct {
+    HWND              hwnd;
+    HDC               hdc;
+    HGLRC             hglrc;
+    RECT              rgn;
+    BOOL              theme_enabled;
+    BOOL              composition_enabled;
+    HANDLE            win_thread;
+    DWORD             win_thread_id;
+    DWORD             main_thread_id;
+    CRITICAL_SECTION  render_section;
+    HANDLE            sem_window_ready;
+} VdFw__Win32InternalData;
+
+static VdFw__Win32InternalData Vd_Fw_Globals = {0};
+static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
+static void    vd_fw__composition_changed(void);
+static void    vd_fw__update_region(void);
+static void    vd_fw__theme_changed(void);
+static void    vd_fw__nccalcsize(WPARAM wparam, LPARAM lparam);
+static BOOL    vd_fw__has_autohide_taskbar(UINT edge, RECT monitor);
+static void    vd_fw__window_pos_changed(WINDOWPOS *pos);
+static LRESULT vd_fw__handle_invisible(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
+static DWORD   vd_fw__win_thread_proc(LPVOID param);
+
 #include <stdio.h>
 #define VD_FW__CHECK_HRESULT(expr) do {\
     if ((expr) != S_OK) { printf("Failed at: %s\n", #expr); DebugBreak(); } \
@@ -135,69 +167,35 @@ extern int vd_fw_swap_buffers(void);
     if ((expr) != TRUE) { printf("Failed at: %s\n GetLastError: %d", #expr, GetLastError()); DebugBreak(); } \
 } while (0)
 
-static HWND    VdFw__Hwnd;
-static HDC     VdFw__Hdc;
-static int     VdFw__WindowState = 0;
-static HGLRC   VdFw__Hglrc;
-static RECT    VdFw__Rgn;
-static POINT   VdFw__DragStart;
-static RECT    VdFw__DragStartRect;
-static int     VdFw__ResizeHit;
-static BOOL    VdFw__Theme_Enabled;
-static BOOL    Vdfw__Composition_Enabled;
-static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
-static void    vd_fw__composition_changed(void);
-static void    vd_fw__update_region(void);
-static void    vd_fw__theme_changed(void);
-static void    vd_fw__nccalcsize(WPARAM wparam, LPARAM lparam);
-static BOOL    vd_fw__has_autohide_taskbar(UINT edge, RECT monitor);
-static void    vd_fw__window_pos_changed(WINDOWPOS *pos);
-static LRESULT vd_fw__handle_invisible(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
+#define VD_FW_G Vd_Fw_Globals
 
 int vd_fw_init(void)
 {
-    SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
-    VD_FW_SANITY_CHECK();
+    VD_FW_G.main_thread_id = GetCurrentThreadId();
 
-    WNDCLASSEXW wcx;
-    ZeroMemory(&wcx, sizeof(wcx));
-    wcx.cbSize         = sizeof(wcx);
-    wcx.style          = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-    wcx.hInstance      = NULL;
-    wcx.lpfnWndProc    = vd_fw__wndproc;
-    wcx.lpszClassName  = L"FWCLASS";
-    wcx.hbrBackground  = (HBRUSH)GetStockObject(BLACK_BRUSH);
-    wcx.hCursor        = LoadCursorA(NULL, IDC_ARROW);
-    if (!RegisterClassExW(&wcx)) {
-        return 0;
-    }
+    VD_FW_G.sem_window_ready = CreateSemaphoreA(
+        NULL,
+        0,
+        1,
+        NULL);
 
-    VdFw__Hwnd = CreateWindowExW(
-        WS_EX_APPWINDOW | WS_EX_LAYERED,
-        L"FWCLASS",
-        L"FW Window",
-        WS_OVERLAPPEDWINDOW | WS_SIZEBOX,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        1600,
-        900,
-        0 /* hwndParent */,
-        0 /* hMenu */,
-        0 /* hInstance */,
-        0 /* lpParam */);
+    DWORD spin_count = 0;
+    VD_FW__CHECK_TRUE(InitializeCriticalSectionAndSpinCount(
+        &VD_FW_G.render_section,
+        spin_count));
 
-    SetLayeredWindowAttributes(VdFw__Hwnd, RGB(255, 0, 255), 0, LWA_COLORKEY);
+    VD_FW_G.win_thread = CreateThread(
+        NULL,
+        0,
+        vd_fw__win_thread_proc,
+        &VD_FW_G.main_thread_id,
+        0,
+        &VD_FW_G.win_thread_id);
 
-    vd_fw__composition_changed();
-    VD_FW_SANITY_CHECK();
-    vd_fw__theme_changed();
-    VD_FW_SANITY_CHECK();
+    EnterCriticalSection(&VD_FW_G.render_section);
+    WaitForSingleObject(VD_FW_G.sem_window_ready, INFINITE);
 
-    // SetWindowPos(VdFw__Hwnd, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_SHOWWINDOW);
-    ShowWindow(VdFw__Hwnd, SW_SHOW);
-    VD_FW__CHECK_NONZERO(UpdateWindow(VdFw__Hwnd));
-
-    VdFw__Hdc = GetDC(VdFw__Hwnd);
+    VD_FW_G.hdc = GetDC(VD_FW_G.hwnd);
 
     PIXELFORMATDESCRIPTOR pfd = {
       sizeof(PIXELFORMATDESCRIPTOR),
@@ -220,55 +218,128 @@ int vd_fw_init(void)
       0,                                // Reserved
       0, 0, 0                           // Layer Masks Ignored
     };
-    int pf = ChoosePixelFormat(VdFw__Hdc, &pfd);
-    if (SetPixelFormat(VdFw__Hdc, pf, &pfd) != TRUE) {
-        return 0;
-    }
+    int pf = ChoosePixelFormat(VD_FW_G.hdc, &pfd);
+    SetPixelFormat(VD_FW_G.hdc, pf, &pfd);
 
-    VdFw__Hglrc = wglCreateContext(VdFw__Hdc);
-    if (VdFw__Hglrc == NULL) {
-        printf("A\n");
-    }
-    VD_FW__CHECK_NULL(VdFw__Hglrc);
-    VD_FW__CHECK_TRUE(wglMakeCurrent(VdFw__Hdc, VdFw__Hglrc));
+    VD_FW_G.hglrc = wglCreateContext(VD_FW_G.hdc);
+
+    VD_FW__CHECK_NULL(VD_FW_G.hglrc);
+    VD_FW__CHECK_TRUE(wglMakeCurrent(VD_FW_G.hdc, VD_FW_G.hglrc));
+
+    LeaveCriticalSection(&VD_FW_G.render_section);
 
     return 1;
 }
 
 int vd_fw_running(void)
 {
-    return !(VdFw__Hwnd == 0);
+    return !(VD_FW_G.hwnd == 0);
+}
+
+int vd_fw_begin_render(void)
+{
+    // EnterCriticalSection(&VD_FW_G.render_section);
+    return 1;
+}
+
+int vd_fw_end_render(void)
+{
+    // LeaveCriticalSection(&VD_FW_G.render_section);
+    return 1;
 }
 
 int vd_fw_poll_events(void)
 {
-    MSG message;
-    while (PeekMessageW(&message, VdFw__Hwnd, 0, 0, PM_REMOVE)) {
-        TranslateMessage(&message);
-        DispatchMessageW(&message);
-    }
     return 1;
 }
 
 int vd_fw_swap_buffers(void)
 {
-    SwapBuffers(VdFw__Hdc);
+    SwapBuffers(VD_FW_G.hdc);
     return 1;
+}
+
+static DWORD vd_fw__win_thread_proc(LPVOID param)
+{
+    (void)param;
+    DWORD *p_main_thread_id = (DWORD*)param;
+
+
+    SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+    VD_FW_SANITY_CHECK();
+
+    WNDCLASSEXW wcx;
+    ZeroMemory(&wcx, sizeof(wcx));
+    wcx.cbSize         = sizeof(wcx);
+    wcx.style          = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
+    wcx.hInstance      = NULL;
+    wcx.lpfnWndProc    = vd_fw__wndproc;
+    wcx.lpszClassName  = L"FWCLASS";
+    wcx.hbrBackground  = (HBRUSH)GetStockObject(BLACK_BRUSH);
+    wcx.hCursor        = LoadCursorA(NULL, IDC_ARROW);
+    if (!RegisterClassExW(&wcx)) {
+        return 0;
+    }
+
+    VD_FW_G.hwnd = CreateWindowExW(
+        WS_EX_APPWINDOW | WS_EX_LAYERED,
+        L"FWCLASS",
+        L"FW Window",
+        WS_OVERLAPPEDWINDOW | WS_SIZEBOX,
+        CW_USEDEFAULT,
+        CW_USEDEFAULT,
+        1600,
+        900,
+        0 /* hwndParent */,
+        0 /* hMenu */,
+        0 /* hInstance */,
+        0 /* lpParam */);
+
+    SetLayeredWindowAttributes(VD_FW_G.hwnd, RGB(255, 0, 255), 0, LWA_COLORKEY);
+
+    vd_fw__composition_changed();
+    VD_FW_SANITY_CHECK();
+    vd_fw__theme_changed();
+    VD_FW_SANITY_CHECK();
+
+    // SetWindowPos(VD_FW_G.hwnd, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_SHOWWINDOW);
+    ShowWindow(VD_FW_G.hwnd, SW_SHOW);
+    VD_FW__CHECK_NONZERO(UpdateWindow(VD_FW_G.hwnd));
+
+    VD_FW__CHECK_TRUE(ReleaseSemaphore(VD_FW_G.sem_window_ready, 1, NULL));
+
+    EnterCriticalSection(&VD_FW_G.render_section);
+    LeaveCriticalSection(&VD_FW_G.render_section);
+
+    // VD_FW__CHECK_TRUE(AttachThreadInput(*p_main_thread_id, GetCurrentThreadId(), TRUE));
+    while (VD_FW_G.hwnd != 0) {
+        MSG message;
+        while (GetMessage(&message, VD_FW_G.hwnd, 0, 0)) {
+            TranslateMessage(&message);
+            DispatchMessageW(&message);
+        }
+
+        // EnterCriticalSection(&VD_FW_G.render_section);
+        // SwapBuffers(VD_FW_G.hdc);
+        // LeaveCriticalSection(&VD_FW_G.render_section);
+    }
+
+    return 0;
 }
 
 static int vd_fw__hit_test(int x, int y)
 {
-    if (IsMaximized(VdFw__Hwnd)) {
+    if (IsMaximized(VD_FW_G.hwnd)) {
         return HTCLIENT;
     }
 
     POINT mouse;
     mouse.x = x;
     mouse.y = y;
-    ScreenToClient(VdFw__Hwnd, &mouse);
+    ScreenToClient(VD_FW_G.hwnd, &mouse);
 
     RECT client;
-    GetClientRect(VdFw__Hwnd, &client);
+    GetClientRect(VD_FW_G.hwnd, &client);
     int width  = client.right - client.left;
     int height = client.bottom - client.top;
 
@@ -317,16 +388,16 @@ static void vd_fw__composition_changed(void)
 {
     BOOL enabled = FALSE;
     VD_FW__CHECK_HRESULT(DwmIsCompositionEnabled(&enabled));
-    Vdfw__Composition_Enabled = enabled;
+    VD_FW_G.composition_enabled = enabled;
 
     printf("Composition Enabled: %d\n", enabled);
 
     if (enabled) {
         // MARGINS m = {0, 0, 1, 0};
         MARGINS m = {-1};
-        VD_FW__CHECK_HRESULT(DwmExtendFrameIntoClientArea(VdFw__Hwnd, &m));
+        VD_FW__CHECK_HRESULT(DwmExtendFrameIntoClientArea(VD_FW_G.hwnd, &m));
         DWORD value = DWMNCRP_ENABLED;
-        VD_FW__CHECK_HRESULT(DwmSetWindowAttribute(VdFw__Hwnd, DWMWA_NCRENDERING_POLICY, &value, sizeof(value)));
+        VD_FW__CHECK_HRESULT(DwmSetWindowAttribute(VD_FW_G.hwnd, DWMWA_NCRENDERING_POLICY, &value, sizeof(value)));
     }
 
     vd_fw__update_region();
@@ -334,28 +405,28 @@ static void vd_fw__composition_changed(void)
 
 static void vd_fw__update_region(void)
 {
-    RECT old_rgn = VdFw__Rgn;
+    RECT old_rgn = VD_FW_G.rgn;
 
-    if (IsMaximized(VdFw__Hwnd)) {
+    if (IsMaximized(VD_FW_G.hwnd)) {
         WINDOWINFO window_info = {};
         window_info.cbSize = sizeof(window_info);
-        GetWindowInfo(VdFw__Hwnd, &window_info);
+        GetWindowInfo(VD_FW_G.hwnd, &window_info);
 
-        VdFw__Rgn = (RECT) {
+        VD_FW_G.rgn = (RECT) {
             .left   = window_info.rcClient.left   - window_info.rcWindow.left,
             .top    = window_info.rcClient.top    - window_info.rcWindow.top,
             .right  = window_info.rcClient.right  - window_info.rcWindow.left,
             .bottom = window_info.rcClient.bottom - window_info.rcWindow.top,
         };
-    } else if (!Vdfw__Composition_Enabled) {
-        VdFw__Rgn = (RECT) {
+    } else if (!VD_FW_G.composition_enabled) {
+        VD_FW_G.rgn = (RECT) {
             .left   = 0,
             .top    = 0,
             .right  = 32767,
             .bottom = 32767,
         };
     } else {
-        VdFw__Rgn = (RECT) {
+        VD_FW_G.rgn = (RECT) {
             .left   = 0,
             .top    = 0,
             .right  = 0,
@@ -363,21 +434,21 @@ static void vd_fw__update_region(void)
         };
     }
 
-    if (EqualRect(&VdFw__Rgn, &old_rgn)) {
+    if (EqualRect(&VD_FW_G.rgn, &old_rgn)) {
         return;
     }
 
     RECT zero_rect = {0};
-    if (EqualRect(&VdFw__Rgn, &zero_rect)) {
-        VD_FW__CHECK_INT(SetWindowRgn(VdFw__Hwnd, NULL, TRUE));
+    if (EqualRect(&VD_FW_G.rgn, &zero_rect)) {
+        VD_FW__CHECK_INT(SetWindowRgn(VD_FW_G.hwnd, NULL, TRUE));
     } else {
-        VD_FW__CHECK_INT(SetWindowRgn(VdFw__Hwnd, CreateRectRgnIndirect(&VdFw__Rgn), TRUE));
+        VD_FW__CHECK_INT(SetWindowRgn(VD_FW_G.hwnd, CreateRectRgnIndirect(&VD_FW_G.rgn), TRUE));
     }
 }
 
 static void vd_fw__theme_changed(void)
 {
-    VdFw__Theme_Enabled = IsThemeActive();
+    VD_FW_G.theme_enabled = IsThemeActive();
 }
 
 static void vd_fw__nccalcsize(WPARAM wparam, LPARAM lparam)
@@ -392,14 +463,14 @@ static void vd_fw__nccalcsize(WPARAM wparam, LPARAM lparam)
     } params = { .lparam = lparam };
 
     RECT non_client = *params.rect;
-    DefWindowProcW(VdFw__Hwnd, WM_NCCALCSIZE, wparam, params.lparam);
+    DefWindowProcW(VD_FW_G.hwnd, WM_NCCALCSIZE, wparam, params.lparam);
 
     RECT client = *params.rect;
 
-    if (IsMaximized(VdFw__Hwnd)) {
+    if (IsMaximized(VD_FW_G.hwnd)) {
         WINDOWINFO window_info = {0};
         window_info.cbSize = sizeof(window_info);
-        GetWindowInfo(VdFw__Hwnd, &window_info);
+        GetWindowInfo(VD_FW_G.hwnd, &window_info);
 
         *params.rect = (RECT) {
             .left   = client.left,
@@ -408,7 +479,7 @@ static void vd_fw__nccalcsize(WPARAM wparam, LPARAM lparam)
             .bottom = client.bottom,
         };
 
-        HMONITOR monitor = MonitorFromWindow(VdFw__Hwnd, MONITOR_DEFAULTTOPRIMARY);
+        HMONITOR monitor = MonitorFromWindow(VD_FW_G.hwnd, MONITOR_DEFAULTTOPRIMARY);
         MONITORINFO monitor_info = {0};
         monitor_info.cbSize = sizeof(monitor_info);
         GetMonitorInfoW(monitor, &monitor_info);
@@ -452,11 +523,11 @@ static BOOL vd_fw__has_autohide_taskbar(UINT edge, RECT monitor)
 static void vd_fw__window_pos_changed(WINDOWPOS *pos)
 {
     RECT client;
-    GetClientRect(VdFw__Hwnd, &client);
+    GetClientRect(VD_FW_G.hwnd, &client);
     if (pos->flags & SWP_FRAMECHANGED) {
         vd_fw__update_region();
     }
-    VD_FW__CHECK_NONZERO(InvalidateRect(VdFw__Hwnd, &client, TRUE));
+    VD_FW__CHECK_NONZERO(InvalidateRect(VD_FW_G.hwnd, &client, TRUE));
 }
 
 static LRESULT vd_fw__handle_invisible(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
@@ -472,13 +543,13 @@ static LRESULT vd_fw__handle_invisible(HWND hwnd, UINT msg, WPARAM wparam, LPARA
 
 static void vd_fw__paint(void)
 {
-    render();
+    // render();
     // PAINTSTRUCT ps;
-    // HDC dc = BeginPaint(VdFw__Hwnd, &ps);
+    // HDC dc = BeginPaint(VD_FW_G.hwnd, &ps);
     // HBRUSH bb = CreateSolidBrush(RGB(0, 255, 0));
 
     // RECT rect;
-    // GetClientRect(VdFw__Hwnd, &rect);
+    // GetClientRect(VD_FW_G.hwnd, &rect);
     // int width = rect.right - rect.left;
     // int height = rect.bottom - rect.top;
 
@@ -489,7 +560,7 @@ static void vd_fw__paint(void)
     // FillRect(dc, &(RECT) { 0, height - 1, width, height }, bb);
 
     // DeleteObject(bb);
-    // EndPaint(VdFw__Hwnd, &ps);
+    // EndPaint(VD_FW_G.hwnd, &ps);
 }
 
 static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
@@ -505,7 +576,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
         case WM_DESTROY: {
             PostQuitMessage(0);
-            VdFw__Hwnd = (HWND)0;
+            VD_FW_G.hwnd = (HWND)0;
         } break;
 
         case WM_DWMCOMPOSITIONCHANGED: {
@@ -536,7 +607,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         } break;
 
         case WM_NCPAINT: {
-            if (Vdfw__Composition_Enabled) {
+            if (VD_FW_G.composition_enabled) {
                 result = DefWindowProc(hwnd, msg, wparam, lparam);
             }
         } break;
@@ -547,14 +618,14 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         } break;
 
         case WM_PAINT: {
-            render();
-            vd_fw_swap_buffers();
+            // render();
+            // vd_fw_swap_buffers();
             DwmFlush();
         } break;
 
         case WM_SETICON:
         case WM_SETTEXT: {
-            if (!Vdfw__Composition_Enabled && !VdFw__Theme_Enabled) {
+            if (!VD_FW_G.composition_enabled && !VD_FW_G.theme_enabled) {
                 result = vd_fw__handle_invisible(hwnd, msg, wparam, lparam);
             } else {
                 result = DefWindowProc(hwnd, msg, wparam, lparam);
@@ -571,17 +642,17 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         } break;
 
         case WM_ENTERSIZEMOVE: {
-            VD_FW__CHECK_NULL(SetTimer(VdFw__Hwnd, (UINT_PTR)&timer_id, USER_TIMER_MINIMUM, NULL));
+            VD_FW__CHECK_NULL(SetTimer(VD_FW_G.hwnd, (UINT_PTR)&timer_id, USER_TIMER_MINIMUM, NULL));
 
         } break;
 
         case WM_EXITSIZEMOVE: {
-            KillTimer(VdFw__Hwnd, (UINT_PTR)&timer_id);
+            KillTimer(VD_FW_G.hwnd, (UINT_PTR)&timer_id);
         } break;
 
         case WM_TIMER: {
-            render();
-            vd_fw_swap_buffers();
+            // render();
+            // vd_fw_swap_buffers();
             DwmFlush();
             result = 1;
         } break;
@@ -612,7 +683,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         //         } else {
         //         }
 
-        //         SetWindowPos(VdFw__Hwnd, NULL,
+        //         SetWindowPos(VD_FW_G.hwnd, NULL,
         //             new_rect.left, new_rect.top,
         //             new_rect.right - new_rect.left,
         //             new_rect.bottom - new_rect.top,
@@ -635,6 +706,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 }
 
 
+#undef VD_FW_G
 #endif // _WIN32
 
 #endif // VD_FW_IMPL
