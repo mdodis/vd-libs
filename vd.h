@@ -1702,8 +1702,36 @@ extern void vd_test_main(void);
 
 #ifdef VD_IMPL
 
-/* ----{
-    VdHiTime result = { a.performance_counter - b.performance_counter };
+/* ----TIMING IMPL--------------------------------------------------------------------------------------------------- */
+#if VD_PLATFORM_WINDOWS
+#include <windows.h>
+
+#ifndef _PROFILEAPI_H_
+#if VD_CPP
+extern "C" {
+#endif // VD_CPP
+
+extern int QueryPerformanceCounter(Vdi64 *perf_count);
+extern int QueryPerformanceFrequency(Vdi64 *perf_freq);
+
+#if VD_CPP
+}
+#endif // VD_CPP
+#endif // !_PROFILEAPI_H_
+
+static Vdi64 Vd__Windows_Performance_Frequency = 0;
+
+VdHiTime vd_hitime_get(void)
+{
+    Vdu64 counter;
+    QueryPerformanceCounter((LARGE_INTEGER*)&counter);
+
+    VdHiTime result = { counter };
+    return result;
+}
+
+VdHiTime vd_hitime_sub(VdHiTime a, VdHiTime b)
+{    VdHiTime result = { a.performance_counter - b.performance_counter };
     return result;
 }
 
