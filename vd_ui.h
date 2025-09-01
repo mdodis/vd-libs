@@ -176,8 +176,8 @@ extern void             vd_ui_measure_text_size(VdUiFontId font, char *str, size
  * @param  fragment_shader     The fragment shader source
  * @param  fragment_shader_len The length of the fragment shader in bytes
  */
-extern void             vd_ui_gl_get_default_shader_sources(char **vertex_shader, size_t *vertex_shader_len,
-                                                            char **fragment_shader, size_t *fragment_shader_len);
+extern void             vd_ui_gl_get_default_shader_sources(const char **const vertex_shader, size_t *vertex_shader_len,
+                                                            const char **const fragment_shader, size_t *fragment_shader_len);
 extern const char*      vd_ui_gl_get_uniform_name_resolution(void);
 extern const char*      vd_ui_gl_get_uniform_name_texture(void);
 
@@ -268,7 +268,7 @@ void vd_ui_frame_end(void)
     // Write render passes
     ctx->passes[0] = (VdUiRenderPass) {
         {0},
-        0,
+        {0},
         0,
         3,
     };
@@ -377,10 +377,12 @@ static void vd_ui__update_all_fonts(VdUiContext *ctx)
 void vd_ui_measure_text_size(VdUiFontId font, char *str, size_t len, float *w, float *h)
 {
     VdUiContext *ctx = vd_ui_context_get();
+    (void)ctx;
 
     // @todo(mdodis): UTF-8
     for (size_t i = 0; i < len; ++i) {
         char c = str[i];
+        (void)c;
 
         // vd_ui_codepoint_metrics((int)c, );
     }
@@ -461,8 +463,8 @@ VdUiContext* vd_ui_context_get(void)
 "   FragColor = color;                                                                                             \n" \
 "}                                                                                                                 \n" \
 
-void vd_ui_gl_get_default_shader_sources(char **vertex_shader, size_t *vertex_shader_len,
-                                         char **fragment_shader, size_t *fragment_shader_len)
+void vd_ui_gl_get_default_shader_sources(const char **const vertex_shader, size_t *vertex_shader_len,
+                                         const char **const fragment_shader, size_t *fragment_shader_len)
 {
     *vertex_shader       = VD_UI_GL_VERTEX_SHADER_SOURCE;
     *fragment_shader     = VD_UI_GL_FRAGMENT_SHADER_SOURCE;

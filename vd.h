@@ -440,11 +440,17 @@ static VD_INLINE Vdi64 vd_ipow64(Vdi64 base, Vdu8 exp)
 #endif // VD_MACRO_ABBREVIATIONS
 
 /* ----TIMING-------------------------------------------------------------------------------------------------------- */
+#if VD_PLATFORM_LINUX
+#include <time.h>
+#endif // VD_PLATFORM_LINUX
+
 typedef struct __VD_HiTime {
 #if VD_PLATFORM_WINDOWS
-    Vdi64  performance_counter;
-#else
-    hitime time;
+    Vdi64 performance_counter;
+#elif VD_PLATFORM_MACOS
+    Vdu64 time;
+#elif VD_PLATFORM_LINUX
+    struct timespec time;
 #endif // VD_PLATFORM_WINDOWS, else
 } VdHiTime;
 
@@ -1765,6 +1771,86 @@ Vdu64 vd_hitime_ms(VdHiTime time_spec)
     return (Vdu64)(((time_spec.performance_counter) * 1000) / Vd__Windows_Performance_Frequency);
 }
 
+#elif VD_PLATFORM_MACOS
+#include <mach/mach_time.h>
+
+static Vdb32                     Vd_Mach_Time_Base_Initialized = VD_FALSE;
+static mach_timebase_info_data_t Vd_Mach_Time_Base;
+
+VdHiTime vd_hitime_get(void)
+{
+    Vdu64 result = mach_absolute_time();
+    return (VdHiTime) {result};
+}
+
+VdHiTime vd_hitime_sub(VdHiTime a, VdHiTime b)
+{
+    VdHiTime result = {a.time - b.time};
+    return result;
+}
+
+Vdu64 vd_hitime_ns(VdHiTime time_spec)
+{
+    if (!Vd_Mach_Time_Base_Initialized) {
+        Vd_Mach_Time_Base_Initialized = VD_TRUE;
+        mach_timebase_info(&Vd_Mach_Time_Base);
+    }
+
+    Vdu64 ns = time_spec.time * Vd_Mach_Time_Base.numer / Vd_Mach_Time_Base.denom;
+    return ns;
+}
+
+Vdf64 vd_hitime_fms64(VdHiTime time_spec)
+{
+    return ((Vdf64)vd_hitime_ns(time_spec) / 1000000.0);
+}
+
+Vdu64 vd_hitime_ms(VdHiTime time_spec)
+{
+    return (Vdu64)vd_hitime_fms64(time_spec);
+}
+
+#elif VD_PLATFORM_LINUX
+#include <time.h>
+
+VdHiTime vd_hitime_get(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    VdHiTime result = { ts };
+    return result;
+}
+
+VdHiTime vd_hitime_sub(VdHiTime a, VdHiTime b)
+{
+    VdHiTime result;
+    Vdi64 nsec_diff = a.time.tv_nsec - b.time.tv_nsec;
+    Vdi64 sec_diff  = a.time.tv_sec  - b.time.tv_sec;
+    if (nsec_diff < 0) {
+        result.time.tv_sec = sec_diff - 1;
+        result.time.tv_nsec = 1000000000 + nsec_diff;
+    } else {
+        result.time.tv_nsec = nsec_diff;
+        result.time.tv_sec = sec_diff;
+    }
+
+    return result;
+}
+
+Vdu64 vd_hitime_ns(VdHiTime time_spec)
+{
+    return (Vdu64)time_spec.time.tv_nsec;
+}
+
+Vdf64 vd_hitime_fms64(VdHiTime time_spec)
+{
+    return ((Vdf64)vd_hitime_ns(time_spec) / 1000000.0);
+}
+
+Vdu64 vd_hitime_ms(VdHiTime time_spec)
+{
+    return (Vdu64)vd_hitime_fms64(time_spec);
+}
 #else
 #error "HiTime not supported on this platform!"
 #endif // VD_PLATFORM_WINDOWS

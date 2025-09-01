@@ -1,3 +1,5 @@
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #define VD_USE_CRT 1
 #define VD_FW_NO_CRT 0
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS
@@ -42,8 +44,8 @@ int main(int argc, char const *argv[])
     GLuint program;
     {
 
-        char *vertex_shader_source;   size_t vertex_shader_len;
-        char *fragment_shader_source; size_t fragment_shader_len;
+        const char *vertex_shader_source;   size_t vertex_shader_len;
+        const char *fragment_shader_source; size_t fragment_shader_len;
         vd_ui_gl_get_default_shader_sources(&vertex_shader_source, &vertex_shader_len, 
                                             &fragment_shader_source, &fragment_shader_len);
 
@@ -145,6 +147,8 @@ int main(int argc, char const *argv[])
 
                     id->id = (uintptr_t)texture;
                 } break;
+
+                default: break;
             }
         }
 
@@ -202,3 +206,4 @@ int main(int argc, char const *argv[])
 
 #define VD_IMPL
 #include "vd.h"
+#pragma clang diagnostic pop

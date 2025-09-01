@@ -28,6 +28,13 @@
 #define VD_FW_VERSION_PATCH    1
 #define VD_FW_VERSION          ((VD_FW_VERSION_MAJOR << 16) | (VD_FW_VERSION_MINOR << 8) | (VD_FW_VERSION_PATCH))
 
+#if defined(__APPLE__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#import <OpenGL/gl3.h>
+#endif
+ 
+
 typedef enum {
     VD_FW_GL_VERSION_BASIC = 0,
     VD_FW_GL_VERSION_1_0   = 1,
@@ -62,12 +69,12 @@ extern unsigned long long vd_fw_delta_ns(void);
 extern int                vd_fw_set_vsync_on(int on);
 extern void               vd_fw_draw_window_border(void);
 extern int                vd_fw_get_mouse_state(int *x, int *y);
-inline int                vd_fw_get_mouse_statef(float *x, float *y);
-inline float              vd_fw_delta_s(void);
-inline void               vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16]);
-inline int                vd_fw_u_point_in_rect(float x, float y, float rx, float ry, float rw, float rh);
+static inline int         vd_fw_get_mouse_statef(float *x, float *y);
+static inline float       vd_fw_delta_s(void);
+static inline void        vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16]);
+static inline int         vd_fw_u_point_in_rect(float x, float y, float rx, float ry, float rw, float rh);
 
-inline float vd_fw_delta_s(void)
+static inline float vd_fw_delta_s(void)
 {
     unsigned long long ns  = vd_fw_delta_ns();
     double ms              = (double)ns / 1000000.0;
@@ -76,13 +83,13 @@ inline float vd_fw_delta_s(void)
     return s;
 }
 
-inline int vd_fw_u_point_in_rect(float x, float y, float rx, float ry, float rw, float rh)
+static inline int vd_fw_u_point_in_rect(float x, float y, float rx, float ry, float rw, float rh)
 {
     return (x >= rx) && (x <= (rx + rw)) &&
            (y >= ry) && (y <= (ry + rh));
 }
 
-inline int vd_fw_get_mouse_statef(float *x, float *y)
+static inline int vd_fw_get_mouse_statef(float *x, float *y)
 {
     int xi, yi;
     int result = vd_fw_get_mouse_state(&xi, &yi);
@@ -93,7 +100,7 @@ inline int vd_fw_get_mouse_statef(float *x, float *y)
     return result;
 }
 
-inline void vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16])
+static inline void vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16])
 {
     out[0]  = 2.0f / (right - left);               out[1]  = 0.0f;                              out[2]  = 0.0f;                          out[3]  = 0.0f;
     out[4]  = 0.0f;                                out[5]  = 2.0f / (top - bottom);             out[6]  = 0.0f;                          out[7]  = 0.0f;
@@ -114,6 +121,7 @@ inline void vd_fw_u_ortho(float left, float right, float bottom, float top, floa
 #endif
 #endif // _WIN32
 
+#if !defined(__APPLE__)
 /* ----GL TYPEDEFS--------------------------------------------------------------------------------------------------- */
 typedef void               GLvoid;
 typedef unsigned int       GLenum;
@@ -135,8 +143,10 @@ typedef signed long int    GLintptr;
 typedef char               GLchar;
 typedef unsigned short int GLhalf;
 typedef struct __GLsync *  GLsync;
+#ifdef _WIN32
 typedef unsigned __int64   GLuint64;
 typedef __int64            GLint64;
+#endif // _WIN32
 
 /* ----GL CONSTANTS-------------------------------------------------------------------------------------------------- */
 #define GL_DEPTH_BUFFER_BIT                              0x00000100
@@ -2004,10 +2014,19 @@ extern PFNGLVERTEXATTRIBP4UIVPROC           glVertexAttribP4uiv;
 typedef void (*GLDEBUGPROC)(GLenum source,GLenum type,GLuint id,GLenum severity,GLsizei length,const GLchar *message,const void *userParam);
 typedef void (*PFNGLDEBUGMESSAGECALLBACKPROC) (GLDEBUGPROC callback, const void *userParam);
 extern PFNGLDEBUGMESSAGECALLBACKPROC glDebugMessageCallback;
+#endif // !defined(__APPLE__)
 
+#if defined(__APPLE__)
+#pragma clang diagnostic pop
+#endif
 #endif // !VD_FW_H
 
 #ifdef VD_FW_IMPL
+
+#if defined(__APPLE__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
 
 static void vd_fw__load_opengl(VdFwGlVersion version);
 static void *vd_fw__gl_get_proc_address(const char *name);
@@ -2937,8 +2956,176 @@ int wWinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPWSTR cmdline, int n
 #endif // VD_FW_NO_CRT
 
 #undef VD_FW_G
-#endif // _WIN32
+#elif defined(__APPLE__)
+#import <AppKit/AppKit.h>
+#import <Cocoa/Cocoa.h>
+#import <QuartzCore/CAMetalLayer.h>
+#import <QuartzCore/CVDisplayLink.h>
+#import <os/log.h>
+#import <mach/mach_time.h>
+#define VD_FW_G Vd_Fw_Globals
 
+typedef struct {
+    NSWindow                    *window;
+    NSOpenGLContext             *gl_context;
+    BOOL                        should_close;
+    mach_timebase_info_data_t   time_base;
+    uint64_t                    last_time;
+    CGFloat                     scale;
+} VdFw__MacOsInternalData;
+
+static VdFw__MacOsInternalData Vd_Fw_Globals;
+
+@interface VdFwWindowDelegate : NSObject<NSWindowDelegate>
+@end
+
+@implementation VdFwWindowDelegate
+- (void)windowWillClose:(NSNotification*)notification {
+    VD_FW_G.should_close = YES;
+}
+@end
+
+int vd_fw_init(VdFwInitInfo *info)
+{
+    @autoreleasepool {
+        VD_FW_G.scale = [[NSScreen mainScreen] backingScaleFactor];
+
+        [NSApplication sharedApplication];
+        [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+        [NSApp activateIgnoringOtherApps:YES];
+        [NSEvent setMouseCoalescingEnabled:NO];
+
+        int w = 640;
+        int h = 480;
+        NSRect frame = NSMakeRect(100, 100, w, h);
+        VD_FW_G.window = [[NSWindow alloc] initWithContentRect:frame
+                                           styleMask:(
+                                                NSWindowStyleMaskTitled |
+                                                NSWindowStyleMaskClosable |
+                                                NSWindowStyleMaskResizable)
+                                           backing: NSBackingStoreBuffered
+                                           defer: NO];
+        [VD_FW_G.window setTitle:[NSString stringWithUTF8String:"F"]];
+        [VD_FW_G.window makeKeyAndOrderFront:nil];
+
+        NSOpenGLPixelFormatAttribute attrs[] = {
+            NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersion3_2Core,
+            NSOpenGLPFAColorSize, 24,
+            NSOpenGLPFAAlphaSize, 8,
+            NSOpenGLPFADepthSize, 24,
+            NSOpenGLPFADoubleBuffer,
+            NSOpenGLPFAAccelerated,
+            0
+        };
+
+        NSOpenGLPixelFormat *pf = [[NSOpenGLPixelFormat alloc] initWithAttributes:attrs];
+        VD_FW_G.gl_context = [[NSOpenGLContext alloc] initWithFormat:pf shareContext:nil];
+        [VD_FW_G.gl_context setView:[VD_FW_G.window contentView]];
+        [VD_FW_G.gl_context makeCurrentContext];
+
+        VdFwWindowDelegate *delegate = [[VdFwWindowDelegate alloc] init];
+        [VD_FW_G.window setDelegate:delegate];
+    }
+
+    VdFwGlVersion version = VD_FW_GL_VERSION_3_3;
+    if (info && info->gl.version != 0) {
+        version = info->gl.version;
+    }
+    vd_fw__load_opengl(version);
+
+    mach_timebase_info(&VD_FW_G.time_base);
+    VD_FW_G.last_time = mach_absolute_time();
+
+    return 1;
+}
+
+unsigned long long vd_fw_delta_ns(void)
+{
+    uint64_t now = mach_absolute_time();
+    uint64_t ns = (now - VD_FW_G.last_time) * VD_FW_G.time_base.numer / VD_FW_G.time_base.denom;
+    return ns;
+}
+
+int vd_fw_get_mouse_state(int *x, int *y)
+{
+    @autoreleasepool {
+        if (!VD_FW_G.window) {
+            if (x) *x = 0;
+            if (y) *y = 0;
+            return 0;
+        }
+
+        // Mouse location in screen coordinates
+        NSPoint loc = [NSEvent mouseLocation];
+
+        // Convert to window coordinates
+        NSPoint windowPoint = [VD_FW_G.window convertPointFromScreen:loc];
+
+        // Convert to content view coordinates
+        NSView *cv = [VD_FW_G.window contentView];
+        NSPoint viewPoint = [cv convertPoint:windowPoint fromView:nil];
+        NSRect cvf = [cv frame];
+
+        // Cocoa’s origin is bottom-left, OpenGL expects same
+        if (x) *x = (viewPoint.x) * VD_FW_G.scale;
+        if (y) *y = (cvf.size.height - viewPoint.y) * VD_FW_G.scale;
+    }
+
+    return 0;
+}
+
+int vd_fw_running(void)
+{
+    @autoreleasepool {
+        NSEvent *event;
+        while ((event = [NSApp nextEventMatchingMask:NSEventMaskAny
+                                           untilDate:[NSDate distantPast]
+                                              inMode:NSDefaultRunLoopMode
+                                             dequeue:YES])) {
+            [NSApp sendEvent:event];
+        }
+    }
+
+    return !VD_FW_G.should_close;
+}
+
+int vd_fw_swap_buffers(void)
+{
+    @autoreleasepool {
+        [VD_FW_G.gl_context flushBuffer];
+    }
+
+    return 1;
+}
+
+int vd_fw_get_size(int *w, int *h)
+{
+    NSRect rect = [[VD_FW_G.window contentView] frame];
+    if (w) *w = (int)rect.size.width * VD_FW_G.scale;
+    if (h) *h = (int)rect.size.height * VD_FW_G.scale;
+    return 0;
+}
+
+int vd_fw_set_vsync_on(int on)
+{
+    @autoreleasepool {
+        if (VD_FW_G.gl_context) {
+            GLint sync = on;
+            [VD_FW_G.gl_context setValues:&sync forParameter:NSOpenGLCPSwapInterval];
+        }
+    }
+    return 1;
+}
+
+static void *vd_fw__gl_get_proc_address(const char *name)
+{
+    return 0;
+}
+
+#undef VD_FW_G
+#endif // _WIN32, __APPLE__
+
+#if !defined(__APPLE__)
 /* ----GL VERSION 1.2------------------------------------------------------------------------------------------------ */
 PFNGLDRAWRANGEELEMENTSPROC       glDrawRangeElements;
 PFNGLTEXIMAGE3DPROC              glTexImage3D;
@@ -3232,11 +3419,17 @@ PFNGLVERTEXATTRIBP3UIPROC            glVertexAttribP3ui;
 PFNGLVERTEXATTRIBP3UIVPROC           glVertexAttribP3uiv;
 PFNGLVERTEXATTRIBP4UIPROC            glVertexAttribP4ui;
 PFNGLVERTEXATTRIBP4UIVPROC           glVertexAttribP4uiv;
-
 PFNGLDEBUGMESSAGECALLBACKPROC glDebugMessageCallback;
+#endif // !defined(__APPLE__)
 
 static void vd_fw__load_opengl(VdFwGlVersion version)
 {
+#if defined(__APPLE__)
+    // @todo(mdodis): This check
+    // if (version > VD_FW_GL_VERION_4_1) {
+
+    // }
+#else
 #define LOAD(p, s) s = (p)vd_fw__gl_get_proc_address(#s)
 
     if (version >= VD_FW_GL_VERSION_1_2) {
@@ -3552,6 +3745,7 @@ static void vd_fw__load_opengl(VdFwGlVersion version)
         LOAD(PFNGLVERTEXATTRIBP4UIVPROC,           glVertexAttribP4uiv);
     }
 #undef LOAD
+#endif 
 }
 
 enum {
@@ -3815,4 +4009,7 @@ void vd_fw_draw_window_border(void)
 #undef PUT_RECT
 }
 
+#if defined(__APPLE__)
+#pragma clang diagnostic pop
+#endif
 #endif // VD_FW_IMPL

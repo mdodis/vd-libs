@@ -2,6 +2,9 @@
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS
 #include "vd_fw.h"
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+
 const char *Vertex_Shader_Source =
 "#version 330 core                       \n"
 "layout (location = 0) in vec3 aPos;     \n"
@@ -20,6 +23,8 @@ const char *Fragment_Shader_Source =
 "}                                             \n"
 ;
 
+#include <string.h>
+
 int main(int argc, char const *argv[])
 {
     (void)argc;
@@ -37,11 +42,13 @@ int main(int argc, char const *argv[])
     {
 
         GLuint vshd = glCreateShader(GL_VERTEX_SHADER);
-        glShaderSource(vshd, 1, &Vertex_Shader_Source, 0);
+        GLint len = strlen(Vertex_Shader_Source);
+        glShaderSource(vshd, 1, &Vertex_Shader_Source, &len);
         glCompileShader(vshd);
 
         GLuint fshd = glCreateShader(GL_FRAGMENT_SHADER);
-        glShaderSource(fshd, 1, &Fragment_Shader_Source, 0);
+        len = strlen(Fragment_Shader_Source);
+        glShaderSource(fshd, 1, &Fragment_Shader_Source, &len);
         glCompileShader(fshd);
 
         program = glCreateProgram();
@@ -60,11 +67,11 @@ int main(int argc, char const *argv[])
         glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        vd_fw_draw_window_border();
         vd_fw_swap_buffers();
     }
     return 0;
 }
 
+#pragma clang diagnostic pop
 #define VD_FW_IMPL
 #include "vd_fw.h"
