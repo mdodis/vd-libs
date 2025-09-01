@@ -57,6 +57,10 @@ typedef struct {
 } VdUiTexture;
 
 typedef struct {
+    uintptr_t id;
+} VdUiFontId;
+
+typedef struct {
     VdUiTexture  selected_texture;
     unsigned int first_instance;
     unsigned int instance_count;
@@ -88,6 +92,9 @@ extern void*            vd_ui_frame_get_vertex_buffer(size_t *buffer_size);
  * @return            The pass data
  */
 extern VdUiRenderPass*  vd_ui_frame_get_render_passes(int *num_passes);
+
+/* ----FONTS--------------------------------------------------------------------------------------------------------- */
+extern 
 
 /* ----INPUT--------------------------------------------------------------------------------------------------------- */
 extern void             vd_ui_event_mouse_location(float mx, float my);
@@ -123,7 +130,13 @@ extern const char *     vd_ui_gl_get_uniform_name_resolution(void);
 
 #endif // !VD_UI_H
 
+/* ------------------------------------------------------------------------------------------------------------------ */
+/* IMPLEMENTATION                                                                                                   - */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
 #ifdef VD_UI_IMPL
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "ext/stb_truetype.h"
 #define VD_UI_PARENT_STACK_MAX 256
 #define VD_UI_VBUF_COUNT_MAX   128
 #define VD_UI_RP_COUNT_MAX     12
@@ -154,13 +167,13 @@ void vd_ui_frame_end(void)
     // Write buffer
     ctx->vbuf_count = 3;
     ctx->vbuf[0] = (VdUiVertex) {
-        {0.0f,  0.0f}, {100.f, 100.f},      {00.0f, 00.0f}, { 1.0f,  1.0f}, {1.f, 0.f, 1.f, 1.f}
+        {0.0f,  0.0f}, {200.f, 200.f},      {00.0f, 00.0f}, { 1.0f,  1.0f}, {1.f, 0.f, 0.f, 1.f}
     };
     ctx->vbuf[1] = (VdUiVertex) {
-        {200.f, 0.0f}, {300.f, 100.f},      {00.0f, 00.0f}, { 1.0f,  1.0f}, {0.f, 1.f, 1.f, 1.f}
+        {200.f, 0.0f}, {400.f, 400.f},      {00.0f, 00.0f}, { 1.0f,  1.0f}, {0.f, 1.f, 0.f, 1.f}
     };
     ctx->vbuf[2] = (VdUiVertex) {
-        {mx, my}, {mx + 100.f, my + 100.f}, {00.0f, 00.0f}, { 1.0f,  1.0f}, {1.f, 0.f, 0.f, 1.f}
+        {mx, my}, {mx + 200.f, my + 200.f}, {00.0f, 00.0f}, { 1.0f,  1.0f}, {0.f, 0.f, 1.f, 1.f}
     };
 
     ctx->passes[0] = (VdUiRenderPass) {
@@ -176,11 +189,10 @@ size_t vd_ui_get_min_vertex_buffer_size(void)
     return sizeof(VdUiVertex) * VD_UI_VBUF_COUNT_MAX;
 }
 
-void *vd_ui_frame_get_vertex_buffer(size_t *buffer_size, unsigned int *instances)
+void *vd_ui_frame_get_vertex_buffer(size_t *buffer_size)
 {
     VdUiContext *ctx = vd_ui_context_get();
 
-    *instances   = ctx->vbuf_count;
     *buffer_size = ctx->vbuf_count * sizeof(VdUiVertex);
     return (void*)ctx->vbuf;
 }

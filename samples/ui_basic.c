@@ -3,8 +3,6 @@
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS
 #include "vd_fw.h"
 #include "vd.h"
-#define STB_TRUETYPE_IMPLEMENTATION
-#include "ext/stb_truetype.h"
 
 #include "vd_ui.h"
 
