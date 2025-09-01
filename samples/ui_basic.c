@@ -10,55 +10,6 @@
 
 #include <stdio.h>
 
-const char *Vertex_Shader_Source =
-"#version 330 core                                                                      \n"
-"layout (location = 0) in vec2 a_p0;                                                    \n"
-"layout (location = 1) in vec2 a_p1;                                                    \n"
-"layout (location = 2) in vec2 a_p0u;                                                   \n"
-"layout (location = 3) in vec2 a_p1u;                                                   \n"
-"layout (location = 4) in vec4 a_color;                                                 \n"
-"uniform vec2 uResolution;                                                              \n"
-"out vec4 f_color;                                                                      \n"
-"out vec2 f_uv;                                                                         \n"
-"                                                                                       \n"
-"void main()                                                                            \n"
-"{                                                                                      \n"
-"   vec2 positions[4] = vec2[](                                                         \n"
-"       vec2(-1.0, -1.0),                                                               \n"
-"       vec2(-1.0, +1.0),                                                               \n"
-"       vec2(+1.0, -1.0),                                                               \n"
-"       vec2(+1.0, +1.0)                                                                \n"
-"   );                                                                                  \n"
-"   vec2 dhs = (a_p1 - a_p0) / 2.0;                                                     \n"
-"   vec2 dhc = (a_p1 + a_p0) / 2.0;                                                     \n"
-"   vec2 dp  = positions[gl_VertexID] * dhs + dhc;                                      \n"
-"   gl_Position = vec4(2.0 * dp.x / uResolution.x - 1.0,                                \n"
-"                      1.0 - 2.0 * dp.y / uResolution.y,                                \n"
-"                      0.0,                                                             \n"
-"                      1.0);                                                            \n"
-"                                                                                       \n"
-"   vec2 shs = (a_p1u - a_p0u) / 2.0;                                                   \n"
-"   vec2 shc = (a_p1u + a_p0u) / 2.0;                                                   \n"
-"   vec2 shp = positions[gl_VertexID] * shs + shc;                                      \n"
-"   f_uv = shp;                                                                         \n"
-"   f_color = a_color;                                                                  \n"
-"}                                                                                      \n"
-;
-
-const char *Fragment_Shader_Source =
-"#version 330 core                             \n"
-"in vec4 f_color;                              \n"
-"in vec2 f_uv;                                 \n"
-"uniform sampler2D uTexture;                   \n"
-"out vec4 FragColor;                           \n"
-"void main()                                   \n"
-"{                                             \n"
-"   vec4 sample = texture(uTexture, f_uv);     \n"
-"   vec4 color = sample * f_color;             \n"
-"   FragColor = color;                         \n"
-"}                                             \n"
-;
-
 #pragma pack(push, 1)
 typedef struct {
     float p0[2];
@@ -104,12 +55,17 @@ int main(int argc, char const *argv[])
     GLuint program;
     {
 
+        char *vertex_shader_source;   size_t vertex_shader_len;
+        char *fragment_shader_source; size_t fragment_shader_len;
+        vd_ui_gl_get_default_shader_sources(&vertex_shader_source, &vertex_shader_len, 
+                                            &fragment_shader_source, &fragment_shader_len);
+
         GLuint vshd = glCreateShader(GL_VERTEX_SHADER);
-        glShaderSource(vshd, 1, &Vertex_Shader_Source, 0);
+        glShaderSource(vshd, 1, &vertex_shader_source, 0);
         glCompileShader(vshd);
 
         GLuint fshd = glCreateShader(GL_FRAGMENT_SHADER);
-        glShaderSource(fshd, 1, &Fragment_Shader_Source, 0);
+        glShaderSource(fshd, 1, &fragment_shader_source, 0);
         glCompileShader(fshd);
 
         program = glCreateProgram();
@@ -142,7 +98,7 @@ int main(int argc, char const *argv[])
     GLuint vbo;
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(InputVertex) * 14, 0, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, vd_ui_get_min_vertex_buffer_size(), 0, GL_DYNAMIC_DRAW);
 
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(InputVertex), (void*)VD_OFFSET_OF(InputVertex, p0));
@@ -173,36 +129,56 @@ int main(int argc, char const *argv[])
 
         int w, h;
         vd_fw_get_size(&w, &h);
+        vd_ui_frame_begin(delta_seconds);
+
+        float mx, my;
+        vd_fw_get_mouse_statef(&mx, &my);
+
+        vd_ui_event_mouse_location(mx, my);
+
+
+
+        vd_ui_frame_end();
+
+        // Get vertex buffer
+        size_t buffer_size;
+        void *buffer = vd_ui_frame_get_vertex_buffer(&buffer_size);
+
+        // Get render passes
+        int num_passes;
+        VdUiRenderPass *passes = vd_ui_frame_get_render_passes(&num_passes);
+
+        // Update vertex buffer
+        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        void *data = glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+        VD_MEMCPY(data, buffer, buffer_size);
+        glUnmapBuffer(GL_ARRAY_BUFFER);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
 
         glViewport(0, 0, w, h);
         glClearColor(0.2f, 0.2f, 0.2f, 0.5f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        float mx, my;
-        vd_fw_get_mouse_statef(&mx, &my);
-
-        glBindBuffer(GL_ARRAY_BUFFER, vbo);
-        InputVertex vertices[] = {
-            { {0.0f,  0.0f}, {100.f, 100.f},      {00.0f, 00.0f}, { 1.0f,  1.0f}, {1.f, 0.f, 1.f, 1.f} },
-            { {200.f, 0.0f}, {300.f, 100.f},      {00.0f, 00.0f}, { 1.0f,  1.0f}, {0.f, 1.f, 1.f, 1.f} },
-            { {mx, my}, {mx + 100.f, my + 100.f}, {00.0f, 00.0f}, { 1.0f,  1.0f}, {1.f, 0.f, 0.f, 1.f} },
-        };
-        void *data = glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-        VD_MEMCPY(data, vertices, sizeof(vertices));
-
-        glUnmapBuffer(GL_ARRAY_BUFFER);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-
         glBindVertexArray(vao);
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
         glUseProgram(program);
+
+        // @todo(mdodis): This should be determined by the ui
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, texture);
+        glUniform2f(glGetUniformLocation(program, vd_ui_gl_get_uniform_name_resolution()), (float)w, (float)h);
         glUniform1i(glGetUniformLocation(program, "uTexture"), 0);
-        glUniform2f(glGetUniformLocation(program, "uResolution"), (float)w, (float)h);
 
-        glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, VD_ARRAY_COUNT(vertices));
-
+        // Loop through render passes
+        for (int i = 0; i < num_passes; ++i) {
+            VdUiRenderPass *pass = &passes[i];
+            glDrawArraysInstanced(
+                GL_TRIANGLE_STRIP,
+                pass->first_instance,
+                4,
+                pass->instance_count);
+        }
+        
         vd_fw_swap_buffers();
     }
     return 0;
