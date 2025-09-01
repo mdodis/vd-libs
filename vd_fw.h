@@ -2420,6 +2420,13 @@ static void vd_fw__gl_debug_message_callback(GLenum source, GLenum type, GLuint 
         length,
         &written,
         0);
+
+    WriteConsole(
+        GetStdHandle(STD_OUTPUT_HANDLE),
+        "\n",
+        1,
+        &written,
+        0);
 }
 
 static int vd_fw__hit_test(int x, int y)

@@ -32,7 +32,6 @@
 #error "vd_ui.h requires vd.h"
 #endif // !VD_H
 
-typedef struct VdUiContext VdUiContext;
 
 typedef struct VdUiDiv VdUiDiv;
 struct VdUiDiv {
@@ -43,17 +42,25 @@ struct VdUiDiv {
     VdUiDiv *parent;
 };
 
+/* ----SHORT & SWEET------------------------------------------------------------------------------------------------- */
+extern void         vd_ui_init(void);
+
+/* ----CONTEXT CREATION---------------------------------------------------------------------------------------------- */
+typedef struct VdUiContext VdUiContext;
 typedef struct {
     int a;
 } VdUiContextCreateInfo;
 
-extern void         vd_ui_init(void);
 extern VdUiContext* vd_ui_context_create(VdUiContextCreateInfo *info);
 extern void         vd_ui_context_set(VdUiContext *context);
 extern VdUiContext* vd_ui_context_get(void);
+
+/* ----UI LAYOUT----------------------------------------------------------------------------------------------------- */
 extern VdUiDiv*     vd_ui_div_new(VdStr string);
 extern VdUiDiv*     vd_ui_push_parent(VdUiDiv *div);
 extern VdUiDiv*     vd_ui_pop_parent(void);
+
+/* ----GLYPH CACHE--------------------------------------------------------------------------------------------------- */
 
 #endif // !VD_UI_H
 
