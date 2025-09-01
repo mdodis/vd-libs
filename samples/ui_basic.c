@@ -26,22 +26,6 @@ int main(int argc, char const *argv[])
     VdArena arena;
     VD_ARENA_FROM_SYSTEM(&arena, VD_MEGABYTES(24));
 
-
-    Vdusize len;
-    void *file = vd_dump_file_to_bytes(&arena, "c:/windows/fonts/arial.ttf", &len);
-    stbtt_fontinfo font_info;
-    stbtt_InitFont(&font_info, file, stbtt_GetFontOffsetForIndex(file, 0));
-    float scale = stbtt_ScaleForPixelHeight(&font_info, 32.f);
-
-    stbtt_pack_context spc;
-    int width = 512;
-    int height = 512;
-    unsigned char *pixels = (unsigned char*)malloc(width * height);
-    stbtt_PackBegin(&spc, pixels, width, height, 0, 1, 0);
-    stbtt_packedchar packed[95]; 
-    int result = stbtt_PackFontRange(&spc, file, 0, 64.f, 32, 95, packed);
-    stbtt_PackEnd(&spc);
-
     vd_ui_init();
     vd_fw_init(& (VdFwInitInfo) {
         .gl = {
@@ -49,6 +33,11 @@ int main(int argc, char const *argv[])
             .version = VD_FW_GL_VERSION_3_3,
         },
     });
+
+    Vdusize len;
+    void *file = vd_dump_file_to_bytes(&arena, "./ext/LiberationSans-Regular.ttf", &len);
+    vd_ui_font_add_ttf(file, len, 32.f);
+
 
     GLuint program;
     {
@@ -72,22 +61,10 @@ int main(int argc, char const *argv[])
         glLinkProgram(program);
     }
 
-    GLuint texture;
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glBlendEquation(GL_FUNC_ADD);
     glActiveTexture(GL_TEXTURE0);
-
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
-
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, pixels);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);   
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);   
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);    
-    glBindTexture(GL_TEXTURE_2D, 0);
 
     GLuint vao;
     glGenVertexArrays(1, &vao);
@@ -96,7 +73,7 @@ int main(int argc, char const *argv[])
     GLuint vbo;
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, vd_ui_get_min_vertex_buffer_size(), 0, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)vd_ui_get_min_vertex_buffer_size(), 0, GL_DYNAMIC_DRAW);
 
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(InputVertex), (void*)VD_OFFSET_OF(InputVertex, p0));
@@ -134,9 +111,42 @@ int main(int argc, char const *argv[])
 
         vd_ui_event_mouse_location(mx, my);
 
-
-
         vd_ui_frame_end();
+
+        // Process updates
+        size_t num_updates;
+        VdUiUpdate *updates = vd_ui_frame_get_updates(&num_updates);
+
+        for (size_t i = 0; i < num_updates; ++i) {
+            VdUiUpdate *update = &updates[i];
+            switch (update->type) {
+                case VD_UI_UPDATE_TYPE_NEW_TEXTURE: {
+                    int width                = update->data.new_texture.width;
+                    int height               = update->data.new_texture.height;
+                    VdUiTextureFormat format = update->data.new_texture.format;
+                    void *buffer             = update->data.new_texture.buffer;
+                    size_t buffer_size       = update->data.new_texture.size;
+                    VdUiTextureId *id        = update->data.new_texture.write_id;
+
+                    VD_UNUSED(format);
+                    VD_UNUSED(buffer_size);
+
+                    GLuint texture;
+                    glGenTextures(1, &texture);
+                    glBindTexture(GL_TEXTURE_2D, texture);
+
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, buffer);
+                    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);   
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);   
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);    
+                    glBindTexture(GL_TEXTURE_2D, 0);
+
+                    id->id = (uintptr_t)texture;
+                } break;
+            }
+        }
 
         // Get vertex buffer
         size_t buffer_size;
@@ -159,17 +169,19 @@ int main(int argc, char const *argv[])
 
         glBindVertexArray(vao);
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
-        glUseProgram(program);
 
-        // @todo(mdodis): This should be determined by the ui
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, texture);
-        glUniform2f(glGetUniformLocation(program, vd_ui_gl_get_uniform_name_resolution()), (float)w, (float)h);
-        glUniform1i(glGetUniformLocation(program, "uTexture"), 0);
 
         // Loop through render passes
         for (int i = 0; i < num_passes; ++i) {
             VdUiRenderPass *pass = &passes[i];
+            GLuint texture_id = (GLuint)pass->selected_texture.id;
+
+            glUseProgram(program);
+            glActiveTexture(GL_TEXTURE0);
+            glUniform2f(glGetUniformLocation(program, vd_ui_gl_get_uniform_name_resolution()), (float)w, (float)h);
+            glUniform1i(glGetUniformLocation(program, vd_ui_gl_get_uniform_name_texture()), 0);
+            glBindTexture(GL_TEXTURE_2D, texture_id);
+
             glDrawArraysInstanced(
                 GL_TRIANGLE_STRIP,
                 pass->first_instance,

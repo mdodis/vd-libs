@@ -32,6 +32,16 @@
 #define VD_UNUSED(x) ((void)(x))
 #endif // !VD_UNUSED
 
+/**
+ * To use a custom id for a texture, define a struct like so:
+ * typedef struct {
+ *     <Your custom texture id stuff>
+ * } VdUiTextureId;
+ */
+#ifndef VD_UI_TEXTURE_ID_STRUCT_DEFINED
+#define VD_UI_TEXTURE_ID_STRUCT_DEFINED 0
+#endif // VD_UI_TEXTURE_ID_STRUCT_DEFINED
+
 /* ----BASIC--------------------------------------------------------------------------------------------------------- */
 typedef struct VdUiDiv VdUiDiv;
 struct VdUiDiv {
@@ -42,6 +52,28 @@ struct VdUiDiv {
     VdUiDiv *parent;
 };
 
+/**
+ * Initialize the ui.
+ */
+extern void             vd_ui_init(void);
+
+/**
+ * Get the minimum size required to hold the vertex buffer. Using this, you should allocate the buffer
+ * @return  The size (in bytes) of the vertex buffer.
+ */
+extern size_t           vd_ui_get_min_vertex_buffer_size(void);
+
+/**
+ * Begin a new frame. Call this before any ui layout or rendering calls
+ * @param delta_seconds The delta time, in seconds.
+ */
+extern void             vd_ui_frame_begin(float delta_seconds);
+/**
+ * End the frame. Call this after any ui layout or drawing calls.
+ */
+extern void             vd_ui_frame_end(void);
+
+/* ----RENDERING----------------------------------------------------------------------------------------------------- */
 #pragma pack(push, 1)
 typedef struct {
     float p0[2];
@@ -52,32 +84,51 @@ typedef struct {
 } VdUiVertex;
 #pragma pack(pop)
 
+#if !VD_UI_TEXTURE_ID_STRUCT_DEFINED
 typedef struct {
     uintptr_t id;
-} VdUiTexture;
+} VdUiTextureId;
+#endif // !VD_UI_TEXTURE_ID_STRUCT_DEFINED
 
 typedef struct {
     uintptr_t id;
 } VdUiFontId;
 
 typedef struct {
-    VdUiTexture  selected_texture;
-    unsigned int first_instance;
-    unsigned int instance_count;
+    VdUiFontId    cached_id;
+    VdUiTextureId selected_texture;
+    unsigned int  first_instance;
+    unsigned int  instance_count;
 } VdUiRenderPass;
 
-extern void             vd_ui_init(void);
-/**
- * Begin a new frame. Call this before any ui layout or rendering calls
- * @param delta_seconds The delta time, in seconds.
- */
-extern void             vd_ui_frame_begin(float delta_seconds);
-/**
- * End the frame. Call this after any ui layout or rendering calls
- */
-extern void             vd_ui_frame_end(void);
+typedef enum {
+    VD_UI_UPDATE_TYPE_NEW_TEXTURE,
+    VD_UI_UPDATE_TYPE_WRITE_TEXTURE,
+} VdUiUpdateType;
 
-extern size_t           vd_ui_get_min_vertex_buffer_size(void);
+typedef enum {
+    VD_UI_TEXTURE_FORMAT_R8,
+} VdUiTextureFormat;
+
+typedef struct {
+    VdUiUpdateType type;
+    union {
+        struct {
+            int               width, height; // in:  width and height of the texture
+            VdUiTextureFormat format;        // in:  format of the texture
+            void              *buffer;       // in:  texture buffer
+            size_t            size;          // in:  texture buffer size
+            VdUiTextureId     *write_id;     // out: write the uploaded texture id
+        } new_texture;
+    } data;
+} VdUiUpdate;
+
+/**
+ * Get the updates required to render the ui. You must handle all of these before any rendering of the UI occurs.
+ * @param  num_updates The number of updates.
+ * @return             The updates array.
+ */
+extern VdUiUpdate*      vd_ui_frame_get_updates(size_t *num_updates);
 
 /**
  * Get the vertex buffer for the frame, to pass into your rendering code
@@ -94,7 +145,7 @@ extern void*            vd_ui_frame_get_vertex_buffer(size_t *buffer_size);
 extern VdUiRenderPass*  vd_ui_frame_get_render_passes(int *num_passes);
 
 /* ----FONTS--------------------------------------------------------------------------------------------------------- */
-extern 
+extern VdUiFontId       vd_ui_font_add_ttf(void *buffer, size_t size, float pixel_size);
 
 /* ----INPUT--------------------------------------------------------------------------------------------------------- */
 extern void             vd_ui_event_mouse_location(float mx, float my);
@@ -115,6 +166,7 @@ extern VdUiDiv*         vd_ui_push_parent(VdUiDiv *div);
 extern VdUiDiv*         vd_ui_pop_parent(void);
 
 /* ----GLYPH CACHE--------------------------------------------------------------------------------------------------- */
+extern void             vd_ui_measure_text_size(VdUiFontId font, char *str, size_t len, float *w, float *h);
 
 /* ----INTEGRATION - OPENGL------------------------------------------------------------------------------------------ */
 /**
@@ -126,7 +178,8 @@ extern VdUiDiv*         vd_ui_pop_parent(void);
  */
 extern void             vd_ui_gl_get_default_shader_sources(char **vertex_shader, size_t *vertex_shader_len,
                                                             char **fragment_shader, size_t *fragment_shader_len);
-extern const char *     vd_ui_gl_get_uniform_name_resolution(void);
+extern const char*      vd_ui_gl_get_uniform_name_resolution(void);
+extern const char*      vd_ui_gl_get_uniform_name_texture(void);
 
 #endif // !VD_UI_H
 
@@ -137,24 +190,51 @@ extern const char *     vd_ui_gl_get_uniform_name_resolution(void);
 #ifdef VD_UI_IMPL
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "ext/stb_truetype.h"
+
 #define VD_UI_PARENT_STACK_MAX 256
 #define VD_UI_VBUF_COUNT_MAX   128
 #define VD_UI_RP_COUNT_MAX     12
+#define VD_UI_FONT_COUNT_MAX   4
+#define VD_UI_UPDATE_COUNT_MAX 2
 static VdUiContext *Vd_Ui_Global_Context = 0;
+
+static void vd_ui__update_all_fonts(VdUiContext *ctx);
+
+typedef struct {
+    void           *font_buffer;
+    stbtt_fontinfo font_info;
+    float          size;
+    float          size_scaled;
+    int            bounding_box[4];
+    VdUiTextureId  texture;
+    int            in_gpu;
+    int            atlas[2];
+    unsigned char  *buffer;
+    size_t         buffer_size;
+} VdUiFont;
 
 struct VdUiContext {
     VdUiDiv           *parents[VD_UI_PARENT_STACK_MAX];
     VdUiDiv           root;
+
     VdUiVertex        vbuf[VD_UI_VBUF_COUNT_MAX];
     unsigned int      vbuf_count;
     VdUiRenderPass    passes[VD_UI_RP_COUNT_MAX];
 
+    unsigned int      num_updates;
+    VdUiUpdate        updates[VD_UI_UPDATE_COUNT_MAX];
+
+    unsigned int      num_fonts;
+    VdUiFont          fonts[VD_UI_FONT_COUNT_MAX];
+
+    float             delta_seconds;
     float             mouse[2];
 };
 
 void vd_ui_frame_begin(float delta_seconds)
 {
-
+    VdUiContext *ctx = vd_ui_context_get();
+    ctx->delta_seconds = delta_seconds;
 }
 
 void vd_ui_frame_end(void)
@@ -163,6 +243,15 @@ void vd_ui_frame_end(void)
 
     float mx = ctx->mouse[0];
     float my = ctx->mouse[1];
+
+    // Zero immediate mode stuff
+    ctx->vbuf_count = 0;
+    // ctx->num_passes = 0;
+    ctx->num_updates = 0;
+
+    // Process updates
+    vd_ui__update_all_fonts(ctx);
+
 
     // Write buffer
     ctx->vbuf_count = 3;
@@ -176,7 +265,9 @@ void vd_ui_frame_end(void)
         {mx, my}, {mx + 200.f, my + 200.f}, {00.0f, 00.0f}, { 1.0f,  1.0f}, {0.f, 0.f, 1.f, 1.f}
     };
 
+    // Write render passes
     ctx->passes[0] = (VdUiRenderPass) {
+        {0},
         0,
         0,
         3,
@@ -187,6 +278,13 @@ void vd_ui_frame_end(void)
 size_t vd_ui_get_min_vertex_buffer_size(void)
 {
     return sizeof(VdUiVertex) * VD_UI_VBUF_COUNT_MAX;
+}
+
+VdUiUpdate *vd_ui_frame_get_updates(size_t *num_updates)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    *num_updates = ctx->num_updates;
+    return ctx->updates;
 }
 
 void *vd_ui_frame_get_vertex_buffer(size_t *buffer_size)
@@ -202,7 +300,40 @@ VdUiRenderPass *vd_ui_frame_get_render_passes(int *num_passes)
     VdUiContext *ctx = vd_ui_context_get();
 
     *num_passes = 1;
+
+    // Update font ids in render passes
+    for (int i = 0; i < *num_passes; ++i) {
+        VdUiRenderPass *pass = &ctx->passes[i];
+        pass->selected_texture = ctx->fonts[pass->cached_id.id].texture;
+    }
+
     return ctx->passes; 
+}
+
+/* ----FONTS IMPL---------------------------------------------------------------------------------------------------- */
+VdUiFontId vd_ui_font_add_ttf(void *buffer, size_t size, float pixel_size)
+{
+    VD_UNUSED(size);
+
+    VdUiContext *ctx = vd_ui_context_get();
+    VdUiFont *font = &ctx->fonts[ctx->num_fonts++];
+
+    font->font_buffer = buffer; 
+    stbtt_InitFont(&font->font_info, buffer, stbtt_GetFontOffsetForIndex(buffer, 0));
+    font->size = pixel_size;
+    font->size_scaled = stbtt_ScaleForPixelHeight(&font->font_info, pixel_size);
+    stbtt_GetFontBoundingBox(&font->font_info, &font->bounding_box[0], &font->bounding_box[1],
+                                               &font->bounding_box[2], &font->bounding_box[3]);
+    font->texture.id = 0;
+    font->in_gpu = 0;
+    font->atlas[0] = 512;
+    font->atlas[1] = 512;
+    font->buffer_size = font->atlas[0] * font->atlas[1];
+    font->buffer = (unsigned char*)VD_MALLOC(font->buffer_size);
+
+    VdUiFontId result;
+    result.id = ctx->num_fonts - 1;
+    return result;
 }
 
 /* ----INPUT IMPL---------------------------------------------------------------------------------------------------- */
@@ -211,6 +342,48 @@ void vd_ui_event_mouse_location(float mx, float my)
     VdUiContext *ctx = vd_ui_context_get();
     ctx->mouse[0] = mx;
     ctx->mouse[1] = my;
+}
+
+/* ----GLYPH CACHE IMPL---------------------------------------------------------------------------------------------- */
+static void vd_ui__update_all_fonts(VdUiContext *ctx)
+{
+    for (unsigned int fi = 0; fi < ctx->num_fonts; ++fi) {
+        VdUiFont *font = &ctx->fonts[fi];
+        if (!font->in_gpu) {
+            font->in_gpu = 1;
+
+            stbtt_pack_context pc;
+            int first_unicode_char_in_range = 32;
+            int num_chars_in_range          = 95;
+            stbtt_packedchar packed_chars[95];
+            stbtt_PackBegin(&pc,     font->buffer, font->atlas[0], font->atlas[1], 0, 1, 0);
+            stbtt_PackFontRange(&pc, font->font_buffer, 0, font->size,
+                                     first_unicode_char_in_range, num_chars_in_range, packed_chars);
+            stbtt_PackEnd(&pc);
+
+            // If font is not uploaded, then just push it
+            VdUiUpdate *update = &ctx->updates[ctx->num_updates++];
+            update->type = VD_UI_UPDATE_TYPE_NEW_TEXTURE;
+            update->data.new_texture.width    = 512;
+            update->data.new_texture.height   = 512;
+            update->data.new_texture.format   = VD_UI_TEXTURE_FORMAT_R8;
+            update->data.new_texture.buffer   = font->buffer;
+            update->data.new_texture.size     = font->buffer_size;
+            update->data.new_texture.write_id = &font->texture;
+        }
+    }
+}
+
+void vd_ui_measure_text_size(VdUiFontId font, char *str, size_t len, float *w, float *h)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+
+    // @todo(mdodis): UTF-8
+    for (size_t i = 0; i < len; ++i) {
+        char c = str[i];
+
+        // vd_ui_codepoint_metrics((int)c, );
+    }
 }
 
 void vd_ui_init(void)
@@ -300,6 +473,11 @@ void vd_ui_gl_get_default_shader_sources(char **vertex_shader, size_t *vertex_sh
 const char *vd_ui_gl_get_uniform_name_resolution(void)
 {
     return "uResolution";
+}
+
+const char *vd_ui_gl_get_uniform_name_texture(void)
+{
+    return "uTexture";
 }
 
 #endif // VD_UI_IMPL
