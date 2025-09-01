@@ -181,6 +181,15 @@ extern void             vd_ui_gl_get_default_shader_sources(const char **const v
 extern const char*      vd_ui_gl_get_uniform_name_resolution(void);
 extern const char*      vd_ui_gl_get_uniform_name_texture(void);
 
+/* ----HELPERS------------------------------------------------------------------------------------------------------- */
+static inline int vd_ui_strlen(const char *s)
+{
+    const char *c = s;
+    int l = 0;
+    while (*c++) l++;
+    return l;
+}
+
 #endif // !VD_UI_H
 
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -199,18 +208,23 @@ extern const char*      vd_ui_gl_get_uniform_name_texture(void);
 static VdUiContext *Vd_Ui_Global_Context = 0;
 
 static void vd_ui__update_all_fonts(VdUiContext *ctx);
+static void vd_ui__push_vertex(VdUiContext *ctx, float p0[2], float p1[2],
+                                                 float u0[2], float u1[2],
+                                                 float color[4]);
+static void vd_ui__put_line(VdUiContext *ctx, const char *str, int len);
 
 typedef struct {
-    void           *font_buffer;
-    stbtt_fontinfo font_info;
-    float          size;
-    float          size_scaled;
-    int            bounding_box[4];
-    VdUiTextureId  texture;
-    int            in_gpu;
-    int            atlas[2];
-    unsigned char  *buffer;
-    size_t         buffer_size;
+    void             *font_buffer;
+    stbtt_fontinfo   font_info;
+    float            size;
+    float            size_scaled;
+    int              bounding_box[4];
+    VdUiTextureId    texture;
+    int              in_gpu;
+    int              atlas[2];
+    unsigned char    *buffer;
+    size_t           buffer_size;
+    stbtt_packedchar packed_chars[95];
 } VdUiFont;
 
 struct VdUiContext {
@@ -243,6 +257,8 @@ void vd_ui_frame_end(void)
 
     float mx = ctx->mouse[0];
     float my = ctx->mouse[1];
+    (void)mx;
+    (void)my;
 
     // Zero immediate mode stuff
     ctx->vbuf_count = 0;
@@ -253,24 +269,25 @@ void vd_ui_frame_end(void)
     vd_ui__update_all_fonts(ctx);
 
 
+    vd_ui__put_line(ctx, "Hello", strlen("Hello"));
     // Write buffer
-    ctx->vbuf_count = 3;
-    ctx->vbuf[0] = (VdUiVertex) {
-        {0.0f,  0.0f}, {200.f, 200.f},      {00.0f, 00.0f}, { 1.0f,  1.0f}, {1.f, 0.f, 0.f, 1.f}
-    };
-    ctx->vbuf[1] = (VdUiVertex) {
-        {200.f, 0.0f}, {400.f, 400.f},      {00.0f, 00.0f}, { 1.0f,  1.0f}, {0.f, 1.f, 0.f, 1.f}
-    };
-    ctx->vbuf[2] = (VdUiVertex) {
-        {mx, my}, {mx + 200.f, my + 200.f}, {00.0f, 00.0f}, { 1.0f,  1.0f}, {0.f, 0.f, 1.f, 1.f}
-    };
+    // ctx->vbuf_count = 3;
+    // ctx->vbuf[0] = (VdUiVertex) {
+    //     {0.0f,  0.0f}, {200.f, 200.f},      {00.0f, 00.0f}, { 1.0f,  1.0f}, {1.f, 0.f, 0.f, 1.f}
+    // };
+    // ctx->vbuf[1] = (VdUiVertex) {
+    //     {200.f, 0.0f}, {400.f, 400.f},      {00.0f, 00.0f}, { 1.0f,  1.0f}, {0.f, 1.f, 0.f, 1.f}
+    // };
+    // ctx->vbuf[2] = (VdUiVertex) {
+    //     {mx, my}, {mx + 200.f, my + 200.f}, {00.0f, 00.0f}, { 1.0f,  1.0f}, {0.f, 0.f, 1.f, 1.f}
+    // };
 
     // Write render passes
     ctx->passes[0] = (VdUiRenderPass) {
         {0},
         {0},
         0,
-        3,
+        ctx->vbuf_count,
     };
 
 }
@@ -355,10 +372,9 @@ static void vd_ui__update_all_fonts(VdUiContext *ctx)
             stbtt_pack_context pc;
             int first_unicode_char_in_range = 32;
             int num_chars_in_range          = 95;
-            stbtt_packedchar packed_chars[95];
             stbtt_PackBegin(&pc,     font->buffer, font->atlas[0], font->atlas[1], 0, 1, 0);
             stbtt_PackFontRange(&pc, font->font_buffer, 0, font->size,
-                                     first_unicode_char_in_range, num_chars_in_range, packed_chars);
+                                     first_unicode_char_in_range, num_chars_in_range, font->packed_chars);
             stbtt_PackEnd(&pc);
 
             // If font is not uploaded, then just push it
@@ -371,6 +387,71 @@ static void vd_ui__update_all_fonts(VdUiContext *ctx)
             update->data.new_texture.size     = font->buffer_size;
             update->data.new_texture.write_id = &font->texture;
         }
+    }
+}
+
+static void vd_ui__push_vertex(VdUiContext *ctx, float p0[2], float p1[2],
+                                                 float u0[2], float u1[2],
+                                                 float color[4])
+{
+    VdUiVertex *v = &ctx->vbuf[ctx->vbuf_count++];
+    v->p0[0] = p0[0];
+    v->p0[1] = p0[1];
+    v->p1[0] = p1[0];
+    v->p1[1] = p1[1];
+    v->p0u[0] = u0[0];
+    v->p0u[1] = u0[1];
+    v->p1u[0] = u1[0];
+    v->p1u[1] = u1[1];
+    v->color[0] = color[0];
+    v->color[1] = color[1];
+    v->color[2] = color[2];
+    v->color[3] = color[3];
+}
+
+static void vd_ui__put_line(VdUiContext *ctx, const char *str, int len)
+{
+    VdUiFont *font = &ctx->fonts[0];
+
+    float rp[2] = {100.f, 100.f};
+    int ascent, descent, linegap;
+    stbtt_GetFontVMetrics(&font->font_info, &ascent, &descent, &linegap);
+
+    float vadvance = (ascent - descent + linegap) * font->size_scaled;
+    
+    for (int i = 0; i < len; ++i) {
+        char c = str[i];
+
+        stbtt_aligned_quad quad;
+        stbtt_GetPackedQuad(
+            font->packed_chars,
+            512, 512,
+            c - ' ',
+            &rp[0], &rp[1],
+            &quad,
+            1);
+
+        // int idx = c - 35;
+        // stbtt_packedchar *rg = &font->packed_chars[idx];
+
+        // float uvs[4] = {
+        //     ((float)rg->x0) / 512.f, ((float)rg->y0) / 512.f,
+        //     ((float)rg->x1) / 512.f, ((float)rg->y1) / 512.f,
+        // };
+
+        vd_ui__push_vertex(ctx,
+            (float[]){quad.x0, quad.y0},                        // p0
+            (float[]){quad.x1, quad.y1},  // p1
+            (float[]){quad.s0, quad.t0},                      // u0
+            (float[]){quad.s1, quad.t1},                      // u1
+            (float[]){1.f, 0.f, 1.f, 1.f});
+
+        // vd_ui__push_vertex(ctx,
+        //     (float[]){rp[0], rp[1]},                        // p0
+        //     (float[]){rp[0] + 128.f, rp[1] + 128.f},  // p1
+        //     (float[]){uvs[0], uvs[1]},                      // u0
+        //     (float[]){uvs[2], uvs[3]},                      // u1
+        //     (float[]){1.f, 0.f, 1.f, 1.f});
     }
 }
 
