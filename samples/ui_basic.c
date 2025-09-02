@@ -148,6 +148,10 @@ int main(int argc, char const *argv[])
                     id->id = (uintptr_t)texture;
                 } break;
 
+                case VD_UI_UPDATE_TYPE_WRITE_TEXTURE: {
+                    VD_TODO();
+                } break;
+
                 default: break;
             }
         }

@@ -88,6 +88,7 @@ typedef struct {
 typedef struct {
     uintptr_t id;
 } VdUiTextureId;
+#define VD_UI_TEXTURE_ID_IS_NULL(x) (x.id == 0)
 #endif // !VD_UI_TEXTURE_ID_STRUCT_DEFINED
 
 typedef struct {
@@ -120,6 +121,14 @@ typedef struct {
             size_t            size;          // in:  texture buffer size
             VdUiTextureId     *write_id;     // out: write the uploaded texture id
         } new_texture;
+
+        struct {
+            int               width, height;
+            VdUiTextureFormat format;        // in:  format of the texture
+            void              *buffer;
+            size_t            size;
+            VdUiTextureId     texture;
+        } write_texture;
     } data;
 } VdUiUpdate;
 
@@ -200,12 +209,41 @@ static inline int vd_ui_strlen(const char *s)
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "ext/stb_truetype.h"
 
-#define VD_UI_PARENT_STACK_MAX 256
-#define VD_UI_VBUF_COUNT_MAX   128
-#define VD_UI_RP_COUNT_MAX     12
-#define VD_UI_FONT_COUNT_MAX   4
-#define VD_UI_UPDATE_COUNT_MAX 2
+#define VD_UI_PARENT_STACK_MAX      256
+#define VD_UI_VBUF_COUNT_MAX        128
+#define VD_UI_RP_COUNT_MAX          12
+#define VD_UI_FONT_COUNT_MAX        4
+#define VD_UI_UPDATE_COUNT_MAX      2
+#define VD_UI_GLYPH_CACHE_COUNT_MAX 2048
+#define VD_UI_LOG(x, ...)           printf("VDUI: " x "\n", __VA_ARGS__)
 static VdUiContext *Vd_Ui_Global_Context = 0;
+
+typedef struct VdUiFont  VdUiFont;
+typedef struct VdUiGlyph VdUiGlyph;
+
+typedef enum {
+    VD_UI__TEXTURE_STATE_NULL = 0,
+    VD_UI__TEXTURE_STATE_NEEDS_UPDATE,
+    VD_UI__TEXTURE_STATE_IN_GPU,
+} VdUi__TextureState;
+
+struct VdUiGlyph {
+    unsigned int  codepoint;
+    VdUiTextureId texture;
+    VdUiFontId    font;
+    int           x0, y0, x1, y1;
+    float         xadvance, xoff, yoff;
+    float         xoff2, yoff2;
+    int           next;
+};
+
+struct VdUiFont {
+    void                *font_buffer;
+    stbtt_fontinfo      font_info;
+    float               size;
+    float               size_scaled;
+    int                 bounding_box[4];
+};
 
 static void vd_ui__update_all_fonts(VdUiContext *ctx);
 static void vd_ui__push_vertex(VdUiContext *ctx, float p0[2], float p1[2],
@@ -213,33 +251,47 @@ static void vd_ui__push_vertex(VdUiContext *ctx, float p0[2], float p1[2],
                                                  float color[4]);
 static void vd_ui__put_line(VdUiContext *ctx, const char *str, int len);
 
-typedef struct {
-    void             *font_buffer;
-    stbtt_fontinfo   font_info;
-    float            size;
-    float            size_scaled;
-    int              bounding_box[4];
-    VdUiTextureId    texture;
-    int              in_gpu;
-    int              atlas[2];
-    unsigned char    *buffer;
-    size_t           buffer_size;
-    stbtt_packedchar packed_chars[95];
-} VdUiFont;
+static void vd_ui__get_glyph_quad(VdUiContext *ctx, unsigned int codepoint, VdUiFontId font_id,
+                                  float *rx, float *ry,
+                                  float *x0, float *y0,
+                                  float *x1, float *y1,
+                                  float *s0, float *t0,
+                                  float *s1, float *t1);
+static VdUiGlyph*   vd_ui__push_glyph(VdUiContext *ctx, unsigned int codepoint, VdUiFontId font_id);
+static size_t       vd_ui__hash_glyph(unsigned int codepoint, VdUiFontId font_id);
 
 struct VdUiContext {
-    VdUiDiv           *parents[VD_UI_PARENT_STACK_MAX];
-    VdUiDiv           root;
+    VdUiDiv                 *parents[VD_UI_PARENT_STACK_MAX];
+    VdUiDiv                 root;
 
-    VdUiVertex        vbuf[VD_UI_VBUF_COUNT_MAX];
-    unsigned int      vbuf_count;
-    VdUiRenderPass    passes[VD_UI_RP_COUNT_MAX];
+    VdUiVertex              vbuf[VD_UI_VBUF_COUNT_MAX];
+    unsigned int            vbuf_count;
+    VdUiRenderPass          passes[VD_UI_RP_COUNT_MAX];
 
-    unsigned int      num_updates;
-    VdUiUpdate        updates[VD_UI_UPDATE_COUNT_MAX];
+    unsigned int            num_updates;
+    VdUiUpdate              updates[VD_UI_UPDATE_COUNT_MAX];
 
-    unsigned int      num_fonts;
-    VdUiFont          fonts[VD_UI_FONT_COUNT_MAX];
+    unsigned int            num_fonts;
+    VdUiFont                fonts[VD_UI_FONT_COUNT_MAX];
+
+    // Glyph Cache
+    // Plan (for now):
+    // - LUT for codepoint to glyph index
+    // - Dynamically growing list of glyphs that are indexed into
+    // - For each glyph, ref count every frame
+    // - Anything that hasn't been used for some time gets paged out
+    // - If a new character is detected, cache it and store it in a per frame buffer
+    // - At the end of the frame, compute the required new chars (if any), and render
+    // - to bitmap
+    VdUiGlyph               *glyph_cache;
+    int                     atlas[2];
+    void                    *buffer;
+    size_t                  buffer_size;
+    VdUiTextureId           texture;
+    VdUi__TextureState      state;
+
+    // @todo(mdodis): cache packs to textures and do them all in one go
+    stbtt_pack_context      pack_context;
 
     float             delta_seconds;
     float             mouse[2];
@@ -265,11 +317,8 @@ void vd_ui_frame_end(void)
     // ctx->num_passes = 0;
     ctx->num_updates = 0;
 
-    // Process updates
-    vd_ui__update_all_fonts(ctx);
 
-
-    vd_ui__put_line(ctx, "Hello", strlen("Hello"));
+    vd_ui__put_line(ctx, "Woohoo!", strlen("Woohoo!"));
     // Write buffer
     // ctx->vbuf_count = 3;
     // ctx->vbuf[0] = (VdUiVertex) {
@@ -281,6 +330,9 @@ void vd_ui_frame_end(void)
     // ctx->vbuf[2] = (VdUiVertex) {
     //     {mx, my}, {mx + 200.f, my + 200.f}, {00.0f, 00.0f}, { 1.0f,  1.0f}, {0.f, 0.f, 1.f, 1.f}
     // };
+
+    // Process updates
+    vd_ui__update_all_fonts(ctx);
 
     // Write render passes
     ctx->passes[0] = (VdUiRenderPass) {
@@ -321,7 +373,7 @@ VdUiRenderPass *vd_ui_frame_get_render_passes(int *num_passes)
     // Update font ids in render passes
     for (int i = 0; i < *num_passes; ++i) {
         VdUiRenderPass *pass = &ctx->passes[i];
-        pass->selected_texture = ctx->fonts[pass->cached_id.id].texture;
+        pass->selected_texture = ctx->texture;
     }
 
     return ctx->passes; 
@@ -341,13 +393,6 @@ VdUiFontId vd_ui_font_add_ttf(void *buffer, size_t size, float pixel_size)
     font->size_scaled = stbtt_ScaleForPixelHeight(&font->font_info, pixel_size);
     stbtt_GetFontBoundingBox(&font->font_info, &font->bounding_box[0], &font->bounding_box[1],
                                                &font->bounding_box[2], &font->bounding_box[3]);
-    font->texture.id = 0;
-    font->in_gpu = 0;
-    font->atlas[0] = 512;
-    font->atlas[1] = 512;
-    font->buffer_size = font->atlas[0] * font->atlas[1];
-    font->buffer = (unsigned char*)VD_MALLOC(font->buffer_size);
-
     VdUiFontId result;
     result.id = ctx->num_fonts - 1;
     return result;
@@ -364,30 +409,37 @@ void vd_ui_event_mouse_location(float mx, float my)
 /* ----GLYPH CACHE IMPL---------------------------------------------------------------------------------------------- */
 static void vd_ui__update_all_fonts(VdUiContext *ctx)
 {
-    for (unsigned int fi = 0; fi < ctx->num_fonts; ++fi) {
-        VdUiFont *font = &ctx->fonts[fi];
-        if (!font->in_gpu) {
-            font->in_gpu = 1;
-
-            stbtt_pack_context pc;
-            int first_unicode_char_in_range = 32;
-            int num_chars_in_range          = 95;
-            stbtt_PackBegin(&pc,     font->buffer, font->atlas[0], font->atlas[1], 0, 1, 0);
-            stbtt_PackFontRange(&pc, font->font_buffer, 0, font->size,
-                                     first_unicode_char_in_range, num_chars_in_range, font->packed_chars);
-            stbtt_PackEnd(&pc);
-
-            // If font is not uploaded, then just push it
+    switch (ctx->state) {
+        case VD_UI__TEXTURE_STATE_NULL: {
+            VD_UI_LOG("Queued initial texture upload to GPU %d", ctx->state);
             VdUiUpdate *update = &ctx->updates[ctx->num_updates++];
             update->type = VD_UI_UPDATE_TYPE_NEW_TEXTURE;
-            update->data.new_texture.width    = 512;
-            update->data.new_texture.height   = 512;
+            update->data.new_texture.width    = ctx->atlas[0];
+            update->data.new_texture.height   = ctx->atlas[1];
             update->data.new_texture.format   = VD_UI_TEXTURE_FORMAT_R8;
-            update->data.new_texture.buffer   = font->buffer;
-            update->data.new_texture.size     = font->buffer_size;
-            update->data.new_texture.write_id = &font->texture;
-        }
+            update->data.new_texture.buffer   = ctx->buffer;
+            update->data.new_texture.size     = ctx->buffer_size;
+            update->data.new_texture.write_id = &ctx->texture;
+        } break;
+
+        case VD_UI__TEXTURE_STATE_NEEDS_UPDATE: {
+            VD_UI_LOG("Queued subsequent texture upload to GPU %d", ctx->state);
+            VdUiUpdate *update = &ctx->updates[ctx->num_updates++];
+            update->type = VD_UI_UPDATE_TYPE_WRITE_TEXTURE;
+
+            update->data.write_texture.width    = ctx->atlas[0];
+            update->data.write_texture.height   = ctx->atlas[1];
+            update->data.write_texture.format   = VD_UI_TEXTURE_FORMAT_R8;
+            update->data.write_texture.buffer   = ctx->buffer;
+            update->data.write_texture.size     = ctx->buffer_size;
+            update->data.write_texture.texture  = ctx->texture;
+            
+        } break;
+
+        default: break;
     }
+
+    ctx->state = VD_UI__TEXTURE_STATE_IN_GPU;
 }
 
 static void vd_ui__push_vertex(VdUiContext *ctx, float p0[2], float p1[2],
@@ -413,46 +465,135 @@ static void vd_ui__put_line(VdUiContext *ctx, const char *str, int len)
 {
     VdUiFont *font = &ctx->fonts[0];
 
-    float rp[2] = {100.f, 100.f};
+    float rp[2] = {ctx->mouse[0], ctx->mouse[1]};
     int ascent, descent, linegap;
     stbtt_GetFontVMetrics(&font->font_info, &ascent, &descent, &linegap);
 
     float vadvance = (ascent - descent + linegap) * font->size_scaled;
+    VD_UNUSED(vadvance);
     
     for (int i = 0; i < len; ++i) {
         char c = str[i];
 
-        stbtt_aligned_quad quad;
-        stbtt_GetPackedQuad(
-            font->packed_chars,
-            512, 512,
-            c - ' ',
+        float p0[2], p1[2];
+        float u0[2], u1[2];
+
+        vd_ui__get_glyph_quad(ctx, (int)c, (VdUiFontId) {0},
             &rp[0], &rp[1],
-            &quad,
-            1);
-
-        // int idx = c - 35;
-        // stbtt_packedchar *rg = &font->packed_chars[idx];
-
-        // float uvs[4] = {
-        //     ((float)rg->x0) / 512.f, ((float)rg->y0) / 512.f,
-        //     ((float)rg->x1) / 512.f, ((float)rg->y1) / 512.f,
-        // };
+            &p0[0], &p0[1],
+            &p1[0], &p1[1],
+            &u0[0], &u0[1],
+            &u1[0], &u1[1]);
 
         vd_ui__push_vertex(ctx,
-            (float[]){quad.x0, quad.y0},                        // p0
-            (float[]){quad.x1, quad.y1},  // p1
-            (float[]){quad.s0, quad.t0},                      // u0
-            (float[]){quad.s1, quad.t1},                      // u1
+            p0, p1,
+            u0, u1,
             (float[]){1.f, 0.f, 1.f, 1.f});
-
-        // vd_ui__push_vertex(ctx,
-        //     (float[]){rp[0], rp[1]},                        // p0
-        //     (float[]){rp[0] + 128.f, rp[1] + 128.f},  // p1
-        //     (float[]){uvs[0], uvs[1]},                      // u0
-        //     (float[]){uvs[2], uvs[3]},                      // u1
-        //     (float[]){1.f, 0.f, 1.f, 1.f});
     }
+}
+
+static int vd_ui__glyph_eq(VdUiGlyph *glyph, unsigned int codepoint, VdUiFontId font)
+{
+    return (glyph->codepoint == codepoint) && (glyph->font.id == font.id);
+}
+
+static int vd_ui__glyph_free(VdUiGlyph *glyph)
+{
+    return glyph->codepoint == 0;
+}
+
+static void vd_ui__get_glyph_quad(VdUiContext *ctx, unsigned int codepoint, VdUiFontId font_id,
+                                  float *rx, float *ry,
+                                  float *x0, float *y0,
+                                  float *x1, float *y1,
+                                  float *s0, float *t0,
+                                  float *s1, float *t1)
+{
+    size_t hash = vd_ui__hash_glyph(codepoint, font_id);
+    size_t hindex = hash % VD_UI_GLYPH_CACHE_COUNT_MAX;
+    size_t index = hindex;
+
+    // Lookup glyph
+    int found_glyph = 1;
+    while (!vd_ui__glyph_eq(&ctx->glyph_cache[index], codepoint, font_id)) {
+        if (ctx->glyph_cache[index].next == -1) {
+            found_glyph = 0;
+            break;
+        }
+
+        index = ctx->glyph_cache[index].next;
+    }
+
+    VdUiGlyph *glyph = &ctx->glyph_cache[index];
+
+    if (!found_glyph) {
+        // @todo(mdodis): Glyph paging
+        // We didn't find the glyph. Allocate a new one if it fits
+        // and assert if it doesn't (for now)
+        glyph = vd_ui__push_glyph(ctx, codepoint, font_id);
+    }
+
+    int align_to_integer = 1;
+    float ipw = 1.0f / (ctx->atlas[0]); float iph = 1.0f / (ctx->atlas[1]);
+
+    if (align_to_integer) {
+        float x = ((int)floor((*rx) + glyph->xoff + 0.5f));
+        float y = ((int)floor((*ry) + glyph->yoff + 0.5f));
+        *x0 = x;               *x1 = x + glyph->xoff2 - glyph->xoff;
+        *y0 = y;               *y1 = y + glyph->yoff2 - glyph->yoff;
+
+    } else {
+        *x0 = (*rx) + glyph->xoff;     *x1 = (*rx) + glyph->xoff2;
+        *y0 = (*ry) + glyph->yoff;     *y1 = (*ry) + glyph->yoff2;
+    }
+
+    *s0 = (glyph->x0) * ipw;  *s1 = (glyph->x1) * ipw;
+    *t0 = (glyph->y0) * iph;  *t1 = (glyph->y1) * iph;
+
+    *rx += glyph->xadvance;
+}
+
+VdUiGlyph *vd_ui__push_glyph(VdUiContext *ctx, unsigned int codepoint, VdUiFontId font_id)
+{
+    ctx->state = ctx->state == VD_UI__TEXTURE_STATE_IN_GPU ? VD_UI__TEXTURE_STATE_NEEDS_UPDATE : VD_UI__TEXTURE_STATE_NULL;
+    VdUiFont *font = &ctx->fonts[font_id.id];
+
+    stbtt_packedchar packed_char;
+    int result = stbtt_PackFontRange(
+        &ctx->pack_context, font->font_buffer, 0,
+        font->size,
+        codepoint, 1, &packed_char);
+
+    VD_UI_LOG("Pushed codepoint %c to packed range", (char)codepoint);
+
+
+    VD_ASSERT(result != 0);
+
+    size_t index = vd_ui__hash_glyph(codepoint, font_id) % VD_UI_GLYPH_CACHE_COUNT_MAX;
+
+    if (vd_ui__glyph_free(&ctx->glyph_cache[index])) {
+        VdUiGlyph *glyph = &ctx->glyph_cache[index];
+        glyph->codepoint = codepoint;
+        glyph->font = font_id;
+        glyph->x0 = packed_char.x0; glyph->y0 = packed_char.y0;
+        glyph->x1 = packed_char.x1; glyph->y1 = packed_char.y1;
+        glyph->xoff = packed_char.xoff;
+        glyph->yoff = packed_char.yoff;
+        glyph->xoff2 = packed_char.xoff2;
+        glyph->yoff2 = packed_char.yoff2;
+        glyph->xadvance = packed_char.xadvance;
+        return glyph;
+    } else {
+        VD_TODO();
+    }
+
+}
+
+static size_t vd_ui__hash_glyph(unsigned int codepoint, VdUiFontId font_id)
+{
+    size_t result = vd_dhash64(&codepoint, sizeof(codepoint));
+    result = result ^ vd_dhash64(&font_id, sizeof(font_id));
+    return result;
 }
 
 void vd_ui_measure_text_size(VdUiFontId font, char *str, size_t len, float *w, float *h)
@@ -480,6 +621,22 @@ VdUiContext *vd_ui_context_create(VdUiContextCreateInfo *info)
 #ifdef VD_H
     VdUiContext *result = VD_MALLOC(sizeof(VdUiContext));
     VD_MEMSET(result, 0, sizeof(*result));
+
+    result->glyph_cache = (VdUiGlyph*)VD_MALLOC(sizeof(VdUiGlyph) * VD_UI_GLYPH_CACHE_COUNT_MAX);
+    for (int i = 0; i < VD_UI_GLYPH_CACHE_COUNT_MAX; ++i) {
+        result->glyph_cache[i].codepoint = 0;
+        result->glyph_cache[i].texture.id = 0;
+        result->glyph_cache[i].font.id = 0;
+        result->glyph_cache[i].next = -1;
+    }
+
+    result->atlas[0] = 512;
+    result->atlas[1] = 512;
+    result->buffer_size = result->atlas[0] * result->atlas[1];
+    result->buffer = (unsigned char*)VD_MALLOC(result->buffer_size);
+
+    stbtt_PackBegin(&result->pack_context, result->buffer,
+                    result->atlas[0], result->atlas[1], 0, 1, 0);
 #else
 #error "todo"
 #endif
