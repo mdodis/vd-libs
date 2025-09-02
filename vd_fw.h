@@ -3041,7 +3041,11 @@ static VdFw__MacOsInternalData Vd_Fw_Globals;
 - (void)windowWillClose:(NSNotification*)notification {
     VD_FW_G.should_close = YES;
 }
-@end
+
+- (void)windowDidResize:(NSNotification *)notification {
+    // VERY important: tell OpenGL to refresh the drawable
+    [VD_FW_G.gl_context update];
+}@end
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
@@ -3055,7 +3059,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 
         int w = 640;
         int h = 480;
-        NSRect frame = NSMakeRect(100, 100, w, h);
+        NSRect frame = NSMakeRect(0, 0, w, h);
         VD_FW_G.window = [[NSWindow alloc] initWithContentRect:frame
                                            styleMask:(
                                                 NSWindowStyleMaskTitled |

@@ -109,10 +109,12 @@ int main(int argc, char const *argv[])
         int w, h;
         vd_fw_get_size(&w, &h);
         vd_ui_frame_begin(delta_seconds);
+        printf("Window Size: %dx%d\n", w, h);
 
         float mx, my;
         int mouse_state = vd_fw_get_mouse_statef(&mx, &my);
         vd_ui_event_mouse_location(mx, my);
+        vd_ui_event_size(w, h);
 
 
         vd_ui_div_new(VD_UI_LIT("Woohoo!oohooW"));
@@ -152,8 +154,8 @@ int main(int argc, char const *argv[])
                         &format,
                         &type);
 
-                    // GL_CHECK(glTexImage2D(GL_TEXTURE_2D, level, internal_format, width, height, border, format, type, buffer));
-                    GL_CHECK(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 4, 4, 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer));
+                    GL_CHECK(glTexImage2D(GL_TEXTURE_2D, level, internal_format, width, height, border, format, type, buffer));
+                    // GL_CHECK(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 4, 4, 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer));
                     GL_CHECK(glPixelStorei(GL_UNPACK_ALIGNMENT, 1));
                     GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT));
                     GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT));
@@ -201,7 +203,7 @@ int main(int argc, char const *argv[])
 
             glUseProgram(program);
             glActiveTexture(GL_TEXTURE0);
-            glUniform2f(glGetUniformLocation(program, vd_ui_gl_get_uniform_name_resolution()), (float)w, (float)h);
+            GL_CHECK(glUniform2f(glGetUniformLocation(program, vd_ui_gl_get_uniform_name_resolution()), (float)w, (float)h));
             glUniform1i(glGetUniformLocation(program, vd_ui_gl_get_uniform_name_texture()), 0);
             glBindTexture(GL_TEXTURE_2D, texture_id);
 

@@ -563,9 +563,9 @@ static void vd_ui__layout(VdUiContext *ctx)
 
         // X0, Y0
         d->rect[0] = 20.f; d->rect[1] = starty;
-        d->rect[2] = 30.f; d->rect[3] = starty + 24.f;
+        d->rect[2] = 100.f; d->rect[3] = starty + 100.f;
 
-        starty += 24.f + 8.f;
+        starty += 100.f + 8.f;
         d = d->next;
     }
 }
@@ -960,7 +960,7 @@ VD_UI_API void vd_ui_gl_cv_texture_format(VdUiTextureFormat format, int *level, 
 
         case VD_UI_TEXTURE_FORMAT_RGBA8: {
             *level           = 0;
-            *internal_format = 0x1908; /* GL_RGBA8 */
+            *internal_format = 0x8058; /* GL_RGBA8 */
             *border          = 0;
             *texformat       = 0x1908; /* GL_RGBA  */
             *type            = 0x1401; /* GL_UNSIGNED_BYTE */
