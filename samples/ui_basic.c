@@ -109,15 +109,18 @@ int main(int argc, char const *argv[])
         int w, h;
         vd_fw_get_size(&w, &h);
         vd_ui_frame_begin(delta_seconds);
-        printf("Window Size: %dx%d\n", w, h);
 
         float mx, my;
         int mouse_state = vd_fw_get_mouse_statef(&mx, &my);
+        VD_UNUSED(mouse_state);
+
         vd_ui_event_mouse_location(mx, my);
         vd_ui_event_size(w, h);
 
 
-        vd_ui_div_new(VD_UI_LIT("Woohoo!oohooW"));
+        vd_ui_div_new(VD_UI_FLAG_TEXT, VD_UI_LIT("Woohoo"));
+        vd_ui_div_new(VD_UI_FLAG_TEXT, VD_UI_LIT("Woohoo 2"));
+        vd_ui_div_new(VD_UI_FLAG_TEXT, VD_UI_LIT("Woohoo 3"));
 
         vd_ui_frame_end();
 
@@ -162,6 +165,8 @@ int main(int argc, char const *argv[])
                     GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
                     GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
                     GL_CHECK(glBindTexture(GL_TEXTURE_2D, 0));
+
+                    printf("Allocated texture:%d\n", texture);
 
                     id->id = (uintptr_t)texture;
                 } break;
