@@ -1,6 +1,6 @@
 /**
  * vd_fw.h - Gets you a window with OpenGL running on platforms that support it
- * 
+ * ---------------------------------------------------------------------------------------------------------------------
  * zlib License
  * 
  * (C) Copyright 2025-2026 Michael Dodis (michaeldodisgr@gmail.com)
@@ -20,6 +20,11 @@
  * 2. Altered source versions must be plainly marked as such, and must not be
  *    misrepresented as being the original software.
  * 3. This notice may not be removed or altered from any source distribution.
+ * ---------------------------------------------------------------------------------------------------------------------
+ * NOTES
+ * - Do NOT include OpenGL headers, or import an OpenGL loader. This library does that already 
+ * - The highest possible OpenGL version you should support if you want it to work (as of 2025...)
+ *   on the big threes is OpenGL Core Profile 4.1 (MacOS limitation)
  */
 #ifndef VD_FW_H
 #define VD_FW_H
@@ -28,12 +33,21 @@
 #define VD_FW_VERSION_PATCH    1
 #define VD_FW_VERSION          ((VD_FW_VERSION_MAJOR << 16) | (VD_FW_VERSION_MINOR << 8) | (VD_FW_VERSION_PATCH))
 
+#ifdef VD_FW_STATIC
+#define VD_FW_API static
+#else
+#define VD_FW_API extern
+#endif // VD_FW_STATIC
+
+#ifndef VD_FW_INLINE
+#define VD_FW_INLINE static inline
+#endif // VD_FW_INLINE
+
 #if defined(__APPLE__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #import <OpenGL/gl3.h>
-#endif
- 
+#endif // defined(__APPLE__)
 
 typedef enum {
     VD_FW_GL_VERSION_BASIC = 0,
@@ -50,6 +64,11 @@ typedef enum {
     VD_FW_GL_VERSION_3_3   = 33,
 } VdFwGlVersion;
 
+enum {
+    VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN  = 1 << 0,
+    VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN = 1 << 1,
+};
+
 typedef struct __VD_FW_InitInfo {
     struct {
         VdFwGlVersion version;
@@ -61,20 +80,60 @@ typedef struct __VD_FW_InitInfo {
     } window_options;
 } VdFwInitInfo;
 
-extern int                vd_fw_init(VdFwInitInfo *info);
-extern int                vd_fw_running(void);
-extern int                vd_fw_swap_buffers(void);
-extern int                vd_fw_get_size(int *w, int *h);
-extern unsigned long long vd_fw_delta_ns(void);
-extern int                vd_fw_set_vsync_on(int on);
-extern void               vd_fw_draw_window_border(void);
-extern int                vd_fw_get_mouse_state(int *x, int *y);
-static inline int         vd_fw_get_mouse_statef(float *x, float *y);
-static inline float       vd_fw_delta_s(void);
-static inline void        vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16]);
-static inline int         vd_fw_u_point_in_rect(float x, float y, float rx, float ry, float rw, float rh);
+/**
+ * Initialize fw. Call this before any other call
+ * @param  info Custom options when initializing. Leave null for default
+ * @return      (Reserved)
+ */
+VD_FW_API int                vd_fw_init(VdFwInitInfo *info);
 
-static inline float vd_fw_delta_s(void)
+/**
+ * Check if the application is running. Call this every frame
+ * @return  1 if running, 0 if not
+ */
+VD_FW_API int                vd_fw_running(void);
+
+/**
+ * Swap back buffer with front buffer; call at the end of your rendering
+ * @return  (Reserved)
+ */
+VD_FW_API int                vd_fw_swap_buffers(void);
+
+/**
+ * Get the size of the window, in pixels
+ * @param  w The width of the window, in pixels
+ * @param  h The height of the window, in pixels
+ * @return   (Reserved)
+ */
+VD_FW_API int                vd_fw_get_size(int *w, int *h);
+
+/**
+ * Get the time (in nanoseconds) since the last call to @see vd_fw_swap_buffers
+ * @return  The delta time (in nanoseconds)
+ */
+VD_FW_API unsigned long long vd_fw_delta_ns(void);
+
+/**
+ * Set VSYNC to the number of frames to sync on
+ * @param  on 0: no sync, 1: sync every frame, 2: sync every other frame
+ * @return    1 if the change was applied successfully
+ */
+VD_FW_API int                vd_fw_set_vsync_on(int on);
+
+/**
+ * Read the mouse state. @see above in the enumeration
+ * @param  x The horizontal position of the mouse, in pixels (left -> right)
+ * @param  y The vertical position of the mouse, in pixels (top -> bottom)
+ * @return   The mouse button state
+ */
+VD_FW_API int                vd_fw_get_mouse_state(int *x, int *y);
+VD_FW_API void               vd_fw_draw_window_border(void);
+VD_FW_INLINE int             vd_fw_get_mouse_statef(float *x, float *y);
+VD_FW_INLINE float           vd_fw_delta_s(void);
+VD_FW_INLINE void            vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16]);
+VD_FW_INLINE int             vd_fw_u_point_in_rect(float x, float y, float rx, float ry, float rw, float rh);
+
+VD_FW_INLINE float vd_fw_delta_s(void)
 {
     unsigned long long ns  = vd_fw_delta_ns();
     double ms              = (double)ns / 1000000.0;
@@ -83,13 +142,13 @@ static inline float vd_fw_delta_s(void)
     return s;
 }
 
-static inline int vd_fw_u_point_in_rect(float x, float y, float rx, float ry, float rw, float rh)
+VD_FW_INLINE int vd_fw_u_point_in_rect(float x, float y, float rx, float ry, float rw, float rh)
 {
     return (x >= rx) && (x <= (rx + rw)) &&
            (y >= ry) && (y <= (ry + rh));
 }
 
-static inline int vd_fw_get_mouse_statef(float *x, float *y)
+VD_FW_INLINE int vd_fw_get_mouse_statef(float *x, float *y)
 {
     int xi, yi;
     int result = vd_fw_get_mouse_state(&xi, &yi);
@@ -100,7 +159,7 @@ static inline int vd_fw_get_mouse_statef(float *x, float *y)
     return result;
 }
 
-static inline void vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16])
+VD_FW_INLINE void vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16])
 {
     out[0]  = 2.0f / (right - left);               out[1]  = 0.0f;                              out[2]  = 0.0f;                          out[3]  = 0.0f;
     out[4]  = 0.0f;                                out[5]  = 2.0f / (top - bottom);             out[6]  = 0.0f;                          out[7]  = 0.0f;
@@ -2029,7 +2088,6 @@ extern PFNGLDEBUGMESSAGECALLBACKPROC glDebugMessageCallback;
 #endif
 
 static void vd_fw__load_opengl(VdFwGlVersion version);
-static void *vd_fw__gl_get_proc_address(const char *name);
 
 #ifdef _WIN32
 #pragma comment(lib, "User32.lib")
@@ -2192,7 +2250,7 @@ static void *vd_fw__gl_get_proc_address(const char *name)
     return (void*)wglGetProcAddress(name);
 }
 
-int vd_fw_init(VdFwInitInfo *info)
+VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
     if (info != NULL) {
         VD_FW_G.draw_decorations = info->window_options.draw_default_borders;
@@ -2304,7 +2362,7 @@ int vd_fw_init(VdFwInitInfo *info)
     return 1;
 }
 
-int vd_fw_running(void)
+VD_FW_API int vd_fw_running(void)
 {
     DWORD result = WaitForSingleObject(VD_FW_G.sem_closed, 0);
     if (result == WAIT_OBJECT_0) {
@@ -2316,14 +2374,14 @@ int vd_fw_running(void)
     }
 }
 
-int vd_fw_swap_buffers(void)
+VD_FW_API int vd_fw_swap_buffers(void)
 {
     QueryPerformanceCounter(&VD_FW_G.performance_counter);
     SwapBuffers(VD_FW_G.hdc);
     return 1;
 }
 
-int vd_fw_get_size(int *w, int *h)
+VD_FW_API int vd_fw_get_size(int *w, int *h)
 {
     RECT rect;
     GetClientRect(VD_FW_G.hwnd, &rect);
@@ -2332,14 +2390,14 @@ int vd_fw_get_size(int *w, int *h)
     return 0;
 }
 
-int vd_fw_set_vsync_on(int on)
+VD_FW_API int vd_fw_set_vsync_on(int on)
 {
     BOOL result = VD_FW_G.proc_swapInterval(on);
 
     return result == TRUE ? on : 0;
 }
 
-int vd_fw_get_mouse_state(int *x, int *y)
+VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
 {
     POINT p;
     GetCursorPos(&p);
@@ -2352,7 +2410,7 @@ int vd_fw_get_mouse_state(int *x, int *y)
     return 0;
 }
 
-unsigned long long vd_fw_delta_ns(void)
+VD_FW_API unsigned long long vd_fw_delta_ns(void)
 {
     LARGE_INTEGER now_performance_counter;
     QueryPerformanceCounter(&now_performance_counter);
@@ -2985,7 +3043,7 @@ static VdFw__MacOsInternalData Vd_Fw_Globals;
 }
 @end
 
-int vd_fw_init(VdFwInitInfo *info)
+VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
     @autoreleasepool {
         VD_FW_G.scale = [[NSScreen mainScreen] backingScaleFactor];
@@ -3039,15 +3097,17 @@ int vd_fw_init(VdFwInitInfo *info)
     return 1;
 }
 
-unsigned long long vd_fw_delta_ns(void)
+VD_FW_API unsigned long long vd_fw_delta_ns(void)
 {
     uint64_t now = mach_absolute_time();
     uint64_t ns = (now - VD_FW_G.last_time) * VD_FW_G.time_base.numer / VD_FW_G.time_base.denom;
     return ns;
 }
 
-int vd_fw_get_mouse_state(int *x, int *y)
+VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
 {
+    int result = 0;
+
     @autoreleasepool {
         if (!VD_FW_G.window) {
             if (x) *x = 0;
@@ -3059,22 +3119,29 @@ int vd_fw_get_mouse_state(int *x, int *y)
         NSPoint loc = [NSEvent mouseLocation];
 
         // Convert to window coordinates
-        NSPoint windowPoint = [VD_FW_G.window convertPointFromScreen:loc];
+        NSPoint window_point = [VD_FW_G.window convertPointFromScreen:loc];
 
         // Convert to content view coordinates
         NSView *cv = [VD_FW_G.window contentView];
-        NSPoint viewPoint = [cv convertPoint:windowPoint fromView:nil];
+        NSPoint view_point = [cv convertPoint:window_point fromView:nil];
         NSRect cvf = [cv frame];
 
         // Cocoa’s origin is bottom-left, OpenGL expects same
-        if (x) *x = (viewPoint.x) * VD_FW_G.scale;
-        if (y) *y = (cvf.size.height - viewPoint.y) * VD_FW_G.scale;
+        if (x) *x = (view_point.x) * VD_FW_G.scale;
+        if (y) *y = (cvf.size.height - view_point.y) * VD_FW_G.scale;
+
+        // Get the mouse state
+        BOOL left_down  = ([NSEvent pressedMouseButtons] & (1 << 0)) != 0;
+        BOOL right_down = ([NSEvent pressedMouseButtons] & (1 << 1)) != 0;
+
+        result |= left_down  ? VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN : 0;
+        result |= right_down ? VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN : 0;
     }
 
-    return 0;
+    return result;
 }
 
-int vd_fw_running(void)
+VD_FW_API int vd_fw_running(void)
 {
     @autoreleasepool {
         NSEvent *event;
@@ -3089,7 +3156,7 @@ int vd_fw_running(void)
     return !VD_FW_G.should_close;
 }
 
-int vd_fw_swap_buffers(void)
+VD_FW_API int vd_fw_swap_buffers(void)
 {
     @autoreleasepool {
         [VD_FW_G.gl_context flushBuffer];
@@ -3098,7 +3165,7 @@ int vd_fw_swap_buffers(void)
     return 1;
 }
 
-int vd_fw_get_size(int *w, int *h)
+VD_FW_API int vd_fw_get_size(int *w, int *h)
 {
     NSRect rect = [[VD_FW_G.window contentView] frame];
     if (w) *w = (int)rect.size.width * VD_FW_G.scale;
@@ -3106,7 +3173,7 @@ int vd_fw_get_size(int *w, int *h)
     return 0;
 }
 
-int vd_fw_set_vsync_on(int on)
+VD_FW_API int vd_fw_set_vsync_on(int on)
 {
     @autoreleasepool {
         if (VD_FW_G.gl_context) {
@@ -3115,11 +3182,6 @@ int vd_fw_set_vsync_on(int on)
         }
     }
     return 1;
-}
-
-static void *vd_fw__gl_get_proc_address(const char *name)
-{
-    return 0;
 }
 
 #undef VD_FW_G
@@ -3815,10 +3877,6 @@ static int vd_fw__was_hovered(VdFw__GenericInternalData *data, int id) {
 
 static int vd_fw__is_hovered(VdFw__GenericInternalData *data, int id) {
     return data->e[id].is_hovered;
-}
-
-static int vd_fw__was_unhovered(VdFw__GenericInternalData *data, int id) {
-    return data->e[id].was_hovered && !data->e[id].is_hovered;
 }
 
 static void vd_fw__anim_update(VdFw__GenericInternalData *data, int id, float new_color[4], float time, int mode) {

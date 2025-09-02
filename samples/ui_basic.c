@@ -10,6 +10,8 @@
 
 #include <stdio.h>
 
+#define GL_CHECK(expr) do { (expr); int _e_ = glGetError(); if (_e_ != 0) { printf("Check at " __FILE__ ":%d failed with 0x%x\n", __LINE__, _e_); assert(0); }} while(0)
+
 #pragma pack(push, 1)
 typedef struct {
     float p0[2];
@@ -109,9 +111,11 @@ int main(int argc, char const *argv[])
         vd_ui_frame_begin(delta_seconds);
 
         float mx, my;
-        vd_fw_get_mouse_statef(&mx, &my);
-
+        int mouse_state = vd_fw_get_mouse_statef(&mx, &my);
         vd_ui_event_mouse_location(mx, my);
+
+
+        vd_ui_div_new(VD_UI_LIT("Woohoo!oohooW"));
 
         vd_ui_frame_end();
 
@@ -125,25 +129,37 @@ int main(int argc, char const *argv[])
                 case VD_UI_UPDATE_TYPE_NEW_TEXTURE: {
                     int width                = update->data.new_texture.width;
                     int height               = update->data.new_texture.height;
-                    VdUiTextureFormat format = update->data.new_texture.format;
                     void *buffer             = update->data.new_texture.buffer;
                     size_t buffer_size       = update->data.new_texture.size;
                     VdUiTextureId *id        = update->data.new_texture.write_id;
 
-                    VD_UNUSED(format);
                     VD_UNUSED(buffer_size);
 
                     GLuint texture;
                     glGenTextures(1, &texture);
                     glBindTexture(GL_TEXTURE_2D, texture);
 
-                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, buffer);
-                    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);   
-                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);   
-                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);    
-                    glBindTexture(GL_TEXTURE_2D, 0);
+                    GLint  level;
+                    GLint  internal_format;
+                    GLint  border;
+                    GLenum format;
+                    GLenum type;
+                    vd_ui_gl_cv_texture_format(
+                        update->data.new_texture.format,
+                        &level,
+                        &internal_format, 
+                        &border, 
+                        &format,
+                        &type);
+
+                    // GL_CHECK(glTexImage2D(GL_TEXTURE_2D, level, internal_format, width, height, border, format, type, buffer));
+                    GL_CHECK(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 4, 4, 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer));
+                    GL_CHECK(glPixelStorei(GL_UNPACK_ALIGNMENT, 1));
+                    GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT));
+                    GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT));
+                    GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
+                    GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
+                    GL_CHECK(glBindTexture(GL_TEXTURE_2D, 0));
 
                     id->id = (uintptr_t)texture;
                 } break;
@@ -178,11 +194,10 @@ int main(int argc, char const *argv[])
         glBindVertexArray(vao);
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
-
         // Loop through render passes
         for (int i = 0; i < num_passes; ++i) {
             VdUiRenderPass *pass = &passes[i];
-            GLuint texture_id = (GLuint)pass->selected_texture.id;
+            GLuint texture_id = (GLuint)pass->selected_texture->id;
 
             glUseProgram(program);
             glActiveTexture(GL_TEXTURE0);
