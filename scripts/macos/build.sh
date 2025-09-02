@@ -29,6 +29,7 @@ echo "Compiling $SAMPLE_TO_COMPILE ..."
 cc \
     -x objective-c \
     $CFLAGS \
+    -fsanitize=address \
     $PRJ_DIR/samples/$SAMPLE_TO_COMPILE.c \
     -o $SAMPLE_TO_COMPILE \
     -framework Cocoa \

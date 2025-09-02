@@ -115,8 +115,10 @@ int main(int argc, char const *argv[])
         vd_ui_event_mouse_button(VD_UI_MOUSE_RIGHT, mouse_state & VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN);
 
 
-        vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("Woohoo"));
         vd_ui_div_new(VD_UI_FLAG_TEXT, VD_UI_LIT("Woohoo 2"));
+        vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("Woohoo"));
+        vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("Woohoo 3"));
+        vd_ui_div_new(VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND, VD_UI_LIT("Woohoo 4"));
         // vd_ui_div_new(VD_UI_FLAG_TEXT, VD_UI_LIT("Woohoo 3"));
 
         vd_ui_frame_end();
@@ -184,12 +186,6 @@ int main(int argc, char const *argv[])
         int num_passes;
         VdUiRenderPass *passes = vd_ui_frame_get_render_passes(&num_passes);
 
-        // Update vertex buffer
-        glBindBuffer(GL_ARRAY_BUFFER, vbo);
-        void *data = glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-        VD_MEMCPY(data, buffer, buffer_size);
-        glUnmapBuffer(GL_ARRAY_BUFFER);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
 
         glViewport(0, 0, w, h);
         glClearColor(0.2f, 0.2f, 0.2f, 0.5f);
@@ -204,7 +200,7 @@ int main(int argc, char const *argv[])
             VdUiRenderPass *pass = &passes[i];
             GLuint texture_id = (GLuint)pass->selected_texture->id;
 
-            printf("Draw %d instances with texture %d\n", pass->instance_count, texture_id);
+            printf("Draw %d instances with texture %d statrting at %d\n", pass->instance_count, texture_id, pass->first_instance);
 
             glUseProgram(program);
             glActiveTexture(GL_TEXTURE0);
@@ -215,9 +211,14 @@ int main(int argc, char const *argv[])
             glBindVertexArray(vao);
             glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
+            // Update vertex buffer
+            glBindBuffer(GL_ARRAY_BUFFER, vbo);
+            glBufferSubData(GL_ARRAY_BUFFER, 0, pass->instance_count * sizeof(VdUiVertex), buffer + pass->first_instance * sizeof(VdUiVertex));
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
+
             glDrawArraysInstanced(
                 GL_TRIANGLE_STRIP,
-                pass->first_instance,
+                0,
                 4,
                 pass->instance_count);
         }

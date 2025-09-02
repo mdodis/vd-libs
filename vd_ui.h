@@ -472,9 +472,6 @@ VD_UI_API void vd_ui_frame_end(void)
     // Zero immediate mode stuff
     ctx->vbuf_count = 0;
     ctx->num_passes = 0;
-    ctx->passes[0].instance_count = 0;
-    ctx->passes[0].first_instance = 0;
-    ctx->passes[0].selected_texture = 0;
     ctx->num_updates = 0;
     ctx->current_texture_id = 0;
 
@@ -506,7 +503,7 @@ VD_UI_API void *vd_ui_frame_get_vertex_buffer(size_t *buffer_size)
 {
     VdUiContext *ctx = vd_ui_context_get();
 
-    *buffer_size = (ctx->vbuf_count + 1) * sizeof(VdUiVertex);
+    *buffer_size = (ctx->vbuf_count) * sizeof(VdUiVertex);
     return (void*)ctx->vbuf;
 }
 
@@ -753,6 +750,7 @@ static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId *texture, float p
         ctx->current_texture_id = texture;
     }
 
+    // Ok so clearly there is an issue when submitting separate passes
     VdUiVertex *v = &ctx->vbuf[ctx->vbuf_count++];
     v->p0[0]   = p0[0];     v->p0[1]   = p0[1];
     v->p1[0]   = p1[0];     v->p1[1]   = p1[1];
@@ -1070,8 +1068,8 @@ VD_UI_API VdUiContext* vd_ui_context_get(void)
 "{                                                                                                                 \n" \
 "   vec2 positions[4] = vec2[](                                                                                    \n" \
 "       vec2(-1.0, -1.0),                                                                                          \n" \
-"       vec2(-1.0, +1.0),                                                                                          \n" \
 "       vec2(+1.0, -1.0),                                                                                          \n" \
+"       vec2(-1.0, +1.0),                                                                                          \n" \
 "       vec2(+1.0, +1.0)                                                                                           \n" \
 "   );                                                                                                             \n" \
 "   vec2 dhs = (a_p1 - a_p0) / 2.0;                                                                                \n" \
