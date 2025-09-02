@@ -22,10 +22,10 @@
  * 3. This notice may not be removed or altered from any source distribution.
  * ---------------------------------------------------------------------------------------------------------------------
  * @todo(mdodis):
- * - RenderPass (texture) interleaving
- * - Proper ui layout
  * - Mouse Clicks
+ * - Proper ui layout
  * - Buttons and labels
+ * - Glyph Cache collision resolution
  *
  * EXAMPLE - OpenGL (@todo)
  * 
@@ -46,6 +46,8 @@
 #else
 #define VD_UI_API extern
 #endif // VD_UI_STATIC
+
+typedef char VdUiBool;
 
 /**
  * To use a custom id for a texture, define a struct like so:
@@ -80,14 +82,24 @@ VD_UI_API void             vd_ui_frame_begin(float delta_seconds);
 VD_UI_API void             vd_ui_frame_end(void);
 
 /* ----UI------------------------------------------------------------------------------------------------------------ */
-
 typedef struct {
     char *s;
     int  l;
 } VdUiStr;
 
+typedef union {
+    float e[4];
+} VdUiF4;
+
 enum {
-    VD_UI_FLAG_TEXT = 1 << 0,
+    // Per div flags
+    VD_UI_FLAG_TEXT         = 1 << 0,
+    VD_UI_FLAG_BACKGROUND   = 1 << 1,
+
+    // Mouse Enumerations
+    VD_UI_MOUSE_LEFT        = 0,
+    VD_UI_MOUSE_RIGHT       = 1,
+    VD_UI_MOUSE_MIDDLE      = 2,
 };
 typedef int VdUiFlags;
 
@@ -117,11 +129,18 @@ struct VdUiDiv {
     float       comp_pos_rel[2];
     float       comp_size[2];
     float       rect[4];
+
+    float       hot_t;
+    float       active_t;
 };
 
 typedef struct {
-    VdUiDiv *div;
-    char clicked;
+    VdUiDiv  *div;
+    float    mouse[2];
+    VdUiBool pressed;
+    VdUiBool released;
+    VdUiBool clicked;
+    VdUiBool hovering;
 } VdUiReply;
 
 #define VD_UI_LIT(s) ((VdUiStr) {s, sizeof(s) - 1})
@@ -129,6 +148,7 @@ typedef struct {
 VD_UI_API int              vd_ui_button(VdUiStr str);
 
 VD_UI_API VdUiDiv*         vd_ui_div_new(VdUiFlags flags, VdUiStr str);
+VD_UI_API VdUiReply        vd_ui_call(VdUiDiv *div);
 
 // Parent Stack
 VD_UI_API void             vd_ui_parent_push(VdUiDiv *div);
@@ -221,8 +241,9 @@ VD_UI_API VdUiRenderPass*  vd_ui_frame_get_render_passes(int *num_passes);
 VD_UI_API VdUiFontId       vd_ui_font_add_ttf(void *buffer, size_t size, float pixel_size);
 
 /* ----INPUT--------------------------------------------------------------------------------------------------------- */
-VD_UI_API void             vd_ui_event_mouse_location(float mx, float my);
 VD_UI_API void             vd_ui_event_size(float width, float height);
+VD_UI_API void             vd_ui_event_mouse_location(float mx, float my);
+VD_UI_API void             vd_ui_event_mouse_button(int index, int down);
 
 
 /* ----CONTEXT CREATION---------------------------------------------------------------------------------------------- */
@@ -336,6 +357,7 @@ struct VdUiFont {
 };
 
 static void vd_ui__update_all_fonts(VdUiContext *ctx);
+static void vd_ui__push_rect(VdUiContext *ctx, VdUiTextureId *texture, float rect[4], float color[4]);
 static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId *texture, float p0[2], float p1[2],
                                                                          float u0[2], float u1[2],
                                                                          float color[4]);
@@ -352,6 +374,9 @@ static size_t       vd_ui__hash_glyph(unsigned int codepoint, VdUiFontId font_id
 static void         vd_ui__layout(VdUiContext *ctx);
 static VdUiStr      vd_ui__strbuf_dup(VdUiContext *ctx, VdUiStr str);
 static void         vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr);
+static int          vd_ui__point_in_rect(float point[2], float r[4]);
+static float        vd_ui__lerp(float a, float b, float t);
+static VdUiF4       vd_ui__lerp4(VdUiF4 a, VdUiF4 b, float t);
 
 struct VdUiContext {
     VdUiDiv                 root;
@@ -404,6 +429,9 @@ struct VdUiContext {
     float                   delta_seconds;
     float                   mouse[2];
     float                   window[2];
+    int                     mouse_left;
+    int                     mouse_right;
+    int                     mouse_middle;
 
     // Per frame storage (strings)
     char                    *strbuf;
@@ -444,6 +472,9 @@ VD_UI_API void vd_ui_frame_end(void)
     // Zero immediate mode stuff
     ctx->vbuf_count = 0;
     ctx->num_passes = 0;
+    ctx->passes[0].instance_count = 0;
+    ctx->passes[0].first_instance = 0;
+    ctx->passes[0].selected_texture = 0;
     ctx->num_updates = 0;
     ctx->current_texture_id = 0;
 
@@ -475,7 +506,7 @@ VD_UI_API void *vd_ui_frame_get_vertex_buffer(size_t *buffer_size)
 {
     VdUiContext *ctx = vd_ui_context_get();
 
-    *buffer_size = ctx->vbuf_count * sizeof(VdUiVertex);
+    *buffer_size = (ctx->vbuf_count + 1) * sizeof(VdUiVertex);
     return (void*)ctx->vbuf;
 }
 
@@ -535,6 +566,26 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     }
 
     return result;
+}
+
+VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    float dt = ctx->delta_seconds;
+
+    VdUiReply reply = {};
+    reply.mouse[0]  = ctx->mouse[0];    reply.mouse[1] = ctx->mouse[1];
+
+    int hovered  = vd_ui__point_in_rect(ctx->mouse, div->rect);
+    int pressed  = hovered  && ctx->mouse_left;
+    int released = !hovered && !ctx->mouse_left;
+
+    float hot_speed = 3.f;
+    float active_speed = 3.f;
+    div->hot_t    = vd_ui__lerp(div->hot_t,    hovered ? 1.0f : 0.0f, dt * hot_speed);
+    div->active_t = vd_ui__lerp(div->active_t, hovered ? 1.0f : 0.0f, dt * active_speed);
+
+    return reply;
 }
 
 // Parent Stack Impl
@@ -610,6 +661,13 @@ VD_UI_API VdUiFontId vd_ui_font_add_ttf(void *buffer, size_t size, float pixel_s
 }
 
 /* ----INPUT IMPL---------------------------------------------------------------------------------------------------- */
+VD_UI_API void vd_ui_event_size(float width, float height)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    ctx->window[0] = width;
+    ctx->window[1] = height;
+}
+
 VD_UI_API void vd_ui_event_mouse_location(float mx, float my)
 {
     VdUiContext *ctx = vd_ui_context_get();
@@ -617,11 +675,16 @@ VD_UI_API void vd_ui_event_mouse_location(float mx, float my)
     ctx->mouse[1] = my;
 }
 
-VD_UI_API void vd_ui_event_size(float width, float height)
+VD_UI_API void vd_ui_event_mouse_button(int index, int down)
 {
     VdUiContext *ctx = vd_ui_context_get();
-    ctx->window[0] = width;
-    ctx->window[1] = height;
+    switch (index)
+    {
+        case VD_UI_MOUSE_LEFT:   ctx->mouse_left   = down; break;
+        case VD_UI_MOUSE_RIGHT:  ctx->mouse_right  = down; break;
+        case VD_UI_MOUSE_MIDDLE: ctx->mouse_middle = down; break;
+        default: break;
+    }
 }
 
 /* ----GLYPH CACHE IMPL---------------------------------------------------------------------------------------------- */
@@ -678,14 +741,6 @@ static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId *texture, float p
                                                                          float u0[2], float u1[2],
                                                                          float color[4])
 {
-    // if (ctx->current_texture_id == 0)
-    // {
-    //     VdUiRenderPass *pass   = &ctx->passes[ctx->num_passes];
-    //     pass->selected_texture = texture;
-    //     pass->first_instance   = ctx->vbuf_count;
-    //     pass->instance_count   = 0;
-    //     ctx->current_texture_id = texture;
-    // }
     if (ctx->current_texture_id != texture)
     {
         VD_ASSERT(ctx->num_passes < VD_UI_RP_COUNT_MAX);
@@ -699,20 +754,26 @@ static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId *texture, float p
     }
 
     VdUiVertex *v = &ctx->vbuf[ctx->vbuf_count++];
-    v->p0[0] = p0[0];
-    v->p0[1] = p0[1];
-    v->p1[0] = p1[0];
-    v->p1[1] = p1[1];
-    v->p0u[0] = u0[0];
-    v->p0u[1] = u0[1];
-    v->p1u[0] = u1[0];
-    v->p1u[1] = u1[1];
+    v->p0[0]   = p0[0];     v->p0[1]   = p0[1];
+    v->p1[0]   = p1[0];     v->p1[1]   = p1[1];
+
+    v->p0u[0]   = u0[0];    v->p0u[1]   = u0[1];
+    v->p1u[0]   = u1[0];    v->p1u[1]   = u1[1];
+
     v->color[0] = color[0];
     v->color[1] = color[1];
     v->color[2] = color[2];
     v->color[3] = color[3];
 
     ctx->passes[ctx->num_passes - 1].instance_count++;
+}
+
+static void vd_ui__push_rect(VdUiContext *ctx, VdUiTextureId *texture, float rect[4], float color[4])
+{
+    vd_ui__push_vertex(ctx, texture,
+        (float[]){rect[0], rect[1]}, (float[]){rect[2], rect[3]},
+        (float[]){0.0f   , 0.0f   }, (float[]){1.0f   , 1.0f   },
+        color);
 }
 
 static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y)
@@ -895,7 +956,40 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
         return;
     }
 
-    vd_ui__put_line(ctx, curr->content_str, curr->rect[0], curr->rect[1]);
+    if (curr->flags & VD_UI_FLAG_BACKGROUND) {
+        VdUiF4 base_color  = {0.9f, 0.4f, 0.4f, 1.f};
+        VdUiF4 hot_color   = {0.7f, 0.3f, 0.3f, 1.f};
+        VdUiF4 final_color = vd_ui__lerp4(base_color, hot_color, curr->hot_t);
+        // vd_ui__push_rect(ctx, &ctx->white, curr->rect, final_color.e);
+        vd_ui__push_rect(ctx, &ctx->white, curr->rect, base_color.e);
+        VD_UI_LOG("Write Rect: %.*s %f %f %f %f", curr->content_str.l, curr->content_str.s, curr->rect[0], curr->rect[1], curr->rect[2], curr->rect[3]);
+    }
+
+    if (curr->flags & VD_UI_FLAG_TEXT) {
+        vd_ui__put_line(ctx, curr->content_str, curr->rect[0], curr->rect[1]);
+        VD_UI_LOG("Write Write String: %.*s %f %f %f %f", curr->content_str.l, curr->content_str.s, curr->rect[0], curr->rect[1], curr->rect[2], curr->rect[3]);
+    }
+}
+
+static int vd_ui__point_in_rect(float point[2], float r[4])
+{
+    return (point[0] >= r[0]) && (point[0] <= r[2]) &&
+           (point[1] >= r[1]) && (point[1] <= r[3]); 
+}
+
+static float vd_ui__lerp(float a, float b, float t)
+{
+    return (1.0f - t) * a + t * b;
+}
+
+static VdUiF4 vd_ui__lerp4(VdUiF4 a, VdUiF4 b, float t)
+{
+    return (VdUiF4) {
+        vd_ui__lerp(a.e[0], b.e[0], t),
+        vd_ui__lerp(a.e[1], b.e[1], t),
+        vd_ui__lerp(a.e[2], b.e[2], t),
+        vd_ui__lerp(a.e[3], b.e[3], t),
+    };
 }
 
 /* ----CONTEXT CREATION IMPL----------------------------------------------------------------------------------------- */

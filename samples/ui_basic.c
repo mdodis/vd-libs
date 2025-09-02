@@ -65,11 +65,6 @@ int main(int argc, char const *argv[])
         glLinkProgram(program);
     }
 
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glBlendEquation(GL_FUNC_ADD);
-    glActiveTexture(GL_TEXTURE0);
-
     GLuint vao;
     glGenVertexArrays(1, &vao);
     glBindVertexArray(vao);
@@ -114,13 +109,15 @@ int main(int argc, char const *argv[])
         int mouse_state = vd_fw_get_mouse_statef(&mx, &my);
         VD_UNUSED(mouse_state);
 
-        vd_ui_event_mouse_location(mx, my);
         vd_ui_event_size(w, h);
+        vd_ui_event_mouse_location(mx, my);
+        vd_ui_event_mouse_button(VD_UI_MOUSE_LEFT,  mouse_state & VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN);
+        vd_ui_event_mouse_button(VD_UI_MOUSE_RIGHT, mouse_state & VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN);
 
 
-        vd_ui_div_new(VD_UI_FLAG_TEXT, VD_UI_LIT("Woohoo"));
+        vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("Woohoo"));
         vd_ui_div_new(VD_UI_FLAG_TEXT, VD_UI_LIT("Woohoo 2"));
-        vd_ui_div_new(VD_UI_FLAG_TEXT, VD_UI_LIT("Woohoo 3"));
+        // vd_ui_div_new(VD_UI_FLAG_TEXT, VD_UI_LIT("Woohoo 3"));
 
         vd_ui_frame_end();
 
@@ -198,19 +195,25 @@ int main(int argc, char const *argv[])
         glClearColor(0.2f, 0.2f, 0.2f, 0.5f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        glBindVertexArray(vao);
-        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+        puts("Begin Render");
         // Loop through render passes
         for (int i = 0; i < num_passes; ++i) {
             VdUiRenderPass *pass = &passes[i];
             GLuint texture_id = (GLuint)pass->selected_texture->id;
 
+            printf("Draw %d instances with texture %d\n", pass->instance_count, texture_id);
+
             glUseProgram(program);
             glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, texture_id);
             GL_CHECK(glUniform2f(glGetUniformLocation(program, vd_ui_gl_get_uniform_name_resolution()), (float)w, (float)h));
             glUniform1i(glGetUniformLocation(program, vd_ui_gl_get_uniform_name_texture()), 0);
-            glBindTexture(GL_TEXTURE_2D, texture_id);
+
+            glBindVertexArray(vao);
+            glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
             glDrawArraysInstanced(
                 GL_TRIANGLE_STRIP,
