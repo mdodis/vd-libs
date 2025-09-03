@@ -22,10 +22,13 @@
  * 3. This notice may not be removed or altered from any source distribution.
  * ---------------------------------------------------------------------------------------------------------------------
  * @todo(mdodis):
- * - Mouse Clicks
  * - Proper ui layout
  * - Buttons and labels
  * - Glyph Cache collision resolution
+ * - Div cache collision resolution
+ * - Rounding
+ * - Padding
+ * - Images
  *
  * EXAMPLE - OpenGL (@todo)
  * 
@@ -95,6 +98,7 @@ enum {
     // Per div flags
     VD_UI_FLAG_TEXT         = 1 << 0,
     VD_UI_FLAG_BACKGROUND   = 1 << 1,
+    VD_UI_FLAG_CLICKABLE    = 1 << 2,
 
     // Mouse Enumerations
     VD_UI_MOUSE_LEFT        = 0,
@@ -145,7 +149,9 @@ typedef struct {
 
 #define VD_UI_LIT(s) ((VdUiStr) {s, sizeof(s) - 1})
 
-VD_UI_API int              vd_ui_button(VdUiStr str);
+VD_UI_API void             vd_ui_demo(void);
+VD_UI_API VdUiReply        vd_ui_button(VdUiStr str);
+VD_UI_API void             vd_ui_label(VdUiStr str);
 
 VD_UI_API VdUiDiv*         vd_ui_div_new(VdUiFlags flags, VdUiStr str);
 VD_UI_API VdUiReply        vd_ui_call(VdUiDiv *div);
@@ -551,6 +557,33 @@ static size_t vd_ui__hash(void *begin, int len)
     return vd_dhash64(begin, len);
 }
 
+VD_UI_API void vd_ui_demo(void)
+{
+    vd_ui_label(VD_UI_LIT("Buttons"));
+    static int button1_click_count = 0;
+    if (vd_ui_button(VD_UI_LIT("Button 1")).clicked)
+    {
+        button1_click_count++;
+        VD_UI_LOG("Clicked %d times", button1_click_count);
+    }
+}
+
+VD_UI_API VdUiReply vd_ui_button(VdUiStr str)
+{
+    VdUiDiv *div = vd_ui_div_new(VD_UI_FLAG_TEXT |
+                                 VD_UI_FLAG_BACKGROUND |
+                                 VD_UI_FLAG_CLICKABLE,
+                                 str);
+    return vd_ui_call(div);
+}
+
+VD_UI_API void vd_ui_label(VdUiStr str)
+{
+    VdUiDiv *div = vd_ui_div_new(VD_UI_FLAG_TEXT,
+                                 str);
+    (void)div;
+}
+
 VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
 {
     VdUiContext *ctx = vd_ui_context_get();
@@ -611,20 +644,22 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
     int released = !ctx->mouse_left;
     int clicked  = 0;
 
-    if (hovered && !pressed) {
-        ctx->hot = div->h;
-    }
+    if (div->flags & VD_UI_FLAG_CLICKABLE) {
+        if (hovered && !pressed) {
+            ctx->hot = div->h;
+        }
 
-    if (hovered && pressed) {
-        ctx->active = div->h;
-    }
+        if (hovered && pressed) {
+            ctx->active = div->h;
+        }
 
-    if (released && (ctx->active == div->h) && hovered) {
-        clicked = 1;
-    }
+        if (released && (ctx->active == div->h) && hovered) {
+            clicked = 1;
+        }
 
-    if (released && (ctx->active == div->h)) {
-        ctx->active = 0;
+        if (released && (ctx->active == div->h)) {
+            ctx->active = 0;
+        }
     }
 
     float hot_speed = 0.01f;

@@ -98,18 +98,7 @@ int main(int argc, char const *argv[])
         vd_ui_event_mouse_button(VD_UI_MOUSE_RIGHT, mouse_state & VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN);
 
 
-        static int toggle = 0;
-        vd_ui_div_new(VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND, VD_UI_LIT("Woohoo 2"));
-
-        VdUiDiv *d = vd_ui_div_new(VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND, VD_UI_LIT("Woohoo 4"));
-        if (vd_ui_call(d).clicked) {
-            toggle = !toggle;
-        }
-
-        if (toggle) {
-
-            vd_ui_div_new(VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND, VD_UI_LIT("Toggle APPEAR"));
-        }
+        vd_ui_demo();
 
 
         // vd_ui_div_new(VD_UI_FLAG_TEXT, VD_UI_LIT("Woohoo 3"));
