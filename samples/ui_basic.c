@@ -79,6 +79,9 @@ int main(int argc, char const *argv[])
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    char buf[128];
+    vd_ui_snprintf(buf, sizeof(buf), "Hello %d != %d", 1821, 1942);
+
     vd_fw_set_vsync_on(1);
     while (vd_fw_running()) {
         float delta_seconds = vd_fw_delta_s();
@@ -151,7 +154,24 @@ int main(int argc, char const *argv[])
                 } break;
 
                 case VD_UI_UPDATE_TYPE_WRITE_TEXTURE: {
-                    VD_TODO();
+                    GLuint texture = (GLuint)update->data.write_texture.texture.id;
+
+                    GLint  level;
+                    GLint  internal_format;
+                    GLint  border;
+                    GLenum format;
+                    GLenum type;
+                    vd_ui_gl_cv_texture_format(
+                        update->data.write_texture.format,
+                        &level,
+                        &internal_format, 
+                        &border, 
+                        &format,
+                        &type);
+
+                    glBindTexture(GL_TEXTURE_2D, texture);
+                    glTexSubImage2D(GL_TEXTURE_2D, level, 0, 0, update->data.write_texture.width, update->data.write_texture.height, format, type, update->data.write_texture.buffer);
+                    glBindTexture(GL_TEXTURE_2D, 0);
                 } break;
 
                 default: break;

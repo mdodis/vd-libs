@@ -875,7 +875,6 @@ static void vd_ui__update_all_fonts(VdUiContext *ctx)
             update->data.write_texture.buffer   = ctx->buffer;
             update->data.write_texture.size     = ctx->buffer_size;
             update->data.write_texture.texture  = ctx->texture;
-            
         } break;
 
         default: break;
