@@ -197,9 +197,11 @@ extern char Vd_Ui_CharBuf[VD_UI_CHAR_BUF_COUNT];
 
 VD_UI_API void             vd_ui_demo(void);
 VD_UI_API VdUiReply        vd_ui_button(VdUiStr str);
-VD_UI_INL VdUiReply        vd_ui_buttonf(const char *fmt, ...) { VD_UI_DOTTOSTR(fmt); return vd_ui_button(str); }
+VD_UI_INL VdUiReply        vd_ui_buttonf(const char *label, ...)   { VD_UI_DOTTOSTR(label); return vd_ui_button(str); }
 VD_UI_API void             vd_ui_label(VdUiStr str);
-VD_UI_API void             vd_ui_labelf(const char *fmt, ...)  { VD_UI_DOTTOSTR(fmt); vd_ui_label(str); }
+VD_UI_API void             vd_ui_labelf(const char *label, ...)    { VD_UI_DOTTOSTR(label); vd_ui_label(str); }
+VD_UI_API VdUiReply        vd_ui_checkbox(int *b, VdUiStr str);
+VD_UI_API VdUiReply        vd_ui_checkboxf(int *b, const char *label, ...) { VD_UI_DOTTOSTR(label); return vd_ui_checkbox(b, str); }
 
 VD_UI_API VdUiDiv*         vd_ui_div_new(VdUiFlags flags, VdUiStr str);
 VD_UI_API VdUiDiv*         vd_ui_div_newf(VdUiFlags flags, const char *fmt, ...);
@@ -208,6 +210,8 @@ VD_UI_API VdUiReply        vd_ui_call(VdUiDiv *div);
 // Parent Stack
 VD_UI_API void             vd_ui_parent_push(VdUiDiv *div);
 VD_UI_API void             vd_ui_parent_pop(void);
+VD_UI_API int              vd_ui_parent_count(void);
+VD_UI_API VdUiDiv*         vd_ui_parent_get(int i);
 
 /* ----RENDERING----------------------------------------------------------------------------------------------------- */
 enum {
@@ -542,6 +546,24 @@ VD_UI_API void vd_ui_frame_begin(float delta_seconds)
     ctx->strbuf_len = 0;
 }
 
+static void vd_ui__print_tree(VdUiDiv *now, int sp)
+{
+    if (now == 0) return;
+
+    for (int i = 0; i < sp; ++i) printf("-");
+    if (now->content_str.l == 0) {
+        printf("<>\n");
+    } else {
+        printf("%.*s\n", now->content_str.l, now->content_str.s);
+    }
+
+    VdUiDiv *child = now->first;
+    while (child) {
+        vd_ui__print_tree(child, sp + 4);
+        child = child->next;
+    }
+}
+
 VD_UI_API void vd_ui_frame_end(void)
 {
     VdUiContext *ctx = vd_ui_context_get();
@@ -557,6 +579,8 @@ VD_UI_API void vd_ui_frame_end(void)
 
     // Layout UI
     vd_ui__layout(ctx);
+
+    vd_ui__print_tree(&ctx->root, 0);
 
     // Render
     vd_ui__traverse_and_render_divs(ctx, &ctx->root);
@@ -598,17 +622,6 @@ static size_t vd_ui__hash(void *begin, int len)
     return vd_dhash64(begin, len);
 }
 
-VD_UI_API void vd_ui_demo(void)
-{
-    static int button1_click_count = 0;
-    if (vd_ui_buttonf("Button 1").clicked) {
-        button1_click_count++;
-        VD_UI_LOG("Clicked %d times", button1_click_count);
-    }
-
-    vd_ui_labelf("Button 1 Clicked: %d times", button1_click_count);
-}
-
 VD_UI_API VdUiReply vd_ui_button(VdUiStr str)
 {
     VdUiDiv *div = vd_ui_div_new(VD_UI_FLAG_TEXT |
@@ -623,6 +636,24 @@ VD_UI_API void vd_ui_label(VdUiStr str)
     VdUiDiv *div = vd_ui_div_new(VD_UI_FLAG_TEXT,
                                  str);
     (void)div;
+}
+
+VD_UI_API VdUiReply vd_ui_checkbox(int *b, VdUiStr str)
+{
+    // @todo(mdodis) hash results to same
+    VdUiDiv *div = vd_ui_div_new(0, str);
+    vd_ui_parent_push(div);
+
+    VdUiDiv *ckbx = vd_ui_div_newf(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_CLICKABLE, "##ckbx");
+    VdUiReply reply = vd_ui_call(ckbx);
+
+    if (reply.clicked) {
+        *b = !(*b);
+    }
+
+    vd_ui_label(str);
+    vd_ui_parent_pop();
+    return (VdUiReply) {0};
 }
 
 VD_UI_API VdUiDiv *vd_ui_div_newf(VdUiFlags flags, const char *fmt, ...)
@@ -645,7 +676,13 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
 {
     VdUiContext *ctx = vd_ui_context_get();
 
-    size_t h = vd_ui__hash(str.s, str.l);
+    size_t ht = vd_ui__hash(str.s, str.l);
+    size_t h = ht;
+
+    for (int i = 0; i < vd_ui_parent_count(); ++i) {
+        h = h ^ vd_ui_parent_get(i)->h;
+    }
+
     size_t index = h % ctx->divs_cap;
 
     VdUiDiv *result;
@@ -657,7 +694,6 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
         // @todo(mdodis): traversal
 
         // Otherwise, we need to allocate a new div
-        ctx->divs[index].h = h;
         result = &ctx->divs[index];
         VD_UI_LOG("Allocated new Div at index: %zu with id %zu", index, result->h);
     }
@@ -678,10 +714,17 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     if (!parent->first) {
         parent->first      = result;
         parent->last       = result;
+        // result->next       = result;
+        // result->prev       = result;
     } else {
-        parent->last->next = result;
-        result->prev       = parent->last;
-        parent->last       = result;
+        // Insert result after parent->last in the circular list
+        VdUiDiv *last = parent->last;
+        VdUiDiv *first = parent->first;
+        last->next = result;
+        result->prev = last;
+        // result->next = first;
+        // first->prev = result;
+        parent->last = result;
     }
 
     return result;
@@ -749,6 +792,32 @@ VD_UI_API void vd_ui_parent_pop(void)
     ctx->parents_next--;
 }
 
+VD_UI_API int vd_ui_parent_count(void)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    return ctx->parents_next - 1;
+}
+
+VD_UI_API VdUiDiv *vd_ui_parent_get(int i)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    return ctx->parents[i + 1];
+}
+
+VD_UI_API void vd_ui_demo(void)
+{
+    static int button1_click_count = 0;
+    if (vd_ui_buttonf("Button 1").clicked) {
+        button1_click_count++;
+        VD_UI_LOG("Clicked %d times", button1_click_count);
+    }
+
+    vd_ui_labelf("Button 1 Clicked: %d times", button1_click_count);
+
+    static int checkbox = 0;
+    vd_ui_checkboxf(&checkbox, "Checkbox 1");
+}
+
 static void vd_ui__layout(VdUiContext *ctx)
 {
     // Begin at root
@@ -761,7 +830,6 @@ static void vd_ui__layout(VdUiContext *ctx)
 
     VdUiDiv *d = root->first;
     while (d != 0) {
-
         float tex_w, tex_h;
         VdUiFontId font_id = {0};
         vd_ui_measure_text_size(font_id, d->content_str, &tex_w, &tex_h);
@@ -1116,20 +1184,19 @@ VD_UI_API void vd_ui_measure_text_size(VdUiFontId font_id, VdUiStr str, float *w
 
 static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
 {
+    if (curr == 0) {
+        return;
+    }
+
     // Post order: search process child first from last to first
     VdUiDiv *first_child = curr->first;
     VdUiDiv *last_child  = curr->last;
     VdUiDiv *child = last_child;
 
-    do {
-        if (child == 0) {
-            break;
-        }
-
+    while (child != 0) {
         vd_ui__traverse_and_render_divs(ctx, child);
-
         child = child->prev;
-    } while (child != last_child);
+    }
 
     // After we've processed every child, we're ready to render ourselves
     

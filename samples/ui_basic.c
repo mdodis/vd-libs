@@ -79,9 +79,6 @@ int main(int argc, char const *argv[])
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    char buf[128];
-    vd_ui_snprintf(buf, sizeof(buf), "Hello %d != %d", 1821, 1942);
-
     vd_fw_set_vsync_on(1);
     while (vd_fw_running()) {
         float delta_seconds = vd_fw_delta_s();
