@@ -1029,26 +1029,55 @@ VdUiGlyph *vd_ui__push_glyph(VdUiContext *ctx, unsigned int codepoint, VdUiFontI
 
     VD_UI_LOG("Pushed codepoint %c to packed range", (char)codepoint);
 
+    if (result == 0) {
+        VD_TODO();
+    }
 
     VD_ASSERT(result != 0);
 
     size_t index = vd_ui__hash_glyph(codepoint, font_id) % VD_UI_GLYPH_CACHE_COUNT_MAX;
 
+    VdUiGlyph *glyph;
     if (vd_ui__glyph_free(&ctx->glyph_cache[index])) {
-        VdUiGlyph *glyph = &ctx->glyph_cache[index];
-        glyph->codepoint = codepoint;
-        glyph->font = font_id;
-        glyph->x0 = packed_char.x0; glyph->y0 = packed_char.y0;
-        glyph->x1 = packed_char.x1; glyph->y1 = packed_char.y1;
-        glyph->xoff = packed_char.xoff;
-        glyph->yoff = packed_char.yoff;
-        glyph->xoff2 = packed_char.xoff2;
-        glyph->yoff2 = packed_char.yoff2;
-        glyph->xadvance = packed_char.xadvance;
-        return glyph;
+        glyph = &ctx->glyph_cache[index];
     } else {
-        VD_TODO();
+        // We didn't find space to allocate the glyph
+
+        // 1. Follow the glyph's next property until we find last glyph with next != -1
+        VdUiGlyph *chain_end = &ctx->glyph_cache[index];
+        while (!vd_ui__glyph_free(chain_end) && chain_end->next != -1)
+        {
+            chain_end = &ctx->glyph_cache[chain_end->next];
+        }
+
+        // 2. Allocate starting from the cellar
+        int cindex = VD_UI_GLYPH_CACHE_COUNT_MAX - 1;
+
+        VdUiGlyph *cglyph = &ctx->glyph_cache[cindex];
+        while (!vd_ui__glyph_free(cglyph) && cindex != 0) {
+            cindex--;
+        }
+
+        if (cindex == 0) {
+            // @todo(mdodis): Page out a glyph (or maybe try to do it earlier?)
+            VD_TODO();
+        }
+
+        glyph = cglyph;
+        chain_end->next = cindex;
     }
+
+    glyph->codepoint = codepoint;
+    glyph->font = font_id;
+    glyph->x0 = packed_char.x0; glyph->y0 = packed_char.y0;
+    glyph->x1 = packed_char.x1; glyph->y1 = packed_char.y1;
+    glyph->xoff = packed_char.xoff;
+    glyph->yoff = packed_char.yoff;
+    glyph->xoff2 = packed_char.xoff2;
+    glyph->yoff2 = packed_char.yoff2;
+    glyph->xadvance = packed_char.xadvance;
+    glyph->next = -1;
+    return glyph;
 
 }
 
@@ -1190,8 +1219,8 @@ VD_UI_API VdUiContext *vd_ui_context_create(VdUiContextCreateInfo *info)
                     result->atlas[0], result->atlas[1], 0, 1, 0);
 
     // Divs & Ids
-    result->divs_cap       = 1024;
-    result->divs_cap_total = 1000;
+    result->divs_cap       = 1000;
+    result->divs_cap_total = 1024;
     result->divs           = (VdUiDiv*)VD_MALLOC(result->divs_cap_total * sizeof(VdUiDiv));
     VD_MEMSET(result->divs, 0, result->divs_cap_total * sizeof(VdUiDiv));
 
