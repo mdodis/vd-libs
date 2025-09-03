@@ -155,14 +155,21 @@ VD_UI_API void             vd_ui_parent_push(VdUiDiv *div);
 VD_UI_API void             vd_ui_parent_pop(void);
 
 /* ----RENDERING----------------------------------------------------------------------------------------------------- */
+enum {
+    VD_UI_VERTEX_FLAG_TEXTURE_IS_ALPHA_BUFFER = 1 << 0,
+};
+typedef unsigned int VdUiVertexFlags;
+
 #pragma pack(push, 1)
 typedef struct {
-    float p0[2];
-    float p1[2];
-    float p0u[2];
-    float p1u[2];
-    float color[4];
-} VdUiVertex;
+    float            p0[2];       //  4 x 2 =  8 bytes
+    float            p1[2];       //  4 x 2 =  8 bytes
+    float            p0u[2];      //  4 x 2 =  8 bytes
+    float            p1u[2];      //  4 x 2 =  8 bytes
+    float            color[4];    //  4 x 4 = 16 bytes
+    VdUiVertexFlags  flags;       //  1 x 4 =  4 bytes
+    unsigned char    padd[12];    // 15 x 1 = 12 bytes
+} VdUiVertex;                     //        = 64 bytes
 #pragma pack(pop)
 
 #if !VD_UI_TEXTURE_ID_STRUCT_DEFINED
@@ -294,6 +301,24 @@ VD_UI_API const char*      vd_ui_gl_get_uniform_name_texture(void);
  */
 VD_UI_API void             vd_ui_gl_cv_texture_format(VdUiTextureFormat format, int *level, int *internal_format, int *border, unsigned int *texformat, unsigned int *type);
 
+/**
+ * Gets the number of attributes present in the vertex buffer
+ * @return  The number of attributes to create
+ */
+VD_UI_API int              vd_ui_gl_get_num_attributes(void);
+
+/**
+ * Gets the ith attribute's properties
+ * @param  attribute  The attribute index                (1st parameter to glVertexAttribPointer)
+ * @param  size       The number of elements             (2nd parameter to glVertexAttribPointer)
+ * @param  type       The type of element                (3rd parameter to glVertexAttribPointer)
+ * @param  normalized Whether the elemets are normalized (4th parameter to glVertexAttribPointer)
+ * @param  stride     The stride of each attribute       (5th parameter to glVertexAttribPointer)
+ * @param  pointer    The offset of the attribute        (6th parameter to glVertexAttribPointer)
+ * @param  divisor    The input rate of the attribute    (2nd parameter to glVertexAttribDivisor)
+ */
+VD_UI_API void             vd_ui_gl_get_attribute_properties(int attribute, int *size, unsigned int *type, unsigned char *normalized, int *stride, void **pointer, unsigned int *divisor);
+
 /* ----HELPERS------------------------------------------------------------------------------------------------------- */
 static inline int vd_ui_strlen(const char *s)
 {
@@ -360,7 +385,8 @@ static void vd_ui__update_all_fonts(VdUiContext *ctx);
 static void vd_ui__push_rect(VdUiContext *ctx, VdUiTextureId *texture, float rect[4], float color[4]);
 static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId *texture, float p0[2], float p1[2],
                                                                          float u0[2], float u1[2],
-                                                                         float color[4]);
+                                                                         float color[4],
+                                                                         VdUiVertexFlags flags);
 static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y);
 
 static void vd_ui__get_glyph_quad(VdUiContext *ctx, unsigned int codepoint, VdUiFontId font_id,
@@ -736,7 +762,8 @@ static void vd_ui__update_all_fonts(VdUiContext *ctx)
 
 static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId *texture, float p0[2], float p1[2],
                                                                          float u0[2], float u1[2],
-                                                                         float color[4])
+                                                                         float color[4],
+                                                                         VdUiVertexFlags flags)
 {
     if (ctx->current_texture_id != texture)
     {
@@ -763,6 +790,8 @@ static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId *texture, float p
     v->color[2] = color[2];
     v->color[3] = color[3];
 
+    v->flags    = flags;
+
     ctx->passes[ctx->num_passes - 1].instance_count++;
 }
 
@@ -771,7 +800,8 @@ static void vd_ui__push_rect(VdUiContext *ctx, VdUiTextureId *texture, float rec
     vd_ui__push_vertex(ctx, texture,
         (float[]){rect[0], rect[1]}, (float[]){rect[2], rect[3]},
         (float[]){0.0f   , 0.0f   }, (float[]){1.0f   , 1.0f   },
-        color);
+        color,
+        0);
 }
 
 static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y)
@@ -801,7 +831,8 @@ static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y)
         vd_ui__push_vertex(ctx, &ctx->texture,
             p0, p1,
             u0, u1,
-            (float[]){1.f, 1.f, 1.f, 1.f});
+            (float[]){1.f, 1.f, 1.f, 1.f},
+            VD_UI_VERTEX_FLAG_TEXTURE_IS_ALPHA_BUFFER);
     }
 }
 
@@ -955,7 +986,7 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
     }
 
     if (curr->flags & VD_UI_FLAG_BACKGROUND) {
-        VdUiF4 base_color  = {0.9f, 0.4f, 0.4f, 1.f};
+        VdUiF4 base_color  = {0.9f, 0.4f, 0.4f, 0.5f};
         VdUiF4 hot_color   = {0.7f, 0.3f, 0.3f, 1.f};
         VdUiF4 final_color = vd_ui__lerp4(base_color, hot_color, curr->hot_t);
         // vd_ui__push_rect(ctx, &ctx->white, curr->rect, final_color.e);
@@ -964,7 +995,7 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
     }
 
     if (curr->flags & VD_UI_FLAG_TEXT) {
-        vd_ui__put_line(ctx, curr->content_str, curr->rect[0], curr->rect[1]);
+        vd_ui__put_line(ctx, curr->content_str, curr->rect[0], curr->rect[1] + 12.f);
         VD_UI_LOG("Write Write String: %.*s %f %f %f %f", curr->content_str.l, curr->content_str.s, curr->rect[0], curr->rect[1], curr->rect[2], curr->rect[3]);
     }
 }
@@ -1060,9 +1091,11 @@ VD_UI_API VdUiContext* vd_ui_context_get(void)
 "layout (location = 2) in vec2 a_p0u;                                                                              \n" \
 "layout (location = 3) in vec2 a_p1u;                                                                              \n" \
 "layout (location = 4) in vec4 a_color;                                                                            \n" \
+"layout (location = 5) in uint a_flags;                                                                            \n" \
 "uniform vec2 uResolution;                                                                                         \n" \
 "out vec4 f_color;                                                                                                 \n" \
 "out vec2 f_uv;                                                                                                    \n" \
+"flat out uint f_flags;                                                                                            \n" \
 "                                                                                                                  \n" \
 "void main()                                                                                                       \n" \
 "{                                                                                                                 \n" \
@@ -1085,19 +1118,24 @@ VD_UI_API VdUiContext* vd_ui_context_get(void)
 "   vec2 shp = positions[gl_VertexID] * shs + shc;                                                                 \n" \
 "   f_uv = shp;                                                                                                    \n" \
 "   f_color = a_color;                                                                                             \n" \
+"   f_flags = a_flags;                                                                                             \n" \
 "}                                                                                                                 \n" \
 
 #define VD_UI_GL_FRAGMENT_SHADER_SOURCE                                                                                \
 "#version 330 core                                                                                                 \n" \
 "in vec4 f_color;                                                                                                  \n" \
 "in vec2 f_uv;                                                                                                     \n" \
+"flat in uint f_flags;                                                                                             \n" \
 "uniform sampler2D uTexture;                                                                                       \n" \
 "out vec4 FragColor;                                                                                               \n" \
 "void main()                                                                                                       \n" \
 "{                                                                                                                 \n" \
 "   vec4 sample = texture(uTexture, f_uv);                                                                         \n" \
-"   vec4 color = vec4(f_color.xyz, sample.r);                                                                      \n" \
-"   FragColor = vec4(color);                                                                                             \n" \
+"   float use_alpha_mask = float((f_flags & 1u) != 0u);                                                            \n" \
+"   vec4 normal_color = sample * f_color;                                                                          \n" \
+"   vec4 mask_color = vec4(f_color.rgb, f_color.a * sample.r);                                                     \n" \
+"   vec4 color = mix(normal_color, mask_color, use_alpha_mask);                                                    \n" \
+"   FragColor = vec4(color);                                                                                       \n" \
 "}                                                                                                                 \n" \
 
 VD_UI_API void vd_ui_gl_get_default_shader_sources(const char **const vertex_shader, size_t *vertex_shader_len,
@@ -1141,6 +1179,31 @@ VD_UI_API void vd_ui_gl_cv_texture_format(VdUiTextureFormat format, int *level, 
         default: {
 
         } break;
+    }
+}
+
+VD_UI_API int vd_ui_gl_get_num_attributes(void)
+{
+    // p0, p1, p0u, p1u, color, flags
+    return 6;
+}
+
+VD_UI_API void vd_ui_gl_get_attribute_properties(int attribute, int *size, unsigned int *type, unsigned char *normalized, int *stride, void **pointer, unsigned int *divisor)
+{
+    switch (attribute) {
+        //                 GL_FLOAT          GL_FALSE
+        case 0: *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, p0);    *divisor = 1; break;
+        //                 GL_FLOAT          GL_FALSE
+        case 1: *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, p1);    *divisor = 1; break;
+        //                 GL_FLOAT          GL_FALSE
+        case 2: *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, p0u);   *divisor = 1; break;
+        //                 GL_FLOAT          GL_FALSE
+        case 3: *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, p1u);   *divisor = 1; break;
+        //                 GL_FLOAT          GL_FALSE
+        case 4: *size = 4; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, color); *divisor = 1; break;
+        //                 GL_UNSIGNED_INT   GL_FALSE
+        case 5: *size = 1; *type = 0x1405;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, flags); *divisor = 1; break;
+        default: break;
     }
 }
 

@@ -12,16 +12,6 @@
 
 #define GL_CHECK(expr) do { (expr); int _e_ = glGetError(); if (_e_ != 0) { printf("Check at " __FILE__ ":%d failed with 0x%x\n", __LINE__, _e_); assert(0); }} while(0)
 
-#pragma pack(push, 1)
-typedef struct {
-    float p0[2];
-    float p1[2];
-    float p0u[2];
-    float p1u[2];
-    float color[4];
-} InputVertex;
-#pragma pack(pop)
-
 int main(int argc, char const *argv[])
 {
     (void)argc;
@@ -51,18 +41,14 @@ int main(int argc, char const *argv[])
         vd_ui_gl_get_default_shader_sources(&vertex_shader_source, &vertex_shader_len, 
                                             &fragment_shader_source, &fragment_shader_len);
 
-        GLuint vshd = glCreateShader(GL_VERTEX_SHADER);
-        glShaderSource(vshd, 1, &vertex_shader_source, 0);
-        glCompileShader(vshd);
+        GLuint vshd = vd_fw_compile_shader(GL_VERTEX_SHADER, vertex_shader_source);
 
-        GLuint fshd = glCreateShader(GL_FRAGMENT_SHADER);
-        glShaderSource(fshd, 1, &fragment_shader_source, 0);
-        glCompileShader(fshd);
+        GLuint fshd = vd_fw_compile_shader(GL_FRAGMENT_SHADER, fragment_shader_source);
 
         program = glCreateProgram();
         glAttachShader(program, vshd);
         glAttachShader(program, fshd);
-        glLinkProgram(program);
+        vd_fw_link_program(program);
     }
 
     GLuint vao;
@@ -74,27 +60,24 @@ int main(int argc, char const *argv[])
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)vd_ui_get_min_vertex_buffer_size(), 0, GL_DYNAMIC_DRAW);
 
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(InputVertex), (void*)VD_OFFSET_OF(InputVertex, p0));
-    glVertexAttribDivisor(0, 1);
+    for (int i = 0; i < vd_ui_gl_get_num_attributes(); ++i) {
+        GLint size;
+        GLenum type;
+        GLboolean normalized;
+        GLsizei stride;
+        void *pointer;
+        GLuint divisor;
+        vd_ui_gl_get_attribute_properties(i, &size, &type, &normalized, &stride, &pointer, &divisor);
+        glEnableVertexAttribArray(i);
+        glVertexAttribPointer(i, size, type, normalized, stride, pointer);
+        glVertexAttribDivisor(i, divisor);
+    }
 
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(InputVertex), (void*)VD_OFFSET_OF(InputVertex, p1));
-    glVertexAttribDivisor(1, 1);
-
-    glEnableVertexAttribArray(2);
-    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(InputVertex), (void*)VD_OFFSET_OF(InputVertex, p0u));
-    glVertexAttribDivisor(2, 1);
-
-    glEnableVertexAttribArray(3);
-    glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(InputVertex), (void*)VD_OFFSET_OF(InputVertex, p1u));
-    glVertexAttribDivisor(3, 1);
-
-    glEnableVertexAttribArray(4);
-    glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(InputVertex) , (void*)VD_OFFSET_OF(InputVertex, color));
-    glVertexAttribDivisor(4, 1);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     vd_fw_set_vsync_on(1);
     while (vd_fw_running()) {
@@ -116,8 +99,6 @@ int main(int argc, char const *argv[])
 
 
         vd_ui_div_new(VD_UI_FLAG_TEXT, VD_UI_LIT("Woohoo 2"));
-        vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("Woohoo"));
-        vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("Woohoo 3"));
         vd_ui_div_new(VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND, VD_UI_LIT("Woohoo 4"));
         // vd_ui_div_new(VD_UI_FLAG_TEXT, VD_UI_LIT("Woohoo 3"));
 
@@ -191,10 +172,8 @@ int main(int argc, char const *argv[])
         glClearColor(0.2f, 0.2f, 0.2f, 0.5f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
         puts("Begin Render");
+        printf("%lu vertices\n", buffer_size / sizeof(VdUiVertex));
         // Loop through render passes
         for (int i = 0; i < num_passes; ++i) {
             VdUiRenderPass *pass = &passes[i];

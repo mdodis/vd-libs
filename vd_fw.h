@@ -128,6 +128,8 @@ VD_FW_API int                vd_fw_set_vsync_on(int on);
  */
 VD_FW_API int                vd_fw_get_mouse_state(int *x, int *y);
 VD_FW_API void               vd_fw_draw_window_border(void);
+VD_FW_API GLuint             vd_fw_compile_shader(GLenum type, const char *source);
+VD_FW_API int                vd_fw_link_program(GLuint program);
 VD_FW_INLINE int             vd_fw_get_mouse_statef(float *x, float *y);
 VD_FW_INLINE float           vd_fw_delta_s(void);
 VD_FW_INLINE void            vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16]);
@@ -3812,6 +3814,45 @@ static void vd_fw__load_opengl(VdFwGlVersion version)
     }
 #undef LOAD
 #endif 
+}
+
+VD_FW_API GLuint vd_fw_compile_shader(GLenum type, const char *source)
+{
+    int success;
+    GLuint shd = glCreateShader(type);
+    glShaderSource(shd, 1, &source, 0);
+    glCompileShader(shd);
+    glGetShaderiv(shd, GL_COMPILE_STATUS, &success);
+
+    if (success) {
+        return shd;
+    }
+
+    static char buf[1024];
+    GLsizei len;
+    glGetShaderInfoLog(shd, sizeof(buf), &len, buf);
+
+    printf("Shader compilation failed: %s\n", buf);
+    return 0;
+}
+
+VD_FW_API int vd_fw_link_program(GLuint program)
+{
+    int success;
+    glLinkProgram(program);
+    glGetProgramiv(program, GL_LINK_STATUS, &success);
+
+    if (success) {
+        return 1;
+    }
+
+
+    static char buf[1024];
+    GLsizei len;
+    glGetProgramInfoLog(program, sizeof(buf), &len, buf);
+    printf("Program linkage failed: %s\n", buf);
+
+    return 0;
 }
 
 enum {
