@@ -402,6 +402,8 @@ static void         vd_ui__layout(VdUiContext *ctx);
 static VdUiStr      vd_ui__strbuf_dup(VdUiContext *ctx, VdUiStr str);
 static void         vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr);
 static int          vd_ui__point_in_rect(float point[2], float r[4]);
+static float        vd_ui__clampf01(float x);
+static float        vd_ui__clampf(float x, float a, float b);
 static float        vd_ui__lerp(float a, float b, float t);
 static VdUiF4       vd_ui__lerp4(VdUiF4 a, VdUiF4 b, float t);
 
@@ -459,6 +461,8 @@ struct VdUiContext {
     int                     mouse_left;
     int                     mouse_right;
     int                     mouse_middle;
+    size_t                  hot;
+    size_t                  active;
 
     // Per frame storage (strings)
     char                    *strbuf;
@@ -574,6 +578,7 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     result->last = 0;
     result->prev = 0;
     result->flags = flags;
+    result->h = h;
     result->content_str = vd_ui__strbuf_dup(ctx, str);
 
     VdUiDiv *parent = ctx->parents[ctx->parents_next - 1];
@@ -598,16 +603,41 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
     float dt = ctx->delta_seconds;
 
     VdUiReply reply = {};
+    reply.div = div;
     reply.mouse[0]  = ctx->mouse[0];    reply.mouse[1] = ctx->mouse[1];
 
     int hovered  = vd_ui__point_in_rect(ctx->mouse, div->rect);
-    int pressed  = hovered  && ctx->mouse_left;
-    int released = !hovered && !ctx->mouse_left;
+    int pressed  = ctx->mouse_left;
+    int released = !ctx->mouse_left;
+    int clicked  = 0;
 
-    float hot_speed = 3.f;
-    float active_speed = 3.f;
-    div->hot_t    = vd_ui__lerp(div->hot_t,    hovered ? 1.0f : 0.0f, dt * hot_speed);
-    div->active_t = vd_ui__lerp(div->active_t, hovered ? 1.0f : 0.0f, dt * active_speed);
+    if (hovered && !pressed) {
+        ctx->hot = div->h;
+    }
+
+    if (hovered && pressed) {
+        ctx->active = div->h;
+    }
+
+    if (released && (ctx->active == div->h) && hovered) {
+        clicked = 1;
+    }
+
+    if (released && (ctx->active == div->h)) {
+        ctx->active = 0;
+    }
+
+    float hot_speed = 0.01f;
+    float active_speed = 0.01f;
+    div->hot_t    = vd_ui__lerp(div->hot_t, hovered ? 1.0f : 0.0f, dt * hot_speed);
+    div->hot_t    = vd_ui__clampf01(div->hot_t);
+
+    div->active_t = vd_ui__lerp(div->active_t, (pressed && hovered) ? 1.0f : 0.0f, dt * active_speed);
+    div->active_t = vd_ui__clampf01(div->active_t);
+
+    reply.hovering = hovered;
+    reply.pressed = hovered && pressed;
+    reply.clicked = clicked;
 
     return reply;
 }
@@ -988,17 +1018,18 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
     }
 
     if (curr->flags & VD_UI_FLAG_BACKGROUND) {
-        VdUiF4 base_color  = {0.9f, 0.4f, 0.4f, 0.5f};
-        VdUiF4 hot_color   = {0.7f, 0.3f, 0.3f, 1.f};
-        VdUiF4 final_color = vd_ui__lerp4(base_color, hot_color, curr->hot_t);
+        VdUiF4 base_color   = {0.9f, 0.4f, 0.4f, 0.5f};
+        VdUiF4 hot_color    = {0.7f, 0.3f, 0.3f, 1.f};
+        VdUiF4 active_color = {0.1f, 0.9f, 0.4f, 1.f};
+
+        VdUiF4 final_color  = vd_ui__lerp4(base_color, hot_color, curr->hot_t);
+        final_color  = vd_ui__lerp4(final_color, active_color, curr->active_t);
         vd_ui__push_rect(ctx, &ctx->white, curr->rect, final_color.e);
         // vd_ui__push_rect(ctx, &ctx->white, curr->rect, base_color.e);
-        VD_UI_LOG("Write Rect: %.*s %f %f %f %f", curr->content_str.l, curr->content_str.s, curr->rect[0], curr->rect[1], curr->rect[2], curr->rect[3]);
     }
 
     if (curr->flags & VD_UI_FLAG_TEXT) {
         vd_ui__put_line(ctx, curr->content_str, curr->rect[0], curr->rect[1] + 12.f);
-        VD_UI_LOG("Write Write String: %.*s %f %f %f %f", curr->content_str.l, curr->content_str.s, curr->rect[0], curr->rect[1], curr->rect[2], curr->rect[3]);
     }
 }
 
@@ -1006,6 +1037,18 @@ static int vd_ui__point_in_rect(float point[2], float r[4])
 {
     return (point[0] >= r[0]) && (point[0] <= r[2]) &&
            (point[1] >= r[1]) && (point[1] <= r[3]); 
+}
+
+static float vd_ui__clampf01(float x)
+{
+    return vd_ui__clampf(x, 0.f, 1.f);
+}
+
+static float vd_ui__clampf(float x, float a, float b)
+{
+    if (x < a) return a;
+    if (x > b) return b;
+    return x;
 }
 
 static float vd_ui__lerp(float a, float b, float t)

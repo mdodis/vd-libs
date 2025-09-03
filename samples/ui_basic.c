@@ -98,8 +98,19 @@ int main(int argc, char const *argv[])
         vd_ui_event_mouse_button(VD_UI_MOUSE_RIGHT, mouse_state & VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN);
 
 
-        vd_ui_div_new(VD_UI_FLAG_TEXT, VD_UI_LIT("Woohoo 2"));
-        vd_ui_div_new(VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND, VD_UI_LIT("Woohoo 4"));
+        static int toggle = 0;
+        vd_ui_div_new(VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND, VD_UI_LIT("Woohoo 2"));
+
+        VdUiDiv *d = vd_ui_div_new(VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND, VD_UI_LIT("Woohoo 4"));
+        if (vd_ui_call(d).clicked) {
+            toggle = !toggle;
+        }
+
+        if (toggle) {
+
+            vd_ui_div_new(VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND, VD_UI_LIT("Toggle APPEAR"));
+        }
+
 
         // vd_ui_div_new(VD_UI_FLAG_TEXT, VD_UI_LIT("Woohoo 3"));
 
@@ -147,8 +158,6 @@ int main(int argc, char const *argv[])
                     GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
                     GL_CHECK(glBindTexture(GL_TEXTURE_2D, 0));
 
-                    printf("Allocated texture:%d\n", texture);
-
                     id->id = (uintptr_t)texture;
                 } break;
 
@@ -173,14 +182,10 @@ int main(int argc, char const *argv[])
         glClearColor(0.2f, 0.2f, 0.2f, 0.5f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        puts("Begin Render");
-        printf("%lu vertices\n", buffer_size / sizeof(VdUiVertex));
         // Loop through render passes
         for (int i = 0; i < num_passes; ++i) {
             VdUiRenderPass *pass = &passes[i];
             GLuint texture_id = (GLuint)pass->selected_texture->id;
-
-            printf("Draw %d instances with texture %d statrting at %d\n", pass->instance_count, texture_id, pass->first_instance);
 
             glUseProgram(program);
             glActiveTexture(GL_TEXTURE0);
