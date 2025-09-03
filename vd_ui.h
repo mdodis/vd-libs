@@ -29,6 +29,7 @@
  * - Rounding
  * - Padding
  * - Images
+ * - Support more of printf
  *
  * EXAMPLE - OpenGL (@todo)
  * 
@@ -40,6 +41,8 @@
 #define VD_UI_VERSION_PATCH    1
 #define VD_UI_VERSION          ((VD_UI_VERSION_MAJOR << 16) | (VD_UI_VERSION_MINOR << 8) | (VD_UI_VERSION_PATCH))
 
+#include <stdarg.h>
+
 #ifndef VD_UNUSED
 #define VD_UNUSED(x) ((void)(x))
 #endif // !VD_UNUSED
@@ -49,6 +52,10 @@
 #else
 #define VD_UI_API extern
 #endif // VD_UI_STATIC
+
+#ifndef VD_UI_INL
+#define VD_UI_INL static inline
+#endif // !VD_UI_INL
 
 typedef char VdUiBool;
 
@@ -83,6 +90,35 @@ VD_UI_API void             vd_ui_frame_begin(float delta_seconds);
  * End the frame. Call this after any ui layout or drawing calls.
  */
 VD_UI_API void             vd_ui_frame_end(void);
+
+/* ----HELPERS------------------------------------------------------------------------------------------------------- */
+VD_UI_API int              vd_ui_vsnprintf(char *s, size_t n, const char *format, va_list args);
+static inline int          vd_ui_snprintf(char *s, size_t n, const char *format, ...);
+static inline int          vd_ui_strlen(const char *s);
+static inline void*        vd_ui_memcpy(void *dst, void *src, size_t count);
+
+static inline int vd_ui_snprintf(char *s, size_t n, const char *format, ...) {
+    va_list args;
+    va_start(args, format);    
+    int result = vd_ui_vsnprintf(s, n, format, args);
+    va_end(args);
+
+    return result;
+}
+
+static inline int vd_ui_strlen(const char *s)
+{
+    const char *c = s;
+    int l = 0;
+    while (*c++) l++;
+    return l;
+}
+
+static inline void *vd_ui_memcpy(void *dst, void *src, size_t count)
+{
+    for (size_t i = 0; i < count; ++i) ((unsigned char*)dst)[i] = ((unsigned char*)src)[i];
+    return dst;
+}
 
 /* ----UI------------------------------------------------------------------------------------------------------------ */
 typedef struct {
@@ -147,13 +183,26 @@ typedef struct {
     VdUiBool hovering;
 } VdUiReply;
 
-#define VD_UI_LIT(s) ((VdUiStr) {s, sizeof(s) - 1})
+#define VD_UI_CHAR_BUF_COUNT    1024
+#define VD_UI_LIT(s)            ((VdUiStr) {s, sizeof(s) - 1})
+#define VD_UI_DOTTOSTR(fmt)                                                       \
+    va_list args;                                                                 \
+    va_start(args, fmt);                                                          \
+    int __sz__ = vd_ui_vsnprintf(Vd_Ui_CharBuf, VD_UI_CHAR_BUF_COUNT, fmt, args); \
+    va_end(args);                                                                 \
+    VdUiStr str = {Vd_Ui_CharBuf, __sz__};
+
+
+extern char Vd_Ui_CharBuf[VD_UI_CHAR_BUF_COUNT];
 
 VD_UI_API void             vd_ui_demo(void);
 VD_UI_API VdUiReply        vd_ui_button(VdUiStr str);
+VD_UI_INL VdUiReply        vd_ui_buttonf(const char *fmt, ...) { VD_UI_DOTTOSTR(fmt); return vd_ui_button(str); }
 VD_UI_API void             vd_ui_label(VdUiStr str);
+VD_UI_API void             vd_ui_labelf(const char *fmt, ...)  { VD_UI_DOTTOSTR(fmt); vd_ui_label(str); }
 
 VD_UI_API VdUiDiv*         vd_ui_div_new(VdUiFlags flags, VdUiStr str);
+VD_UI_API VdUiDiv*         vd_ui_div_newf(VdUiFlags flags, const char *fmt, ...);
 VD_UI_API VdUiReply        vd_ui_call(VdUiDiv *div);
 
 // Parent Stack
@@ -324,16 +373,6 @@ VD_UI_API int              vd_ui_gl_get_num_attributes(void);
  * @param  divisor    The input rate of the attribute    (2nd parameter to glVertexAttribDivisor)
  */
 VD_UI_API void             vd_ui_gl_get_attribute_properties(int attribute, int *size, unsigned int *type, unsigned char *normalized, int *stride, void **pointer, unsigned int *divisor);
-
-/* ----HELPERS------------------------------------------------------------------------------------------------------- */
-static inline int vd_ui_strlen(const char *s)
-{
-    const char *c = s;
-    int l = 0;
-    while (*c++) l++;
-    return l;
-}
-
 #endif // !VD_UI_H
 
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -350,8 +389,10 @@ static inline int vd_ui_strlen(const char *s)
 #define VD_UI_FONT_COUNT_MAX        4
 #define VD_UI_UPDATE_COUNT_MAX      2
 #define VD_UI_GLYPH_CACHE_COUNT_MAX 2048
+#define VD_UI_FBUF_MAX              1024
 #define VD_UI_LOG(x, ...)           printf("VDUI: " x "\n", __VA_ARGS__)
 static VdUiContext *Vd_Ui_Global_Context = 0;
+char Vd_Ui_CharBuf[VD_UI_CHAR_BUF_COUNT];
 
 static unsigned int Vd_Ui_White_Texture_Buffer[4*4] = {
     0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
@@ -559,13 +600,13 @@ static size_t vd_ui__hash(void *begin, int len)
 
 VD_UI_API void vd_ui_demo(void)
 {
-    vd_ui_label(VD_UI_LIT("Buttons"));
     static int button1_click_count = 0;
-    if (vd_ui_button(VD_UI_LIT("Button 1")).clicked)
-    {
+    if (vd_ui_buttonf("Button 1").clicked) {
         button1_click_count++;
         VD_UI_LOG("Clicked %d times", button1_click_count);
     }
+
+    vd_ui_labelf("Button 1 Clicked: %d times", button1_click_count);
 }
 
 VD_UI_API VdUiReply vd_ui_button(VdUiStr str)
@@ -582,6 +623,22 @@ VD_UI_API void vd_ui_label(VdUiStr str)
     VdUiDiv *div = vd_ui_div_new(VD_UI_FLAG_TEXT,
                                  str);
     (void)div;
+}
+
+VD_UI_API VdUiDiv *vd_ui_div_newf(VdUiFlags flags, const char *fmt, ...)
+{
+    static char buf[VD_UI_FBUF_MAX];
+
+    va_list args;
+    va_start(args, fmt);
+    int result = vd_ui_vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+
+    VD_ASSERT(result < sizeof(buf));
+
+    VdUiStr str = {buf, result};
+
+    return vd_ui_div_new(flags, str);
 }
 
 VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
@@ -1161,6 +1218,85 @@ VD_UI_API void vd_ui_context_set(VdUiContext *context)
 VD_UI_API VdUiContext* vd_ui_context_get(void)
 {
     return Vd_Ui_Global_Context;
+}
+
+/* ----HELPERS IMPL-------------------------------------------------------------------------------------------------- */
+static void vd_ui__putc(char **buf, size_t *rm, int c, int *count) {
+    if (*rm > 1) {
+        **buf = (char)c;
+        (*buf)++;
+        (*rm)--;
+    }
+    (*count)++;
+}
+
+static void vd_ui__itoa(char **buf, size_t *rm, int *count, unsigned int value, unsigned int base, int uppercase)
+{
+    char tmp[32];
+    const char *digits = uppercase ? "0123456789ABCDEF" : "0123456789abcdef";
+    int pos = 0;
+
+    if (value == 0) {
+        tmp[pos++] = '0';
+    } else {
+        while (value > 0 && pos < sizeof(tmp)) {
+            tmp[pos++] = digits[value % base];
+            value /= base;
+        }
+    }
+
+    while (pos > 0) {
+        vd_ui__putc(buf, rm, tmp[--pos], count);
+    }
+}
+
+VD_UI_API int vd_ui_vsnprintf(char *s, size_t n, const char *format, va_list args)
+{
+    char   *buf  = s;
+    size_t rm    = n;
+    int    count = 0;
+
+    while (*format) {
+        if ((*format) != '%') {
+            vd_ui__putc(&buf, &rm, *format++, &count);
+            continue;
+        }
+
+        format++;
+        switch (*format) {
+            case 's': {
+                const char *s = va_arg(args, const char *);
+
+                while (*s) {
+                    vd_ui__putc(&buf, &rm, *s++, &count);
+                }
+            } break;
+
+            case 'd': {
+                int val = va_arg(args, int);
+                if (val < 0) {
+                    vd_ui__putc(&buf, &rm, '-', &count);
+                    val = -val;
+                }
+
+                vd_ui__itoa(&buf, &rm, &count, (unsigned)val, 10, 0);
+            } break;
+
+            default: {
+                vd_ui__putc(&buf, &rm, '%', &count);
+                vd_ui__putc(&buf, &rm, *format, &count);
+            } break;
+        }
+        format++;
+    }
+
+    if (rm > 0) {
+        *buf = '\0';
+    } else if (n > 0) {
+        s[n - 1] = '\0';
+    }
+
+    return count;
 }
 
 /* ----INTEGRATION - OPENGL IMPL------------------------------------------------------------------------------------- */
