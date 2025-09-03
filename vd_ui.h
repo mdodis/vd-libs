@@ -379,6 +379,7 @@ struct VdUiFont {
     float               size;
     float               size_scaled;
     int                 bounding_box[4];
+    int                 ascent, descent, linegap;
 };
 
 static void vd_ui__update_all_fonts(VdUiContext *ctx);
@@ -645,7 +646,7 @@ static void vd_ui__layout(VdUiContext *ctx)
 
         // X0, Y0
         d->rect[0] = 20.f;               d->rect[1] = starty;
-        d->rect[2] = d->rect[0] + tex_w; d->rect[3] = starty + 100.f;
+        d->rect[2] = d->rect[0] + tex_w; d->rect[3] = starty + tex_h;
 
         starty += 100.f + 8.f;
         d = d->next;
@@ -678,6 +679,7 @@ VD_UI_API VdUiFontId vd_ui_font_add_ttf(void *buffer, size_t size, float pixel_s
     font->size_scaled = stbtt_ScaleForPixelHeight(&font->font_info, pixel_size);
     stbtt_GetFontBoundingBox(&font->font_info, &font->bounding_box[0], &font->bounding_box[1],
                                                &font->bounding_box[2], &font->bounding_box[3]);
+    stbtt_GetFontVMetrics(&font->font_info, &font->ascent, &font->descent, &font->linegap);
     VdUiFontId result;
     result.id = ctx->num_fonts - 1;
     return result;
@@ -808,13 +810,9 @@ static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y)
 {
     VdUiFont *font = &ctx->fonts[0];
 
-    float rp[2] = {x, y};
-    int ascent, descent, linegap;
-    stbtt_GetFontVMetrics(&font->font_info, &ascent, &descent, &linegap);
+    float hadd = font->bounding_box[3] - font->bounding_box[1];
+    float rp[2] = {x, y + hadd * font->size_scaled * 0.5f};
 
-    float vadvance = (ascent - descent + linegap) * font->size_scaled;
-    VD_UNUSED(vadvance);
-    
     for (int i = 0; i < s.l; ++i) {
         char c = s.s[i];
 
@@ -940,19 +938,23 @@ static size_t vd_ui__hash_glyph(unsigned int codepoint, VdUiFontId font_id)
     return result;
 }
 
-VD_UI_API void vd_ui_measure_text_size(VdUiFontId font, VdUiStr str, float *w, float *h)
+VD_UI_API void vd_ui_measure_text_size(VdUiFontId font_id, VdUiStr str, float *w, float *h)
 {
     VdUiContext *ctx = vd_ui_context_get();
     (void)ctx;
 
     *w = *h = 0.f;
 
+    VdUiFont *font = &ctx->fonts[font_id.id];
+    *h = (font->ascent - font->descent + font->linegap) * font->size_scaled;
+
+
     // @todo(mdodis): UTF-8
     for (size_t i = 0; i < str.l; ++i) {
         char c = str.s[i];
 
         float x0, y0, x1, y1, s0, t0, s1, t1;
-        vd_ui__get_glyph_quad(ctx, (unsigned int)c, font,
+        vd_ui__get_glyph_quad(ctx, (unsigned int)c, font_id,
             w, h,
             &x0, &y0,
             &x1, &y1,
@@ -989,8 +991,8 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
         VdUiF4 base_color  = {0.9f, 0.4f, 0.4f, 0.5f};
         VdUiF4 hot_color   = {0.7f, 0.3f, 0.3f, 1.f};
         VdUiF4 final_color = vd_ui__lerp4(base_color, hot_color, curr->hot_t);
-        // vd_ui__push_rect(ctx, &ctx->white, curr->rect, final_color.e);
-        vd_ui__push_rect(ctx, &ctx->white, curr->rect, base_color.e);
+        vd_ui__push_rect(ctx, &ctx->white, curr->rect, final_color.e);
+        // vd_ui__push_rect(ctx, &ctx->white, curr->rect, base_color.e);
         VD_UI_LOG("Write Rect: %.*s %f %f %f %f", curr->content_str.l, curr->content_str.s, curr->rect[0], curr->rect[1], curr->rect[2], curr->rect[3]);
     }
 

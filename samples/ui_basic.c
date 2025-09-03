@@ -100,6 +100,7 @@ int main(int argc, char const *argv[])
 
         vd_ui_div_new(VD_UI_FLAG_TEXT, VD_UI_LIT("Woohoo 2"));
         vd_ui_div_new(VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND, VD_UI_LIT("Woohoo 4"));
+
         // vd_ui_div_new(VD_UI_FLAG_TEXT, VD_UI_LIT("Woohoo 3"));
 
         vd_ui_frame_end();
