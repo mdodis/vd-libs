@@ -1,5 +1,8 @@
+#if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif // defined(__clang__)
+
 #define VD_USE_CRT 1
 #define VD_FW_NO_CRT 0
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS
@@ -21,6 +24,7 @@ int main(int argc, char const *argv[])
     VD_ARENA_FROM_SYSTEM(&arena, VD_MEGABYTES(24));
 
     vd_ui_init();
+    vd_ui_debug_set_draw_cursor_on(1);
     vd_fw_init(& (VdFwInitInfo) {
         .gl = {
             .debug_on = 1,
@@ -79,7 +83,7 @@ int main(int argc, char const *argv[])
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    vd_fw_set_vsync_on(1);
+    vd_fw_set_vsync_on(2);
     while (vd_fw_running()) {
         float delta_seconds = vd_fw_delta_s();
         (void)delta_seconds;
@@ -92,16 +96,13 @@ int main(int argc, char const *argv[])
         int mouse_state = vd_fw_get_mouse_statef(&mx, &my);
         VD_UNUSED(mouse_state);
 
-        vd_ui_event_size(w, h);
+        vd_ui_event_size((float)w, (float)h);
         vd_ui_event_mouse_location(mx, my);
         vd_ui_event_mouse_button(VD_UI_MOUSE_LEFT,  mouse_state & VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN);
         vd_ui_event_mouse_button(VD_UI_MOUSE_RIGHT, mouse_state & VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN);
 
 
         vd_ui_demo();
-
-
-        // vd_ui_div_new(VD_UI_FLAG_TEXT, VD_UI_LIT("Woohoo 3"));
 
         vd_ui_frame_end();
 
@@ -185,7 +186,7 @@ int main(int argc, char const *argv[])
 
 
         glViewport(0, 0, w, h);
-        glClearColor(0.2f, 0.2f, 0.2f, 0.5f);
+        glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         // Loop through render passes
@@ -204,7 +205,7 @@ int main(int argc, char const *argv[])
 
             // Update vertex buffer
             glBindBuffer(GL_ARRAY_BUFFER, vbo);
-            glBufferSubData(GL_ARRAY_BUFFER, 0, pass->instance_count * sizeof(VdUiVertex), buffer + pass->first_instance * sizeof(VdUiVertex));
+            glBufferSubData(GL_ARRAY_BUFFER, 0, pass->instance_count * sizeof(VdUiVertex), (unsigned char*)buffer + pass->first_instance * sizeof(VdUiVertex));
             glBindBuffer(GL_ARRAY_BUFFER, 0);
 
             glDrawArraysInstanced(
@@ -227,4 +228,7 @@ int main(int argc, char const *argv[])
 
 #define VD_IMPL
 #include "vd.h"
+
+#if defined(__clang__)
 #pragma clang diagnostic pop
+#endif // defined(__clang__)

@@ -33,6 +33,10 @@
 #define VD_FW_VERSION_PATCH    1
 #define VD_FW_VERSION          ((VD_FW_VERSION_MAJOR << 16) | (VD_FW_VERSION_MINOR << 8) | (VD_FW_VERSION_PATCH))
 
+#ifndef _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
+#endif // !_CRT_SECURE_NO_WARNINGS
+
 #ifdef VD_FW_STATIC
 #define VD_FW_API static
 #else
@@ -47,142 +51,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #import <OpenGL/gl3.h>
-#endif // defined(__APPLE__)
-
-typedef enum {
-    VD_FW_GL_VERSION_BASIC = 0,
-    VD_FW_GL_VERSION_1_0   = 1,
-    VD_FW_GL_VERSION_1_2   = 12,
-    VD_FW_GL_VERSION_1_3   = 13,
-    VD_FW_GL_VERSION_1_4   = 14,
-    VD_FW_GL_VERSION_1_5   = 15,
-    VD_FW_GL_VERSION_2_0   = 20,
-    VD_FW_GL_VERSION_2_1   = 21,
-    VD_FW_GL_VERSION_3_0   = 30,
-    VD_FW_GL_VERSION_3_1   = 31,
-    VD_FW_GL_VERSION_3_2   = 32,
-    VD_FW_GL_VERSION_3_3   = 33,
-} VdFwGlVersion;
-
-enum {
-    VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN  = 1 << 0,
-    VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN = 1 << 1,
-};
-
-typedef struct __VD_FW_InitInfo {
-    struct {
-        VdFwGlVersion version;
-        int           debug_on;
-    } gl;
-
-    struct {
-        int           draw_default_borders;
-    } window_options;
-} VdFwInitInfo;
-
-/**
- * Initialize fw. Call this before any other call
- * @param  info Custom options when initializing. Leave null for default
- * @return      (Reserved)
- */
-VD_FW_API int                vd_fw_init(VdFwInitInfo *info);
-
-/**
- * Check if the application is running. Call this every frame
- * @return  1 if running, 0 if not
- */
-VD_FW_API int                vd_fw_running(void);
-
-/**
- * Swap back buffer with front buffer; call at the end of your rendering
- * @return  (Reserved)
- */
-VD_FW_API int                vd_fw_swap_buffers(void);
-
-/**
- * Get the size of the window, in pixels
- * @param  w The width of the window, in pixels
- * @param  h The height of the window, in pixels
- * @return   (Reserved)
- */
-VD_FW_API int                vd_fw_get_size(int *w, int *h);
-
-/**
- * Get the time (in nanoseconds) since the last call to @see vd_fw_swap_buffers
- * @return  The delta time (in nanoseconds)
- */
-VD_FW_API unsigned long long vd_fw_delta_ns(void);
-
-/**
- * Set VSYNC to the number of frames to sync on
- * @param  on 0: no sync, 1: sync every frame, 2: sync every other frame
- * @return    1 if the change was applied successfully
- */
-VD_FW_API int                vd_fw_set_vsync_on(int on);
-
-/**
- * Read the mouse state. @see above in the enumeration
- * @param  x The horizontal position of the mouse, in pixels (left -> right)
- * @param  y The vertical position of the mouse, in pixels (top -> bottom)
- * @return   The mouse button state
- */
-VD_FW_API int                vd_fw_get_mouse_state(int *x, int *y);
-VD_FW_API void               vd_fw_draw_window_border(void);
-VD_FW_API GLuint             vd_fw_compile_shader(GLenum type, const char *source);
-VD_FW_API int                vd_fw_link_program(GLuint program);
-VD_FW_INLINE int             vd_fw_get_mouse_statef(float *x, float *y);
-VD_FW_INLINE float           vd_fw_delta_s(void);
-VD_FW_INLINE void            vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16]);
-VD_FW_INLINE int             vd_fw_u_point_in_rect(float x, float y, float rx, float ry, float rw, float rh);
-
-VD_FW_INLINE float vd_fw_delta_s(void)
-{
-    unsigned long long ns  = vd_fw_delta_ns();
-    double ms              = (double)ns / 1000000.0;
-    double s64             = ms         / 1000.0;
-    float s                = (float)s64;
-    return s;
-}
-
-VD_FW_INLINE int vd_fw_u_point_in_rect(float x, float y, float rx, float ry, float rw, float rh)
-{
-    return (x >= rx) && (x <= (rx + rw)) &&
-           (y >= ry) && (y <= (ry + rh));
-}
-
-VD_FW_INLINE int vd_fw_get_mouse_statef(float *x, float *y)
-{
-    int xi, yi;
-    int result = vd_fw_get_mouse_state(&xi, &yi);
-
-    if (x) *x = (float)xi;
-    if (y) *y = (float)yi;
-
-    return result;
-}
-
-VD_FW_INLINE void vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16])
-{
-    out[0]  = 2.0f / (right - left);               out[1]  = 0.0f;                              out[2]  = 0.0f;                          out[3]  = 0.0f;
-    out[4]  = 0.0f;                                out[5]  = 2.0f / (top - bottom);             out[6]  = 0.0f;                          out[7]  = 0.0f;
-    out[8]  = 0.0f;                                out[9]  = 0.0f;                              out[10] = -2.0f / (far - near);          out[11] = 0.0f;
-    out[12] = - (right + left) / (right - left);   out[13] = - (top + bottom) / (top - bottom); out[14] = - (far + near) / (far - near); out[15] = 1.0f;
-}
-
-#if _WIN32
-#define VD_FW_WIN32_SUBSYSTEM_CONSOLE 1
-#define VD_FW_WIN32_SUBSYSTEM_WINDOWS 2
-
-#ifndef VD_FW_WIN32_SUBSYSTEM
-#define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_CONSOLE
-#endif // !VD_FW_WIN32_SUBSYSTEM
-
-#ifndef VD_FW_NO_CRT
-#define VD_FW_NO_CRT 0
-#endif
-#endif // _WIN32
-
-#if !defined(__APPLE__)
+#else
 /* ----GL TYPEDEFS--------------------------------------------------------------------------------------------------- */
 typedef void               GLvoid;
 typedef unsigned int       GLenum;
@@ -1033,6 +902,142 @@ typedef __int64            GLint64;
 #define GL_TIMESTAMP                                     0x8E28
 #define GL_INT_2_10_10_10_REV                            0x8D9F
 
+#endif // defined(__APPLE__)
+
+typedef enum {
+    VD_FW_GL_VERSION_BASIC = 0,
+    VD_FW_GL_VERSION_1_0   = 1,
+    VD_FW_GL_VERSION_1_2   = 12,
+    VD_FW_GL_VERSION_1_3   = 13,
+    VD_FW_GL_VERSION_1_4   = 14,
+    VD_FW_GL_VERSION_1_5   = 15,
+    VD_FW_GL_VERSION_2_0   = 20,
+    VD_FW_GL_VERSION_2_1   = 21,
+    VD_FW_GL_VERSION_3_0   = 30,
+    VD_FW_GL_VERSION_3_1   = 31,
+    VD_FW_GL_VERSION_3_2   = 32,
+    VD_FW_GL_VERSION_3_3   = 33,
+} VdFwGlVersion;
+
+enum {
+    VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN  = 1 << 0,
+    VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN = 1 << 1,
+};
+
+typedef struct __VD_FW_InitInfo {
+    struct {
+        VdFwGlVersion version;
+        int           debug_on;
+    } gl;
+
+    struct {
+        int           draw_default_borders;
+    } window_options;
+} VdFwInitInfo;
+
+/**
+ * Initialize fw. Call this before any other call
+ * @param  info Custom options when initializing. Leave null for default
+ * @return      (Reserved)
+ */
+VD_FW_API int                vd_fw_init(VdFwInitInfo *info);
+
+/**
+ * Check if the application is running. Call this every frame
+ * @return  1 if running, 0 if not
+ */
+VD_FW_API int                vd_fw_running(void);
+
+/**
+ * Swap back buffer with front buffer; call at the end of your rendering
+ * @return  (Reserved)
+ */
+VD_FW_API int                vd_fw_swap_buffers(void);
+
+/**
+ * Get the size of the window, in pixels
+ * @param  w The width of the window, in pixels
+ * @param  h The height of the window, in pixels
+ * @return   (Reserved)
+ */
+VD_FW_API int                vd_fw_get_size(int *w, int *h);
+
+/**
+ * Get the time (in nanoseconds) since the last call to @see vd_fw_swap_buffers
+ * @return  The delta time (in nanoseconds)
+ */
+VD_FW_API unsigned long long vd_fw_delta_ns(void);
+
+/**
+ * Set VSYNC to the number of frames to sync on
+ * @param  on 0: no sync, 1: sync every frame, 2: sync every other frame
+ * @return    1 if the change was applied successfully
+ */
+VD_FW_API int                vd_fw_set_vsync_on(int on);
+
+/**
+ * Read the mouse state. @see above in the enumeration
+ * @param  x The horizontal position of the mouse, in pixels (left -> right)
+ * @param  y The vertical position of the mouse, in pixels (top -> bottom)
+ * @return   The mouse button state
+ */
+VD_FW_API int                vd_fw_get_mouse_state(int *x, int *y);
+VD_FW_API void               vd_fw_draw_window_border(void);
+VD_FW_API GLuint             vd_fw_compile_shader(GLenum type, const char *source);
+VD_FW_API int                vd_fw_link_program(GLuint program);
+VD_FW_INLINE int             vd_fw_get_mouse_statef(float *x, float *y);
+VD_FW_INLINE float           vd_fw_delta_s(void);
+VD_FW_INLINE void            vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16]);
+VD_FW_INLINE int             vd_fw_u_point_in_rect(float x, float y, float rx, float ry, float rw, float rh);
+
+VD_FW_INLINE float vd_fw_delta_s(void)
+{
+    unsigned long long ns  = vd_fw_delta_ns();
+    double ms              = (double)ns / 1000000.0;
+    double s64             = ms         / 1000.0;
+    float s                = (float)s64;
+    return s;
+}
+
+VD_FW_INLINE int vd_fw_u_point_in_rect(float x, float y, float rx, float ry, float rw, float rh)
+{
+    return (x >= rx) && (x <= (rx + rw)) &&
+           (y >= ry) && (y <= (ry + rh));
+}
+
+VD_FW_INLINE int vd_fw_get_mouse_statef(float *x, float *y)
+{
+    int xi, yi;
+    int result = vd_fw_get_mouse_state(&xi, &yi);
+
+    if (x) *x = (float)xi;
+    if (y) *y = (float)yi;
+
+    return result;
+}
+
+VD_FW_INLINE void vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16])
+{
+    out[0]  = 2.0f / (right - left);               out[1]  = 0.0f;                              out[2]  = 0.0f;                          out[3]  = 0.0f;
+    out[4]  = 0.0f;                                out[5]  = 2.0f / (top - bottom);             out[6]  = 0.0f;                          out[7]  = 0.0f;
+    out[8]  = 0.0f;                                out[9]  = 0.0f;                              out[10] = -2.0f / (far - near);          out[11] = 0.0f;
+    out[12] = - (right + left) / (right - left);   out[13] = - (top + bottom) / (top - bottom); out[14] = - (far + near) / (far - near); out[15] = 1.0f;
+}
+
+#if _WIN32
+#define VD_FW_WIN32_SUBSYSTEM_CONSOLE 1
+#define VD_FW_WIN32_SUBSYSTEM_WINDOWS 2
+
+#ifndef VD_FW_WIN32_SUBSYSTEM
+#define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_CONSOLE
+#endif // !VD_FW_WIN32_SUBSYSTEM
+
+#ifndef VD_FW_NO_CRT
+#define VD_FW_NO_CRT 0
+#endif
+#endif // _WIN32
+
+#if !defined(__APPLE__)
 /* ----GL VERSION 1.0------------------------------------------------------------------------------------------------ */
 typedef void                           (*PFNGLCULLFACEPROC)               (GLenum mode);
 typedef void                           (*PFNGLFRONTFACEPROC)              (GLenum mode);
@@ -2177,7 +2182,31 @@ static void vd_fw__load_opengl(VdFwGlVersion version);
 #define WM_NCUAHDRAWFRAME (0x00AF)
 #endif
 
+#define WGL_CONTEXT_DEBUG_BIT_ARB                   0x00000001
+#define WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB      0x00000002
+#define WGL_CONTEXT_MAJOR_VERSION_ARB               0x2091
+#define WGL_CONTEXT_MINOR_VERSION_ARB               0x2092
+#define WGL_CONTEXT_PROFILE_MASK_ARB                0x9126
+#define WGL_CONTEXT_CORE_PROFILE_BIT_ARB            0x00000001
+#define WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB   0x00000002
+#define WGL_SAMPLE_BUFFERS_ARB                      0x2041
+#define WGL_SAMPLES_ARB                             0x2042
+#define WGL_DRAW_TO_WINDOW_ARB                      0x2001
+#define WGL_SUPPORT_OPENGL_ARB                      0x2010
+#define WGL_DOUBLE_BUFFER_ARB                       0x2011
+#define WGL_ACCELERATION_ARB                        0x2003
+#define WGL_FULL_ACCELERATION_ARB                   0x2027
+#define WGL_TYPE_RGBA_ARB                           0x202B
+#define WGL_PIXEL_TYPE_ARB                          0x2013
+#define WGL_COLOR_BITS_ARB                          0x2014
+#define WGL_ALPHA_BITS_ARB                          0x201B
+#define WGL_DEPTH_BITS_ARB                          0x2022
+#define WGL_STENCIL_BITS_ARB                        0x2023
+#define WGL_CONTEXT_FLAGS_ARB             0x2094
+#define WGL_CONTEXT_DEBUG_BIT_ARB         0x00000001
 typedef BOOL (WINAPI * PFNWGLSWAPINTERVALEXTPROC) (int interval);
+typedef HGLRC (WINAPI * PFNWGLCREATECONTEXTATTRIBSARBPROC) (HDC hDC, HGLRC hShareContext, const int *attribList);
+typedef BOOL (WINAPI * PFNWGLCHOOSEPIXELFORMATARBPROC) (HDC hdc, const int *piAttribIList, const FLOAT *pfAttribFList, UINT nMaxFormats, int *piFormats, UINT *nNumFormats);
 
 typedef struct {
     HWND                        hwnd;
@@ -2258,6 +2287,27 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         VD_FW_G.draw_decorations = info->window_options.draw_default_borders;
     }
 
+    if (info != NULL) {
+#if VD_FW_WIN32_SUBSYSTEM == VD_FW_WIN32_SUBSYSTEM_WINDOWS
+        if (info->gl.debug_on) {
+            AllocConsole();
+            AttachConsole(GetCurrentProcessId());
+            DWORD written;
+            SetConsoleTitle("DEBUG CONSOLE");
+            WriteConsole(
+                GetStdHandle(STD_OUTPUT_HANDLE),
+                "Console allocated for debugging\n",
+                sizeof("Console allocated for debugging\n") - 1,
+                &written,
+                0);
+            freopen("conin$","r",stdin);
+            freopen("conout$","w",stdout);
+            freopen("conout$","w",stderr);
+
+        }
+#endif
+    }
+
     VD_FW_G.main_thread_id = GetCurrentThreadId();
 
     VD_FW_G.sem_window_ready = CreateSemaphoreA(
@@ -2289,34 +2339,105 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 
     VD_FW_G.hdc = GetDC(VD_FW_G.hwnd);
 
-    PIXELFORMATDESCRIPTOR pfd = {
-      sizeof(PIXELFORMATDESCRIPTOR),
-      1,                                // Version Number
-      PFD_DRAW_TO_WINDOW |              // Format Must Support Window
-      PFD_SUPPORT_OPENGL |              // Format Must Support OpenGL
-      PFD_SUPPORT_COMPOSITION |      // Format Must Support Composition
-      PFD_DOUBLEBUFFER,                 // Must Support Double Buffering
-      PFD_TYPE_RGBA,                    // Request An RGBA Format
-      32,                               // Select Our Color Depth
-      0, 0, 0, 0, 0, 0,                 // Color Bits Ignored
-      8,                                // An Alpha Buffer
-      0,                                // Shift Bit Ignored
-      0,                                // No Accumulation Buffer
-      0, 0, 0, 0,                       // Accumulation Bits Ignored
-      24,                               // 16Bit Z-Buffer (Depth Buffer)
-      8,                                // Some Stencil Buffer
-      0,                                // No Auxiliary Buffer
-      PFD_MAIN_PLANE,                   // Main Drawing Layer
-      0,                                // Reserved
-      0, 0, 0                           // Layer Masks Ignored
-    };
-    int pf = ChoosePixelFormat(VD_FW_G.hdc, &pfd);
-    SetPixelFormat(VD_FW_G.hdc, pf, &pfd);
+    // Create context
+    {
+        // Temp context flags
+        PIXELFORMATDESCRIPTOR pfd = {
+          sizeof(PIXELFORMATDESCRIPTOR),
+          1,                                // Version Number
+          PFD_DRAW_TO_WINDOW |              // Format Must Support Window
+          PFD_SUPPORT_OPENGL |              // Format Must Support OpenGL
+          PFD_DOUBLEBUFFER,                 // Must Support Double Buffering
+          PFD_TYPE_RGBA,                    // Request An RGBA Format
+          32,                               // Select Our Color Depth
+          0, 0, 0, 0, 0, 0,                 // Color Bits Ignored
+          0,                                // An Alpha Buffer
+          0,                                // Shift Bit Ignored
+          0,                                // No Accumulation Buffer
+          0, 0, 0, 0,                       // Accumulation Bits Ignored
+          24,                               // 16Bit Z-Buffer (Depth Buffer)
+          8,                                // Some Stencil Buffer
+          0,                                // No Auxiliary Buffer
+          PFD_MAIN_PLANE,                   // Main Drawing Layer
+          0,                                // Reserved
+          0, 0, 0                           // Layer Masks Ignored
+        };
+        int pf = ChoosePixelFormat(VD_FW_G.hdc, &pfd);
+        SetPixelFormat(VD_FW_G.hdc, pf, &pfd);
 
-    VD_FW_G.hglrc = wglCreateContext(VD_FW_G.hdc);
+        HGLRC temp_context = wglCreateContext(VD_FW_G.hdc);
+        VD_FW__CHECK_NULL(temp_context);
+        VD_FW__CHECK_TRUE(wglMakeCurrent(VD_FW_G.hdc, temp_context));
 
-    VD_FW__CHECK_NULL(VD_FW_G.hglrc);
-    VD_FW__CHECK_TRUE(wglMakeCurrent(VD_FW_G.hdc, VD_FW_G.hglrc));
+        int major = 3;
+        int minor = 3;
+
+        if (info->gl.version != VD_FW_GL_VERSION_BASIC) {
+            switch (info->gl.version) {
+                case VD_FW_GL_VERSION_1_0: major = 1; minor = 0; break;
+                case VD_FW_GL_VERSION_1_2: major = 1; minor = 2; break;
+                case VD_FW_GL_VERSION_1_3: major = 1; minor = 3; break;
+                case VD_FW_GL_VERSION_1_4: major = 1; minor = 4; break;
+                case VD_FW_GL_VERSION_1_5: major = 1; minor = 5; break;
+                case VD_FW_GL_VERSION_2_0: major = 2; minor = 0; break;
+                case VD_FW_GL_VERSION_2_1: major = 2; minor = 1; break;
+                case VD_FW_GL_VERSION_3_0: major = 3; minor = 0; break;
+                case VD_FW_GL_VERSION_3_1: major = 3; minor = 1; break;
+                case VD_FW_GL_VERSION_3_2: major = 3; minor = 2; break;
+                case VD_FW_GL_VERSION_3_3: major = 3; minor = 3; break;
+                default: break;
+            }
+        }
+
+        // Context attributes
+        int attribs[] = {
+            WGL_CONTEXT_MAJOR_VERSION_ARB, major,
+            WGL_CONTEXT_MINOR_VERSION_ARB, minor,
+            WGL_CONTEXT_PROFILE_MASK_ARB,  WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
+            WGL_CONTEXT_FLAGS_ARB,         WGL_CONTEXT_DEBUG_BIT_ARB,
+            0
+        };
+
+        PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = 
+            (PFNWGLCREATECONTEXTATTRIBSARBPROC) wglGetProcAddress("wglCreateContextAttribsARB");
+
+        PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB = 
+            (PFNWGLCHOOSEPIXELFORMATARBPROC) wglGetProcAddress("wglChoosePixelFormatARB");
+
+        int pixel_attribs[] = {
+            WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
+            WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
+            WGL_DOUBLE_BUFFER_ARB,  GL_TRUE,
+            WGL_ACCELERATION_ARB,   WGL_FULL_ACCELERATION_ARB,
+
+            WGL_PIXEL_TYPE_ARB,     WGL_TYPE_RGBA_ARB,
+            WGL_COLOR_BITS_ARB,     32,
+            WGL_ALPHA_BITS_ARB,     8,
+            WGL_DEPTH_BITS_ARB,     24,
+            WGL_STENCIL_BITS_ARB,   8,
+
+            WGL_SAMPLE_BUFFERS_ARB, 1,
+            WGL_SAMPLES_ARB,        4,
+            0,
+        };
+
+        int pixel_format;
+        UINT num_formats;
+
+        VD_FW__CHECK_TRUE(wglChoosePixelFormatARB(VD_FW_G.hdc, pixel_attribs, NULL, 1, &pixel_format, &num_formats));
+
+        PIXELFORMATDESCRIPTOR pfdchosen;
+        DescribePixelFormat(VD_FW_G.hdc, pixel_format, sizeof(pfdchosen), &pfdchosen);
+        SetPixelFormat(VD_FW_G.hdc, pf, &pfdchosen);
+
+        VD_FW_G.hglrc = wglCreateContextAttribsARB(VD_FW_G.hdc, 0, attribs);
+
+        wglMakeCurrent(NULL, NULL);
+        wglDeleteContext(temp_context);
+
+        VD_FW__CHECK_NULL(VD_FW_G.hglrc);
+        VD_FW__CHECK_TRUE(wglMakeCurrent(VD_FW_G.hdc, VD_FW_G.hglrc));
+    }
 
     VD_FW_G.proc_swapInterval = (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
 
@@ -2325,22 +2446,6 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         version = info->gl.version;
     }
     vd_fw__load_opengl(version);
-
-    if (info != 0) {
-#if VD_FW_WIN32_SUBSYSTEM == VD_FW_WIN32_SUBSYSTEM_WINDOWS
-        if (info->gl.debug_on) {
-            AllocConsole();
-            DWORD written;
-            SetConsoleTitle("DEBUG CONSOLE");
-            WriteConsole(
-                GetStdHandle(STD_OUTPUT_HANDLE),
-                "Console allocated for debugging\n",
-                sizeof("Console allocated for debugging\n") - 1,
-                &written,
-                0);
-        }
-#endif
-    }
 
     if (info != 0 && info->gl.debug_on) {
         glDebugMessageCallback = (PFNGLDEBUGMESSAGECALLBACKPROC)wglGetProcAddress("glDebugMessageCallback");
@@ -2409,7 +2514,12 @@ VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
     if (x) *x = p.x;
     if (y) *y = p.y;
 
-    return 0;
+    int result = 0;
+
+    result |= GetAsyncKeyState(VK_LBUTTON) ? VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN  : 0;
+    result |= GetAsyncKeyState(VK_RBUTTON) ? VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN : 0;
+
+    return result;
 }
 
 VD_FW_API unsigned long long vd_fw_delta_ns(void)

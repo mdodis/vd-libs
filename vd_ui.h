@@ -221,13 +221,13 @@ typedef unsigned int VdUiVertexFlags;
 
 #pragma pack(push, 1)
 typedef struct {
-    float            p0[2];       //  4 x 2 =  8 bytes
-    float            p1[2];       //  4 x 2 =  8 bytes
-    float            p0u[2];      //  4 x 2 =  8 bytes
-    float            p1u[2];      //  4 x 2 =  8 bytes
+    float            p0[2];       //  2 x 4 =  8 bytes
+    float            p1[2];       //  2 x 4 =  8 bytes
+    float            p0u[2];      //  2 x 4 =  8 bytes
+    float            p1u[2];      //  2 x 4 =  8 bytes
     float            color[4];    //  4 x 4 = 16 bytes
-    VdUiVertexFlags  flags;       //  1 x 4 =  4 bytes
-    unsigned char    padd[12];    // 15 x 1 = 12 bytes
+    float            alpha_mix;   //  1 x 4 =  4 bytes
+    unsigned char    padd[12];    // 12 x 1 = 12 bytes
 } VdUiVertex;                     //        = 64 bytes
 #pragma pack(pop)
 
@@ -377,6 +377,10 @@ VD_UI_API int              vd_ui_gl_get_num_attributes(void);
  * @param  divisor    The input rate of the attribute    (2nd parameter to glVertexAttribDivisor)
  */
 VD_UI_API void             vd_ui_gl_get_attribute_properties(int attribute, int *size, unsigned int *type, unsigned char *normalized, int *stride, void **pointer, unsigned int *divisor);
+
+/* ----DEBUG--------------------------------------------------------------------------------------------------------- */
+VD_UI_API void             vd_ui_debug_set_draw_cursor_on(VdUiBool on);
+
 #endif // !VD_UI_H
 
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -522,6 +526,10 @@ struct VdUiContext {
 
     // Stored to differentiate between passes
     VdUiTextureId          *current_texture_id;
+
+    struct {
+        VdUiBool           custom_cursor_on;
+    } debug;
 };
 
 VD_UI_API void vd_ui_frame_begin(float delta_seconds)
@@ -580,10 +588,16 @@ VD_UI_API void vd_ui_frame_end(void)
     // Layout UI
     vd_ui__layout(ctx);
 
-    vd_ui__print_tree(&ctx->root, 0);
+    // vd_ui__print_tree(&ctx->root, 0);
 
     // Render
     vd_ui__traverse_and_render_divs(ctx, &ctx->root);
+
+    if (ctx->debug.custom_cursor_on) {
+        vd_ui__push_rect(ctx, &ctx->white,
+            (float[]) {ctx->mouse[0], ctx->mouse[1], ctx->mouse[0] + 16.f, ctx->mouse[1] + 16.f},
+            (float[]) {1.f, 1.f, 1.f , 1.f});
+    }
 
     // Process updates
     vd_ui__update_all_fonts(ctx);
@@ -762,17 +776,17 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
         }
     }
 
-    float hot_speed = 0.01f;
-    float active_speed = 0.01f;
+    float hot_speed = 2.f;
+    float active_speed = 2.1f;
     div->hot_t    = vd_ui__lerp(div->hot_t, hovered ? 1.0f : 0.0f, dt * hot_speed);
     div->hot_t    = vd_ui__clampf01(div->hot_t);
 
     div->active_t = vd_ui__lerp(div->active_t, (pressed && hovered) ? 1.0f : 0.0f, dt * active_speed);
     div->active_t = vd_ui__clampf01(div->active_t);
 
-    reply.hovering = hovered;
-    reply.pressed = hovered && pressed;
-    reply.clicked = clicked;
+    reply.hovering = (VdUiBool)hovered;
+    reply.pressed = (VdUiBool)hovered && (VdUiBool)pressed;
+    reply.clicked = (VdUiBool)clicked;
 
     return reply;
 }
@@ -981,7 +995,11 @@ static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId *texture, float p
     v->color[2] = color[2];
     v->color[3] = color[3];
 
-    v->flags    = flags;
+    if (flags & VD_UI_VERTEX_FLAG_TEXTURE_IS_ALPHA_BUFFER) {
+        v->alpha_mix = 1.0;
+    } else {
+        v->alpha_mix = 0.0;
+    }
 
     ctx->passes[ctx->num_passes - 1].instance_count++;
 }
@@ -999,7 +1017,7 @@ static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y)
 {
     VdUiFont *font = &ctx->fonts[0];
 
-    float hadd = font->bounding_box[3] - font->bounding_box[1];
+    float hadd = (float)font->bounding_box[3] - (float)font->bounding_box[1];
     float rp[2] = {x, y + hadd * font->size_scaled * 0.5f};
 
     for (int i = 0; i < s.l; ++i) {
@@ -1068,8 +1086,8 @@ static void vd_ui__get_glyph_quad(VdUiContext *ctx, unsigned int codepoint, VdUi
     float ipw = 1.0f / (ctx->atlas[0]); float iph = 1.0f / (ctx->atlas[1]);
 
     if (align_to_integer) {
-        float x = ((int)floor((*rx) + glyph->xoff + 0.5f));
-        float y = ((int)floor((*ry) + glyph->yoff + 0.5f));
+        float x = (float)((int)floor((*rx) + glyph->xoff + 0.5f));
+        float y = (float)((int)floor((*ry) + glyph->yoff + 0.5f));
         *x0 = x;               *x1 = x + glyph->xoff2 - glyph->xoff;
         *y0 = y;               *y1 = y + glyph->yoff2 - glyph->yoff;
 
@@ -1360,10 +1378,10 @@ VD_UI_API int vd_ui_vsnprintf(char *s, size_t n, const char *format, va_list arg
         format++;
         switch (*format) {
             case 's': {
-                const char *s = va_arg(args, const char *);
+                const char *str = va_arg(args, const char *);
 
-                while (*s) {
-                    vd_ui__putc(&buf, &rm, *s++, &count);
+                while (*str) {
+                    vd_ui__putc(&buf, &rm, *str++, &count);
                 }
             } break;
 
@@ -1394,6 +1412,13 @@ VD_UI_API int vd_ui_vsnprintf(char *s, size_t n, const char *format, va_list arg
     return count;
 }
 
+/* ----DEBUG--------------------------------------------------------------------------------------------------------- */
+VD_UI_API void vd_ui_debug_set_draw_cursor_on(VdUiBool on)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    ctx->debug.custom_cursor_on = on;
+}
+
 /* ----INTEGRATION - OPENGL IMPL------------------------------------------------------------------------------------- */
 #define VD_UI_GL_VERTEX_SHADER_SOURCE                                                                                  \
 "#version 330 core                                                                                                 \n" \
@@ -1402,11 +1427,11 @@ VD_UI_API int vd_ui_vsnprintf(char *s, size_t n, const char *format, va_list arg
 "layout (location = 2) in vec2 a_p0u;                                                                              \n" \
 "layout (location = 3) in vec2 a_p1u;                                                                              \n" \
 "layout (location = 4) in vec4 a_color;                                                                            \n" \
-"layout (location = 5) in uint a_flags;                                                                            \n" \
+"layout (location = 5) in float a_amix;                                                                            \n" \
 "uniform vec2 uResolution;                                                                                         \n" \
 "out vec4 f_color;                                                                                                 \n" \
 "out vec2 f_uv;                                                                                                    \n" \
-"flat out uint f_flags;                                                                                            \n" \
+"out float f_amix;                                                                                                 \n" \
 "                                                                                                                  \n" \
 "void main()                                                                                                       \n" \
 "{                                                                                                                 \n" \
@@ -1429,23 +1454,23 @@ VD_UI_API int vd_ui_vsnprintf(char *s, size_t n, const char *format, va_list arg
 "   vec2 shp = positions[gl_VertexID] * shs + shc;                                                                 \n" \
 "   f_uv = shp;                                                                                                    \n" \
 "   f_color = a_color;                                                                                             \n" \
-"   f_flags = a_flags;                                                                                             \n" \
+"   f_amix = a_amix;                                                                                               \n" \
 "}                                                                                                                 \n" \
 
 #define VD_UI_GL_FRAGMENT_SHADER_SOURCE                                                                                \
 "#version 330 core                                                                                                 \n" \
 "in vec4 f_color;                                                                                                  \n" \
 "in vec2 f_uv;                                                                                                     \n" \
-"flat in uint f_flags;                                                                                             \n" \
+"in float f_amix;                                                                                                  \n" \
 "uniform sampler2D uTexture;                                                                                       \n" \
 "out vec4 FragColor;                                                                                               \n" \
+"const uint VD_UI_VERTEX_FLAG_TEXTURE_IS_ALPHA_BUFFER = 1 << 0;                                                    \n" \
 "void main()                                                                                                       \n" \
 "{                                                                                                                 \n" \
 "   vec4 sample = texture(uTexture, f_uv);                                                                         \n" \
-"   float use_alpha_mask = float((f_flags & 1u) != 0u);                                                            \n" \
 "   vec4 normal_color = sample * f_color;                                                                          \n" \
 "   vec4 mask_color = vec4(f_color.rgb, f_color.a * sample.r);                                                     \n" \
-"   vec4 color = mix(normal_color, mask_color, use_alpha_mask);                                                    \n" \
+"   vec4 color = mix(normal_color, mask_color, f_amix);                                                            \n" \
 "   FragColor = vec4(color);                                                                                       \n" \
 "}                                                                                                                 \n" \
 
@@ -1513,7 +1538,7 @@ VD_UI_API void vd_ui_gl_get_attribute_properties(int attribute, int *size, unsig
         //                 GL_FLOAT          GL_FALSE
         case 4: *size = 4; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, color); *divisor = 1; break;
         //                 GL_UNSIGNED_INT   GL_FALSE
-        case 5: *size = 1; *type = 0x1405;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, flags); *divisor = 1; break;
+        case 5: *size = 1; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, alpha_mix); *divisor = 1; break;
         default: break;
     }
 }
