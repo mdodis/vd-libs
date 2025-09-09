@@ -132,9 +132,11 @@ typedef union {
 
 enum {
     // Per div flags
-    VD_UI_FLAG_TEXT         = 1 << 0,
-    VD_UI_FLAG_BACKGROUND   = 1 << 1,
-    VD_UI_FLAG_CLICKABLE    = 1 << 2,
+    VD_UI_FLAG_TEXT             = 1 << 0,
+    VD_UI_FLAG_BACKGROUND       = 1 << 1,
+    VD_UI_FLAG_CLICKABLE        = 1 << 2,
+    VD_UI_FLAG_CLIP_CONTENT     = 1 << 3,
+    VD_UI_FLAG_FLEX_VERTICAL    = 1 << 4, // 0 here means FLEX_HORIZONTAL
 
     // Mouse Enumerations
     VD_UI_MOUSE_LEFT        = 0,
@@ -142,6 +144,25 @@ enum {
     VD_UI_MOUSE_MIDDLE      = 2,
 };
 typedef int VdUiFlags;
+
+enum {
+    VD_UI_SIZE_MODE_ABSOLUTE = 0,
+    VD_UI_SIZE_MODE_TEXT_CONTENT = 1,
+    VD_UI_SIZE_MODE_CONTAIN_CHILDREN = 2,
+};
+typedef int VdUiSizeMode;
+
+enum {
+    VD_UI_AXISH = 0,
+    VD_UI_AXISV = 1,
+    VD_UI_AXES = 2,
+};
+
+typedef struct {
+    VdUiSizeMode mode;
+    float        value;
+    float        importance;
+} VdUiSize;
 
 typedef struct VdUiDiv VdUiDiv;
 struct VdUiDiv {
@@ -166,8 +187,10 @@ struct VdUiDiv {
 
     VdUiStr     content_str;
 
-    float       comp_pos_rel[2];
-    float       comp_size[2];
+    VdUiSize    size[2];
+
+    float       comp_pos_rel[VD_UI_AXES];
+    float       comp_size[VD_UI_AXES];
     float       rect[4];
 
     float       hot_t;
@@ -301,7 +324,7 @@ VD_UI_API void*            vd_ui_frame_get_vertex_buffer(size_t *buffer_size);
  * @param  num_passes The number of passes to draw
  * @return            The pass data
  */
-VD_UI_API VdUiRenderPass*  vd_ui_frame_get_render_passes(int *num_passes);
+VD_UI_API VdUiRenderPass*  vd_ui_frame_get_render_passes(unsigned int *num_passes);
 
 /* ----FONTS--------------------------------------------------------------------------------------------------------- */
 VD_UI_API VdUiFontId       vd_ui_font_add_ttf(void *buffer, size_t size, float pixel_size);
@@ -380,6 +403,7 @@ VD_UI_API void             vd_ui_gl_get_attribute_properties(int attribute, int 
 
 /* ----DEBUG--------------------------------------------------------------------------------------------------------- */
 VD_UI_API void             vd_ui_debug_set_draw_cursor_on(VdUiBool on);
+VD_UI_API void             vd_ui_debug_set_inspector_on(VdUiBool on);
 
 #endif // !VD_UI_H
 
@@ -392,8 +416,8 @@ VD_UI_API void             vd_ui_debug_set_draw_cursor_on(VdUiBool on);
 #include "ext/stb_truetype.h"
 
 #define VD_UI_PARENT_STACK_MAX      256
-#define VD_UI_VBUF_COUNT_MAX        128
-#define VD_UI_RP_COUNT_MAX          12
+#define VD_UI_VBUF_COUNT_MAX        256
+#define VD_UI_RP_COUNT_MAX          64
 #define VD_UI_FONT_COUNT_MAX        4
 #define VD_UI_UPDATE_COUNT_MAX      2
 #define VD_UI_GLYPH_CACHE_COUNT_MAX 2048
@@ -462,6 +486,8 @@ static float        vd_ui__clampf(float x, float a, float b);
 static float        vd_ui__lerp(float a, float b, float t);
 static VdUiF4       vd_ui__lerp4(VdUiF4 a, VdUiF4 b, float t);
 
+static void         vd_ui__do_inspector(VdUiContext *ctx);
+
 struct VdUiContext {
     VdUiDiv                 root;
 
@@ -529,6 +555,7 @@ struct VdUiContext {
 
     struct {
         VdUiBool           custom_cursor_on;
+        VdUiBool           inspector_on;
     } debug;
 };
 
@@ -582,6 +609,10 @@ VD_UI_API void vd_ui_frame_end(void)
     ctx->num_passes = 0;
     ctx->num_updates = 0;
     ctx->current_texture_id = 0;
+    ctx->root.rect[0] = 0.f;
+    ctx->root.rect[1] = 0.f;
+    ctx->root.rect[2] = ctx->window[0];
+    ctx->root.rect[3] = ctx->window[1];
 
     // vd_ui__put_line(ctx, "Woohoo!", strlen("Woohoo!"));
 
@@ -597,6 +628,10 @@ VD_UI_API void vd_ui_frame_end(void)
         vd_ui__push_rect(ctx, &ctx->white,
             (float[]) {ctx->mouse[0], ctx->mouse[1], ctx->mouse[0] + 16.f, ctx->mouse[1] + 16.f},
             (float[]) {1.f, 1.f, 1.f , 1.f});
+    }
+
+    if (ctx->debug.inspector_on) {
+        vd_ui__do_inspector(ctx);
     }
 
     // Process updates
@@ -623,7 +658,7 @@ VD_UI_API void *vd_ui_frame_get_vertex_buffer(size_t *buffer_size)
     return (void*)ctx->vbuf;
 }
 
-VD_UI_API VdUiRenderPass *vd_ui_frame_get_render_passes(int *num_passes)
+VD_UI_API VdUiRenderPass *vd_ui_frame_get_render_passes(unsigned int *num_passes)
 {
     VdUiContext *ctx = vd_ui_context_get();
     *num_passes = ctx->num_passes;
@@ -642,6 +677,10 @@ VD_UI_API VdUiReply vd_ui_button(VdUiStr str)
                                  VD_UI_FLAG_BACKGROUND |
                                  VD_UI_FLAG_CLICKABLE,
                                  str);
+
+    div->size[0].mode = VD_UI_SIZE_MODE_TEXT_CONTENT;
+    div->size[1].mode = VD_UI_SIZE_MODE_TEXT_CONTENT;
+
     return vd_ui_call(div);
 }
 
@@ -649,7 +688,8 @@ VD_UI_API void vd_ui_label(VdUiStr str)
 {
     VdUiDiv *div = vd_ui_div_new(VD_UI_FLAG_TEXT,
                                  str);
-    (void)div;
+    div->size[0].mode = VD_UI_SIZE_MODE_TEXT_CONTENT;
+    div->size[1].mode = VD_UI_SIZE_MODE_TEXT_CONTENT;
 }
 
 VD_UI_API VdUiReply vd_ui_checkbox(int *b, VdUiStr str)
@@ -828,33 +868,140 @@ VD_UI_API void vd_ui_demo(void)
 
     vd_ui_labelf("Button 1 Clicked: %d times", button1_click_count);
 
-    static int checkbox = 0;
-    vd_ui_checkboxf(&checkbox, "Checkbox 1");
+    // static int checkbox = 0;
+    // vd_ui_checkboxf(&checkbox, "Checkbox 1");
+}
+
+static void vd_ui__calc_fixed_size(VdUiContext *ctx, VdUiDiv *curr)
+{
+    if (curr == 0) {
+        return;
+    }
+
+    VdUiDiv *child = curr->first;
+    while (child != 0) {
+        vd_ui__calc_fixed_size(ctx, child);
+        child = child->next;
+    }
+
+    for (int i = 0; i < VD_UI_AXES; ++i) {
+        switch (curr->size[i].mode) {
+
+            case VD_UI_SIZE_MODE_ABSOLUTE: {
+                curr->comp_size[i] = curr->size[i].value;
+            } break;
+
+            case VD_UI_SIZE_MODE_TEXT_CONTENT: {
+                VdUiFontId font_id = {0};
+                float text_sizes[VD_UI_AXES];
+                vd_ui_measure_text_size(font_id, curr->content_str, &text_sizes[0], &text_sizes[1]);
+
+                curr->comp_size[i] = text_sizes[i];
+            } break;
+
+            default: break;
+        }
+    }
+}
+
+static void vd_ui__calc_dyn_size_down(VdUiContext *ctx, VdUiDiv *curr)
+{
+    if (curr == 0) {
+        return;
+    }
+
+    float full_size[VD_UI_AXES] = {0.f, 0.f};
+
+    VdUiDiv *child = curr->first;
+    while (child != 0) {
+        vd_ui__calc_dyn_size_down(ctx, child);
+        full_size[0] += child->comp_size[0];
+        full_size[1] += child->comp_size[1];
+        child = child->next;
+    }
+
+    for (int i = 0; i < VD_UI_AXES; ++i) {
+        switch (curr->size[i].mode) {
+
+            case VD_UI_SIZE_MODE_ABSOLUTE: {
+                curr->comp_size[i] = curr->size[i].value;
+            } break;
+
+            case VD_UI_SIZE_MODE_TEXT_CONTENT: {
+                VdUiFontId font_id = {0};
+                float text_sizes[VD_UI_AXES];
+                vd_ui_measure_text_size(font_id, curr->content_str, &text_sizes[0], &text_sizes[1]);
+
+                curr->comp_size[i] = text_sizes[i];
+            } break;
+
+            case VD_UI_SIZE_MODE_CONTAIN_CHILDREN: {
+                curr->comp_size[i] = full_size[i];
+            } break;
+
+            default: break;
+        }
+    }
+}
+
+static void vd_ui__calc_positions(VdUiContext *ctx, VdUiDiv *curr)
+{
+    if (curr == 0) {
+        return;
+    }
+
+    VdUiDiv *child = curr->first;
+
+    int daxis = VD_UI_AXISH;
+    int faxis = daxis == VD_UI_AXISH ? VD_UI_AXISV : VD_UI_AXISH;
+    int daxis2, faxis2;
+
+    switch (daxis) {
+        case VD_UI_AXISV: daxis2 = 3; faxis2 = 2; break;
+        case VD_UI_AXISH: daxis2 = 2; faxis2 = 3; break;
+        default: break;
+    }
+
+    float cursor[2] = {0.f, 0.f};
+
+    while (child != 0) {
+
+        child->comp_pos_rel[daxis] = cursor[daxis];
+        child->comp_pos_rel[faxis] = 0.f;
+
+        child->rect[daxis] = curr->rect[daxis] + child->comp_pos_rel[daxis];
+        child->rect[faxis] = curr->rect[faxis] + child->comp_pos_rel[faxis];
+        child->rect[daxis2] = child->rect[daxis] + child->comp_size[daxis];
+        child->rect[faxis2] = child->rect[faxis] + child->comp_size[faxis];
+
+        cursor[daxis] += child->comp_size[daxis];
+
+        if (child->comp_size[faxis] > cursor[faxis]) {
+            cursor[faxis] = child->comp_size[faxis];
+        }
+
+        child = child->next;
+    }
+
+
+    child = curr->first;
+    while (child != 0) {
+        vd_ui__calc_positions(ctx, child);
+        child = child->next;
+    }
 }
 
 static void vd_ui__layout(VdUiContext *ctx)
 {
-    // Begin at root
-    VdUiDiv *root = &ctx->root;
-    root->rect[0] = 0.f;             root->rect[1] = 0.f;
-    root->rect[2] = ctx->window[0];  root->rect[2] = ctx->window[1];
+    // Calculate independent sizes
+    vd_ui__calc_fixed_size(ctx, &ctx->root);
 
-    // Simple top bottom layout
-    float starty = 100.f;
+    // Calculate upwards-dependent sizes
 
-    VdUiDiv *d = root->first;
-    while (d != 0) {
-        float tex_w, tex_h;
-        VdUiFontId font_id = {0};
-        vd_ui_measure_text_size(font_id, d->content_str, &tex_w, &tex_h);
+    // Calculate downwards-dependent sizes
+    vd_ui__calc_dyn_size_down(ctx, &ctx->root);
 
-        // X0, Y0
-        d->rect[0] = 20.f;               d->rect[1] = starty;
-        d->rect[2] = d->rect[0] + tex_w; d->rect[3] = starty + tex_h;
-
-        starty += 100.f + 8.f;
-        d = d->next;
-    }
+    vd_ui__calc_positions(ctx, &ctx->root);
 }
 
 static VdUiStr vd_ui__strbuf_dup(VdUiContext *ctx, VdUiStr str)
@@ -974,6 +1121,9 @@ static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId *texture, float p
     {
         VD_ASSERT(ctx->num_passes < VD_UI_RP_COUNT_MAX);
         ctx->num_passes++;
+        if (ctx->num_passes > VD_UI_RP_COUNT_MAX) {
+            VD_UI_LOG("%s", "www");
+        }
 
         VdUiRenderPass *pass   = &ctx->passes[ctx->num_passes - 1];
         pass->selected_texture = texture;
@@ -981,6 +1131,8 @@ static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId *texture, float p
         pass->instance_count   = 0;
         ctx->current_texture_id = texture;
     }
+
+    VD_ASSERT(ctx->vbuf_count < VD_UI_VBUF_COUNT_MAX);
 
     // Ok so clearly there is an issue when submitting separate passes
     VdUiVertex *v = &ctx->vbuf[ctx->vbuf_count++];
@@ -1001,6 +1153,9 @@ static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId *texture, float p
         v->alpha_mix = 0.0;
     }
 
+    if (ctx->num_passes > VD_UI_RP_COUNT_MAX) {
+        VD_UI_LOG("%s", "WHAT");
+    }
     ctx->passes[ctx->num_passes - 1].instance_count++;
 }
 
@@ -1412,11 +1567,110 @@ VD_UI_API int vd_ui_vsnprintf(char *s, size_t n, const char *format, va_list arg
     return count;
 }
 
-/* ----DEBUG--------------------------------------------------------------------------------------------------------- */
+/* ----DEBUG IMPL---------------------------------------------------------------------------------------------------- */
 VD_UI_API void vd_ui_debug_set_draw_cursor_on(VdUiBool on)
 {
     VdUiContext *ctx = vd_ui_context_get();
     ctx->debug.custom_cursor_on = on;
+}
+
+VD_UI_API void vd_ui_debug_set_inspector_on(VdUiBool on)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    ctx->debug.inspector_on = on;
+}
+
+static struct {
+    int initialized;
+    float height;
+    float rect[4];
+    struct {
+        float offset;
+        float size_h;
+    } hierarchy;
+} Vd_Ui_Inspector = {0};
+
+static void vd_ui__inspector_do_hierarchy(VdUiContext *ctx, VdUiDiv *curr, float depth);
+
+static void vd_ui__do_inspector(VdUiContext *ctx)
+{
+    if (!Vd_Ui_Inspector.initialized) {
+        Vd_Ui_Inspector.initialized = 1;
+        Vd_Ui_Inspector.height = 300.f;
+        Vd_Ui_Inspector.rect[0] = 0.f;
+        Vd_Ui_Inspector.rect[1] = ctx->window[1] - Vd_Ui_Inspector.height;
+    }
+    Vd_Ui_Inspector.rect[2] = ctx->window[0];
+    Vd_Ui_Inspector.rect[3] = ctx->window[1];
+    Vd_Ui_Inspector.hierarchy.size_h = Vd_Ui_Inspector.rect[2] - ctx->window[0] * 0.5f;
+
+    Vd_Ui_Inspector.hierarchy.offset = 4.f;
+
+    vd_ui__push_rect(ctx, &ctx->white, Vd_Ui_Inspector.rect, (float[]) {0.7f, 0.8f, 0.7f, 0.7f});
+
+    vd_ui__inspector_do_hierarchy(ctx, &ctx->root, 0.f);
+}
+
+static void vd_ui__inspector_do_hierarchy(VdUiContext *ctx, VdUiDiv *curr, float depth)
+{
+    VdUiDiv *child = curr->first;
+
+    float entry_rect[4] = {
+        Vd_Ui_Inspector.rect[0] + depth,
+        Vd_Ui_Inspector.rect[1] + Vd_Ui_Inspector.hierarchy.offset,
+        Vd_Ui_Inspector.rect[0] + depth + Vd_Ui_Inspector.hierarchy.size_h,
+        Vd_Ui_Inspector.rect[1] + Vd_Ui_Inspector.hierarchy.offset + 32.f,
+    };
+
+
+    float entry_color[4] = {0.1f, 0.1f, 0.1f, 1.f};
+    float entry_color_hovered[4] = {0.3f, 0.1f, 0.1f, 1.f};
+    float *final_color = entry_color;
+
+    if (vd_ui__point_in_rect(ctx->mouse, entry_rect)) {
+        final_color = entry_color_hovered;
+
+        float description_pos[2] = {
+            Vd_Ui_Inspector.rect[0] + Vd_Ui_Inspector.hierarchy.size_h,
+            Vd_Ui_Inspector.rect[1]
+        };
+
+        static char buf[1024];
+
+        {
+            int sz = vd_ui_snprintf(buf, sizeof(buf), "Rect: {%d %d %d %d}", (int)curr->rect[0], (int)curr->rect[1], (int)curr->rect[2], (int)curr->rect[3]);
+            VdUiStr s = {buf, sz};
+            vd_ui__put_line(ctx, s, description_pos[0], description_pos[1]);
+        }
+
+        {
+            int sz = vd_ui_snprintf(buf, sizeof(buf), "Relative Size: {%d %d}", (int)curr->comp_size[0], (int)curr->comp_size[1]);
+            VdUiStr s = {buf, sz};
+            vd_ui__put_line(ctx, s, description_pos[0], description_pos[1] + 32.f);
+        }
+
+        {
+            int sz = vd_ui_snprintf(buf, sizeof(buf), "Relative Pos: {%d %d}", (int)curr->comp_pos_rel[0], (int)curr->comp_pos_rel[1]);
+            VdUiStr s = {buf, sz};
+            vd_ui__put_line(ctx, s, description_pos[0], description_pos[1] + 64.f);
+        }
+
+    }
+
+    vd_ui__push_rect(ctx, &ctx->white, entry_rect, final_color);
+
+    if (curr->content_str.l != 0) {
+        vd_ui__put_line(ctx, curr->content_str, entry_rect[0], entry_rect[1]);
+    } else {
+        vd_ui__put_line(ctx, VD_UI_LIT("#id"), entry_rect[0], entry_rect[1]);
+    }
+
+    Vd_Ui_Inspector.hierarchy.offset += 32.f;
+
+    while (child != 0) {
+        vd_ui__inspector_do_hierarchy(ctx, child, depth + 64.f);
+        child = child->next;
+    }
 }
 
 /* ----INTEGRATION - OPENGL IMPL------------------------------------------------------------------------------------- */
@@ -1528,17 +1782,17 @@ VD_UI_API void vd_ui_gl_get_attribute_properties(int attribute, int *size, unsig
 {
     switch (attribute) {
         //                 GL_FLOAT          GL_FALSE
-        case 0: *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, p0);    *divisor = 1; break;
+        case 0: *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, p0);         *divisor = 1; break;
         //                 GL_FLOAT          GL_FALSE
-        case 1: *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, p1);    *divisor = 1; break;
+        case 1: *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, p1);         *divisor = 1; break;
         //                 GL_FLOAT          GL_FALSE
-        case 2: *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, p0u);   *divisor = 1; break;
+        case 2: *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, p0u);        *divisor = 1; break;
         //                 GL_FLOAT          GL_FALSE
-        case 3: *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, p1u);   *divisor = 1; break;
+        case 3: *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, p1u);        *divisor = 1; break;
         //                 GL_FLOAT          GL_FALSE
-        case 4: *size = 4; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, color); *divisor = 1; break;
-        //                 GL_UNSIGNED_INT   GL_FALSE
-        case 5: *size = 1; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, alpha_mix); *divisor = 1; break;
+        case 4: *size = 4; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, color);      *divisor = 1; break;
+        //                 GL_FLOAT          GL_FALSE
+        case 5: *size = 1; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, alpha_mix);  *divisor = 1; break;
         default: break;
     }
 }

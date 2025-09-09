@@ -24,7 +24,9 @@ int main(int argc, char const *argv[])
     VD_ARENA_FROM_SYSTEM(&arena, VD_MEGABYTES(24));
 
     vd_ui_init();
-    vd_ui_debug_set_draw_cursor_on(1);
+    vd_ui_debug_set_draw_cursor_on(0);
+    vd_ui_debug_set_inspector_on(1);
+
     vd_fw_init(& (VdFwInitInfo) {
         .gl = {
             .debug_on = 1,
@@ -181,7 +183,7 @@ int main(int argc, char const *argv[])
         void *buffer = vd_ui_frame_get_vertex_buffer(&buffer_size);
 
         // Get render passes
-        int num_passes;
+        unsigned int num_passes;
         VdUiRenderPass *passes = vd_ui_frame_get_render_passes(&num_passes);
 
 
@@ -190,7 +192,7 @@ int main(int argc, char const *argv[])
         glClear(GL_COLOR_BUFFER_BIT);
 
         // Loop through render passes
-        for (int i = 0; i < num_passes; ++i) {
+        for (unsigned int i = 0; i < num_passes; ++i) {
             VdUiRenderPass *pass = &passes[i];
             GLuint texture_id = (GLuint)pass->selected_texture->id;
 
