@@ -94,7 +94,6 @@ VD_UI_API int              vd_ui_vsnprintf(char *s, size_t n, const char *format
 static inline int          vd_ui_snprintf(char *s, size_t n, const char *format, ...);
 static inline int          vd_ui_strlen(const char *s);
 static inline void*        vd_ui_memcpy(void *dst, void *src, size_t count);
-
 static inline int vd_ui_snprintf(char *s, size_t n, const char *format, ...) {
     va_list args;
     va_start(args, format);    
@@ -173,8 +172,11 @@ typedef struct {
 } VdUiSize;
 
 typedef struct {
-    float    padding[4];
-    VdUiSize size[VD_UI_AXES];
+    float           padding[4];
+    VdUiSize        size[VD_UI_AXES];
+    VdUiGradient    normal_grad;
+    VdUiGradient    hot_grad;
+    VdUiGradient    active_grad;
 } VdUiStyle;
 
 typedef struct VdUiDiv VdUiDiv;
@@ -250,6 +252,10 @@ VD_UI_API void             vd_ui_parent_pop(void);
 VD_UI_API int              vd_ui_parent_count(void);
 VD_UI_API VdUiDiv*         vd_ui_parent_get(int i);
 
+static inline int vd_ui_div_has_flag(VdUiDiv *div, VdUiFlags flag)
+{
+    return div->flags & flag ? 1 : 0;
+}
 /* ----RENDERING----------------------------------------------------------------------------------------------------- */
 enum {
     VD_UI_VERTEX_FLAG_TEXTURE_IS_ALPHA_BUFFER = 1 << 0,
@@ -435,10 +441,10 @@ VD_UI_API void             vd_ui_debug_set_metrics_on(VdUiBool on);
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "ext/stb_truetype.h"
 
-static unsigned char public_sans_regular[84836];
+static unsigned char Vd_Ui_Public_Sans_Regular[84836];
 
 #define VD_UI_PARENT_STACK_MAX      256
-#define VD_UI_VBUF_COUNT_MAX        256
+#define VD_UI_VBUF_COUNT_MAX        1024
 #define VD_UI_RP_COUNT_MAX          64
 #define VD_UI_FONT_COUNT_MAX        4
 #define VD_UI_UPDATE_COUNT_MAX      2
@@ -522,6 +528,7 @@ static float        vd_ui__clampf01(float x);
 static float        vd_ui__clampf(float x, float a, float b);
 static float        vd_ui__lerp(float a, float b, float t);
 static VdUiF4       vd_ui__lerp4(VdUiF4 a, VdUiF4 b, float t);
+static VdUiF4       vd_ui__lerpgrad(VdUiF4 a, VdUiF4 b, float t);
 
 static void         vd_ui__do_inspector(VdUiContext *ctx);
 
@@ -946,7 +953,10 @@ VD_UI_API VdUiDiv *vd_ui_parent_get(int i)
 VD_UI_API void vd_ui_demo(void)
 {
     static int button1_click_count = 0;
-    vd_ui_parent_push(vd_ui_div_newf(0, "##button-example"));
+    VdUiDiv *button_example = vd_ui_div_newf(VD_UI_FLAG_FLEX_HORIZONTAL, "##button-example");
+    button_example->style.size[0].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
+    button_example->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
+    vd_ui_parent_push(button_example);
     {
         if (vd_ui_buttonf("Button 1").clicked) {
             button1_click_count++;
@@ -1603,7 +1613,7 @@ static VdUiF4 vd_ui__lerp4(VdUiF4 a, VdUiF4 b, float t)
 VD_UI_API void vd_ui_init(void)
 {
     vd_ui_context_set(vd_ui_context_create(0));
-    vd_ui_font_add_ttf(public_sans_regular, sizeof(public_sans_regular), 20.f);
+    vd_ui_font_add_ttf(Vd_Ui_Public_Sans_Regular, sizeof(Vd_Ui_Public_Sans_Regular), 20.f);
 }
 
 VD_UI_API VdUiContext *vd_ui_context_create(VdUiContextCreateInfo *info)
@@ -1711,6 +1721,7 @@ VD_UI_API int vd_ui_vsnprintf(char *s, size_t n, const char *format, va_list arg
         }
 
         format++;
+
         switch (*format) {
             case 's': {
                 const char *str = va_arg(args, const char *);
@@ -1821,9 +1832,11 @@ static void vd_ui__inspector_do_hierarchy(VdUiContext *ctx, VdUiDiv *curr, float
             Vd_Ui_Inspector.rect[1]
         };
 
-        vd_ui__put_linef(ctx, description_pos[0], description_pos[1] +  0.f, "Rect: %d %d %d %d", (int)curr->rect[0], (int)curr->rect[1], (int)curr->rect[2], (int)curr->rect[3]);
-        vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 32.f, "Size: %d %d", (int)curr->comp_size[0], (int)curr->comp_size[1]);
-        vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 64.f, "RPos: %d %d", (int)curr->comp_pos_rel[0], (int)curr->comp_pos_rel[1]);
+        vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f +  0.f, "Rect: %d %d %d %d", (int)curr->rect[0], (int)curr->rect[1], (int)curr->rect[2], (int)curr->rect[3]);
+        vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + 16.f, "Size: %d %d", (int)curr->comp_size[0], (int)curr->comp_size[1]);
+        vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + 32.f, "RPos: %d %d", (int)curr->comp_pos_rel[0], (int)curr->comp_pos_rel[1]);
+        vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + 48.f, "Text Background Clickable ClipContent FlexHorizontal");
+        vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + 64.f, "%d    %d         %d         %d", vd_ui_div_has_flag(curr, VD_UI_FLAG_TEXT), vd_ui_div_has_flag(curr, VD_UI_FLAG_BACKGROUND), vd_ui_div_has_flag(curr, VD_UI_FLAG_CLICKABLE), vd_ui_div_has_flag(curr, VD_UI_FLAG_CLIP_CONTENT), vd_ui_div_has_flag(curr, VD_UI_FLAG_FLEX_HORIZONTAL));
 
     }
 
@@ -2007,7 +2020,7 @@ VD_UI_API void vd_ui_gl_get_attribute_properties(int attribute, int *size, unsig
     }
 }
 
-static unsigned char public_sans_regular[84836] = {
+static unsigned char Vd_Ui_Public_Sans_Regular[84836] = {
 0x00,0x01,0x00,0x00,0x00,0x11,0x01,0x00,0x00,0x04,0x00,0x10,0x47,0x44,0x45,0x46,0x28,0xfe,0x2a,0x80,0x00,0x01,0x0a,0xcc,0x00,0x00,0x00,0xe2,0x47,0x50,0x4f,0x53,
 0x3e,0x9b,0x33,0x0c,0x00,0x01,0x0b,0xb0,0x00,0x00,0x37,0x76,0x47,0x53,0x55,0x42,0xf1,0x2f,0x68,0x1c,0x00,0x01,0x43,0x28,0x00,0x00,0x08,0x3c,0x4f,0x53,0x2f,0x32,
 0x91,0x08,0x64,0x92,0x00,0x00,0x01,0x98,0x00,0x00,0x00,0x60,0x63,0x6d,0x61,0x70,0xb6,0x8c,0x39,0x72,0x00,0x00,0x0c,0x18,0x00,0x00,0x06,0x54,0x63,0x76,0x74,0x20,
