@@ -20,9 +20,6 @@ int main(int argc, char const *argv[])
     (void)argc;
     (void)argv;
 
-    VdArena arena;
-    VD_ARENA_FROM_SYSTEM(&arena, VD_MEGABYTES(24));
-
     vd_ui_init();
     vd_ui_debug_set_draw_cursor_on(0);
     vd_ui_debug_set_inspector_on(1);
@@ -39,14 +36,37 @@ int main(int argc, char const *argv[])
         },
     });
 
-    // Vdusize len;
-    // void *file = vd_dump_file_to_bytes(&arena, "./ext/LiberationSans-Regular.ttf", &len);
-    // vd_ui_font_add_ttf(file, len, 20.f);
+    static char buf[1024];
 
+    vd_ui_snprintf(buf, sizeof(buf), "Hello %3s", "a");
+    printf("Buf L is %s\n", buf);
+
+    vd_ui_snprintf(buf, sizeof(buf), "Hello %03d Worlds", 1);
+    printf("Buf L is %s\n", buf);
+
+    vd_ui_snprintf(buf, sizeof(buf), "Hello %-3X Worlds", 123);
+    printf("Buf L is %s\n", buf);
+
+    vd_ui_snprintf(buf, sizeof(buf), "Hello %-3d Worlds", 1);
+    printf("Buf L is %s\n", buf);
+
+    vd_ui_snprintf(buf, sizeof(buf), "Hello %-3x Worlds", 12);
+    printf("Buf L is %s\n", buf);
+
+    vd_ui_snprintf(buf, sizeof(buf), "Hello %3d", 1);
+    printf("Buf 1 is %s\n", buf);
+
+    vd_ui_snprintf(buf, sizeof(buf), "Hello %3d", -12);
+    printf("Buf 1 is %s\n", buf);
+
+    vd_ui_snprintf(buf, sizeof(buf), "Hello %3d", 12345);
+    printf("Buf 1 is %s\n", buf);
+
+    vd_ui_snprintf(buf, sizeof(buf), "Hello %d", 1);
+    printf("Buf 2 is %s\n", buf);
 
     GLuint program;
     {
-
         const char *vertex_shader_source;   size_t vertex_shader_len;
         const char *fragment_shader_source; size_t fragment_shader_len;
         vd_ui_gl_get_default_shader_sources(&vertex_shader_source, &vertex_shader_len, 

@@ -453,7 +453,15 @@ static unsigned char Vd_Ui_Public_Sans_Regular[84836];
 #define VD_UI_CLIP_STACK_MAX        64
 #define VD_UI_NULL_DIVS_MAX         64
 
+#ifndef VD_UI_LOG_ENABLE
+#define VD_UI_LOG_ENABLE 0
+#endif // !VD_UI_LOG_ENABLE
+#if VD_UI_LOG_ENABLE
 #define VD_UI_LOG(x, ...)           printf("VDUI: " x "\n", __VA_ARGS__)
+#else
+#define VD_UI_LOG(x, ...)
+#endif // VD_UI_LOG_ENABLE
+
 static VdUiContext *Vd_Ui_Global_Context = 0;
 char Vd_Ui_CharBuf[VD_UI_CHAR_BUF_COUNT];
 
@@ -1688,25 +1696,9 @@ static void vd_ui__putc(char **buf, size_t *rm, int c, int *count) {
     (*count)++;
 }
 
-static void vd_ui__itoa(char **buf, size_t *rm, int *count, unsigned int value, unsigned int base, int uppercase)
-{
-    char tmp[32];
-    const char *digits = uppercase ? "0123456789ABCDEF" : "0123456789abcdef";
-    int pos = 0;
-
-    if (value == 0) {
-        tmp[pos++] = '0';
-    } else {
-        while (value > 0 && pos < sizeof(tmp)) {
-            tmp[pos++] = digits[value % base];
-            value /= base;
-        }
-    }
-
-    while (pos > 0) {
-        vd_ui__putc(buf, rm, tmp[--pos], count);
-    }
-}
+static int vd_ui__is_letter(char c)     { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'); }
+static int vd_ui__is_uppercase(char c)  { return (c >= 'A' && c <= 'Z'); }
+static char vd_ui__to_lowercase(char c) { return (c - 'A' + 'a'); }
 
 VD_UI_API int vd_ui_vsnprintf(char *s, size_t n, const char *format, va_list args)
 {
@@ -1720,30 +1712,165 @@ VD_UI_API int vd_ui_vsnprintf(char *s, size_t n, const char *format, va_list arg
             continue;
         }
 
-        format++;
+        // "%s"
+        //  ^ we are here
+        const char *spec = format;
+        int spec_count = 1;
+        int justify = 0;
+        int min_width = 0;
+        int prefix_zero = 0;
+        int plus = 0;
 
-        switch (*format) {
+        while (spec[spec_count] != 0 && spec[spec_count] != ' ' && !vd_ui__is_letter(spec[spec_count])) {
+            spec_count++;
+        }
+
+        if (spec_count > 1) {
+
+            int parse_count = spec_count;
+
+            for (int i = 1; i < parse_count; ++i) {
+                if (spec[i] == '-') {
+                    justify = -1;
+                } else if (spec[i] == '+') {
+                    plus = 1;
+                } else if (spec[i] == '0') {
+                    prefix_zero = 1;
+                } else if (spec[i] >= '1' && spec[i] <= '9') {
+                    // Parse width
+
+                    int w = 0;
+                    while ((i < parse_count) && (spec[i] >= '1' && spec[i] <= '9')) {
+                        w *= 10;
+                        w += spec[i] - '0';
+                        i++;
+                    }
+
+                    min_width = w;
+                    if (justify == 0) {
+                        justify = 1;
+                    }
+                }
+            }
+
+            format += spec_count;
+        } else {
+            format += 1;
+        }
+
+        char typ = *format;
+        int uppercase = vd_ui__is_uppercase(typ);
+        char typl = typ;
+        if (uppercase) {
+            typl = vd_ui__to_lowercase(typ);
+        }
+
+        switch (typl) {
             case 's': {
                 const char *str = va_arg(args, const char *);
+
+                int len = 0;
+                {
+                    const char *str2 = str;
+                    while (*str2++) len++;
+                }
+
+                if (justify == 1) {
+                    int num_spaces = 0;
+                    if (min_width > len) {
+                        num_spaces = min_width - len;
+                    }
+
+                    for (int i = 0; i < num_spaces; ++i) vd_ui__putc(&buf, &rm, ' ', &count);
+                }
 
                 while (*str) {
                     vd_ui__putc(&buf, &rm, *str++, &count);
                 }
+
+                if (justify == -1) {
+                    int num_spaces = 0;
+                    if (min_width > len) {
+                        num_spaces = min_width - len;
+                    }
+
+                    for (int i = 0; i < num_spaces; ++i) vd_ui__putc(&buf, &rm, ' ', &count);
+                }
             } break;
 
+
+            case 'o':
+            case 'x':
             case 'd': {
-                int val = va_arg(args, int);
-                if (val < 0) {
-                    vd_ui__putc(&buf, &rm, '-', &count);
-                    val = -val;
+                int base = 10;
+
+                if (typl == 'x') {
+                    base = 16;
+                } else if (typl == 'o') {
+                    base = 8;
                 }
 
-                vd_ui__itoa(&buf, &rm, &count, (unsigned)val, 10, 0);
+                int val = va_arg(args, int);
+                int is_negative = 0;
+                if (val < 0) {
+                    is_negative = 1;
+                    val = -val;
+                }
+                unsigned int value = (unsigned int)val;
+
+                char tmp[40];
+                const char *digits = uppercase ? "0123456789ABCDEF" : "0123456789abcdef";
+                int pos = 0;
+
+                if (value == 0) {
+                    tmp[pos++] = '0';
+                } else {
+                    while (value > 0 && pos < sizeof(tmp)) {
+                        tmp[pos++] = digits[value % base];
+                        value /= base;
+                    }
+                }
+
+                if (is_negative) {
+                    tmp[pos++] = '-';
+                } else if (!is_negative && plus) {
+                    tmp[pos++] = '+';
+                }
+
+                if (justify == 1) {
+                    int num_spaces = 0;
+                    if (min_width > pos) {
+                        num_spaces = min_width - pos;
+                    }
+
+
+                    if (prefix_zero) {
+                        for (int i = 0; i < num_spaces; ++i) vd_ui__putc(&buf, &rm, '0', &count);
+                    } else {
+                        for (int i = 0; i < num_spaces; ++i) vd_ui__putc(&buf, &rm, ' ', &count);
+                    }
+                }
+
+                int saved_pos = pos;
+
+                while (pos > 0) {
+                    vd_ui__putc(&buf, &rm, tmp[--pos], &count);
+                }
+
+                pos = saved_pos;
+
+                if (justify == -1) {
+                    int num_spaces = 0;
+                    if (min_width > pos) {
+                        num_spaces = min_width - pos;
+                    }
+                    for (int i = 0; i < num_spaces; ++i) vd_ui__putc(&buf, &rm, ' ', &count);
+                }
             } break;
 
             default: {
                 vd_ui__putc(&buf, &rm, '%', &count);
-                vd_ui__putc(&buf, &rm, *format, &count);
+                vd_ui__putc(&buf, &rm, typ, &count);
             } break;
         }
         format++;
