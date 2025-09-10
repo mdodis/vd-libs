@@ -25,7 +25,7 @@ int main(int argc, char const *argv[])
 
     vd_ui_init();
     vd_ui_debug_set_draw_cursor_on(0);
-    // vd_ui_debug_set_inspector_on(1);
+    vd_ui_debug_set_inspector_on(1);
     vd_ui_debug_set_metrics_on(0);
 
     vd_fw_init(& (VdFwInitInfo) {
@@ -39,9 +39,9 @@ int main(int argc, char const *argv[])
         },
     });
 
-    Vdusize len;
-    void *file = vd_dump_file_to_bytes(&arena, "./ext/LiberationSans-Regular.ttf", &len);
-    vd_ui_font_add_ttf(file, len, 20.f);
+    // Vdusize len;
+    // void *file = vd_dump_file_to_bytes(&arena, "./ext/LiberationSans-Regular.ttf", &len);
+    // vd_ui_font_add_ttf(file, len, 20.f);
 
 
     GLuint program;
@@ -89,6 +89,7 @@ int main(int argc, char const *argv[])
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_SCISSOR_TEST);
 
     vd_fw_set_vsync_on(0);
     while (vd_fw_running()) {
@@ -206,6 +207,7 @@ int main(int argc, char const *argv[])
         for (unsigned int i = 0; i < num_passes; ++i) {
             VdUiRenderPass *pass = &passes[i];
             GLuint texture_id = (GLuint)pass->selected_texture->id;
+            glScissor((GLint)pass->clip[0], (GLint)pass->clip[1], (GLsizei)pass->clip[2], (GLsizei)pass->clip[3]);
 
             glUseProgram(program);
             glActiveTexture(GL_TEXTURE0);
