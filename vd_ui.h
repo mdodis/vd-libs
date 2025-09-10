@@ -26,8 +26,6 @@
  * - Buttons and labels
  * - Glyph Cache collision resolution
  * - Div cache collision resolution
- * - Rounding
- * - Padding
  * - Images
  * - Support more of printf
  *
@@ -142,6 +140,12 @@ enum {
     VD_UI_MOUSE_LEFT        = 0,
     VD_UI_MOUSE_RIGHT       = 1,
     VD_UI_MOUSE_MIDDLE      = 2,
+
+    // Positions
+    VD_UI_LEFT = 0,
+    VD_UI_TOP  = 1,
+    VD_UI_RIGHT = 2,
+    VD_UI_BOTTOM = 3,
 };
 typedef int VdUiFlags;
 
@@ -164,6 +168,10 @@ typedef struct {
     float        importance;
 } VdUiSize;
 
+typedef struct {
+    float padding[4];
+} VdUiStyle;
+
 typedef struct VdUiDiv VdUiDiv;
 struct VdUiDiv {
     /** The first child of this div */
@@ -178,6 +186,7 @@ struct VdUiDiv {
     VdUiDiv     *parent;
 
     VdUiFlags   flags;
+    VdUiStyle   style;
 
     size_t      h;
     size_t      last_frame_touched;
@@ -336,6 +345,7 @@ VD_UI_API VdUiFontId       vd_ui_font_add_ttf(void *buffer, size_t size, float p
 VD_UI_API void             vd_ui_event_size(float width, float height);
 VD_UI_API void             vd_ui_event_mouse_location(float mx, float my);
 VD_UI_API void             vd_ui_event_mouse_button(int index, int down);
+VD_UI_API void             vd_ui_event_mouse_wheel(float dx, float dy);
 
 
 /* ----CONTEXT CREATION---------------------------------------------------------------------------------------------- */
@@ -551,6 +561,7 @@ struct VdUiContext {
     size_t                  last_frame_index;
     float                   delta_seconds;
     float                   mouse[2];
+    float                   wheel[2];
     float                   window[2];
     int                     mouse_left;
     int                     mouse_right;
@@ -581,6 +592,8 @@ VD_UI_API void vd_ui_frame_begin(float delta_seconds)
     ctx->root.last    = 0;
     ctx->root.prev    = 0;
     ctx->root.parent  = 0;
+    ctx->wheel[0]     = 0.f;
+    ctx->wheel[1]     = 0.f;
     vd_ui_parent_push(&ctx->root);
 
     ctx->delta_seconds = delta_seconds;
@@ -696,8 +709,12 @@ VD_UI_API VdUiReply vd_ui_button(VdUiStr str)
                                  VD_UI_FLAG_CLICKABLE,
                                  str);
 
-    div->size[0].mode = VD_UI_SIZE_MODE_TEXT_CONTENT;
-    div->size[1].mode = VD_UI_SIZE_MODE_TEXT_CONTENT;
+    div->size[0].mode  = VD_UI_SIZE_MODE_TEXT_CONTENT;
+    div->size[1].mode  = VD_UI_SIZE_MODE_TEXT_CONTENT;
+    div->style.padding[VD_UI_LEFT]   = 4.f;
+    div->style.padding[VD_UI_TOP]    = 4.f;
+    div->style.padding[VD_UI_RIGHT]  = 4.f;
+    div->style.padding[VD_UI_BOTTOM] = 4.f;
 
     return vd_ui_call(div);
 }
@@ -782,6 +799,10 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     result->last = 0;
     result->prev = 0;
     result->flags = flags;
+    result->style.padding[0] = 0.f;
+    result->style.padding[1] = 0.f;
+    result->style.padding[2] = 0.f;
+    result->style.padding[3] = 0.f;
     result->h = h;
     result->content_str = vd_ui__strbuf_dup(ctx, str);
 
@@ -797,7 +818,6 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     } else {
         // Insert result after parent->last in the circular list
         VdUiDiv *last = parent->last;
-        VdUiDiv *first = parent->first;
         last->next = result;
         result->prev = last;
         // result->next = first;
@@ -918,6 +938,9 @@ static void vd_ui__calc_fixed_size(VdUiContext *ctx, VdUiDiv *curr)
 
             case VD_UI_SIZE_MODE_ABSOLUTE: {
                 curr->comp_size[i] = curr->size[i].value;
+
+                curr->comp_size[0] += curr->style.padding[0] + curr->style.padding[2];
+                curr->comp_size[1] += curr->style.padding[1] + curr->style.padding[3];
             } break;
 
             case VD_UI_SIZE_MODE_TEXT_CONTENT: {
@@ -926,11 +949,15 @@ static void vd_ui__calc_fixed_size(VdUiContext *ctx, VdUiDiv *curr)
                 vd_ui_measure_text_size(font_id, curr->content_str, &text_sizes[0], &text_sizes[1]);
 
                 curr->comp_size[i] = text_sizes[i];
+
+                curr->comp_size[0] += curr->style.padding[0] + curr->style.padding[2];
+                curr->comp_size[1] += curr->style.padding[1] + curr->style.padding[3];
             } break;
 
             default: break;
         }
     }
+
 }
 
 static void vd_ui__calc_dyn_size_down(VdUiContext *ctx, VdUiDiv *curr)
@@ -951,18 +978,6 @@ static void vd_ui__calc_dyn_size_down(VdUiContext *ctx, VdUiDiv *curr)
 
     for (int i = 0; i < VD_UI_AXES; ++i) {
         switch (curr->size[i].mode) {
-
-            case VD_UI_SIZE_MODE_ABSOLUTE: {
-                curr->comp_size[i] = curr->size[i].value;
-            } break;
-
-            case VD_UI_SIZE_MODE_TEXT_CONTENT: {
-                VdUiFontId font_id = {0};
-                float text_sizes[VD_UI_AXES];
-                vd_ui_measure_text_size(font_id, curr->content_str, &text_sizes[0], &text_sizes[1]);
-
-                curr->comp_size[i] = text_sizes[i];
-            } break;
 
             case VD_UI_SIZE_MODE_CONTAIN_CHILDREN: {
                 curr->comp_size[i] = full_size[i];
@@ -988,7 +1003,7 @@ static void vd_ui__calc_positions(VdUiContext *ctx, VdUiDiv *curr)
     }
 
     int faxis = daxis == VD_UI_AXISH ? VD_UI_AXISV : VD_UI_AXISH;
-    int daxis2, faxis2;
+    int daxis2 = 0, faxis2 = 0;
 
     switch (daxis) {
         case VD_UI_AXISV: daxis2 = 3; faxis2 = 2; break;
@@ -1083,6 +1098,13 @@ VD_UI_API void vd_ui_event_mouse_location(float mx, float my)
     VdUiContext *ctx = vd_ui_context_get();
     ctx->mouse[0] = mx;
     ctx->mouse[1] = my;
+}
+
+VD_UI_API void vd_ui_event_mouse_wheel(float dx, float dy)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    ctx->wheel[0] = dx;
+    ctx->wheel[1] = dy;
 }
 
 VD_UI_API void vd_ui_event_mouse_button(int index, int down)
@@ -1216,7 +1238,7 @@ static void vd_ui__push_rectgrad(VdUiContext *ctx, VdUiTextureId *texture, float
         (float[]){0.0f   , 0.0f   }, (float[]){1.0f   , 1.0f   },
         color,
         0,
-        4.f, 2.f, 0.f);
+        2.f, 2.f, 0.f);
 }
 
 static void vd_ui__push_rect(VdUiContext *ctx, VdUiTextureId *texture, float rect[4], float color[4])
@@ -1434,7 +1456,6 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
     }
 
     // Post order: search process child first from last to first
-    VdUiDiv *first_child = curr->first;
     VdUiDiv *last_child  = curr->last;
     VdUiDiv *child = last_child;
 
@@ -1467,7 +1488,7 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
     if (curr->flags & VD_UI_FLAG_TEXT) {
         VdUiFont *font = &ctx->fonts[0];
         float ydown = (-font->descent) * font->size_scaled;
-        vd_ui__put_line(ctx, curr->content_str, curr->rect[0], curr->rect[1] + ydown);
+        vd_ui__put_line(ctx, curr->content_str, curr->rect[0] + curr->style.padding[0] * 2, curr->rect[1] + curr->style.padding[1] + ydown);
     }
 }
 

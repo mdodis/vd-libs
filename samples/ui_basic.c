@@ -103,6 +103,12 @@ int main(int argc, char const *argv[])
         int mouse_state = vd_fw_get_mouse_statef(&mx, &my);
         VD_UNUSED(mouse_state);
 
+        float wx, wy;
+        int wheel_moved = vd_fw_get_mouse_wheel(&wx, &wy);
+        if (wheel_moved) {
+            printf("WHEEL %f %f\n", wx, wy);
+        }
+
         vd_ui_event_size((float)w, (float)h);
         vd_ui_event_mouse_location(mx, my);
         vd_ui_event_mouse_button(VD_UI_MOUSE_LEFT,  mouse_state & VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN);

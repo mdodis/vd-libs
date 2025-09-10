@@ -47,6 +47,183 @@
 #define VD_FW_INLINE static inline
 #endif // VD_FW_INLINE
 
+typedef enum {
+    VD_FW_GL_VERSION_BASIC = 0,
+    VD_FW_GL_VERSION_1_0   = 1,
+    VD_FW_GL_VERSION_1_2   = 12,
+    VD_FW_GL_VERSION_1_3   = 13,
+    VD_FW_GL_VERSION_1_4   = 14,
+    VD_FW_GL_VERSION_1_5   = 15,
+    VD_FW_GL_VERSION_2_0   = 20,
+    VD_FW_GL_VERSION_2_1   = 21,
+    VD_FW_GL_VERSION_3_0   = 30,
+    VD_FW_GL_VERSION_3_1   = 31,
+    VD_FW_GL_VERSION_3_2   = 32,
+    VD_FW_GL_VERSION_3_3   = 33,
+} VdFwGlVersion;
+
+enum {
+    VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN  = 1 << 0,
+    VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN = 1 << 1,
+};
+
+typedef struct __VD_FW_InitInfo {
+    struct {
+        VdFwGlVersion version;
+        int           debug_on;
+    } gl;
+
+    struct {
+        int           draw_default_borders;
+    } window_options;
+} VdFwInitInfo;
+
+/**
+ * Initialize fw. Call this before any other call
+ * @param  info Custom options when initializing. Leave null for default
+ * @return      (Reserved)
+ */
+VD_FW_API int                vd_fw_init(VdFwInitInfo *info);
+
+/**
+ * Check if the application is running. Call this every frame
+ * @return  1 if running, 0 if not
+ */
+VD_FW_API int                vd_fw_running(void);
+
+/**
+ * Swap back buffer with front buffer; call at the end of your rendering
+ * @return  (Reserved)
+ */
+VD_FW_API int                vd_fw_swap_buffers(void);
+
+/**
+ * Get the size of the window, in pixels
+ * @param  w The width of the window, in pixels
+ * @param  h The height of the window, in pixels
+ * @return   (Reserved)
+ */
+VD_FW_API int                vd_fw_get_size(int *w, int *h);
+
+/**
+ * Get the time (in nanoseconds) since the last call to @see vd_fw_swap_buffers
+ * @return  The delta time (in nanoseconds)
+ */
+VD_FW_API unsigned long long vd_fw_delta_ns(void);
+
+/**
+ * Set VSYNC to the number of frames to sync on
+ * @param  on 0: no sync, 1: sync every frame, 2: sync every other frame
+ * @return    1 if the change was applied successfully
+ */
+VD_FW_API int                vd_fw_set_vsync_on(int on);
+
+/**
+ * Read the mouse state. @see above in the enumeration
+ * @param  x The horizontal position of the mouse, in pixels (left -> right)
+ * @param  y The vertical position of the mouse, in pixels (top -> bottom)
+ * @return   The mouse button state
+ */
+VD_FW_API int                vd_fw_get_mouse_state(int *x, int *y);
+
+/**
+ * Read the mouse wheel state.
+ * @param  dx The delta of horizontal wheel (either trackpad swipe right, or ctrl + mousewheel)
+ * @param  dy The delta of vertical wheel
+ * @return    1 if the wheel moved, 0 if not
+ */
+VD_FW_API int                vd_fw_get_mouse_wheel(float *dx, float *dy);
+
+/**
+ * Compile a GLSL shader and check for errors
+ * @param  type   The shader type
+ * @param  source The shader source code
+ * @return        The shader handle
+ */
+VD_FW_API unsigned int       vd_fw_compile_shader(unsigned int type, const char *source);
+
+/**
+ * Link a GL program and check for errors
+ * @param  program The program to link
+ * @return         1 on success, 0 otherwise
+ */
+VD_FW_API int                vd_fw_link_program(unsigned int program);
+
+/**
+ * Shorthand for getting mouse coordinates as floats
+ * @param  x The x position
+ * @param  y The y position
+ * @return   The mouse button states
+ */
+VD_FW_INLINE int             vd_fw_get_mouse_statef(float *x, float *y);
+
+/**
+ * Shorthand for computing delta time in seconds
+ * @return  The delta time (in seconds)
+ */
+VD_FW_INLINE float           vd_fw_delta_s(void);
+
+/**
+ * Construct an orthographic projection matrix
+ * @param   left The left side
+ * @param  right The right side
+ * @param    top The top side
+ * @param bottom The bottom side
+ * @param   near The near plane
+ * @param    far The far plane
+ * @param    out The output matrix
+ */
+VD_FW_INLINE void            vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16]);
+VD_FW_INLINE int             vd_fw_u_point_in_rect(float x, float y, float rx, float ry, float rw, float rh);
+
+VD_FW_INLINE float vd_fw_delta_s(void)
+{
+    unsigned long long ns  = vd_fw_delta_ns();
+    double ms              = (double)ns / 1000000.0;
+    double sec64           = ms         / 1000.0;
+    float s                = (float)sec64;
+    return s;
+}
+
+VD_FW_INLINE int vd_fw_u_point_in_rect(float x, float y, float rx, float ry, float rw, float rh)
+{
+    return (x >= rx) && (x <= (rx + rw)) &&
+           (y >= ry) && (y <= (ry + rh));
+}
+
+VD_FW_INLINE int vd_fw_get_mouse_statef(float *x, float *y)
+{
+    int xi, yi;
+    int result = vd_fw_get_mouse_state(&xi, &yi);
+
+    if (x) *x = (float)xi;
+    if (y) *y = (float)yi;
+
+    return result;
+}
+
+VD_FW_INLINE void vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16])
+{
+    out[0]  = 2.0f / (right - left);               out[1]  = 0.0f;                              out[2]  = 0.0f;                          out[3]  = 0.0f;
+    out[4]  = 0.0f;                                out[5]  = 2.0f / (top - bottom);             out[6]  = 0.0f;                          out[7]  = 0.0f;
+    out[8]  = 0.0f;                                out[9]  = 0.0f;                              out[10] = -2.0f / (far - near);          out[11] = 0.0f;
+    out[12] = - (right + left) / (right - left);   out[13] = - (top + bottom) / (top - bottom); out[14] = - (far + near) / (far - near); out[15] = 1.0f;
+}
+
+#if _WIN32
+#define VD_FW_WIN32_SUBSYSTEM_CONSOLE 1
+#define VD_FW_WIN32_SUBSYSTEM_WINDOWS 2
+
+#ifndef VD_FW_WIN32_SUBSYSTEM
+#define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_CONSOLE
+#endif // !VD_FW_WIN32_SUBSYSTEM
+
+#ifndef VD_FW_NO_CRT
+#define VD_FW_NO_CRT 0
+#endif
+#endif // _WIN32
+
+
 #if defined(__APPLE__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
@@ -901,141 +1078,7 @@ typedef __int64            GLint64;
 #define GL_TIME_ELAPSED                                  0x88BF
 #define GL_TIMESTAMP                                     0x8E28
 #define GL_INT_2_10_10_10_REV                            0x8D9F
-
 #endif // defined(__APPLE__)
-
-typedef enum {
-    VD_FW_GL_VERSION_BASIC = 0,
-    VD_FW_GL_VERSION_1_0   = 1,
-    VD_FW_GL_VERSION_1_2   = 12,
-    VD_FW_GL_VERSION_1_3   = 13,
-    VD_FW_GL_VERSION_1_4   = 14,
-    VD_FW_GL_VERSION_1_5   = 15,
-    VD_FW_GL_VERSION_2_0   = 20,
-    VD_FW_GL_VERSION_2_1   = 21,
-    VD_FW_GL_VERSION_3_0   = 30,
-    VD_FW_GL_VERSION_3_1   = 31,
-    VD_FW_GL_VERSION_3_2   = 32,
-    VD_FW_GL_VERSION_3_3   = 33,
-} VdFwGlVersion;
-
-enum {
-    VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN  = 1 << 0,
-    VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN = 1 << 1,
-};
-
-typedef struct __VD_FW_InitInfo {
-    struct {
-        VdFwGlVersion version;
-        int           debug_on;
-    } gl;
-
-    struct {
-        int           draw_default_borders;
-    } window_options;
-} VdFwInitInfo;
-
-/**
- * Initialize fw. Call this before any other call
- * @param  info Custom options when initializing. Leave null for default
- * @return      (Reserved)
- */
-VD_FW_API int                vd_fw_init(VdFwInitInfo *info);
-
-/**
- * Check if the application is running. Call this every frame
- * @return  1 if running, 0 if not
- */
-VD_FW_API int                vd_fw_running(void);
-
-/**
- * Swap back buffer with front buffer; call at the end of your rendering
- * @return  (Reserved)
- */
-VD_FW_API int                vd_fw_swap_buffers(void);
-
-/**
- * Get the size of the window, in pixels
- * @param  w The width of the window, in pixels
- * @param  h The height of the window, in pixels
- * @return   (Reserved)
- */
-VD_FW_API int                vd_fw_get_size(int *w, int *h);
-
-/**
- * Get the time (in nanoseconds) since the last call to @see vd_fw_swap_buffers
- * @return  The delta time (in nanoseconds)
- */
-VD_FW_API unsigned long long vd_fw_delta_ns(void);
-
-/**
- * Set VSYNC to the number of frames to sync on
- * @param  on 0: no sync, 1: sync every frame, 2: sync every other frame
- * @return    1 if the change was applied successfully
- */
-VD_FW_API int                vd_fw_set_vsync_on(int on);
-
-/**
- * Read the mouse state. @see above in the enumeration
- * @param  x The horizontal position of the mouse, in pixels (left -> right)
- * @param  y The vertical position of the mouse, in pixels (top -> bottom)
- * @return   The mouse button state
- */
-VD_FW_API int                vd_fw_get_mouse_state(int *x, int *y);
-VD_FW_API void               vd_fw_draw_window_border(void);
-VD_FW_API GLuint             vd_fw_compile_shader(GLenum type, const char *source);
-VD_FW_API int                vd_fw_link_program(GLuint program);
-VD_FW_INLINE int             vd_fw_get_mouse_statef(float *x, float *y);
-VD_FW_INLINE float           vd_fw_delta_s(void);
-VD_FW_INLINE void            vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16]);
-VD_FW_INLINE int             vd_fw_u_point_in_rect(float x, float y, float rx, float ry, float rw, float rh);
-
-VD_FW_INLINE float vd_fw_delta_s(void)
-{
-    unsigned long long ns  = vd_fw_delta_ns();
-    double ms              = (double)ns / 1000000.0;
-    double s64             = ms         / 1000.0;
-    float s                = (float)s64;
-    return s;
-}
-
-VD_FW_INLINE int vd_fw_u_point_in_rect(float x, float y, float rx, float ry, float rw, float rh)
-{
-    return (x >= rx) && (x <= (rx + rw)) &&
-           (y >= ry) && (y <= (ry + rh));
-}
-
-VD_FW_INLINE int vd_fw_get_mouse_statef(float *x, float *y)
-{
-    int xi, yi;
-    int result = vd_fw_get_mouse_state(&xi, &yi);
-
-    if (x) *x = (float)xi;
-    if (y) *y = (float)yi;
-
-    return result;
-}
-
-VD_FW_INLINE void vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16])
-{
-    out[0]  = 2.0f / (right - left);               out[1]  = 0.0f;                              out[2]  = 0.0f;                          out[3]  = 0.0f;
-    out[4]  = 0.0f;                                out[5]  = 2.0f / (top - bottom);             out[6]  = 0.0f;                          out[7]  = 0.0f;
-    out[8]  = 0.0f;                                out[9]  = 0.0f;                              out[10] = -2.0f / (far - near);          out[11] = 0.0f;
-    out[12] = - (right + left) / (right - left);   out[13] = - (top + bottom) / (top - bottom); out[14] = - (far + near) / (far - near); out[15] = 1.0f;
-}
-
-#if _WIN32
-#define VD_FW_WIN32_SUBSYSTEM_CONSOLE 1
-#define VD_FW_WIN32_SUBSYSTEM_WINDOWS 2
-
-#ifndef VD_FW_WIN32_SUBSYSTEM
-#define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_CONSOLE
-#endif // !VD_FW_WIN32_SUBSYSTEM
-
-#ifndef VD_FW_NO_CRT
-#define VD_FW_NO_CRT 0
-#endif
-#endif // _WIN32
 
 #if !defined(__APPLE__)
 /* ----GL VERSION 1.0------------------------------------------------------------------------------------------------ */
@@ -2225,6 +2268,8 @@ typedef struct {
     HANDLE                      sem_closed;
     volatile BOOL               t_running;
     BOOL                        draw_decorations;
+    int                         wheel_moved;
+    float                       wheel[2];
 } VdFw__Win32InternalData;
 
 static VdFw__Win32InternalData Vd_Fw_Globals = {0};
@@ -2322,10 +2367,11 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         1,
         NULL);
 
-    // DWORD spin_count = 0;
-    // VD_FW__CHECK_TRUE(InitializeCriticalSectionAndSpinCount(
-    //     &VD_FW_G.render_section,
-    //     spin_count));
+    // Create a message queue on this thread
+    {
+        MSG msg;
+        PeekMessage(&msg, NULL, WM_USER, WM_USER, PM_NOREMOVE);
+    }
 
     VD_FW_G.win_thread = CreateThread(
         NULL,
@@ -2472,13 +2518,42 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 VD_FW_API int vd_fw_running(void)
 {
     DWORD result = WaitForSingleObject(VD_FW_G.sem_closed, 0);
-    if (result == WAIT_OBJECT_0) {
-        return 0;
-    } else if (result == WAIT_TIMEOUT) {
-        return 1;
-    } else {
+    if (result != WAIT_TIMEOUT) {
         return 0;
     }
+
+    VD_FW_G.wheel_moved = 0;
+    VD_FW_G.wheel[0] = 0.f;
+    VD_FW_G.wheel[1] = 0.f;
+
+    // Peek Messages
+    MSG msg;
+    while (PeekMessage(&msg, 0, 0, 0, PM_REMOVE)) {
+        // TranslateMessage(&msg);
+
+        UINT   message = msg.message;
+        WPARAM wparam = msg.lParam;
+        (void)wparam;
+        LPARAM lparam = msg.wParam;
+
+        switch (message) {
+            case WM_MOUSEWHEEL: {
+                VD_FW_G.wheel_moved = 1;
+                int delta = GET_WHEEL_DELTA_WPARAM(lparam);
+                float dy = (float)delta / (float)WHEEL_DELTA;
+                VD_FW_G.wheel[1] += dy;
+            } break;
+            case WM_MOUSEHWHEEL: {
+                VD_FW_G.wheel_moved = 1;
+                int delta = GET_WHEEL_DELTA_WPARAM(lparam);
+                float dx = (float)delta / (float)WHEEL_DELTA;
+                VD_FW_G.wheel[0] += dx;
+            } break;
+            default: break;
+        }
+    }
+
+    return 1;
 }
 
 VD_FW_API int vd_fw_swap_buffers(void)
@@ -2520,6 +2595,13 @@ VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
     result |= GetAsyncKeyState(VK_RBUTTON) ? VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN : 0;
 
     return result;
+}
+
+VD_FW_API int vd_fw_get_mouse_wheel(float *dx, float *dy)
+{
+    if (dx) *dx = VD_FW_G.wheel[0];
+    if (dy) *dy = VD_FW_G.wheel[1];
+    return VD_FW_G.wheel_moved;
 }
 
 VD_FW_API unsigned long long vd_fw_delta_ns(void)
@@ -2776,53 +2858,6 @@ static LRESULT vd_fw__nccalcsize(WPARAM wparam, LPARAM lparam)
     } else {
         return DefWindowProcW(VD_FW_G.hwnd, WM_NCCALCSIZE, wparam, lparam);
     }
-    // if (!VD_FW_G.draw_decorations) {
-    //     if (wparam == TRUE) {
-    //         return;
-    //     }
-    // }
-
-    // union {
-    //     LPARAM lparam;
-    //     RECT   *rect;
-    // } params = { .lparam = lparam };
-
-    // RECT non_client = *params.rect;
-    // DefWindowProcW(VD_FW_G.hwnd, WM_NCCALCSIZE, wparam, params.lparam);
-
-    // RECT client = *params.rect;
-
-    // if (IsMaximized(VD_FW_G.hwnd)) {
-    //     WINDOWINFO window_info = {0};
-    //     window_info.cbSize = sizeof(window_info);
-    //     GetWindowInfo(VD_FW_G.hwnd, &window_info);
-
-    //     *params.rect = (RECT) {
-    //         .left   = client.left,
-    //         .top    = non_client.top + window_info.cyWindowBorders,
-    //         .right  = client.right,
-    //         .bottom = client.bottom,
-    //     };
-
-    //     HMONITOR monitor = MonitorFromWindow(VD_FW_G.hwnd, MONITOR_DEFAULTTOPRIMARY);
-    //     MONITORINFO monitor_info = {0};
-    //     monitor_info.cbSize = sizeof(monitor_info);
-    //     GetMonitorInfoW(monitor, &monitor_info);
-
-    //     if (EqualRect(params.rect, &monitor_info.rcMonitor)) {
-    //         if (vd_fw__has_autohide_taskbar(ABE_BOTTOM, monitor_info.rcMonitor)) {
-    //             params.rect->bottom--;
-    //         } else if (vd_fw__has_autohide_taskbar(ABE_LEFT, monitor_info.rcMonitor)) {
-    //             params.rect->left++;
-    //         } else if (vd_fw__has_autohide_taskbar(ABE_TOP, monitor_info.rcMonitor)) {
-    //             params.rect->top++;
-    //         } else if (vd_fw__has_autohide_taskbar(ABE_RIGHT, monitor_info.rcMonitor)) {
-    //             params.rect->right--;
-    //         }
-    //     } else {
-    //         *params.rect = non_client;
-    //     }
-    // }
 }
 
 static BOOL vd_fw__has_autohide_taskbar(UINT edge, RECT monitor)
@@ -2864,28 +2899,6 @@ static LRESULT vd_fw__handle_invisible(HWND hwnd, UINT msg, WPARAM wparam, LPARA
     SetWindowLongPtrW(hwnd, GWL_STYLE, old_style);    
 
     return result;
-}
-
-static void vd_fw__paint(void)
-{
-    // render();
-    // PAINTSTRUCT ps;
-    // HDC dc = BeginPaint(VD_FW_G.hwnd, &ps);
-    // HBRUSH bb = CreateSolidBrush(RGB(0, 255, 0));
-
-    // RECT rect;
-    // GetClientRect(VD_FW_G.hwnd, &rect);
-    // int width = rect.right - rect.left;
-    // int height = rect.bottom - rect.top;
-
-    // /* Draw a rectangle on the border of the client area for testing */
-    // FillRect(dc, &(RECT) { 0, 0, 1, height }, bb);
-    // FillRect(dc, &(RECT) { 0, 0, width, 1 }, bb);
-    // FillRect(dc, &(RECT) { width - 1, 0, width, height }, bb);
-    // FillRect(dc, &(RECT) { 0, height - 1, width, height }, bb);
-
-    // DeleteObject(bb);
-    // EndPaint(VD_FW_G.hwnd, &ps);
 }
 
 static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
@@ -2985,6 +2998,11 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             // vd_fw_swap_buffers();
             // DwmFlush();
             result = 1;
+        } break;
+
+        case WM_MOUSEHWHEEL:
+        case WM_MOUSEWHEEL: {
+            PostThreadMessageA(VD_FW_G.main_thread_id, msg, wparam, lparam);
         } break;
 
         case WM_MOVING:
@@ -3894,7 +3912,7 @@ static void vd_fw__load_opengl(VdFwGlVersion version)
 #endif 
 }
 
-VD_FW_API GLuint vd_fw_compile_shader(GLenum type, const char *source)
+VD_FW_API unsigned int vd_fw_compile_shader(unsigned int type, const char *source)
 {
     int success;
     GLuint shd = glCreateShader(type);
@@ -3914,7 +3932,7 @@ VD_FW_API GLuint vd_fw_compile_shader(GLenum type, const char *source)
     return 0;
 }
 
-VD_FW_API int vd_fw_link_program(GLuint program)
+VD_FW_API int vd_fw_link_program(unsigned int program)
 {
     int success;
     glLinkProgram(program);
@@ -3931,263 +3949,6 @@ VD_FW_API int vd_fw_link_program(GLuint program)
     printf("Program linkage failed: %s\n", buf);
 
     return 0;
-}
-
-enum {
-    VD_FW__CLOSE_BUTTON_ID = 0,
-    VD_FW__MAXIMIZE_BUTTON_ID = 1,
-    VD_FW__MAX_IDS,
-};
-
-typedef struct {
-    int   is_hovered;
-    int   was_hovered;
-    float location[4];
-    float color[4];
-} VdFw__Elem;
-
-typedef struct {
-    float start_color[4];
-    float end_color[4];
-    float now_color[4];
-    float timer;
-    float time;
-    int ease_mode;
-} VdFw__Tween;
-
-typedef struct {
-    VdFw__Elem  e[VD_FW__MAX_IDS];
-    VdFw__Tween t[VD_FW__MAX_IDS];
-
-    int        initialized;
-    GLint      projection_location;
-    GLint      rect_location;
-    GLint      color_location;
-    GLuint     vao;
-    GLuint     program;
-    GLuint     vbo;
-    GLuint     ibo;
-    float      mouse[2];
-    float      window[2];
-} VdFw__GenericInternalData;
-
-static void vd_fw__write_location(VdFw__GenericInternalData *data, int id, float location[4])
-{
-    VdFw__Elem *e = &data->e[id];
-    e->location[0] = location[0];
-    e->location[1] = location[1];
-    e->location[2] = location[2];
-    e->location[3] = location[3];
-
-    int inside = vd_fw_u_point_in_rect(data->mouse[0], data->mouse[1], location[0], location[1], location[2], location[3]);
-
-    e->was_hovered = e->is_hovered;
-    e->is_hovered = inside;
-}
-
-static void vd_fw__write_color(VdFw__GenericInternalData *data, int id, float color[4])
-{
-    VdFw__Elem *e = &data->e[id];
-    e->color[0] = color[0];
-    e->color[1] = color[1];
-    e->color[2] = color[2];
-    e->color[3] = color[3];
-}
-
-static int vd_fw__was_hovered(VdFw__GenericInternalData *data, int id) {
-    return data->e[id].was_hovered;
-}
-
-static int vd_fw__is_hovered(VdFw__GenericInternalData *data, int id) {
-    return data->e[id].is_hovered;
-}
-
-static void vd_fw__anim_update(VdFw__GenericInternalData *data, int id, float new_color[4], float time, int mode) {
-    VdFw__Tween *w = &data->t[id];
-    w->timer = 0.f;
-    w->time = time;
-    w->ease_mode = mode;
-
-    w->start_color[0] = w->end_color[0];
-    w->start_color[1] = w->end_color[1];
-    w->start_color[2] = w->end_color[2];
-    w->start_color[3] = w->end_color[3];
-
-    w->end_color[0] = new_color[0];
-    w->end_color[1] = new_color[1];
-    w->end_color[2] = new_color[2];
-    w->end_color[3] = new_color[3];
-}
-
-static float vd_fw__ease(VdFw__Tween *w, float x) {
-    if (w->ease_mode == 0) {
-        return x;
-    } else if (w->ease_mode == 1) {
-        float p = (-2.f * x + 2.f);
-        return x < 0.5f ? 16.f * x * x * x * x * x : 1.f - (p*p*p*p*p) / 2.f;
-    }
-
-    return x;
-}
-
-static void vd_fw__animate(VdFw__GenericInternalData *data, int id) {
-
-    // VdFw__Elem  *e = &data->e[id];
-    VdFw__Tween *w = &data->t[id];
-
-    float s = vd_fw_delta_s();
-
-    if (w->time <= 0.000001f) {
-        return;
-    }
-
-    w->timer += s;
-
-    if (w->timer > w->time) {
-        w->timer = w->time;
-        vd_fw__write_color(data, id, w->end_color);
-    } else {
-
-        float t = w->timer / w->time;
-
-        float now[4] = {
-            (1.f - vd_fw__ease(w, t)) * w->start_color[0] + vd_fw__ease(w, t) * w->end_color[0],
-            (1.f - vd_fw__ease(w, t)) * w->start_color[1] + vd_fw__ease(w, t) * w->end_color[1],
-            (1.f - vd_fw__ease(w, t)) * w->start_color[2] + vd_fw__ease(w, t) * w->end_color[2],
-            (1.f - vd_fw__ease(w, t)) * w->start_color[3] + vd_fw__ease(w, t) * w->end_color[3],
-        };
-        vd_fw__write_color(data, id, now);
-    }
-
-}
-
-#define VD_FW_GL_VERSION_3_3_INTERNAL_VERTEX_SHADER_SOURCE                                                             \
-    "#version 330 core                                                                                             \n" \
-    "uniform mat4 uProjection;                                                                                     \n" \
-    "uniform vec4 uRect;                                                                                           \n" \
-    "void main() {                                                                                                 \n" \
-    "   vec2 positions[6] = vec2[](                                                                                \n" \
-    "       vec2(0.0, 0.0), // top-left                                                                            \n" \
-    "       vec2(1.0, 0.0), // top-right                                                                           \n" \
-    "       vec2(1.0, 1.0), // bottom-right                                                                        \n" \
-    "       vec2(1.0, 1.0), // bottom-right                                                                        \n" \
-    "       vec2(0.0, 1.0), // bottom-left                                                                         \n" \
-    "       vec2(0.0, 0.0)  // top-left                                                                            \n" \
-    "   );                                                                                                         \n" \
-    "   vec2 p = vec2(positions[gl_VertexID].x * uRect.z + uRect.x, positions[gl_VertexID].y * uRect.w + uRect.y); \n" \
-    "   gl_Position = uProjection * vec4(p, 0.0, 1.0);                                                             \n" \
-    "}                                                                                                             \n" \
-
-#define VD_FW_GL_VERSION_3_3_INTERNAL_FRAGMENT_SHADER_SOURCE                                                           \
-    "#version 330 core                                                                                             \n" \
-    "uniform vec4 uColor;                                                                                          \n" \
-    "out vec4 FragColor;                                                                                           \n" \
-    "void main() {                                                                                                 \n" \
-    "   FragColor = uColor;                                                                                        \n" \
-    "}                                                                                                             \n" \
-
-void vd_fw_draw_window_border(void)
-{
-    static VdFw__GenericInternalData data = {0};
-
-    if (!data.initialized) {
-        data.initialized = 1;
-        glGenVertexArrays(1, &data.vao);
-        glBindVertexArray(data.vao);
-
-        const char *vertex_shader = VD_FW_GL_VERSION_3_3_INTERNAL_VERTEX_SHADER_SOURCE;
-        GLuint vshd = glCreateShader(GL_VERTEX_SHADER);
-        glShaderSource(vshd, 1, &vertex_shader, 0);
-        glCompileShader(vshd);
-
-        const char *fragment_shader = VD_FW_GL_VERSION_3_3_INTERNAL_FRAGMENT_SHADER_SOURCE;
-        GLuint fshd = glCreateShader(GL_FRAGMENT_SHADER);
-        glShaderSource(fshd, 1, &fragment_shader, 0);
-        glCompileShader(fshd);
-
-        data.program = glCreateProgram();
-        glAttachShader(data.program, vshd);
-        glAttachShader(data.program, fshd);
-        glLinkProgram(data.program);
-
-        data.projection_location = glGetUniformLocation(data.program, "uProjection");
-        data.rect_location       = glGetUniformLocation(data.program, "uRect");
-        data.color_location      = glGetUniformLocation(data.program, "uColor");
-
-        glBindVertexArray(0);
-    }
-    glUseProgram(data.program);
-
-    float width;
-    float height;
-    {
-
-        int widthi, heighti;
-        vd_fw_get_size(&widthi, &heighti);
-
-        width  = (float)widthi;
-        height = (float)heighti;
-        float projection[16];
-        vd_fw_u_ortho(0.0f, width, height, 0.0f, -1.0f, 1.0f, projection);
-        glUniformMatrix4fv(data.projection_location, 1, GL_FALSE, projection);
-
-        vd_fw_get_mouse_statef(&data.mouse[0], &data.mouse[1]);
-    }
-
-    glBindVertexArray(data.vao);
-
-#define PUT_RECT(x, y, w, h, r, g, b, a) do {     \
-    glUniform4f(data.rect_location, x, y, w, h);  \
-    glUniform4f(data.color_location, r, g, b, a); \
-    glDrawArrays(GL_TRIANGLES, 0, 6);             \
-} while(0)
-
-    float button_size = 24.f;
-    float offset = width - button_size;
-
-    float close_button_normal[4] = {.7f, 0.f, 0.f, 1.f};
-    float close_button_hover[4]  = {1.f, 0.f, 0.f, 1.f};
-
-    vd_fw__write_location(&data, VD_FW__CLOSE_BUTTON_ID, (float[]){offset, 0.f, button_size, button_size});
-    offset -= button_size;
-
-    if (!vd_fw__was_hovered(&data, VD_FW__CLOSE_BUTTON_ID) && vd_fw__is_hovered(&data, VD_FW__CLOSE_BUTTON_ID)) {
-        vd_fw__anim_update(&data, VD_FW__CLOSE_BUTTON_ID, close_button_hover, 0.16f, 1);
-    } else if (vd_fw__was_hovered(&data, VD_FW__CLOSE_BUTTON_ID) && !vd_fw__is_hovered(&data, VD_FW__CLOSE_BUTTON_ID)) {
-        vd_fw__anim_update(&data, VD_FW__CLOSE_BUTTON_ID, close_button_normal, 0.32f, 1);
-    } else {
-        vd_fw__write_color(&data, VD_FW__CLOSE_BUTTON_ID, close_button_normal);
-    }
-
-    float maximize_button_normal[4] = {0.2f, 0.7f, 0.2f, 1.f};
-    float maximize_button_hover[4]  = {0.3f, 0.5f, 0.3f, 1.f};
-    vd_fw__write_location(&data, VD_FW__MAXIMIZE_BUTTON_ID, (float[]){offset, 0.f, button_size, button_size});
-    offset -= button_size;
-
-    if (!vd_fw__was_hovered(&data, VD_FW__MAXIMIZE_BUTTON_ID) && vd_fw__is_hovered(&data, VD_FW__MAXIMIZE_BUTTON_ID)) {
-        vd_fw__anim_update(&data, VD_FW__MAXIMIZE_BUTTON_ID, maximize_button_hover, 0.16f, 1);
-        // OutputDebugStringA("HOVER\n");
-    } else if (vd_fw__was_hovered(&data, VD_FW__MAXIMIZE_BUTTON_ID) && !vd_fw__is_hovered(&data, VD_FW__MAXIMIZE_BUTTON_ID)) {
-        vd_fw__anim_update(&data, VD_FW__MAXIMIZE_BUTTON_ID, maximize_button_normal, 0.32f, 1);
-    } else {
-        vd_fw__write_color(&data, VD_FW__MAXIMIZE_BUTTON_ID, maximize_button_normal);
-    }
-
-    vd_fw__animate(&data, VD_FW__CLOSE_BUTTON_ID);
-    vd_fw__animate(&data, VD_FW__MAXIMIZE_BUTTON_ID);
-    for (int i = 0; i < VD_FW__MAX_IDS; ++i) {
-
-
-        VdFw__Elem *e = &data.e[i];
-        PUT_RECT(
-            e->location[0], e->location[1], e->location[2], e->location[3],
-            e->color[0], e->color[1], e->color[2], e->color[3]);
-    }
-    
-    glBindVertexArray(0);
-
-    glUseProgram(0);
-#undef PUT_RECT
 }
 
 #if defined(__APPLE__)
