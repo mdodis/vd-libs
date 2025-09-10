@@ -35,7 +35,7 @@ int main(int argc, char const *argv[])
         },
 
         .window_options = {
-            .draw_default_borders = 0,
+            .draw_default_borders = 1,
         },
     });
 
@@ -193,7 +193,7 @@ int main(int argc, char const *argv[])
 
 
         glViewport(0, 0, w, h);
-        glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         // Loop through render passes

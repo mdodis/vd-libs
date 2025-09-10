@@ -136,7 +136,7 @@ enum {
     VD_UI_FLAG_BACKGROUND       = 1 << 1,
     VD_UI_FLAG_CLICKABLE        = 1 << 2,
     VD_UI_FLAG_CLIP_CONTENT     = 1 << 3,
-    VD_UI_FLAG_FLEX_VERTICAL    = 1 << 4, // 0 here means FLEX_HORIZONTAL
+    VD_UI_FLAG_FLEX_HORIZONTAL  = 1 << 4, // 0 here means Vertical
 
     // Mouse Enumerations
     VD_UI_MOUSE_LEFT        = 0,
@@ -187,7 +187,7 @@ struct VdUiDiv {
 
     VdUiStr     content_str;
 
-    VdUiSize    size[2];
+    VdUiSize    size[VD_UI_AXES];
 
     float       comp_pos_rel[VD_UI_AXES];
     float       comp_size[VD_UI_AXES];
@@ -244,14 +244,17 @@ typedef unsigned int VdUiVertexFlags;
 
 #pragma pack(push, 1)
 typedef struct {
-    float            p0[2];       //  2 x 4 =  8 bytes
-    float            p1[2];       //  2 x 4 =  8 bytes
-    float            p0u[2];      //  2 x 4 =  8 bytes
-    float            p1u[2];      //  2 x 4 =  8 bytes
-    float            color[4];    //  4 x 4 = 16 bytes
-    float            alpha_mix;   //  1 x 4 =  4 bytes
-    unsigned char    padd[12];    // 12 x 1 = 12 bytes
-} VdUiVertex;                     //        = 64 bytes
+    float            p0[2];            //  2 x  4 =   8 bytes
+    float            p1[2];            //  2 x  4 =   8 bytes
+    float            p0u[2];           //  2 x  4 =   8 bytes
+    float            p1u[2];           //  2 x  4 =   8 bytes
+    float            color[16];        //  4 x 16 =  64 bytes
+    float            alpha_mix;        //  1 x  4 =   4 bytes
+    float            corner_radius;    //  1 x  4 =   4 bytes
+    float            edge_softness;    //  1 x  4 =   4 bytes
+    float            border_thickness; //  1 x  4 =   4 bytes
+    unsigned char    padd[16];         // 16 x  1 =  16 bytes
+} VdUiVertex;                          //         = 128 bytes
 #pragma pack(pop)
 
 #if !VD_UI_TEXTURE_ID_STRUCT_DEFINED
@@ -404,6 +407,7 @@ VD_UI_API void             vd_ui_gl_get_attribute_properties(int attribute, int 
 /* ----DEBUG--------------------------------------------------------------------------------------------------------- */
 VD_UI_API void             vd_ui_debug_set_draw_cursor_on(VdUiBool on);
 VD_UI_API void             vd_ui_debug_set_inspector_on(VdUiBool on);
+VD_UI_API void             vd_ui_debug_set_metrics_on(VdUiBool on);
 
 #endif // !VD_UI_H
 
@@ -463,11 +467,20 @@ struct VdUiFont {
 
 static void vd_ui__update_all_fonts(VdUiContext *ctx);
 static void vd_ui__push_rect(VdUiContext *ctx, VdUiTextureId *texture, float rect[4], float color[4]);
+static void vd_ui__push_rectgrad(VdUiContext *ctx, VdUiTextureId *texture, float rect[4], float color[16]);
 static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId *texture, float p0[2], float p1[2],
                                                                          float u0[2], float u1[2],
                                                                          float color[4],
                                                                          VdUiVertexFlags flags);
+static void vd_ui__push_vertexgrad(VdUiContext *ctx, VdUiTextureId *texture, float p0[2], float p1[2],
+                                                                             float u0[2], float u1[2],
+                                                                             float color[16],
+                                                                             VdUiVertexFlags flags,
+                                                                             float corner_radius,
+                                                                             float edge_softness,
+                                                                             float border_thickness);
 static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y);
+static void vd_ui__put_linef(VdUiContext *ctx, float x, float y, const char *fmt, ...);
 
 static void vd_ui__get_glyph_quad(VdUiContext *ctx, unsigned int codepoint, VdUiFontId font_id,
                                   float *rx, float *ry,
@@ -554,6 +567,7 @@ struct VdUiContext {
     VdUiTextureId          *current_texture_id;
 
     struct {
+        VdUiBool           metrics_on;
         VdUiBool           custom_cursor_on;
         VdUiBool           inspector_on;
     } debug;
@@ -634,6 +648,10 @@ VD_UI_API void vd_ui_frame_end(void)
         vd_ui__do_inspector(ctx);
     }
 
+    if (ctx->debug.metrics_on) {
+        vd_ui__put_linef(ctx, 0.f, 32.f, "VBUF: %d", ctx->vbuf_count);
+    }
+
     // Process updates
     vd_ui__update_all_fonts(ctx);
 }
@@ -695,10 +713,16 @@ VD_UI_API void vd_ui_label(VdUiStr str)
 VD_UI_API VdUiReply vd_ui_checkbox(int *b, VdUiStr str)
 {
     // @todo(mdodis) hash results to same
-    VdUiDiv *div = vd_ui_div_new(0, str);
+    VdUiDiv *div = vd_ui_div_new(VD_UI_FLAG_FLEX_HORIZONTAL, str);
+    div->size[0].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
+    div->size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
     vd_ui_parent_push(div);
 
     VdUiDiv *ckbx = vd_ui_div_newf(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_CLICKABLE, "##ckbx");
+    ckbx->size[0].mode = VD_UI_SIZE_MODE_ABSOLUTE;
+    ckbx->size[0].value = 32.f;
+    ckbx->size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
+    ckbx->size[1].value = 32.f;
     VdUiReply reply = vd_ui_call(ckbx);
 
     if (reply.clicked) {
@@ -868,8 +892,13 @@ VD_UI_API void vd_ui_demo(void)
 
     vd_ui_labelf("Button 1 Clicked: %d times", button1_click_count);
 
-    // static int checkbox = 0;
-    // vd_ui_checkboxf(&checkbox, "Checkbox 1");
+    static int checkbox = 0;
+    vd_ui_checkboxf(&checkbox, "Show Hidden");
+
+    if (checkbox) {
+
+        vd_ui_labelf("Hidden content");
+    }
 }
 
 static void vd_ui__calc_fixed_size(VdUiContext *ctx, VdUiDiv *curr)
@@ -952,7 +981,12 @@ static void vd_ui__calc_positions(VdUiContext *ctx, VdUiDiv *curr)
 
     VdUiDiv *child = curr->first;
 
-    int daxis = VD_UI_AXISH;
+    int daxis = VD_UI_AXISV;
+
+    if (curr->flags & VD_UI_FLAG_FLEX_HORIZONTAL) {
+        daxis = VD_UI_AXISH;
+    }
+
     int faxis = daxis == VD_UI_AXISH ? VD_UI_AXISV : VD_UI_AXISH;
     int daxis2, faxis2;
 
@@ -1112,18 +1146,18 @@ static void vd_ui__update_all_fonts(VdUiContext *ctx)
     ctx->state = VD_UI__TEXTURE_STATE_IN_GPU;
 }
 
-static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId *texture, float p0[2], float p1[2],
-                                                                         float u0[2], float u1[2],
-                                                                         float color[4],
-                                                                         VdUiVertexFlags flags)
+static void vd_ui__push_vertexgrad(VdUiContext *ctx, VdUiTextureId *texture, float p0[2], float p1[2],
+                                                                             float u0[2], float u1[2],
+                                                                             float color[16],
+                                                                             VdUiVertexFlags flags,
+                                                                             float corner_radius,
+                                                                             float edge_softness,
+                                                                             float border_thickness)
 {
     if (ctx->current_texture_id != texture)
     {
         VD_ASSERT(ctx->num_passes < VD_UI_RP_COUNT_MAX);
         ctx->num_passes++;
-        if (ctx->num_passes > VD_UI_RP_COUNT_MAX) {
-            VD_UI_LOG("%s", "www");
-        }
 
         VdUiRenderPass *pass   = &ctx->passes[ctx->num_passes - 1];
         pass->selected_texture = texture;
@@ -1142,10 +1176,10 @@ static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId *texture, float p
     v->p0u[0]   = u0[0];    v->p0u[1]   = u0[1];
     v->p1u[0]   = u1[0];    v->p1u[1]   = u1[1];
 
-    v->color[0] = color[0];
-    v->color[1] = color[1];
-    v->color[2] = color[2];
-    v->color[3] = color[3];
+    v->color[0] = color[0]; v->color[4] = color[4]; v->color[8]  = color[8];  v->color[12] = color[12];
+    v->color[1] = color[1]; v->color[5] = color[5]; v->color[9]  = color[9];  v->color[13] = color[13];
+    v->color[2] = color[2]; v->color[6] = color[6]; v->color[10] = color[10]; v->color[14] = color[14];
+    v->color[3] = color[3]; v->color[7] = color[7]; v->color[11] = color[11]; v->color[15] = color[15];
 
     if (flags & VD_UI_VERTEX_FLAG_TEXTURE_IS_ALPHA_BUFFER) {
         v->alpha_mix = 1.0;
@@ -1153,10 +1187,36 @@ static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId *texture, float p
         v->alpha_mix = 0.0;
     }
 
-    if (ctx->num_passes > VD_UI_RP_COUNT_MAX) {
-        VD_UI_LOG("%s", "WHAT");
-    }
+    v->corner_radius = corner_radius;
+    v->edge_softness = edge_softness;
+    v->border_thickness = border_thickness;
+
     ctx->passes[ctx->num_passes - 1].instance_count++;
+}
+
+static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId *texture, float p0[2], float p1[2],
+                                                                         float u0[2], float u1[2],
+                                                                         float color[4],
+                                                                         VdUiVertexFlags flags)
+{
+    float colors[16] = {
+        color[0], color[1], color[2], color[3],
+        color[0], color[1], color[2], color[3],
+        color[0], color[1], color[2], color[3],
+        color[0], color[1], color[2], color[3],
+    };
+    vd_ui__push_vertexgrad(ctx, texture, p0, p1, u0, u1, colors, flags, 0.f, 0.f, 0.f);
+}
+
+static void vd_ui__push_rectgrad(VdUiContext *ctx, VdUiTextureId *texture, float rect[4], float color[16])
+{
+
+    vd_ui__push_vertexgrad(ctx, texture,
+        (float[]){rect[0], rect[1]}, (float[]){rect[2], rect[3]},
+        (float[]){0.0f   , 0.0f   }, (float[]){1.0f   , 1.0f   },
+        color,
+        0,
+        4.f, 2.f, 0.f);
 }
 
 static void vd_ui__push_rect(VdUiContext *ctx, VdUiTextureId *texture, float rect[4], float color[4])
@@ -1194,6 +1254,18 @@ static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y)
             (float[]){1.f, 1.f, 1.f, 1.f},
             VD_UI_VERTEX_FLAG_TEXTURE_IS_ALPHA_BUFFER);
     }
+}
+
+static void vd_ui__put_linef(VdUiContext *ctx, float x, float y, const char *fmt, ...)
+{
+    static char buf[VD_UI_FBUF_MAX];
+    va_list args;
+    va_start(args, fmt);
+    int result = vd_ui_vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+    VD_ASSERT(result < sizeof(buf));
+    VdUiStr str = {buf, result};
+    vd_ui__put_line(ctx, str, x, y);
 }
 
 static int vd_ui__glyph_eq(VdUiGlyph *glyph, unsigned int codepoint, VdUiFontId font)
@@ -1370,26 +1442,32 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
         vd_ui__traverse_and_render_divs(ctx, child);
         child = child->prev;
     }
-
-    // After we've processed every child, we're ready to render ourselves
     
     if (curr == &ctx->root) {
         return;
     }
 
+    // After we've processed every child, we're ready to render ourselves
     if (curr->flags & VD_UI_FLAG_BACKGROUND) {
         VdUiF4 base_color   = {0.9f, 0.4f, 0.4f, 0.5f};
         VdUiF4 hot_color    = {0.7f, 0.3f, 0.3f, 1.f};
         VdUiF4 active_color = {0.1f, 0.9f, 0.4f, 1.f};
 
-        VdUiF4 final_color  = vd_ui__lerp4(base_color, hot_color, curr->hot_t);
-        final_color  = vd_ui__lerp4(final_color, active_color, curr->active_t);
-        vd_ui__push_rect(ctx, &ctx->white, curr->rect, final_color.e);
+        VdUiF4 final_color = vd_ui__lerp4(base_color, hot_color, curr->hot_t);
+        final_color = vd_ui__lerp4(final_color, active_color, curr->active_t);
+        vd_ui__push_rectgrad(ctx, &ctx->white, curr->rect, (float[]) {
+            0.3f, 0.3f, 0.3f, 1.f,
+            0.3f, 0.3f, 0.3f, 1.f,
+            0.2f, 0.2f, 0.2f, 1.f,
+            0.2f, 0.2f, 0.2f, 1.f,
+        });
         // vd_ui__push_rect(ctx, &ctx->white, curr->rect, base_color.e);
     }
 
     if (curr->flags & VD_UI_FLAG_TEXT) {
-        vd_ui__put_line(ctx, curr->content_str, curr->rect[0], curr->rect[1] + 12.f);
+        VdUiFont *font = &ctx->fonts[0];
+        float ydown = (-font->descent) * font->size_scaled;
+        vd_ui__put_line(ctx, curr->content_str, curr->rect[0], curr->rect[1] + ydown);
     }
 }
 
@@ -1580,6 +1658,12 @@ VD_UI_API void vd_ui_debug_set_inspector_on(VdUiBool on)
     ctx->debug.inspector_on = on;
 }
 
+VD_UI_API void vd_ui_debug_set_metrics_on(VdUiBool on)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    ctx->debug.metrics_on = on;
+}
+
 static struct {
     int initialized;
     float height;
@@ -1618,7 +1702,7 @@ static void vd_ui__inspector_do_hierarchy(VdUiContext *ctx, VdUiDiv *curr, float
     float entry_rect[4] = {
         Vd_Ui_Inspector.rect[0] + depth,
         Vd_Ui_Inspector.rect[1] + Vd_Ui_Inspector.hierarchy.offset,
-        Vd_Ui_Inspector.rect[0] + depth + Vd_Ui_Inspector.hierarchy.size_h,
+        Vd_Ui_Inspector.rect[0] + Vd_Ui_Inspector.hierarchy.size_h,
         Vd_Ui_Inspector.rect[1] + Vd_Ui_Inspector.hierarchy.offset + 32.f,
     };
 
@@ -1680,35 +1764,51 @@ static void vd_ui__inspector_do_hierarchy(VdUiContext *ctx, VdUiDiv *curr, float
 "layout (location = 1) in vec2 a_p1;                                                                               \n" \
 "layout (location = 2) in vec2 a_p0u;                                                                              \n" \
 "layout (location = 3) in vec2 a_p1u;                                                                              \n" \
-"layout (location = 4) in vec4 a_color;                                                                            \n" \
-"layout (location = 5) in float a_amix;                                                                            \n" \
+"layout (location = 4) in vec4 a_color0;                                                                           \n" \
+"layout (location = 5) in vec4 a_color1;                                                                           \n" \
+"layout (location = 6) in vec4 a_color2;                                                                           \n" \
+"layout (location = 7) in vec4 a_color3;                                                                           \n" \
+"layout (location = 8) in float a_amix;                                                                            \n" \
+"layout (location = 9) in float a_corner_radius;                                                                   \n" \
+"layout (location = 10) in float a_edge_softness;                                                                  \n" \
 "uniform vec2 uResolution;                                                                                         \n" \
 "out vec4 f_color;                                                                                                 \n" \
 "out vec2 f_uv;                                                                                                    \n" \
 "out float f_amix;                                                                                                 \n" \
+"out vec2  f_dp;                                                                                                   \n" \
+"out vec2  f_dc;                                                                                                   \n" \
+"out vec2  f_dhs;                                                                                                  \n" \
+"out float f_corner_radius;                                                                                        \n" \
+"out float f_edge_softness;                                                                                        \n" \
 "                                                                                                                  \n" \
 "void main()                                                                                                       \n" \
 "{                                                                                                                 \n" \
-"   vec2 positions[4] = vec2[](                                                                                    \n" \
-"       vec2(-1.0, -1.0),                                                                                          \n" \
-"       vec2(+1.0, -1.0),                                                                                          \n" \
-"       vec2(-1.0, +1.0),                                                                                          \n" \
-"       vec2(+1.0, +1.0)                                                                                           \n" \
-"   );                                                                                                             \n" \
-"   vec2 dhs = (a_p1 - a_p0) / 2.0;                                                                                \n" \
-"   vec2 dhc = (a_p1 + a_p0) / 2.0;                                                                                \n" \
-"   vec2 dp  = positions[gl_VertexID] * dhs + dhc;                                                                 \n" \
-"   gl_Position = vec4(2.0 * dp.x / uResolution.x - 1.0,                                                           \n" \
-"                      1.0 - 2.0 * dp.y / uResolution.y,                                                           \n" \
-"                      0.0,                                                                                        \n" \
-"                      1.0);                                                                                       \n" \
+"    vec2 positions[4] = vec2[](                                                                                   \n" \
+"        vec2(-1.0, -1.0),                                                                                         \n" \
+"        vec2(+1.0, -1.0),                                                                                         \n" \
+"        vec2(-1.0, +1.0),                                                                                         \n" \
+"        vec2(+1.0, +1.0)                                                                                          \n" \
+"    );                                                                                                            \n" \
+"    vec4 colors[4] = vec4[](a_color0, a_color1, a_color2, a_color3);                                              \n" \
+"    vec2 dhs = (a_p1 - a_p0) / 2.0;                                                                               \n" \
+"    vec2 dc = (a_p1 + a_p0) / 2.0;                                                                                \n" \
+"    vec2 dp  = positions[gl_VertexID] * dhs + dc;                                                                 \n" \
+"    gl_Position = vec4(2.0 * dp.x / uResolution.x - 1.0,                                                          \n" \
+"                       1.0 - 2.0 * dp.y / uResolution.y,                                                          \n" \
+"                       0.0,                                                                                       \n" \
+"                       1.0);                                                                                      \n" \
 "                                                                                                                  \n" \
-"   vec2 shs = (a_p1u - a_p0u) / 2.0;                                                                              \n" \
-"   vec2 shc = (a_p1u + a_p0u) / 2.0;                                                                              \n" \
-"   vec2 shp = positions[gl_VertexID] * shs + shc;                                                                 \n" \
-"   f_uv = shp;                                                                                                    \n" \
-"   f_color = a_color;                                                                                             \n" \
-"   f_amix = a_amix;                                                                                               \n" \
+"    vec2 shs = (a_p1u - a_p0u) / 2.0;                                                                             \n" \
+"    vec2 shc = (a_p1u + a_p0u) / 2.0;                                                                             \n" \
+"    vec2 shp = positions[gl_VertexID] * shs + shc;                                                                \n" \
+"    f_uv = shp;                                                                                                   \n" \
+"    f_color = colors[gl_VertexID];                                                                                \n" \
+"    f_amix = a_amix;                                                                                              \n" \
+"    f_dp = dp;                                                                                                    \n" \
+"    f_dc = dc;                                                                                                    \n" \
+"    f_dhs = dhs;                                                                                                  \n" \
+"    f_corner_radius = a_corner_radius;                                                                            \n" \
+"    f_edge_softness = a_edge_softness;                                                                            \n" \
 "}                                                                                                                 \n" \
 
 #define VD_UI_GL_FRAGMENT_SHADER_SOURCE                                                                                \
@@ -1716,16 +1816,30 @@ static void vd_ui__inspector_do_hierarchy(VdUiContext *ctx, VdUiDiv *curr, float
 "in vec4 f_color;                                                                                                  \n" \
 "in vec2 f_uv;                                                                                                     \n" \
 "in float f_amix;                                                                                                  \n" \
+"in vec2  f_dp;                                                                                                    \n" \
+"in vec2  f_dc;                                                                                                    \n" \
+"in vec2  f_dhs;                                                                                                   \n" \
+"in float f_corner_radius;                                                                                         \n" \
+"in float f_edge_softness;                                                                                         \n" \
 "uniform sampler2D uTexture;                                                                                       \n" \
 "out vec4 FragColor;                                                                                               \n" \
-"const uint VD_UI_VERTEX_FLAG_TEXTURE_IS_ALPHA_BUFFER = 1 << 0;                                                    \n" \
+"                                                                                                                  \n" \
+"float sdf_rounded_rect(vec2 sample_pos, vec2 rect_center, vec2 rect_half_size, float r) {                         \n" \
+"    vec2 d2 = (abs(rect_center - sample_pos) - rect_half_size + vec2(r, r));                                      \n" \
+"    return min(max(d2.x, d2.y), 0.0) + length(max(d2, 0.0)) -r;                                                   \n" \
+"}                                                                                                                 \n" \
+"                                                                                                                  \n" \
 "void main()                                                                                                       \n" \
 "{                                                                                                                 \n" \
-"   vec4 sample = texture(uTexture, f_uv);                                                                         \n" \
-"   vec4 normal_color = sample * f_color;                                                                          \n" \
-"   vec4 mask_color = vec4(f_color.rgb, f_color.a * sample.r);                                                     \n" \
-"   vec4 color = mix(normal_color, mask_color, f_amix);                                                            \n" \
-"   FragColor = vec4(color);                                                                                       \n" \
+"    vec2 softness_padding = vec2(max(0, f_edge_softness * 2 - 1), max(0, f_edge_softness * 2 - 1));               \n" \
+"    float dist = sdf_rounded_rect(f_dp, f_dc, f_dhs - softness_padding, f_corner_radius);                         \n" \
+"    float sdf = 1.f - smoothstep(0, 2 * f_edge_softness, dist);                                                   \n" \
+"                                                                                                                  \n" \
+"    vec4 sample = texture(uTexture, f_uv);                                                                        \n" \
+"    vec4 normal_color = sample * f_color;                                                                         \n" \
+"    vec4 mask_color = vec4(f_color.rgb, f_color.a * sample.r);                                                    \n" \
+"    vec4 color = mix(normal_color, mask_color, f_amix);                                                           \n" \
+"    FragColor = vec4(color) * sdf;                                                                                      \n" \
 "}                                                                                                                 \n" \
 
 VD_UI_API void vd_ui_gl_get_default_shader_sources(const char **const vertex_shader, size_t *vertex_shader_len,
@@ -1774,25 +1888,35 @@ VD_UI_API void vd_ui_gl_cv_texture_format(VdUiTextureFormat format, int *level, 
 
 VD_UI_API int vd_ui_gl_get_num_attributes(void)
 {
-    // p0, p1, p0u, p1u, color, flags
-    return 6;
+    // p0, p1, p0u, p1u, color0, color1, color2, color3, alpha_mix, corner_radius, edge_softness
+    return 11;
 }
 
 VD_UI_API void vd_ui_gl_get_attribute_properties(int attribute, int *size, unsigned int *type, unsigned char *normalized, int *stride, void **pointer, unsigned int *divisor)
 {
     switch (attribute) {
-        //                 GL_FLOAT          GL_FALSE
-        case 0: *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, p0);         *divisor = 1; break;
-        //                 GL_FLOAT          GL_FALSE
-        case 1: *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, p1);         *divisor = 1; break;
-        //                 GL_FLOAT          GL_FALSE
-        case 2: *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, p0u);        *divisor = 1; break;
-        //                 GL_FLOAT          GL_FALSE
-        case 3: *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, p1u);        *divisor = 1; break;
-        //                 GL_FLOAT          GL_FALSE
-        case 4: *size = 4; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, color);      *divisor = 1; break;
-        //                 GL_FLOAT          GL_FALSE
-        case 5: *size = 1; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, alpha_mix);  *divisor = 1; break;
+        //                  GL_FLOAT          GL_FALSE
+        case 0:  *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, p0);             *divisor = 1; break;
+        //                  GL_FLOAT          GL_FALSE
+        case 1:  *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, p1);             *divisor = 1; break;
+        //                  GL_FLOAT          GL_FALSE
+        case 2:  *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, p0u);            *divisor = 1; break;
+        //                  GL_FLOAT          GL_FALSE
+        case 3:  *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, p1u);            *divisor = 1; break;
+        //                  GL_FLOAT          GL_FALSE
+        case 4:  *size = 4; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, color);          *divisor = 1; break;
+        //                  GL_FLOAT          GL_FALSE
+        case 5:  *size = 4; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)(VD_OFFSET_OF(VdUiVertex, color) + 16);   *divisor = 1; break;
+        //                  GL_FLOAT          GL_FALSE
+        case 6:  *size = 4; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)(VD_OFFSET_OF(VdUiVertex, color) + 32);   *divisor = 1; break;
+        //                  GL_FLOAT          GL_FALSE
+        case 7:  *size = 4; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)(VD_OFFSET_OF(VdUiVertex, color) + 48);   *divisor = 1; break;
+        //                  GL_FLOAT          GL_FALSE
+        case 8:  *size = 1; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, alpha_mix);      *divisor = 1; break;
+        //                  GL_FLOAT          GL_FALSE
+        case 9:  *size = 1; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, corner_radius);  *divisor = 1; break;
+        //                  GL_FLOAT          GL_FALSE
+        case 10: *size = 1; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, edge_softness);  *divisor = 1; break;
         default: break;
     }
 }

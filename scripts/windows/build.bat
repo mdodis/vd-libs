@@ -39,23 +39,10 @@ set PRJ_DIR=%cd%
 if not exist build mkdir build
 pushd build
 
-REM --SAMPLES - UI BASIC------------------------------------------------------------------------------------------------
 set INC_DIR=%PRJ_DIR%
 set SRC_DIR=%PRJ_DIR%\samples
 
-if %SAMPLE_TO_COMPILE%==ui_basic (
-    cl /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %SRC_DIR%\ui_basic.c /Fe:ui_basic.exe 
-)
-
-REM --SAMPLES - GL WINDOW-----------------------------------------------------------------------------------------------
-if %SAMPLE_TO_COMPILE%==gl_window (
-    cl /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %SRC_DIR%\gl_window.c /Fe:gl_window.exe 
-)
-
-REM --SAMPLES - GL CUBE-------------------------------------------------------------------------------------------------
-if %SAMPLE_TO_COMPILE%==gl_cube (
-    cl /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %SRC_DIR%\gl_cube.c /Fe:gl_cube.exe 
-)
+cl /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %SRC_DIR%\%SAMPLE_TO_COMPILE%.c /Fe:%SAMPLE_TO_COMPILE%.exe 
 
 
 popd
