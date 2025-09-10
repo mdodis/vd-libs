@@ -2750,7 +2750,7 @@ static void vd_fw__theme_changed(void)
 
 static LRESULT vd_fw__nccalcsize(WPARAM wparam, LPARAM lparam)
 {
-    int borderless = 1;
+    int borderless = !VD_FW_G.draw_decorations;
     if (wparam && borderless) {
 
         NCCALCSIZE_PARAMS *params = (NCCALCSIZE_PARAMS*)lparam;
@@ -2929,7 +2929,11 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         } break;
 
         case WM_NCHITTEST: {
-            result = vd_fw__hit_test(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam));
+            if (VD_FW_G.draw_decorations) {
+                result = DefWindowProc(hwnd, msg, wparam, lparam);
+            } else {
+                result = vd_fw__hit_test(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam));
+            }
         } break;
 
         case WM_NCPAINT: {
@@ -2987,42 +2991,6 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         case WM_SIZING: {
             DwmFlush();
         } break;
-
-        // case WM_SYSCOMMAND: {
-        //     if ((wparam & 0xfff0) == SC_KEYMENU)
-        //         return 0;
-        // } break;
-
-
-        // case WM_MOUSEMOVE: {
-        //     if ((VdFw__WindowState == VD_FW__MOVING) || (VdFw__WindowState == VD_FW__SIZING)) {
-        //         POINT cursor;
-        //         GetCursorPos(&cursor);
-
-        //         int dx = cursor.x - VdFw__DragStart.x;
-        //         int dy = cursor.y - VdFw__DragStart.y;
-
-        //         RECT new_rect = VdFw__DragStartRect;
-
-        //         if (VdFw__WindowState == VD_FW__MOVING) {
-        //             OffsetRect(&new_rect, dx, dy);
-        //         } else {
-        //         }
-
-        //         SetWindowPos(VD_FW_G.hwnd, NULL,
-        //             new_rect.left, new_rect.top,
-        //             new_rect.right - new_rect.left,
-        //             new_rect.bottom - new_rect.top,
-        //             SWP_NOZORDER | SWP_NOACTIVATE);
-        //     }
-        // } break;
-
-        // case WM_LBUTTONUP: {
-        //     if ((VdFw__WindowState == VD_FW__MOVING) || (VdFw__WindowState == VD_FW__SIZING)) {
-        //         VdFw__WindowState = 0;
-        //         ReleaseCapture();
-        //     }
-        // } break;
 
         default: {
             result = DefWindowProc(hwnd, msg, wparam, lparam);
