@@ -672,7 +672,7 @@ struct VdUiContext {
     // - to bitmap
     VdUiGlyph               *glyph_cache;
     int                     glyph_cache_count;
-    
+
     int                     atlas[2];
     void                    *buffer;
     size_t                  buffer_size;
@@ -1590,7 +1590,6 @@ static void vd_ui__get_glyph_quad(VdUiContext *ctx, unsigned int codepoint, int 
         float y = (float)((int)floor((*ry) + glyph->yoff + 0.5f));
         *x0 = x;               *x1 = x + glyph->xoff2 - glyph->xoff;
         *y0 = y;               *y1 = y + glyph->yoff2 - glyph->yoff;
-
     } else {
         *x0 = (*rx) + glyph->xoff;     *x1 = (*rx) + glyph->xoff2;
         *y0 = (*ry) + glyph->yoff;     *y1 = (*ry) + glyph->yoff2;
@@ -1599,7 +1598,7 @@ static void vd_ui__get_glyph_quad(VdUiContext *ctx, unsigned int codepoint, int 
     *s0 = (glyph->x0) * ipw;  *s1 = (glyph->x1) * ipw;
     *t0 = (glyph->y0) * iph;  *t1 = (glyph->y1) * iph;
 
-    *rx += glyph->xadvance;
+    *rx += roundf(glyph->xadvance);
 }
 
 VdUiGlyph *vd_ui__push_glyph(VdUiContext *ctx, unsigned int codepoint, int size, VdUiFontId font_id)
