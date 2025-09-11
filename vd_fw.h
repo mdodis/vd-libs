@@ -2159,6 +2159,7 @@ static void vd_fw__load_opengl(VdFwGlVersion version);
 #pragma comment(linker, "/NODEFAULTLIB:msvcrt.lib")
 #pragma comment(linker, "/NODEFAULTLIB:msvcrtd.lib")
 #pragma comment(linker, "/NODEFAULTLIB:oldnames.lib")
+#pragma execution_character_set("utf-8")
 #endif // VD_FW_NO_CRT
 // #define WIN32_LEAN_AND_MEAN
 #define NOGDICAPMASKS
@@ -2325,6 +2326,11 @@ static void *vd_fw__gl_get_proc_address(const char *name)
 {
     return (void*)wglGetProcAddress(name);
 }
+
+#if !VD_FW_NO_CRT
+#include <io.h>
+#include <fcntl.h>
+#endif // !VD_FW_NO_CRT
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
@@ -3104,10 +3110,10 @@ LRESULT WinMainCRTStartup(void)
 #else
 int wWinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPWSTR cmdline, int nshowcmd)
 {
-    VD_UNUSED(hinstance);
-    VD_UNUSED(prev_instance);
-    VD_UNUSED(cmdline);
-    VD_UNUSED(nshowcmd);
+    (void)(hinstance);
+    (void)(prev_instance);
+    (void)(cmdline);
+    (void)(nshowcmd);
     int result = main(0, 0);
     ExitProcess(result);
 }

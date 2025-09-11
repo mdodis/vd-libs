@@ -45,7 +45,7 @@ pushd build
 set INC_DIR=%PRJ_DIR%
 set SRC_DIR=%PRJ_DIR%\samples
 
-cl /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %SRC_DIR%\%SAMPLE_TO_COMPILE%.c /Fe:%SAMPLE_TO_COMPILE%.exe 
+cl /utf-8 /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %SRC_DIR%\%SAMPLE_TO_COMPILE%.c /Fe:%SAMPLE_TO_COMPILE%.exe 
 
 if %COMPILE_PROGRAMS%==1 (
     cl /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %PRJ_DIR%/programs/embed.c /Fe:embed.exe 

@@ -530,7 +530,7 @@ static void vd_ui__get_glyph_quad(VdUiContext *ctx, unsigned int codepoint, int 
                                   float *s0, float *t0,
                                   float *s1, float *t1);
 static VdUiGlyph*   vd_ui__push_glyph(VdUiContext *ctx, unsigned int codepoint, int size, VdUiFontId font_id);
-static size_t       vd_ui__hash_glyph(unsigned int codepoint, VdUiFontId font_id);
+static size_t       vd_ui__hash_glyph(unsigned int codepoint, int size, VdUiFontId font_id);
 static void         vd_ui__layout(VdUiContext *ctx);
 static VdUiStr      vd_ui__strbuf_dup(VdUiContext *ctx, VdUiStr str);
 static void         vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr);
@@ -540,6 +540,10 @@ static float        vd_ui__clampf(float x, float a, float b);
 static float        vd_ui__lerp(float a, float b, float t);
 static VdUiF4       vd_ui__lerp4(VdUiF4 a, VdUiF4 b, float t);
 static VdUiF4       vd_ui__lerpgrad(VdUiF4 a, VdUiF4 b, float t);
+
+static const char*  vd_ui__utf8next(const char *p);
+static int          vd_ui__utf8dec(const char **p, unsigned int *out);
+static int          vd_ui__utf8decs(VdUiStr *str, unsigned int *out);
 
 static void         vd_ui__do_inspector(VdUiContext *ctx);
 
@@ -551,6 +555,7 @@ struct VdUiContext {
 
     VdUiTextureId           white;
     VdUiFontId              default_font;
+    int                     default_font_size;
 
     // Resources
     unsigned int            vbuf_count;
@@ -868,7 +873,7 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     result->style.padding[1] = 0.f;
     result->style.padding[2] = 0.f;
     result->style.padding[3] = 0.f;
-    result->style.text_font_size = 16;
+    result->style.text_font_size = ctx->default_font_size;
 
     VdUiDiv *parent = ctx->parents[ctx->parents_next - 1];
     result->parent = parent;
@@ -977,7 +982,6 @@ VD_UI_API void vd_ui_demo(void)
     {
         if (vd_ui_buttonf("Button 1").clicked) {
             button1_click_count++;
-            VD_UI_LOG("Clicked %d times", button1_click_count);
         }
 
         vd_ui_spacer();
@@ -985,6 +989,8 @@ VD_UI_API void vd_ui_demo(void)
         vd_ui_labelf("Button 1 Clicked: %d times", button1_click_count);
     }
     vd_ui_parent_pop();
+
+    vd_ui_labelf(u8"Some unicode: ă x ă");
 
     static int checkbox = 0;
     vd_ui_checkboxf(&checkbox, "Show Hidden");
@@ -1421,13 +1427,13 @@ static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y, int s
     float hadd = (float)font->bounding_box[3] - (float)font->bounding_box[1];
     float rp[2] = {x, y + hadd * size_scaled * 0.5f};
 
-    for (int i = 0; i < s.l; ++i) {
-        char c = s.s[i];
+    unsigned int codepoint = 0;
+    while (vd_ui__utf8decs(&s, &codepoint)) {
 
         float p0[2], p1[2];
         float u0[2], u1[2];
 
-        vd_ui__get_glyph_quad(ctx, (int)c, size, (VdUiFontId) {0},
+        vd_ui__get_glyph_quad(ctx, codepoint, size, (VdUiFontId) {0},
             &rp[0], &rp[1],
             &p0[0], &p0[1],
             &p1[0], &p1[1],
@@ -1451,12 +1457,12 @@ static void vd_ui__put_linef(VdUiContext *ctx, float x, float y, const char *fmt
     va_end(args);
     VD_ASSERT(result < sizeof(buf));
     VdUiStr str = {buf, result};
-    vd_ui__put_line(ctx, str, x, y, 16);
+    vd_ui__put_line(ctx, str, x, y, ctx->default_font_size);
 }
 
-static int vd_ui__glyph_eq(VdUiGlyph *glyph, unsigned int codepoint, VdUiFontId font)
+static int vd_ui__glyph_eq(VdUiGlyph *glyph, unsigned int codepoint, int size, VdUiFontId font)
 {
-    return (glyph->codepoint == codepoint) && (glyph->font.id == font.id);
+    return (glyph->codepoint == codepoint) && (glyph->size == size) && (glyph->font.id == font.id);
 }
 
 static int vd_ui__glyph_free(VdUiGlyph *glyph)
@@ -1471,13 +1477,13 @@ static void vd_ui__get_glyph_quad(VdUiContext *ctx, unsigned int codepoint, int 
                                   float *s0, float *t0,
                                   float *s1, float *t1)
 {
-    size_t hash = vd_ui__hash_glyph(codepoint, font_id);
+    size_t hash = vd_ui__hash_glyph(codepoint, size, font_id);
     size_t hindex = hash % VD_UI_GLYPH_CACHE_COUNT_MAX;
     size_t index = hindex;
 
     // Lookup glyph
     int found_glyph = 1;
-    while (!vd_ui__glyph_eq(&ctx->glyph_cache[index], codepoint, font_id)) {
+    while (!vd_ui__glyph_eq(&ctx->glyph_cache[index], codepoint, size, font_id)) {
         if (ctx->glyph_cache[index].next == -1) {
             found_glyph = 0;
             break;
@@ -1534,7 +1540,7 @@ VdUiGlyph *vd_ui__push_glyph(VdUiContext *ctx, unsigned int codepoint, int size,
 
     VD_ASSERT(result != 0);
 
-    size_t index = vd_ui__hash_glyph(codepoint, font_id) % VD_UI_GLYPH_CACHE_COUNT_MAX;
+    size_t index = vd_ui__hash_glyph(codepoint, size, font_id) % VD_UI_GLYPH_CACHE_COUNT_MAX;
 
     VdUiGlyph *glyph;
     if (vd_ui__glyph_free(&ctx->glyph_cache[index])) {
@@ -1575,15 +1581,17 @@ VdUiGlyph *vd_ui__push_glyph(VdUiContext *ctx, unsigned int codepoint, int size,
     glyph->xoff2 = packed_char.xoff2;
     glyph->yoff2 = packed_char.yoff2;
     glyph->xadvance = packed_char.xadvance;
+    glyph->size = size;
     glyph->next = -1;
     return glyph;
 
 }
 
-static size_t vd_ui__hash_glyph(unsigned int codepoint, VdUiFontId font_id)
+static size_t vd_ui__hash_glyph(unsigned int codepoint, int size, VdUiFontId font_id)
 {
     size_t result = vd_dhash64(&codepoint, sizeof(codepoint));
     result = result ^ vd_dhash64(&font_id, sizeof(font_id));
+    result = result ^ vd_dhash64(&size, sizeof(size));
     return result;
 }
 
@@ -1599,19 +1607,16 @@ VD_UI_API void vd_ui_measure_text_size(VdUiFontId font_id, VdUiStr str, int size
     float size_scaled = stbtt_ScaleForPixelHeight(&font->font_info, pixel_size);
     *h = (font->ascent - font->descent + font->linegap) * size_scaled;
 
-    // @todo(mdodis): UTF-8
-    for (size_t i = 0; i < str.l; ++i) {
-        char c = str.s[i];
-
+    unsigned int codepoint;
+    while (vd_ui__utf8decs(&str, &codepoint)) {
         float x0, y0, x1, y1, s0, t0, s1, t1;
-        vd_ui__get_glyph_quad(ctx, (unsigned int)c, size, font_id,
+        vd_ui__get_glyph_quad(ctx, codepoint, size, font_id,
             w, h,
             &x0, &y0,
             &x1, &y1,
             &s0, &t0,
             &s1, &t1);
     }
-
 }
 
 static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
@@ -1694,6 +1699,77 @@ static VdUiF4 vd_ui__lerp4(VdUiF4 a, VdUiF4 b, float t)
     };
 }
 
+static const char *vd_ui__utf8next(const char *p)
+{
+    if (!p || !*p) return p;
+
+    unsigned char c = (unsigned char)*p;
+    int step = 1;
+
+    if ((c & 0x80) == 0x00) step = 1;
+    if ((c & 0xe0) == 0xc0) step = 2;
+    if ((c & 0xf0) == 0xe0) step = 3;
+    if ((c & 0xf8) == 0xf0) step = 4;
+
+    while (step-- && *p) ++p;
+    return p;
+}
+
+static int vd_ui__utf8dec(const char **p, unsigned int *out)
+{
+    if (!p || !*p || !**p) return 0;
+
+    const unsigned char *s = (const unsigned char*)*p;
+    unsigned char c = *s;
+    unsigned int cp;
+    int len;
+
+    if      ((c & 0x80) == 0x00) { len = 1; cp = c;        }
+    else if ((c & 0xe0) == 0xc0) { len = 2; cp = c & 0x1f; }
+    else if ((c & 0xf0) == 0xe0) { len = 3; cp = c & 0x0f; }
+    else if ((c & 0xf8) == 0xf0) { len = 4; cp = c & 0x07; }
+    else                         { return 0; }
+
+    for (int i = 1; i < len; ++i) {
+        unsigned char cc = s[i];
+        if ((cc & 0xc0) != 0x80) return 0;
+        cp = (cp << 6) | (cc & 0x3f);
+    }
+
+    *out = cp;
+    *p += len;
+    return 1;
+}
+
+static int vd_ui__utf8decs(VdUiStr *str, unsigned int *out)
+{
+    if (!str || str->l <= 0) return 0;
+
+    const unsigned char *s = (const unsigned char*)str->s;
+    unsigned char c = *s;
+    unsigned int cp;
+    int len;
+
+    if      ((c & 0x80) == 0x00) { len = 1; cp = c;        } // 1 (ASCII)
+    else if ((c & 0xe0) == 0xc0) { len = 2; cp = c & 0x1f; } // 2
+    else if ((c & 0xf0) == 0xe0) { len = 3; cp = c & 0x0f; } // 3
+    else if ((c & 0xf8) == 0xf0) { len = 4; cp = c & 0x07; } // 4
+    else                         { return 0;               } // Invalid leading byte
+
+    if (len > str->l) return 0;
+
+    for (int i = 1; i < len; ++i) {
+        unsigned char cc = s[i];
+        if ((cc & 0xc0) != 0x80) return 0;
+        cp = (cp << 6) | (cc & 0x3f);
+    }
+
+    str->s += len;
+    str->l -= len;
+    *out = cp;
+    return 1;
+}
+
 /* ----CONTEXT CREATION IMPL----------------------------------------------------------------------------------------- */
 VD_UI_API void vd_ui_init(void)
 {
@@ -1701,6 +1777,7 @@ VD_UI_API void vd_ui_init(void)
     vd_ui_context_set(ctx);
     VdUiFontId default_font = vd_ui_font_add_ttf(Vd_Ui_Public_Sans_Regular, sizeof(Vd_Ui_Public_Sans_Regular));
     ctx->default_font = default_font;
+    ctx->default_font_size = 20;
 }
 
 VD_UI_API VdUiContext *vd_ui_context_create(VdUiContextCreateInfo *info)
