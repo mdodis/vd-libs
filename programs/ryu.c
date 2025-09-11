@@ -40,6 +40,9 @@ int cv_float_to_str(float x, char *buf)
     unsigned int unbiasedexp = exponent - 127;
     int subnormal = exponent == 0;
 
+    (void)unbiasedexp;
+    (void)subnormal;
+
     if (valu == 0x7F800000) {
         const char *str = "inf";
         while (*str) { 
@@ -91,12 +94,15 @@ int cv_float_to_str(float x, char *buf)
     // u = 4mf - {
     //           { 2, otherwise
     unsigned int fu = 4 * mf - ((m == 0) && (e > 1)) ? 1 : 2;
+    (void)fu;
 
     // v = 4mf
     unsigned int fv = 4 * mf;
+    (void)fv;
 
     // w = 4mf + 2
     unsigned int fw = 4 * mf + 2;
+    (void)fw;
 
     // Step 3. Convert (fu,fv,fw) * 2^e2 to a decimal power base.
     int e10;
@@ -126,6 +132,8 @@ void test_float(float x) {
 
 int main(int argc, char const *argv[])
 {
+    (void)argc;
+    (void)argv;
 
     printf("|%-32s|%-32s|\n", "printf", "ryu");
     puts("|--------------------------------|--------------------------------|");

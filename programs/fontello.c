@@ -78,7 +78,8 @@ int main(int argc, char const *argv[])
                 c++;
             }
 
-            printf("    %s", prefix);
+            printf("    /* %-60.*s */ ", c, id_begin);
+            printf("%s", prefix);
             for (int j = 0; j < c; ++j) {
                 char idc = id_begin[j];
 
@@ -124,7 +125,6 @@ int main(int argc, char const *argv[])
 
             printf(",");
 
-            printf(" /* %.*s */", c, id_begin);
             printf("\n");
 
         } else {
