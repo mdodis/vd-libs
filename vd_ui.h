@@ -550,6 +550,7 @@ struct VdUiContext {
     unsigned int            parents_next;
 
     VdUiTextureId           white;
+    VdUiFontId              default_font;
 
     // Resources
     unsigned int            vbuf_count;
@@ -1412,7 +1413,7 @@ static void vd_ui__push_rect(VdUiContext *ctx, VdUiTextureId *texture, float rec
 
 static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y, int size)
 {
-    VdUiFont *font = &ctx->fonts[0];
+    VdUiFont *font = &ctx->fonts[ctx->default_font.id];
 
     float pixel_size = (float)size;
     float size_scaled = stbtt_ScaleForPixelHeight(&font->font_info, pixel_size);
@@ -1650,7 +1651,7 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
     }
 
     if (curr->flags & VD_UI_FLAG_TEXT) {
-        VdUiFont *font = &ctx->fonts[0];
+        VdUiFont *font = &ctx->fonts[ctx->default_font.id];
 
         float pixel_size = (float)curr->style.text_font_size;
         float size_scaled = stbtt_ScaleForPixelHeight(&font->font_info, pixel_size);
@@ -1696,8 +1697,10 @@ static VdUiF4 vd_ui__lerp4(VdUiF4 a, VdUiF4 b, float t)
 /* ----CONTEXT CREATION IMPL----------------------------------------------------------------------------------------- */
 VD_UI_API void vd_ui_init(void)
 {
-    vd_ui_context_set(vd_ui_context_create(0));
-    vd_ui_font_add_ttf(Vd_Ui_Public_Sans_Regular, sizeof(Vd_Ui_Public_Sans_Regular));
+    VdUiContext *ctx = vd_ui_context_create(0);
+    vd_ui_context_set(ctx);
+    VdUiFontId default_font = vd_ui_font_add_ttf(Vd_Ui_Public_Sans_Regular, sizeof(Vd_Ui_Public_Sans_Regular));
+    ctx->default_font = default_font;
 }
 
 VD_UI_API VdUiContext *vd_ui_context_create(VdUiContextCreateInfo *info)
