@@ -1,5 +1,5 @@
 /**
- * embed.c - Simple embedding utility by Michael Dodis <michaeldodisgr@gmail.com>
+ * sembd.c - Simple embedding utility for source files in macros by Michael Dodis <michaeldodisgr@gmail.com>
  * ---------------------------------------------------------------------------------------------------------------------
  * This is free and unencumbered software released into the public domain.
  *
@@ -27,47 +27,90 @@
  * For more information, please refer to <https://unlicense.org/>
  * ---------------------------------------------------------------------------------------------------------------------
  */
-
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 int main(int argc, char const *argv[])
 {
     if (argc < 3) {
-        fprintf(stderr, "Invocation: <program name> file_to_embed identifier");
+        fprintf(stderr, "Invocation: <program name> file_to_embed identifier <?min_len>");
         return -1;
     }
 
     const char *file_to_read = argv[1];
     const char *name = argv[2];
 
-    size_t newline_per_byte = 32;
+    int min_len = 0;
+
+    if (argc >= 4) {
+        min_len = atoi(argv[3]);
+    }
+
+    int max_line_len = 0;
 
     FILE *f = fopen(file_to_read, "rb");
     fseek(f, 0, SEEK_END);
     size_t size = ftell(f);
     fseek(f, 0, SEEK_SET);
-
-    unsigned char *result = (unsigned char*)malloc(size);
+    char *result = (char*)malloc(size + 1);
     fread(result, size, 1, f);
     fclose(f);
 
-    printf("static unsigned char %s[%llu] = {\n", name, size);
+    result[size] = 0;
 
-    for (size_t i = 0; i < size; ++i) {
-        printf("0x%02x", result[i]);
+    // Measure max line
+    size_t i = 0;
+    int curr_line = 0;
+    while (i < size) {
 
-        if (i != (size - 1)) {
-            printf(",");
+        while ((i < size) && (result[i] != '\n' && result[i] != '\r')) {
+            curr_line++;
+            i++;
         }
 
-        if (((i + 1) % newline_per_byte) == 0) {
-            printf("\n");
+        while ((i < size) && (result[i] == '\n' || result[i] == '\r')) {
+            i++;
         }
 
+        if (max_line_len < curr_line) {
+            max_line_len = curr_line;
+        }
+        curr_line = 0;
     }
 
-    printf("\n};\n");
+    if (curr_line > max_line_len) {
+        max_line_len = curr_line;
+    }
 
-    return 0;
+    if (max_line_len < min_len) {
+        max_line_len = min_len;
+    }
+
+    fprintf(stderr, "max line: %d\n", max_line_len);
+
+    printf("#define %s \\\n", name);
+
+    i = 0;
+    while (i < size) {
+        printf("\"");
+
+        curr_line = 0;
+        while ((i < size) && result[i] != '\n' && result[i] != '\r') {
+            printf("%c", result[i]);
+            curr_line++;
+            i++;
+        }
+
+        for (int x = curr_line; x < max_line_len; ++x) {
+            printf(" ");
+        }
+
+        printf("\\n\" \\\n");
+
+
+        // Skip over line
+        if (result[i] == '\r') i++;
+        if (result[i] == '\n') i++;
+    }
 }

@@ -118,7 +118,7 @@ static inline void *vd_ui_memcpy(void *dst, void *src, size_t count)
     return dst;
 }
 
-/* ----UI------------------------------------------------------------------------------------------------------------ */
+/* ----DATA TYPES---------------------------------------------------------------------------------------------------- */
 typedef struct {
     char *s;
     int  l;
@@ -128,10 +128,18 @@ typedef union {
     float e[4];
 } VdUiF4;
 
-typedef struct {
-    float colors[4][4];
+typedef union {
+    float  colors[4][4];
+    VdUiF4 vectors[4]; 
+    float  e[16];
 } VdUiGradient;
 
+static inline VdUiF4       vd_ui_f4(float x, float y, float z, float w);
+static inline VdUiF4       vd_ui_fall4(float s);
+static inline VdUiGradient vd_ui_gradient(VdUiF4 top_left, VdUiF4 top_right, VdUiF4 bottom_left, VdUiF4 bottom_right);
+static inline VdUiGradient vd_ui_gradient1(VdUiF4 all);
+
+/* ----UI------------------------------------------------------------------------------------------------------------ */
 enum {
     // Per div flags
     VD_UI_FLAG_TEXT             = 1 << 0,
@@ -260,6 +268,52 @@ static inline int vd_ui_div_has_flag(VdUiDiv *div, VdUiFlags flag)
 {
     return div->flags & flag ? 1 : 0;
 }
+
+static inline VdUiF4 vd_ui_f4(float x, float y, float z, float w)
+{
+    VdUiF4 result;
+    result.e[0] = x;
+    result.e[1] = y;
+    result.e[2] = z;
+    result.e[3] = w;
+    return result;
+}
+
+static inline VdUiF4 vd_ui_fall4(float s)
+{
+    return vd_ui_f4(s,s,s,s);
+}
+
+static inline VdUiGradient vd_ui_gradient(VdUiF4 top_left, VdUiF4 top_right, VdUiF4 bottom_left, VdUiF4 bottom_right)
+{
+    VdUiGradient result;
+    result.colors[0][0] = top_left.e[0];
+    result.colors[0][1] = top_left.e[1];
+    result.colors[0][2] = top_left.e[2];
+    result.colors[0][3] = top_left.e[3];
+
+    result.colors[1][0] = top_right.e[0];
+    result.colors[1][1] = top_right.e[1];
+    result.colors[1][2] = top_right.e[2];
+    result.colors[1][3] = top_right.e[3];
+
+    result.colors[2][0] = bottom_left.e[0];
+    result.colors[2][1] = bottom_left.e[1];
+    result.colors[2][2] = bottom_left.e[2];
+    result.colors[2][3] = bottom_left.e[3];
+
+    result.colors[3][0] = bottom_right.e[0];
+    result.colors[3][1] = bottom_right.e[1];
+    result.colors[3][2] = bottom_right.e[2];
+    result.colors[3][3] = bottom_right.e[3];
+    return result;
+}
+
+static inline VdUiGradient vd_ui_gradient1(VdUiF4 all)
+{
+    return vd_ui_gradient(all, all, all, all);
+}
+
 /* ----RENDERING----------------------------------------------------------------------------------------------------- */
 enum {
     VD_UI_VERTEX_FLAG_TEXTURE_IS_ALPHA_BUFFER = 1 << 0,
@@ -398,6 +452,13 @@ VD_UI_API const char*      vd_ui_gl_get_uniform_name_resolution(void);
  * @return  The uniform name to pass into glGetUniformLocation (which you can then store somewhere and pass to glUniform1i)
  */
 VD_UI_API const char*      vd_ui_gl_get_uniform_name_texture(void);
+
+/**
+ * Gets the uniform name for mouse coordinates using the default OpenGL 3.3 core profile shader provider as an example by the library
+ * @return  The uniform name to pass into glGetUniformLocation (which you can then store somewhere and pass to glUniform2f)
+ */
+VD_UI_API const char*      vd_ui_gl_get_uniform_name_mouse(void);
+
 /**
  * @param  format          The storage format to pass into OpenGL
  */
@@ -618,7 +679,7 @@ static float        vd_ui__clampf01(float x);
 static float        vd_ui__clampf(float x, float a, float b);
 static float        vd_ui__lerp(float a, float b, float t);
 static VdUiF4       vd_ui__lerp4(VdUiF4 a, VdUiF4 b, float t);
-static VdUiF4       vd_ui__lerpgrad(VdUiF4 a, VdUiF4 b, float t);
+static VdUiGradient vd_ui__lerpgrad(VdUiGradient a, VdUiGradient b, float t);
 
 static const char*  vd_ui__utf8next(const char *p);
 static int          vd_ui__utf8dec(const char **p, unsigned int *out);
@@ -844,7 +905,14 @@ VD_UI_API VdUiReply vd_ui_button(VdUiStr str)
     div->style.padding[VD_UI_TOP]    = 4.f;
     div->style.padding[VD_UI_RIGHT]  = 4.f;
     div->style.padding[VD_UI_BOTTOM] = 4.f;
+    div->style.normal_grad = vd_ui_gradient(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f),
+                                            vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f));
 
+    div->style.hot_grad    = vd_ui_gradient(vd_ui_f4(0.52f, 0.52f, 0.52f, 1.f), vd_ui_f4(0.52f, 0.52f, 0.52f, 1.f),
+                                            vd_ui_f4(0.52f, 0.52f, 0.52f, 1.f), vd_ui_f4(0.52f, 0.52f, 0.52f, 1.f));
+
+    div->style.active_grad = vd_ui_gradient(vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f),
+                                            vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f));
     return vd_ui_call(div);
 }
 
@@ -1010,8 +1078,8 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
         }
     }
 
-    float hot_speed = 2.f;
-    float active_speed = 2.1f;
+    float hot_speed = 9.f;
+    float active_speed = 10.f;
     div->hot_t    = vd_ui__lerp(div->hot_t, hovered ? 1.0f : 0.0f, dt * hot_speed);
     div->hot_t    = vd_ui__clampf01(div->hot_t);
 
@@ -1722,19 +1790,9 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
 
     // After we've processed every child, we're ready to render ourselves
     if (curr->flags & VD_UI_FLAG_BACKGROUND) {
-        VdUiF4 base_color   = {0.9f, 0.4f, 0.4f, 0.5f};
-        VdUiF4 hot_color    = {0.7f, 0.3f, 0.3f, 1.f};
-        VdUiF4 active_color = {0.1f, 0.9f, 0.4f, 1.f};
-
-        VdUiF4 final_color = vd_ui__lerp4(base_color, hot_color, curr->hot_t);
-        final_color = vd_ui__lerp4(final_color, active_color, curr->active_t);
-        vd_ui__push_rectgrad(ctx, &ctx->white, curr->rect, (float[]) {
-            0.3f, 0.3f, 0.3f, 1.f,
-            0.3f, 0.3f, 0.3f, 1.f,
-            0.2f, 0.2f, 0.2f, 1.f,
-            0.2f, 0.2f, 0.2f, 1.f,
-        });
-        // vd_ui__push_rect(ctx, &ctx->white, curr->rect, base_color.e);
+        VdUiGradient grad = vd_ui__lerpgrad(curr->style.normal_grad, curr->style.hot_grad, curr->hot_t);
+        grad = vd_ui__lerpgrad(grad, curr->style.active_grad, curr->active_t);
+        vd_ui__push_rectgrad(ctx, &ctx->white, curr->rect, grad.e);
     }
 
     if (curr->flags & VD_UI_FLAG_TEXT) {
@@ -1779,6 +1837,12 @@ static VdUiF4 vd_ui__lerp4(VdUiF4 a, VdUiF4 b, float t)
         vd_ui__lerp(a.e[2], b.e[2], t),
         vd_ui__lerp(a.e[3], b.e[3], t),
     };
+}
+
+static VdUiGradient vd_ui__lerpgrad(VdUiGradient a, VdUiGradient b, float t)
+{
+    return vd_ui_gradient(vd_ui__lerp4(a.vectors[0], b.vectors[0], t), vd_ui__lerp4(a.vectors[1], b.vectors[1], t),
+                          vd_ui__lerp4(a.vectors[2], b.vectors[2], t), vd_ui__lerp4(a.vectors[3], b.vectors[3], t));
 }
 
 static const char *vd_ui__utf8next(const char *p)
@@ -2378,6 +2442,8 @@ static void vd_ui__inspector_do_hierarchy(VdUiContext *ctx, VdUiDiv *curr, float
 "in float f_corner_radius;                                                                                         \n" \
 "in float f_edge_softness;                                                                                         \n" \
 "uniform sampler2D uTexture;                                                                                       \n" \
+"uniform vec2 uResolution;                                                                                         \n" \
+"uniform vec2 uMouse;                                                                                              \n" \
 "out vec4 FragColor;                                                                                               \n" \
 "                                                                                                                  \n" \
 "float sdf_rounded_rect(vec2 sample_pos, vec2 rect_center, vec2 rect_half_size, float r) {                         \n" \
@@ -2395,7 +2461,17 @@ static void vd_ui__inspector_do_hierarchy(VdUiContext *ctx, VdUiDiv *curr, float
 "    vec4 normal_color = sample * f_color;                                                                         \n" \
 "    vec4 mask_color = vec4(f_color.rgb, f_color.a * sample.r);                                                    \n" \
 "    vec4 color = mix(normal_color, mask_color, f_amix);                                                           \n" \
-"    FragColor = vec4(color) * sdf;                                                                                      \n" \
+"                                                                                                                  \n" \
+"    vec2  mD = clamp(uMouse - f_dc, -f_dhs, f_dhs);                                                               \n" \
+"    vec2  pC = f_dc + mD;                                                                                         \n" \
+"    float D  = length(uMouse - pC);                                                                               \n" \
+"    float xD = length(f_dhs) * 10.0;                                                                               \n" \
+"    float P  = 1.0 - clamp(D / xD, 0.0, 0.7);                                                                     \n" \
+"    vec3 kC = vec3(0.8, 0.8, 0.8);                                                                                 \n" \
+"                                                                                                                  \n" \
+"    color.rgb = color.rgb + (color.rgb * kC * P);                                                                                         \n" \
+"                                                                                                                  \n" \
+"    FragColor = color * sdf;                                                                                \n" \
 "}                                                                                                                 \n" \
 
 VD_UI_API void vd_ui_gl_get_default_shader_sources(const char **const vertex_shader, size_t *vertex_shader_len,
@@ -2415,6 +2491,11 @@ VD_UI_API const char *vd_ui_gl_get_uniform_name_resolution(void)
 VD_UI_API const char *vd_ui_gl_get_uniform_name_texture(void)
 {
     return "uTexture";
+}
+
+VD_UI_API const char *vd_ui_gl_get_uniform_name_mouse(void)
+{
+    return "uMouse";
 }
 
 VD_UI_API void vd_ui_gl_cv_texture_format(VdUiTextureFormat format, int *level, int *internal_format, int *border, unsigned int *texformat, unsigned int *type)

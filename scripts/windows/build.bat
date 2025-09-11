@@ -51,6 +51,7 @@ if %COMPILE_PROGRAMS%==1 (
     cl /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %PRJ_DIR%/programs/printf_specifiers.c /Fe:print_specifiers.exe 
     cl /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %PRJ_DIR%/programs/fontello.c /Fe:fontello.exe 
     cl /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %PRJ_DIR%/programs/ryu.c /Fe:ryu.exe 
+    cl /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %PRJ_DIR%/programs/sembd.c /Fe:sembd.exe 
 )
 
 popd
