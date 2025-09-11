@@ -4,8 +4,7 @@ set SCRIPT_DIR=%~dp0
 
 REM --ARGUMENTS---------------------------------------------------------------------------------------------------------
 set BUILD_MODE="debug"
-set COMPILE_ALL=0
-set SAMPLE_TO_COMPILE="ui_basic"
+set SAMPLE_TO_COMPILE=""
 set COMPILE_PROGRAMS=0
 
 :parse_args
@@ -24,8 +23,6 @@ if "%~1"=="-m" (
     )
 ) else if "%~1"=="-p" (
     set COMPILE_PROGRAMS=1
-) else if "%~1"=="-a" (
-    set COMPILE_ALL=1
 ) else if "%~1"=="-s" (
     set SAMPLE_TO_COMPILE=%~2
     shift
@@ -45,7 +42,9 @@ pushd build
 set INC_DIR=%PRJ_DIR%
 set SRC_DIR=%PRJ_DIR%\samples
 
-cl /utf-8 /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %SRC_DIR%\%SAMPLE_TO_COMPILE%.c /Fe:%SAMPLE_TO_COMPILE%.exe 
+if not %SAMPLE_TO_COMPILE%=="" (
+    cl /utf-8 /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %SRC_DIR%\%SAMPLE_TO_COMPILE%.c /Fe:%SAMPLE_TO_COMPILE%.exe 
+)
 
 if %COMPILE_PROGRAMS%==1 (
     cl /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %PRJ_DIR%/programs/embed.c /Fe:embed.exe 
