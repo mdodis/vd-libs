@@ -28,6 +28,7 @@
  * - Div cache collision resolution
  * - Images
  * - Support more of printf
+ * - Proper standalone floating point printing implementation
  *
  * EXAMPLE - OpenGL (@todo)
  * 
@@ -793,10 +794,10 @@ VD_UI_API void vd_ui_spacer(void)
     VdUiStr null_str = {0, 0};
     VdUiDiv *spacer = vd_ui_div_new(0, null_str);
     spacer->style.size[0].mode       = VD_UI_SIZE_MODE_ABSOLUTE;
-    spacer->style.size[0].value      = 0.f;
+    spacer->style.size[0].value      = 9999.f;
     spacer->style.size[0].importance = 0.f;
     spacer->style.size[1].mode       = VD_UI_SIZE_MODE_ABSOLUTE;
-    spacer->style.size[1].value      = 9999.f;
+    spacer->style.size[1].value      = 0.f;
     spacer->style.size[1].importance = 0.f;
 }
 
@@ -826,6 +827,7 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
         result = &ctx->null_divs[ctx->null_divs_len++];
         result->h = 0;
         result->is_null = 1;
+        result->content_str = VD_UI_LIT("<NULL>");
     } else {
         size_t ht = vd_ui__hash(str.s, str.l);
         size_t h = ht;
@@ -848,6 +850,7 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
         }
         result->h = h;
         result->is_null = 0;
+        result->content_str = vd_ui__strbuf_dup(ctx, str);
     }
 
     result->last_frame_touched = ctx->frame_index;
@@ -860,7 +863,6 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     result->style.padding[1] = 0.f;
     result->style.padding[2] = 0.f;
     result->style.padding[3] = 0.f;
-    result->content_str = vd_ui__strbuf_dup(ctx, str);
 
     VdUiDiv *parent = ctx->parents[ctx->parents_next - 1];
     result->parent = parent;
@@ -964,12 +966,15 @@ VD_UI_API void vd_ui_demo(void)
     VdUiDiv *button_example = vd_ui_div_newf(VD_UI_FLAG_FLEX_HORIZONTAL, "##button-example");
     button_example->style.size[0].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
     button_example->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
+
     vd_ui_parent_push(button_example);
     {
         if (vd_ui_buttonf("Button 1").clicked) {
             button1_click_count++;
             VD_UI_LOG("Clicked %d times", button1_click_count);
         }
+
+        vd_ui_spacer();
 
         vd_ui_labelf("Button 1 Clicked: %d times", button1_click_count);
     }
@@ -1700,6 +1705,44 @@ static int vd_ui__is_letter(char c)     { return (c >= 'a' && c <= 'z') || (c >=
 static int vd_ui__is_uppercase(char c)  { return (c >= 'A' && c <= 'Z'); }
 static char vd_ui__to_lowercase(char c) { return (c - 'A' + 'a'); }
 
+static inline int vd_ui__ipow32(int base, unsigned char exp)
+{
+    static const unsigned char highest_bit_set[] = {
+        0,1,2,2,3,3,3,3,4,4,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+        255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+        255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+        255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+    };
+
+    int result = 1;
+    switch (highest_bit_set[exp]) {
+        case 255:
+            if (base == 1) return 1;
+            if (base == -1) return 1 - 2 * (exp & 1);
+            return 0;
+        case 5:
+            if (exp & 1) result *= base;
+            exp >>= 1;
+            base *= base;
+        case 4:
+            if (exp & 1) result *= base;
+            exp >>= 1;
+            base *= base;
+        case 3:
+            if (exp & 1) result *= base;
+            exp >>= 1;
+            base *= base;
+        case 2:
+            if (exp & 1) result *= base;
+            exp >>= 1;
+            base *= base;
+        case 1:
+            if (exp & 1) result *= base;
+        default:
+            return result;
+    }
+}
+
 VD_UI_API int vd_ui_vsnprintf(char *s, size_t n, const char *format, va_list args)
 {
     char   *buf  = s;
@@ -1799,17 +1842,58 @@ VD_UI_API int vd_ui_vsnprintf(char *s, size_t n, const char *format, va_list arg
             } break;
 
             case 'f': {
-                float val = (float)va_arg(args, double);
+                float vala = (float)va_arg(args, double);
+
+                int is_negative = 0;
+                float val = vala;
+                if (vala < 0.f) {
+                    is_negative = 1;
+                    val = -vala;
+                }
 
                 // @todo(mdodis): proper standalone floating point implementation
-                static char fbuf[40];
+                int ipart = (int)val;
+                float fpart = n - (float)ipart;
 
-                snprintf(fbuf, sizeof(fbuf), "%f", val);
+                char tmp[64];
+                const char *digits = uppercase ? "0123456789" : "0123456789";
+                int pos = 0;
 
-                char *b = fbuf;
-                while (*b) {
-                    vd_ui__putc(&buf, &rm, *b++, &count);
+                if (ipart == 0) {
+                    tmp[pos++] = '0';
+                } else {
+                    while (ipart > 0 && pos < sizeof(tmp)) {
+                        tmp[pos++] = digits[ipart % 10];
+                        ipart /= 10;
+                    }
                 }
+                int pos_before_dec = pos;
+
+                fpart = fpart * vd_ui__ipow32(10, 3);
+                int dpart = (int)fpart;
+
+                if (dpart == 0) {
+                    tmp[pos++] = '0';
+                } else {
+                    while (dpart > 0 && pos < sizeof(tmp)) {
+                        tmp[pos++] = digits[dpart % 10];
+                        dpart /= 10;
+                    }
+                }
+
+                int saved_pos_before_dec = pos_before_dec;
+                while (pos_before_dec > 0) {
+                    vd_ui__putc(&buf, &rm, tmp[--pos_before_dec], &count);
+                }
+
+                vd_ui__putc(&buf, &rm, '.', &count);
+
+                pos_before_dec = saved_pos_before_dec;
+
+                while (pos > pos_before_dec) {
+                    vd_ui__putc(&buf, &rm, tmp[--pos], &count);
+                }
+
             } break;
 
             case 'o':
