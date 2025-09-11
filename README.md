@@ -28,7 +28,7 @@ A collection of header-only libraries and utility programs
 
 ## Samples
 
-| Name (samples/name.c)                                     | Description                                                                                                                          |
+| Name                                                      | Description                                                                                                                          |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | [gl_cube](./samples/gl_cube.c)                            | **WIP** Cube Sample with vd_fw.h in OpenGL                                                                                           |
 | [gl_window](./samples/gl_window.c)                        | Takes in a [Fontello](https://fontello.com/) config.json file, outputs C compatible enums                                            |
