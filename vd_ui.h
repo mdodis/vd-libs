@@ -164,12 +164,14 @@ enum {
     VD_UI_AXISH = 0,
     VD_UI_AXISV = 1,
     VD_UI_AXES = 2,
+    VD_UI_AXIS_AUTO = -1,
 };
+typedef int VdUiAxis;
 
 typedef struct {
     VdUiSizeMode mode;
     float        value;
-    float        importance;
+    float        niceness;
 } VdUiSize;
 
 typedef struct {
@@ -674,10 +676,12 @@ VD_UI_API void vd_ui_frame_end(void)
     ctx->num_passes = 0;
     ctx->num_updates = 0;
     ctx->current_texture_id = 0;
-    ctx->root.rect[0] = 0.f;
-    ctx->root.rect[1] = 0.f;
-    ctx->root.rect[2] = ctx->window[0];
-    ctx->root.rect[3] = ctx->window[1];
+    ctx->root.rect[0]      = 0.f;
+    ctx->root.rect[1]      = 0.f;
+    ctx->root.rect[2]      = ctx->window[0];
+    ctx->root.rect[3]      = ctx->window[1];
+    ctx->root.comp_size[0] = ctx->window[0];
+    ctx->root.comp_size[1] = ctx->window[1];
     ctx->clip_stack_count = 0;
 
     // Layout UI
@@ -795,10 +799,10 @@ VD_UI_API void vd_ui_spacer(void)
     VdUiDiv *spacer = vd_ui_div_new(0, null_str);
     spacer->style.size[0].mode       = VD_UI_SIZE_MODE_ABSOLUTE;
     spacer->style.size[0].value      = 9999.f;
-    spacer->style.size[0].importance = 0.f;
+    spacer->style.size[0].niceness   = 1000.f;
     spacer->style.size[1].mode       = VD_UI_SIZE_MODE_ABSOLUTE;
     spacer->style.size[1].value      = 0.f;
-    spacer->style.size[1].importance = 0.f;
+    spacer->style.size[1].niceness   = 1000.f;
 }
 
 VD_UI_API VdUiDiv *vd_ui_div_newf(VdUiFlags flags, const char *fmt, ...)
@@ -994,11 +998,14 @@ static void vd_ui__calc_fixed_size(VdUiContext *ctx, VdUiDiv *curr)
     if (curr == 0) {
         return;
     }
-
     VdUiDiv *child = curr->first;
     while (child != 0) {
         vd_ui__calc_fixed_size(ctx, child);
         child = child->next;
+    }
+
+    if (curr == &ctx->root) {
+        return;
     }
 
     for (int i = 0; i < VD_UI_AXES; ++i) {
@@ -1055,6 +1062,60 @@ static void vd_ui__calc_dyn_size_down(VdUiContext *ctx, VdUiDiv *curr)
         }
     }
 }
+
+static void vd_ui__calc_oversizes(VdUiContext *ctx, VdUiDiv *curr)
+{
+    if (curr == 0) {
+        return;
+    }
+
+    for (int i = 0; i < VD_UI_AXES; ++i) {
+        if (curr->parent == 0) {
+            continue;
+        }
+
+        if (curr->first == 0) {
+            continue;
+        }
+
+        if (curr->comp_size[i] < curr->parent->comp_size[i]) {
+            continue;
+        }
+
+        // We need to subtract this amount from each child depending on niceness
+        float oversize_amount = curr->comp_size[i] - curr->parent->comp_size[i];
+
+        // First, compute the overall niceness of each child to then convert proportionally to [0, 1]
+        float overall_niceness = 0.f;
+        VdUiDiv *child = curr->first;
+        while (child != 0) {
+            overall_niceness += child->style.size[i].niceness;
+            child = child->next;
+        }
+
+        // If no child is nice, then we can't do anything
+        if (overall_niceness <= 0.f) {
+            continue;
+        }
+
+        child = curr->first;
+        while (child != 0) {
+            float proportional_niceness = child->style.size[i].niceness / overall_niceness;
+            if (proportional_niceness != 0.f) {
+                child->comp_size[i] = child->comp_size[i] - oversize_amount * proportional_niceness;
+            }
+
+            child = child->next;
+        }
+    }
+
+    VdUiDiv *child = curr->first;
+    while (child != 0) {
+        vd_ui__calc_oversizes(ctx, child);
+        child = child->next;
+    }
+}
+
 
 static void vd_ui__calc_positions(VdUiContext *ctx, VdUiDiv *curr)
 {
@@ -1117,6 +1178,9 @@ static void vd_ui__layout(VdUiContext *ctx)
 
     // Calculate downwards-dependent sizes
     vd_ui__calc_dyn_size_down(ctx, &ctx->root);
+
+    // Solve violations
+    vd_ui__calc_oversizes(ctx, &ctx->root);
 
     vd_ui__calc_positions(ctx, &ctx->root);
 }

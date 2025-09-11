@@ -2333,7 +2333,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     }
 
     if (info != NULL) {
-#if VD_FW_WIN32_SUBSYSTEM == VD_FW_WIN32_SUBSYSTEM_WINDOWS
+#if (VD_FW_WIN32_SUBSYSTEM == VD_FW_WIN32_SUBSYSTEM_WINDOWS)
         if (info->gl.debug_on) {
             AllocConsole();
             AttachConsole(GetCurrentProcessId());
@@ -2345,9 +2345,11 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
                 sizeof("Console allocated for debugging\n") - 1,
                 &written,
                 0);
+#if !VD_FW_NO_CRT
             freopen("conin$","r",stdin);
             freopen("conout$","w",stdout);
             freopen("conout$","w",stderr);
+#endif // !VD_FW_NO_CRT
 
         }
 #endif
@@ -3927,8 +3929,6 @@ VD_FW_API unsigned int vd_fw_compile_shader(unsigned int type, const char *sourc
     static char buf[1024];
     GLsizei len;
     glGetShaderInfoLog(shd, sizeof(buf), &len, buf);
-
-    printf("Shader compilation failed: %s\n", buf);
     return 0;
 }
 
@@ -3946,8 +3946,6 @@ VD_FW_API int vd_fw_link_program(unsigned int program)
     static char buf[1024];
     GLsizei len;
     glGetProgramInfoLog(program, sizeof(buf), &len, buf);
-    printf("Program linkage failed: %s\n", buf);
-
     return 0;
 }
 
