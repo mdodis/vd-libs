@@ -671,6 +671,8 @@ struct VdUiContext {
     // - At the end of the frame, compute the required new chars (if any), and render
     // - to bitmap
     VdUiGlyph               *glyph_cache;
+    int                     glyph_cache_count;
+    
     int                     atlas[2];
     void                    *buffer;
     size_t                  buffer_size;
@@ -1640,6 +1642,7 @@ VdUiGlyph *vd_ui__push_glyph(VdUiContext *ctx, unsigned int codepoint, int size,
         VdUiGlyph *cglyph = &ctx->glyph_cache[cindex];
         while (!vd_ui__glyph_free(cglyph) && cindex != 0) {
             cindex--;
+            cglyph = &ctx->glyph_cache[cindex];
         }
 
         if (cindex == 0) {
@@ -1650,6 +1653,8 @@ VdUiGlyph *vd_ui__push_glyph(VdUiContext *ctx, unsigned int codepoint, int size,
         glyph = cglyph;
         chain_end->next = cindex;
     }
+
+    ctx->glyph_cache_count++;
 
     glyph->codepoint = codepoint;
     glyph->font = font_id;
@@ -1663,7 +1668,6 @@ VdUiGlyph *vd_ui__push_glyph(VdUiContext *ctx, unsigned int codepoint, int size,
     glyph->size = size;
     glyph->next = -1;
     return glyph;
-
 }
 
 static size_t vd_ui__hash_glyph(unsigned int codepoint, int size, VdUiFontId font_id)
