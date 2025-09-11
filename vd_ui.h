@@ -180,6 +180,7 @@ typedef struct {
     VdUiGradient    normal_grad;
     VdUiGradient    hot_grad;
     VdUiGradient    active_grad;
+    int             text_font_size;
 } VdUiStyle;
 
 typedef struct VdUiDiv VdUiDiv;
@@ -354,7 +355,7 @@ VD_UI_API void*            vd_ui_frame_get_vertex_buffer(size_t *buffer_size);
 VD_UI_API VdUiRenderPass*  vd_ui_frame_get_render_passes(unsigned int *num_passes);
 
 /* ----FONTS--------------------------------------------------------------------------------------------------------- */
-VD_UI_API VdUiFontId       vd_ui_font_add_ttf(void *buffer, size_t size, float pixel_size);
+VD_UI_API VdUiFontId       vd_ui_font_add_ttf(void *buffer, size_t size);
 
 /* ----INPUT--------------------------------------------------------------------------------------------------------- */
 VD_UI_API void             vd_ui_event_size(float width, float height);
@@ -374,7 +375,7 @@ VD_UI_API void             vd_ui_context_set(VdUiContext *context);
 VD_UI_API VdUiContext*     vd_ui_context_get(void);
 
 /* ----GLYPH CACHE--------------------------------------------------------------------------------------------------- */
-VD_UI_API void             vd_ui_measure_text_size(VdUiFontId font, VdUiStr str, float *w, float *h);
+VD_UI_API void             vd_ui_measure_text_size(VdUiFontId font, VdUiStr str, int size, float *w, float *h);
 
 /* ----INTEGRATION - OPENGL------------------------------------------------------------------------------------------ */
 /**
@@ -491,14 +492,13 @@ struct VdUiGlyph {
     int           x0, y0, x1, y1;
     float         xadvance, xoff, yoff;
     float         xoff2, yoff2;
+    int           size;
     int           next;
 };
 
 struct VdUiFont {
     void                *font_buffer;
     stbtt_fontinfo      font_info;
-    float               size;
-    float               size_scaled;
     int                 bounding_box[4];
     int                 ascent, descent, linegap;
 };
@@ -520,16 +520,16 @@ static void vd_ui__push_vertexgrad(VdUiContext *ctx, VdUiTextureId *texture, flo
                                                                              float corner_radius,
                                                                              float edge_softness,
                                                                              float border_thickness);
-static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y);
+static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y, int size);
 static void vd_ui__put_linef(VdUiContext *ctx, float x, float y, const char *fmt, ...);
 
-static void vd_ui__get_glyph_quad(VdUiContext *ctx, unsigned int codepoint, VdUiFontId font_id,
+static void vd_ui__get_glyph_quad(VdUiContext *ctx, unsigned int codepoint, int size, VdUiFontId font_id,
                                   float *rx, float *ry,
                                   float *x0, float *y0,
                                   float *x1, float *y1,
                                   float *s0, float *t0,
                                   float *s1, float *t1);
-static VdUiGlyph*   vd_ui__push_glyph(VdUiContext *ctx, unsigned int codepoint, VdUiFontId font_id);
+static VdUiGlyph*   vd_ui__push_glyph(VdUiContext *ctx, unsigned int codepoint, int size, VdUiFontId font_id);
 static size_t       vd_ui__hash_glyph(unsigned int codepoint, VdUiFontId font_id);
 static void         vd_ui__layout(VdUiContext *ctx);
 static VdUiStr      vd_ui__strbuf_dup(VdUiContext *ctx, VdUiStr str);
@@ -867,6 +867,7 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     result->style.padding[1] = 0.f;
     result->style.padding[2] = 0.f;
     result->style.padding[3] = 0.f;
+    result->style.text_font_size = 16;
 
     VdUiDiv *parent = ctx->parents[ctx->parents_next - 1];
     result->parent = parent;
@@ -1021,7 +1022,7 @@ static void vd_ui__calc_fixed_size(VdUiContext *ctx, VdUiDiv *curr)
             case VD_UI_SIZE_MODE_TEXT_CONTENT: {
                 VdUiFontId font_id = {0};
                 float text_sizes[VD_UI_AXES];
-                vd_ui_measure_text_size(font_id, curr->content_str, &text_sizes[0], &text_sizes[1]);
+                vd_ui_measure_text_size(font_id, curr->content_str, curr->style.text_font_size, &text_sizes[0], &text_sizes[1]);
 
                 curr->comp_size[i] = text_sizes[i];
 
@@ -1198,7 +1199,7 @@ static VdUiStr vd_ui__strbuf_dup(VdUiContext *ctx, VdUiStr str)
 }
 
 /* ----FONTS IMPL---------------------------------------------------------------------------------------------------- */
-VD_UI_API VdUiFontId vd_ui_font_add_ttf(void *buffer, size_t size, float pixel_size)
+VD_UI_API VdUiFontId vd_ui_font_add_ttf(void *buffer, size_t size)
 {
     VD_UNUSED(size);
 
@@ -1207,8 +1208,6 @@ VD_UI_API VdUiFontId vd_ui_font_add_ttf(void *buffer, size_t size, float pixel_s
 
     font->font_buffer = buffer; 
     stbtt_InitFont(&font->font_info, buffer, stbtt_GetFontOffsetForIndex(buffer, 0));
-    font->size = pixel_size;
-    font->size_scaled = stbtt_ScaleForPixelHeight(&font->font_info, pixel_size);
     stbtt_GetFontBoundingBox(&font->font_info, &font->bounding_box[0], &font->bounding_box[1],
                                                &font->bounding_box[2], &font->bounding_box[3]);
     stbtt_GetFontVMetrics(&font->font_info, &font->ascent, &font->descent, &font->linegap);
@@ -1411,12 +1410,15 @@ static void vd_ui__push_rect(VdUiContext *ctx, VdUiTextureId *texture, float rec
         0);
 }
 
-static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y)
+static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y, int size)
 {
     VdUiFont *font = &ctx->fonts[0];
 
+    float pixel_size = (float)size;
+    float size_scaled = stbtt_ScaleForPixelHeight(&font->font_info, pixel_size);
+
     float hadd = (float)font->bounding_box[3] - (float)font->bounding_box[1];
-    float rp[2] = {x, y + hadd * font->size_scaled * 0.5f};
+    float rp[2] = {x, y + hadd * size_scaled * 0.5f};
 
     for (int i = 0; i < s.l; ++i) {
         char c = s.s[i];
@@ -1424,7 +1426,7 @@ static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y)
         float p0[2], p1[2];
         float u0[2], u1[2];
 
-        vd_ui__get_glyph_quad(ctx, (int)c, (VdUiFontId) {0},
+        vd_ui__get_glyph_quad(ctx, (int)c, size, (VdUiFontId) {0},
             &rp[0], &rp[1],
             &p0[0], &p0[1],
             &p1[0], &p1[1],
@@ -1448,7 +1450,7 @@ static void vd_ui__put_linef(VdUiContext *ctx, float x, float y, const char *fmt
     va_end(args);
     VD_ASSERT(result < sizeof(buf));
     VdUiStr str = {buf, result};
-    vd_ui__put_line(ctx, str, x, y);
+    vd_ui__put_line(ctx, str, x, y, 16);
 }
 
 static int vd_ui__glyph_eq(VdUiGlyph *glyph, unsigned int codepoint, VdUiFontId font)
@@ -1461,7 +1463,7 @@ static int vd_ui__glyph_free(VdUiGlyph *glyph)
     return glyph->codepoint == 0;
 }
 
-static void vd_ui__get_glyph_quad(VdUiContext *ctx, unsigned int codepoint, VdUiFontId font_id,
+static void vd_ui__get_glyph_quad(VdUiContext *ctx, unsigned int codepoint, int size, VdUiFontId font_id,
                                   float *rx, float *ry,
                                   float *x0, float *y0,
                                   float *x1, float *y1,
@@ -1489,7 +1491,7 @@ static void vd_ui__get_glyph_quad(VdUiContext *ctx, unsigned int codepoint, VdUi
         // @todo(mdodis): Glyph paging
         // We didn't find the glyph. Allocate a new one if it fits
         // and assert if it doesn't (for now)
-        glyph = vd_ui__push_glyph(ctx, codepoint, font_id);
+        glyph = vd_ui__push_glyph(ctx, codepoint, size, font_id);
     }
 
     int align_to_integer = 1;
@@ -1512,7 +1514,7 @@ static void vd_ui__get_glyph_quad(VdUiContext *ctx, unsigned int codepoint, VdUi
     *rx += glyph->xadvance;
 }
 
-VdUiGlyph *vd_ui__push_glyph(VdUiContext *ctx, unsigned int codepoint, VdUiFontId font_id)
+VdUiGlyph *vd_ui__push_glyph(VdUiContext *ctx, unsigned int codepoint, int size, VdUiFontId font_id)
 {
     ctx->state = ctx->state == VD_UI__TEXTURE_STATE_IN_GPU ? VD_UI__TEXTURE_STATE_NEEDS_UPDATE : VD_UI__TEXTURE_STATE_NULL;
     VdUiFont *font = &ctx->fonts[font_id.id];
@@ -1520,7 +1522,7 @@ VdUiGlyph *vd_ui__push_glyph(VdUiContext *ctx, unsigned int codepoint, VdUiFontI
     stbtt_packedchar packed_char;
     int result = stbtt_PackFontRange(
         &ctx->pack_context, font->font_buffer, 0,
-        font->size,
+        (float)size,
         codepoint, 1, &packed_char);
 
     VD_UI_LOG("Pushed codepoint %c to packed range", (char)codepoint);
@@ -1584,7 +1586,7 @@ static size_t vd_ui__hash_glyph(unsigned int codepoint, VdUiFontId font_id)
     return result;
 }
 
-VD_UI_API void vd_ui_measure_text_size(VdUiFontId font_id, VdUiStr str, float *w, float *h)
+VD_UI_API void vd_ui_measure_text_size(VdUiFontId font_id, VdUiStr str, int size, float *w, float *h)
 {
     VdUiContext *ctx = vd_ui_context_get();
     (void)ctx;
@@ -1592,15 +1594,16 @@ VD_UI_API void vd_ui_measure_text_size(VdUiFontId font_id, VdUiStr str, float *w
     *w = *h = 0.f;
 
     VdUiFont *font = &ctx->fonts[font_id.id];
-    *h = (font->ascent - font->descent + font->linegap) * font->size_scaled;
-
+    float pixel_size = (float)size;
+    float size_scaled = stbtt_ScaleForPixelHeight(&font->font_info, pixel_size);
+    *h = (font->ascent - font->descent + font->linegap) * size_scaled;
 
     // @todo(mdodis): UTF-8
     for (size_t i = 0; i < str.l; ++i) {
         char c = str.s[i];
 
         float x0, y0, x1, y1, s0, t0, s1, t1;
-        vd_ui__get_glyph_quad(ctx, (unsigned int)c, font_id,
+        vd_ui__get_glyph_quad(ctx, (unsigned int)c, size, font_id,
             w, h,
             &x0, &y0,
             &x1, &y1,
@@ -1648,8 +1651,12 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
 
     if (curr->flags & VD_UI_FLAG_TEXT) {
         VdUiFont *font = &ctx->fonts[0];
-        float ydown = (-font->descent) * font->size_scaled;
-        vd_ui__put_line(ctx, curr->content_str, curr->rect[0] + curr->style.padding[0] * 2, curr->rect[1] + curr->style.padding[1] + ydown);
+
+        float pixel_size = (float)curr->style.text_font_size;
+        float size_scaled = stbtt_ScaleForPixelHeight(&font->font_info, pixel_size);
+
+        float ydown = (-font->descent) * size_scaled;
+        vd_ui__put_line(ctx, curr->content_str, curr->rect[0] + curr->style.padding[0] * 2, curr->rect[1] + curr->style.padding[1] + ydown, curr->style.text_font_size);
     }
 }
 
@@ -1690,7 +1697,7 @@ static VdUiF4 vd_ui__lerp4(VdUiF4 a, VdUiF4 b, float t)
 VD_UI_API void vd_ui_init(void)
 {
     vd_ui_context_set(vd_ui_context_create(0));
-    vd_ui_font_add_ttf(Vd_Ui_Public_Sans_Regular, sizeof(Vd_Ui_Public_Sans_Regular), 20.f);
+    vd_ui_font_add_ttf(Vd_Ui_Public_Sans_Regular, sizeof(Vd_Ui_Public_Sans_Regular));
 }
 
 VD_UI_API VdUiContext *vd_ui_context_create(VdUiContextCreateInfo *info)
@@ -2131,9 +2138,9 @@ static void vd_ui__inspector_do_hierarchy(VdUiContext *ctx, VdUiDiv *curr, float
     vd_ui__push_rect(ctx, &ctx->white, entry_rect, final_color);
 
     if (curr->content_str.l != 0) {
-        vd_ui__put_line(ctx, curr->content_str, entry_rect[0], entry_rect[1]);
+        vd_ui__put_line(ctx, curr->content_str, entry_rect[0], entry_rect[1], 16);
     } else {
-        vd_ui__put_line(ctx, VD_UI_LIT("#id"), entry_rect[0], entry_rect[1]);
+        vd_ui__put_line(ctx, VD_UI_LIT("#id"), entry_rect[0], entry_rect[1], 16);
     }
 
     Vd_Ui_Inspector.hierarchy.offset += 32.f;
