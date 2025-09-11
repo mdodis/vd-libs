@@ -36,35 +36,6 @@ int main(int argc, char const *argv[])
         },
     });
 
-    static char buf[1024];
-
-    vd_ui_snprintf(buf, sizeof(buf), "Hello %3s", "a");
-    printf("Buf L is %s\n", buf);
-
-    vd_ui_snprintf(buf, sizeof(buf), "Hello %03d Worlds", 1);
-    printf("Buf L is %s\n", buf);
-
-    vd_ui_snprintf(buf, sizeof(buf), "Hello %-3X Worlds", 123);
-    printf("Buf L is %s\n", buf);
-
-    vd_ui_snprintf(buf, sizeof(buf), "Hello %-3d Worlds", 1);
-    printf("Buf L is %s\n", buf);
-
-    vd_ui_snprintf(buf, sizeof(buf), "Hello %-3x Worlds", 12);
-    printf("Buf L is %s\n", buf);
-
-    vd_ui_snprintf(buf, sizeof(buf), "Hello %3d", 1);
-    printf("Buf 1 is %s\n", buf);
-
-    vd_ui_snprintf(buf, sizeof(buf), "Hello %3d", -12);
-    printf("Buf 1 is %s\n", buf);
-
-    vd_ui_snprintf(buf, sizeof(buf), "Hello %3d", 12345);
-    printf("Buf 1 is %s\n", buf);
-
-    vd_ui_snprintf(buf, sizeof(buf), "Hello %d", 1);
-    printf("Buf 2 is %s\n", buf);
-
     GLuint program;
     {
         const char *vertex_shader_source;   size_t vertex_shader_len;

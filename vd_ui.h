@@ -1798,6 +1798,19 @@ VD_UI_API int vd_ui_vsnprintf(char *s, size_t n, const char *format, va_list arg
                 }
             } break;
 
+            case 'f': {
+                float val = (float)va_arg(args, double);
+
+                // @todo(mdodis): proper standalone floating point implementation
+                static char fbuf[40];
+
+                snprintf(fbuf, sizeof(fbuf), "%f", val);
+
+                char *b = fbuf;
+                while (*b) {
+                    vd_ui__putc(&buf, &rm, *b++, &count);
+                }
+            } break;
 
             case 'o':
             case 'x':

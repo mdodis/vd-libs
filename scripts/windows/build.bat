@@ -50,6 +50,7 @@ cl /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %SRC_DIR%\%SAMPLE_TO_COMPILE%.c /Fe:%SA
 if %COMPILE_PROGRAMS%==1 (
     cl /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %PRJ_DIR%/programs/embed.c /Fe:embed.exe 
     cl /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %PRJ_DIR%/programs/printf_specifiers.c /Fe:print_specifiers.exe 
+    cl /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %PRJ_DIR%/programs/ryu.c /Fe:ryu.exe 
 )
 
 popd
