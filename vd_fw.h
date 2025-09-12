@@ -69,11 +69,15 @@ enum {
 
 typedef struct __VD_FW_InitInfo {
     struct {
+        /** What version of OpenGL you'd like to use. 3.3 and upwards recommended. */
         VdFwGlVersion version;
+
+        /** Whether to enable a debug console to show you errors produced by GL calls */
         int           debug_on;
     } gl;
 
     struct {
+        /** Set to 1 to draw default borders. This is experimental and subject to change (possibly inverted value as a better default) */
         int           draw_default_borders;
     } window_options;
 } VdFwInitInfo;
@@ -150,6 +154,22 @@ VD_FW_API unsigned int       vd_fw_compile_shader(unsigned int type, const char 
 VD_FW_API int                vd_fw_link_program(unsigned int program);
 
 /**
+ * Compiles a program, if any of the shader sources have been modified. You should call this every frame
+ * @param  program            Pointer to program (GLuint), initialize it to zero before rendering loop
+ * @param  last_compile       Pointer to last compilation time, initialize it to zero before rendering loop,
+ *                            and don't use it in any other way
+ * @param  vertex_file_path   The relative (or absolute) path to the vertex shader source
+ * @param  fragment_file_path The relative (or absolute) path to the fragment shader source
+ * @return                    1 if successful, 0 if encountered any breaking error. You don't really need to check this,
+ *                            as this function will keep the previously loaded program if the new one doesn't compile or
+ *                            link
+ * 
+ */
+VD_FW_API int                vd_fw_compile_or_hotload_program(unsigned int *program, unsigned long long *last_compile,
+                                                              const char *vertex_file_path,
+                                                              const char *fragment_file_path);
+
+/**
  * Shorthand for getting mouse coordinates as floats
  * @param  x The x position
  * @param  y The y position
@@ -209,6 +229,10 @@ VD_FW_INLINE void vd_fw_u_ortho(float left, float right, float bottom, float top
     out[8]  = 0.0f;                                out[9]  = 0.0f;                              out[10] = -2.0f / (far - near);          out[11] = 0.0f;
     out[12] = - (right + left) / (right - left);   out[13] = - (top + bottom) / (top - bottom); out[14] = - (far + near) / (far - near); out[15] = 1.0f;
 }
+
+VD_FW_API int vd_fw__any_time_higher(int num_files, const char **files, unsigned long long *check_against);
+VD_FW_API char *vd_fw__debug_dump_file_text(const char *path);
+VD_FW_API void vd_fw__free_mem(void *memory);
 
 #if _WIN32
 #define VD_FW_WIN32_SUBSYSTEM_CONSOLE 1
@@ -2684,6 +2708,78 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     return 0;
 }
 
+VD_FW_API int vd_fw__any_time_higher(int num_files, const char **files, unsigned long long *check_against)
+{
+    int result = 0;
+
+    // Reinterpret check_against as FILETIME
+    FILETIME *against = (FILETIME*)check_against;
+    for (int i = 0; i < num_files; ++i) {
+
+        HANDLE hfile = CreateFileA(files[i],
+                                   GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                   0, // lpSecurityAttributes
+                                   OPEN_EXISTING,
+                                   FILE_ATTRIBUTE_NORMAL,
+                                   NULL);
+        if (hfile == INVALID_HANDLE_VALUE) {
+            continue;
+        }
+
+        FILETIME creation_time, last_access_time, last_write_time;
+        if (!GetFileTime(hfile, &creation_time, &last_access_time, &last_write_time)) {
+            CloseHandle(hfile);
+            continue;
+        }
+
+        if (CompareFileTime(&last_write_time, against) > 0) {
+            result = 1;
+            *against = last_write_time;
+            CloseHandle(hfile);
+            break;
+        }
+
+        CloseHandle(hfile);
+    }
+
+    return result;
+}
+
+VD_FW_API char *vd_fw__debug_dump_file_text(const char *path)
+{
+    HANDLE hfile = CreateFileA(path,
+                               GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                               0, // lpSecurityAttributes
+                               OPEN_EXISTING,
+                               FILE_ATTRIBUTE_NORMAL,
+                               NULL);
+    if (hfile == INVALID_HANDLE_VALUE) {
+        return 0;
+    }
+
+    LARGE_INTEGER sz;
+    if (!GetFileSizeEx(hfile, &sz)) {
+        return 0;
+    }
+
+    char *memory = (char*)HeapAlloc(GetProcessHeap(), 0, sz.QuadPart + 1);
+
+    DWORD bytes_read;
+    // @todo(mdodis): if file is > 4GB
+    if (!ReadFile(hfile, memory, (DWORD)sz.QuadPart, &bytes_read, 0)) {
+        HeapFree(GetProcessHeap(), 0, memory);
+        return 0;
+    }
+
+    memory[sz.QuadPart] = 0;
+    return memory;
+}
+
+VD_FW_API void vd_fw__free_mem(void *memory)
+{
+    HeapFree(GetProcessHeap(), 0, memory);
+}
+
 static void vd_fw__gl_debug_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam)
 {
     (void)userParam;
@@ -3953,6 +4049,63 @@ VD_FW_API int vd_fw_link_program(unsigned int program)
     GLsizei len;
     glGetProgramInfoLog(program, sizeof(buf), &len, buf);
     return 0;
+}
+
+VD_FW_API int vd_fw_compile_or_hotload_program(unsigned int *program, unsigned long long *last_compile,
+                                                              const char *vertex_file_path,
+                                                              const char *fragment_file_path)
+{
+    int needs_recompile = 0;
+    if (*last_compile == 0) {
+        needs_recompile = 1;
+    }
+
+    const char *files[2] = {
+        vertex_file_path,
+        fragment_file_path,
+    };
+
+    if (vd_fw__any_time_higher(2, files, last_compile)) {
+        needs_recompile = 1;
+    }
+
+    if (!needs_recompile) {
+        return 1;
+    }
+
+    int result = 1;
+
+    char *srv = vd_fw__debug_dump_file_text(vertex_file_path);
+    char *srf = vd_fw__debug_dump_file_text(fragment_file_path);
+
+    unsigned int vshd = vd_fw_compile_shader(GL_VERTEX_SHADER, srv);
+    unsigned int fshd = vd_fw_compile_shader(GL_FRAGMENT_SHADER, srf);
+
+    unsigned int new_program;
+    if (vshd == 0 || fshd == 0) {
+        result = 0;
+    } else {
+        vd_fw__free_mem(srv);
+        vd_fw__free_mem(srf);
+
+        new_program = glCreateProgram();
+        glAttachShader(new_program, vshd);
+        glAttachShader(new_program, fshd);
+
+        if (vd_fw_link_program(new_program)) {
+            glDeleteShader(vshd);
+            glDeleteShader(fshd);
+            if (*program != 0) {
+                glDeleteProgram(*program);
+            }
+
+            *program = new_program;
+        } else {
+            result = 0;
+        }
+    }
+
+    return result;
 }
 
 #if defined(__APPLE__)

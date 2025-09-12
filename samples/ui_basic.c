@@ -37,22 +37,8 @@ int main(int argc, char const *argv[])
         },
     });
 
-    GLuint program;
-    {
-        const char *vertex_shader_source;   size_t vertex_shader_len;
-        const char *fragment_shader_source; size_t fragment_shader_len;
-        vd_ui_gl_get_default_shader_sources(&vertex_shader_source, &vertex_shader_len, 
-                                            &fragment_shader_source, &fragment_shader_len);
-
-        GLuint vshd = vd_fw_compile_shader(GL_VERTEX_SHADER, vertex_shader_source);
-
-        GLuint fshd = vd_fw_compile_shader(GL_FRAGMENT_SHADER, fragment_shader_source);
-
-        program = glCreateProgram();
-        glAttachShader(program, vshd);
-        glAttachShader(program, fshd);
-        vd_fw_link_program(program);
-    }
+    GLuint program = 0;
+    unsigned long long program_time = 0;
 
     GLuint vao;
     glGenVertexArrays(1, &vao);
@@ -87,6 +73,8 @@ int main(int argc, char const *argv[])
     while (vd_fw_running()) {
         float delta_seconds = vd_fw_delta_s();
         (void)delta_seconds;
+
+        vd_fw_compile_or_hotload_program(&program, &program_time, "./glsl/ui_basic.vert", "./glsl/ui_basic.frag");
 
         int w, h;
         vd_fw_get_size(&w, &h);
