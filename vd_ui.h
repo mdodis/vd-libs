@@ -134,10 +134,31 @@ typedef union {
     float  e[16];
 } VdUiGradient;
 
+typedef struct {
+    uintptr_t id;
+} VdUiFontId;
+
+#if !VD_UI_TEXTURE_ID_STRUCT_DEFINED
+typedef struct {
+    uintptr_t id;
+} VdUiTextureId;
+#define VD_UI_TEXTURE_ID_MAKE_NULL(x) ((x).id = 0)
+#define VD_UI_TEXTURE_ID_IS_NULL(x)   ((x).id == 0)
+#define VD_UI_TEXTURE_ID_COMPARE(x,y) ((x).id == (y).id)
+#endif // !VD_UI_TEXTURE_ID_STRUCT_DEFINED
+
+typedef struct {
+    VdUiFontId   font;
+    unsigned int codepoint;
+} VdUiSymbol;
+
 static inline VdUiF4       vd_ui_f4(float x, float y, float z, float w);
 static inline VdUiF4       vd_ui_fall4(float s);
 static inline VdUiGradient vd_ui_gradient(VdUiF4 top_left, VdUiF4 top_right, VdUiF4 bottom_left, VdUiF4 bottom_right);
 static inline VdUiGradient vd_ui_gradient1(VdUiF4 all);
+static inline VdUiSymbol   vd_ui_symbol(VdUiFontId id, unsigned int codepoint);
+static inline int          vd_ui_symbol_valid(VdUiSymbol symbol);
+static inline VdUiStr      vd_ui_symbol_as_str(VdUiSymbol symbol);
 
 /* ----UI------------------------------------------------------------------------------------------------------------ */
 enum {
@@ -176,6 +197,16 @@ enum {
 };
 typedef int VdUiAxis;
 
+enum {
+    VD_UI_VISBILITY_DONT_DISPLAY = 1 << 0,
+    VD_UI_VISBILITY_DONT_MEASURE = 1 << 2,
+
+    VD_UI_VISIBILITY_SHOW = 0,
+    VD_UI_VISIBILITY_HIDE = VD_UI_VISBILITY_DONT_DISPLAY,
+    VD_UI_VISIBILITY_OMIT = VD_UI_VISBILITY_DONT_DISPLAY | VD_UI_VISBILITY_DONT_MEASURE,
+};
+typedef int VdUiVisibility;
+
 typedef struct {
     VdUiSizeMode mode;
     float        value;
@@ -183,12 +214,35 @@ typedef struct {
 } VdUiSize;
 
 typedef struct {
+    /** Padding to put around text */
     float           padding[4];
+
+    /** Size preferences for each axis */
     VdUiSize        size[VD_UI_AXES];
+
+    /** Gradient to use for when the div is not interacted with */
     VdUiGradient    normal_grad;
+
+    /** Gradient to use for when the div is hot */
     VdUiGradient    hot_grad;
+
+    /** Gradient to use for when the div is active */
     VdUiGradient    active_grad;
+
+    /** The font size to use for the text & symbol, in pixels. */
     int             text_font_size;
+
+    /** The visibility of the text */
+    VdUiVisibility  text_visibility;
+
+    /** The symbol to prefix the text with */
+    VdUiSymbol      symbol;
+
+    /** The visibility of the symbol */
+    VdUiVisibility  symbol_visibility;
+
+    int             symbol_hidden;
+    int             text_hidden;
 } VdUiStyle;
 
 typedef struct VdUiDiv VdUiDiv;
@@ -235,6 +289,7 @@ typedef struct {
 
 #define VD_UI_CHAR_BUF_COUNT    1024
 #define VD_UI_LIT(s)            ((VdUiStr) {s, sizeof(s) - 1})
+
 #define VD_UI_DOTTOSTR(fmt)                                                       \
     va_list args;                                                                 \
     va_start(args, fmt);                                                          \
@@ -314,6 +369,29 @@ static inline VdUiGradient vd_ui_gradient1(VdUiF4 all)
     return vd_ui_gradient(all, all, all, all);
 }
 
+static inline VdUiSymbol vd_ui_symbol(VdUiFontId id, unsigned int codepoint)
+{
+    VdUiSymbol result;
+    result.font = id;
+    result.codepoint = codepoint;
+    return result;
+}
+
+static inline int vd_ui_symbol_valid(VdUiSymbol symbol)
+{
+    return (symbol.font.id != 0) && (symbol.codepoint != 0);
+}
+
+static inline VdUiStr vd_ui_symbol_as_str(VdUiSymbol symbol)
+{
+    VdUiStr result;
+
+    result.s = (char*)&symbol.codepoint;
+    result.l = 4;
+
+    return result;    
+}
+
 /* ----RENDERING----------------------------------------------------------------------------------------------------- */
 enum {
     VD_UI_VERTEX_FLAG_TEXTURE_IS_ALPHA_BUFFER = 1 << 0,
@@ -334,19 +412,6 @@ typedef struct {
     unsigned char    padd[16];         // 16 x  1 =  16 bytes
 } VdUiVertex;                          //         = 128 bytes
 #pragma pack(pop)
-
-#if !VD_UI_TEXTURE_ID_STRUCT_DEFINED
-typedef struct {
-    uintptr_t id;
-} VdUiTextureId;
-#define VD_UI_TEXTURE_ID_MAKE_NULL(x) ((x).id = 0)
-#define VD_UI_TEXTURE_ID_IS_NULL(x)   ((x).id == 0)
-#define VD_UI_TEXTURE_ID_COMPARE(x,y) ((x).id == (y).id)
-#endif // !VD_UI_TEXTURE_ID_STRUCT_DEFINED
-
-typedef struct {
-    uintptr_t id;
-} VdUiFontId;
 
 typedef struct {
     VdUiFontId    cached_id;
@@ -661,6 +726,7 @@ static void vd_ui__push_vertexgrad(VdUiContext *ctx, VdUiTextureId *texture, flo
                                                                              float edge_softness,
                                                                              float border_thickness);
 static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y, int size);
+static void vd_ui__put_symbol(VdUiContext *ctx, VdUiSymbol symbol, float *x, float y, int size);
 static void vd_ui__put_linef(VdUiContext *ctx, float x, float y, const char *fmt, ...);
 
 static void vd_ui__get_glyph_quad(VdUiContext *ctx, unsigned int codepoint, int size, VdUiFontId font_id,
@@ -694,8 +760,6 @@ struct VdUiContext {
     unsigned int            parents_next;
 
     VdUiTextureId           white;
-    VdUiFontId              default_font;
-    int                     default_font_size;
 
     // Resources
     unsigned int            vbuf_count;
@@ -763,6 +827,12 @@ struct VdUiContext {
 
     // Stored to differentiate between passes
     VdUiTextureId          *current_texture_id;
+
+    struct {
+        VdUiFontId              font;
+        int                     font_size;
+        VdUiSymbol              checkmark;
+    } def;
 
     struct {
         VdUiBool           metrics_on;
@@ -932,11 +1002,9 @@ VD_UI_API VdUiReply vd_ui_checkbox(int *b, VdUiStr str)
     div->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
     vd_ui_parent_push(div);
 
-    VdUiDiv *ckbx = vd_ui_div_newf(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_CLICKABLE, "##ckbx");
-    ckbx->style.size[0].mode = VD_UI_SIZE_MODE_ABSOLUTE;
-    ckbx->style.size[0].value = 32.f;
-    ckbx->style.size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
-    ckbx->style.size[1].value = 32.f;
+    VdUiDiv *ckbx = vd_ui_div_newf(VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_CLICKABLE, "##ckbx");
+    ckbx->style.size[0].mode = VD_UI_SIZE_MODE_TEXT_CONTENT;
+    ckbx->style.size[1].mode = VD_UI_SIZE_MODE_TEXT_CONTENT;
     ckbx->style.normal_grad = vd_ui_gradient(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f),
                                             vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f));
 
@@ -945,6 +1013,11 @@ VD_UI_API VdUiReply vd_ui_checkbox(int *b, VdUiStr str)
 
     ckbx->style.active_grad = vd_ui_gradient(vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f),
                                             vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f));
+
+    VdUiContext *ctx = vd_ui_context_get();
+    ckbx->style.symbol = ctx->def.checkmark;
+    ckbx->style.text_hidden = 1;
+
     VdUiReply reply = vd_ui_call(ckbx);
 
     if (reply.clicked) {
@@ -1030,7 +1103,7 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     result->style.padding[1] = 0.f;
     result->style.padding[2] = 0.f;
     result->style.padding[3] = 0.f;
-    result->style.text_font_size = ctx->default_font_size;
+    result->style.text_font_size = ctx->def.font_size;
 
     VdUiDiv *parent = ctx->parents[ctx->parents_next - 1];
     result->parent = parent;
@@ -1185,8 +1258,18 @@ static void vd_ui__calc_fixed_size(VdUiContext *ctx, VdUiDiv *curr)
 
             case VD_UI_SIZE_MODE_TEXT_CONTENT: {
                 VdUiFontId font_id = {0};
-                float text_sizes[VD_UI_AXES];
-                vd_ui_measure_text_size(font_id, curr->content_str, curr->style.text_font_size, &text_sizes[0], &text_sizes[1]);
+                float text_sizes[VD_UI_AXES] = {0.f, 0.f};
+
+                if (!curr->style.text_hidden) {
+                    vd_ui_measure_text_size(font_id, curr->content_str, curr->style.text_font_size, &text_sizes[0], &text_sizes[1]);
+                }
+
+                if (vd_ui_symbol_valid(curr->style.symbol)) {
+
+                    VdUiStr symstr = vd_ui_symbol_as_str(curr->style.symbol);
+
+                    vd_ui_measure_text_size(curr->style.symbol.font, symstr, curr->style.text_font_size, &text_sizes[0], &text_sizes[1]);
+                }
 
                 curr->comp_size[i] = text_sizes[i];
 
@@ -1576,7 +1659,7 @@ static void vd_ui__push_rect(VdUiContext *ctx, VdUiTextureId *texture, float rec
 
 static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y, int size)
 {
-    VdUiFont *font = &ctx->fonts[ctx->default_font.id];
+    VdUiFont *font = &ctx->fonts[ctx->def.font.id];
 
     float pixel_size = (float)size;
     float size_scaled = stbtt_ScaleForPixelHeight(&font->font_info, pixel_size);
@@ -1605,6 +1688,34 @@ static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y, int s
     }
 }
 
+static void vd_ui__put_symbol(VdUiContext *ctx, VdUiSymbol symbol, float *x, float y, int size)
+{
+    VdUiFont *font = &ctx->fonts[ctx->def.font.id];
+
+    float pixel_size = (float)size;
+    float size_scaled = stbtt_ScaleForPixelHeight(&font->font_info, pixel_size);
+
+    float hadd = (float)font->bounding_box[3] - (float)font->bounding_box[1];
+
+    float p0[2], p1[2];
+    float u0[2], u1[2];
+
+    y += hadd * size_scaled * 0.5f;
+
+    vd_ui__get_glyph_quad(ctx, symbol.codepoint, size, symbol.font,
+        x, &y,
+        &p0[0], &p0[1],
+        &p1[0], &p1[1],
+        &u0[0], &u0[1],
+        &u1[0], &u1[1]);
+
+    vd_ui__push_vertex(ctx, &ctx->texture,
+        p0, p1,
+        u0, u1,
+        (float[]){1.f, 1.f, 1.f, 1.f},
+        VD_UI_VERTEX_FLAG_TEXTURE_IS_ALPHA_BUFFER);
+}
+
 static void vd_ui__put_linef(VdUiContext *ctx, float x, float y, const char *fmt, ...)
 {
     static char buf[VD_UI_FBUF_MAX];
@@ -1614,7 +1725,7 @@ static void vd_ui__put_linef(VdUiContext *ctx, float x, float y, const char *fmt
     va_end(args);
     VD_ASSERT(result < sizeof(buf));
     VdUiStr str = {buf, result};
-    vd_ui__put_line(ctx, str, x, y, ctx->default_font_size);
+    vd_ui__put_line(ctx, str, x, y, ctx->def.font_size);
 }
 
 static int vd_ui__glyph_eq(VdUiGlyph *glyph, unsigned int codepoint, int size, VdUiFontId font)
@@ -1758,8 +1869,6 @@ VD_UI_API void vd_ui_measure_text_size(VdUiFontId font_id, VdUiStr str, int size
     VdUiContext *ctx = vd_ui_context_get();
     (void)ctx;
 
-    *w = *h = 0.f;
-
     VdUiFont *font = &ctx->fonts[font_id.id];
     float pixel_size = (float)size;
     float size_scaled = stbtt_ScaleForPixelHeight(&font->font_info, pixel_size);
@@ -1804,13 +1913,22 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
     }
 
     if (curr->flags & VD_UI_FLAG_TEXT) {
-        VdUiFont *font = &ctx->fonts[ctx->default_font.id];
+        VdUiFont *font = &ctx->fonts[ctx->def.font.id];
 
         float pixel_size = (float)curr->style.text_font_size;
         float size_scaled = stbtt_ScaleForPixelHeight(&font->font_info, pixel_size);
 
         float ydown = (-font->descent) * size_scaled;
-        vd_ui__put_line(ctx, curr->content_str, curr->rect[0] + curr->style.padding[0] * 2, curr->rect[1] + curr->style.padding[1] + ydown, curr->style.text_font_size);
+        float x = curr->rect[0] + curr->style.padding[0] * 2;
+        float y = curr->rect[1] + curr->style.padding[1] + ydown;
+
+        if (vd_ui_symbol_valid(curr->style.symbol)) {
+            vd_ui__put_symbol(ctx, curr->style.symbol, &x, y, curr->style.text_font_size);
+        }
+
+        if (!curr->style.text_hidden) {
+            vd_ui__put_line(ctx, curr->content_str, x, y, curr->style.text_font_size);
+        }
     }
 }
 
@@ -1929,9 +2047,12 @@ VD_UI_API void vd_ui_init(void)
 {
     VdUiContext *ctx = vd_ui_context_create(0);
     vd_ui_context_set(ctx);
-    VdUiFontId default_font = vd_ui_font_add_ttf(Vd_Ui_Public_Sans_Regular, sizeof(Vd_Ui_Public_Sans_Regular));
-    ctx->default_font = default_font;
-    ctx->default_font_size = 20;
+    VdUiFontId deffont = vd_ui_font_add_ttf(Vd_Ui_Public_Sans_Regular, sizeof(Vd_Ui_Public_Sans_Regular));
+    VdUiFontId defsymt = vd_ui_font_add_ttf(Vd_Ui_Default_Icons_Font, sizeof(Vd_Ui_Default_Icons_Font));
+
+    ctx->def.font = deffont;
+    ctx->def.font_size = 20;
+    ctx->def.checkmark = vd_ui_symbol(defsymt, VD_UI_DEFAULT_ICONS_OK);
 }
 
 VD_UI_API VdUiContext *vd_ui_context_create(VdUiContextCreateInfo *info)
