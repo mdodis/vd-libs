@@ -19,7 +19,7 @@ done
 pushd $SCRIPT_DIR/../..
 
 PRJ_DIR="$(realpath .)"
-CFLAGS="-O0 -g -Wall -std=c99 -I $PRJ_DIR"
+CFLAGS="-O0 -g -Wall -std=c11 -I $PRJ_DIR"
 
 mkdir -p ./build
 pushd ./build

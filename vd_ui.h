@@ -747,8 +747,8 @@ static float        vd_ui__lerp(float a, float b, float t);
 static VdUiF4       vd_ui__lerp4(VdUiF4 a, VdUiF4 b, float t);
 static VdUiGradient vd_ui__lerpgrad(VdUiGradient a, VdUiGradient b, float t);
 
-static const char*  vd_ui__utf8next(const char *p);
-static int          vd_ui__utf8dec(const char **p, unsigned int *out);
+// static const char*  vd_ui__utf8next(const char *p);
+// static int          vd_ui__utf8dec(const char **p, unsigned int *out);
 static int          vd_ui__utf8decs(VdUiStr *str, unsigned int *out);
 
 static void         vd_ui__do_inspector(VdUiContext *ctx);
@@ -864,24 +864,6 @@ VD_UI_API void vd_ui_frame_begin(float delta_seconds)
     }
 
     ctx->strbuf_len = 0;
-}
-
-static void vd_ui__print_tree(VdUiDiv *now, int sp)
-{
-    if (now == 0) return;
-
-    for (int i = 0; i < sp; ++i) printf("-");
-    if (now->content_str.l == 0) {
-        printf("<>\n");
-    } else {
-        printf("%.*s\n", now->content_str.l, now->content_str.s);
-    }
-
-    VdUiDiv *child = now->first;
-    while (child) {
-        vd_ui__print_tree(child, sp + 4);
-        child = child->next;
-    }
 }
 
 VD_UI_API void vd_ui_frame_end(void)
@@ -1971,47 +1953,47 @@ static VdUiGradient vd_ui__lerpgrad(VdUiGradient a, VdUiGradient b, float t)
                           vd_ui__lerp4(a.vectors[2], b.vectors[2], t), vd_ui__lerp4(a.vectors[3], b.vectors[3], t));
 }
 
-static const char *vd_ui__utf8next(const char *p)
-{
-    if (!p || !*p) return p;
+// static const char *vd_ui__utf8next(const char *p)
+// {
+//     if (!p || !*p) return p;
 
-    unsigned char c = (unsigned char)*p;
-    int step = 1;
+//     unsigned char c = (unsigned char)*p;
+//     int step = 1;
 
-    if ((c & 0x80) == 0x00) step = 1;
-    if ((c & 0xe0) == 0xc0) step = 2;
-    if ((c & 0xf0) == 0xe0) step = 3;
-    if ((c & 0xf8) == 0xf0) step = 4;
+//     if ((c & 0x80) == 0x00) step = 1;
+//     if ((c & 0xe0) == 0xc0) step = 2;
+//     if ((c & 0xf0) == 0xe0) step = 3;
+//     if ((c & 0xf8) == 0xf0) step = 4;
 
-    while (step-- && *p) ++p;
-    return p;
-}
+//     while (step-- && *p) ++p;
+//     return p;
+// }
 
-static int vd_ui__utf8dec(const char **p, unsigned int *out)
-{
-    if (!p || !*p || !**p) return 0;
+// static int vd_ui__utf8dec(const char **p, unsigned int *out)
+// {
+//     if (!p || !*p || !**p) return 0;
 
-    const unsigned char *s = (const unsigned char*)*p;
-    unsigned char c = *s;
-    unsigned int cp;
-    int len;
+//     const unsigned char *s = (const unsigned char*)*p;
+//     unsigned char c = *s;
+//     unsigned int cp;
+//     int len;
 
-    if      ((c & 0x80) == 0x00) { len = 1; cp = c;        }
-    else if ((c & 0xe0) == 0xc0) { len = 2; cp = c & 0x1f; }
-    else if ((c & 0xf0) == 0xe0) { len = 3; cp = c & 0x0f; }
-    else if ((c & 0xf8) == 0xf0) { len = 4; cp = c & 0x07; }
-    else                         { return 0; }
+//     if      ((c & 0x80) == 0x00) { len = 1; cp = c;        }
+//     else if ((c & 0xe0) == 0xc0) { len = 2; cp = c & 0x1f; }
+//     else if ((c & 0xf0) == 0xe0) { len = 3; cp = c & 0x0f; }
+//     else if ((c & 0xf8) == 0xf0) { len = 4; cp = c & 0x07; }
+//     else                         { return 0; }
 
-    for (int i = 1; i < len; ++i) {
-        unsigned char cc = s[i];
-        if ((cc & 0xc0) != 0x80) return 0;
-        cp = (cp << 6) | (cc & 0x3f);
-    }
+//     for (int i = 1; i < len; ++i) {
+//         unsigned char cc = s[i];
+//         if ((cc & 0xc0) != 0x80) return 0;
+//         cp = (cp << 6) | (cc & 0x3f);
+//     }
 
-    *out = cp;
-    *p += len;
-    return 1;
-}
+//     *out = cp;
+//     *p += len;
+//     return 1;
+// }
 
 static int vd_ui__utf8decs(VdUiStr *str, unsigned int *out)
 {
@@ -2270,10 +2252,8 @@ VD_UI_API int vd_ui_vsnprintf(char *s, size_t n, const char *format, va_list arg
             case 'f': {
                 float vala = (float)va_arg(args, double);
 
-                int is_negative = 0;
                 float val = vala;
                 if (vala < 0.f) {
-                    is_negative = 1;
                     val = -vala;
                 }
 

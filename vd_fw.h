@@ -3223,6 +3223,12 @@ int wWinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPWSTR cmdline, int n
 #import <QuartzCore/CVDisplayLink.h>
 #import <os/log.h>
 #import <mach/mach_time.h>
+#import <sys/types.h>
+#import <sys/stat.h>
+#import <fcntl.h>
+#import <unistd.h>
+#import <stdlib.h>
+#import <stdio.h>
 #define VD_FW_G Vd_Fw_Globals
 
 typedef struct {
@@ -3347,6 +3353,11 @@ VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
     return result;
 }
 
+VD_FW_API int vd_fw_get_mouse_wheel(float *dx, float *dy)
+{
+    return 0;
+}
+
 VD_FW_API int vd_fw_running(void)
 {
     @autoreleasepool {
@@ -3388,6 +3399,61 @@ VD_FW_API int vd_fw_set_vsync_on(int on)
         }
     }
     return 1;
+}
+
+VD_FW_API int vd_fw__any_time_higher(int num_files, const char **files, unsigned long long *check_against)
+{
+    int result = 0;
+    for (int i = 0; i < num_files; ++i) {
+        int fd = open(files[i], O_RDONLY);
+
+        if (fd < 0) {
+            return 0;
+        }
+
+        struct stat st;
+        if (fstat(fd, &st) != 0) {
+            close(fd);
+            return 0;
+        }
+
+        close(fd);
+
+        unsigned long long file_secs = st.st_mtimespec.tv_sec;
+
+        if (file_secs > *check_against) {
+            *check_against = file_secs;
+            close(fd);
+            result = 1;
+            break;
+        }
+
+    }
+
+    return result;
+}
+
+VD_FW_API char *vd_fw__debug_dump_file_text(const char *path)
+{
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        return 0;
+    }
+
+    fseek(f, 0, SEEK_END);
+    size_t size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    char *result = (char*)malloc(size +1);
+    fread(result, size, 1, f);
+
+    result[size] = 0;
+    return result;
+}
+
+VD_FW_API void vd_fw__free_mem(void *memory)
+{
+    free(memory);
 }
 
 #undef VD_FW_G
