@@ -109,6 +109,8 @@ VD_FW_API int                vd_fw_swap_buffers(void);
  */
 VD_FW_API int                vd_fw_get_size(int *w, int *h);
 
+VD_FW_API float              vd_fw_get_scale(void);
+
 /**
  * Get the time (in nanoseconds) since the last call to @see vd_fw_swap_buffers
  * @return  The delta time (in nanoseconds)
@@ -168,6 +170,7 @@ VD_FW_API int                vd_fw_link_program(unsigned int program);
 VD_FW_API int                vd_fw_compile_or_hotload_program(unsigned int *program, unsigned long long *last_compile,
                                                               const char *vertex_file_path,
                                                               const char *fragment_file_path);
+
 
 /**
  * Shorthand for getting mouse coordinates as floats
@@ -3388,6 +3391,11 @@ VD_FW_API int vd_fw_get_size(int *w, int *h)
     if (w) *w = (int)rect.size.width * VD_FW_G.scale;
     if (h) *h = (int)rect.size.height * VD_FW_G.scale;
     return 0;
+}
+
+VD_FW_API float vd_fw_get_scale(void)
+{
+    return VD_FW_G.scale;
 }
 
 VD_FW_API int vd_fw_set_vsync_on(int on)

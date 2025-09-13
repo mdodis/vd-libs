@@ -319,6 +319,8 @@ VD_UI_API void             vd_ui_parent_pop(void);
 VD_UI_API int              vd_ui_parent_count(void);
 VD_UI_API VdUiDiv*         vd_ui_parent_get(int i);
 
+VD_UI_API void             vd_ui_set_scale(float s);
+
 static inline int vd_ui_div_has_flag(VdUiDiv *div, VdUiFlags flag)
 {
     return div->flags & flag ? 1 : 0;
@@ -807,6 +809,8 @@ struct VdUiContext {
     // @todo(mdodis): cache packs to textures and do them all in one go
     stbtt_pack_context      pack_context;
 
+    float                   dpi_scale;
+
     // Per frame info
     size_t                  frame_index;
     size_t                  last_frame_index;
@@ -1085,7 +1089,7 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     result->style.padding[1] = 0.f;
     result->style.padding[2] = 0.f;
     result->style.padding[3] = 0.f;
-    result->style.text_font_size = ctx->def.font_size;
+    result->style.text_font_size = ctx->def.font_size * ctx->dpi_scale;
 
     VdUiDiv *parent = ctx->parents[ctx->parents_next - 1];
     result->parent = parent;
@@ -1181,6 +1185,12 @@ VD_UI_API VdUiDiv *vd_ui_parent_get(int i)
 {
     VdUiContext *ctx = vd_ui_context_get();
     return ctx->parents[i + 1];
+}
+
+VD_UI_API void vd_ui_set_scale(float s)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    ctx->dpi_scale = s;
 }
 
 VD_UI_API void vd_ui_demo(void)
@@ -2059,6 +2069,7 @@ VD_UI_API VdUiContext *vd_ui_context_create(VdUiContextCreateInfo *info)
     result->atlas[1] = 512;
     result->buffer_size = result->atlas[0] * result->atlas[1];
     result->buffer = (unsigned char*)VD_MALLOC(result->buffer_size);
+    result->dpi_scale = 1.0f;
 
     stbtt_PackBegin(&result->pack_context, result->buffer,
                     result->atlas[0], result->atlas[1], 0, 1, 0);

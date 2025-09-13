@@ -37,6 +37,8 @@ int main(int argc, char const *argv[])
         },
     });
 
+    vd_ui_set_scale(vd_fw_get_scale());
+
     GLuint program = 0;
     unsigned long long program_time = 0;
 
