@@ -3378,10 +3378,10 @@ VD_FW_API int vd_fw_running(void)
 
 VD_FW_API int vd_fw_swap_buffers(void)
 {
+    VD_FW_G.last_time = mach_absolute_time();
     @autoreleasepool {
         [VD_FW_G.gl_context flushBuffer];
     }
-
     return 1;
 }
 
