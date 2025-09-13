@@ -240,9 +240,6 @@ typedef struct {
 
     /** The visibility of the symbol */
     VdUiVisibility  symbol_visibility;
-
-    int             symbol_hidden;
-    int             text_hidden;
 } VdUiStyle;
 
 typedef struct VdUiDiv VdUiDiv;
@@ -982,7 +979,8 @@ VD_UI_API void vd_ui_label(VdUiStr str)
 
 VD_UI_API VdUiReply vd_ui_checkbox(int *b, VdUiStr str)
 {
-    // @todo(mdodis) hash results to same
+    VdUiContext *ctx = vd_ui_context_get();
+
     VdUiDiv *div = vd_ui_div_new(VD_UI_FLAG_FLEX_HORIZONTAL, str);
     div->style.size[0].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
     div->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
@@ -1000,9 +998,13 @@ VD_UI_API VdUiReply vd_ui_checkbox(int *b, VdUiStr str)
     ckbx->style.active_grad = vd_ui_gradient(vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f),
                                             vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f));
 
-    VdUiContext *ctx = vd_ui_context_get();
     ckbx->style.symbol = ctx->def.checkmark;
-    ckbx->style.text_hidden = 1;
+    ckbx->style.text_visibility = VD_UI_VISIBILITY_OMIT;
+    ckbx->style.symbol_visibility = (*b) ? 0 : VD_UI_VISBILITY_DONT_DISPLAY;
+    ckbx->style.padding[VD_UI_LEFT] = 4.f;
+    ckbx->style.padding[VD_UI_RIGHT] = 4.f;
+    ckbx->style.padding[VD_UI_TOP] = 4.f;
+    ckbx->style.padding[VD_UI_BOTTOM] = 4.f;
 
     VdUiReply reply = vd_ui_call(ckbx);
 
@@ -1252,7 +1254,7 @@ static void vd_ui__calc_fixed_size(VdUiContext *ctx, VdUiDiv *curr)
                 VdUiFontId font_id = {0};
                 float text_sizes[VD_UI_AXES] = {0.f, 0.f};
 
-                if (!curr->style.text_hidden) {
+                if (! (curr->style.text_visibility & VD_UI_VISBILITY_DONT_MEASURE)) {
                     vd_ui_measure_text_size(font_id, curr->content_str, curr->style.text_font_size, &text_sizes[0], &text_sizes[1]);
                 }
 
@@ -1914,11 +1916,11 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
         float x = curr->rect[0] + curr->style.padding[0] * 2;
         float y = curr->rect[1] + curr->style.padding[1] + ydown;
 
-        if (vd_ui_symbol_valid(curr->style.symbol)) {
+        if (vd_ui_symbol_valid(curr->style.symbol) && (curr->style.symbol_visibility & VD_UI_VISBILITY_DONT_DISPLAY) == 0) {
             vd_ui__put_symbol(ctx, curr->style.symbol, &x, y, curr->style.text_font_size);
         }
 
-        if (!curr->style.text_hidden) {
+        if ((curr->style.text_visibility & VD_UI_VISBILITY_DONT_DISPLAY) == 0) {
             vd_ui__put_line(ctx, curr->content_str, x, y, curr->style.text_font_size);
         }
     }

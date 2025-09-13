@@ -25,6 +25,10 @@
  * - Do NOT include OpenGL headers, or import an OpenGL loader. This library does that already 
  * - The highest possible OpenGL version you should support if you want it to work (as of 2025...)
  *   on the big threes is OpenGL Core Profile 4.1 (MacOS limitation)
+ *
+ * TODO
+ * - Move MacOS window creation and handling to another thread
+ *   so that we can draw continuously and not care about display events maybe
  */
 #ifndef VD_FW_H
 #define VD_FW_H
@@ -3267,6 +3271,18 @@ static VdFw__MacOsInternalData Vd_Fw_Globals;
     // VERY important: tell OpenGL to refresh the drawable
     [VD_FW_G.gl_context update];
 }
+- (BOOL)acceptsFirstResponder {
+    return YES; // optional, if you also want key events
+}
+
+- (BOOL)wantsUpdateLayer {
+    return YES; // optional if using layer-backed views
+}
+
+// KEY PART:
+- (BOOL)canDrawConcurrently {
+    return YES;
+}
 @end
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
@@ -3305,6 +3321,8 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
                                            defer: NO];
         [VD_FW_G.window setTitle:[NSString stringWithUTF8String:"F"]];
         [VD_FW_G.window makeKeyAndOrderFront:nil];
+
+        [VD_FW_G.window setAllowsConcurrentViewDrawing:YES];
 
         NSOpenGLPixelFormatAttribute attrs[] = {
             NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersion3_2Core,
@@ -3403,6 +3421,7 @@ VD_FW_API int vd_fw_running(void)
 
 VD_FW_API int vd_fw_swap_buffers(void)
 {
+
     VD_FW_G.last_time = mach_absolute_time();
     @autoreleasepool {
         [VD_FW_G.gl_context flushBuffer];
