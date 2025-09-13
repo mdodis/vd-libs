@@ -36,6 +36,7 @@ int main(int argc, char const *argv[])
             .draw_default_borders = 1,
         },
     });
+    vd_fw_set_title("UI Basic");
 
     vd_ui_set_scale(vd_fw_get_scale());
 

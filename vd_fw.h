@@ -109,8 +109,6 @@ VD_FW_API int                vd_fw_swap_buffers(void);
  */
 VD_FW_API int                vd_fw_get_size(int *w, int *h);
 
-VD_FW_API float              vd_fw_get_scale(void);
-
 /**
  * Get the time (in nanoseconds) since the last call to @see vd_fw_swap_buffers
  * @return  The delta time (in nanoseconds)
@@ -139,6 +137,18 @@ VD_FW_API int                vd_fw_get_mouse_state(int *x, int *y);
  * @return    1 if the wheel moved, 0 if not
  */
 VD_FW_API int                vd_fw_get_mouse_wheel(float *dx, float *dy);
+
+/**
+ * Gets the backing scale factor
+ * @return  The backing scale factor
+ */
+VD_FW_API float              vd_fw_get_scale(void);
+
+/**
+ * Sets the title of the window
+ * @param  title The new title of the window
+ */
+VD_FW_API void               vd_fw_set_title(const char *title);
 
 /**
  * Compile a GLSL shader and check for errors
@@ -3256,7 +3266,8 @@ static VdFw__MacOsInternalData Vd_Fw_Globals;
 - (void)windowDidResize:(NSNotification *)notification {
     // VERY important: tell OpenGL to refresh the drawable
     [VD_FW_G.gl_context update];
-}@end
+}
+@end
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
@@ -3268,6 +3279,19 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         [NSApp activateIgnoringOtherApps:YES];
         [NSEvent setMouseCoalescingEnabled:NO];
 
+        // Create a simple menu bar so the app shows in the Dock
+        NSMenu *menubar = [[NSMenu alloc] init];
+        NSMenuItem *appMenuItem = [[NSMenuItem alloc] init];
+        [menubar addItem:appMenuItem];
+        [NSApp setMainMenu:menubar];
+        NSMenu *appMenu = [[NSMenu alloc] initWithTitle:@"Application"];
+        NSMenuItem *quitMenuItem = [[NSMenuItem alloc]
+            initWithTitle:@"Quit"
+                   action:@selector(terminate:)
+            keyEquivalent:@"q"];
+        [appMenu addItem:quitMenuItem];
+        [appMenuItem setSubmenu:appMenu];
+
         int w = 640;
         int h = 480;
         NSRect frame = NSMakeRect(0, 0, w, h);
@@ -3275,6 +3299,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
                                            styleMask:(
                                                 NSWindowStyleMaskTitled |
                                                 NSWindowStyleMaskClosable |
+                                                NSWindowStyleMaskMiniaturizable |
                                                 NSWindowStyleMaskResizable)
                                            backing: NSBackingStoreBuffered
                                            defer: NO];
@@ -3396,6 +3421,11 @@ VD_FW_API int vd_fw_get_size(int *w, int *h)
 VD_FW_API float vd_fw_get_scale(void)
 {
     return VD_FW_G.scale;
+}
+
+VD_FW_API void vd_fw_set_title(const char *title)
+{
+    [VD_FW_G.window setTitle: [NSString stringWithUTF8String: (title)]];
 }
 
 VD_FW_API int vd_fw_set_vsync_on(int on)
