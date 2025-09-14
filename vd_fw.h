@@ -2467,7 +2467,8 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         int major = 3;
         int minor = 3;
 
-        if (info->gl.version != VD_FW_GL_VERSION_BASIC) {
+
+        if (info && info->gl.version != VD_FW_GL_VERSION_BASIC) {
             switch (info->gl.version) {
                 case VD_FW_GL_VERSION_1_0: major = 1; minor = 0; break;
                 case VD_FW_GL_VERSION_1_2: major = 1; minor = 2; break;
@@ -2660,7 +2661,8 @@ VD_FW_API float vd_fw_get_scale(void)
 
 VD_FW_API void vd_fw_set_title(const char *title)
 {
-    SetWindowTextA(VD_FW_G.hwnd, title);
+    // @todo(mdodis): This doesn't work
+    SetWindowText(VD_FW_G.hwnd, title);
 }
 
 VD_FW_API unsigned long long vd_fw_delta_ns(void)
