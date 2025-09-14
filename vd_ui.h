@@ -230,7 +230,7 @@ typedef struct {
     VdUiGradient    active_grad;
 
     /** The font size to use for the text & symbol, in pixels. */
-    int             text_font_size;
+    float           text_font_size;
 
     /** The visibility of the text */
     VdUiVisibility  text_visibility;
@@ -493,7 +493,7 @@ VD_UI_API void             vd_ui_context_set(VdUiContext *context);
 VD_UI_API VdUiContext*     vd_ui_context_get(void);
 
 /* ----GLYPH CACHE--------------------------------------------------------------------------------------------------- */
-VD_UI_API void             vd_ui_measure_text_size(VdUiFontId font, VdUiStr str, int size, float *w, float *h);
+VD_UI_API void             vd_ui_measure_text_size(VdUiFontId font, VdUiStr str, float size, float *w, float *h);
 
 /* ----INTEGRATION - OPENGL------------------------------------------------------------------------------------------ */
 /**
@@ -696,7 +696,7 @@ struct VdUiGlyph {
     int           x0, y0, x1, y1;
     float         xadvance, xoff, yoff;
     float         xoff2, yoff2;
-    int           size;
+    float         size;
     int           next;
 };
 
@@ -724,18 +724,18 @@ static void vd_ui__push_vertexgrad(VdUiContext *ctx, VdUiTextureId *texture, flo
                                                                              float corner_radius,
                                                                              float edge_softness,
                                                                              float border_thickness);
-static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y, int size);
-static void vd_ui__put_symbol(VdUiContext *ctx, VdUiSymbol symbol, float *x, float y, int size);
+static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y, float size);
+static void vd_ui__put_symbol(VdUiContext *ctx, VdUiSymbol symbol, float *x, float y, float size);
 static void vd_ui__put_linef(VdUiContext *ctx, float x, float y, const char *fmt, ...);
 
-static void vd_ui__get_glyph_quad(VdUiContext *ctx, unsigned int codepoint, int size, VdUiFontId font_id,
+static void vd_ui__get_glyph_quad(VdUiContext *ctx, unsigned int codepoint, float size, VdUiFontId font_id,
                                   float *rx, float *ry,
                                   float *x0, float *y0,
                                   float *x1, float *y1,
                                   float *s0, float *t0,
                                   float *s1, float *t1);
-static VdUiGlyph*   vd_ui__push_glyph(VdUiContext *ctx, unsigned int codepoint, int size, VdUiFontId font_id);
-static size_t       vd_ui__hash_glyph(unsigned int codepoint, int size, VdUiFontId font_id);
+static VdUiGlyph*   vd_ui__push_glyph(VdUiContext *ctx, unsigned int codepoint, float size, VdUiFontId font_id);
+static size_t       vd_ui__hash_glyph(unsigned int codepoint, float size, VdUiFontId font_id);
 static void         vd_ui__layout(VdUiContext *ctx);
 
 static void         vd_ui__get_axes_for_div(VdUiDiv *div, int *daxis, int *faxis, int *daxisf, int *faxisf);
@@ -833,7 +833,7 @@ struct VdUiContext {
 
     struct {
         VdUiFontId              font;
-        int                     font_size;
+        float                   font_size;
         VdUiSymbol              checkmark;
     } def;
 
@@ -1665,7 +1665,7 @@ static void vd_ui__push_rect(VdUiContext *ctx, VdUiTextureId *texture, float rec
         0);
 }
 
-static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y, int size)
+static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y, float size)
 {
     VdUiFont *font = &ctx->fonts[ctx->def.font.id];
 
@@ -1696,7 +1696,7 @@ static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y, int s
     }
 }
 
-static void vd_ui__put_symbol(VdUiContext *ctx, VdUiSymbol symbol, float *x, float y, int size)
+static void vd_ui__put_symbol(VdUiContext *ctx, VdUiSymbol symbol, float *x, float y, float size)
 {
     VdUiFont *font = &ctx->fonts[ctx->def.font.id];
 
@@ -1736,7 +1736,7 @@ static void vd_ui__put_linef(VdUiContext *ctx, float x, float y, const char *fmt
     vd_ui__put_line(ctx, str, x, y, ctx->def.font_size * ctx->dpi_scale);
 }
 
-static int vd_ui__glyph_eq(VdUiGlyph *glyph, unsigned int codepoint, int size, VdUiFontId font)
+static int vd_ui__glyph_eq(VdUiGlyph *glyph, unsigned int codepoint, float size, VdUiFontId font)
 {
     return (glyph->codepoint == codepoint) && (glyph->size == size) && (glyph->font.id == font.id);
 }
@@ -1746,7 +1746,7 @@ static int vd_ui__glyph_free(VdUiGlyph *glyph)
     return glyph->codepoint == 0;
 }
 
-static void vd_ui__get_glyph_quad(VdUiContext *ctx, unsigned int codepoint, int size, VdUiFontId font_id,
+static void vd_ui__get_glyph_quad(VdUiContext *ctx, unsigned int codepoint, float size, VdUiFontId font_id,
                                   float *rx, float *ry,
                                   float *x0, float *y0,
                                   float *x1, float *y1,
@@ -1796,7 +1796,7 @@ static void vd_ui__get_glyph_quad(VdUiContext *ctx, unsigned int codepoint, int 
     *rx += roundf(glyph->xadvance);
 }
 
-VdUiGlyph *vd_ui__push_glyph(VdUiContext *ctx, unsigned int codepoint, int size, VdUiFontId font_id)
+VdUiGlyph *vd_ui__push_glyph(VdUiContext *ctx, unsigned int codepoint, float size, VdUiFontId font_id)
 {
     ctx->state = ctx->state == VD_UI__TEXTURE_STATE_IN_GPU ? VD_UI__TEXTURE_STATE_NEEDS_UPDATE : VD_UI__TEXTURE_STATE_NULL;
     VdUiFont *font = &ctx->fonts[font_id.id];
@@ -1864,7 +1864,7 @@ VdUiGlyph *vd_ui__push_glyph(VdUiContext *ctx, unsigned int codepoint, int size,
     return glyph;
 }
 
-static size_t vd_ui__hash_glyph(unsigned int codepoint, int size, VdUiFontId font_id)
+static size_t vd_ui__hash_glyph(unsigned int codepoint, float size, VdUiFontId font_id)
 {
     size_t result = vd_dhash64(&codepoint, sizeof(codepoint));
     result = result ^ vd_dhash64(&font_id, sizeof(font_id));
@@ -1872,7 +1872,7 @@ static size_t vd_ui__hash_glyph(unsigned int codepoint, int size, VdUiFontId fon
     return result;
 }
 
-VD_UI_API void vd_ui_measure_text_size(VdUiFontId font_id, VdUiStr str, int size, float *w, float *h)
+VD_UI_API void vd_ui_measure_text_size(VdUiFontId font_id, VdUiStr str, float size, float *w, float *h)
 {
     VdUiContext *ctx = vd_ui_context_get();
     (void)ctx;

@@ -2653,6 +2653,16 @@ VD_FW_API int vd_fw_get_mouse_wheel(float *dx, float *dy)
     return VD_FW_G.wheel_moved;
 }
 
+VD_FW_API float vd_fw_get_scale(void)
+{
+    return (float)GetDpiForWindow(VD_FW_G.hwnd) / 90.f;
+}
+
+VD_FW_API void vd_fw_set_title(const char *title)
+{
+    SetWindowTextA(VD_FW_G.hwnd, title);
+}
+
 VD_FW_API unsigned long long vd_fw_delta_ns(void)
 {
     LARGE_INTEGER now_performance_counter;
