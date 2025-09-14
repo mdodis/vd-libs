@@ -737,6 +737,8 @@ static void vd_ui__get_glyph_quad(VdUiContext *ctx, unsigned int codepoint, int 
 static VdUiGlyph*   vd_ui__push_glyph(VdUiContext *ctx, unsigned int codepoint, int size, VdUiFontId font_id);
 static size_t       vd_ui__hash_glyph(unsigned int codepoint, int size, VdUiFontId font_id);
 static void         vd_ui__layout(VdUiContext *ctx);
+
+static void         vd_ui__get_axes_for_div(VdUiDiv *div, int *daxis, int *faxis, int *daxisf, int *faxisf);
 static VdUiStr      vd_ui__strbuf_dup(VdUiContext *ctx, VdUiStr str);
 static void         vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr);
 static int          vd_ui__point_in_rect(float point[2], float r[4]);
@@ -1214,6 +1216,8 @@ VD_UI_API void vd_ui_demo(void)
     }
     vd_ui_parent_pop();
 
+    vd_ui_buttonf("Another Button");
+
     vd_ui_labelf(u8"Some unicode: ă x ă");
 
     static int checkbox = 0;
@@ -1222,6 +1226,24 @@ VD_UI_API void vd_ui_demo(void)
     if (checkbox) {
 
         vd_ui_labelf("Hidden content");
+    }
+}
+
+static void vd_ui__get_axes_for_div(VdUiDiv *div, int *daxis, int *faxis, int *daxisf, int *faxisf)
+{
+
+    *daxis = VD_UI_AXISV;
+
+    if (div->flags & VD_UI_FLAG_FLEX_HORIZONTAL) {
+        *daxis = VD_UI_AXISH;
+    }
+
+    *faxis = (*daxis) == VD_UI_AXISH ? VD_UI_AXISV : VD_UI_AXISH;
+
+    switch (*daxis) {
+        case VD_UI_AXISV: *daxisf = 3; *faxisf = 2; break;
+        case VD_UI_AXISH: *daxisf = 2; *faxisf = 3; break;
+        default: break;
     }
 }
 
@@ -1285,11 +1307,15 @@ static void vd_ui__calc_dyn_size_down(VdUiContext *ctx, VdUiDiv *curr)
 
     float full_size[VD_UI_AXES] = {0.f, 0.f};
 
+    int daxis,  faxis;
+    int daxisf, faxisf;
+    vd_ui__get_axes_for_div(curr, &daxis, &faxis, &daxisf, &faxisf);
+
     VdUiDiv *child = curr->first;
     while (child != 0) {
         vd_ui__calc_dyn_size_down(ctx, child);
-        full_size[0] += child->comp_size[0];
-        full_size[1] += child->comp_size[1];
+        full_size[daxis] += child->comp_size[daxis];
+        full_size[faxis] =  (child->comp_size[faxis] > full_size[faxis]) ? child->comp_size[faxis] : full_size[faxis];
         child = child->next;
     }
 
@@ -1367,20 +1393,8 @@ static void vd_ui__calc_positions(VdUiContext *ctx, VdUiDiv *curr)
 
     VdUiDiv *child = curr->first;
 
-    int daxis = VD_UI_AXISV;
-
-    if (curr->flags & VD_UI_FLAG_FLEX_HORIZONTAL) {
-        daxis = VD_UI_AXISH;
-    }
-
-    int faxis = daxis == VD_UI_AXISH ? VD_UI_AXISV : VD_UI_AXISH;
-    int daxis2 = 0, faxis2 = 0;
-
-    switch (daxis) {
-        case VD_UI_AXISV: daxis2 = 3; faxis2 = 2; break;
-        case VD_UI_AXISH: daxis2 = 2; faxis2 = 3; break;
-        default: break;
-    }
+    int daxis, faxis, daxisf, faxisf;
+    vd_ui__get_axes_for_div(curr, &daxis, &faxis, &daxisf, &faxisf);
 
     float cursor[2] = {0.f, 0.f};
 
@@ -1391,8 +1405,8 @@ static void vd_ui__calc_positions(VdUiContext *ctx, VdUiDiv *curr)
 
         child->rect[daxis] = curr->rect[daxis] + child->comp_pos_rel[daxis];
         child->rect[faxis] = curr->rect[faxis] + child->comp_pos_rel[faxis];
-        child->rect[daxis2] = child->rect[daxis] + child->comp_size[daxis];
-        child->rect[faxis2] = child->rect[faxis] + child->comp_size[faxis];
+        child->rect[daxisf] = child->rect[daxis] + child->comp_size[daxis];
+        child->rect[faxisf] = child->rect[faxis] + child->comp_size[faxis];
 
         cursor[daxis] += child->comp_size[daxis];
 
@@ -1719,7 +1733,7 @@ static void vd_ui__put_linef(VdUiContext *ctx, float x, float y, const char *fmt
     va_end(args);
     VD_ASSERT(result < sizeof(buf));
     VdUiStr str = {buf, result};
-    vd_ui__put_line(ctx, str, x, y, ctx->def.font_size);
+    vd_ui__put_line(ctx, str, x, y, ctx->def.font_size * ctx->dpi_scale);
 }
 
 static int vd_ui__glyph_eq(VdUiGlyph *glyph, unsigned int codepoint, int size, VdUiFontId font)
@@ -2045,7 +2059,7 @@ VD_UI_API void vd_ui_init(void)
     VdUiFontId defsymt = vd_ui_font_add_ttf(Vd_Ui_Default_Icons_Font, sizeof(Vd_Ui_Default_Icons_Font));
 
     ctx->def.font = deffont;
-    ctx->def.font_size = 20;
+    ctx->def.font_size = 16;
     ctx->def.checkmark = vd_ui_symbol(defsymt, VD_UI_DEFAULT_ICONS_OK);
 }
 
@@ -2475,20 +2489,21 @@ static void vd_ui__inspector_do_hierarchy(VdUiContext *ctx, VdUiDiv *curr, float
             Vd_Ui_Inspector.rect[1]
         };
 
-        vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f +  0.f, "Rect: %d %d %d %d", (int)curr->rect[0], (int)curr->rect[1], (int)curr->rect[2], (int)curr->rect[3]);
-        vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + 16.f, "Size: %d %d", (int)curr->comp_size[0], (int)curr->comp_size[1]);
-        vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + 32.f, "RPos: %d %d", (int)curr->comp_pos_rel[0], (int)curr->comp_pos_rel[1]);
-        vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + 48.f, "Text Background Clickable ClipContent FlexHorizontal");
-        vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + 64.f, "%d    %d         %d         %d", vd_ui_div_has_flag(curr, VD_UI_FLAG_TEXT), vd_ui_div_has_flag(curr, VD_UI_FLAG_BACKGROUND), vd_ui_div_has_flag(curr, VD_UI_FLAG_CLICKABLE), vd_ui_div_has_flag(curr, VD_UI_FLAG_CLIP_CONTENT), vd_ui_div_has_flag(curr, VD_UI_FLAG_FLEX_HORIZONTAL));
+        float yincrease = ctx->def.font_size * ctx->dpi_scale;
+        vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + yincrease * 0.f, "Rect: %d %d %d %d", (int)curr->rect[0], (int)curr->rect[1], (int)curr->rect[2], (int)curr->rect[3]);
+        vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + yincrease * 1.f, "Size: %d %d", (int)curr->comp_size[0], (int)curr->comp_size[1]);
+        vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + yincrease * 2.f, "RPos: %d %d", (int)curr->comp_pos_rel[0], (int)curr->comp_pos_rel[1]);
+        vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + yincrease * 3.f, "Text Background Clickable ClipContent FlexHorizontal");
+        vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + yincrease * 4.f, "%d    %d         %d         %d", vd_ui_div_has_flag(curr, VD_UI_FLAG_TEXT), vd_ui_div_has_flag(curr, VD_UI_FLAG_BACKGROUND), vd_ui_div_has_flag(curr, VD_UI_FLAG_CLICKABLE), vd_ui_div_has_flag(curr, VD_UI_FLAG_CLIP_CONTENT), vd_ui_div_has_flag(curr, VD_UI_FLAG_FLEX_HORIZONTAL));
 
     }
 
     vd_ui__push_rect(ctx, &ctx->white, entry_rect, final_color);
 
     if (curr->content_str.l != 0) {
-        vd_ui__put_line(ctx, curr->content_str, entry_rect[0], entry_rect[1], 16);
+        vd_ui__put_line(ctx, curr->content_str, entry_rect[0], entry_rect[1], ctx->def.font_size * ctx->dpi_scale);
     } else {
-        vd_ui__put_line(ctx, VD_UI_LIT("#id"), entry_rect[0], entry_rect[1], 16);
+        vd_ui__put_line(ctx, VD_UI_LIT("#id"), entry_rect[0], entry_rect[1], ctx->def.font_size * ctx->dpi_scale);
     }
 
     Vd_Ui_Inspector.hierarchy.offset += 32.f;
