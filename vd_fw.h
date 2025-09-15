@@ -149,8 +149,15 @@ VD_FW_API int                vd_fw_running(void);
  */
 VD_FW_API int                vd_fw_swap_buffers(void);
 
-VD_FW_API int                vd_fw_begin_render(void);
-VD_FW_API int                vd_fw_end_render(void);
+/**
+ * Begin rendering
+ */
+VD_FW_API float              vd_fw_begin_render(void);
+
+/**
+ * End rendering
+ */
+VD_FW_API void               vd_fw_end_render(void);
 
 /**
  * Get the size of the window, in pixels
@@ -315,14 +322,6 @@ VD_FW_INLINE int vd_fw__cmp_float(float x, float y)
     } else {
         return 0;
     }
-
-    // if (vd_fw__fabs(x - y) < precision) {
-    //     return 0;
-    // } else if (x < y) {
-    //     return -1;
-    // } else {
-    //     return 1;
-    // }
 }
 
 VD_FW_INLINE float vd_fw_cos(float x)
@@ -2371,6 +2370,7 @@ static void vd_fw__load_opengl(VdFwGlVersion version);
 #pragma comment(lib, "uxtheme.lib")
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "kernel32.lib")
+#pragma comment(lib, "winmm.lib")
 #if VD_FW_WIN32_SUBSYSTEM == VD_FW_WIN32_SUBSYSTEM_CONSOLE
 #pragma comment(linker, "/subsystem:console")
 #else
@@ -2424,6 +2424,7 @@ static void vd_fw__load_opengl(VdFwGlVersion version);
 #include <dwmapi.h>
 #include <shellscalingapi.h>
 #include <versionhelpers.h>
+#include <timeapi.h>
 #ifdef min
 #undef min
 #endif
@@ -2469,14 +2470,28 @@ static void vd_fw__load_opengl(VdFwGlVersion version);
 #define WGL_ALPHA_BITS_ARB                          0x201B
 #define WGL_DEPTH_BITS_ARB                          0x2022
 #define WGL_STENCIL_BITS_ARB                        0x2023
-#define WGL_CONTEXT_FLAGS_ARB             0x2094
-#define WGL_CONTEXT_DEBUG_BIT_ARB         0x00000001
+#define WGL_CONTEXT_FLAGS_ARB                       0x2094
+#define WGL_CONTEXT_DEBUG_BIT_ARB                   0x00000001
 typedef BOOL (WINAPI * PFNWGLSWAPINTERVALEXTPROC) (int interval);
 typedef HGLRC (WINAPI * PFNWGLCREATECONTEXTATTRIBSARBPROC) (HDC hDC, HGLRC hShareContext, const int *attribList);
 typedef BOOL (WINAPI * PFNWGLCHOOSEPIXELFORMATARBPROC) (HDC hdc, const int *piAttribIList, const FLOAT *pfAttribFList, UINT nMaxFormats, int *piFormats, UINT *nNumFormats);
 
+enum {
+    VD_FW_WIN32_FLAGS_WAKE_COND_VAR = 1 << 0,
+    VD_FW_WIN32_FLAGS_SIZE_CHANGED  = 1 << 1,
+};
+
 typedef struct {
+    int w, h;
+    int flags;
+} VdFw__Win32Frame;
+
+typedef struct {
+/* ----WINDOW THREAD ONLY-------------------------------------------------------------------------------------------- */
     HWND                        hwnd;
+    int                         w, h;
+    volatile BOOL               t_paint_ready;
+
     HDC                         hdc;
     HGLRC                       hglrc;
     RECT                        rgn;
@@ -2494,6 +2509,10 @@ typedef struct {
     BOOL                        draw_decorations;
     int                         wheel_moved;
     float                       wheel[2];
+    CRITICAL_SECTION            critical_section;
+    CONDITION_VARIABLE          cond_var;
+    VdFw__Win32Frame            next_frame;
+    VdFw__Win32Frame            curr_frame;
 } VdFw__Win32InternalData;
 
 static VdFw__Win32InternalData Vd_Fw_Globals = {0};
@@ -2557,6 +2576,10 @@ static void *vd_fw__gl_get_proc_address(const char *name)
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
+
+    SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+    timeBeginPeriod(1);
+
     if (info != NULL) {
         VD_FW_G.draw_decorations = info->window_options.draw_default_borders;
     }
@@ -2586,6 +2609,11 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 
     VD_FW_G.main_thread_id = GetCurrentThreadId();
 
+
+
+    InitializeCriticalSection(&VD_FW_G.critical_section);
+    InitializeConditionVariable(&VD_FW_G.cond_var);
+
     VD_FW_G.sem_window_ready = CreateSemaphoreA(
         NULL,
         0,
@@ -2611,6 +2639,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         &VD_FW_G.main_thread_id,
         0,
         &VD_FW_G.win_thread_id);
+    SetThreadDescription(VD_FW_G.win_thread, L"Window Thread");
 
     WaitForSingleObject(VD_FW_G.sem_window_ready, INFINITE);
 
@@ -2795,13 +2824,47 @@ VD_FW_API int vd_fw_swap_buffers(void)
     return 1;
 }
 
+VD_FW_API float vd_fw_begin_render(void)
+{
+    EnterCriticalSection(&VD_FW_G.critical_section);
+    VD_FW_G.curr_frame = VD_FW_G.next_frame;
+    VD_FW_G.next_frame.flags = 0;
+    LeaveCriticalSection(&VD_FW_G.critical_section);
+
+    LARGE_INTEGER now_performance_counter;
+    QueryPerformanceCounter(&now_performance_counter);
+    LARGE_INTEGER delta;
+    delta.QuadPart = now_performance_counter.QuadPart - VD_FW_G.performance_counter.QuadPart;
+    unsigned long long q  =  delta.QuadPart / VD_FW_G.frequency.QuadPart;
+    unsigned long long r  =  delta.QuadPart % VD_FW_G.frequency.QuadPart;
+    unsigned long long ns =  q * 1000000000ULL;
+    ns                    += (r * 1000000000ULL) / VD_FW_G.frequency.QuadPart;
+    double ms             = (double)ns / 1000000.0;
+    double sec64          = ms         / 1000.0;
+    float s               = (float)sec64;
+
+    VD_FW_G.performance_counter = now_performance_counter;
+
+    return s;
+}
+
+VD_FW_API void vd_fw_end_render(void)
+{
+    SwapBuffers(VD_FW_G.hdc);
+    // QueryPerformanceCounter(&VD_FW_G.performance_counter);
+
+    DwmFlush();
+
+    if (VD_FW_G.curr_frame.flags & VD_FW_WIN32_FLAGS_WAKE_COND_VAR) {
+        WakeConditionVariable(&VD_FW_G.cond_var);
+    }
+}
+
 VD_FW_API int vd_fw_get_size(int *w, int *h)
 {
-    RECT rect;
-    GetClientRect(VD_FW_G.hwnd, &rect);
-    *w = rect.right - rect.left;
-    *h = rect.bottom - rect.top;
-    return 0;
+    *w = VD_FW_G.curr_frame.w;
+    *h = VD_FW_G.curr_frame.h;
+    return VD_FW_G.curr_frame.flags & VD_FW_WIN32_FLAGS_SIZE_CHANGED;
 }
 
 VD_FW_API int vd_fw_set_vsync_on(int on)
@@ -2864,8 +2927,6 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
 {
     (void)param;
     VD_FW_G.t_running = TRUE;
-
-    SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
     VD_FW_SANITY_CHECK();
 
     WNDCLASSEXW wcx;
@@ -2902,11 +2963,21 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     vd_fw__theme_changed();
     VD_FW_SANITY_CHECK();
 
+    RECT rect;
+    GetClientRect(VD_FW_G.hwnd, &rect);
+    VD_FW_G.w = rect.right - rect.left;
+    VD_FW_G.h = rect.bottom - rect.top;
+    VD_FW_G.next_frame.w = VD_FW_G.w;
+    VD_FW_G.next_frame.h = VD_FW_G.h;
+
+
     // SetWindowPos(VD_FW_G.hwnd, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_SHOWWINDOW);
     ShowWindow(VD_FW_G.hwnd, SW_SHOW);
     VD_FW__CHECK_NONZERO(UpdateWindow(VD_FW_G.hwnd));
 
     VD_FW__CHECK_TRUE(ReleaseSemaphore(VD_FW_G.sem_window_ready, 1, NULL));
+
+    VD_FW_G.t_paint_ready = 1;
 
     while (VD_FW_G.t_running) {
         MSG message;
@@ -3197,12 +3268,12 @@ static BOOL vd_fw__has_autohide_taskbar(UINT edge, RECT monitor)
 
 static void vd_fw__window_pos_changed(WINDOWPOS *pos)
 {
-    RECT client;
-    GetClientRect(VD_FW_G.hwnd, &client);
+    VD_FW_G.w = pos->cx;
+    VD_FW_G.h = pos->cy;
+
     if (pos->flags & SWP_FRAMECHANGED) {
         vd_fw__update_region();
     }
-    VD_FW__CHECK_NONZERO(InvalidateRect(VD_FW_G.hwnd, &client, TRUE));
 }
 
 static LRESULT vd_fw__handle_invisible(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
@@ -3218,8 +3289,6 @@ static LRESULT vd_fw__handle_invisible(HWND hwnd, UINT msg, WPARAM wparam, LPARA
 
 static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
-    static UINT timer_id = 0;
-
     LRESULT result = 0;
     switch (msg) {
 
@@ -3237,7 +3306,26 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             vd_fw__composition_changed();
         } break;
 
-        // @todo(mdodis): WM_KEYDOWN
+        case WM_PAINT: {
+            if (!VD_FW_G.t_paint_ready) break;
+
+            PAINTSTRUCT ps;
+            BeginPaint(hwnd, &ps);
+            EnterCriticalSection(&VD_FW_G.critical_section);
+
+            if (VD_FW_G.w != VD_FW_G.next_frame.w || VD_FW_G.h != VD_FW_G.next_frame.h) {
+                VD_FW_G.next_frame.w = VD_FW_G.w;
+                VD_FW_G.next_frame.h = VD_FW_G.h;
+                VD_FW_G.next_frame.flags |= VD_FW_WIN32_FLAGS_SIZE_CHANGED;
+            }
+
+            VD_FW_G.next_frame.flags |= VD_FW_WIN32_FLAGS_WAKE_COND_VAR;
+
+            WakeConditionVariable(&VD_FW_G.cond_var);
+            SleepConditionVariableCS(&VD_FW_G.cond_var, &VD_FW_G.critical_section, INFINITE);
+            LeaveCriticalSection(&VD_FW_G.critical_section);
+            EndPaint(hwnd, &ps);
+        } break;
 
         case WM_ERASEBKGND: {
             result = 1;
@@ -3275,12 +3363,6 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             result = 0;
         } break;
 
-        case WM_PAINT: {
-            // render();
-            // vd_fw_swap_buffers();
-            DwmFlush();
-        } break;
-
         case WM_SETICON:
         case WM_SETTEXT: {
             if (!VD_FW_G.composition_enabled && !VD_FW_G.theme_enabled) {
@@ -3299,30 +3381,9 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             vd_fw__window_pos_changed((WINDOWPOS*)lparam);
         } break;
 
-        case WM_ENTERSIZEMOVE: {
-            // VD_FW__CHECK_NULL(SetTimer(VD_FW_G.hwnd, (UINT_PTR)&timer_id, USER_TIMER_MINIMUM, NULL));
-
-        } break;
-
-        case WM_EXITSIZEMOVE: {
-            // KillTimer(VD_FW_G.hwnd, (UINT_PTR)&timer_id);
-        } break;
-
-        case WM_TIMER: {
-            // render();
-            // vd_fw_swap_buffers();
-            // DwmFlush();
-            result = 1;
-        } break;
-
         case WM_MOUSEHWHEEL:
         case WM_MOUSEWHEEL: {
             PostThreadMessageA(VD_FW_G.main_thread_id, msg, wparam, lparam);
-        } break;
-
-        case WM_MOVING:
-        case WM_SIZING: {
-            DwmFlush();
         } break;
 
         default: {

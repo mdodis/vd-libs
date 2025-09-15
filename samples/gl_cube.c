@@ -40,13 +40,13 @@ int main(int argc, char const *argv[])
     vd_fw_init(& (VdFwInitInfo) {
         .gl = {
             .version = VD_FW_GL_VERSION_3_3,
-            .debug_on = 1,
+            .debug_on = 0,
         },
         .window_options = {
             .draw_default_borders = 1,
         }
     });
-    vd_fw_set_vsync_on(1);
+    vd_fw_set_vsync_on(0);
 
     float vertices[] = {
         -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
@@ -129,20 +129,21 @@ int main(int argc, char const *argv[])
     unsigned long long program_time = 0;
 
     while (vd_fw_running()) {
+        float ds = vd_fw_begin_render();
 
-        int w, h;
-        vd_fw_get_size(&w, &h);
+        static int w, h;
+        if (vd_fw_get_size(&w, &h)) {
+            glViewport(0, 0, w, h);
+        }
         float fw, fh;
         fw = (float)w;
         fh = (float)h;
 
-        float ds = vd_fw_delta_s();
         static float cy = 0.f;
         static float cp = 0.f;
 
         vd_fw_compile_or_hotload_program(&program, &program_time, "./glsl/gl_cube.vert", "./glsl/gl_cube.frag");
 
-        glViewport(0, 0, w, h);
         glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -170,7 +171,7 @@ int main(int argc, char const *argv[])
         cy += ds * 2.f;
         cp += ds * 2.f;
 
-        vd_fw_swap_buffers();
+        vd_fw_end_render();
     }
     return 0;
 }
