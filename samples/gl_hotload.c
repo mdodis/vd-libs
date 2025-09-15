@@ -42,6 +42,8 @@ int main(int argc, char const *argv[])
     glBindVertexArray(0);
 
     while (vd_fw_running()) {
+        vd_fw_begin_render();
+
         int w, h;
         vd_fw_get_size(&w, &h);
 
@@ -55,7 +57,7 @@ int main(int argc, char const *argv[])
         glBindVertexArray(vao);
         glDrawArrays(GL_TRIANGLES, 0, 3);
 
-        vd_fw_swap_buffers();
+        vd_fw_end_render();
     }
 
     return 0;

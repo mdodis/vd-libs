@@ -144,12 +144,6 @@ VD_FW_API int                vd_fw_init(VdFwInitInfo *info);
 VD_FW_API int                vd_fw_running(void);
 
 /**
- * Swap back buffer with front buffer; call at the end of your rendering
- * @return  (Reserved)
- */
-VD_FW_API int                vd_fw_swap_buffers(void);
-
-/**
  * Begin rendering
  */
 VD_FW_API float              vd_fw_begin_render(void);
@@ -2853,7 +2847,13 @@ VD_FW_API void vd_fw_end_render(void)
     SwapBuffers(VD_FW_G.hdc);
     // QueryPerformanceCounter(&VD_FW_G.performance_counter);
 
-    DwmFlush();
+    if (glFenceSync && glClientWaitSync && glDeleteSync) {
+        GLsync fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+        if (fence) {
+            glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, 1000000000ULL);
+            glDeleteSync(fence);
+        }
+    }
 
     if (VD_FW_G.curr_frame.flags & VD_FW_WIN32_FLAGS_WAKE_COND_VAR) {
         WakeConditionVariable(&VD_FW_G.cond_var);
@@ -3325,6 +3325,13 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             SleepConditionVariableCS(&VD_FW_G.cond_var, &VD_FW_G.critical_section, INFINITE);
             LeaveCriticalSection(&VD_FW_G.critical_section);
             EndPaint(hwnd, &ps);
+
+            DwmFlush();
+        } break;
+
+        case WM_DPICHANGED: {
+            RECT *rect = (RECT*)lparam;
+            SetWindowPos(hwnd, 0, rect->left, rect->top, rect->right - rect->left, rect->bottom - rect->top, SWP_NOZORDER | SWP_NOACTIVATE);
         } break;
 
         case WM_ERASEBKGND: {
@@ -3337,7 +3344,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         } break;
 
         case WM_NCACTIVATE: {
-            result = DefWindowProc(hwnd, msg, wparam, -1);
+            result = DefWindowProc(hwnd, msg, wparam, lparam);
         } break;
 
         case WM_NCCALCSIZE: {

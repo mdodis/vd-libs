@@ -12,12 +12,14 @@ int main(int argc, char const *argv[])
             .version = VD_FW_GL_VERSION_3_3,
         },
         .window_options = {
-            .draw_default_borders = 0,
+            .draw_default_borders = 1,
         }
     });
     vd_fw_set_vsync_on(1);
 
     while (vd_fw_running()) {
+        vd_fw_begin_render();
+
         int w, h;
         vd_fw_get_size(&w, &h);
 
@@ -25,7 +27,7 @@ int main(int argc, char const *argv[])
         glClearColor(0.3f, 0.2f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        vd_fw_swap_buffers();
+        vd_fw_end_render();
     }
 
     return 0;

@@ -33,10 +33,9 @@ int main(int argc, char const *argv[])
         },
 
         .window_options = {
-            .draw_default_borders = 1,
+            .draw_default_borders = 0,
         },
     });
-    vd_fw_set_title("UI Basic");
 
     vd_ui_set_scale(vd_fw_get_scale());
 
@@ -74,8 +73,7 @@ int main(int argc, char const *argv[])
 
     vd_fw_set_vsync_on(0);
     while (vd_fw_running()) {
-        float delta_seconds = vd_fw_delta_s();
-        (void)delta_seconds;
+        float delta_seconds = vd_fw_begin_render();
 
         vd_fw_compile_or_hotload_program(&program, &program_time, "./glsl/ui_basic.vert", "./glsl/ui_basic.frag");
 
@@ -214,7 +212,7 @@ int main(int argc, char const *argv[])
                 pass->instance_count);
         }
         
-        vd_fw_swap_buffers();
+        vd_fw_end_render();
     }
     return 0;
 }
