@@ -23,6 +23,7 @@
  * ---------------------------------------------------------------------------------------------------------------------
  * @todo(mdodis):
  * - Fix AXISV spacing not working
+ * - Text Input
  * - Images
  * - Support more of printf
  * - Proper standalone floating point printing implementation
@@ -1485,10 +1486,8 @@ VD_UI_API void vd_ui_demo(void)
     button_example->style.size[0].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
     button_example->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
 
-
     vd_ui_parent_push(button_example);
     // @todo(mdodis): Fix AXISV spacing not working
-    // vd_ui_spacer(VD_UI_AXISV);
     {
         if (vd_ui_buttonf("Button 1").clicked) {
             button1_click_count++;
@@ -1676,6 +1675,8 @@ static void vd_ui__calc_oversizes(VdUiContext *ctx, VdUiDiv *curr)
 
             child = child->next;
         }
+
+        curr->comp_size[i] -= oversize_amount;
     }
 
     VdUiDiv *child = curr->first;
@@ -2846,7 +2847,7 @@ static void vd_ui__do_inspector(VdUiContext *ctx)
     Vd_Ui_Inspector.rect[3] = ctx->window[1];
     Vd_Ui_Inspector.hierarchy.size_h = Vd_Ui_Inspector.rect[2] - ctx->window[0] * 0.5f;
 
-    Vd_Ui_Inspector.hierarchy.offset = 4.f;
+    Vd_Ui_Inspector.hierarchy.offset = 2.f;
 
     vd_ui__push_rect(ctx, &ctx->white, Vd_Ui_Inspector.rect, (float[]) {0.7f, 0.8f, 0.7f, 0.7f});
 
@@ -2861,7 +2862,7 @@ static void vd_ui__inspector_do_hierarchy(VdUiContext *ctx, VdUiDiv *curr, float
         Vd_Ui_Inspector.rect[0] + depth,
         Vd_Ui_Inspector.rect[1] + Vd_Ui_Inspector.hierarchy.offset,
         Vd_Ui_Inspector.rect[0] + Vd_Ui_Inspector.hierarchy.size_h,
-        Vd_Ui_Inspector.rect[1] + Vd_Ui_Inspector.hierarchy.offset + 32.f,
+        Vd_Ui_Inspector.rect[1] + Vd_Ui_Inspector.hierarchy.offset + 16.f,
     };
 
 
@@ -2894,7 +2895,7 @@ static void vd_ui__inspector_do_hierarchy(VdUiContext *ctx, VdUiDiv *curr, float
         vd_ui__put_line(ctx, VD_UI_LIT("#id"), entry_rect[0], entry_rect[1], ctx->def.font_size * ctx->dpi_scale);
     }
 
-    Vd_Ui_Inspector.hierarchy.offset += 32.f;
+    Vd_Ui_Inspector.hierarchy.offset += 16.f;
 
     while (child != 0) {
         vd_ui__inspector_do_hierarchy(ctx, child, depth + 64.f);
