@@ -97,9 +97,9 @@ void main()
     vec3 finalGlowColor = mix(coolGlow, warmGlow, colorMix * glowColorBlendScale);
 
     // Apply glow and color effects
-    color.rgb += finalGlowColor * finalGlowIntensity * glowStrength;
-    color.rgb = mix(color.rgb, color.rgb * vec3(1.05, 1.0, 0.95), finalGlowIntensity * colorTempShift);
-    color.rgb *= (1.0 + finalGlowIntensity * brightnessBoost);
+    // color.rgb += finalGlowColor * finalGlowIntensity * glowStrength;
+    // color.rgb = mix(color.rgb, color.rgb * vec3(1.05, 1.0, 0.95), finalGlowIntensity * colorTempShift);
+    // color.rgb *= (1.0 + finalGlowIntensity * brightnessBoost);
 
     FragColor = color * sdf * border_factor;
 }
