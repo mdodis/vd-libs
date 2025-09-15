@@ -51,6 +51,50 @@
 #define VD_FW_INLINE static inline
 #endif // VD_FW_INLINE
 
+#ifndef VD_FW_NO_CRT
+#define VD_FW_NO_CRT 0
+#endif
+
+#define VD_FW_FPI  3.14159265359f
+#define VD_FW_FPI2 (2 * VD_FW_FPI)
+#define VD_FW_FPIH (0.5f * VD_FW_FPI)
+
+#ifndef VD_FW_SIN
+#if VD_FW_NO_CRT
+#define VD_FW_SIN(x) vd_fw_sin(x)
+#else
+#include <math.h>
+#define VD_FW_SIN(x) sinf(x)
+#endif
+#endif // !VD_FW_SIN
+
+#ifndef VD_FW_COS
+#if VD_FW_NO_CRT
+#define VD_FW_COS(x) vd_fw_cos(x)
+#else
+#include <math.h>
+#define VD_FW_COS(x) cosf(x)
+#endif
+#endif // !VD_FW_COS
+
+#ifndef VD_FW_TAN
+#if VD_FW_NO_CRT
+#define VD_FW_TAN(x) vd_fw_tan(x)
+#else
+#include <math.h>
+#define VD_FW_TAN(x) tanf(x)
+#endif
+#endif // !VD_FW_TAN
+
+#ifndef VD_FW_SQRT
+#if VD_FW_NO_CRT
+#define VD_FW_SQRT(x) vd_fw_sqrt(x)
+#else
+#include <math.h>
+#define VD_FW_SQRT(x) sqrtf(x)
+#endif
+#endif // !VD_FW_SQRT
+
 typedef enum {
     VD_FW_GL_VERSION_BASIC = 0,
     VD_FW_GL_VERSION_1_0   = 1,
@@ -104,6 +148,9 @@ VD_FW_API int                vd_fw_running(void);
  * @return  (Reserved)
  */
 VD_FW_API int                vd_fw_swap_buffers(void);
+
+VD_FW_API int                vd_fw_begin_render(void);
+VD_FW_API int                vd_fw_end_render(void);
 
 /**
  * Get the size of the window, in pixels
@@ -211,7 +258,25 @@ VD_FW_INLINE float           vd_fw_delta_s(void);
  * @param    out The output matrix
  */
 VD_FW_INLINE void            vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16]);
-VD_FW_INLINE int             vd_fw_u_point_in_rect(float x, float y, float rx, float ry, float rw, float rh);
+
+/**
+ * Construct a perspective projection matrix
+ * @param    fov The vertical fov, in degrees
+ * @param aspect The aspect ratio
+ * @param    far The far plane
+ * @param   near The near plane
+ * @param    out The output matrix
+ */
+VD_FW_INLINE void            vd_fw_u_perspective(float fov, float aspect, float near, float far, float out[16]);
+
+/**
+ * Construct a view matrix
+ * @param    eye Position of the camera
+ * @param target Look target position
+ * @param  updir The up direction
+ * @param    out The output matrix
+ */
+VD_FW_INLINE void            vd_fw_u_lookat(float eye[3], float target[3], float updir[3], float out[16]);
 
 VD_FW_INLINE float vd_fw_delta_s(void)
 {
@@ -220,12 +285,6 @@ VD_FW_INLINE float vd_fw_delta_s(void)
     double sec64           = ms         / 1000.0;
     float s                = (float)sec64;
     return s;
-}
-
-VD_FW_INLINE int vd_fw_u_point_in_rect(float x, float y, float rx, float ry, float rw, float rh)
-{
-    return (x >= rx) && (x <= (rx + rw)) &&
-           (y >= ry) && (y <= (ry + rh));
 }
 
 VD_FW_INLINE int vd_fw_get_mouse_statef(float *x, float *y)
@@ -239,6 +298,89 @@ VD_FW_INLINE int vd_fw_get_mouse_statef(float *x, float *y)
     return result;
 }
 
+VD_FW_INLINE float vd_fw__fabs(float x)
+{
+    if (x < 0.f) return x;
+    return x;
+}
+
+VD_FW_INLINE int vd_fw__cmp_float(float x, float y)
+{
+    float precision = 1.1920929e-07f;
+
+    if ((x - precision) < y) {
+        return -1;
+    } else if ((x + precision) > y) {
+        return 1;
+    } else {
+        return 0;
+    }
+
+    // if (vd_fw__fabs(x - y) < precision) {
+    //     return 0;
+    // } else if (x < y) {
+    //     return -1;
+    // } else {
+    //     return 1;
+    // }
+}
+
+VD_FW_INLINE float vd_fw_cos(float x)
+{
+    if (x < 0.f) {
+        x = -x;
+    }
+
+    if (vd_fw__cmp_float(x, VD_FW_FPI2) >= 0) {
+        do {
+            x -= VD_FW_FPI2;
+        } while(vd_fw__cmp_float(x, VD_FW_FPI2) >= 0);
+    }
+
+    if ((vd_fw__cmp_float(x, VD_FW_FPI) >= 0) && (vd_fw__cmp_float(x, VD_FW_FPI2) == -1)) {
+        x -= VD_FW_FPI;
+
+        return -1.f * (1.0f - (x*x/2.0f)*( 1.0f - (x*x/12.0f) * ( 1.0f - (x*x/30.0f) * (1.0f - (x*x/56.0f )*(1.0f - (x*x/90.0f)*(1.0f - (x*x/132.0f)*(1.0f - (x*x/182.0f))))))));
+    } else {
+        return 1.0f - (x*x/2.0f)*( 1.0f - (x*x/12.0f) * ( 1.0f - (x*x/30.0f) * (1.0f - (x*x/56.0f )*(1.0f - (x*x/90.0f)*(1.0f - (x*x/132.0f)*(1.0f - (x*x/182.0f)))))));
+    }
+}
+
+VD_FW_INLINE float vd_fw_sin(float x)
+{
+    return vd_fw_cos(x - VD_FW_FPIH);
+}
+
+VD_FW_INLINE float vd_fw_tan(float x)
+{
+
+    float x2 = x * x;
+    return x * (1.0f
+                 + x2 * ( 1.0f/3.0f
+                 + x2 * ( 2.0f/15.0f
+                 + x2 * ( 17.0f/315.0f
+                 + x2 * ( 62.0f/2835.0f
+                 + x2 * ( 1382.0f/155925.0f
+                 + x2 * ( 21844.0f/6081075.0f
+                 )))))) );
+}
+
+VD_FW_INLINE float vd_fw_sqrt(float x)
+{
+    if (x <= 0.0f) return 0.0f; // Handle non-positive inputs safely
+
+    // Initial guess using bit manipulation
+    union { float f; unsigned int i; } u = { x };
+    u.i = (u.i >> 1) + 0x1fc00000; // Approximate initial guess for sqrt
+
+    // One Newton–Raphson refinement step
+    // g = u.f is our initial guess
+    float g = u.f;
+    g = 0.5f * (g + x / g);
+
+    return g; 
+}
+
 VD_FW_INLINE void vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16])
 {
     out[0]  = 2.0f / (right - left);               out[1]  = 0.0f;                              out[2]  = 0.0f;                          out[3]  = 0.0f;
@@ -247,10 +389,55 @@ VD_FW_INLINE void vd_fw_u_ortho(float left, float right, float bottom, float top
     out[12] = - (right + left) / (right - left);   out[13] = - (top + bottom) / (top - bottom); out[14] = - (far + near) / (far - near); out[15] = 1.0f;
 }
 
+VD_FW_INLINE void vd_fw_u_perspective(float fov, float aspect, float near, float far, float out[16])
+{
+    float fovrad = (fov / 2.f) * (VD_FW_FPI / 180.f);
+    float tangent = VD_FW_TAN(fovrad);
+    float top   = near * tangent;
+    float right = top * aspect;
+
+    out[0]  = near / right;
+    out[5]  = near / top;
+    out[10] = -(far + near) / (far - near);
+    out[11] = -1.f;
+    out[14] = -(2.f * far * near) / (far - near);
+    out[15] = 0.f;
+}
+
+VD_FW_INLINE void vd_fw_u_lookat(float eye[3], float target[3], float updir[3], float out[16])
+{
+    // Forward vector (camera looks along -Z)
+    float forward[3] = { target[0] - eye[0], target[1] - eye[1], target[2] - eye[2] };
+    float f_len = VD_FW_SQRT(forward[0]*forward[0] + forward[1]*forward[1] + forward[2]*forward[2]);
+    forward[0]/=f_len; forward[1]/=f_len; forward[2]/=f_len;
+
+    // Left vector
+    float left[3] = {
+        updir[1]*forward[2] - updir[2]*forward[1],
+        updir[2]*forward[0] - updir[0]*forward[2],
+        updir[0]*forward[1] - updir[1]*forward[0]
+    };
+    float l_len = VD_FW_SQRT(left[0]*left[0] + left[1]*left[1] + left[2]*left[2]);
+    left[0]/=l_len; left[1]/=l_len; left[2]/=l_len;
+
+    // Recompute up vector
+    float up[3] = {
+        forward[1]*left[2] - forward[2]*left[1],
+        forward[2]*left[0] - forward[0]*left[2],
+        forward[0]*left[1] - forward[1]*left[0]
+    };
+
+    // Column-major matrix
+    out[0] = left[0];  out[4] = left[1];  out[8]  = left[2];  out[12] = - (left[0]*eye[0] + left[1]*eye[1] + left[2]*eye[2]);
+    out[1] = up[0];    out[5] = up[1];    out[9]  = up[2];    out[13] = - (up[0]*eye[0] + up[1]*eye[1] + up[2]*eye[2]);
+    out[2] = -forward[0]; out[6] = -forward[1]; out[10] = -forward[2]; out[14] = forward[0]*eye[0] + forward[1]*eye[1] + forward[2]*eye[2];
+    out[3] = 0.0f;    out[7] = 0.0f;    out[11] = 0.0f;    out[15] = 1.0f;
+}
+
+/* ----INTERNAL API-------------------------------------------------------------------------------------------------- */
 VD_FW_API int vd_fw__any_time_higher(int num_files, const char **files, unsigned long long *check_against);
 VD_FW_API char *vd_fw__debug_dump_file_text(const char *path);
 VD_FW_API void vd_fw__free_mem(void *memory);
-
 #if _WIN32
 #define VD_FW_WIN32_SUBSYSTEM_CONSOLE 1
 #define VD_FW_WIN32_SUBSYSTEM_WINDOWS 2
@@ -258,12 +445,7 @@ VD_FW_API void vd_fw__free_mem(void *memory);
 #ifndef VD_FW_WIN32_SUBSYSTEM
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_CONSOLE
 #endif // !VD_FW_WIN32_SUBSYSTEM
-
-#ifndef VD_FW_NO_CRT
-#define VD_FW_NO_CRT 0
-#endif
 #endif // _WIN32
-
 
 #if defined(__APPLE__)
 #pragma clang diagnostic push

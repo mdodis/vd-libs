@@ -87,7 +87,9 @@ int main(int argc, char const *argv[])
         max_line_len = min_len;
     }
 
-    fprintf(stderr, "max line: %d\n", max_line_len);
+    if (max_line_len > 6) {
+        max_line_len -= 6;
+    }
 
     printf("#define %s \\\n", name);
 
