@@ -3268,8 +3268,16 @@ static BOOL vd_fw__has_autohide_taskbar(UINT edge, RECT monitor)
 
 static void vd_fw__window_pos_changed(WINDOWPOS *pos)
 {
-    VD_FW_G.w = pos->cx;
-    VD_FW_G.h = pos->cy;
+    if (VD_FW_G.draw_decorations) {
+        RECT client;
+        GetClientRect(VD_FW_G.hwnd, &client);
+        VD_FW_G.w = client.right - client.left;
+        VD_FW_G.h = client.bottom - client.top;
+
+    } else {
+        VD_FW_G.w = pos->cx;
+        VD_FW_G.h = pos->cy;
+    }
 
     if (pos->flags & SWP_FRAMECHANGED) {
         vd_fw__update_region();
