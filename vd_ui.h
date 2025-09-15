@@ -22,10 +22,7 @@
  * 3. This notice may not be removed or altered from any source distribution.
  * ---------------------------------------------------------------------------------------------------------------------
  * @todo(mdodis):
- * - Proper ui layout
- * - Buttons and labels
- * - Glyph Cache collision resolution
- * - Div cache collision resolution
+ * - Text Alignment
  * - Images
  * - Support more of printf
  * - Proper standalone floating point printing implementation
@@ -168,6 +165,7 @@ enum {
     VD_UI_FLAG_CLICKABLE        = 1 << 2,
     VD_UI_FLAG_CLIP_CONTENT     = 1 << 3,
     VD_UI_FLAG_FLEX_HORIZONTAL  = 1 << 4, // 0 here means Vertical
+    VD_UI_FLAG_ALIGN_CENTER     = 1 << 5,
 
     // Mouse Enumerations
     VD_UI_MOUSE_LEFT        = 0,
@@ -250,6 +248,9 @@ typedef struct {
     /** The visibility of the text */
     VdUiVisibility  text_visibility;
 
+    VdUiTextHAlign  text_halign;
+    VdUiTextVAlign  text_valign;
+
     /** The symbol to prefix the text with */
     VdUiSymbol      symbol;
 
@@ -280,6 +281,8 @@ struct VdUiDiv {
     VdUiDiv     *hprev;
 
     VdUiStr     content_str;
+    float       text_size[VD_UI_AXES];
+
     float       comp_pos_rel[VD_UI_AXES];
     float       comp_size[VD_UI_AXES];
     float       rect[4];
@@ -366,18 +369,34 @@ VD_UI_API void             vd_ui_spacer(void);
 
 /**
  * Displays an icon with (optional) text
- * @param        symbol The symbol to use
- * @param           str The id (and/or text) to use
+ * @param  symbol The symbol to use
+ * @param  str    The id (and/or text) to use
  */
 VD_UI_API void             vd_ui_icon(VdUiSymbol symbol, VdUiStr str);
 
 /**
  * Displays an icon with (optional) text (printf version)
- * @param        symbol The symbol to use
- * @param           str The id (and/or text) to use
- * @return              The interaction result
+ * @param  symbol The symbol to use
+ * @param  str    The id (and/or text) to use
+ * @return        The interaction result
  */
 VD_UI_API void             vd_ui_iconf(VdUiSymbol symbol, const char *label, ...) { VD_UI_DOTTOSTR(label); vd_ui_icon(symbol, str); }
+
+/**
+ * Displays a clickable icon with (optional) text
+ * @param  symbol The symbol to use
+ * @param  str    The id (and/or text) to use
+ * @return        The interaction result
+ */
+VD_UI_API VdUiReply        vd_ui_icon_button(VdUiSymbol symbol, VdUiStr str);
+
+/**
+ * Displays a clickable icon with (optional) text (printf version)
+ * @param  symbol The symbol to use
+ * @param  str    The id (and/or text) to use
+ * @return        The interaction result
+ */
+VD_UI_API VdUiReply        vd_ui_icon_buttonf(VdUiSymbol symbol, const char *label, ...) { VD_UI_DOTTOSTR(label); return vd_ui_icon_button(symbol, str); }
 
 /* ----CORE UI------------------------------------------------------------------------------------------------------- */
 /**
@@ -590,6 +609,13 @@ VD_UI_API void             vd_ui_context_set(VdUiContext *context);
 VD_UI_API VdUiContext*     vd_ui_context_get(void);
 
 /* ----GLYPH CACHE--------------------------------------------------------------------------------------------------- */
+VD_UI_API void             vd_ui_get_glyph_metrics(VdUiFontId id, unsigned int codepoint, float size,
+                                                   float *rx, float *ry,
+                                                   float *x0, float *y0,
+                                                   float *x1, float *y1,
+                                                   float *s0, float *t0,
+                                                   float *s1, float *t1);
+
 VD_UI_API void             vd_ui_measure_text_size(VdUiFontId font, VdUiStr str, float size, float *w, float *h);
 
 /* ----INTEGRATION - OPENGL------------------------------------------------------------------------------------------ */
@@ -1103,14 +1129,16 @@ VD_UI_API VdUiReply vd_ui_checkbox(int *b, VdUiStr str)
 {
     VdUiContext *ctx = vd_ui_context_get();
 
-    VdUiDiv *div = vd_ui_div_new(VD_UI_FLAG_FLEX_HORIZONTAL, str);
+    VdUiDiv *div = vd_ui_div_new(VD_UI_FLAG_FLEX_HORIZONTAL | VD_UI_FLAG_ALIGN_CENTER, str);
     div->style.size[0].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
     div->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
     vd_ui_parent_push(div);
 
     VdUiDiv *ckbx = vd_ui_div_newf(VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_CLICKABLE, "##ckbx");
-    ckbx->style.size[0].mode = VD_UI_SIZE_MODE_TEXT_CONTENT;
-    ckbx->style.size[1].mode = VD_UI_SIZE_MODE_TEXT_CONTENT;
+    ckbx->style.size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
+    ckbx->style.size[0].value = ctx->def.font_size;
+    ckbx->style.size[1].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
+    ckbx->style.size[1].value = ctx->def.font_size;
     ckbx->style.normal_grad = vd_ui_gradient(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f),
                                             vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f));
 
@@ -1159,8 +1187,37 @@ VD_UI_API void vd_ui_icon(VdUiSymbol symbol, VdUiStr str)
     div->style.size[0].value = 32.f;
     div->style.size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
     div->style.size[1].value = 32.f;
+    div->style.text_valign = VD_UI_TEXT_VALIGN_MIDDLE;
+    div->style.text_halign = VD_UI_TEXT_HALIGN_CENTER;
     div->style.symbol = symbol;
     // div->style.normal_grad = vd_ui_gradient1(vd_ui_f4(1.f, 0.f, 0.f, 1.f));
+}
+
+VD_UI_API VdUiReply vd_ui_icon_button(VdUiSymbol symbol, VdUiStr str)
+{
+    VdUiDiv *div = vd_ui_div_new(VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_CLICKABLE,
+                                 str);
+    div->style.size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
+    div->style.size[0].value = 32.f;
+    div->style.size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
+    div->style.size[1].value = 32.f;
+    div->style.text_valign = VD_UI_TEXT_VALIGN_MIDDLE;
+    div->style.text_halign = VD_UI_TEXT_HALIGN_CENTER;
+    div->style.symbol = symbol;
+    div->style.normal_grad = vd_ui_gradient(vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f),
+                                            vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f));
+
+    div->style.hot_grad    = vd_ui_gradient(vd_ui_f4(0.52f, 0.52f, 0.52f, 1.f), vd_ui_f4(0.52f, 0.52f, 0.52f, 1.f),
+                                            vd_ui_f4(0.52f, 0.52f, 0.52f, 1.f), vd_ui_f4(0.52f, 0.52f, 0.52f, 1.f));
+
+    div->style.active_grad = vd_ui_gradient(vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f),
+                                            vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f));
+    div->style.padding[0] = 0.f;
+    div->style.padding[1] = 0.f;
+    div->style.padding[2] = 0.f;
+    div->style.padding[3] = 0.f;
+
+    return vd_ui_call(div);
 }
 
 VD_UI_API VdUiDiv *vd_ui_div_newf(VdUiFlags flags, const char *fmt, ...)
@@ -1377,7 +1434,7 @@ VD_UI_API void vd_ui_set_scale(float s)
 
 VD_UI_API void vd_ui_demo_decorations(void)
 {
-    VdUiDiv *decorations = vd_ui_div_newf(VD_UI_FLAG_FLEX_HORIZONTAL | VD_UI_FLAG_BACKGROUND, "##decorations");
+    VdUiDiv *decorations = vd_ui_div_newf(VD_UI_FLAG_FLEX_HORIZONTAL | VD_UI_FLAG_ALIGN_CENTER | VD_UI_FLAG_BACKGROUND, "##decorations");
     decorations->style.size[0].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
     decorations->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
     decorations->style.normal_grad = vd_ui_gradient(vd_ui_f4(0.13f, 0.13f, 0.13f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f),
@@ -1396,9 +1453,9 @@ VD_UI_API void vd_ui_demo_decorations(void)
 
         vd_ui_spacer();
 
-        vd_ui_iconf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_WINDOW_MINIMIZE), "##minimize");
-        vd_ui_iconf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_WINDOW_MAXIMIZE), "##maximize");
-        vd_ui_iconf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_CANCEL), "##close");
+        vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_WINDOW_MINIMIZE), "##minimize");
+        vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_WINDOW_MAXIMIZE), "##maximize");
+        vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_CANCEL), "##close");
     }
     vd_ui_parent_pop();
 }
@@ -1472,7 +1529,35 @@ static void vd_ui__calc_fixed_size(VdUiContext *ctx, VdUiDiv *curr)
         return;
     }
 
+    VdUiFontId font_id = {0};
+    float text_sizes[VD_UI_AXES] = {0.f, 0.f};
+
+    if ((curr->content_str.l > 0) && (curr->style.text_visibility & VD_UI_VISBILITY_DONT_MEASURE) == 0) {
+        vd_ui_measure_text_size(font_id, curr->content_str, curr->style.text_font_size, &text_sizes[0], &text_sizes[1]);
+    }
+
+    if (vd_ui_symbol_valid(curr->style.symbol) && (curr->style.symbol_visibility & VD_UI_VISBILITY_DONT_MEASURE) == 0) {
+
+        float rx = 0.f, ry = 0.f;
+        float x0, y0, x1, y1, s0, t0, s1, t1;
+        vd_ui_get_glyph_metrics(curr->style.symbol.font, curr->style.symbol.codepoint, curr->style.text_font_size,
+                                &rx, &ry,
+                                &x0, &y0,
+                                &x1, &y1,
+                                &s0, &t0,
+                                &s1, &t1);
+        text_sizes[0] += x1 - x0;
+        if ((y1 - y0) > text_sizes[1]) {
+            text_sizes[1] = y1 - y0;
+        }
+    }
+
+    curr->text_size[0] = text_sizes[0];
+    curr->text_size[1] = text_sizes[1];
+
     for (int i = 0; i < VD_UI_AXES; ++i) {
+
+
         switch (curr->style.size[i].mode) {
 
             case VD_UI_SIZE_MODE_ABSOLUTE: {
@@ -1483,22 +1568,7 @@ static void vd_ui__calc_fixed_size(VdUiContext *ctx, VdUiDiv *curr)
             } break;
 
             case VD_UI_SIZE_MODE_TEXT_CONTENT: {
-                VdUiFontId font_id = {0};
-                float text_sizes[VD_UI_AXES] = {0.f, 0.f};
-
-                if (! (curr->style.text_visibility & VD_UI_VISBILITY_DONT_MEASURE)) {
-                    vd_ui_measure_text_size(font_id, curr->content_str, curr->style.text_font_size, &text_sizes[0], &text_sizes[1]);
-                }
-
-                if (vd_ui_symbol_valid(curr->style.symbol)) {
-
-                    VdUiStr symstr = vd_ui_symbol_as_str(curr->style.symbol);
-
-                    vd_ui_measure_text_size(curr->style.symbol.font, symstr, curr->style.text_font_size, &text_sizes[0], &text_sizes[1]);
-                }
-
                 curr->comp_size[i] = text_sizes[i];
-
                 curr->comp_size[0] += curr->style.padding[0] + curr->style.padding[2];
                 curr->comp_size[1] += curr->style.padding[1] + curr->style.padding[3];
             } break;
@@ -1608,21 +1678,38 @@ static void vd_ui__calc_positions(VdUiContext *ctx, VdUiDiv *curr)
 
     float cursor[2] = {0.f, 0.f};
 
+    // @todo(mdodis): Cache this during vd_ui__calc_dyn_size_down instead of looping twice
+    while (child != 0) {
+
+        if (child->comp_size[faxis] > cursor[faxis]) {
+            cursor[faxis] = child->comp_size[faxis];
+        }
+
+        child = child->next;
+    }
+
+    float curr_faxis_center = curr->rect[faxis] + (curr->rect[faxisf] - curr->rect[faxis]) * 0.5f;
+
+    child = curr->first;
     while (child != 0) {
 
         child->comp_pos_rel[daxis] = cursor[daxis];
         child->comp_pos_rel[faxis] = 0.f;
 
+
         child->rect[daxis] = curr->rect[daxis] + child->comp_pos_rel[daxis];
-        child->rect[faxis] = curr->rect[faxis] + child->comp_pos_rel[faxis];
         child->rect[daxisf] = child->rect[daxis] + child->comp_size[daxis];
-        child->rect[faxisf] = child->rect[faxis] + child->comp_size[faxis];
+
+        if (curr->flags & VD_UI_FLAG_ALIGN_CENTER) {
+            child->rect[faxis]  = curr_faxis_center - (child->comp_size[faxis] * 0.5f);
+            child->rect[faxisf] = child->rect[faxis] + child->comp_size[faxis];
+        } else {
+
+            child->rect[faxis] = curr->rect[faxis] + child->comp_pos_rel[faxis];
+            child->rect[faxisf] = child->rect[faxis] + child->comp_size[faxis];
+        }
 
         cursor[daxis] += child->comp_size[daxis];
-
-        if (child->comp_size[faxis] > cursor[faxis]) {
-            cursor[faxis] = child->comp_size[faxis];
-        }
 
         child = child->next;
     }
@@ -2092,10 +2179,25 @@ static size_t vd_ui__hash_glyph(unsigned int codepoint, float size, VdUiFontId f
     return result;
 }
 
+VD_UI_API void             vd_ui_get_glyph_metrics(VdUiFontId id, unsigned int codepoint, float size,
+                                                   float *rx, float *ry,
+                                                   float *x0, float *y0,
+                                                   float *x1, float *y1,
+                                                   float *s0, float *t0,
+                                                   float *s1, float *t1)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    vd_ui__get_glyph_quad(ctx, codepoint, size, id,
+        rx, ry,
+        x0, y0,
+        x1, y1,
+        s0, t0,
+        s1, t1);
+}
+
 VD_UI_API void vd_ui_measure_text_size(VdUiFontId font_id, VdUiStr str, float size, float *w, float *h)
 {
     VdUiContext *ctx = vd_ui_context_get();
-    (void)ctx;
 
     VdUiFont *font = &ctx->fonts[font_id.id];
     float pixel_size = (float)size;
@@ -2139,8 +2241,55 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
             float size_scaled = stbtt_ScaleForPixelHeight(&font->font_info, pixel_size);
 
             float ydown = (-font->descent) * size_scaled;
-            float x = curr->rect[0] + curr->style.padding[0] * 2;
-            float y = curr->rect[1] + curr->style.padding[1] + ydown;
+            float x = 0.f;
+            float y = 0.f;
+
+            switch (curr->style.text_halign) {
+                case VD_UI_TEXT_HALIGN_LEFT: {
+                    x = curr->rect[0] + curr->style.padding[0] * 2;
+                } break;
+
+                case VD_UI_TEXT_HALIGN_CENTER: {
+                    float rect_left  = curr->rect[VD_UI_LEFT];
+                    float rect_right = curr->rect[VD_UI_RIGHT];
+
+                    float rect_width = rect_right - rect_left;
+
+                    float text_width = curr->text_size[0];
+                    float rect_hce = rect_left + rect_width * 0.5f;
+
+                    x = rect_hce - (text_width * 0.5f);
+
+                } break;
+
+                case VD_UI_TEXT_HALIGN_RIGHT: {
+                    x = curr->rect[0] + curr->style.padding[0] * 2;
+                } break;
+
+                default: break;
+            }
+
+            switch (curr->style.text_valign) {
+                case VD_UI_TEXT_VALIGN_BASELINE: {
+                    y = curr->rect[1] + curr->style.padding[1];
+                    y += ydown;
+                } break;
+
+                case VD_UI_TEXT_VALIGN_MIDDLE: {
+                    float rect_top = curr->rect[VD_UI_TOP];
+                    float rect_bot = curr->rect[VD_UI_BOTTOM];
+
+                    float rect_height = rect_bot - rect_top;
+
+                    float font_height = (font->ascent - font->descent) * size_scaled;
+
+                    float rect_vce = rect_top + rect_height * 0.5f;
+
+                    y = rect_vce + (font_height * 0.5f - font->ascent * size_scaled);
+                } break;
+
+                default: break;
+            }
 
             if (vd_ui_symbol_valid(curr->style.symbol) && (curr->style.symbol_visibility & VD_UI_VISBILITY_DONT_DISPLAY) == 0) {
                 vd_ui__put_symbol(ctx, curr->style.symbol, &x, y, curr->style.text_font_size);
@@ -2334,7 +2483,6 @@ VD_UI_API VdUiContext *vd_ui_context_create(VdUiContextCreateInfo *info)
 #endif
     return result;
 }
-
 VD_UI_API void vd_ui_context_set(VdUiContext *context)
 {
     Vd_Ui_Global_Context = context;
