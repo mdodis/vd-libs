@@ -97,6 +97,7 @@ int main(int argc, char const *argv[])
         vd_ui_event_mouse_button(VD_UI_MOUSE_RIGHT, mouse_state & VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN);
 
 
+        vd_ui_demo_decorations();
         vd_ui_demo();
 
         vd_ui_frame_end();
