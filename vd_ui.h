@@ -22,7 +22,7 @@
  * 3. This notice may not be removed or altered from any source distribution.
  * ---------------------------------------------------------------------------------------------------------------------
  * @todo(mdodis):
- * - Text Alignment
+ * - Fix AXISV spacing not working
  * - Images
  * - Support more of printf
  * - Proper standalone floating point printing implementation
@@ -364,8 +364,9 @@ VD_UI_API VdUiReply        vd_ui_checkboxf(int *b, const char *label, ...) { VD_
 
 /**
  * Consumes all available space within the parent
+ * @param  axis The axis to space to
  */
-VD_UI_API void             vd_ui_spacer(void);
+VD_UI_API void             vd_ui_spacer(VdUiAxis axis);
 
 /**
  * Displays an icon with (optional) text
@@ -1148,11 +1149,15 @@ VD_UI_API VdUiReply vd_ui_checkbox(int *b, VdUiStr str)
     ckbx->style.active_grad = vd_ui_gradient(vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f),
                                             vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f));
 
+    ckbx->style.text_valign = VD_UI_TEXT_VALIGN_MIDDLE;
+    ckbx->style.text_halign = VD_UI_TEXT_HALIGN_CENTER;
     ckbx->style.symbol = ctx->def.checkmark;
     ckbx->style.text_visibility = VD_UI_VISIBILITY_OMIT;
     ckbx->style.symbol_visibility = (*b) ? 0 : VD_UI_VISBILITY_DONT_DISPLAY;
-    ckbx->style.padding[VD_UI_LEFT] = 4.f;
-    ckbx->style.padding[VD_UI_RIGHT] = 4.f;
+
+    // @todo(mdodis): Figure out why putting in 4 everywhere doesn't work
+    ckbx->style.padding[VD_UI_LEFT] = 2.f;
+    ckbx->style.padding[VD_UI_RIGHT] = 2.f;
     ckbx->style.padding[VD_UI_TOP] = 4.f;
     ckbx->style.padding[VD_UI_BOTTOM] = 4.f;
 
@@ -1167,16 +1172,24 @@ VD_UI_API VdUiReply vd_ui_checkbox(int *b, VdUiStr str)
     return (VdUiReply) {0};
 }
 
-VD_UI_API void vd_ui_spacer(void)
+VD_UI_API void vd_ui_spacer(VdUiAxis axis)
 {
     VdUiStr null_str = {0, 0};
     VdUiDiv *spacer = vd_ui_div_new(0, null_str);
-    spacer->style.size[0].mode       = VD_UI_SIZE_MODE_ABSOLUTE;
-    spacer->style.size[0].value      = 9999.f;
-    spacer->style.size[0].niceness   = 1000.f;
-    spacer->style.size[1].mode       = VD_UI_SIZE_MODE_ABSOLUTE;
-    spacer->style.size[1].value      = 0.f;
-    spacer->style.size[1].niceness   = 1000.f;
+    int daxis = 0;
+    int faxis = 0;
+
+    switch (axis) {
+        case VD_UI_AXISH: daxis = 0; faxis = 1; break;
+        case VD_UI_AXISV: daxis = 1; faxis = 0; break;
+    }
+
+    spacer->style.size[daxis].mode       = VD_UI_SIZE_MODE_ABSOLUTE;
+    spacer->style.size[daxis].value      = 9999.f;
+    spacer->style.size[daxis].niceness   = 1000.f;
+    spacer->style.size[faxis].mode       = VD_UI_SIZE_MODE_ABSOLUTE;
+    spacer->style.size[faxis].value      = 0.f;
+    spacer->style.size[faxis].niceness   = 1000.f;
 }
 
 VD_UI_API void vd_ui_icon(VdUiSymbol symbol, VdUiStr str)
@@ -1437,12 +1450,12 @@ VD_UI_API void vd_ui_demo_decorations(void)
     VdUiDiv *decorations = vd_ui_div_newf(VD_UI_FLAG_FLEX_HORIZONTAL | VD_UI_FLAG_ALIGN_CENTER | VD_UI_FLAG_BACKGROUND, "##decorations");
     decorations->style.size[0].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
     decorations->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
-    decorations->style.normal_grad = vd_ui_gradient(vd_ui_f4(0.13f, 0.13f, 0.13f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f),
-                                                    vd_ui_f4(0.23f, 0.23f, 0.23f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f));
-    decorations->style.active_grad = vd_ui_gradient(vd_ui_f4(0.13f, 0.13f, 0.13f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f),
-                                                    vd_ui_f4(0.23f, 0.23f, 0.23f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f));
-    decorations->style.hot_grad    = vd_ui_gradient(vd_ui_f4(0.13f, 0.13f, 0.13f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f),
-                                                    vd_ui_f4(0.23f, 0.23f, 0.23f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f));
+    decorations->style.normal_grad = vd_ui_gradient(vd_ui_f4(0.13f, 0.13f, 0.13f, 1.f), vd_ui_f4(0.23f, 0.23f, 0.23f, 1.f),
+                                                    vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f),    vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f));
+    decorations->style.hot_grad    = vd_ui_gradient(vd_ui_f4(0.13f, 0.13f, 0.13f, 1.f), vd_ui_f4(0.23f, 0.23f, 0.23f, 1.f),
+                                                    vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f),    vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f));
+    decorations->style.active_grad = vd_ui_gradient(vd_ui_f4(0.13f, 0.13f, 0.13f, 1.f), vd_ui_f4(0.23f, 0.23f, 0.23f, 1.f),
+                                                    vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f),    vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f));
     decorations->style.padding[VD_UI_LEFT] = 16.f;
     decorations->style.padding[VD_UI_TOP]  = 16.f;
 
@@ -1451,7 +1464,12 @@ VD_UI_API void vd_ui_demo_decorations(void)
         vd_ui_iconf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_I_CURSOR), "##icon");
         vd_ui_labelf("A Cool Window");
 
-        vd_ui_spacer();
+        vd_ui_spacer(VD_UI_AXISH);
+
+        vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_LEFT_OPEN), "##left");
+        vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_RIGHT_OPEN), "##right");
+
+        vd_ui_spacer(VD_UI_AXISH);
 
         vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_WINDOW_MINIMIZE), "##minimize");
         vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_WINDOW_MAXIMIZE), "##maximize");
@@ -1467,13 +1485,16 @@ VD_UI_API void vd_ui_demo(void)
     button_example->style.size[0].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
     button_example->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
 
+
     vd_ui_parent_push(button_example);
+    // @todo(mdodis): Fix AXISV spacing not working
+    // vd_ui_spacer(VD_UI_AXISV);
     {
         if (vd_ui_buttonf("Button 1").clicked) {
             button1_click_count++;
         }
 
-        vd_ui_spacer();
+        vd_ui_spacer(VD_UI_AXISH);
 
         vd_ui_labelf("Button 1 Clicked: %d times", button1_click_count);
     }

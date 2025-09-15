@@ -87,9 +87,7 @@ int main(int argc, char const *argv[])
 
         float wx, wy;
         int wheel_moved = vd_fw_get_mouse_wheel(&wx, &wy);
-        if (wheel_moved) {
-            printf("WHEEL %f %f\n", wx, wy);
-        }
+        (void)wheel_moved;
 
         vd_ui_event_size((float)w, (float)h);
         vd_ui_event_mouse_location(mx, my);
