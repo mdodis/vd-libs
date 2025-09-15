@@ -6,6 +6,7 @@ REM --ARGUMENTS-----------------------------------------------------------------
 set BUILD_MODE="debug"
 set SAMPLE_TO_COMPILE=""
 set COMPILE_PROGRAMS=0
+set PROGRAM_TO_COMPILE=""
 
 :parse_args
 if "%~1"=="" goto after_parse
@@ -23,6 +24,8 @@ if "%~1"=="-m" (
     )
 ) else if "%~1"=="-p" (
     set COMPILE_PROGRAMS=1
+    set PROGRAM_TO_COMPILE=%~2
+    shift
 ) else if "%~1"=="-s" (
     set SAMPLE_TO_COMPILE=%~2
     shift
@@ -40,6 +43,7 @@ if not exist build mkdir build
 pushd build
 
 set INC_DIR=%PRJ_DIR%
+set EXT_DIR=%PRJ_DIR%\ext
 set SRC_DIR=%PRJ_DIR%\samples
 
 if not %SAMPLE_TO_COMPILE%=="" (
@@ -47,12 +51,7 @@ if not %SAMPLE_TO_COMPILE%=="" (
 )
 
 if %COMPILE_PROGRAMS%==1 (
-    cl /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %PRJ_DIR%/programs/embed.c /Fe:embed.exe 
-    cl /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %PRJ_DIR%/programs/printf_specifiers.c /Fe:print_specifiers.exe 
-    cl /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %PRJ_DIR%/programs/fontello.c /Fe:fontello.exe 
-    cl /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %PRJ_DIR%/programs/ryu.c /Fe:ryu.exe 
-    cl /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %PRJ_DIR%/programs/sembd.c /Fe:sembd.exe 
-    cl /Zi /Od /I %INC_DIR% /W4 /GS- /nologo /DUNICODE /D_UNICODE %PRJ_DIR%/programs/winpic.c /Fe:winpic.exe
+    cl /Zi /Od /I %INC_DIR% /I %EXT_DIR% /W4 /GS- /nologo /DUNICODE /D_UNICODE %PRJ_DIR%/programs/%PROGRAM_TO_COMPILE%.c /Fe:%PROGRAM_TO_COMPILE%.exe
 )
 
 popd
