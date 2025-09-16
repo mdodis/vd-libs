@@ -122,6 +122,8 @@ typedef struct {
     int  l;
 } VdUiStr;
 
+VD_UI_INL int              vd_ui_str_eq(VdUiStr a, VdUiStr b);
+
 typedef union {
     float e[4];
 } VdUiF4;
@@ -320,6 +322,21 @@ typedef struct {
 
 
 extern char Vd_Ui_CharBuf[VD_UI_CHAR_BUF_COUNT];
+
+VD_UI_INL int vd_ui_str_eq(VdUiStr a, VdUiStr b)
+{
+    if (a.l != b.l) {
+        return 0;
+    }
+
+    for (int i = 0; i < a.l; ++i) {
+        if (a.s[i] != b.s[i]) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
 
 VD_UI_INL const char *vd_ui_size_mode_to_str(VdUiSizeMode size_mode)
 {
@@ -1256,7 +1273,6 @@ VD_UI_API VdUiReply vd_ui_icon_button(VdUiSymbol symbol, VdUiStr str)
 VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
 {
     VdUiDiv *scroll_view = vd_ui_div_new(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_FLEX_HORIZONTAL | VD_UI_FLAG_CLIP_CONTENT, str);
-    vd_ui_parent_push(scroll_view);
 
     scroll_view->style.normal_grad = vd_ui_gradient(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f),
                                                     vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f));
@@ -1271,19 +1287,35 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
     scroll_view->style.size[1].value = 500.0f;
     scroll_view->style.size[1].niceness = 0.0f;
 
+    // scroll_view->style.size[0].mode  = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
+    // scroll_view->style.size[1].mode  = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
+    vd_ui_parent_push(scroll_view);
 
     VdUiDiv *scroll_container = vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("##scroll-container"));
+    // scroll_container->style.size[0].mode     = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
+    // scroll_container->style.size[0].value    = 1.f;
+    // scroll_container->style.size[0].niceness = 0.f;
+
+    // scroll_container->style.size[1].mode     = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+    // scroll_container->style.size[1].value    = 1.f;
+    // scroll_container->style.size[1].niceness = 0.f;
+
     scroll_container->style.size[0].mode     = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
     scroll_container->style.size[0].value    = 1.f;
-    scroll_container->style.size[0].niceness = 100.f;
+    scroll_container->style.size[0].niceness = 1.f;
 
-    scroll_container->style.size[1].mode     = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+    scroll_container->style.size[1].mode     = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
     scroll_container->style.size[1].value    = 1.f;
-    scroll_container->style.size[1].niceness = 100.f;
+    scroll_container->style.size[1].niceness = 0.f;
+
 
     VdUiDiv *scroll_section = vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("##scroll_section"));
-    scroll_section->style.size[0].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
-    scroll_section->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
+    scroll_section->style.size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
+    scroll_section->style.size[0].value = 32.f;
+    scroll_section->style.size[0].niceness = 0.f;
+    scroll_section->style.size[1].mode = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+    scroll_section->style.size[1].value = 1.f;
+    scroll_section->style.size[1].niceness = 2.f;
     vd_ui_parent_push(scroll_section);
     {
         vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_UP_OPEN), "##up");
@@ -1777,16 +1809,48 @@ static void vd_ui__calc_oversizes(VdUiContext *ctx, VdUiDiv *curr)
             continue;
         }
 
-        if (curr->comp_size[i] < curr->parent->comp_size[i]) {
+        // If working on horizontal axis and flex mode is vertical (i.e. VD_UI_FLAG_FLEX_HORIZONTAL is not set)
+        // then continue
+        if (i == 0 && (curr->flags & VD_UI_FLAG_FLEX_HORIZONTAL) == 0) {
             continue;
         }
 
-        // We need to subtract this amount from each child depending on niceness
-        float oversize_amount = curr->comp_size[i] - curr->parent->comp_size[i];
+        // If working on vertical axis and flex mode isn't vertical (i.e. VD_UI_FLAG_FLEX_HORIZONTAL is set)
+        // then continue
+        if (i == 1 && (curr->flags & VD_UI_FLAG_FLEX_HORIZONTAL) != 0) {
+            continue;
+        }
+
+        // @todo(mdodis): Introduce comp_children_size when calculating child sizes 
+        float child_sizes = 0.f;
+
+        VdUiDiv *child = curr->first;
+        while (child != 0) {
+            child_sizes += child->comp_size[i];
+            child = child->next;
+        }
+
+        float oversize_amount = 0.f;
+
+        if (curr->style.size[i].mode == VD_UI_SIZE_MODE_CONTAIN_CHILDREN) {
+
+            if (child_sizes < curr->parent->comp_size[i]) {
+                continue;
+            }
+
+            oversize_amount = child_sizes - curr->parent->comp_size[i];
+
+        } else { // if (curr->style.size[i].mode == VD_UI_SIZE_MODE_ABSOLUTE) {
+            if (child_sizes < curr->comp_size[i]) {
+                continue;
+            }
+
+            oversize_amount = child_sizes - curr->comp_size[i];
+        }
 
         // First, compute the overall niceness of each child to then convert proportionally to [0, 1]
         float overall_niceness = 0.f;
-        VdUiDiv *child = curr->first;
+        child = curr->first;
         while (child != 0) {
             overall_niceness += child->style.size[i].niceness;
             child = child->next;
@@ -1807,7 +1871,11 @@ static void vd_ui__calc_oversizes(VdUiContext *ctx, VdUiDiv *curr)
             child = child->next;
         }
 
-        curr->comp_size[i] -= oversize_amount;
+        child_sizes -= oversize_amount;
+
+        if (curr->style.size[i].mode == VD_UI_SIZE_MODE_CONTAIN_CHILDREN) {
+            curr->comp_size[i] = child_sizes;
+        }
     }
 
     VdUiDiv *child = curr->first;
@@ -2971,7 +3039,7 @@ static void vd_ui__do_inspector(VdUiContext *ctx)
 {
     if (!Vd_Ui_Inspector.initialized) {
         Vd_Ui_Inspector.initialized = 1;
-        Vd_Ui_Inspector.height = 300.f;
+        Vd_Ui_Inspector.height = 350.f;
         Vd_Ui_Inspector.rect[0] = 0.f;
         Vd_Ui_Inspector.rect[1] = ctx->window[1] - Vd_Ui_Inspector.height;
     }
