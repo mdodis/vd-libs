@@ -1,4 +1,4 @@
-![vd-libs logo](./assets/vd-logo.svg)
+![vd-libs logo](./assets/vd-logo-v.svg)
 
 A collection of header-only libraries and utility programs
 ## Libraries
