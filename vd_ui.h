@@ -185,8 +185,17 @@ enum {
     VD_UI_SIZE_MODE_ABSOLUTE = 0,
     VD_UI_SIZE_MODE_TEXT_CONTENT = 1,
     VD_UI_SIZE_MODE_CONTAIN_CHILDREN = 2,
+    VD_UI_SIZE_MODE_PERCENT_OF_PARENT = 3,
 };
 typedef int VdUiSizeMode;
+
+VD_UI_INL const char*      vd_ui_size_mode_to_str(VdUiSizeMode size_mode);
+
+typedef struct {
+    VdUiSizeMode mode;
+    float        value;
+    float        niceness;
+} VdUiSize;
 
 enum {
     VD_UI_AXISH = 0,
@@ -218,12 +227,6 @@ enum {
     VD_UI_TEXT_VALIGN_MIDDLE   = 1,
 };
 typedef int VdUiTextVAlign;
-
-typedef struct {
-    VdUiSizeMode mode;
-    float        value;
-    float        niceness;
-} VdUiSize;
 
 typedef struct {
     /** Padding to put around text */
@@ -282,6 +285,8 @@ struct VdUiDiv {
     VdUiDiv     *hprev;
 
     VdUiStr     content_str;
+    VdUiStr     id_str;
+
     float       text_size[VD_UI_AXES];
 
     float       comp_pos_rel[VD_UI_AXES];
@@ -315,6 +320,17 @@ typedef struct {
 
 
 extern char Vd_Ui_CharBuf[VD_UI_CHAR_BUF_COUNT];
+
+VD_UI_INL const char *vd_ui_size_mode_to_str(VdUiSizeMode size_mode)
+{
+    switch (size_mode) {
+        case VD_UI_SIZE_MODE_ABSOLUTE:          return "absolute";
+        case VD_UI_SIZE_MODE_TEXT_CONTENT:      return "text-content";
+        case VD_UI_SIZE_MODE_CONTAIN_CHILDREN:  return "contain-children";
+        case VD_UI_SIZE_MODE_PERCENT_OF_PARENT: return "percentage-of-parent";
+        default:                                return "<invalid>";
+    }
+}
 
 /* ----DEMOS--------------------------------------------------------------------------------------------------------- */
 VD_UI_API void             vd_ui_demo_decorations(void);
@@ -399,6 +415,9 @@ VD_UI_API VdUiReply        vd_ui_icon_button(VdUiSymbol symbol, VdUiStr str);
  * @return        The interaction result
  */
 VD_UI_API VdUiReply        vd_ui_icon_buttonf(VdUiSymbol symbol, const char *label, ...) { VD_UI_DOTTOSTR(label); return vd_ui_icon_button(symbol, str); }
+
+VD_UI_API void             vd_ui_scroll_begin(VdUiStr str, float *x, float *y);
+VD_UI_API void             vd_ui_scroll_end(void);
 
 /* ----CORE UI------------------------------------------------------------------------------------------------------- */
 /**
@@ -798,7 +817,7 @@ static unsigned char Vd_Ui_Default_Icons_Font[7840];
 
 #define VD_UI_PARENT_STACK_MAX      256
 #define VD_UI_VBUF_COUNT_MAX        1024
-#define VD_UI_RP_COUNT_MAX          64
+#define VD_UI_RP_COUNT_MAX          128
 #define VD_UI_FONT_COUNT_MAX        4
 #define VD_UI_UPDATE_COUNT_MAX      2
 #define VD_UI_GLYPH_CACHE_COUNT_MAX 2048
@@ -1185,12 +1204,12 @@ VD_UI_API void vd_ui_spacer(VdUiAxis axis)
         case VD_UI_AXISV: daxis = 1; faxis = 0; break;
     }
 
-    spacer->style.size[daxis].mode       = VD_UI_SIZE_MODE_ABSOLUTE;
-    spacer->style.size[daxis].value      = 9999.f;
+    spacer->style.size[daxis].mode       = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+    spacer->style.size[daxis].value      = 1.f;
     spacer->style.size[daxis].niceness   = 1000.f;
     spacer->style.size[faxis].mode       = VD_UI_SIZE_MODE_ABSOLUTE;
     spacer->style.size[faxis].value      = 0.f;
-    spacer->style.size[faxis].niceness   = 1000.f;
+    spacer->style.size[faxis].niceness   = 0.f;
 }
 
 VD_UI_API void vd_ui_icon(VdUiSymbol symbol, VdUiStr str)
@@ -1234,6 +1253,73 @@ VD_UI_API VdUiReply vd_ui_icon_button(VdUiSymbol symbol, VdUiStr str)
     return vd_ui_call(div);
 }
 
+VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
+{
+    VdUiDiv *scroll_view = vd_ui_div_new(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_FLEX_HORIZONTAL | VD_UI_FLAG_CLIP_CONTENT, str);
+    vd_ui_parent_push(scroll_view);
+
+    scroll_view->style.normal_grad = vd_ui_gradient(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f),
+                                                    vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f));
+    scroll_view->style.hot_grad    = vd_ui_gradient(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f),
+                                                    vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f));
+    scroll_view->style.active_grad = vd_ui_gradient(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f),
+                                                    vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f));
+    scroll_view->style.size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
+    scroll_view->style.size[0].value = 300.0f;
+    scroll_view->style.size[0].niceness = 0.0f;
+    scroll_view->style.size[1].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
+    scroll_view->style.size[1].value = 500.0f;
+    scroll_view->style.size[1].niceness = 0.0f;
+
+
+    VdUiDiv *scroll_container = vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("##scroll-container"));
+    scroll_container->style.size[0].mode     = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+    scroll_container->style.size[0].value    = 1.f;
+    scroll_container->style.size[0].niceness = 100.f;
+
+    scroll_container->style.size[1].mode     = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+    scroll_container->style.size[1].value    = 1.f;
+    scroll_container->style.size[1].niceness = 100.f;
+
+    VdUiDiv *scroll_section = vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("##scroll_section"));
+    scroll_section->style.size[0].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
+    scroll_section->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
+    vd_ui_parent_push(scroll_section);
+    {
+        vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_UP_OPEN), "##up");
+        VdUiDiv *hspace = vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("##scroll_vhandle_space"));
+        hspace->style.normal_grad = vd_ui_gradient(vd_ui_f4(0.7f, 0.2f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f),
+                                                   vd_ui_f4(0.7f, 0.2f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f));
+        hspace->style.hot_grad    = vd_ui_gradient(vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f),
+                                                   vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f));
+        hspace->style.active_grad = vd_ui_gradient(vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f),
+                                                   vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f));
+        hspace->style.size[0].mode     = VD_UI_SIZE_MODE_ABSOLUTE;
+        hspace->style.size[0].value    = 32.f;
+
+        hspace->style.size[1].mode     = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+        hspace->style.size[1].value    = 1.f;
+        hspace->style.size[1].niceness = 1.f;
+
+        vd_ui_parent_push(hspace);
+        {
+            VdUiDiv *vhandle = vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("##vhandle"));
+        }
+        vd_ui_parent_pop();
+
+        vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_DOWN_OPEN), "##down");
+    }
+    vd_ui_parent_pop();
+
+    vd_ui_parent_push(scroll_container);
+}
+
+VD_UI_API void vd_ui_scroll_end()
+{
+    vd_ui_parent_pop();
+    vd_ui_parent_pop();
+}
+
 VD_UI_API VdUiDiv *vd_ui_div_newf(VdUiFlags flags, const char *fmt, ...)
 {
     static char buf[VD_UI_FBUF_MAX];
@@ -1272,7 +1358,8 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
         result = &ctx->null_divs[ctx->null_divs_len++];
         result->h = 0;
         result->is_null = 1;
-        result->content_str = VD_UI_LIT("<NULL>");
+        result->content_str = (VdUiStr) {0, 0};
+        result->id_str = VD_UI_LIT("<null>");
     } else {
         size_t ht = vd_ui__hash(substr_to_hash.s, substr_to_hash.l);
         size_t h = ht;
@@ -1318,6 +1405,7 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
         result->h = h;
         result->is_null = 0;
 
+        // Copy content str
         // Only copy part of the string that is need
         VdUiStr str_to_copy = str;
         if (str_id_start_index != 0) {
@@ -1329,6 +1417,19 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
         } else {
             result->content_str.s = 0;
             result->content_str.l = 0;
+        }
+
+        str_to_copy = str;
+        // Copy id str
+        if (str_id_start_index != 0) {
+            str_to_copy.s = str.s + str_id_start_index;
+            str_to_copy.l = (str.l) - (str_id_start_index);
+        }
+
+        if (str_to_copy.l != 0) {
+            result->id_str = vd_ui__strbuf_dup(ctx, str_to_copy);
+        } else {
+            result->id_str = str;
         }
     }
 
@@ -1481,35 +1582,40 @@ VD_UI_API void vd_ui_demo_decorations(void)
 
 VD_UI_API void vd_ui_demo(void)
 {
-    static int button1_click_count = 0;
-    VdUiDiv *button_example = vd_ui_div_newf(VD_UI_FLAG_FLEX_HORIZONTAL, "##button-example");
-    button_example->style.size[0].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
-    button_example->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
+    static float scrollx = 0.f;
+    static float scrolly = 0.f;
 
-    vd_ui_parent_push(button_example);
-    // @todo(mdodis): Fix AXISV spacing not working
+    vd_ui_scroll_begin(VD_UI_LIT("##main-scroll-view"), &scrollx, &scrolly);
     {
-        if (vd_ui_buttonf("Button 1").clicked) {
-            button1_click_count++;
+        VdUiDiv *button_example = vd_ui_div_newf(VD_UI_FLAG_FLEX_HORIZONTAL, "##button-example");
+        button_example->style.size[0].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
+        button_example->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
+
+        vd_ui_parent_push(button_example);
+        // @todo(mdodis): Fix AXISV spacing not working
+        {
+            static int button1_click_count = 0;
+            if (vd_ui_buttonf("Button 1").clicked) {
+                button1_click_count++;
+            }
+
+            vd_ui_labelf("Button 1 Clicked: %d times", button1_click_count);
         }
+        vd_ui_parent_pop();
 
-        vd_ui_spacer(VD_UI_AXISH);
+        vd_ui_buttonf("Another Button");
 
-        vd_ui_labelf("Button 1 Clicked: %d times", button1_click_count);
+        vd_ui_labelf(u8"Some unicode: ă x ă");
+
+        static int checkbox = 0;
+        vd_ui_checkboxf(&checkbox, "Show Hidden");
+
+        if (checkbox) {
+
+            vd_ui_labelf("Hidden content");
+        }
     }
-    vd_ui_parent_pop();
-
-    vd_ui_buttonf("Another Button");
-
-    vd_ui_labelf(u8"Some unicode: ă x ă");
-
-    static int checkbox = 0;
-    vd_ui_checkboxf(&checkbox, "Show Hidden");
-
-    if (checkbox) {
-
-        vd_ui_labelf("Hidden content");
-    }
+    vd_ui_scroll_end();
 }
 
 static void vd_ui__get_axes_for_div(VdUiDiv *div, int *daxis, int *faxis, int *daxisf, int *faxisf)
@@ -1597,6 +1703,31 @@ static void vd_ui__calc_fixed_size(VdUiContext *ctx, VdUiDiv *curr)
         }
     }
 
+}
+
+static void vd_ui__calc_dyn_size_up(VdUiContext *ctx, VdUiDiv *curr)
+{
+    if (curr == 0) {
+        return;
+    }
+
+    for (int i = 0; i < VD_UI_AXES; ++i) {
+        switch (curr->style.size[i].mode) {
+            case VD_UI_SIZE_MODE_PERCENT_OF_PARENT: {
+                if (!curr->parent) break;
+
+                curr->comp_size[i] = curr->style.size[i].value * curr->parent->comp_size[i];
+            } break;
+
+            default: break;
+        }
+    }
+
+    VdUiDiv *child = curr->first;
+    while (child != 0) {
+        vd_ui__calc_dyn_size_up(ctx, child);
+        child = child->next;
+    }
 }
 
 static void vd_ui__calc_dyn_size_down(VdUiContext *ctx, VdUiDiv *curr)
@@ -1750,6 +1881,7 @@ static void vd_ui__layout(VdUiContext *ctx)
     vd_ui__calc_fixed_size(ctx, &ctx->root);
 
     // Calculate upwards-dependent sizes
+    vd_ui__calc_dyn_size_up(ctx, &ctx->root);
 
     // Calculate downwards-dependent sizes
     vd_ui__calc_dyn_size_down(ctx, &ctx->root);
@@ -2849,7 +2981,7 @@ static void vd_ui__do_inspector(VdUiContext *ctx)
 
     Vd_Ui_Inspector.hierarchy.offset = 2.f;
 
-    vd_ui__push_rect(ctx, &ctx->white, Vd_Ui_Inspector.rect, (float[]) {0.7f, 0.8f, 0.7f, 0.7f});
+    vd_ui__push_rect(ctx, &ctx->white, Vd_Ui_Inspector.rect, (float[]) {0.7f, 0.8f, 0.7f, 0.2f});
 
     vd_ui__inspector_do_hierarchy(ctx, &ctx->root, 0.f);
 }
@@ -2884,13 +3016,20 @@ static void vd_ui__inspector_do_hierarchy(VdUiContext *ctx, VdUiDiv *curr, float
         vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + yincrease * 2.f, "RPos: %d %d", (int)curr->comp_pos_rel[0], (int)curr->comp_pos_rel[1]);
         vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + yincrease * 3.f, "Text Background Clickable ClipContent FlexHorizontal");
         vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + yincrease * 4.f, "%d    %d         %d         %d", vd_ui_div_has_flag(curr, VD_UI_FLAG_TEXT), vd_ui_div_has_flag(curr, VD_UI_FLAG_BACKGROUND), vd_ui_div_has_flag(curr, VD_UI_FLAG_CLICKABLE), vd_ui_div_has_flag(curr, VD_UI_FLAG_CLIP_CONTENT), vd_ui_div_has_flag(curr, VD_UI_FLAG_FLEX_HORIZONTAL));
+        vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + yincrease * 5.f, "Size[0] %s, %f, %f", vd_ui_size_mode_to_str(curr->style.size[0].mode), curr->style.size[0].value, curr->style.size[0].niceness);
+        vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + yincrease * 6.f, "Size[1] %s, %f, %f", vd_ui_size_mode_to_str(curr->style.size[1].mode), curr->style.size[1].value, curr->style.size[1].niceness);
 
+        VdUiGradient redgrad = vd_ui_gradient1(vd_ui_f4(1.f, 0.f, 0.f, 0.7f));
+        vd_ui__push_rectgrad(ctx, &ctx->white, curr->rect, redgrad.e,
+                                                           0.f,
+                                                           0.f,
+                                                           2.f);
     }
 
     vd_ui__push_rect(ctx, &ctx->white, entry_rect, final_color);
 
-    if (curr->content_str.l != 0) {
-        vd_ui__put_line(ctx, curr->content_str, entry_rect[0], entry_rect[1], ctx->def.font_size * ctx->dpi_scale);
+    if (curr->id_str.l != 0) {
+        vd_ui__put_line(ctx, curr->id_str, entry_rect[0], entry_rect[1], ctx->def.font_size * ctx->dpi_scale);
     } else {
         vd_ui__put_line(ctx, VD_UI_LIT("#id"), entry_rect[0], entry_rect[1], ctx->def.font_size * ctx->dpi_scale);
     }

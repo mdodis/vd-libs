@@ -23,7 +23,7 @@ int main(int argc, char const *argv[])
 
     vd_ui_init();
     vd_ui_debug_set_draw_cursor_on(0);
-    vd_ui_debug_set_inspector_on(0);
+    vd_ui_debug_set_inspector_on(1);
     vd_ui_debug_set_metrics_on(0);
 
     vd_fw_init(& (VdFwInitInfo) {
