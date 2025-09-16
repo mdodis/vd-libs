@@ -23,6 +23,8 @@
  * ---------------------------------------------------------------------------------------------------------------------
  * @todo(mdodis):
  * - Fix AXISV spacing not working
+ * - Introduce comp_children_size when calculating child sizes 
+ * - Scroll view
  * - Text Input
  * - Images
  * - Support more of printf
@@ -1643,8 +1645,11 @@ VD_UI_API void vd_ui_demo(void)
         vd_ui_checkboxf(&checkbox, "Show Hidden");
 
         if (checkbox) {
-
             vd_ui_labelf("Hidden content");
+        }
+
+        for (int i = 0; i < 20; ++i) {
+            vd_ui_buttonf("Button %d", i);
         }
     }
     vd_ui_scroll_end();
