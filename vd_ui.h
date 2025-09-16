@@ -834,8 +834,14 @@ enum {
 static unsigned char Vd_Ui_Public_Sans_Regular[84836];
 static unsigned char Vd_Ui_Default_Icons_Font[7840];
 
+#define VD_UI_LAYERS_MAX            8
+#define VD_UI_CHANNELS_MAX          24
+#define VD_UI_VERTICES_PER_CHANNEL  256
+#define VD_UI_VERTICES_MAX          (VD_UI_LAYERS_MAX * VD_UI_CHANNELS_MAX * VD_UI_VERTICES_PER_CHANNEL)
+#define VD_UI_RENDER_PASSES_MAX     (VD_UI_LAYERS_MAX * VD_UI_CHANNELS_MAX)
+
 #define VD_UI_PARENT_STACK_MAX      256
-#define VD_UI_VBUF_COUNT_MAX        1024
+#define VD_UI_VBUF_COUNT_MAX        2048
 #define VD_UI_RP_COUNT_MAX          128
 #define VD_UI_FONT_COUNT_MAX        4
 #define VD_UI_UPDATE_COUNT_MAX      2
@@ -856,12 +862,17 @@ static unsigned char Vd_Ui_Default_Icons_Font[7840];
 static VdUiContext *Vd_Ui_Global_Context = 0;
 char Vd_Ui_CharBuf[VD_UI_CHAR_BUF_COUNT];
 
-static unsigned int Vd_Ui_White_Texture_Buffer[4*4] = {
-    0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
-    0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
-    0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
-    0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
-};
+typedef struct {
+    VdUiTextureId texture;
+    int           num_vertices;
+    VdUiVertex    vertices[VD_UI_VERTICES_PER_CHANNEL];
+} VdUiChannel;
+
+typedef struct {
+    int         clip_index;
+    int         num_channels;
+    VdUiChannel channels[VD_UI_CHANNELS_MAX];
+} VdUiLayer;
 
 typedef struct VdUiFont  VdUiFont;
 typedef struct VdUiGlyph VdUiGlyph;
@@ -894,11 +905,11 @@ static void vd_ui__update_all_fonts(VdUiContext *ctx);
 static void vd_ui__push_clip(VdUiContext *ctx, float clip[4]);
 static void vd_ui__pop_clip(VdUiContext *ctx);
 static void vd_ui__get_clip(VdUiContext *ctx, float *out_clip);
-static void vd_ui__push_rect(VdUiContext *ctx, VdUiTextureId *texture, float rect[4], float color[4]);
-static void vd_ui__push_rectgrad(VdUiContext *ctx, VdUiTextureId *texture, float rect[4], float color[16],
-                                                                                          float corner_radius,
-                                                                                          float edge_softness,
-                                                                                          float border_thickness);
+static void vd_ui__push_rect(VdUiContext *ctx, float rect[4], float color[4]);
+static void vd_ui__push_rectgrad(VdUiContext *ctx, float rect[4], float color[16],
+                                                                  float corner_radius,
+                                                                  float edge_softness,
+                                                                  float border_thickness);
 static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId *texture, float p0[2], float p1[2],
                                                                          float u0[2], float u1[2],
                                                                          float color[4],
@@ -933,10 +944,10 @@ static float        vd_ui__clampf(float x, float a, float b);
 static float        vd_ui__lerp(float a, float b, float t);
 static VdUiF4       vd_ui__lerp4(VdUiF4 a, VdUiF4 b, float t);
 static VdUiGradient vd_ui__lerpgrad(VdUiGradient a, VdUiGradient b, float t);
-
-// static const char*  vd_ui__utf8next(const char *p);
-// static int          vd_ui__utf8dec(const char **p, unsigned int *out);
 static int          vd_ui__utf8decs(VdUiStr *str, unsigned int *out);
+
+static void         vd_ui__push_layer(void);
+static void         vd_ui__pop_layer(void);
 
 static void         vd_ui__do_inspector(VdUiContext *ctx);
 
@@ -946,9 +957,6 @@ struct VdUiContext {
     VdUiDiv                 *parents[VD_UI_PARENT_STACK_MAX];
     unsigned int            parents_next;
 
-    VdUiTextureId           white;
-
-    // Resources
     unsigned int            vbuf_count;
     VdUiVertex              vbuf[VD_UI_VBUF_COUNT_MAX];
 
@@ -1082,7 +1090,7 @@ VD_UI_API void vd_ui_frame_end(void)
     vd_ui__traverse_and_render_divs(ctx, &ctx->root);
 
     if (ctx->debug.custom_cursor_on) {
-        vd_ui__push_rect(ctx, &ctx->white,
+        vd_ui__push_rect(ctx,
             (float[]) {ctx->mouse[0], ctx->mouse[1], ctx->mouse[0] + 16.f, ctx->mouse[1] + 16.f},
             (float[]) {1.f, 1.f, 1.f , 1.f});
     }
@@ -2067,20 +2075,6 @@ static void vd_ui__get_clip(VdUiContext *ctx, float *out_clip)
 /* ----GLYPH CACHE IMPL---------------------------------------------------------------------------------------------- */
 static void vd_ui__update_all_fonts(VdUiContext *ctx)
 {
-    if (VD_UI_TEXTURE_ID_IS_NULL(ctx->white))
-    {
-        VD_UI_LOG("%s", "Queued white texture upload to GPU");
-        VdUiUpdate *update = &ctx->updates[ctx->num_updates++];
-        update->type = VD_UI_UPDATE_TYPE_NEW_TEXTURE;
-        update->data.new_texture.width    = 4;
-        update->data.new_texture.height   = 4;
-        update->data.new_texture.format   = VD_UI_TEXTURE_FORMAT_RGBA8;
-        update->data.new_texture.buffer   = Vd_Ui_White_Texture_Buffer;
-        update->data.new_texture.size     = sizeof(Vd_Ui_White_Texture_Buffer);
-        update->data.new_texture.write_id = &ctx->white;
-
-    }
-
     switch (ctx->state) {
         case VD_UI__TEXTURE_STATE_NULL: {
             VD_UI_LOG("Queued initial texture upload to GPU %d", ctx->state);
@@ -2176,27 +2170,27 @@ static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId *texture, float p
     vd_ui__push_vertexgrad(ctx, texture, p0, p1, u0, u1, colors, flags, 0.f, 0.f, 0.f);
 }
 
-static void vd_ui__push_rectgrad(VdUiContext *ctx, VdUiTextureId *texture, float rect[4], float color[16],
-                                                                                          float corner_radius,
-                                                                                          float edge_softness,
-                                                                                          float border_thickness)
+static void vd_ui__push_rectgrad(VdUiContext *ctx, float rect[4], float color[16],
+                                                                  float corner_radius,
+                                                                  float edge_softness,
+                                                                  float border_thickness)
 {
-
-    vd_ui__push_vertexgrad(ctx, texture,
+    // @todo(mdodis): Precompute calculation for st for full alpha pixel row
+    vd_ui__push_vertexgrad(ctx, &ctx->texture,
         (float[]){rect[0], rect[1]}, (float[]){rect[2], rect[3]},
-        (float[]){0.0f   , 0.0f   }, (float[]){1.0f   , 1.0f   },
+        (float[]){0.0f   , 0.0f   }, (float[]){4.f / (float)(ctx->atlas[0])   , 0.0f   },
         color,
-        0,
+        VD_UI_VERTEX_FLAG_TEXTURE_IS_ALPHA_BUFFER,
         corner_radius, edge_softness, border_thickness);
 }
 
-static void vd_ui__push_rect(VdUiContext *ctx, VdUiTextureId *texture, float rect[4], float color[4])
+static void vd_ui__push_rect(VdUiContext *ctx, float rect[4], float color[4])
 {
-    vd_ui__push_vertex(ctx, texture,
+    vd_ui__push_vertex(ctx, &ctx->texture,
         (float[]){rect[0], rect[1]}, (float[]){rect[2], rect[3]},
-        (float[]){0.0f   , 0.0f   }, (float[]){1.0f   , 1.0f   },
+        (float[]){0.0f   , 0.0f   }, (float[]){4.f / (float)(ctx->atlas[0])   , 0.0f   },
         color,
-        0);
+        VD_UI_VERTEX_FLAG_TEXTURE_IS_ALPHA_BUFFER);
 }
 
 static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y, float size)
@@ -2458,7 +2452,7 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
         if (curr->flags & VD_UI_FLAG_BACKGROUND) {
             VdUiGradient grad = vd_ui__lerpgrad(curr->style.normal_grad, curr->style.hot_grad, curr->hot_t);
             grad = vd_ui__lerpgrad(grad, curr->style.active_grad, curr->active_t);
-            vd_ui__push_rectgrad(ctx, &ctx->white, curr->rect, grad.e, curr->style.corner_radius, 0.f, 0.f);
+            vd_ui__push_rectgrad(ctx, curr->rect, grad.e, curr->style.corner_radius, 0.f, 0.f);
         }
 
         if (curr->flags & VD_UI_FLAG_TEXT) {
@@ -2658,6 +2652,12 @@ VD_UI_API void vd_ui_init(void)
     ctx->def.checkmark = vd_ui_symbol(defsymt, VD_UI_DEFAULT_ICONS_OK);
 }
 
+typedef struct
+{
+   int width,height;
+   int x,y,bottom_y;
+} stbrp_context_struct;
+
 VD_UI_API VdUiContext *vd_ui_context_create(VdUiContextCreateInfo *info)
 {
     VD_UNUSED(info);
@@ -2685,6 +2685,16 @@ VD_UI_API VdUiContext *vd_ui_context_create(VdUiContextCreateInfo *info)
     stbtt_PackBegin(&result->pack_context, result->buffer,
                     result->atlas[0], result->atlas[1], 0, 1, 0);
 
+    // Write 4x4 white texture
+    {
+        unsigned char *buf = (unsigned char*)result->buffer;
+        buf[0 * 4 + 0] = 255; buf[0 * 4 + 1] = 255; buf[0 * 4 + 2] = 255; buf[0 * 4 + 3] = 255;
+    }
+
+    // Reserve first 4 pixels in the texture for rectangle rendering
+    stbrp_context_struct *rpcontext = (stbrp_context_struct*)result->pack_context.pack_info;
+    rpcontext->x = 4;
+
     // Divs & Ids
     result->divs_cap       = 1000;
     result->divs_cap_total = 1024;
@@ -2696,9 +2706,6 @@ VD_UI_API VdUiContext *vd_ui_context_create(VdUiContextCreateInfo *info)
     result->null_divs_len = 0;
     result->null_divs     = (VdUiDiv*)VD_MALLOC(result->null_divs_cap * sizeof(VdUiDiv));
     VD_MEMSET(result->null_divs, 0, result->null_divs_cap * sizeof(VdUiDiv));
-
-    // White Texture
-    VD_UI_TEXTURE_ID_MAKE_NULL(result->white);
 
     // Arena
     result->strbuf_cap  = 1024 * 5; // 5 Kilobytes of per frame string storage
@@ -3054,7 +3061,7 @@ static void vd_ui__do_inspector(VdUiContext *ctx)
 
     Vd_Ui_Inspector.hierarchy.offset = 2.f;
 
-    vd_ui__push_rect(ctx, &ctx->white, Vd_Ui_Inspector.rect, (float[]) {0.7f, 0.8f, 0.7f, 0.2f});
+    vd_ui__push_rect(ctx, Vd_Ui_Inspector.rect, (float[]) {0.7f, 0.8f, 0.7f, 0.2f});
 
     vd_ui__inspector_do_hierarchy(ctx, &ctx->root, 0.f);
 }
@@ -3093,13 +3100,13 @@ static void vd_ui__inspector_do_hierarchy(VdUiContext *ctx, VdUiDiv *curr, float
         vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + yincrease * 6.f, "Size[1] %s, %f, %f", vd_ui_size_mode_to_str(curr->style.size[1].mode), curr->style.size[1].value, curr->style.size[1].niceness);
 
         VdUiGradient redgrad = vd_ui_gradient1(vd_ui_f4(1.f, 0.f, 0.f, 0.7f));
-        vd_ui__push_rectgrad(ctx, &ctx->white, curr->rect, redgrad.e,
-                                                           0.f,
-                                                           0.f,
-                                                           2.f);
+        vd_ui__push_rectgrad(ctx, curr->rect, redgrad.e,
+                                              0.f,
+                                              0.f,
+                                              2.f);
     }
 
-    vd_ui__push_rect(ctx, &ctx->white, entry_rect, final_color);
+    vd_ui__push_rect(ctx, entry_rect, final_color);
 
     if (curr->id_str.l != 0) {
         vd_ui__put_line(ctx, curr->id_str, entry_rect[0], entry_rect[1], ctx->def.font_size * ctx->dpi_scale);
