@@ -30,8 +30,8 @@ A collection of header-only libraries and utility programs
 
 | Name                                                      | Description                                                                                                                          |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| [gl_cube](./samples/gl_cube.c)                            | **WIP** Cube Sample with vd_fw.h in OpenGL                                                                                           |
-| [gl_window](./samples/gl_window.c)                        | Takes in a [Fontello](https://fontello.com/) config.json file, outputs C compatible enums                                            |
+| [gl_window](./samples/gl_window.c)                        | Window Sample with vd_fw.h in OpenGL                                                                                                 |
+| [gl_cube](./samples/gl_cube.c)                            | Cube Sample with vd_fw.h in OpenGL                                                                                                   |
 | [ui_basic](./samples/ui_basic.c)                          | **WIP** listing of all printf specifiers to help with writing your own printf implementation                                         |
 
 ## Compilation
