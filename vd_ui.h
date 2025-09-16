@@ -863,7 +863,7 @@ static VdUiContext *Vd_Ui_Global_Context = 0;
 char Vd_Ui_CharBuf[VD_UI_CHAR_BUF_COUNT];
 
 typedef struct {
-    VdUiTextureId texture;
+    VdUiTextureId *texture;
     int           num_vertices;
     VdUiVertex    vertices[VD_UI_VERTICES_PER_CHANNEL];
 } VdUiChannel;
@@ -902,9 +902,12 @@ struct VdUiFont {
 };
 
 static void vd_ui__update_all_fonts(VdUiContext *ctx);
+
 static void vd_ui__push_clip(VdUiContext *ctx, float clip[4]);
 static void vd_ui__pop_clip(VdUiContext *ctx);
 static void vd_ui__get_clip(VdUiContext *ctx, float *out_clip);
+static unsigned int vd_ui__get_clip_index(VdUiContext *ctx);
+
 static void vd_ui__push_rect(VdUiContext *ctx, float rect[4], float color[4]);
 static void vd_ui__push_rectgrad(VdUiContext *ctx, float rect[4], float color[16],
                                                                   float corner_radius,
@@ -945,9 +948,6 @@ static float        vd_ui__lerp(float a, float b, float t);
 static VdUiF4       vd_ui__lerp4(VdUiF4 a, VdUiF4 b, float t);
 static VdUiGradient vd_ui__lerpgrad(VdUiGradient a, VdUiGradient b, float t);
 static int          vd_ui__utf8decs(VdUiStr *str, unsigned int *out);
-
-static void         vd_ui__push_layer(void);
-static void         vd_ui__pop_layer(void);
 
 static void         vd_ui__do_inspector(VdUiContext *ctx);
 
@@ -2072,6 +2072,12 @@ static void vd_ui__get_clip(VdUiContext *ctx, float *out_clip)
     out_clip[3] = ctx->clip_stack[curr][3];
 }
 
+static unsigned int vd_ui__get_clip_index(VdUiContext *ctx)
+{
+    VD_ASSERT(ctx->clip_stack_count > 0);
+    return ctx->clip_stack_count - 1;
+}
+
 /* ----GLYPH CACHE IMPL---------------------------------------------------------------------------------------------- */
 static void vd_ui__update_all_fonts(VdUiContext *ctx)
 {
@@ -2115,13 +2121,32 @@ static void vd_ui__push_vertexgrad(VdUiContext *ctx, VdUiTextureId *texture, flo
                                                                              float edge_softness,
                                                                              float border_thickness)
 {
-    if (ctx->current_texture_id != texture)
+    float current_clip[4];
+    vd_ui__get_clip(ctx, current_clip);
+
+    int clip_same;
+
+    if (ctx->num_passes > 0) {
+        VdUiRenderPass *current_pass = &ctx->passes[ctx->num_passes - 1];
+
+        clip_same = current_pass->clip[0] == current_clip[0] &&
+                    current_pass->clip[1] == current_clip[1] &&
+                    current_pass->clip[2] == current_clip[2] &&
+                    current_pass->clip[3] == current_clip[3];
+    } else {
+        clip_same = 0;
+    }
+
+    if ((ctx->current_texture_id != texture) || (!clip_same))
     {
         VD_ASSERT(ctx->num_passes < VD_UI_RP_COUNT_MAX);
         ctx->num_passes++;
 
         VdUiRenderPass *pass   = &ctx->passes[ctx->num_passes - 1];
-        vd_ui__get_clip(ctx, pass->clip);
+        pass->clip[0] = current_clip[0];
+        pass->clip[1] = current_clip[1];
+        pass->clip[2] = current_clip[2];
+        pass->clip[3] = current_clip[3];
         pass->selected_texture = texture;
         pass->first_instance   = ctx->vbuf_count;
         pass->instance_count   = 0;
@@ -2443,10 +2468,6 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
         return;
     }
 
-    // Post order: search process child first from last to first
-    VdUiDiv *last_child  = curr->last;
-    VdUiDiv *child = last_child;
-
     if (curr != &ctx->root) {
         // After we've processed every child, we're ready to render ourselves
         if (curr->flags & VD_UI_FLAG_BACKGROUND) {
@@ -2522,11 +2543,21 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
         }
     }
 
+    VdUiDiv *last_child  = curr->last;
+    VdUiDiv *child = last_child;
+
+    if (curr->flags & VD_UI_FLAG_CLIP_CONTENT) {
+        vd_ui__push_clip(ctx, curr->rect);
+    }
+
     while (child != 0) {
         vd_ui__traverse_and_render_divs(ctx, child);
         child = child->prev;
     }
-    
+
+    if (curr->flags & VD_UI_FLAG_CLIP_CONTENT) {
+        vd_ui__pop_clip(ctx);        
+    }
 }
 
 static int vd_ui__point_in_rect(float point[2], float r[4])

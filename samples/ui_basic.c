@@ -187,7 +187,12 @@ int main(int argc, char const *argv[])
         for (unsigned int i = 0; i < num_passes; ++i) {
             VdUiRenderPass *pass = &passes[i];
             GLuint texture_id = (GLuint)pass->selected_texture->id;
-            glScissor((GLint)pass->clip[0], (GLint)pass->clip[1], (GLsizei)pass->clip[2], (GLsizei)pass->clip[3]);
+            GLint clip_width   = (GLint)pass->clip[2] - (GLint)pass->clip[0];
+            GLint clip_height  = (GLint)pass->clip[3] - (GLint)pass->clip[1];
+            GLint clip_x       = (GLint)pass->clip[0];
+            GLint clip_lower_y = (GLint)h - (GLint)pass->clip[3];
+
+            glScissor(clip_x, clip_lower_y, clip_width, clip_height);
 
             glUseProgram(program);
             glActiveTexture(GL_TEXTURE0);
