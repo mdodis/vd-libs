@@ -22,7 +22,7 @@
  * 3. This notice may not be removed or altered from any source distribution.
  * ---------------------------------------------------------------------------------------------------------------------
  * @todo(mdodis):
- * - Fix AXISV spacing not working
+ * - New and improved render pass api using texture id + scissor + layer id as keys
  * - Introduce comp_children_size when calculating child sizes 
  * - Scroll view
  * - Text Input
