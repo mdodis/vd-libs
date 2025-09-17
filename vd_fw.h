@@ -3089,7 +3089,11 @@ static void vd_fw__gl_debug_message_callback(GLenum source, GLenum type, GLuint 
 static int vd_fw__hit_test(int x, int y)
 {
     if (IsMaximized(VD_FW_G.hwnd)) {
-        return HTCLIENT;
+        if (y < 30) {
+            return HTCLIENT;
+        }
+
+        return HTNOWHERE;
     }
 
     POINT mouse;
@@ -3182,6 +3186,10 @@ static void vd_fw__update_region(void)
             .top    = window_info.rcClient.top    - window_info.rcWindow.top,
             .right  = window_info.rcClient.right  - window_info.rcWindow.left,
             .bottom = window_info.rcClient.bottom - window_info.rcWindow.top,
+            // .left   = window_info.rcWindow.left,
+            // .top    = window_info.rcWindow.top,
+            // .right  = window_info.rcWindow.right,
+            // .bottom = window_info.rcWindow.bottom,
         };
     } else if (!VD_FW_G.composition_enabled) {
         VD_FW_G.rgn = (RECT) {
@@ -3277,6 +3285,14 @@ static void vd_fw__window_pos_changed(WINDOWPOS *pos)
     } else {
         VD_FW_G.w = pos->cx;
         VD_FW_G.h = pos->cy;
+
+        // @note(mdodis): When window is maximized, pos->x and pos->y become -8, -8
+        // So, subtract them from the overall width and height 2 times each so that
+        // the maximized viewport is fully shown instead of clipped at the top and right
+        if (IsMaximized(VD_FW_G.hwnd)) {
+            VD_FW_G.w += 2 * pos->x;
+            VD_FW_G.h += 2 * pos->y;
+        }
     }
 
     if (pos->flags & SWP_FRAMECHANGED) {
@@ -3347,7 +3363,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         } break;
 
         case WM_LBUTTONDOWN: {
-            ReleaseCapture();
+            // ReleaseCapture();
             SendMessageW(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
         } break;
 
@@ -3356,7 +3372,11 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         } break;
 
         case WM_NCCALCSIZE: {
-            vd_fw__nccalcsize(wparam, lparam);
+            if (VD_FW_G.draw_decorations) {
+                result = DefWindowProc(hwnd, msg, wparam, lparam);
+            } else {
+                vd_fw__nccalcsize(wparam, lparam);
+            }
         } break;
 
         case WM_NCHITTEST: {
@@ -3375,7 +3395,11 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
         case WM_NCUAHDRAWCAPTION:
         case WM_NCUAHDRAWFRAME: {
-            result = 0;
+            if (VD_FW_G.draw_decorations) {
+                result = DefWindowProc(hwnd, msg, wparam, lparam);
+            } else {
+                result = 0;
+            }
         } break;
 
         case WM_SETICON:
@@ -3393,7 +3417,18 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         } break;
 
         case WM_WINDOWPOSCHANGED: {
-            vd_fw__window_pos_changed((WINDOWPOS*)lparam);
+            if (VD_FW_G.draw_decorations) {
+                result = DefWindowProc(hwnd, msg, wparam, lparam);
+            } else {
+                vd_fw__window_pos_changed((WINDOWPOS*)lparam);
+            }
+        } break;
+
+        // @note(mdodis): WM_SIZE will only get called if the WM_WINDOWPOSCHANGED isn't handled by our wndproc
+        //                In this case and in this case only, we already know that we're drawing default borders
+        case WM_SIZE: {
+            VD_FW_G.w = LOWORD(lparam);
+            VD_FW_G.h = HIWORD(lparam);
         } break;
 
         case WM_MOUSEHWHEEL:

@@ -24,6 +24,7 @@
  * @todo(mdodis):
  * - New and improved render pass api using texture id + scissor + layer id as keys
  * - Introduce comp_children_size when calculating child sizes 
+ * - Fix vd_ui_call responding with clicked even though the mouse was first pressed outside of a div's rect
  * - Allow active elements to capture the mouse
  * - Scroll View Behaviors
  *   - Holding down buttons scrolls continuously
