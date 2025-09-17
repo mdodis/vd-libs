@@ -24,7 +24,13 @@
  * @todo(mdodis):
  * - New and improved render pass api using texture id + scissor + layer id as keys
  * - Introduce comp_children_size when calculating child sizes 
- * - Scroll view
+ * - Allow active elements to capture the mouse
+ * - Scroll View Behaviors
+ *   - Holding down buttons scrolls continuously
+ *   - Allow grip size to be customizable
+ *   - Horizontal scrolling
+ *   - When clicking the fringe/track, move towards the clicked position by half pages
+ *   - Fix vertical axis computation borked and not showing down arrow (probably an oversize miscomputation)
  * - Text Input
  * - Images
  * - Support more of printf
