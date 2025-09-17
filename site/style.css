@@ -1,0 +1,19 @@
+#mainnav {
+    transition: box-shadow 0.2s ease-in-out;
+}
+
+:root {
+    --bittersweet: #ee5a58ff;
+    --eerie-black: #1e1b18ff;
+    --antiflash-white: #e8e9ebff;
+    --slate-gray: #6b717eff;
+    --orange-peel: #ffa630ff;
+}
+
+/*[data-bs-theme="dark"] {
+    --bs-body-bg: var(--slate-gray);
+}
+
+[data-bs-theme="dark"] .navbar {
+    background-color: var(--eerie-black);
+}*/
