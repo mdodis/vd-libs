@@ -23,7 +23,7 @@ int main(int argc, char const *argv[])
 
     vd_ui_init();
     vd_ui_debug_set_draw_cursor_on(0);
-    vd_ui_debug_set_inspector_on(1);
+    vd_ui_debug_set_inspector_on(0);
     vd_ui_debug_set_metrics_on(0);
 
     vd_fw_init(& (VdFwInitInfo) {
@@ -93,6 +93,7 @@ int main(int argc, char const *argv[])
         vd_ui_event_mouse_location(mx, my);
         vd_ui_event_mouse_button(VD_UI_MOUSE_LEFT,  mouse_state & VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN);
         vd_ui_event_mouse_button(VD_UI_MOUSE_RIGHT, mouse_state & VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN);
+        vd_ui_event_mouse_wheel(wx, wy);
 
 
         vd_ui_demo_decorations();

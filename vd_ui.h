@@ -1296,12 +1296,17 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
                                                     vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f));
     scroll_view->style.active_grad = vd_ui_gradient(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f),
                                                     vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f));
-    scroll_view->style.size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
-    scroll_view->style.size[0].value = 300.0f;
+    // scroll_view->style.size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
+    // scroll_view->style.size[0].value = 300.0f;
+    // scroll_view->style.size[0].niceness = 0.0f;
+    scroll_view->style.size[0].mode  = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+    scroll_view->style.size[0].value = 1.0f;
     scroll_view->style.size[0].niceness = 0.0f;
     scroll_view->style.size[1].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
     scroll_view->style.size[1].value = 500.0f;
-    scroll_view->style.size[1].niceness = 0.0f;
+    // scroll_view->style.size[1].mode  = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+    // scroll_view->style.size[1].value = 1.0f;
+    // scroll_view->style.size[1].niceness = 0.0f;
 
     // scroll_view->style.size[0].mode  = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
     // scroll_view->style.size[1].mode  = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
@@ -1333,7 +1338,15 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
     scroll_section->style.size[1].niceness = 2.f;
     vd_ui_parent_push(scroll_section);
     {
-        vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_UP_OPEN), "##up");
+        VdUiContext *ctx = vd_ui_context_get();
+        if (vd_ui__point_in_rect(ctx->mouse, scroll_view->rect)) {
+            *y -= ctx->wheel[1] * 4.f;    
+        }
+
+        if (vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_UP_OPEN), "##up").clicked) {
+            *y -= 4.f;            
+        }
+
         VdUiDiv *hspace = vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("##scroll_vhandle_space"));
         hspace->style.normal_grad = vd_ui_gradient(vd_ui_f4(0.7f, 0.2f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f),
                                                    vd_ui_f4(0.7f, 0.2f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f));
@@ -1369,6 +1382,7 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
             float window_position             = scroll_view->comp_pos_rel[1];
             float window_position_ratio       = window_position / scrollable_window_area_size;
             float grip_position_on_track      = scrollable_track_size * window_position_ratio;
+            (void)grip_position_on_track;
 
 
             grip->style.size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
@@ -1402,7 +1416,9 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
         }
         vd_ui_parent_pop();
 
-        vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_DOWN_OPEN), "##down");
+        if (vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_DOWN_OPEN), "##down").clicked) {
+            *y += 4.f;
+        }
     }
     vd_ui_parent_pop();
 
