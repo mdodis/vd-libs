@@ -171,6 +171,7 @@ enum {
     VD_UI_FLAG_CLIP_CONTENT     = 1 << 3,
     VD_UI_FLAG_FLEX_HORIZONTAL  = 1 << 4, // 0 here means Vertical
     VD_UI_FLAG_ALIGN_CENTER     = 1 << 5,
+    VD_UI_FLAG_FLOAT            = 1 << 6,
 
     // Mouse Enumerations
     VD_UI_MOUSE_LEFT        = 0,
@@ -1345,7 +1346,20 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
 
         vd_ui_parent_push(hspace);
         {
-            VdUiDiv *vhandle = vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("##vhandle"));
+            VdUiDiv *grip = vd_ui_div_new(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_CLICKABLE | VD_UI_FLAG_FLOAT, VD_UI_LIT("##grip"));
+            grip->style.size[0].mode = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+            grip->style.size[0].value = 1.f;
+
+            grip->style.size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
+            grip->style.size[1].value = 32.f;
+            grip->style.normal_grad = vd_ui_gradient(vd_ui_f4(0.3f, 0.3f, 0.3f, 0.8f), vd_ui_f4(0.3f, 0.3f, 0.3f, 0.8f),
+                                                     vd_ui_f4(0.3f, 0.3f, 0.3f, 0.8f), vd_ui_f4(0.3f, 0.3f, 0.3f, 0.8f));
+            grip->style.hot_grad    = vd_ui_gradient(vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f),
+                                                     vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f));
+            grip->style.active_grad = vd_ui_gradient(vd_ui_f4(0.4f, 0.4f, 0.4f, 1.f), vd_ui_f4(0.4f, 0.4f, 0.4f, 1.f),
+                                                     vd_ui_f4(0.4f, 0.4f, 0.4f, 1.f), vd_ui_f4(0.4f, 0.4f, 0.4f, 1.f));
+
+            VdUiReply grip_reply = vd_ui_call(grip);
         }
         vd_ui_parent_pop();
 
@@ -1790,8 +1804,12 @@ static void vd_ui__calc_dyn_size_down(VdUiContext *ctx, VdUiDiv *curr)
     VdUiDiv *child = curr->first;
     while (child != 0) {
         vd_ui__calc_dyn_size_down(ctx, child);
-        full_size[daxis] += child->comp_size[daxis];
-        full_size[faxis] =  (child->comp_size[faxis] > full_size[faxis]) ? child->comp_size[faxis] : full_size[faxis];
+
+        if ((child->flags & VD_UI_FLAG_FLOAT) == 0) {
+            full_size[daxis] += child->comp_size[daxis];
+            full_size[faxis] =  (child->comp_size[faxis] > full_size[faxis]) ? child->comp_size[faxis] : full_size[faxis];
+        }
+
         child = child->next;
     }
 
@@ -1839,7 +1857,9 @@ static void vd_ui__calc_oversizes(VdUiContext *ctx, VdUiDiv *curr)
 
         VdUiDiv *child = curr->first;
         while (child != 0) {
-            child_sizes += child->comp_size[i];
+            if ((child->flags & VD_UI_FLAG_FLOAT) == 0) {
+                child_sizes += child->comp_size[i];
+            }
             child = child->next;
         }
 
@@ -1865,7 +1885,11 @@ static void vd_ui__calc_oversizes(VdUiContext *ctx, VdUiDiv *curr)
         float overall_niceness = 0.f;
         child = curr->first;
         while (child != 0) {
-            overall_niceness += child->style.size[i].niceness;
+
+            if ((child->flags & VD_UI_FLAG_FLOAT) == 0) {
+                overall_niceness += child->style.size[i].niceness;
+            }
+
             child = child->next;
         }
 
@@ -1876,9 +1900,11 @@ static void vd_ui__calc_oversizes(VdUiContext *ctx, VdUiDiv *curr)
 
         child = curr->first;
         while (child != 0) {
-            float proportional_niceness = child->style.size[i].niceness / overall_niceness;
-            if (proportional_niceness != 0.f) {
-                child->comp_size[i] = child->comp_size[i] - oversize_amount * proportional_niceness;
+            if ((child->flags & VD_UI_FLAG_FLOAT) == 0) {
+                float proportional_niceness = child->style.size[i].niceness / overall_niceness;
+                if (proportional_niceness != 0.f) {
+                    child->comp_size[i] = child->comp_size[i] - oversize_amount * proportional_niceness;
+                }
             }
 
             child = child->next;
@@ -1915,8 +1941,10 @@ static void vd_ui__calc_positions(VdUiContext *ctx, VdUiDiv *curr)
     // @todo(mdodis): Cache this during vd_ui__calc_dyn_size_down instead of looping twice
     while (child != 0) {
 
-        if (child->comp_size[faxis] > cursor[faxis]) {
-            cursor[faxis] = child->comp_size[faxis];
+        if ((child->flags & VD_UI_FLAG_FLOAT) == 0) {
+            if (child->comp_size[faxis] > cursor[faxis]) {
+                cursor[faxis] = child->comp_size[faxis];
+            }
         }
 
         child = child->next;
@@ -1927,23 +1955,29 @@ static void vd_ui__calc_positions(VdUiContext *ctx, VdUiDiv *curr)
     child = curr->first;
     while (child != 0) {
 
-        child->comp_pos_rel[daxis] = cursor[daxis];
-        child->comp_pos_rel[faxis] = 0.f;
+        if ((child->flags & VD_UI_FLAG_FLOAT) == 0) {
+            child->comp_pos_rel[daxis] = cursor[daxis];
+            child->comp_pos_rel[faxis] = 0.f;
 
+            child->rect[daxis] = curr->rect[daxis] + child->comp_pos_rel[daxis];
+            child->rect[daxisf] = child->rect[daxis] + child->comp_size[daxis];
 
-        child->rect[daxis] = curr->rect[daxis] + child->comp_pos_rel[daxis];
-        child->rect[daxisf] = child->rect[daxis] + child->comp_size[daxis];
+            if (curr->flags & VD_UI_FLAG_ALIGN_CENTER) {
+                child->rect[faxis]  = curr_faxis_center - (child->comp_size[faxis] * 0.5f);
+                child->rect[faxisf] = child->rect[faxis] + child->comp_size[faxis];
+            } else {
 
-        if (curr->flags & VD_UI_FLAG_ALIGN_CENTER) {
-            child->rect[faxis]  = curr_faxis_center - (child->comp_size[faxis] * 0.5f);
-            child->rect[faxisf] = child->rect[faxis] + child->comp_size[faxis];
+                child->rect[faxis] = curr->rect[faxis] + child->comp_pos_rel[faxis];
+                child->rect[faxisf] = child->rect[faxis] + child->comp_size[faxis];
+            }
+
+            cursor[daxis] += child->comp_size[daxis];
         } else {
-
-            child->rect[faxis] = curr->rect[faxis] + child->comp_pos_rel[faxis];
-            child->rect[faxisf] = child->rect[faxis] + child->comp_size[faxis];
+            child->rect[VD_UI_LEFT]   = curr->rect[0] + child->comp_pos_rel[0];
+            child->rect[VD_UI_TOP]    = curr->rect[1] + child->comp_pos_rel[1];
+            child->rect[VD_UI_RIGHT]  = child->rect[VD_UI_LEFT] + child->comp_size[0];
+            child->rect[VD_UI_BOTTOM] = child->rect[VD_UI_TOP]  + child->comp_size[1];
         }
-
-        cursor[daxis] += child->comp_size[daxis];
 
         child = child->next;
     }
