@@ -3088,13 +3088,13 @@ static void vd_fw__gl_debug_message_callback(GLenum source, GLenum type, GLuint 
 
 static int vd_fw__hit_test(int x, int y)
 {
-    if (IsMaximized(VD_FW_G.hwnd)) {
-        if (y < 30) {
-            return HTCLIENT;
-        }
+    // if (IsMaximized(VD_FW_G.hwnd)) {
+    //     if (y < 30) {
+    //         return HTCLIENT;
+    //     }
 
-        return HTNOWHERE;
-    }
+    //     return HTNOWHERE;
+    // }
 
     POINT mouse;
     mouse.x = x;
@@ -3112,6 +3112,10 @@ static int vd_fw__hit_test(int x, int y)
                      GetSystemMetrics(SM_CXPADDEDBORDER);
     /* The diagonal size handles are wider than the frame */
     int diagonal_width = frame_size * 2 + GetSystemMetrics(SM_CXBORDER);
+
+    if (!VD_FW_G.draw_decorations && IsMaximized(VD_FW_G.hwnd)) {
+        mouse.y += frame_size;
+    }
 
     if (!PtInRect(&client, mouse)) {
         return HTNOWHERE;
@@ -3150,9 +3154,9 @@ static int vd_fw__hit_test(int x, int y)
     }
 
     if (mouse.y < 30) {
-        return HTCLIENT;
+        return HTCAPTION;
     }
-    return HTNOWHERE;
+    return HTCLIENT;
 }
 
 static void vd_fw__composition_changed(void)
@@ -3362,13 +3366,15 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             result = 1;
         } break;
 
-        case WM_LBUTTONDOWN: {
-            // ReleaseCapture();
-            SendMessageW(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
-        } break;
+        // case WM_LBUTTONDOWN: {
+        //     // ReleaseCapture();
+        //     // SendMessageW(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
+        // } break;
 
         case WM_NCACTIVATE: {
-            result = DefWindowProc(hwnd, msg, wparam, lparam);
+            // DefWindowProc doesn't repaint border if lparam == -1
+            // See: https://blogs.msdn.microsoft.com/wpfsdk/2008/09/08/custom-window-chrome-in-wpf/
+            result = DefWindowProc(hwnd, msg, wparam, -1);
         } break;
 
         case WM_NCCALCSIZE: {
