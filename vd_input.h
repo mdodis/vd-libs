@@ -1,4 +1,5 @@
 /**
+ * \internal
  * vd_input.h - An OS input translation library
  * 
  * zlib License

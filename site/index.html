@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Bootstrap demo</title>
+    <title>VD Libs - Home</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
     <link rel="stylesheet" href="./style.css">
   </head>
-  <body>
+  <body class="d-flex flex-column min-vh-100">
 
     <!-- Begin Navbar -->
-    <nav id="mainnav" class="navbar sticky-top navbar-expand-lg bg-body-tertiary">
+    <nav id="mainnav" class="navbar sticky-top navbar-expand-md bg-body-tertiary">
         <div class="container-fluid">
             <a class="navbar-brand" href="#">
                 <img    src="./assets/vd-logo-p@1x.png"
@@ -29,13 +29,7 @@
                         <a class="nav-link active" aria-current="page" href="#">Home</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#">Features</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#">Pricing</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link disabled" aria-disabled="true">Disabled</a>
+                        <a class="nav-link" href="./api/index.html">API</a>
                     </li>
                 </ul>
             </div>
@@ -44,7 +38,7 @@
     <!--   End Navbar -->
 
     <!-- Begin Content -->
-    <div class="container">
+    <div class="container flex-grow-1">
         <div class="row justify-content-center">
           <div class="col-12 col-sm-10 col-md-8 col-lg-8 text-start">
             <h4>FAQ</h4>
@@ -102,6 +96,12 @@
           </div>
         </div>
       </div>
+
+    <footer class="footer mt-auto py-3 bg-dark">
+        <div class="container">
+            <span class="text-muted">&copy; Michael Dodis, 2025-2026.</span>
+        </div>
+    </footer>
 
     <!--   End Content -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>

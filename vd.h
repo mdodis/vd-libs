@@ -1,4 +1,5 @@
 /**
+ * \internal
  * vd.h - A 'batteries-included' header file to use with C99
  * 
  * zlib License
@@ -568,7 +569,7 @@ enum {
 
 typedef Vdu8 VdArenaFlags;
 
-typedef struct __VD_Arena {
+typedef struct VdArena {
     Vdu8         *buf;
     Vdusize      buf_len;
     Vdusize      prev_offset;
@@ -578,8 +579,11 @@ typedef struct __VD_Arena {
 } VdArena;
 
 typedef struct __VD_ArenaSave {
+    /** The saved arena. */
     VdArena   *arena;
+    /** The previous offset in the arena. */
     Vdusize    prev_offset;
+    /** The current offset in the arena. */
     Vdusize    curr_offset;
 } VdArenaSave;
 
@@ -738,8 +742,6 @@ typedef struct __VD_FixedArrayHeader {
 #define VD_FIXEDARRAY_HEADER(a)                         ((VdFixedArrayHeader*)(((Vdu8*)a) - sizeof(VdFixedArrayHeader)))
 
 /**
- * @sym VD_FIXEDARRAY
- *
  * @brief   A fixed size array with no dynamic reallocation whatsoever
  *
  * @details VD_FIXEDARRAY int *myarray = 0;
@@ -748,8 +750,7 @@ typedef struct __VD_FixedArrayHeader {
 #define VD_FIXEDARRAY
 
 /**
- * @sym VD_FIXEDARRAY_INIT
- * Initialize the fixed array as empty with a set count
+ * @brief Initialize the fixed array as empty with a set count
  *
  * @param a         Array pointer (must be 0 initially)
  * @param count     The maximum capacity of the fixed array
@@ -781,9 +782,7 @@ VD_INLINE void* vd__fixed_array_allocate(VdArena *arena, Vdu32 capacity, Vdusize
 
 
 #if VD_MACRO_ABBREVIATIONS
-/** @sym fixedarray_init Shorthand for @see VD_FIXEDARRAY_INIT */
 #define fixedarray_init(a, count, allocator)         VD_FIXEDARRAY_INIT(a, count, allocator)
-/** @sym fixedarray_init_reserve Shorthand for @see VD_FIXEDARRAY_INIT_RESERVE */
 #define fixedarray_init_reserve(a, len, allocator)   VD_FIXEDARRAY_INIT_RESERVE(a, len, allocator)
 #define fixedarray_addn(a, n)                        VD_FIXEDARRAY_ADDN(a, n)
 #define fixedarray_add(a, v)                         VD_FIXEDARRAY_ADD(a, v)
@@ -1234,8 +1233,6 @@ struct Vd__StrmapBinPrefix {
 };                                                               // = 64 bytes
 
 /**
- * @sym VdStrmapInitOptions
- *
  * @brief Options to modify Strmap behavior, allocation strategy, etc.
  */
 typedef struct __VD_StrmapInitOptions {
@@ -1246,9 +1243,7 @@ typedef struct __VD_StrmapInitOptions {
     Vdu32 average_key_len;
 } VdStrmapInitOptions;
 
-/**
- * @sym VD_STRMAP
- *
+/*
  * @brief   A string map is hash table using coalesced hashing
  *
  * @details VD_STRMAP int *my_map = 0;
@@ -1378,7 +1373,7 @@ typedef struct __VD_KVMapInitOptions {
 } VdKVMapInitOptions;
 
 
-/**
+/*
  * Expect T: struct { TKey k; TValue v; };
  */
 

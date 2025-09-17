@@ -32,7 +32,7 @@ float radialGlow(vec2 fragPos, vec2 glowCenter, float radius, float intensity) {
 void main()
 {
     // === Tunable parameters ===
-    float softnessScale       = 2.0;    // Multiplier for edge softness padding
+    float softnessScale       = 1.2;    // Multiplier for edge softness padding
     float glowInnerFactor     = 0.2;    // Inner glow radius relative to rect size
     float glowOuterFactor     = 0.3;    // Outer glow radius relative to rect size
     float glowInnerIntensity  = 0.4;    // Strength of inner glow
@@ -40,7 +40,7 @@ void main()
     float edgeEnhanceScale    = 0.1;    // Scale for edge distance normalization
     float edgeEnhanceBoost    = 0.5;    // Boost factor for edge proximity effect
     float glowColorBlendScale = 0.3;    // How much warm/cool glow mix varies
-    float glowStrength        = 0.1;    // Overall glow strength multiplier
+    float glowStrength        = 0.08;    // Overall glow strength multiplier
     float colorTempShift      = 0.2;    // Subtle color temperature mix factor
     float brightnessBoost     = 0.1;    // Brightness boost based on glow intensity
 
@@ -91,15 +91,15 @@ void main()
     float edgeDistance = sdf_rounded_rect(f_dp, f_dc, f_dhs, f_corner_radius);
     float edgeFactor = 1.0 - clamp(abs(edgeDistance) / (length(f_dhs) * edgeEnhanceScale), 0.0, 1.0);
 
-    float finalGlowIntensity = combinedGlow * proximityFactor * (1.0 + edgeFactor * edgeEnhanceBoost) * mouseInside;
+    float finalGlowIntensity = combinedGlow * proximityFactor * (1.0 + edgeFactor * edgeEnhanceBoost) * 1.f;
 
     float colorMix = sin(atan(mouseLocal.y, mouseLocal.x) * 2.0) * 0.5 + 0.5;
     vec3 finalGlowColor = mix(coolGlow, warmGlow, colorMix * glowColorBlendScale);
 
     // Apply glow and color effects
-    // color.rgb += finalGlowColor * finalGlowIntensity * glowStrength;
+    color.rgb += finalGlowColor * finalGlowIntensity * glowStrength;
     // color.rgb = mix(color.rgb, color.rgb * vec3(1.05, 1.0, 0.95), finalGlowIntensity * colorTempShift);
-    // color.rgb *= (1.0 + finalGlowIntensity * brightnessBoost);
+    color.rgb *= (1.0 + finalGlowIntensity * brightnessBoost);
 
     FragColor = color * sdf * border_factor;
 }

@@ -1,4 +1,5 @@
 /**
+ * \internal
  * vd_inix.h - An extended INI file format parser
  * 
  * zlib License

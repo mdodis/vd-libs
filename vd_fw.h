@@ -1,4 +1,5 @@
 /**
+ * \internal
  * vd_fw.h - Gets you a window with OpenGL running on platforms that support it
  * ---------------------------------------------------------------------------------------------------------------------
  * zlib License

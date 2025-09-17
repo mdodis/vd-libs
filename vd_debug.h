@@ -1,4 +1,5 @@
 /**
+ * \internal
  * vd_debug.h - Quick debugging utilities
  * 
  * zlib License

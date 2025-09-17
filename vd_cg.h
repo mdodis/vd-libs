@@ -1,4 +1,5 @@
 /**
+ * \internal
  * vd_cg.h - A maths header file to use with C99
  * 
  * zlib License

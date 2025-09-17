@@ -1,4 +1,5 @@
 /**
+ * \internal
  * vd_imgui.h - A C translation layer for Dear ImGui
  * 
  * zlib License

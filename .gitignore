@@ -8,3 +8,4 @@ build-*/
 *.rdi
 **/*.vs
 **/build*/
+site/api

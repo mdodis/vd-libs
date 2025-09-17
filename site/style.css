@@ -17,3 +17,80 @@
 [data-bs-theme="dark"] .navbar {
     background-color: var(--eerie-black);
 }*/
+
+#apisearch {
+    max-width: 600px;
+}
+
+.search {
+    margin-bottom:16px;
+    padding:6px;
+    width:90%;
+    font-size:16px;
+}
+
+
+.entry {
+    padding: 14px 16px;
+    border-left: 4px solid var(--bittersweet);
+    margin: 12px 0;
+    background: var(--eerie-black);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(30,27,24,0.08);
+    color: var(--antiflash-white);
+}
+
+
+.sig {
+    font-family: monospace;
+    background: #23272b;
+    color: var(--orange-peel);
+    padding: 4px 8px;
+    border-radius: 4px;
+    display: block;
+    width: 100%;
+    margin-bottom: 6px;
+    overflow-x: auto;
+}
+
+
+.brief {
+    font-weight: 600;
+    margin-top: 6px;
+    color: rgb(207, 207, 207);
+    /* font-size: 1.08em; */
+}
+
+.hidden {
+    display:none;
+}
+
+
+.doctable {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.doctable th, .doctable td {
+    border: 1px solid var(--slate-gray);
+}
+
+.doctable, td:nth-child(1) {
+    width: 20%;
+}
+.doctable, td:nth-child(2) {
+    width: 100%;
+}
+
+.doctable thead tr:first-child th:first-child {
+    border-top-left-radius: 8px;
+}
+.doctable thead tr:first-child th:last-child {
+    border-top-right-radius: 8px;
+}
+.doctable tbody tr:last-child td:first-child {
+    border-bottom-left-radius: 8px;
+}
+.doctable tbody tr:last-child td:last-child {
+    border-bottom-right-radius: 8px;
+}

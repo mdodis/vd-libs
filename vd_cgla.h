@@ -1,4 +1,5 @@
 /**
+ * \internal
  * vd_cgla.h - Common Graphics Library Aliases
  * 
  * zlib License

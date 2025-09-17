@@ -1,4 +1,5 @@
 /**
+ * \internal
  * vd_vk.h - A helper vulkan library
  * 
  * zlib License
