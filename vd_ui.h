@@ -361,7 +361,6 @@ VD_UI_INL const char *vd_ui_size_mode_to_str(VdUiSizeMode size_mode)
 }
 
 /* ----DEMOS--------------------------------------------------------------------------------------------------------- */
-VD_UI_API void             vd_ui_demo_decorations(void);
 VD_UI_API void             vd_ui_demo(void);
 
 /* ----BASIC WIDGETS------------------------------------------------------------------------------------------------- */
@@ -1092,6 +1091,12 @@ VD_UI_API void vd_ui_frame_end(void)
     ctx->root.rect[3]      = ctx->window[1];
     ctx->root.comp_size[0] = ctx->window[0];
     ctx->root.comp_size[1] = ctx->window[1];
+    ctx->root.style.size[0].mode     = VD_UI_SIZE_MODE_ABSOLUTE;
+    ctx->root.style.size[0].value    = ctx->window[0];
+    ctx->root.style.size[0].niceness = 0.f;
+    ctx->root.style.size[1].mode     = VD_UI_SIZE_MODE_ABSOLUTE;
+    ctx->root.style.size[1].value    = ctx->window[1];
+    ctx->root.style.size[1].niceness = 0.f;
     ctx->clip_stack_count = 0;
 
     // Layout UI
@@ -1295,6 +1300,7 @@ VD_UI_API VdUiReply vd_ui_icon_button(VdUiSymbol symbol, VdUiStr str)
 
 VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
 {
+    // @todo(mdodis): Fix proportion of scrolling not correctly set
     VdUiDiv *scroll_view = vd_ui_div_new(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_FLEX_HORIZONTAL | VD_UI_FLAG_CLIP_CONTENT, str);
 
     scroll_view->style.normal_grad = vd_ui_gradient(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f),
@@ -1308,9 +1314,10 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
     // scroll_view->style.size[0].niceness = 0.0f;
     scroll_view->style.size[0].mode  = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
     scroll_view->style.size[0].value = 1.0f;
-    scroll_view->style.size[0].niceness = 0.0f;
-    scroll_view->style.size[1].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
-    scroll_view->style.size[1].value = 500.0f;
+    scroll_view->style.size[0].niceness = 100.0f;
+    scroll_view->style.size[1].mode  = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+    scroll_view->style.size[1].value = 1.0f;
+    scroll_view->style.size[1].niceness = 100.0f;
     // scroll_view->style.size[1].mode  = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
     // scroll_view->style.size[1].value = 1.0f;
     // scroll_view->style.size[1].niceness = 0.0f;
@@ -1340,9 +1347,9 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
     scroll_section->style.size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
     scroll_section->style.size[0].value = 32.f;
     scroll_section->style.size[0].niceness = 0.f;
-    scroll_section->style.size[1].mode = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+    scroll_section->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
     scroll_section->style.size[1].value = 1.f;
-    scroll_section->style.size[1].niceness = 2.f;
+    scroll_section->style.size[1].niceness = 0.f;
     vd_ui_parent_push(scroll_section);
     {
         VdUiContext *ctx = vd_ui_context_get();
@@ -1671,78 +1678,85 @@ VD_UI_API void vd_ui_set_scale(float s)
     ctx->dpi_scale = s;
 }
 
-VD_UI_API void vd_ui_demo_decorations(void)
-{
-    VdUiDiv *decorations = vd_ui_div_newf(VD_UI_FLAG_FLEX_HORIZONTAL | VD_UI_FLAG_ALIGN_CENTER | VD_UI_FLAG_BACKGROUND, "##decorations");
-    decorations->style.size[0].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
-    decorations->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
-    decorations->style.normal_grad = vd_ui_gradient(vd_ui_f4(0.13f, 0.13f, 0.13f, 1.f), vd_ui_f4(0.23f, 0.23f, 0.23f, 1.f),
-                                                    vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f),    vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f));
-    decorations->style.hot_grad    = vd_ui_gradient(vd_ui_f4(0.13f, 0.13f, 0.13f, 1.f), vd_ui_f4(0.23f, 0.23f, 0.23f, 1.f),
-                                                    vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f),    vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f));
-    decorations->style.active_grad = vd_ui_gradient(vd_ui_f4(0.13f, 0.13f, 0.13f, 1.f), vd_ui_f4(0.23f, 0.23f, 0.23f, 1.f),
-                                                    vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f),    vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f));
-    decorations->style.padding[VD_UI_LEFT] = 16.f;
-    decorations->style.padding[VD_UI_TOP]  = 16.f;
-
-    vd_ui_parent_push(decorations);
-    {
-        vd_ui_iconf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_I_CURSOR), "##icon");
-        vd_ui_labelf("A Cool Window");
-
-        vd_ui_spacer(VD_UI_AXISH);
-
-        vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_LEFT_OPEN), "##left");
-        vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_RIGHT_OPEN), "##right");
-
-        vd_ui_spacer(VD_UI_AXISH);
-
-        vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_WINDOW_MINIMIZE), "##minimize");
-        vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_WINDOW_MAXIMIZE), "##maximize");
-        vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_CANCEL), "##close");
-    }
-    vd_ui_parent_pop();
-}
-
 VD_UI_API void vd_ui_demo(void)
 {
-    static float scrollx = 0.f;
-    static float scrolly = 0.f;
-
-    vd_ui_scroll_begin(VD_UI_LIT("##main-scroll-view"), &scrollx, &scrolly);
+    VdUiDiv *app = vd_ui_div_new(0, VD_UI_LIT("##app"));
+    app->style.size[0].mode = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+    app->style.size[0].value = 1.f;
+    app->style.size[1].mode = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+    app->style.size[1].value = 1.f;
+    vd_ui_parent_push(app);
     {
-        VdUiDiv *button_example = vd_ui_div_newf(VD_UI_FLAG_FLEX_HORIZONTAL, "##button-example");
-        button_example->style.size[0].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
-        button_example->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
-
-        vd_ui_parent_push(button_example);
-        // @todo(mdodis): Fix AXISV spacing not working
         {
-            static int button1_click_count = 0;
-            if (vd_ui_buttonf("Button 1").clicked) {
-                button1_click_count++;
+            VdUiDiv *decorations = vd_ui_div_newf(VD_UI_FLAG_FLEX_HORIZONTAL | VD_UI_FLAG_ALIGN_CENTER | VD_UI_FLAG_BACKGROUND, "##decorations");
+            decorations->style.size[0].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
+            decorations->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
+            decorations->style.normal_grad = vd_ui_gradient(vd_ui_f4(0.13f, 0.13f, 0.13f, 1.f), vd_ui_f4(0.23f, 0.23f, 0.23f, 1.f),
+                                                            vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f),    vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f));
+            decorations->style.hot_grad    = vd_ui_gradient(vd_ui_f4(0.13f, 0.13f, 0.13f, 1.f), vd_ui_f4(0.23f, 0.23f, 0.23f, 1.f),
+                                                            vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f),    vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f));
+            decorations->style.active_grad = vd_ui_gradient(vd_ui_f4(0.13f, 0.13f, 0.13f, 1.f), vd_ui_f4(0.23f, 0.23f, 0.23f, 1.f),
+                                                            vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f),    vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f));
+            decorations->style.padding[VD_UI_LEFT] = 16.f;
+            decorations->style.padding[VD_UI_TOP]  = 16.f;
+
+            vd_ui_parent_push(decorations);
+            {
+                vd_ui_iconf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_I_CURSOR), "##icon");
+                vd_ui_labelf("A Cool Window");
+
+                vd_ui_spacer(VD_UI_AXISH);
+
+                vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_LEFT_OPEN), "##left");
+                vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_RIGHT_OPEN), "##right");
+
+                vd_ui_spacer(VD_UI_AXISH);
+
+                vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_WINDOW_MINIMIZE), "##minimize");
+                vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_WINDOW_MAXIMIZE), "##maximize");
+                vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_CANCEL), "##close");
+            }
+            vd_ui_parent_pop();
+        }
+        static float scrollx = 0.f;
+        static float scrolly = 0.f;
+
+        vd_ui_scroll_begin(VD_UI_LIT("##main-scroll-view"), &scrollx, &scrolly);
+        {
+            VdUiDiv *button_example = vd_ui_div_newf(VD_UI_FLAG_FLEX_HORIZONTAL, "##button-example");
+            button_example->style.size[0].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
+            button_example->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
+
+            vd_ui_parent_push(button_example);
+            // @todo(mdodis): Fix AXISV spacing not working
+            {
+                static int button1_click_count = 0;
+                if (vd_ui_buttonf("Button 1").clicked) {
+                    button1_click_count++;
+                }
+
+                vd_ui_labelf("Button 1 Clicked: %d times", button1_click_count);
+            }
+            vd_ui_parent_pop();
+
+            vd_ui_buttonf("Another Button");
+
+            vd_ui_labelf(u8"Some unicode: ă x ă");
+
+            static int checkbox = 0;
+            vd_ui_checkboxf(&checkbox, "Show Hidden");
+
+            if (checkbox) {
+                vd_ui_labelf("Hidden content");
             }
 
-            vd_ui_labelf("Button 1 Clicked: %d times", button1_click_count);
+            for (int i = 0; i < 50; ++i) {
+                vd_ui_buttonf("Button %d", i);
+            }
         }
-        vd_ui_parent_pop();
-
-        vd_ui_buttonf("Another Button");
-
-        vd_ui_labelf(u8"Some unicode: ă x ă");
-
-        static int checkbox = 0;
-        vd_ui_checkboxf(&checkbox, "Show Hidden");
-
-        if (checkbox) {
-            vd_ui_labelf("Hidden content");
-        }
-
-        for (int i = 0; i < 50; ++i) {
-            vd_ui_buttonf("Button %d", i);
-        }
+        vd_ui_scroll_end();
     }
-    vd_ui_scroll_end();
+    vd_ui_parent_pop();
 }
 
 static void vd_ui__get_axes_for_div(VdUiDiv *div, int *daxis, int *faxis, int *daxisf, int *faxisf)

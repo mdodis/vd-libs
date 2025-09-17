@@ -96,7 +96,6 @@ int main(int argc, char const *argv[])
         vd_ui_event_mouse_wheel(wx, wy);
 
 
-        vd_ui_demo_decorations();
         vd_ui_demo();
 
         vd_ui_frame_end();
