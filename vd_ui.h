@@ -299,14 +299,16 @@ struct VdUiDiv {
     VdUiStr     content_str;
     VdUiStr     id_str;
 
-    float          text_size[VD_UI_AXES];
-    float             offset[VD_UI_AXES];
+    float       text_size[VD_UI_AXES];
+    float       offset[VD_UI_AXES];
     float       comp_pos_rel[VD_UI_AXES];
-    float          comp_size[VD_UI_AXES];
+    float       comp_size[VD_UI_AXES];
     float       rect[4];
 
     float       hot_t;
     float       active_t;
+    float       timeout_t;
+    float       timeout_mod;
 
     VdUiBool    is_null;
 };
@@ -956,6 +958,8 @@ static void         vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *c
 static int          vd_ui__point_in_rect(float point[2], float r[4]);
 static float        vd_ui__clampf01(float x);
 static float        vd_ui__clampf(float x, float a, float b);
+static float        vd_ui__smooth_damp(float current, float target, float *velocity,
+                                       float smooth_time, float max_speed, float delta_seconds);
 static float        vd_ui__lerp(float a, float b, float t);
 static VdUiF4       vd_ui__lerp4(VdUiF4 a, VdUiF4 b, float t);
 static VdUiGradient vd_ui__lerpgrad(VdUiGradient a, VdUiGradient b, float t);
@@ -1023,6 +1027,8 @@ struct VdUiContext {
     float                   mouse[VD_UI_AXES];
     float                   mouse_last[VD_UI_AXES];
     float                   wheel[VD_UI_AXES];
+    float                   wheel_current[VD_UI_AXES];
+    float                   wheel_target[VD_UI_AXES];
     float                   window[VD_UI_AXES];
     int                     mouse_left;
     int                     mouse_left_last;
@@ -1040,9 +1046,9 @@ struct VdUiContext {
     VdUiTextureId          *current_texture_id;
 
     struct {
-        VdUiFontId              font;
-        float                   font_size;
-        VdUiSymbol              checkmark;
+        VdUiFontId         font;
+        float              font_size;
+        VdUiSymbol         checkmark;
     } def;
 
     struct {
@@ -1050,6 +1056,10 @@ struct VdUiContext {
         VdUiBool           custom_cursor_on;
         VdUiBool           inspector_on;
     } debug;
+
+    struct {
+        float              lclick_timeout_t;
+    } animation;
 };
 
 VD_UI_API void vd_ui_frame_begin(float delta_seconds)
@@ -1060,10 +1070,10 @@ VD_UI_API void vd_ui_frame_begin(float delta_seconds)
     ctx->root.last     = 0;
     ctx->root.prev     = 0;
     ctx->root.parent   = 0;
-    ctx->wheel[0]      = 0.f;
-    ctx->wheel[1]      = 0.f;
-    ctx->mouse_last[0] = ctx->mouse[0];
-    ctx->mouse_last[1] = ctx->mouse[1];
+    ctx->wheel_target[0] = 0.f;
+    ctx->wheel_target[1] = 0.f;
+    ctx->mouse_last[0]   = ctx->mouse[0];
+    ctx->mouse_last[1]   = ctx->mouse[1];
 
     ctx->null_divs_len = 0;
     vd_ui_parent_push(&ctx->root);
@@ -1103,6 +1113,7 @@ VD_UI_API void vd_ui_frame_end(void)
     ctx->root.style.size[1].value    = ctx->window[1];
     ctx->root.style.size[1].niceness = 0.f;
     ctx->clip_stack_count = 0;
+    ctx->animation.lclick_timeout_t = vd_ui__clampf01(ctx->animation.lclick_timeout_t + ctx->delta_seconds);
 
     // Layout UI
     vd_ui__layout(ctx);
@@ -1373,20 +1384,18 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
     {
         VdUiContext *ctx = vd_ui_context_get();
         if (vd_ui__point_in_rect(ctx->mouse, scroll_view->rect)) {
-            *y -= ctx->wheel[1] * 4.f;    
+            *y -= ctx->wheel_current[1] * 10.f;
         }
 
         if (vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_UP_OPEN), "##up").clicked) {
-            *y -= 4.f;            
+            *y -= 4.f;
         }
 
         VdUiDiv *hspace = vd_ui_div_new(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_CLICKABLE, VD_UI_LIT("##scroll_vhandle_space"));
-        hspace->style.normal_grad = vd_ui_gradient(vd_ui_f4(0.7f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f),
-                                                   vd_ui_f4(0.7f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f));
-        hspace->style.hot_grad    = vd_ui_gradient(vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f),
-                                                   vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f));
-        hspace->style.active_grad = vd_ui_gradient(vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f),
-                                                   vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f));
+        hspace->style.normal_grad = vd_ui_gradient(vd_ui_f4(0.7f, 0.f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.f, 0.2f, 0.f),
+                                                   vd_ui_f4(0.7f, 0.f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.f, 0.2f, 0.f));
+        hspace->style.hot_grad    = hspace->style.normal_grad;
+        hspace->style.active_grad = hspace->style.normal_grad;
         hspace->style.size[0].mode     = VD_UI_SIZE_MODE_ABSOLUTE;
         hspace->style.size[0].value    = 32.f;
 
@@ -1407,21 +1416,29 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
         float scrollable_track_size       = track_size - grip_size;
         float scrollable_window_area_size = content_size - window_size;
         float half_page_size              = window_size * 0.5f;
-        float new_grip_position           = *y;
 
         // Check to see if the user pressed the track
+        float page_scroll_amount = 0.f;
+        float mouse_in_div[2];
+        vd_ui_transform_point(hspace, ctx->mouse, mouse_in_div);
         {
             VdUiReply reply = vd_ui_call(hspace);
             if (reply.clicked) {
-                float mouse_in_div[2];
-                vd_ui_transform_point(hspace, reply.mouse, mouse_in_div);
 
-                if (mouse_in_div[1] < new_grip_position) {
-                    new_grip_position -= half_page_size;
-                } else if (mouse_in_div[1] > (new_grip_position + grip_size)) {
-                    new_grip_position += half_page_size;
+                if (mouse_in_div[1] < *y) {
+                    page_scroll_amount = -half_page_size;
+                    hspace->timeout_mod = -1.f;
+                } else if (mouse_in_div[1] > (*y + grip_size)) {
+                    hspace->timeout_mod = 1.f;
                 }
             }
+        }
+
+        if (hspace->timeout_t >= 0.1f) {
+
+            float deltay = vd_ui__lerp(0.f, hspace->timeout_mod * half_page_size, 1.f - hspace->timeout_t);
+
+            *y += deltay * 0.01f;
         }
 
         vd_ui_parent_push(hspace);
@@ -1443,22 +1460,20 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
 
             VdUiReply grip_reply = vd_ui_call(grip);
 
-            new_grip_position += grip_reply.drag[1];
+            *y += grip_reply.drag[1];
 
-            if (new_grip_position < 0.f) {
-                new_grip_position = 0.f;
+            if (*y < 0.f) {
+                *y = 0.f;
             }
 
-            if (new_grip_position > scrollable_track_size) {
-                new_grip_position = scrollable_track_size;
+            if (*y > scrollable_track_size) {
+                *y = scrollable_track_size;
             }
 
-            *y = new_grip_position;
-
-            float new_grip_position_ratio = new_grip_position / scrollable_track_size;
+            float new_grip_position_ratio = *y / scrollable_track_size;
 
             grip->comp_pos_rel[0] = 0.f;
-            grip->comp_pos_rel[1] = new_grip_position;
+            grip->comp_pos_rel[1] = *y;
 
             scroll_container->offset[1] = -(new_grip_position_ratio * scrollable_window_area_size);
         }
@@ -1660,6 +1675,7 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
 
         if (released && (ctx->active == div->h) && hovered) {
             reply.clicked = 1;
+            div->timeout_t = 1.f;
             ctx->active = 0;
         }
 
@@ -1670,6 +1686,10 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
 
         div->active_t = vd_ui__lerp(div->active_t, (pressed && hovered) ? 1.0f : 0.0f, dt * active_speed);
         div->active_t = vd_ui__clampf01(div->active_t);
+
+        div->timeout_t = vd_ui__lerp(div->timeout_t, 0.f, dt * 11.f);
+        div->timeout_t = vd_ui__clampf01(div->timeout_t);
+        if (div->timeout_t < 0.1f) div->timeout_t = 0.f;
 
         if (reply.pressed && (ctx->active == div->h)) {
             reply.drag[0] = mouse_delta[0]; reply.drag[1] = mouse_delta[1];
@@ -2181,8 +2201,13 @@ VD_UI_API void vd_ui_event_mouse_location(float mx, float my)
 VD_UI_API void vd_ui_event_mouse_wheel(float dx, float dy)
 {
     VdUiContext *ctx = vd_ui_context_get();
-    ctx->wheel[0] = dx;
-    ctx->wheel[1] = dy;
+    ctx->wheel_target[0] = dx;
+    ctx->wheel_target[1] = dy;
+
+    static float xvel = 0.f;
+    static float yvel = 0.f;
+    ctx->wheel_current[0] = vd_ui__smooth_damp(ctx->wheel_current[0], ctx->wheel_target[0], &xvel, 0.11f, 300.f, ctx->delta_seconds);
+    ctx->wheel_current[1] = vd_ui__smooth_damp(ctx->wheel_current[1], ctx->wheel_target[1], &yvel, 0.11f, 300.f, ctx->delta_seconds);
 }
 
 VD_UI_API void vd_ui_event_mouse_button(int index, int down)
@@ -2190,7 +2215,7 @@ VD_UI_API void vd_ui_event_mouse_button(int index, int down)
     VdUiContext *ctx = vd_ui_context_get();
     switch (index)
     {
-        case VD_UI_MOUSE_LEFT:   ctx->mouse_left_last = ctx->mouse_left; ctx->mouse_left = down; break;
+        case VD_UI_MOUSE_LEFT:   ctx->mouse_left_last = ctx->mouse_left; ctx->mouse_left = down; if (down) ctx->animation.lclick_timeout_t = 0.f; break;
         case VD_UI_MOUSE_RIGHT:  ctx->mouse_right  = down; break;
         case VD_UI_MOUSE_MIDDLE: ctx->mouse_middle = down; break;
         default: break;
@@ -2750,6 +2775,33 @@ static float vd_ui__clampf(float x, float a, float b)
     if (x < a) return a;
     if (x > b) return b;
     return x;
+}
+
+static float vd_ui__smooth_damp(float current, float target, float *velocity,
+                                float smooth_time, float max_speed, float delta_seconds)
+{
+    if (delta_seconds < 0.f) return current;
+
+    float omega = 2.f / smooth_time;
+    float x = omega * delta_seconds;
+    float exp_term = 1.f / (1.f + x + 0.48f * x * x + 0.235f * x * x * x);
+    float change = current - target;
+    float original_to = target;
+    float max_change = max_speed * smooth_time;
+    change = vd_ui__clampf(change, -max_change, max_change);
+
+    target = current - change;
+    float temp = (*velocity + omega * change) * delta_seconds;
+    *velocity = (*velocity - omega * temp) * exp_term;
+
+    float output = target + (change + temp) * exp_term;
+
+    if ((original_to - current) > 0.f == output > original_to) {
+        output = original_to;
+        *velocity = (output - original_to) / delta_seconds;
+    }
+
+    return output;
 }
 
 static float vd_ui__lerp(float a, float b, float t)
