@@ -3367,11 +3367,6 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             result = 1;
         } break;
 
-        // case WM_LBUTTONDOWN: {
-        //     // ReleaseCapture();
-        //     // SendMessageW(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
-        // } break;
-
         case WM_NCACTIVATE: {
             // DefWindowProc doesn't repaint border if lparam == -1
             // See: https://blogs.msdn.microsoft.com/wpfsdk/2008/09/08/custom-window-chrome-in-wpf/

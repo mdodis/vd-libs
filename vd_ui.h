@@ -645,6 +645,9 @@ VD_UI_API void             vd_ui_event_mouse_location(float mx, float my);
 VD_UI_API void             vd_ui_event_mouse_button(int index, int down);
 VD_UI_API void             vd_ui_event_mouse_wheel(float dx, float dy);
 
+/* ----INPUT UTILITIES----------------------------------------------------------------------------------------------- */
+VD_UI_API int              vd_ui_mouse_left_clicked(void);
+VD_UI_API int              vd_ui_mouse_left_just_released(void);
 
 /* ----CONTEXT CREATION---------------------------------------------------------------------------------------------- */
 typedef struct VdUiContext VdUiContext;
@@ -1021,6 +1024,7 @@ struct VdUiContext {
     float                   wheel[VD_UI_AXES];
     float                   window[VD_UI_AXES];
     int                     mouse_left;
+    int                     mouse_left_last;
     int                     mouse_right;
     int                     mouse_middle;
     size_t                  hot;
@@ -1601,45 +1605,45 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
     reply.div = div;
     reply.mouse[0]  = ctx->mouse[0];    reply.mouse[1] = ctx->mouse[1];
 
-    float mouse_delta[2] = { ctx->mouse[0] - ctx->mouse_last[0], ctx->mouse[1] - ctx->mouse_last[1] };
-
-    int hovered  = vd_ui__point_in_rect(ctx->mouse, div->rect);
-    int pressed  = ctx->mouse_left;
-    int released = !ctx->mouse_left;
-    int clicked  = 0;
-
     if (div->flags & VD_UI_FLAG_CLICKABLE) {
-        if (hovered && !pressed) {
+        float mouse_delta[2] = { ctx->mouse[0] - ctx->mouse_last[0], ctx->mouse[1] - ctx->mouse_last[1] };
+
+        int hovered  = vd_ui__point_in_rect(ctx->mouse, div->rect);
+        int pressed  = ctx->mouse_left;
+        int released = vd_ui_mouse_left_just_released();
+        int clicked  = vd_ui_mouse_left_clicked();
+
+        if (hovered) {
             ctx->hot = div->h;
+            reply.hovering = 1;
         }
 
-        if (hovered && pressed) {
-            ctx->active = div->h;
+        if (reply.hovering) {
+            if (clicked) {
+                ctx->active = div->h;
+            }
+
+            if (pressed) {
+                reply.pressed = 1;
+            }
         }
 
         if (released && (ctx->active == div->h) && hovered) {
-            clicked = 1;
-        }
-
-        if (released && (ctx->active == div->h)) {
+            reply.clicked = 1;
             ctx->active = 0;
         }
-    }
 
-    float hot_speed = 9.f;
-    float active_speed = 10.f;
-    div->hot_t    = vd_ui__lerp(div->hot_t, hovered ? 1.0f : 0.0f, dt * hot_speed);
-    div->hot_t    = vd_ui__clampf01(div->hot_t);
+        float hot_speed = 9.f;
+        float active_speed = 10.f;
+        div->hot_t    = vd_ui__lerp(div->hot_t, hovered ? 1.0f : 0.0f, dt * hot_speed);
+        div->hot_t    = vd_ui__clampf01(div->hot_t);
 
-    div->active_t = vd_ui__lerp(div->active_t, (pressed && hovered) ? 1.0f : 0.0f, dt * active_speed);
-    div->active_t = vd_ui__clampf01(div->active_t);
+        div->active_t = vd_ui__lerp(div->active_t, (pressed && hovered) ? 1.0f : 0.0f, dt * active_speed);
+        div->active_t = vd_ui__clampf01(div->active_t);
 
-    reply.hovering = (VdUiBool)hovered;
-    reply.pressed = (VdUiBool)hovered && (VdUiBool)pressed;
-    reply.clicked = (VdUiBool)clicked;
-
-    if (reply.pressed) {
-        reply.drag[0] = mouse_delta[0]; reply.drag[1] = mouse_delta[1];
+        if (reply.pressed) {
+            reply.drag[0] = mouse_delta[0]; reply.drag[1] = mouse_delta[1];
+        }
     }
 
     return reply;
@@ -2156,11 +2160,26 @@ VD_UI_API void vd_ui_event_mouse_button(int index, int down)
     VdUiContext *ctx = vd_ui_context_get();
     switch (index)
     {
-        case VD_UI_MOUSE_LEFT:   ctx->mouse_left   = down; break;
+        case VD_UI_MOUSE_LEFT:   ctx->mouse_left_last = ctx->mouse_left; ctx->mouse_left = down; break;
         case VD_UI_MOUSE_RIGHT:  ctx->mouse_right  = down; break;
         case VD_UI_MOUSE_MIDDLE: ctx->mouse_middle = down; break;
         default: break;
     }
+}
+
+
+/* ----INPUT UTILITIES IMPL------------------------------------------------------------------------------------------ */
+
+VD_UI_API int vd_ui_mouse_left_clicked(void)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    return !ctx->mouse_left_last && ctx->mouse_left;
+}
+
+VD_UI_API int vd_ui_mouse_left_just_released(void)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    return ctx->mouse_left_last && !ctx->mouse_left;
 }
 
 static void vd_ui__push_clip(VdUiContext *ctx, float clip[4])
