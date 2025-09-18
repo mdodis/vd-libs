@@ -648,6 +648,7 @@ VD_UI_API void             vd_ui_event_mouse_wheel(float dx, float dy);
 /* ----INPUT UTILITIES----------------------------------------------------------------------------------------------- */
 VD_UI_API int              vd_ui_mouse_left_clicked(void);
 VD_UI_API int              vd_ui_mouse_left_just_released(void);
+VD_UI_API void             vd_ui_transform_point(VdUiDiv *div, float point[2], float out_point[2]);
 
 /* ----CONTEXT CREATION---------------------------------------------------------------------------------------------- */
 typedef struct VdUiContext VdUiContext;
@@ -1304,6 +1305,20 @@ VD_UI_API VdUiReply vd_ui_icon_button(VdUiSymbol symbol, VdUiStr str)
 
 VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
 {
+    //
+    //   Grip Size := Window / Content                                       *----------------* [-]    Window, Up Button
+    //                                                                       | *------------* | | |    Content, Track
+    //                                                                       | |            | | | |
+    //                                                                       | |            | | | |
+    //                                                                       | |            | | |X|    Grip
+    //                                                                       | |            | | |X|
+    //                                                                       | |            | | |X|
+    //                                                                       | |            | | | |
+    //                                                                       | |            | | | |
+    //                                                                       *----------------* [+]    Down Button
+    //                                                                         |            |
+    //                                                                         |------------|
+    //
     // @todo(mdodis): Fix proportion of scrolling not correctly set
     VdUiDiv *scroll_view = vd_ui_div_new(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_FLEX_HORIZONTAL | VD_UI_FLAG_CLIP_CONTENT, str);
 
@@ -1365,9 +1380,9 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
             *y -= 4.f;            
         }
 
-        VdUiDiv *hspace = vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("##scroll_vhandle_space"));
-        hspace->style.normal_grad = vd_ui_gradient(vd_ui_f4(0.7f, 0.2f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f),
-                                                   vd_ui_f4(0.7f, 0.2f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f));
+        VdUiDiv *hspace = vd_ui_div_new(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_CLICKABLE, VD_UI_LIT("##scroll_vhandle_space"));
+        hspace->style.normal_grad = vd_ui_gradient(vd_ui_f4(0.7f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f),
+                                                   vd_ui_f4(0.7f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f));
         hspace->style.hot_grad    = vd_ui_gradient(vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f),
                                                    vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f));
         hspace->style.active_grad = vd_ui_gradient(vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f),
@@ -1379,28 +1394,41 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
         hspace->style.size[1].value    = 1.f;
         hspace->style.size[1].niceness = 1.f;
 
+        float track_size                  = hspace->comp_size[1];
+        float window_size                 = scroll_view->comp_size[1];
+        float content_size                = scroll_container->comp_size[1];
+        float min_grip_size               = 16.f;
+        float max_grip_size               = track_size;
+        float window_content_ratio        = window_size / content_size;
+        float grip_size                   = track_size * window_content_ratio;
+        if (grip_size < min_grip_size) grip_size = min_grip_size;
+        if (grip_size > max_grip_size) grip_size = max_grip_size;
+
+        float scrollable_track_size       = track_size - grip_size;
+        float scrollable_window_area_size = content_size - window_size;
+        float half_page_size              = window_size * 0.5f;
+        float new_grip_position           = *y;
+
+        // Check to see if the user pressed the track
+        {
+            VdUiReply reply = vd_ui_call(hspace);
+            if (reply.clicked) {
+                float mouse_in_div[2];
+                vd_ui_transform_point(hspace, reply.mouse, mouse_in_div);
+
+                if (mouse_in_div[1] < new_grip_position) {
+                    new_grip_position -= half_page_size;
+                } else if (mouse_in_div[1] > (new_grip_position + grip_size)) {
+                    new_grip_position += half_page_size;
+                }
+            }
+        }
+
         vd_ui_parent_push(hspace);
         {
             VdUiDiv *grip = vd_ui_div_new(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_CLICKABLE | VD_UI_FLAG_FLOAT, VD_UI_LIT("##grip"));
             grip->style.size[0].mode = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
             grip->style.size[0].value = 1.f;
-
-            float track_size                  = hspace->comp_size[1];
-            float window_size                 = scroll_view->comp_size[1];
-            float content_size                = scroll_container->comp_size[1];
-            float min_grip_size               = 16.f;
-            float max_grip_size               = track_size;
-            float window_content_ratio        = window_size / content_size;
-            float grip_size                   = track_size * window_content_ratio;
-            if (grip_size < min_grip_size) grip_size = min_grip_size;
-            if (grip_size > max_grip_size) grip_size = max_grip_size;
-
-            float scrollable_track_size       = track_size - grip_size;
-            float scrollable_window_area_size = content_size - window_size;
-            float window_position             = scroll_view->comp_pos_rel[1];
-            float window_position_ratio       = window_position / scrollable_window_area_size;
-            float grip_position_on_track      = scrollable_track_size * window_position_ratio;
-            (void)grip_position_on_track;
 
 
             grip->style.size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
@@ -1415,7 +1443,7 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
 
             VdUiReply grip_reply = vd_ui_call(grip);
 
-            float new_grip_position = *y + grip_reply.drag[1];
+            new_grip_position += grip_reply.drag[1];
 
             if (new_grip_position < 0.f) {
                 new_grip_position = 0.f;
@@ -1427,10 +1455,12 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
 
             *y = new_grip_position;
 
+            float new_grip_position_ratio = new_grip_position / scrollable_track_size;
+
             grip->comp_pos_rel[0] = 0.f;
             grip->comp_pos_rel[1] = new_grip_position;
 
-            scroll_container->offset[1] = -(new_grip_position);
+            scroll_container->offset[1] = -(new_grip_position_ratio * scrollable_window_area_size);
         }
         vd_ui_parent_pop();
 
@@ -1641,7 +1671,7 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
         div->active_t = vd_ui__lerp(div->active_t, (pressed && hovered) ? 1.0f : 0.0f, dt * active_speed);
         div->active_t = vd_ui__clampf01(div->active_t);
 
-        if (reply.pressed) {
+        if (reply.pressed && (ctx->active == div->h)) {
             reply.drag[0] = mouse_delta[0]; reply.drag[1] = mouse_delta[1];
         }
     }
@@ -2180,6 +2210,12 @@ VD_UI_API int vd_ui_mouse_left_just_released(void)
 {
     VdUiContext *ctx = vd_ui_context_get();
     return ctx->mouse_left_last && !ctx->mouse_left;
+}
+
+VD_UI_API void vd_ui_transform_point(VdUiDiv *div, float point[2], float out_point[2])
+{
+    out_point[0] = point[0] - div->rect[0];
+    out_point[1] = point[1] - div->rect[1];
 }
 
 static void vd_ui__push_clip(VdUiContext *ctx, float clip[4])

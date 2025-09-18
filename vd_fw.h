@@ -112,8 +112,9 @@ typedef enum {
 } VdFwGlVersion;
 
 enum {
-    VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN  = 1 << 0,
-    VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN = 1 << 1,
+    VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN   = 1 << 0,
+    VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN  = 1 << 1,
+    VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN = 1 << 2,
 };
 
 typedef struct __VD_FW_InitInfo {
@@ -147,12 +148,7 @@ VD_FW_API int                vd_fw_running(void);
 /**
  * Begin rendering
  */
-VD_FW_API float              vd_fw_begin_render(void);
-
-/**
- * End rendering
- */
-VD_FW_API void               vd_fw_end_render(void);
+VD_FW_API int                vd_fw_swap_buffers(void);
 
 /**
  * Get the size of the window, in pixels
@@ -2486,24 +2482,28 @@ typedef struct {
     HWND                        hwnd;
     int                         w, h;
     volatile BOOL               t_paint_ready;
-
-    HDC                         hdc;
-    HGLRC                       hglrc;
+    BOOL                        draw_decorations;
     RECT                        rgn;
     BOOL                        theme_enabled;
     BOOL                        composition_enabled;
+    DWORD                       main_thread_id;
+
+/* ----RENDER THREAD ONLY-------------------------------------------------------------------------------------------- */
     HANDLE                      win_thread;
     DWORD                       win_thread_id;
-    DWORD                       main_thread_id;
-    HANDLE                      sem_window_ready;
+    HDC                         hdc;
+    HGLRC                       hglrc;
     LARGE_INTEGER               frequency;
     LARGE_INTEGER               performance_counter;
     PFNWGLSWAPINTERVALEXTPROC   proc_swapInterval;
-    HANDLE                      sem_closed;
-    volatile BOOL               t_running;
-    BOOL                        draw_decorations;
     int                         wheel_moved;
     float                       wheel[2];
+    unsigned long long          last_ns;
+
+/* ----RENDER THREAD - WINDOW THREAD SYNC---------------------------------------------------------------------------- */
+    HANDLE                      sem_window_ready;
+    HANDLE                      sem_closed;
+    volatile BOOL               t_running;
     CRITICAL_SECTION            critical_section;
     CONDITION_VARIABLE          cond_var;
     VdFw__Win32Frame            next_frame;
@@ -2793,12 +2793,14 @@ VD_FW_API int vd_fw_running(void)
         LPARAM lparam = msg.wParam;
 
         switch (message) {
+
             case WM_MOUSEWHEEL: {
                 VD_FW_G.wheel_moved = 1;
                 int delta = GET_WHEEL_DELTA_WPARAM(lparam);
                 float dy = (float)delta / (float)WHEEL_DELTA;
                 VD_FW_G.wheel[1] += dy;
             } break;
+
             case WM_MOUSEHWHEEL: {
                 VD_FW_G.wheel_moved = 1;
                 int delta = GET_WHEEL_DELTA_WPARAM(lparam);
@@ -2809,18 +2811,6 @@ VD_FW_API int vd_fw_running(void)
         }
     }
 
-    return 1;
-}
-
-VD_FW_API int vd_fw_swap_buffers(void)
-{
-    QueryPerformanceCounter(&VD_FW_G.performance_counter);
-    SwapBuffers(VD_FW_G.hdc);
-    return 1;
-}
-
-VD_FW_API float vd_fw_begin_render(void)
-{
     EnterCriticalSection(&VD_FW_G.critical_section);
     VD_FW_G.curr_frame = VD_FW_G.next_frame;
     VD_FW_G.next_frame.flags = 0;
@@ -2834,19 +2824,16 @@ VD_FW_API float vd_fw_begin_render(void)
     unsigned long long r  =  delta.QuadPart % VD_FW_G.frequency.QuadPart;
     unsigned long long ns =  q * 1000000000ULL;
     ns                    += (r * 1000000000ULL) / VD_FW_G.frequency.QuadPart;
-    double ms             = (double)ns / 1000000.0;
-    double sec64          = ms         / 1000.0;
-    float s               = (float)sec64;
+    VD_FW_G.last_ns = ns;
 
     VD_FW_G.performance_counter = now_performance_counter;
 
-    return s;
+    return 1;
 }
 
-VD_FW_API void vd_fw_end_render(void)
+VD_FW_API int vd_fw_swap_buffers(void)
 {
     SwapBuffers(VD_FW_G.hdc);
-    // QueryPerformanceCounter(&VD_FW_G.performance_counter);
 
     if (glFenceSync && glClientWaitSync && glDeleteSync) {
         GLsync fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
@@ -2859,6 +2846,7 @@ VD_FW_API void vd_fw_end_render(void)
     if (VD_FW_G.curr_frame.flags & VD_FW_WIN32_FLAGS_WAKE_COND_VAR) {
         WakeConditionVariable(&VD_FW_G.cond_var);
     }
+    return 1;
 }
 
 VD_FW_API int vd_fw_get_size(int *w, int *h)
@@ -2913,15 +2901,7 @@ VD_FW_API void vd_fw_set_title(const char *title)
 
 VD_FW_API unsigned long long vd_fw_delta_ns(void)
 {
-    LARGE_INTEGER now_performance_counter;
-    QueryPerformanceCounter(&now_performance_counter);
-    LARGE_INTEGER delta;
-    delta.QuadPart = now_performance_counter.QuadPart - VD_FW_G.performance_counter.QuadPart;
-    unsigned long long q  =  delta.QuadPart / VD_FW_G.frequency.QuadPart;
-    unsigned long long r  =  delta.QuadPart % VD_FW_G.frequency.QuadPart;
-    unsigned long long ns =  q * 1000000000ULL;
-    ns                    += (r * 1000000000ULL) / VD_FW_G.frequency.QuadPart;
-    return ns;
+    return VD_FW_G.last_ns;
 }
 
 static DWORD vd_fw__win_thread_proc(LPVOID param)
@@ -3433,6 +3413,13 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             VD_FW_G.h = HIWORD(lparam);
         } break;
 
+        case WM_MOUSEMOVE:
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONUP:
+        case WM_RBUTTONDOWN:
+        case WM_RBUTTONUP:
+        case WM_MBUTTONDOWN:
+        case WM_MBUTTONUP:
         case WM_MOUSEHWHEEL:
         case WM_MOUSEWHEEL: {
             PostThreadMessageA(VD_FW_G.main_thread_id, msg, wparam, lparam);
