@@ -922,6 +922,7 @@ static void vd_ui__update_all_fonts(VdUiContext *ctx);
 static void vd_ui__push_clip(VdUiContext *ctx, float clip[4]);
 static void vd_ui__pop_clip(VdUiContext *ctx);
 static void vd_ui__get_clip(VdUiContext *ctx, float *out_clip);
+static int  vd_ui__is_clipped(VdUiContext *ctx, VdUiDiv *div);
 static unsigned int vd_ui__get_clip_index(VdUiContext *ctx);
 
 static void vd_ui__push_rect(VdUiContext *ctx, float rect[4], float color[4]);
@@ -2280,6 +2281,21 @@ static void vd_ui__get_clip(VdUiContext *ctx, float *out_clip)
     out_clip[3] = ctx->clip_stack[curr][3];
 }
 
+static int vd_ui__is_clipped(VdUiContext *ctx, VdUiDiv *div)
+{
+    float clip[4];
+    vd_ui__get_clip(ctx, clip);
+
+    float topleft[2] = { div->rect[0], div->rect[1] };
+    float botright[2] = { div->rect[2], div->rect[3] };
+
+    if (!vd_ui__point_in_rect(topleft, clip) && !vd_ui__point_in_rect(botright, clip)) {
+        return 1;
+    }
+
+    return 0;
+}
+
 static unsigned int vd_ui__get_clip_index(VdUiContext *ctx)
 {
     VD_ASSERT(ctx->clip_stack_count > 0);
@@ -2676,7 +2692,7 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
         return;
     }
 
-    if (curr != &ctx->root) {
+    if ((curr != &ctx->root) && !vd_ui__is_clipped(ctx, curr)) {
         // After we've processed every child, we're ready to render ourselves
         if (curr->flags & VD_UI_FLAG_BACKGROUND) {
             VdUiGradient grad = vd_ui__lerpgrad(curr->style.normal_grad, curr->style.hot_grad, curr->hot_t);
