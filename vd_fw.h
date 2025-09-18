@@ -28,6 +28,7 @@
  *   on the big threes is OpenGL Core Profile 4.1 (MacOS limitation)
  *
  * TODO
+ * - Remove PostThreadMessageA and use a lightweight circular message queue with InterlockedXYZ functions
  * - Move MacOS window creation and handling to another thread
  *   so that we can draw continuously and not care about display events maybe
  */
@@ -229,6 +230,8 @@ VD_FW_API void               vd_fw_set_mouse_capture(int on);
 VD_FW_API int                vd_fw_get_mouse_wheel(float *dx, float *dy);
 VD_FW_INLINE int             vd_fw_get_mouse_statef(float *x, float *y);
 
+VD_FW_API int                vd_fw_get_key_pressed(VdFwKey key);
+
 /**
  * Gets the backing scale factor
  * @return  The backing scale factor
@@ -274,23 +277,23 @@ VD_FW_API int                vd_fw_compile_or_hotload_program(unsigned int *prog
 
 /**
  * Construct an orthographic projection matrix
- * @param   left The left side
- * @param  right The right side
- * @param    top The top side
+ * @param left   The left side
+ * @param right  The right side
+ * @param top    The top side
  * @param bottom The bottom side
- * @param   near The near plane
- * @param    far The far plane
- * @param    out The output matrix
+ * @param near   The near plane
+ * @param far    The far plane
+ * @param out    The output matrix
  */
 VD_FW_INLINE void            vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16]);
 
 /**
  * Construct a perspective projection matrix
- * @param    fov The vertical fov, in degrees
+ * @param fov    The vertical fov, in degrees
  * @param aspect The aspect ratio
- * @param    far The far plane
- * @param   near The near plane
- * @param    out The output matrix
+ * @param far    The far plane
+ * @param near   The near plane
+ * @param out    The output matrix
  */
 VD_FW_INLINE void            vd_fw_u_perspective(float fov, float aspect, float near, float far, float out[16]);
 
@@ -2497,12 +2500,36 @@ typedef BOOL (WINAPI * PFNWGLCHOOSEPIXELFORMATARBPROC) (HDC hdc, const int *piAt
 enum {
     VD_FW_WIN32_FLAGS_WAKE_COND_VAR = 1 << 0,
     VD_FW_WIN32_FLAGS_SIZE_CHANGED  = 1 << 1,
+
+    VD_FW_WIN32_MESSAGE_BUFFER_SIZE = 256,
+
+    VD_FW_WIN32_MESSAGE_TYPE_SCROLL    = 10,
+    VD_FW_WIN32_MESSAGE_TYPE_MOUSEMOVE = 11,
+    VD_FW_WIN32_MESSAGE_TYPE_MOUSEBTN  = 12,
 };
 
 typedef struct {
     int w, h;
     int flags;
 } VdFw__Win32Frame;
+
+typedef struct {
+    UINT msg;
+    union {
+        struct {
+            float dx, dy;
+        } scroll;
+
+        struct {
+            int mx, my;
+        } mousemove;
+
+        struct {
+            DWORD vkbutton;
+            int   down;
+        } mousebtn;
+    } dat;
+} VdFw__Win32Message;
 
 typedef struct {
 /* ----WINDOW THREAD ONLY-------------------------------------------------------------------------------------------- */
@@ -2529,6 +2556,11 @@ typedef struct {
     float                       wheel[2];
     unsigned long long          last_ns;
 
+/* ----RENDER THREAD - WINDOW THREAD DATA---------------------------------------------------------------------------- */
+    VdFw__Win32Message          msgbuf[VD_FW_WIN32_MESSAGE_BUFFER_SIZE];
+    volatile LONG               msgbuf_r;
+    volatile LONG               msgbuf_w;
+
 /* ----RENDER THREAD - WINDOW THREAD SYNC---------------------------------------------------------------------------- */
     HANDLE                      sem_window_ready;
     HANDLE                      sem_closed;
@@ -2537,7 +2569,72 @@ typedef struct {
     CONDITION_VARIABLE          cond_var;
     VdFw__Win32Frame            next_frame;
     VdFw__Win32Frame            curr_frame;
+
+    unsigned char               curr_key_states[VD_FW_KEY_MAX];
+    unsigned char               prev_key_states[VD_FW_KEY_MAX];
 } VdFw__Win32InternalData;
+
+
+VdFwKey vd_fw___vkcode_to_key(WORD vkcode)
+{
+    switch (vkcode)
+    {
+        case 'A':  return VD_FW_KEY_A;
+        case 'B':  return VD_FW_KEY_B;
+        case 'C':  return VD_FW_KEY_C;
+        case 'D':  return VD_FW_KEY_D;
+        case 'E':  return VD_FW_KEY_E;
+        case 'F':  return VD_FW_KEY_F;
+        case 'G':  return VD_FW_KEY_G;
+        case 'H':  return VD_FW_KEY_H;
+        case 'I':  return VD_FW_KEY_I;
+        case 'J':  return VD_FW_KEY_J;
+        case 'K':  return VD_FW_KEY_K;
+        case 'L':  return VD_FW_KEY_L;
+        case 'M':  return VD_FW_KEY_M;
+        case 'N':  return VD_FW_KEY_N;
+        case 'O':  return VD_FW_KEY_O;
+        case 'P':  return VD_FW_KEY_P;
+        case 'Q':  return VD_FW_KEY_Q;
+        case 'R':  return VD_FW_KEY_R;
+        case 'S':  return VD_FW_KEY_S;
+        case 'T':  return VD_FW_KEY_T;
+        case 'U':  return VD_FW_KEY_U;
+        case 'V':  return VD_FW_KEY_V;
+        case 'W':  return VD_FW_KEY_W;
+        case 'X':  return VD_FW_KEY_X;
+        case 'Y':  return VD_FW_KEY_Y;
+        case 'Z':  return VD_FW_KEY_Z;
+        case 0x1b: return VD_FW_KEY_ESCAPE;
+        case 0x20: return VD_FW_KEY_SPACE;
+        case 0x08: return VD_FW_KEY_BACKSPACE;
+        case 0x70: return VD_FW_KEY_F1;
+        case 0x71: return VD_FW_KEY_F2;
+        case 0x72: return VD_FW_KEY_F3;
+        case 0x73: return VD_FW_KEY_F4;
+        case 0x74: return VD_FW_KEY_F5;
+        case 0x75: return VD_FW_KEY_F6;
+        case 0x76: return VD_FW_KEY_F7;
+        case 0x77: return VD_FW_KEY_F8;
+        case 0x78: return VD_FW_KEY_F9;
+        case 0x79: return VD_FW_KEY_F10;
+        case 0x7a: return VD_FW_KEY_F11;
+        case 0x7b: return VD_FW_KEY_F12;
+        case 0x7c: return VD_FW_KEY_F13;
+        case 0x7d: return VD_FW_KEY_F14;
+        case 0x7e: return VD_FW_KEY_F15;
+        case 0x7f: return VD_FW_KEY_F16;
+        case 0x80: return VD_FW_KEY_F17;
+        case 0x81: return VD_FW_KEY_F18;
+        case 0x82: return VD_FW_KEY_F19;
+        case 0x83: return VD_FW_KEY_F20;
+        case 0x84: return VD_FW_KEY_F21;
+        case 0x85: return VD_FW_KEY_F22;
+        case 0x86: return VD_FW_KEY_F23;
+        case 0x87: return VD_FW_KEY_F24;
+        default: return VD_FW_KEY_UNKNOWN;
+    }
+}
 
 static VdFw__Win32InternalData Vd_Fw_Globals = {0};
 static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
@@ -2550,6 +2647,8 @@ static void    vd_fw__window_pos_changed(WINDOWPOS *pos);
 static LRESULT vd_fw__handle_invisible(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 static DWORD   vd_fw__win_thread_proc(LPVOID param);
 static void    vd_fw__gl_debug_message_callback(GLenum source,GLenum type,GLuint id,GLenum severity,GLsizei length,const GLchar *message,const void *userParam);
+static int     vd_fw__msgbuf_r(VdFw__Win32Message *message);
+static int     vd_fw__msgbuf_w(VdFw__Win32Message *message);
 
 #if VD_FW_NO_CRT
 #define VD_FW__CHECK_HRESULT(expr) expr
@@ -2615,11 +2714,11 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
             AllocConsole();
             AttachConsole(GetCurrentProcessId());
             DWORD written;
-            SetConsoleTitle("DEBUG CONSOLE");
+            SetConsoleTitleW(L"DEBUG CONSOLE");
             WriteConsole(
                 GetStdHandle(STD_OUTPUT_HANDLE),
-                "Console allocated for debugging\n",
-                sizeof("Console allocated for debugging\n") - 1,
+                TEXT("Console allocated for debugging\n"),
+                sizeof(TEXT("Console allocated for debugging\n")) - 1,
                 &written,
                 0);
 #if !VD_FW_NO_CRT
@@ -2633,8 +2732,6 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     }
 
     VD_FW_G.main_thread_id = GetCurrentThreadId();
-
-
 
     InitializeCriticalSection(&VD_FW_G.critical_section);
     InitializeConditionVariable(&VD_FW_G.cond_var);
@@ -2650,12 +2747,6 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         0,
         1,
         NULL);
-
-    // Create a message queue on this thread
-    {
-        MSG msg;
-        PeekMessage(&msg, NULL, WM_USER, WM_USER, PM_NOREMOVE);
-    }
 
     VD_FW_G.win_thread = CreateThread(
         NULL,
@@ -2786,8 +2877,8 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
             DWORD written;
             WriteConsole(
                 GetStdHandle(STD_OUTPUT_HANDLE),
-                "ERROR: Failed to load glDebugMessageCallback!",
-                sizeof("ERROR: Failed to load glDebugMessageCallback!") - 1,
+                TEXT("ERROR: Failed to load glDebugMessageCallback!"),
+                sizeof(TEXT("ERROR: Failed to load glDebugMessageCallback!")) - 1,
                 &written,
                 0);
         } else {
@@ -2816,7 +2907,7 @@ VD_FW_API int vd_fw_running(void)
     // Peek Messages
     MSG msg;
     while (PeekMessage(&msg, 0, 0, 0, PM_REMOVE)) {
-        // TranslateMessage(&msg);
+        TranslateMessage(&msg);
 
         UINT   message = msg.message;
         WPARAM wparam = msg.lParam;
@@ -2840,13 +2931,11 @@ VD_FW_API int vd_fw_running(void)
             } break;
 
             case WM_SETFOCUS: {
-                printf("FOCUSED\n");
                 VD_FW_G.focused = 1;
                 VD_FW_G.focus_changed = 1;
             } break;
 
             case WM_KILLFOCUS: {
-                printf("UNFOCUSED\n");
                 VD_FW_G.focused = 0;
                 VD_FW_G.focus_changed = 1;
             } break;
@@ -2931,6 +3020,11 @@ VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
     return result;
 }
 
+VD_FW_API int vd_fw_get_key_pressed(VdFwKey key)
+{
+    return !VD_FW_G.prev_key_states[key] && VD_FW_G.curr_key_states[key];
+}
+
 VD_FW_API void vd_fw_set_mouse_capture(int on)
 {
     if (on) {
@@ -2955,7 +3049,7 @@ VD_FW_API float vd_fw_get_scale(void)
 VD_FW_API void vd_fw_set_title(const char *title)
 {
     // @todo(mdodis): This doesn't work
-    SetWindowText(VD_FW_G.hwnd, title);
+    SetWindowTextA(VD_FW_G.hwnd, title);
 }
 
 VD_FW_API unsigned long long vd_fw_delta_ns(void)
@@ -2969,23 +3063,23 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     VD_FW_G.t_running = TRUE;
     VD_FW_SANITY_CHECK();
 
-    WNDCLASSEXW wcx;
+    WNDCLASSEX wcx;
     ZeroMemory(&wcx, sizeof(wcx));
     wcx.cbSize         = sizeof(wcx);
     wcx.style          = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
     wcx.hInstance      = NULL;
     wcx.lpfnWndProc    = vd_fw__wndproc;
-    wcx.lpszClassName  = L"FWCLASS";
+    wcx.lpszClassName  = TEXT("FWCLASS");
     wcx.hbrBackground  = (HBRUSH)GetStockObject(BLACK_BRUSH);
-    wcx.hCursor        = LoadCursorA(NULL, IDC_ARROW);
-    if (!RegisterClassExW(&wcx)) {
+    wcx.hCursor        = LoadCursor(NULL, IDC_ARROW);
+    if (!RegisterClassEx(&wcx)) {
         return 0;
     }
 
-    VD_FW_G.hwnd = CreateWindowExW(
+    VD_FW_G.hwnd = CreateWindowEx(
         WS_EX_APPWINDOW | WS_EX_LAYERED,
-        L"FWCLASS",
-        L"FW Window",
+        TEXT("FWCLASS"),
+        TEXT("FW Window"),
         WS_OVERLAPPEDWINDOW | WS_SIZEBOX,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
@@ -3023,7 +3117,7 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
         MSG message;
         while (GetMessage(&message, VD_FW_G.hwnd, 0, 0)) {
             TranslateMessage(&message);
-            DispatchMessageW(&message);
+            DispatchMessageA(&message);
         }
     }
 
@@ -3420,6 +3514,18 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             }
         } break;
 
+        case WM_NCMOUSEMOVE: {
+            if (!VD_FW_G.draw_decorations) {
+                // message thread
+            }
+        } break;
+
+        case WM_MOUSEMOVE: {
+            if (VD_FW_G.draw_decorations) {
+                // message thread
+            }
+        } break;
+
         case WM_NCHITTEST: {
             if (VD_FW_G.draw_decorations) {
                 result = DefWindowProc(hwnd, msg, wparam, lparam);
@@ -3470,6 +3576,16 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         case WM_SIZE: {
             VD_FW_G.w = LOWORD(lparam);
             VD_FW_G.h = HIWORD(lparam);
+        } break;
+
+        case WM_KEYUP:
+        case WM_KEYDOWN: {
+            WORD vkcode = (WORD)wparam;
+            VdFwKey key  = vd_fw___vkcode_to_key(vkcode);
+            int is_down  = msg == WM_KEYDOWN;
+
+            VD_FW_G.prev_key_states[key] = VD_FW_G.curr_key_states[key];
+            VD_FW_G.curr_key_states[key] = (unsigned char)is_down;
         } break;
 
         case WM_SETFOCUS:
