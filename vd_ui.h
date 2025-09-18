@@ -308,7 +308,9 @@ struct VdUiDiv {
     float       hot_t;
     float       active_t;
     float       timeout_t;
-    float       timeout_mod;
+    float       timeout_inv_t;
+
+    float       custom[1];
 
     VdUiBool    is_null;
 };
@@ -855,7 +857,7 @@ static unsigned char Vd_Ui_Default_Icons_Font[7840];
 #define VD_UI_RENDER_PASSES_MAX     (VD_UI_LAYERS_MAX * VD_UI_CHANNELS_MAX)
 
 #define VD_UI_PARENT_STACK_MAX      256
-#define VD_UI_VBUF_COUNT_MAX        2048
+#define VD_UI_VBUF_COUNT_MAX        4096
 #define VD_UI_RP_COUNT_MAX          128
 #define VD_UI_FONT_COUNT_MAX        4
 #define VD_UI_UPDATE_COUNT_MAX      2
@@ -1421,25 +1423,21 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
         float page_scroll_amount = 0.f;
         float mouse_in_div[2];
         vd_ui_transform_point(hspace, ctx->mouse, mouse_in_div);
-        {
-            VdUiReply reply = vd_ui_call(hspace);
-            if (reply.clicked) {
 
-                if (mouse_in_div[1] < *y) {
-                    page_scroll_amount = -half_page_size;
-                    hspace->timeout_mod = -1.f;
-                } else if (mouse_in_div[1] > (*y + grip_size)) {
-                    hspace->timeout_mod = 1.f;
-                }
+        if (vd_ui_call(hspace).clicked) {
+            if (mouse_in_div[1] < *y) {
+                hspace->custom[0] = -1.f;
+            } else if (mouse_in_div[1] > (*y + grip_size)) {
+                hspace->custom[0] = 1.f;
             }
         }
 
-        if (hspace->timeout_t >= 0.1f) {
+        // if (hspace->timeout_t >= 0.1f) {
 
-            float deltay = vd_ui__lerp(0.f, hspace->timeout_mod * half_page_size, 1.f - hspace->timeout_t);
+            float deltay = vd_ui__lerp(0.f, hspace->custom[0] * half_page_size, hspace->timeout_inv_t);
 
             *y += deltay * 0.01f;
-        }
+        // }
 
         vd_ui_parent_push(hspace);
         {
@@ -1689,6 +1687,7 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
 
         div->timeout_t = vd_ui__lerp(div->timeout_t, 0.f, dt * 11.f);
         div->timeout_t = vd_ui__clampf01(div->timeout_t);
+        div->timeout_inv_t = (div->timeout_t > 0.1f) ? (1.f - div->timeout_t) : 0.f;
         if (div->timeout_t < 0.1f) div->timeout_t = 0.f;
 
         if (reply.pressed && (ctx->active == div->h)) {
@@ -1739,6 +1738,9 @@ VD_UI_API void vd_ui_demo(void)
     app->style.size[0].value = 1.f;
     app->style.size[1].mode = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
     app->style.size[1].value = 1.f;
+
+    static int num_items = 100;
+
     vd_ui_parent_push(app);
     {
         {
@@ -1761,8 +1763,15 @@ VD_UI_API void vd_ui_demo(void)
 
                 vd_ui_spacer(VD_UI_AXISH);
 
-                vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_LEFT_OPEN), "##left");
-                vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_RIGHT_OPEN), "##right");
+                if (vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_LEFT_OPEN), "##left").clicked) {
+                    num_items -= 50;
+                }
+
+                vd_ui_labelf("%d##item_count", num_items);
+
+                if (vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_RIGHT_OPEN), "##right").clicked) {
+                    num_items += 50;
+                }
 
                 vd_ui_spacer(VD_UI_AXISH);
 
@@ -1804,7 +1813,7 @@ VD_UI_API void vd_ui_demo(void)
                 vd_ui_labelf("Hidden content");
             }
 
-            for (int i = 0; i < 50; ++i) {
+            for (int i = 0; i < num_items; ++i) {
                 vd_ui_buttonf("Button %d", i);
             }
         }
@@ -2965,7 +2974,7 @@ VD_UI_API VdUiContext *vd_ui_context_create(VdUiContextCreateInfo *info)
     VD_MEMSET(result->null_divs, 0, result->null_divs_cap * sizeof(VdUiDiv));
 
     // Arena
-    result->strbuf_cap  = 1024 * 5; // 5 Kilobytes of per frame string storage
+    result->strbuf_cap  = 1024 * 1024; // 1MB of per frame string storage
     result->strbuf      = (char*)VD_MALLOC(result->strbuf_cap);
     result->strbuf_len  = 0;
 
