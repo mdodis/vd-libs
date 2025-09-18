@@ -310,8 +310,6 @@ struct VdUiDiv {
     float       timeout_t;
     float       timeout_inv_t;
 
-    float       custom[1];
-
     VdUiBool    is_null;
 };
 
@@ -323,6 +321,7 @@ typedef struct {
     VdUiBool released;
     VdUiBool clicked;
     VdUiBool hovering;
+    float    click_timeout;
 } VdUiReply;
 
 #define VD_UI_CHAR_BUF_COUNT    1024
@@ -1386,13 +1385,7 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
     vd_ui_parent_push(scroll_section);
     {
         VdUiContext *ctx = vd_ui_context_get();
-        if (vd_ui__point_in_rect(ctx->mouse, scroll_view->rect)) {
-            *y -= ctx->wheel_current[1] * 10.f;
-        }
-
-        if (vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_UP_OPEN), "##up").clicked) {
-            *y -= 4.f;
-        }
+        VdUiReply up_button_reply = vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_UP_OPEN), "##up");
 
         VdUiDiv *hspace = vd_ui_div_new(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_CLICKABLE, VD_UI_LIT("##scroll_vhandle_space"));
         hspace->style.normal_grad = vd_ui_gradient(vd_ui_f4(0.7f, 0.f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.f, 0.2f, 0.f),
@@ -1418,27 +1411,33 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
 
         float scrollable_track_size       = track_size - grip_size;
         float scrollable_window_area_size = content_size - window_size;
-        float half_page_size              = window_size * 0.5f;
 
-        // Check to see if the user pressed the track
-        float page_scroll_amount = 0.f;
-        float mouse_in_div[2];
-        vd_ui_transform_point(hspace, ctx->mouse, mouse_in_div);
+        if (up_button_reply.click_timeout > 0.f) {
+            *y -= window_content_ratio * up_button_reply.click_timeout;
+        }
 
-        if (vd_ui_call(hspace).clicked) {
-            if (mouse_in_div[1] < *y) {
-                hspace->custom[0] = -1.f;
-            } else if (mouse_in_div[1] > (*y + grip_size)) {
-                hspace->custom[0] = 1.f;
+        if (vd_ui__point_in_rect(ctx->mouse, scroll_view->rect)) {
+            *y -= ctx->wheel_current[1] * window_content_ratio * 50.f;
+        }
+
+        VdUiReply track_reply = vd_ui_call(hspace);
+        static float track_scroll_direction = 0.f;
+        if (track_reply.clicked) {
+            float mouse_click_pos[2];
+            mouse_click_pos[0] = track_reply.mouse[0];
+            mouse_click_pos[1] = track_reply.mouse[1];
+            vd_ui_transform_point(hspace, ctx->mouse, mouse_click_pos);
+
+            if (mouse_click_pos[1] < *y) {
+                track_scroll_direction = -1.f;
+            } else if (mouse_click_pos[1] > (*y + grip_size)) {
+                track_scroll_direction = 1.f;
             }
         }
 
-        // if (hspace->timeout_t >= 0.1f) {
-
-            float deltay = vd_ui__lerp(0.f, hspace->custom[0] * half_page_size, hspace->timeout_inv_t);
-
-            *y += deltay * 0.01f;
-        // }
+        if (track_reply.click_timeout > 0.f) {
+            *y += window_content_ratio * 4.f * track_reply.click_timeout * track_scroll_direction;
+        }
 
         vd_ui_parent_push(hspace);
         {
@@ -1478,8 +1477,9 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
         }
         vd_ui_parent_pop();
 
-        if (vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_DOWN_OPEN), "##down").clicked) {
-            *y += 4.f;
+        VdUiReply down_button_reply = vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_DOWN_OPEN), "##down");
+        if (down_button_reply.click_timeout > 0.f) {
+            *y += window_content_ratio * down_button_reply.click_timeout;
         }
     }
     vd_ui_parent_pop();
@@ -1694,6 +1694,8 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
         if (reply.pressed && (ctx->active == div->h)) {
             reply.drag[0] = mouse_delta[0]; reply.drag[1] = mouse_delta[1];
         }
+
+        reply.click_timeout = div->timeout_inv_t;
     }
 
     return reply;
