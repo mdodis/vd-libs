@@ -111,6 +111,37 @@ typedef enum {
     VD_FW_GL_VERSION_3_3   = 33,
 } VdFwGlVersion;
 
+typedef enum {
+    VD_FW_KEY_UNKNOWN = 0,
+    VD_FW_KEY_A,      VD_FW_KEY_B,
+    VD_FW_KEY_C,      VD_FW_KEY_D,
+    VD_FW_KEY_E,      VD_FW_KEY_F,
+    VD_FW_KEY_G,      VD_FW_KEY_H,
+    VD_FW_KEY_I,      VD_FW_KEY_J,
+    VD_FW_KEY_K,      VD_FW_KEY_L,
+    VD_FW_KEY_M,      VD_FW_KEY_N,
+    VD_FW_KEY_O,      VD_FW_KEY_P,
+    VD_FW_KEY_Q,      VD_FW_KEY_R,
+    VD_FW_KEY_S,      VD_FW_KEY_T,
+    VD_FW_KEY_U,      VD_FW_KEY_V,
+    VD_FW_KEY_W,      VD_FW_KEY_X,
+    VD_FW_KEY_Y,      VD_FW_KEY_Z,
+    VD_FW_KEY_SPACE,  VD_FW_KEY_ESCAPE, VD_FW_KEY_BACKSPACE,
+    VD_FW_KEY_F1,     VD_FW_KEY_F2,
+    VD_FW_KEY_F3,     VD_FW_KEY_F4,
+    VD_FW_KEY_F5,     VD_FW_KEY_F6,
+    VD_FW_KEY_F7,     VD_FW_KEY_F8,
+    VD_FW_KEY_F9,     VD_FW_KEY_F10,
+    VD_FW_KEY_F11,    VD_FW_KEY_F12,
+    VD_FW_KEY_F13,    VD_FW_KEY_F14,
+    VD_FW_KEY_F15,    VD_FW_KEY_F16,
+    VD_FW_KEY_F17,    VD_FW_KEY_F18,
+    VD_FW_KEY_F19,    VD_FW_KEY_F20,
+    VD_FW_KEY_F21,    VD_FW_KEY_F22,
+    VD_FW_KEY_F23,    VD_FW_KEY_F24,
+    VD_FW_KEY_MAX,
+} VdFwKey;
+
 enum {
     VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN   = 1 << 0,
     VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN  = 1 << 1,
@@ -159,10 +190,19 @@ VD_FW_API int                vd_fw_swap_buffers(void);
 VD_FW_API int                vd_fw_get_size(int *w, int *h);
 
 /**
+ * Gets whether the window is focused
+ * @param  focused Pointer to int which will receive the value of focus
+ * @return         1 if the focus has changed. There's no point in checking the value of focused otherwise.
+ */
+VD_FW_API int                vd_fw_get_focused(int *focused);
+VD_FW_API void               vd_fw_set_drag_rect(int rect[4]);
+
+/**
  * Get the time (in nanoseconds) since the last call to @see vd_fw_swap_buffers
  * @return  The delta time (in nanoseconds)
  */
 VD_FW_API unsigned long long vd_fw_delta_ns(void);
+VD_FW_INLINE float           vd_fw_delta_s(void);
 
 /**
  * Set VSYNC to the number of frames to sync on
@@ -178,6 +218,7 @@ VD_FW_API int                vd_fw_set_vsync_on(int on);
  * @return   The mouse button state
  */
 VD_FW_API int                vd_fw_get_mouse_state(int *x, int *y);
+VD_FW_API void               vd_fw_set_mouse_capture(int on);
 
 /**
  * Read the mouse wheel state.
@@ -186,6 +227,7 @@ VD_FW_API int                vd_fw_get_mouse_state(int *x, int *y);
  * @return    1 if the wheel moved, 0 if not
  */
 VD_FW_API int                vd_fw_get_mouse_wheel(float *dx, float *dy);
+VD_FW_INLINE int             vd_fw_get_mouse_statef(float *x, float *y);
 
 /**
  * Gets the backing scale factor
@@ -229,21 +271,6 @@ VD_FW_API int                vd_fw_link_program(unsigned int program);
 VD_FW_API int                vd_fw_compile_or_hotload_program(unsigned int *program, unsigned long long *last_compile,
                                                               const char *vertex_file_path,
                                                               const char *fragment_file_path);
-
-
-/**
- * Shorthand for getting mouse coordinates as floats
- * @param  x The x position
- * @param  y The y position
- * @return   The mouse button states
- */
-VD_FW_INLINE int             vd_fw_get_mouse_statef(float *x, float *y);
-
-/**
- * Shorthand for computing delta time in seconds
- * @return  The delta time (in seconds)
- */
-VD_FW_INLINE float           vd_fw_delta_s(void);
 
 /**
  * Construct an orthographic projection matrix
@@ -2487,6 +2514,8 @@ typedef struct {
     BOOL                        theme_enabled;
     BOOL                        composition_enabled;
     DWORD                       main_thread_id;
+    BOOL                        focus_changed;
+    BOOL                        focused;
 
 /* ----RENDER THREAD ONLY-------------------------------------------------------------------------------------------- */
     HANDLE                      win_thread;
@@ -2571,9 +2600,10 @@ static void *vd_fw__gl_get_proc_address(const char *name)
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
-
     SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
     timeBeginPeriod(1);
+
+    VD_FW_G.focused = 1;
 
     if (info != NULL) {
         VD_FW_G.draw_decorations = info->window_options.draw_default_borders;
@@ -2781,6 +2811,7 @@ VD_FW_API int vd_fw_running(void)
     VD_FW_G.wheel_moved = 0;
     VD_FW_G.wheel[0] = 0.f;
     VD_FW_G.wheel[1] = 0.f;
+    VD_FW_G.focus_changed = 0;
 
     // Peek Messages
     MSG msg;
@@ -2807,6 +2838,19 @@ VD_FW_API int vd_fw_running(void)
                 float dx = (float)delta / (float)WHEEL_DELTA;
                 VD_FW_G.wheel[0] += dx;
             } break;
+
+            case WM_SETFOCUS: {
+                printf("FOCUSED\n");
+                VD_FW_G.focused = 1;
+                VD_FW_G.focus_changed = 1;
+            } break;
+
+            case WM_KILLFOCUS: {
+                printf("UNFOCUSED\n");
+                VD_FW_G.focused = 0;
+                VD_FW_G.focus_changed = 1;
+            } break;
+
             default: break;
         }
     }
@@ -2856,6 +2900,12 @@ VD_FW_API int vd_fw_get_size(int *w, int *h)
     return VD_FW_G.curr_frame.flags & VD_FW_WIN32_FLAGS_SIZE_CHANGED;
 }
 
+VD_FW_API int vd_fw_get_focused(int *focused)
+{
+    *focused = VD_FW_G.focused;
+    return VD_FW_G.focus_changed;
+}
+
 VD_FW_API int vd_fw_set_vsync_on(int on)
 {
     BOOL result = VD_FW_G.proc_swapInterval(on);
@@ -2879,6 +2929,15 @@ VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
     result |= GetAsyncKeyState(VK_RBUTTON) ? VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN : 0;
 
     return result;
+}
+
+VD_FW_API void vd_fw_set_mouse_capture(int on)
+{
+    if (on) {
+        SetCapture(VD_FW_G.hwnd);
+    } else {
+        ReleaseCapture();
+    }
 }
 
 VD_FW_API int vd_fw_get_mouse_wheel(float *dx, float *dy)
@@ -3413,13 +3472,8 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             VD_FW_G.h = HIWORD(lparam);
         } break;
 
-        case WM_MOUSEMOVE:
-        case WM_LBUTTONDOWN:
-        case WM_LBUTTONUP:
-        case WM_RBUTTONDOWN:
-        case WM_RBUTTONUP:
-        case WM_MBUTTONDOWN:
-        case WM_MBUTTONUP:
+        case WM_SETFOCUS:
+        case WM_KILLFOCUS:
         case WM_MOUSEHWHEEL:
         case WM_MOUSEWHEEL: {
             PostThreadMessageA(VD_FW_G.main_thread_id, msg, wparam, lparam);

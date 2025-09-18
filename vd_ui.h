@@ -24,14 +24,7 @@
  * @todo(mdodis):
  * - New and improved render pass api using texture id + scissor + layer id as keys
  * - Introduce comp_children_size when calculating child sizes 
- * - Fix vd_ui_call responding with clicked even though the mouse was first pressed outside of a div's rect
  * - Allow active elements to capture the mouse
- * - Scroll View Behaviors
- *   - Holding down buttons scrolls continuously
- *   - Allow grip size to be customizable
- *   - Horizontal scrolling
- *   - When clicking the fringe/track, move towards the clicked position by half pages
- *   - Fix vertical axis computation borked and not showing down arrow (probably an oversize miscomputation)
  * - Text Input
  * - Images
  * - Support more of printf
@@ -179,6 +172,7 @@ enum {
     VD_UI_FLAG_FLEX_HORIZONTAL  = 1 << 4, // 0 here means Vertical
     VD_UI_FLAG_ALIGN_CENTER     = 1 << 5,
     VD_UI_FLAG_FLOAT            = 1 << 6,
+    VD_UI_FLAG_CAPTURES_MOUSE   = 1 << 7,
 
     // Mouse Enumerations
     VD_UI_MOUSE_LEFT        = 0,
@@ -590,6 +584,7 @@ typedef struct {
 typedef enum {
     VD_UI_UPDATE_TYPE_NEW_TEXTURE,
     VD_UI_UPDATE_TYPE_WRITE_TEXTURE,
+    VD_UI_UPDATE_TYPE_CHANGE_CAPTURE,
 } VdUiUpdateType;
 
 typedef enum {
@@ -615,6 +610,10 @@ typedef struct {
             size_t            size;
             VdUiTextureId     texture;
         } write_texture;
+
+        struct {
+            int on;
+        } change_capture;
     } data;
 } VdUiUpdate;
 
@@ -647,11 +646,14 @@ VD_UI_API void             vd_ui_event_size(float width, float height);
 VD_UI_API void             vd_ui_event_mouse_location(float mx, float my);
 VD_UI_API void             vd_ui_event_mouse_button(int index, int down);
 VD_UI_API void             vd_ui_event_mouse_wheel(float dx, float dy);
+VD_UI_API void             vd_ui_event_focus(int on);
 
 /* ----INPUT UTILITIES----------------------------------------------------------------------------------------------- */
 VD_UI_API int              vd_ui_mouse_left_clicked(void);
 VD_UI_API int              vd_ui_mouse_left_just_released(void);
 VD_UI_API void             vd_ui_transform_point(VdUiDiv *div, float point[2], float out_point[2]);
+VD_UI_API void             vd_ui_set_capture(size_t eid);
+VD_UI_API int              vd_ui_is_captured(VdUiDiv *div);
 
 /* ----CONTEXT CREATION---------------------------------------------------------------------------------------------- */
 typedef struct VdUiContext VdUiContext;
@@ -1026,8 +1028,12 @@ struct VdUiContext {
     size_t                  frame_index;
     size_t                  last_frame_index;
     float                   delta_seconds;
+
+    int                     focus;
+
     float                   mouse[VD_UI_AXES];
     float                   mouse_last[VD_UI_AXES];
+
     float                   wheel[VD_UI_AXES];
     float                   wheel_current[VD_UI_AXES];
     float                   wheel_target[VD_UI_AXES];
@@ -1036,6 +1042,8 @@ struct VdUiContext {
     int                     mouse_left_last;
     int                     mouse_right;
     int                     mouse_middle;
+
+    size_t                  id_capturing_mouse;
     size_t                  hot;
     size_t                  active;
 
@@ -1067,15 +1075,15 @@ struct VdUiContext {
 VD_UI_API void vd_ui_frame_begin(float delta_seconds)
 {
     VdUiContext *ctx = vd_ui_context_get();
-    ctx->root.first    = 0;
-    ctx->root.next     = 0;
-    ctx->root.last     = 0;
-    ctx->root.prev     = 0;
-    ctx->root.parent   = 0;
-    ctx->wheel_target[0] = 0.f;
-    ctx->wheel_target[1] = 0.f;
-    ctx->mouse_last[0]   = ctx->mouse[0];
-    ctx->mouse_last[1]   = ctx->mouse[1];
+    ctx->root.first           = 0;
+    ctx->root.next            = 0;
+    ctx->root.last            = 0;
+    ctx->root.prev            = 0;
+    ctx->root.parent          = 0;
+    ctx->wheel_target[0]      = 0.f;
+    ctx->wheel_target[1]      = 0.f;
+    ctx->mouse_last[0]        = ctx->mouse[0];
+    ctx->mouse_last[1]        = ctx->mouse[1];
 
     ctx->null_divs_len = 0;
     vd_ui_parent_push(&ctx->root);
@@ -1441,10 +1449,10 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
 
         vd_ui_parent_push(hspace);
         {
-            VdUiDiv *grip = vd_ui_div_new(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_CLICKABLE | VD_UI_FLAG_FLOAT, VD_UI_LIT("##grip"));
+            VdUiDiv *grip = vd_ui_div_new(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_CLICKABLE | VD_UI_FLAG_FLOAT | VD_UI_FLAG_CAPTURES_MOUSE,
+                                          VD_UI_LIT("##grip"));
             grip->style.size[0].mode = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
             grip->style.size[0].value = 1.f;
-
 
             grip->style.size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
             grip->style.size[1].value = grip_size;
@@ -1625,15 +1633,10 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     if (!parent->first) {
         parent->first      = result;
         parent->last       = result;
-        // result->next       = result;
-        // result->prev       = result;
     } else {
-        // Insert result after parent->last in the circular list
         VdUiDiv *last = parent->last;
         last->next = result;
         result->prev = last;
-        // result->next = first;
-        // first->prev = result;
         parent->last = result;
     }
 
@@ -1653,22 +1656,26 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
         float mouse_delta[2] = { ctx->mouse[0] - ctx->mouse_last[0], ctx->mouse[1] - ctx->mouse_last[1] };
 
         int hovered  = vd_ui__point_in_rect(ctx->mouse, div->rect);
-        int pressed  = ctx->mouse_left;
-        int released = vd_ui_mouse_left_just_released();
-        int clicked  = vd_ui_mouse_left_clicked();
+        int pressed  = (ctx->focus) && ctx->mouse_left;
+        int released = (ctx->focus) && vd_ui_mouse_left_just_released();
+        int clicked  = (ctx->focus) && vd_ui_mouse_left_clicked();
+        int captured = (ctx->focus) && vd_ui_is_captured(div);
 
         if (hovered) {
             ctx->hot = div->h;
             reply.hovering = 1;
         }
 
-        if (reply.hovering) {
+        if (reply.hovering || captured) {
             if (clicked) {
                 ctx->active = div->h;
             }
 
             if (pressed) {
                 reply.pressed = 1;
+                if (div->flags & VD_UI_FLAG_CAPTURES_MOUSE) {
+                    vd_ui_set_capture(div->h);
+                }
             }
         }
 
@@ -1676,6 +1683,12 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
             reply.clicked = 1;
             div->timeout_t = 1.f;
             ctx->active = 0;
+        }
+
+        if (released && (ctx->active == div->h) && captured) {
+            if (div->flags & VD_UI_FLAG_CAPTURES_MOUSE) {
+                vd_ui_set_capture(0);
+            }
         }
 
         float hot_speed = 9.f;
@@ -2234,6 +2247,11 @@ VD_UI_API void vd_ui_event_mouse_button(int index, int down)
     }
 }
 
+VD_UI_API void vd_ui_event_focus(int on)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    ctx->focus = on;
+}
 
 /* ----INPUT UTILITIES IMPL------------------------------------------------------------------------------------------ */
 
@@ -2253,6 +2271,18 @@ VD_UI_API void vd_ui_transform_point(VdUiDiv *div, float point[2], float out_poi
 {
     out_point[0] = point[0] - div->rect[0];
     out_point[1] = point[1] - div->rect[1];
+}
+
+VD_UI_API void vd_ui_set_capture(size_t eid)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    ctx->id_capturing_mouse = eid;
+}
+
+VD_UI_API int vd_ui_is_captured(VdUiDiv *div)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    return div->h == ctx->id_capturing_mouse;
 }
 
 static void vd_ui__push_clip(VdUiContext *ctx, float clip[4])
