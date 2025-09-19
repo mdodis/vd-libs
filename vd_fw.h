@@ -3971,6 +3971,7 @@ int wWinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPWSTR cmdline, int n
 #import <unistd.h>
 #import <stdlib.h>
 #import <stdio.h>
+#import <pthread.h>
 #define VD_FW_G Vd_Fw_Globals
 
 typedef struct {
@@ -4026,7 +4027,6 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
-    [NSApp activateIgnoringOtherApps:YES];
     [NSEvent setMouseCoalescingEnabled:NO];
 
     // @autoreleasepool {
@@ -4038,11 +4038,11 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         Vd_Fw_Delegate = delegate;
 
         // Create a simple menu bar so the app shows in the Dock
-        NSMenu *menubar = [[NSMenu alloc] init];
-        NSMenuItem *appMenuItem = [[NSMenuItem alloc] init];
+        NSMenu *menubar = [[NSMenu new] autorelease];
+        NSMenuItem *appMenuItem = [[NSMenuItem new] autorelease];
         [menubar addItem:appMenuItem];
         [NSApp setMainMenu:menubar];
-        NSMenu *appMenu = [[NSMenu alloc] initWithTitle:@"Application"];
+        NSMenu *appMenu = [[NSMenu new] initWithTitle:@"Application"];
         NSMenuItem *quitMenuItem = [[NSMenuItem alloc]
             initWithTitle:@"Quit"
                    action:@selector(terminate:)
@@ -4061,7 +4061,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
                                                 NSWindowStyleMaskResizable)
                                            backing: NSBackingStoreBuffered
                                            defer: NO];
-        [VD_FW_G.window setTitle:[NSString stringWithUTF8String:"F"]];
+        [VD_FW_G.window setTitle:[NSString stringWithUTF8String:"FW Window"]];
         [VD_FW_G.window makeKeyAndOrderFront:NSApp];
 
         [VD_FW_G.window setAllowsConcurrentViewDrawing:YES];
@@ -4082,6 +4082,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         [VD_FW_G.gl_context makeCurrentContext];
 
         [VD_FW_G.window setDelegate:delegate];
+        [NSApp activateIgnoringOtherApps:YES];
     // }
 
     VdFwGlVersion version = VD_FW_GL_VERSION_3_3;
