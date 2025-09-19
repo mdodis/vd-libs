@@ -196,7 +196,7 @@ VD_FW_API int                vd_fw_get_size(int *w, int *h);
  * @return         1 if the focus has changed. There's no point in checking the value of focused otherwise.
  */
 VD_FW_API int                vd_fw_get_focused(int *focused);
-VD_FW_API void               vd_fw_set_drag_rect(int rect[4]);
+VD_FW_API void               vd_fw_set_ncrects(int count, int (*rects)[4]);
 
 /**
  * Get the time (in nanoseconds) since the last call to @see vd_fw_swap_buffers
@@ -2564,6 +2564,8 @@ typedef struct {
     VdFw__Win32Message          msgbuf[VD_FW_WIN32_MESSAGE_BUFFER_SIZE];
     volatile LONG               msgbuf_r;
     volatile LONG               msgbuf_w;
+    int                         ncrect_count;
+    int                         ncrects[16][4];
 
 /* ----RENDER THREAD - WINDOW THREAD SYNC---------------------------------------------------------------------------- */
     HANDLE                      sem_window_ready;
@@ -3046,6 +3048,17 @@ VD_FW_API int vd_fw_get_focused(int *focused)
     return VD_FW_G.focus_changed;
 }
 
+VD_FW_API void vd_fw_set_ncrects(int count, int (*rects)[4])
+{
+    VD_FW_G.ncrect_count = count;
+    for (int i = 0; i < count; ++i) {
+        VD_FW_G.ncrects[i][0] = rects[i][0];
+        VD_FW_G.ncrects[i][1] = rects[i][1];
+        VD_FW_G.ncrects[i][2] = rects[i][2];
+        VD_FW_G.ncrects[i][3] = rects[i][3];
+    }
+}
+
 VD_FW_API int vd_fw_set_vsync_on(int on)
 {
     BOOL result = VD_FW_G.proc_swapInterval(on);
@@ -3116,14 +3129,14 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     wcx.hInstance      = NULL;
     wcx.lpfnWndProc    = vd_fw__wndproc;
     wcx.lpszClassName  = TEXT("FWCLASS");
-    wcx.hbrBackground  = (HBRUSH)GetStockObject(BLACK_BRUSH);
+    wcx.hbrBackground  = NULL; // (HBRUSH)GetStockObject(BLACK_BRUSH);
     wcx.hCursor        = LoadCursor(NULL, IDC_ARROW);
     if (!RegisterClassEx(&wcx)) {
         return 0;
     }
 
     VD_FW_G.hwnd = CreateWindowEx(
-        WS_EX_APPWINDOW /* @todo(mdodis): for alpha windows: | WS_EX_LAYERED */,
+        0, // WS_EX_APPWINDOW /* @todo(mdodis): for alpha windows: | WS_EX_LAYERED */,
         TEXT("FWCLASS"),
         TEXT("FW Window"),
         WS_OVERLAPPEDWINDOW | WS_SIZEBOX,
@@ -3268,14 +3281,6 @@ static void vd_fw__gl_debug_message_callback(GLenum source, GLenum type, GLuint 
 
 static int vd_fw__hit_test(int x, int y)
 {
-    // if (IsMaximized(VD_FW_G.hwnd)) {
-    //     if (y < 30) {
-    //         return HTCLIENT;
-    //     }
-
-    //     return HTNOWHERE;
-    // }
-
     POINT mouse;
     mouse.x = x;
     mouse.y = y;
@@ -3333,8 +3338,21 @@ static int vd_fw__hit_test(int x, int y)
         return HTRIGHT;
     }
 
-    if (mouse.y < 30) {
-        return HTCAPTION;
+    for (int ri = 0; ri < VD_FW_G.ncrect_count; ++ri) {
+        int rect[4] = {
+            VD_FW_G.ncrects[ri][0],
+            VD_FW_G.ncrects[ri][1],
+            VD_FW_G.ncrects[ri][2],
+            VD_FW_G.ncrects[ri][3],
+        };
+
+        int inside =
+            ((mouse.x >= rect[0]) && (mouse.x <= rect[2])) &&
+            ((mouse.y >= rect[1]) && (mouse.x <= rect[3]));
+
+        if (inside) {
+            return HTCAPTION;
+        }
     }
     return HTCLIENT;
 }
@@ -3673,26 +3691,61 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             vd_fw__msgbuf_w(&m);
         } break;
 
+        // case WM_NCMBUTTONUP:
+        // case WM_NCMBUTTONDOWN:
+        // case WM_NCRBUTTONUP:
+        // case WM_NCRBUTTONDOWN:
+        // case WM_NCLBUTTONUP:
+        // case WM_NCLBUTTONDOWN: {
+
+        //     if (!VD_FW_G.draw_decorations) {
+        //         int down = 0;
+        //         DWORD code = 0;
+
+        //         switch (msg) {
+
+        //             case WM_NCMBUTTONUP:    down = 0; code = VK_MBUTTON; break;
+        //             case WM_NCMBUTTONDOWN:  down = 1; code = VK_MBUTTON; break;
+        //             case WM_NCRBUTTONUP:    down = 0; code = VK_RBUTTON; break;
+        //             case WM_NCRBUTTONDOWN:  down = 1; code = VK_RBUTTON; break;
+        //             case WM_NCLBUTTONUP:    down = 0; code = VK_LBUTTON; break;
+        //             case WM_NCLBUTTONDOWN:  down = 1; code = VK_LBUTTON; break;
+        //             default: break;
+        //         }
+
+        //         VdFw__Win32Message m;
+        //         m.msg = VD_FW_WIN32_MESSAGE_TYPE_MOUSEBTN;
+        //         m.dat.mousebtn.down = down;
+        //         m.dat.mousebtn.vkbutton = code;
+        //         vd_fw__msgbuf_w(&m);
+        //     }
+
+        //     result = DefWindowProc(hwnd, msg, wparam, lparam);
+        // } break;
+
+        // @todo(mdodis):
         // case WM_SETFOCUS:
         // case WM_KILLFOCUS: {
 
         // } break;
 
-        case WM_NCMOUSEMOVE: {
-            if (!VD_FW_G.draw_decorations) {
-                int x = GET_X_LPARAM(lparam);
-                int y = GET_Y_LPARAM(lparam);
+        // case WM_NCMOUSEMOVE: {
+        //     if (!VD_FW_G.draw_decorations) {
+        //         int x = GET_X_LPARAM(lparam);
+        //         int y = GET_Y_LPARAM(lparam);
 
-                POINT p = {x, y};
-                ScreenToClient(VD_FW_G.hwnd, &p);
+        //         POINT p = {x, y};
+        //         ScreenToClient(VD_FW_G.hwnd, &p);
 
-                VdFw__Win32Message m;
-                m.msg = VD_FW_WIN32_MESSAGE_TYPE_MOUSEMOVE;
-                m.dat.mousemove.mx = p.x;
-                m.dat.mousemove.my = p.y;
-                vd_fw__msgbuf_w(&m);
-            }
-        } break;
+        //         VdFw__Win32Message m;
+        //         m.msg = VD_FW_WIN32_MESSAGE_TYPE_MOUSEMOVE;
+        //         m.dat.mousemove.mx = p.x;
+        //         m.dat.mousemove.my = p.y;
+        //         vd_fw__msgbuf_w(&m);
+        //     }
+
+        //     // result = DefWindowProc(hwnd, msg, wparam, lparam);
+        // } break;
 
         case WM_MOUSEMOVE: {
             int x = GET_X_LPARAM(lparam);

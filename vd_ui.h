@@ -22,6 +22,7 @@
  * 3. This notice may not be removed or altered from any source distribution.
  * ---------------------------------------------------------------------------------------------------------------------
  * @todo(mdodis):
+ * - Figure out a good way to get non-client rects from the ui into the windowing framework
  * - New and improved render pass api using texture id + scissor + layer id as keys
  * - Introduce comp_children_size when calculating child sizes 
  * - Allow active elements to capture the mouse

@@ -71,6 +71,11 @@ int main(int argc, char const *argv[])
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_SCISSOR_TEST);
 
+    int rects[1][4] = {
+        {0, 0, 100, 30},
+    };
+    vd_fw_set_ncrects(1, rects);
+
     vd_fw_set_vsync_on(1);
     while (vd_fw_running()) {
         float delta_seconds = vd_fw_delta_s();
