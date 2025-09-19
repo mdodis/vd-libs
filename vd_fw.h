@@ -3986,12 +3986,18 @@ typedef struct {
 
 static VdFw__MacOsInternalData Vd_Fw_Globals;
 
-@interface VdFwWindowDelegate : NSObject<NSWindowDelegate>
+@interface VdFwWindowDelegate : NSObject<NSApplicationDelegate, NSWindowDelegate>
 @end
+
+static VdFwWindowDelegate *Vd_Fw_Delegate;
 
 @implementation VdFwWindowDelegate
 - (void)windowWillClose:(NSNotification*)notification {
     VD_FW_G.should_close = YES;
+}
+
+- (void)applicationDidFinishLaunching:(NSNotification *)notification {
+    printf("applicationDidFinishLaunching\n");
 }
 
 - (void)windowDidResize:(NSNotification *)notification {
@@ -4008,17 +4014,28 @@ static VdFw__MacOsInternalData Vd_Fw_Globals;
 - (BOOL)canDrawConcurrently {
     return YES;
 }
+- (NSRect)contentRectForFrameRect:(NSRect)windowFrame
+{
+    windowFrame.origin = NSZeroPoint;
+    return NSInsetRect(
+        windowFrame, 16, 16);
+}
 @end
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
-    @autoreleasepool {
+    [NSApplication sharedApplication];
+    [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+    [NSApp activateIgnoringOtherApps:YES];
+    [NSEvent setMouseCoalescingEnabled:NO];
+
+    // @autoreleasepool {
         VD_FW_G.scale = [[NSScreen mainScreen] backingScaleFactor];
 
-        [NSApplication sharedApplication];
-        [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
-        [NSApp activateIgnoringOtherApps:YES];
-        [NSEvent setMouseCoalescingEnabled:NO];
+
+        VdFwWindowDelegate *delegate = [[VdFwWindowDelegate alloc] init];
+        [NSApp setDelegate: delegate];
+        Vd_Fw_Delegate = delegate;
 
         // Create a simple menu bar so the app shows in the Dock
         NSMenu *menubar = [[NSMenu alloc] init];
@@ -4045,7 +4062,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
                                            backing: NSBackingStoreBuffered
                                            defer: NO];
         [VD_FW_G.window setTitle:[NSString stringWithUTF8String:"F"]];
-        [VD_FW_G.window makeKeyAndOrderFront:nil];
+        [VD_FW_G.window makeKeyAndOrderFront:NSApp];
 
         [VD_FW_G.window setAllowsConcurrentViewDrawing:YES];
 
@@ -4064,9 +4081,8 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         [VD_FW_G.gl_context setView:[VD_FW_G.window contentView]];
         [VD_FW_G.gl_context makeCurrentContext];
 
-        VdFwWindowDelegate *delegate = [[VdFwWindowDelegate alloc] init];
         [VD_FW_G.window setDelegate:delegate];
-    }
+    // }
 
     VdFwGlVersion version = VD_FW_GL_VERSION_3_3;
     if (info && info->gl.version != 0) {
