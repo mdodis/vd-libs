@@ -1,5 +1,5 @@
-#define VD_FW_NO_CRT 1
-#define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS
+#define VD_FW_NO_CRT 0
+#define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_CONSOLE
 #include "vd_fw.h"
 
 int main(int argc, char const *argv[])
@@ -12,7 +12,7 @@ int main(int argc, char const *argv[])
             .version = VD_FW_GL_VERSION_3_3,
         },
         .window_options = {
-            .draw_default_borders = 1,
+            .draw_default_borders = 0,
         }
     });
     vd_fw_set_vsync_on(0);

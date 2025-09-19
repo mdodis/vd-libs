@@ -2654,6 +2654,26 @@ static void    vd_fw__gl_debug_message_callback(GLenum source,GLenum type,GLuint
 static int     vd_fw__msgbuf_r(VdFw__Win32Message *message);
 static int     vd_fw__msgbuf_w(VdFw__Win32Message *message);
 
+#if VD_FW_WIN32_PROFILE
+#define VD_FW_JOIN_(a,b) a##b
+#define VD_FW_JOIN(a,b) VD_FW_JOIN_(a,b)
+#define VD_FW_WIN32_PROFILE_BEGIN(name) LARGE_INTEGER name; QueryPerformanceCounter(&name)
+#define VD_FW_WIN32_PROFILE_END(name)   do { \
+        LARGE_INTEGER VD_FW_JOIN(name,end); QueryPerformanceCounter(&VD_FW_JOIN(name,end)); \
+        LARGE_INTEGER delta; \
+        delta.QuadPart = VD_FW_JOIN(name,end).QuadPart - (name).QuadPart; \
+        unsigned long long q  =  delta.QuadPart / VD_FW_G.frequency.QuadPart; \
+        unsigned long long r  =  delta.QuadPart % VD_FW_G.frequency.QuadPart; \
+        unsigned long long ns =  q * 1000000000ULL; \
+        ns                    += (r * 1000000000ULL) / VD_FW_G.frequency.QuadPart; \
+        double ms              = (double)ns / 1000000.0; \
+        printf("%20s took %30zuns %3.3fms\n", #name, ns, ms); \
+    } while (0)
+#else
+#define VD_FW_WIN32_PROFILE_BEGIN(name)
+#define VD_FW_WIN32_PROFILE_END(name)
+#endif // VD_FW_WIN32_PROFILE
+
 #if VD_FW_NO_CRT
 #define VD_FW__CHECK_HRESULT(expr) expr
 #define VD_FW__CHECK_INT(expr) expr
@@ -2705,6 +2725,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
     SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
     timeBeginPeriod(1);
+    QueryPerformanceFrequency(&VD_FW_G.frequency);
 
     VD_FW_G.focused = 1;
 
@@ -2891,7 +2912,6 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         }
     }
 
-    QueryPerformanceFrequency(&VD_FW_G.frequency);
     QueryPerformanceCounter(&VD_FW_G.performance_counter);
     return 1;
 }
@@ -3103,7 +3123,7 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     }
 
     VD_FW_G.hwnd = CreateWindowEx(
-        WS_EX_APPWINDOW | WS_EX_LAYERED,
+        WS_EX_APPWINDOW /* @todo(mdodis): for alpha windows: | WS_EX_LAYERED */,
         TEXT("FWCLASS"),
         TEXT("FW Window"),
         WS_OVERLAPPEDWINDOW | WS_SIZEBOX,
@@ -3321,6 +3341,8 @@ static int vd_fw__hit_test(int x, int y)
 
 static void vd_fw__composition_changed(void)
 {
+    VD_FW_WIN32_PROFILE_BEGIN(composition_changed);
+
     BOOL enabled = FALSE;
     VD_FW__CHECK_HRESULT(DwmIsCompositionEnabled(&enabled));
     VD_FW_G.composition_enabled = enabled;
@@ -3334,6 +3356,7 @@ static void vd_fw__composition_changed(void)
     }
 
     vd_fw__update_region();
+    VD_FW_WIN32_PROFILE_END(composition_changed);
 }
 
 static void vd_fw__update_region(void)
@@ -3440,6 +3463,10 @@ static BOOL vd_fw__has_autohide_taskbar(UINT edge, RECT monitor)
 
 static void vd_fw__window_pos_changed(WINDOWPOS *pos)
 {
+#if 0
+    VD_FW_WIN32_PROFILE_BEGIN(window_pos_changed);
+#endif
+
     if (VD_FW_G.draw_decorations) {
         RECT client;
         GetClientRect(VD_FW_G.hwnd, &client);
@@ -3462,15 +3489,23 @@ static void vd_fw__window_pos_changed(WINDOWPOS *pos)
     if (pos->flags & SWP_FRAMECHANGED) {
         vd_fw__update_region();
     }
+
+#if 0
+    VD_FW_WIN32_PROFILE_END(window_pos_changed);
+#endif
 }
 
 static LRESULT vd_fw__handle_invisible(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
+    VD_FW_WIN32_PROFILE_BEGIN(handle_invisible);
+
     LONG_PTR old_style = GetWindowLongPtr(hwnd, GWL_STYLE);
 
     SetWindowLongPtrW(hwnd, GWL_STYLE, old_style & ~WS_VISIBLE);    
     LRESULT result = DefWindowProcW(hwnd, msg, wparam, lparam);
     SetWindowLongPtrW(hwnd, GWL_STYLE, old_style);    
+
+    VD_FW_WIN32_PROFILE_END(handle_invisible);
 
     return result;
 }
@@ -3491,11 +3526,17 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         } break;
 
         case WM_DWMCOMPOSITIONCHANGED: {
-            vd_fw__composition_changed();
+            if (VD_FW_G.draw_decorations) {
+                result = DefWindowProc(hwnd, msg, wparam, lparam);
+            } else {
+                vd_fw__composition_changed();
+            }
         } break;
 
         case WM_PAINT: {
             if (!VD_FW_G.t_paint_ready) break;
+
+            VD_FW_WIN32_PROFILE_BEGIN(wm_paint);
 
             PAINTSTRUCT ps;
             BeginPaint(hwnd, &ps);
@@ -3514,7 +3555,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             LeaveCriticalSection(&VD_FW_G.critical_section);
             EndPaint(hwnd, &ps);
 
-            DwmFlush();
+            VD_FW_WIN32_PROFILE_END(wm_paint);
         } break;
 
         case WM_DPICHANGED: {
@@ -3522,9 +3563,9 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             SetWindowPos(hwnd, 0, rect->left, rect->top, rect->right - rect->left, rect->bottom - rect->top, SWP_NOZORDER | SWP_NOACTIVATE);
         } break;
 
-        // case WM_ERASEBKGND: {
-        //     result = 1;
-        // } break;
+        case WM_ERASEBKGND: {
+            result = 1;
+        } break;
 
         case WM_NCACTIVATE: {
             // DefWindowProc doesn't repaint border if lparam == -1
@@ -3550,9 +3591,11 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         } break;
 
         case WM_NCPAINT: {
+            VD_FW_WIN32_PROFILE_BEGIN(wm_ncpaint);
             if (VD_FW_G.composition_enabled) {
                 result = DefWindowProc(hwnd, msg, wparam, lparam);
             }
+            VD_FW_WIN32_PROFILE_END(wm_ncpaint);
         } break;
 
         case WM_NCUAHDRAWCAPTION:

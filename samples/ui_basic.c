@@ -6,7 +6,6 @@
 #define VD_USE_CRT 1
 #define VD_FW_NO_CRT 0
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS
-// #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_CONSOLE
 #include "vd_fw.h"
 #include "vd.h"
 
