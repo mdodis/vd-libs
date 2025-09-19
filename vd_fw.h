@@ -22,16 +22,41 @@
  *    misrepresented as being the original software.
  * 3. This notice may not be removed or altered from any source distribution.
  * ---------------------------------------------------------------------------------------------------------------------
- * NOTES
+ * NOTESjavascript:void(0)
  * - Do NOT include OpenGL headers, or import an OpenGL loader. This library does that already 
  * - The highest possible OpenGL version you should support if you want it to work (as of 2025...)
  *   on the big threes is OpenGL Core Profile 4.1 (MacOS limitation)
  *
  * TODO
+ * - Change default behavior of init to use window with decorations
+ * - If ncrects are never specified, move the whole window with mouse?
  * - Remove PostThreadMessageA and use a lightweight circular message queue with InterlockedXYZ functions
  * - Move MacOS window creation and handling to another thread
  *   so that we can draw continuously and not care about display events maybe
  */
+
+/**
+ * @file vd_fw.h
+ * @brief Example usage
+ * @code{.c}
+ * #include "vd_fw.h"                                           // Include library
+ * int main() {
+ *     vd_fw_init(NULL);                                        // Initialize library
+ *
+ *     while (vd_fw_running()) {                                // Check if the window is running & gather events
+ *         glClearColor(0.5f, 0.3f, 0.2f, 1.0f);
+ *         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+ *
+ *         vd_fw_swap_buffers();                                // Swap buffers
+ *     }
+ *     return 0;
+ * }
+ * 
+ * #define VD_FW_IMPL                                           // Include implementation code
+ * #include "vd_fw.h"
+ * @endcode
+ */
+
 #ifndef VD_FW_H
 #define VD_FW_H
 #define VD_FW_VERSION_MAJOR    0
@@ -224,6 +249,7 @@ VD_FW_API int                vd_fw_set_vsync_on(int on);
  * @return   The mouse button state
  */
 VD_FW_API int                vd_fw_get_mouse_state(int *x, int *y);
+VD_FW_INLINE int             vd_fw_get_mouse_statef(float *x, float *y);
 VD_FW_API void               vd_fw_set_mouse_capture(int on);
 
 /**
@@ -233,7 +259,6 @@ VD_FW_API void               vd_fw_set_mouse_capture(int on);
  * @return    1 if the wheel moved, 0 if not
  */
 VD_FW_API int                vd_fw_get_mouse_wheel(float *dx, float *dy);
-VD_FW_INLINE int             vd_fw_get_mouse_statef(float *x, float *y);
 
 VD_FW_API int                vd_fw_get_key_pressed(VdFwKey key);
 
@@ -472,6 +497,7 @@ VD_FW_API void vd_fw__free_mem(void *memory);
 #endif // !VD_FW_WIN32_SUBSYSTEM
 #endif // _WIN32
 
+/// @cond EXCLUDE
 #if defined(__APPLE__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
@@ -2377,8 +2403,10 @@ extern PFNGLDEBUGMESSAGECALLBACKPROC glDebugMessageCallback;
 #pragma clang diagnostic pop
 #endif
 #endif // !VD_FW_H
+/// @condend
 
 #ifdef VD_FW_IMPL
+/// @cond EXCLUDE
 
 #if defined(__APPLE__)
 #pragma clang diagnostic push
@@ -4931,4 +4959,5 @@ VD_FW_API int vd_fw_compile_or_hotload_program(unsigned int *program, unsigned l
 #if defined(__APPLE__)
 #pragma clang diagnostic pop
 #endif
+/// @condend
 #endif // VD_FW_IMPL
