@@ -201,7 +201,7 @@ VD_FW_API int                vd_fw_get_focused(int *focused);
 - Pass 1 rect for the caption
 - Pass n rects for excluded
  */
-VD_FW_API void               vd_fw_set_ncrects(int count, int (*rects)[4]);
+VD_FW_API void               vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4]);
 
 /**
  * Get the time (in nanoseconds) since the last call to @see vd_fw_swap_buffers
@@ -2571,6 +2571,7 @@ typedef struct {
     volatile LONG               msgbuf_w;
     int                         ncrect_count;
     int                         ncrects[16][4];
+    int                         nccaption[4];
 
 /* ----RENDER THREAD - WINDOW THREAD SYNC---------------------------------------------------------------------------- */
     HANDLE                      sem_window_ready;
@@ -3053,8 +3054,13 @@ VD_FW_API int vd_fw_get_focused(int *focused)
     return VD_FW_G.focus_changed;
 }
 
-VD_FW_API void vd_fw_set_ncrects(int count, int (*rects)[4])
+VD_FW_API void vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4])
 {
+    VD_FW_G.nccaption[0] = caption[0];
+    VD_FW_G.nccaption[1] = caption[1];
+    VD_FW_G.nccaption[2] = caption[2];
+    VD_FW_G.nccaption[3] = caption[3];
+
     VD_FW_G.ncrect_count = count;
     for (int i = 0; i < count; ++i) {
         VD_FW_G.ncrects[i][0] = rects[i][0];

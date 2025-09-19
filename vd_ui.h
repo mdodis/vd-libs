@@ -96,28 +96,6 @@ VD_UI_API int              vd_ui_vsnprintf(char *s, size_t n, const char *format
 static inline int          vd_ui_snprintf(char *s, size_t n, const char *format, ...);
 static inline int          vd_ui_strlen(const char *s);
 static inline void*        vd_ui_memcpy(void *dst, void *src, size_t count);
-static inline int vd_ui_snprintf(char *s, size_t n, const char *format, ...) {
-    va_list args;
-    va_start(args, format);    
-    int result = vd_ui_vsnprintf(s, n, format, args);
-    va_end(args);
-
-    return result;
-}
-
-static inline int vd_ui_strlen(const char *s)
-{
-    const char *c = s;
-    int l = 0;
-    while (*c++) l++;
-    return l;
-}
-
-static inline void *vd_ui_memcpy(void *dst, void *src, size_t count)
-{
-    for (size_t i = 0; i < count; ++i) ((unsigned char*)dst)[i] = ((unsigned char*)src)[i];
-    return dst;
-}
 
 /* ----DATA TYPES---------------------------------------------------------------------------------------------------- */
 typedef struct {
@@ -332,32 +310,6 @@ typedef struct {
 
 extern char Vd_Ui_CharBuf[VD_UI_CHAR_BUF_COUNT];
 
-VD_UI_INL int vd_ui_str_eq(VdUiStr a, VdUiStr b)
-{
-    if (a.l != b.l) {
-        return 0;
-    }
-
-    for (int i = 0; i < a.l; ++i) {
-        if (a.s[i] != b.s[i]) {
-            return 0;
-        }
-    }
-
-    return 1;
-}
-
-VD_UI_INL const char *vd_ui_size_mode_to_str(VdUiSizeMode size_mode)
-{
-    switch (size_mode) {
-        case VD_UI_SIZE_MODE_ABSOLUTE:          return "absolute";
-        case VD_UI_SIZE_MODE_TEXT_CONTENT:      return "text-content";
-        case VD_UI_SIZE_MODE_CONTAIN_CHILDREN:  return "contain-children";
-        case VD_UI_SIZE_MODE_PERCENT_OF_PARENT: return "percentage-of-parent";
-        default:                                return "<invalid>";
-    }
-}
-
 /* ----DEMOS--------------------------------------------------------------------------------------------------------- */
 VD_UI_API void             vd_ui_demo(void);
 
@@ -478,80 +430,11 @@ VD_UI_API void             vd_ui_parent_pop(void);
 VD_UI_API int              vd_ui_parent_count(void);
 VD_UI_API VdUiDiv*         vd_ui_parent_get(int i);
 
+/**
+ * Sets the scale of the UI
+ * @param  s The scale, 1.0f by default
+ */
 VD_UI_API void             vd_ui_set_scale(float s);
-
-static inline int vd_ui_div_has_flag(VdUiDiv *div, VdUiFlags flag)
-{
-    return div->flags & flag ? 1 : 0;
-}
-
-static inline VdUiF4 vd_ui_f4(float x, float y, float z, float w)
-{
-    VdUiF4 result;
-    result.e[0] = x;
-    result.e[1] = y;
-    result.e[2] = z;
-    result.e[3] = w;
-    return result;
-}
-
-static inline VdUiF4 vd_ui_fall4(float s)
-{
-    return vd_ui_f4(s,s,s,s);
-}
-
-static inline VdUiGradient vd_ui_gradient(VdUiF4 top_left, VdUiF4 top_right, VdUiF4 bottom_left, VdUiF4 bottom_right)
-{
-    VdUiGradient result;
-    result.colors[0][0] = top_left.e[0];
-    result.colors[0][1] = top_left.e[1];
-    result.colors[0][2] = top_left.e[2];
-    result.colors[0][3] = top_left.e[3];
-
-    result.colors[1][0] = top_right.e[0];
-    result.colors[1][1] = top_right.e[1];
-    result.colors[1][2] = top_right.e[2];
-    result.colors[1][3] = top_right.e[3];
-
-    result.colors[2][0] = bottom_left.e[0];
-    result.colors[2][1] = bottom_left.e[1];
-    result.colors[2][2] = bottom_left.e[2];
-    result.colors[2][3] = bottom_left.e[3];
-
-    result.colors[3][0] = bottom_right.e[0];
-    result.colors[3][1] = bottom_right.e[1];
-    result.colors[3][2] = bottom_right.e[2];
-    result.colors[3][3] = bottom_right.e[3];
-    return result;
-}
-
-static inline VdUiGradient vd_ui_gradient1(VdUiF4 all)
-{
-    return vd_ui_gradient(all, all, all, all);
-}
-
-static inline VdUiSymbol vd_ui_symbol(VdUiFontId id, unsigned int codepoint)
-{
-    VdUiSymbol result;
-    result.font = id;
-    result.codepoint = codepoint;
-    return result;
-}
-
-static inline int vd_ui_symbol_valid(VdUiSymbol symbol)
-{
-    return (symbol.font.id != 0) && (symbol.codepoint != 0);
-}
-
-static inline VdUiStr vd_ui_symbol_as_str(VdUiSymbol symbol)
-{
-    VdUiStr result;
-
-    result.s = (char*)&symbol.codepoint;
-    result.l = 4;
-
-    return result;    
-}
 
 /* ----RENDERING----------------------------------------------------------------------------------------------------- */
 enum {
@@ -676,6 +559,40 @@ VD_UI_API void             vd_ui_get_glyph_metrics(VdUiFontId id, unsigned int c
 
 VD_UI_API void             vd_ui_measure_text_size(VdUiFontId font, VdUiStr str, float size, float *w, float *h);
 
+/* ----DEBUG--------------------------------------------------------------------------------------------------------- */
+VD_UI_API void             vd_ui_debug_set_draw_cursor_on(VdUiBool on);
+VD_UI_API void             vd_ui_debug_set_inspector_on(VdUiBool on);
+VD_UI_API void             vd_ui_debug_set_metrics_on(VdUiBool on);
+
+/* ----INTEGRATION - WINDOW SYSTEMS---------------------------------------------------------------------------------- */
+
+/**
+ * Begin measuring non client (draggable) area
+ * @param  nc_div The div that indicates the non client area
+ */
+VD_UI_API void             vd_ui_ws_nc_area_begin(VdUiDiv *nc_div);
+
+/**
+ * End measuring non client area. Functions below this one are then available
+ * @return  [description]
+ */
+VD_UI_API void             vd_ui_ws_nc_area_end(void);
+
+/**
+ * Gets the non client area. The area is defined by:
+ * - 1 rectangle that indicates the whole area (the one passed to vd_ui_ws_nc_area_begin)
+ * - N rectangles that indicate areas to exclude from the hit test
+ * 
+ * @param nc_area_rect          The whole area (including buttons)
+ * @param num_max_exclude_rects The maximum number of area rects pointed to by @ref exclude_rects
+ * @param num_exclude_rects     The number of rects that were written
+ * @param exclude_rects         Pointer to rects array. Must be at least num_max_exclude_rects
+ * @return                      1 if the non client area has changed, due to a resize, or any other reason
+ */
+VD_UI_API int              vd_ui_ws_nc_area_get(float nc_area_rect[4],
+                                                int num_max_exclude_rects,
+                                                int *num_exclude_rects, int (*exclude_rects)[4]);
+
 /* ----INTEGRATION - OPENGL------------------------------------------------------------------------------------------ */
 /**
  * Gets the default shader sources for OpenGL
@@ -685,7 +602,7 @@ VD_UI_API void             vd_ui_measure_text_size(VdUiFontId font, VdUiStr str,
  * @param  fragment_shader_len The length of the fragment shader in bytes
  */
 VD_UI_API void             vd_ui_gl_get_default_shader_sources(const char **const vertex_shader, size_t *vertex_shader_len,
-                                                            const char **const fragment_shader, size_t *fragment_shader_len);
+                                                               const char **const fragment_shader, size_t *fragment_shader_len);
 /**
  * Gets the uniform name for window resolution using the default OpenGL 3.3 core profile shader provided as an example by the library
  * @return  The uniform name to pass into glGetUniformLocation (which you can then store somewhere and pass to glUniform2f)
@@ -734,12 +651,136 @@ VD_UI_API int              vd_ui_gl_get_num_attributes(void);
  * @param  pointer    The offset of the attribute        (6th parameter to glVertexAttribPointer)
  * @param  divisor    The input rate of the attribute    (2nd parameter to glVertexAttribDivisor)
  */
-VD_UI_API void             vd_ui_gl_get_attribute_properties(int attribute, int *size, unsigned int *type, unsigned char *normalized, int *stride, void **pointer, unsigned int *divisor);
+VD_UI_API void             vd_ui_gl_get_attribute_properties(int attribute, int *size, unsigned int *type,
+                                                             unsigned char *normalized, int *stride, void **pointer,
+                                                             unsigned int *divisor);
 
-/* ----DEBUG--------------------------------------------------------------------------------------------------------- */
-VD_UI_API void             vd_ui_debug_set_draw_cursor_on(VdUiBool on);
-VD_UI_API void             vd_ui_debug_set_inspector_on(VdUiBool on);
-VD_UI_API void             vd_ui_debug_set_metrics_on(VdUiBool on);
+/* ----INLINE IMPL--------------------------------------------------------------------------------------------------- */
+VD_UI_INL int vd_ui_str_eq(VdUiStr a, VdUiStr b)
+{
+    if (a.l != b.l) {
+        return 0;
+    }
+
+    for (int i = 0; i < a.l; ++i) {
+        if (a.s[i] != b.s[i]) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+VD_UI_INL const char *vd_ui_size_mode_to_str(VdUiSizeMode size_mode)
+{
+    switch (size_mode) {
+        case VD_UI_SIZE_MODE_ABSOLUTE:          return "absolute";
+        case VD_UI_SIZE_MODE_TEXT_CONTENT:      return "text-content";
+        case VD_UI_SIZE_MODE_CONTAIN_CHILDREN:  return "contain-children";
+        case VD_UI_SIZE_MODE_PERCENT_OF_PARENT: return "percentage-of-parent";
+        default:                                return "<invalid>";
+    }
+}
+
+
+static inline int vd_ui_snprintf(char *s, size_t n, const char *format, ...) {
+    va_list args;
+    va_start(args, format);    
+    int result = vd_ui_vsnprintf(s, n, format, args);
+    va_end(args);
+
+    return result;
+}
+
+static inline int vd_ui_strlen(const char *s)
+{
+    const char *c = s;
+    int l = 0;
+    while (*c++) l++;
+    return l;
+}
+
+static inline void *vd_ui_memcpy(void *dst, void *src, size_t count)
+{
+    for (size_t i = 0; i < count; ++i) ((unsigned char*)dst)[i] = ((unsigned char*)src)[i];
+    return dst;
+}
+
+
+static inline int vd_ui_div_has_flag(VdUiDiv *div, VdUiFlags flag)
+{
+    return div->flags & flag ? 1 : 0;
+}
+
+static inline VdUiF4 vd_ui_f4(float x, float y, float z, float w)
+{
+    VdUiF4 result;
+    result.e[0] = x;
+    result.e[1] = y;
+    result.e[2] = z;
+    result.e[3] = w;
+    return result;
+}
+
+static inline VdUiF4 vd_ui_fall4(float s)
+{
+    return vd_ui_f4(s,s,s,s);
+}
+
+static inline VdUiGradient vd_ui_gradient(VdUiF4 top_left, VdUiF4 top_right, VdUiF4 bottom_left, VdUiF4 bottom_right)
+{
+    VdUiGradient result;
+    result.colors[0][0] = top_left.e[0];
+    result.colors[0][1] = top_left.e[1];
+    result.colors[0][2] = top_left.e[2];
+    result.colors[0][3] = top_left.e[3];
+
+    result.colors[1][0] = top_right.e[0];
+    result.colors[1][1] = top_right.e[1];
+    result.colors[1][2] = top_right.e[2];
+    result.colors[1][3] = top_right.e[3];
+
+    result.colors[2][0] = bottom_left.e[0];
+    result.colors[2][1] = bottom_left.e[1];
+    result.colors[2][2] = bottom_left.e[2];
+    result.colors[2][3] = bottom_left.e[3];
+
+    result.colors[3][0] = bottom_right.e[0];
+    result.colors[3][1] = bottom_right.e[1];
+    result.colors[3][2] = bottom_right.e[2];
+    result.colors[3][3] = bottom_right.e[3];
+    return result;
+}
+
+static inline VdUiGradient vd_ui_gradient1(VdUiF4 all)
+{
+    return vd_ui_gradient(all, all, all, all);
+}
+
+static inline VdUiSymbol vd_ui_symbol(VdUiFontId id, unsigned int codepoint)
+{
+    VdUiSymbol result;
+    result.font = id;
+    result.codepoint = codepoint;
+    return result;
+}
+
+static inline int vd_ui_symbol_valid(VdUiSymbol symbol)
+{
+    return (symbol.font.id != 0) && (symbol.codepoint != 0);
+}
+
+static inline VdUiStr vd_ui_symbol_as_str(VdUiSymbol symbol)
+{
+    VdUiStr result;
+
+    result.s = (char*)&symbol.codepoint;
+    result.l = 4;
+
+    return result;    
+}
+
+
 
 #endif // !VD_UI_H
 
@@ -1765,6 +1806,8 @@ VD_UI_API void vd_ui_demo(void)
     {
         {
             VdUiDiv *decorations = vd_ui_div_newf(VD_UI_FLAG_FLEX_HORIZONTAL | VD_UI_FLAG_ALIGN_CENTER | VD_UI_FLAG_BACKGROUND, "##decorations");
+            // vd_ui_ws_nc_area_begin(decorations);
+
             decorations->style.size[0].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
             decorations->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
             decorations->style.normal_grad = vd_ui_gradient(vd_ui_f4(0.13f, 0.13f, 0.13f, 1.f), vd_ui_f4(0.23f, 0.23f, 0.23f, 1.f),
@@ -1800,6 +1843,8 @@ VD_UI_API void vd_ui_demo(void)
                 vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_CANCEL), "##close");
             }
             vd_ui_parent_pop();
+
+            // vd_ui_ws_nc_area_end();
         }
         static float scrollx = 0.f;
         static float scrolly = 0.f;
