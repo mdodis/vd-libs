@@ -196,6 +196,11 @@ VD_FW_API int                vd_fw_get_size(int *w, int *h);
  * @return         1 if the focus has changed. There's no point in checking the value of focused otherwise.
  */
 VD_FW_API int                vd_fw_get_focused(int *focused);
+/* 
+@todo(mdodis): Probably the simplest way to go about this is let the user:
+- Pass 1 rect for the caption
+- Pass n rects for excluded
+ */
 VD_FW_API void               vd_fw_set_ncrects(int count, int (*rects)[4]);
 
 /**
