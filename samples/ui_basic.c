@@ -28,7 +28,7 @@ int main(int argc, char const *argv[])
 
     vd_fw_init(& (VdFwInitInfo) {
         .gl = {
-            .debug_on = 1,
+            .debug_on = 0,
             .version = VD_FW_GL_VERSION_3_3,
         },
 
@@ -67,11 +67,12 @@ int main(int argc, char const *argv[])
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 
+    glEnable(GL_MULTISAMPLE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_SCISSOR_TEST);
 
-    vd_fw_set_vsync_on(0);
+    vd_fw_set_vsync_on(1);
     while (vd_fw_running()) {
         float delta_seconds = vd_fw_delta_s();
 
@@ -182,7 +183,6 @@ int main(int argc, char const *argv[])
         // Get render passes
         unsigned int num_passes;
         VdUiRenderPass *passes = vd_ui_frame_get_render_passes(&num_passes);
-
 
         glViewport(0, 0, w, h);
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);

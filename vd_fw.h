@@ -2555,6 +2555,10 @@ typedef struct {
     int                         wheel_moved;
     float                       wheel[2];
     unsigned long long          last_ns;
+    int                         mouse[2];
+    DWORD                       lmousedown;
+    DWORD                       rmousedown;
+    DWORD                       mmousedown;
 
 /* ----RENDER THREAD - WINDOW THREAD DATA---------------------------------------------------------------------------- */
     VdFw__Win32Message          msgbuf[VD_FW_WIN32_MESSAGE_BUFFER_SIZE];
@@ -2904,45 +2908,72 @@ VD_FW_API int vd_fw_running(void)
     VD_FW_G.wheel[1] = 0.f;
     VD_FW_G.focus_changed = 0;
 
-    // Peek Messages
-    MSG msg;
-    while (PeekMessage(&msg, 0, 0, 0, PM_REMOVE)) {
-        TranslateMessage(&msg);
-
-        UINT   message = msg.message;
-        WPARAM wparam = msg.lParam;
-        (void)wparam;
-        LPARAM lparam = msg.wParam;
-
-        switch (message) {
-
-            case WM_MOUSEWHEEL: {
-                VD_FW_G.wheel_moved = 1;
-                int delta = GET_WHEEL_DELTA_WPARAM(lparam);
-                float dy = (float)delta / (float)WHEEL_DELTA;
-                VD_FW_G.wheel[1] += dy;
+    VdFw__Win32Message mm;
+    while (vd_fw__msgbuf_r(&mm)) {
+        switch (mm.msg) {
+            case VD_FW_WIN32_MESSAGE_TYPE_MOUSEMOVE: {
+                VD_FW_G.mouse[0] = mm.dat.mousemove.mx;
+                VD_FW_G.mouse[1] = mm.dat.mousemove.my;
             } break;
 
-            case WM_MOUSEHWHEEL: {
-                VD_FW_G.wheel_moved = 1;
-                int delta = GET_WHEEL_DELTA_WPARAM(lparam);
-                float dx = (float)delta / (float)WHEEL_DELTA;
-                VD_FW_G.wheel[0] += dx;
+            case VD_FW_WIN32_MESSAGE_TYPE_SCROLL: {
+                VD_FW_G.wheel[0] += mm.dat.scroll.dx;
+                VD_FW_G.wheel[1] += mm.dat.scroll.dy;
             } break;
 
-            case WM_SETFOCUS: {
-                VD_FW_G.focused = 1;
-                VD_FW_G.focus_changed = 1;
-            } break;
-
-            case WM_KILLFOCUS: {
-                VD_FW_G.focused = 0;
-                VD_FW_G.focus_changed = 1;
+            case VD_FW_WIN32_MESSAGE_TYPE_MOUSEBTN: {
+                if (mm.dat.mousebtn.vkbutton == VK_LBUTTON) {
+                    VD_FW_G.lmousedown = mm.dat.mousebtn.down;
+                } else if (mm.dat.mousebtn.vkbutton == VK_RBUTTON) {
+                    VD_FW_G.rmousedown = mm.dat.mousebtn.down;
+                } else if (mm.dat.mousebtn.vkbutton == VK_MBUTTON) {
+                    VD_FW_G.mmousedown = mm.dat.mousebtn.down;
+                }
             } break;
 
             default: break;
         }
     }
+
+    // Peek Messages
+    // MSG msg;
+    // while (PeekMessage(&msg, 0, 0, 0, PM_REMOVE)) {
+    //     TranslateMessage(&msg);
+
+    //     UINT   message = msg.message;
+    //     WPARAM wparam = msg.lParam;
+    //     (void)wparam;
+    //     LPARAM lparam = msg.wParam;
+
+    //     switch (message) {
+
+    //         case WM_MOUSEWHEEL: {
+    //             VD_FW_G.wheel_moved = 1;
+    //             int delta = GET_WHEEL_DELTA_WPARAM(lparam);
+    //             float dy = (float)delta / (float)WHEEL_DELTA;
+    //             VD_FW_G.wheel[1] += dy;
+    //         } break;
+
+    //         case WM_MOUSEHWHEEL: {
+    //             VD_FW_G.wheel_moved = 1;
+    //             int delta = GET_WHEEL_DELTA_WPARAM(lparam);
+    //             float dx = (float)delta / (float)WHEEL_DELTA;
+    //             VD_FW_G.wheel[0] += dx;
+    //         } break;
+
+    //         case WM_SETFOCUS: {
+    //             VD_FW_G.focused = 1;
+    //             VD_FW_G.focus_changed = 1;
+    //         } break;
+
+    //         case WM_KILLFOCUS: {
+    //             VD_FW_G.focused = 0;
+    //             VD_FW_G.focus_changed = 1;
+    //         } break;
+
+    //         default: break;
+    //     }
+    // }
 
     EnterCriticalSection(&VD_FW_G.critical_section);
     VD_FW_G.curr_frame = VD_FW_G.next_frame;
@@ -3004,19 +3035,14 @@ VD_FW_API int vd_fw_set_vsync_on(int on)
 
 VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
 {
-    POINT p;
-    GetCursorPos(&p);
-
-    ScreenToClient(VD_FW_G.hwnd, &p);
-
-    if (x) *x = p.x;
-    if (y) *y = p.y;
+    if (x) *x = VD_FW_G.mouse[0];
+    if (y) *y = VD_FW_G.mouse[1];
 
     int result = 0;
 
-    result |= GetAsyncKeyState(VK_LBUTTON) ? VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN  : 0;
-    result |= GetAsyncKeyState(VK_RBUTTON) ? VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN : 0;
-
+    result |= VD_FW_G.lmousedown ? VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN   : 0;
+    result |= VD_FW_G.rmousedown ? VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN  : 0;
+    result |= VD_FW_G.mmousedown ? VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN : 0;
     return result;
 }
 
@@ -3496,9 +3522,9 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             SetWindowPos(hwnd, 0, rect->left, rect->top, rect->right - rect->left, rect->bottom - rect->top, SWP_NOZORDER | SWP_NOACTIVATE);
         } break;
 
-        case WM_ERASEBKGND: {
-            result = 1;
-        } break;
+        // case WM_ERASEBKGND: {
+        //     result = 1;
+        // } break;
 
         case WM_NCACTIVATE: {
             // DefWindowProc doesn't repaint border if lparam == -1
@@ -3514,17 +3540,6 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             }
         } break;
 
-        case WM_NCMOUSEMOVE: {
-            if (!VD_FW_G.draw_decorations) {
-                // message thread
-            }
-        } break;
-
-        case WM_MOUSEMOVE: {
-            if (VD_FW_G.draw_decorations) {
-                // message thread
-            }
-        } break;
 
         case WM_NCHITTEST: {
             if (VD_FW_G.draw_decorations) {
@@ -3588,11 +3603,85 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             VD_FW_G.curr_key_states[key] = (unsigned char)is_down;
         } break;
 
-        case WM_SETFOCUS:
-        case WM_KILLFOCUS:
-        case WM_MOUSEHWHEEL:
+        case WM_MBUTTONUP:
+        case WM_MBUTTONDOWN:
+        case WM_RBUTTONUP:
+        case WM_RBUTTONDOWN:
+        case WM_LBUTTONUP:
+        case WM_LBUTTONDOWN: {
+            int down = 0;
+            DWORD code = 0;
+
+            switch (msg) {
+
+                case WM_MBUTTONUP:    down = 0; code = VK_MBUTTON; break;
+                case WM_MBUTTONDOWN:  down = 1; code = VK_MBUTTON; break;
+                case WM_RBUTTONUP:    down = 0; code = VK_RBUTTON; break;
+                case WM_RBUTTONDOWN:  down = 1; code = VK_RBUTTON; break;
+                case WM_LBUTTONUP:    down = 0; code = VK_LBUTTON; break;
+                case WM_LBUTTONDOWN:  down = 1; code = VK_LBUTTON; break;
+                default: break;
+            }
+
+            VdFw__Win32Message m;
+            m.msg = VD_FW_WIN32_MESSAGE_TYPE_MOUSEBTN;
+            m.dat.mousebtn.down = down;
+            m.dat.mousebtn.vkbutton = code;
+            vd_fw__msgbuf_w(&m);
+        } break;
+
+        // case WM_SETFOCUS:
+        // case WM_KILLFOCUS: {
+
+        // } break;
+
+        case WM_NCMOUSEMOVE: {
+            if (!VD_FW_G.draw_decorations) {
+                int x = GET_X_LPARAM(lparam);
+                int y = GET_Y_LPARAM(lparam);
+
+                POINT p = {x, y};
+                ScreenToClient(VD_FW_G.hwnd, &p);
+
+                VdFw__Win32Message m;
+                m.msg = VD_FW_WIN32_MESSAGE_TYPE_MOUSEMOVE;
+                m.dat.mousemove.mx = p.x;
+                m.dat.mousemove.my = p.y;
+                vd_fw__msgbuf_w(&m);
+            }
+        } break;
+
+        case WM_MOUSEMOVE: {
+            int x = GET_X_LPARAM(lparam);
+            int y = GET_Y_LPARAM(lparam);
+
+            VdFw__Win32Message m;
+            m.msg = VD_FW_WIN32_MESSAGE_TYPE_MOUSEMOVE;
+            m.dat.mousemove.mx = x;
+            m.dat.mousemove.my = y;
+            vd_fw__msgbuf_w(&m);
+        } break;
+
+        case WM_MOUSEHWHEEL: {
+            if (!VD_FW_G.t_paint_ready) { result = DefWindowProc(hwnd, msg, wparam, lparam); break; }
+            int delta = GET_WHEEL_DELTA_WPARAM(wparam);
+            float dx = (float)delta / (float)WHEEL_DELTA;
+            VdFw__Win32Message m;
+            m.msg = VD_FW_WIN32_MESSAGE_TYPE_SCROLL;
+            m.dat.scroll.dx = dx;
+            m.dat.scroll.dy = 0.f;
+            vd_fw__msgbuf_w(&m);
+        } break;
+
         case WM_MOUSEWHEEL: {
-            PostThreadMessageA(VD_FW_G.main_thread_id, msg, wparam, lparam);
+            if (!VD_FW_G.t_paint_ready) { result = DefWindowProc(hwnd, msg, wparam, lparam); break; }
+            int delta = GET_WHEEL_DELTA_WPARAM(wparam);
+            float dy = (float)delta / (float)WHEEL_DELTA;
+            VdFw__Win32Message m;
+            m.msg = VD_FW_WIN32_MESSAGE_TYPE_SCROLL;
+            m.dat.scroll.dx = 0.f;
+            m.dat.scroll.dy = dy;
+            vd_fw__msgbuf_w(&m);
         } break;
 
         default: {
@@ -3600,6 +3689,43 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         } break;
     }    
     return result;
+}
+
+static int vd_fw__msgbuf_r(VdFw__Win32Message *message)
+{
+    LONG r = VD_FW_G.msgbuf_r;
+    LONG w = InterlockedCompareExchange(&VD_FW_G.msgbuf_w, VD_FW_G.msgbuf_w, VD_FW_G.msgbuf_w);
+
+    MemoryBarrier();
+
+    if (r == w) {
+        return 0;
+    }
+
+    *message = VD_FW_G.msgbuf[r];
+
+    LONG nr = (r + 1) % VD_FW_WIN32_MESSAGE_BUFFER_SIZE;
+    InterlockedExchange(&VD_FW_G.msgbuf_r, nr);
+
+    return 1;
+}
+
+static int vd_fw__msgbuf_w(VdFw__Win32Message *message)
+{
+    LONG w = VD_FW_G.msgbuf_w;
+    LONG r = InterlockedCompareExchange(&VD_FW_G.msgbuf_r, VD_FW_G.msgbuf_r, VD_FW_G.msgbuf_r);
+
+    MemoryBarrier();
+
+    if ((w + 1) % VD_FW_WIN32_MESSAGE_BUFFER_SIZE == r) {
+        return 0;
+    }
+
+    VD_FW_G.msgbuf[w] = *message;
+    LONG nw = (w + 1) % VD_FW_WIN32_MESSAGE_BUFFER_SIZE;
+    InterlockedExchange(&VD_FW_G.msgbuf_w, nw);
+
+    return 1;
 }
 
 #if VD_FW_NO_CRT

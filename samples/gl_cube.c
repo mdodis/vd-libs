@@ -43,7 +43,7 @@ int main(int argc, char const *argv[])
             .debug_on = 0,
         },
         .window_options = {
-            .draw_default_borders = 1,
+            .draw_default_borders = 0,
         }
     });
     vd_fw_set_vsync_on(0);
@@ -129,7 +129,7 @@ int main(int argc, char const *argv[])
     unsigned long long program_time = 0;
 
     while (vd_fw_running()) {
-        float ds = vd_fw_begin_render();
+        float ds = vd_fw_delta_s();
 
         static int w, h;
         if (vd_fw_get_size(&w, &h)) {
@@ -171,7 +171,7 @@ int main(int argc, char const *argv[])
         cy += ds * 2.f;
         cp += ds * 2.f;
 
-        vd_fw_end_render();
+        vd_fw_swap_buffers();
     }
     return 0;
 }
