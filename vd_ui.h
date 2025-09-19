@@ -435,6 +435,7 @@ VD_UI_API VdUiDiv*         vd_ui_parent_get(int i);
  * @param  s The scale, 1.0f by default
  */
 VD_UI_API void             vd_ui_set_scale(float s);
+VD_UI_API float            vd_ui_get_scale(void);
 
 /* ----RENDERING----------------------------------------------------------------------------------------------------- */
 enum {
@@ -1270,9 +1271,9 @@ VD_UI_API VdUiReply vd_ui_checkbox(int *b, VdUiStr str)
 
     VdUiDiv *ckbx = vd_ui_div_newf(VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_CLICKABLE, "##ckbx");
     ckbx->style.size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
-    ckbx->style.size[0].value = ctx->def.font_size;
+    ckbx->style.size[0].value = ctx->def.font_size * vd_ui_get_scale();
     ckbx->style.size[1].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
-    ckbx->style.size[1].value = ctx->def.font_size;
+    ckbx->style.size[1].value = ctx->def.font_size * vd_ui_get_scale();
     ckbx->style.normal_grad = vd_ui_gradient(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f),
                                             vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f));
 
@@ -1330,9 +1331,9 @@ VD_UI_API void vd_ui_icon(VdUiSymbol symbol, VdUiStr str)
     VdUiDiv *div = vd_ui_div_new(VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND,
                                  str);
     div->style.size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
-    div->style.size[0].value = 32.f;
+    div->style.size[0].value = 32.f * vd_ui_get_scale();
     div->style.size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
-    div->style.size[1].value = 32.f;
+    div->style.size[1].value = 32.f * vd_ui_get_scale();
     div->style.text_valign = VD_UI_TEXT_VALIGN_MIDDLE;
     div->style.text_halign = VD_UI_TEXT_HALIGN_CENTER;
     div->style.symbol = symbol;
@@ -1344,9 +1345,9 @@ VD_UI_API VdUiReply vd_ui_icon_button(VdUiSymbol symbol, VdUiStr str)
     VdUiDiv *div = vd_ui_div_new(VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_CLICKABLE,
                                  str);
     div->style.size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
-    div->style.size[0].value = 32.f;
+    div->style.size[0].value = 32.f * vd_ui_get_scale();
     div->style.size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
-    div->style.size[1].value = 32.f;
+    div->style.size[1].value = 32.f * vd_ui_get_scale();
     div->style.text_valign = VD_UI_TEXT_VALIGN_MIDDLE;
     div->style.text_halign = VD_UI_TEXT_HALIGN_CENTER;
     div->style.symbol = symbol;
@@ -1427,7 +1428,7 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
 
     VdUiDiv *scroll_section = vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("##scroll_section"));
     scroll_section->style.size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
-    scroll_section->style.size[0].value = 32.f;
+    scroll_section->style.size[0].value = 32.f * vd_ui_get_scale();
     scroll_section->style.size[0].niceness = 0.f;
     scroll_section->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
     scroll_section->style.size[1].value = 1.f;
@@ -1443,7 +1444,7 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
         hspace->style.hot_grad    = hspace->style.normal_grad;
         hspace->style.active_grad = hspace->style.normal_grad;
         hspace->style.size[0].mode     = VD_UI_SIZE_MODE_ABSOLUTE;
-        hspace->style.size[0].value    = 32.f;
+        hspace->style.size[0].value    = 32.f * vd_ui_get_scale();
 
         hspace->style.size[1].mode     = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
         hspace->style.size[1].value    = 1.f;
@@ -1790,6 +1791,12 @@ VD_UI_API void vd_ui_set_scale(float s)
 {
     VdUiContext *ctx = vd_ui_context_get();
     ctx->dpi_scale = s;
+}
+
+VD_UI_API float vd_ui_get_scale(void)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    return ctx->dpi_scale;
 }
 
 VD_UI_API void vd_ui_demo(void)

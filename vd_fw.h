@@ -3980,6 +3980,8 @@ typedef struct {
     mach_timebase_info_data_t   time_base;
     uint64_t                    last_time;
     CGFloat                     scale;
+    int                         wheel_moved;
+    float                       wheel[2];
 } VdFw__MacOsInternalData;
 
 static VdFw__MacOsInternalData Vd_Fw_Globals;
@@ -3993,18 +3995,16 @@ static VdFw__MacOsInternalData Vd_Fw_Globals;
 }
 
 - (void)windowDidResize:(NSNotification *)notification {
-    // VERY important: tell OpenGL to refresh the drawable
     [VD_FW_G.gl_context update];
 }
 - (BOOL)acceptsFirstResponder {
-    return YES; // optional, if you also want key events
+    return YES;
 }
 
 - (BOOL)wantsUpdateLayer {
-    return YES; // optional if using layer-backed views
+    return YES;
 }
 
-// KEY PART:
 - (BOOL)canDrawConcurrently {
     return YES;
 }
@@ -4126,17 +4126,38 @@ VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
 
 VD_FW_API int vd_fw_get_mouse_wheel(float *dx, float *dy)
 {
-    return 0;
+    if (dx) *dx = VD_FW_G.wheel[0];
+    if (dy) *dy = VD_FW_G.wheel[1];
+    return VD_FW_G.wheel_moved;
 }
 
 VD_FW_API int vd_fw_running(void)
 {
+    VD_FW_G.wheel_moved = 0;
+    VD_FW_G.wheel[0] = 0.f;
+    VD_FW_G.wheel[1] = 0.f;
+
     @autoreleasepool {
         NSEvent *event;
         while ((event = [NSApp nextEventMatchingMask:NSEventMaskAny
                                            untilDate:[NSDate distantPast]
                                               inMode:NSDefaultRunLoopMode
-                                             dequeue:YES])) {
+                                             dequeue:YES]))
+        {
+            NSEventType type = [event type];
+
+            switch (type) {
+                case NSScrollWheel: {
+
+                    VD_FW_G.wheel[0] += [event deltaX];
+                    VD_FW_G.wheel[1] += [event deltaY];
+
+                    VD_FW_G.wheel_moved = 1;
+                } break;
+
+                default: break;
+            }
+
             [NSApp sendEvent:event];
         }
     }
@@ -4152,6 +4173,12 @@ VD_FW_API int vd_fw_swap_buffers(void)
         [VD_FW_G.gl_context flushBuffer];
     }
     return 1;
+}
+
+VD_FW_API int vd_fw_get_focused(int *focused)
+{
+    *focused = 1;
+    return 0;
 }
 
 VD_FW_API int vd_fw_get_size(int *w, int *h)
