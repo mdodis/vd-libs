@@ -1413,6 +1413,9 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
         float min_grip_size               = 16.f;
         float max_grip_size               = track_size;
         float window_content_ratio        = window_size / content_size;
+        if (content_size < 0.00001f) {
+            window_content_ratio = 0.f;
+        }
         float grip_size                   = track_size * window_content_ratio;
         if (grip_size < min_grip_size) grip_size = min_grip_size;
         if (grip_size > max_grip_size) grip_size = max_grip_size;
@@ -3025,6 +3028,8 @@ VD_UI_API VdUiContext *vd_ui_context_create(VdUiContextCreateInfo *info)
     result->strbuf_cap  = 1024 * 1024; // 1MB of per frame string storage
     result->strbuf      = (char*)VD_MALLOC(result->strbuf_cap);
     result->strbuf_len  = 0;
+
+    result->focus = 1;
 
 #else
 #error "todo"
