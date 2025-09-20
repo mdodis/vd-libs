@@ -18,22 +18,22 @@ while getopts "s:p:" o; do
     esac
 done
 
-echo "SAMPLE_TO_COMPILE is $SAMPLE_TO_COMPILE"
-pushd $SCRIPT_DIR/../..
+pushd $SCRIPT_DIR/../.. > /dev/null
 
 PRJ_DIR="$(realpath .)"
 CFLAGS="-O0 -g -Wall -std=c11 -I $PRJ_DIR"
 
-mkdir -p ./build
-pushd ./build
+mkdir -p ./build > /dev/null
+pushd ./build > /dev/null
 
 if [ -n "$PROGRAM_TO_COMPILE" ]; then
+    echo "Compiling program: $PROGRAM_TO_COMPILE..."
     cc \
         -pthread \
         -x objective-c \
         $CFLAGS \
         -fsanitize=address \
-        $PRJ_DIR/program/$PROGRAM_TO_COMPILE.c \
+        $PRJ_DIR/programs/$PROGRAM_TO_COMPILE.c \
         -o $PROGRAM_TO_COMPILE \
         -framework Cocoa \
         -framework Metal \
@@ -46,6 +46,7 @@ if [ -n "$PROGRAM_TO_COMPILE" ]; then
 fi
 
 if [ -n "$SAMPLE_TO_COMPILE" ]; then
+    echo "Compiling sample: $SAMPLE_TO_COMPILE..."
     cc \
         -pthread \
         -x objective-c \
@@ -64,5 +65,5 @@ if [ -n "$SAMPLE_TO_COMPILE" ]; then
 fi
 
 
-popd
-popd
+popd > /dev/null
+popd > /dev/null

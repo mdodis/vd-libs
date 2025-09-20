@@ -22,7 +22,7 @@
  *    misrepresented as being the original software.
  * 3. This notice may not be removed or altered from any source distribution.
  * ---------------------------------------------------------------------------------------------------------------------
- * NOTESjavascript:void(0)
+ * NOTES
  * - Do NOT include OpenGL headers, or import an OpenGL loader. This library does that already 
  * - The highest possible OpenGL version you should support if you want it to work (as of 2025...)
  *   on the big threes is OpenGL Core Profile 4.1 (MacOS limitation)
@@ -30,14 +30,13 @@
  * TODO
  * - Change default behavior of init to use window with decorations
  * - If ncrects are never specified, move the whole window with mouse?
- * - Remove PostThreadMessageA and use a lightweight circular message queue with InterlockedXYZ functions
  * - MacOS APIs can't be used on another thread other than main thread :/
  *   so, just initialize display link and wait on condition variable + mutex when drawing while resizing
+ * - MacOS resize logic
  */
 
 /**
- * @file vd_fw.h
- * @brief Example usage
+ * @example "vd_fw.h: Create a basic window"
  * @code{.c}
  * #include "vd_fw.h"                                           // Include library
  * int main() {
@@ -57,6 +56,30 @@
  * @endcode
  */
 
+/**
+ * @example "vd_fw.h: Create a borderless window"
+ * @code{.c}
+ * #include "vd_fw.h"                                           // Include library
+ * int main() {
+ *     // Create a borderless window:
+ *     // 1. Specify borderless mode
+ *     // 2. Specify general draggable rectangle
+ *     // 3. Specify non draggable parts of rect (if any)
+ *     vd_fw_init(NULL);                                        // Initialize library
+ *
+ *     while (vd_fw_running()) {                                // Check if the window is running & gather events
+ *         glClearColor(0.5f, 0.3f, 0.2f, 1.0f);
+ *         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+ *
+ *         vd_fw_swap_buffers();                                // Swap buffers
+ *     }
+ *     return 0;
+ * }
+ * 
+ * #define VD_FW_IMPL                                           // Include implementation code
+ * #include "vd_fw.h"
+ * @endcode
+ */
 #ifndef VD_FW_H
 #define VD_FW_H
 #define VD_FW_VERSION_MAJOR    0
@@ -174,7 +197,7 @@ enum {
     VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN = 1 << 2,
 };
 
-typedef struct __VD_FW_InitInfo {
+typedef struct {
     struct {
         /** What version of OpenGL you'd like to use. 3.3 and upwards recommended. */
         VdFwGlVersion version;
@@ -203,7 +226,7 @@ VD_FW_API int                vd_fw_init(VdFwInitInfo *info);
 VD_FW_API int                vd_fw_running(void);
 
 /**
- * Begin rendering
+ * End rendering and swap buffers. Call this right at the end of your rendering code.
  */
 VD_FW_API int                vd_fw_swap_buffers(void);
 
@@ -3985,6 +4008,7 @@ typedef struct {
     int                         wheel_moved;
     float                       wheel[2];
     NSPoint                     drag_start_location;
+    NSPoint                     drag_start_pos_window_coords;
     BOOL                        dragging;
     BOOL                        draw_decorations;
 
@@ -4000,6 +4024,16 @@ static VdFw__MacOsInternalData Vd_Fw_Globals;
 @end
 
 static VdFwWindowDelegate *Vd_Fw_Delegate;
+
+NSCursor *_lrCursor;
+NSCursor *_udCursor;
+NSCursor *_diag1Cursor; // top-left / bottom-right
+NSCursor *_diag2Cursor; // top-right / bottom-left
+NSCursor *_currentCursor;
+
+@interface VdFwContentView : NSView
+
+@end
 
 @implementation VdFwWindowDelegate
     NSPoint initialLocation;
@@ -4027,6 +4061,50 @@ static VdFwWindowDelegate *Vd_Fw_Delegate;
 - (BOOL)canDrawConcurrently {
     return YES;
 }
+
+- (void)applicationDidBecomeActive:(NSNotification *)notification {
+    // Restore if minimized
+    if ([VD_FW_G.window isMiniaturized]) {
+        [VD_FW_G.window deminiaturize:nil];
+    }
+}
+@end
+
+@implementation VdFwContentView
+// @todo(mdodis): Resize logic
+// - (void)mouseMoved:(NSEvent *)event {
+//     // Compute mouse in view coordinates
+//     NSPoint p = [self convertPoint:[event locationInWindow] fromView:nil];
+
+//     CGFloat margin = 6.0; // same as standard macOS hit area (tweak if needed)
+//     CGFloat w = NSWidth(self.bounds);
+//     CGFloat h = NSHeight(self.bounds);
+
+//     BOOL left   = (p.x <= margin);
+//     BOOL right  = (p.x >= (w - margin));
+//     BOOL bottom = (p.y <= margin);
+//     BOOL top    = (p.y >= (h - margin));
+
+//     NSCursor *wanted = nil;
+
+//     // corners take precedence
+//     if ((left && bottom) || (right && top)) {
+//         wanted = _diag1Cursor;
+//     } else if ((right && bottom) || (left && top)) {
+//         wanted = _diag2Cursor;
+//     } else if (left || right) {
+//         wanted = _lrCursor;
+//     } else if (top || bottom) {
+//         wanted = _udCursor;
+//     } else {
+//         wanted = [NSCursor arrowCursor];
+//     }
+
+//     if (wanted != _currentCursor) {
+//         [wanted set];            // immediately change cursor
+//         _currentCursor = wanted;
+//     }
+// }
 @end
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
@@ -4081,9 +4159,12 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
                                                          defer: NO];
 
         [VD_FW_G.window                       setTitle: [NSString stringWithUTF8String: "FW Window"]];
-        [VD_FW_G.window           makeKeyAndOrderFront: NSApp];
+        [VD_FW_G.window           makeKeyAndOrderFront: nil];
         [VD_FW_G.window                   setHasShadow: YES];
         [VD_FW_G.window setAllowsConcurrentViewDrawing: YES];
+
+        _lrCursor = [NSCursor resizeLeftRightCursor];
+        _udCursor = [NSCursor resizeUpDownCursor];
 
         NSOpenGLPixelFormatAttribute attrs[] = {
             NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersion3_2Core,
@@ -4098,10 +4179,20 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         NSOpenGLPixelFormat *pf = [[NSOpenGLPixelFormat alloc] initWithAttributes: attrs];
         VD_FW_G.gl_context = [[NSOpenGLContext alloc]              initWithFormat: pf
                                                                      shareContext: nil];
+        NSRect wframe = [[VD_FW_G.window contentView] bounds];
+        NSView *fw_view = [[VdFwContentView alloc] initWithFrame:wframe];
+        [VD_FW_G.window setContentView: fw_view];
+        // NSView *content_view = [VD_FW_G.window contentView];
+        [fw_view setWantsLayer: YES];
+        [fw_view setAcceptsTouchEvents:YES]; // optional for touch, but ok
+        [fw_view addTrackingArea:[[NSTrackingArea alloc] initWithRect:fw_view.bounds
+                                                             options:NSTrackingMouseMoved |
+                                                                     NSTrackingActiveAlways |
+                                                                     NSTrackingInVisibleRect
+                                                               owner:fw_view
+                                                            userInfo:nil]];
 
-        NSView *content_view = [VD_FW_G.window contentView];
-        [content_view setWantsLayer: YES];
-        [VD_FW_G.gl_context setView: content_view];
+        [VD_FW_G.gl_context setView: fw_view];
         [VD_FW_G.gl_context makeCurrentContext];
 
         [VD_FW_G.window setDelegate:delegate];
@@ -4218,6 +4309,7 @@ VD_FW_API int vd_fw_running(void)
                         loc.x -= window_frame.origin.x;
                         loc.y -= window_frame.origin.y;
                         VD_FW_G.drag_start_location = loc;
+                        VD_FW_G.drag_start_pos_window_coords = view_point;
                         VD_FW_G.dragging = TRUE;
                     }
                 } break;

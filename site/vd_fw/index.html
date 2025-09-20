@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+    <head>
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+        <link rel="manifest" href="/site.webmanifest">
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>VD Libs - vd_fw.h</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+        <link rel="stylesheet" href="/style.css">
+    </head>
+    <body>
+        <!-- Begin Navbar -->
+        <nav id="mainnav" class="navbar sticky-top navbar-expand-md bg-body-tertiary">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="#">
+                    <img    src="/assets/vd-logo-p@1x.png"
+                         srcset="/assets/vd-logo-p@1x.png 1x, /assets/vd-logo-p@2x.png 2x"
+                            alt="Brand"
+                          width="64"
+                         height="38.5">
+                </a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
+                        aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav">
+                        <li class="nav-item">
+                            <a class="nav-link" aria-current="page" href="/index.html">Home</a>
+                        </li>
+                        <!-- Begin Files -->
+                        <li class="nav-item dropdown">
+                            <a class="nav-link active dropdown-toggle" href="#" id="documentationDropdown" role="button" 
+                               data-bs-toggle="dropdown" aria-expanded="false">
+                                Documentation
+                            </a>
+                            <ul class="dropdown-menu" aria-labelledby="documentationDropdown">
+                                <li><a class="dropdown-item" href="/vd_fw/index.html">vd_fw.h</a></li>
+                                <li><a class="dropdown-item" href="#">File 2</a></li>
+                                <li><a class="dropdown-item" href="#">File 3</a></li>
+                            </ul>
+                        </li>
+                        <!--   End Files -->
+                    </ul>
+
+                </div>
+            </div>
+        </nav>
+        <!--   End Navbar -->
+
+        <!-- Begin Content -->
+        <div class="container flex-grow-1">
+            <div class="row justify-content-center">
+                <div class="col-12 col-sm-10 col-md-8 col-lg-8 text-start">
+                    <h4 id="brief">Brief</h4>
+                    <p class="p-2">
+                        A library that gets you a semi-customizable window and an OpenGL context, minimizing 
+                        dependencies and hiding the complexities of doing proper windowing on each platform.
+                    </p>
+
+                    <h4 id="support-table">Support Table</h4>
+                    <table class="table">
+                        <tr>
+                            <th scope="col">Platform</th>
+                            <th scope="col">Supported</th>
+                        </tr>
+                        <tbody>
+                            <tr>
+                                <td>Windows</td>
+                                <td class="table-success">Yes</td>
+                            </tr>
+                            <tr>
+                                <td>MacOS</td>
+                                <td class="table-success">Yes</td>
+                            </tr>
+                            <tr>
+                                <td>Linux (X11)</td>
+                                <td class="table-warning">Coming soon...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h4 id="usage">Usage</h4>
+                    <p class="p-2">
+                        This is all you need to create a simple window. By default it creates an OpenGL 3.3 core profile context
+                    </p>
+
+<!-- https://codebeautify.org/code-highlighter -->
+<!-- Theme: Zenburn -->
+<pre class="copy">
+ <code id="htmlViewer" style="color:rgb(220, 220, 220); font-weight:400;background-color:rgb(63, 63, 63);background:rgb(63, 63, 63);display:block;padding: .5em;"><span style="color:rgb(127, 159, 127); font-weight:400;">#<span style="color:rgb(227, 206, 171); font-weight:400;">include</span> <span style="color:rgb(204, 147, 147); font-weight:400;">&quot;vd_fw.h&quot;</span>                                           <span style="color:rgb(127, 159, 127); font-weight:400;">// Include library</span></span>
+<span style="color:rgb(220, 220, 220); font-weight:400;"><span style="color:rgb(239, 239, 143); font-weight:400;">int</span> <span style="color:rgb(239, 239, 143); font-weight:400;">main</span><span style="color:rgb(220, 220, 220); font-weight:400;">()</span> </span>{
+    <span style="color:rgb(204, 147, 147); font-weight:400;">vd_fw_init</span>(<span style="color:rgb(239, 239, 175); font-weight:400;">NULL</span>);                                        <span style="color:rgb(127, 159, 127); font-weight:400;">// Initialize library</span>
+    <span style="color:rgb(227, 206, 171); font-weight:400;">while</span> (<span style="color:rgb(204, 147, 147); font-weight:400;">vd_fw_running</span>()) {                                <span style="color:rgb(127, 159, 127); font-weight:400;">// Check if the window is running &amp; gather events</span>
+        <span style="color:rgb(204, 147, 147); font-weight:400;">glClearColor</span>(<span style="color:rgb(140, 208, 211); font-weight:400;">0.5f</span>, <span style="color:rgb(140, 208, 211); font-weight:400;">0.3f</span>, <span style="color:rgb(140, 208, 211); font-weight:400;">0.2f</span>, <span style="color:rgb(140, 208, 211); font-weight:400;">1.0f</span>);
+        <span style="color:rgb(204, 147, 147); font-weight:400;">glClear</span>(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        <span style="color:rgb(204, 147, 147); font-weight:400;">vd_fw_swap_buffers</span>();                                <span style="color:rgb(127, 159, 127); font-weight:400;">// Swap buffers</span>
+    }
+    <span style="color:rgb(227, 206, 171); font-weight:400;">return</span> <span style="color:rgb(140, 208, 211); font-weight:400;">0</span>;
+}
+
+<span style="color:rgb(127, 159, 127); font-weight:400;">#<span style="color:rgb(227, 206, 171); font-weight:400;">define</span> VD_FW_IMPL                                           <span style="color:rgb(127, 159, 127); font-weight:400;">// Include implementation code</span></span>
+<span style="color:rgb(127, 159, 127); font-weight:400;">#<span style="color:rgb(227, 206, 171); font-weight:400;">include</span> <span style="color:rgb(204, 147, 147); font-weight:400;">&quot;vd_fw.h&quot;</span></span>
+</code></pre>
+<hr>
+                    <h4 id="linking-and-dependencies">Linking & Dependencies</h4>
+
+                    <h4 id="windows">Windows</h4>
+                    <p class="p-2">
+                        With MSVC you don't really need to link anything, since linker comments in the
+                        translation unit that includes vd_fw.h are defined so that the appropriate libraries
+                        and subsystem are used. But for reference, here they are:
+                    </p>
+                    <ol class="list-group">
+                        <li class="list-group-item">User32</li>
+                        <li class="list-group-item">OpenGL32</li>
+                        <li class="list-group-item">Dwmapi</li>
+                        <li class="list-group-item">Shcore</li>
+                        <li class="list-group-item">Gdi32</li>
+                        <li class="list-group-item">uxtheme</li>
+                        <li class="list-group-item">shell32</li>
+                        <li class="list-group-item">kernel32</li>
+                        <li class="list-group-item">winmm</li>
+                    </ol>
+                    <br>
+
+                    <h4 id="macos">MacOS</h4>
+                    <p class="p-2">
+                        For MacOS, it's a bit different. with clang, you must link several frameworks (via <code>-framework framework_name</code>).
+                        Additionally, <code>-x objective-c</code> must be used since the Mac APIs use Objective-C.
+                    </p>
+                    <ol class="list-group">
+                        <li class="list-group-item">pthread (compiler flag)</li>
+                        <li class="list-group-item">Cocoa</li>
+                        <li class="list-group-item">Metal</li>
+                        <li class="list-group-item">QuartzCore</li>
+                        <li class="list-group-item">CoreGraphics</li>
+                        <li class="list-group-item">IOSurface</li>
+                        <li class="list-group-item">IOKit</li>
+                        <li class="list-group-item">Foundation</li>
+                        <li class="list-group-item">OpenGL</li>
+                    </ol>
+
+                    <br>
+
+                    <h4 id="api-ref">Reference</h4>
+
+                    <!-- Begin API -->
+                    <!-- VD_FW_API int                vd_fw_init(VdFwInitInfo *info); -->
+                    <div id="vd_fw_init" class="apiitem function">
+                        <span class="item-decl">int vd_fw_init(VdFwInitInfo *info)</span>
+                        <div class="apidetails">
+                            <p class="item-desc">
+                                Initializes the library. Any call before this is invalid.
+                            </p>
+                            <table class="table">
+                            <tbody>
+                                <tr><td>info</td>
+                                    <td>Options for the window and OpenGL context. Leave null for default.</td>
+                                </tr>
+                            </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- VD_FW_API int                vd_fw_running(void); -->
+                    <div id="vd_fw_running" class="apiitem function">
+                        <span class="item-decl">int vd_fw_running(void)</span>
+                        <div class="apidetails">
+                            <p class="item-desc">
+                                Check if the application is running. Call this every frame.
+                            </p>
+                            <table class="table">
+                            <tbody>
+                                <tr><td>Return Value</td>
+                                    <td>1 if running, 0 otherwise.</td>
+                                </tr>
+                            </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- VD_FW_API int                vd_fw_swap_buffers(void); -->
+                    <div id="vd_fw_init" class="apiitem function">
+                        <span class="item-decl">int vd_fw_swap_buffers(void)</span>
+                        <div class="apidetails">
+                            <p class="item-desc">
+                                End rendering and swap buffers. Call this right at the end of your rendering code.
+                            </p>
+                            <table class="table">
+                            <tbody>
+                                <tr><td>Return Value</td>
+                                    <td>(Reserved for future use)</td>
+                                </tr>
+                            </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <!--   End API -->
+
+
+                </div>
+
+            </div>
+          </div>
+        <!--   End Content -->
+
+        <footer class="footer mt-auto py-3 bg-dark">
+            <div class="container">
+                <span class="text-muted">&copy; Michael Dodis, 2025-2026.</span>
+            </div>
+        </footer>
+
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
+                integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
+                crossorigin="anonymous">
+        </script>
+        <script src="/index.js"></script>
+    </body>
+</html>

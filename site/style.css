@@ -18,79 +18,99 @@
     background-color: var(--eerie-black);
 }*/
 
-#apisearch {
-    max-width: 600px;
+.toc {
+    position: sticky;
+    top: 20px; /* distance from top when scrolling */
 }
 
-.search {
-    margin-bottom:16px;
-    padding:6px;
-    width:90%;
-    font-size:16px;
-}
-
-
-.entry {
-    padding: 14px 16px;
-    border-left: 4px solid var(--bittersweet);
-    margin: 12px 0;
-    background: var(--eerie-black);
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(30,27,24,0.08);
-    color: var(--antiflash-white);
-}
-
-
-.sig {
-    font-family: monospace;
-    background: #23272b;
-    color: var(--orange-peel);
-    padding: 4px 8px;
-    border-radius: 4px;
-    display: block;
-    width: 100%;
-    margin-bottom: 6px;
-    overflow-x: auto;
-}
-
-
-.brief {
-    font-weight: 600;
-    margin-top: 6px;
-    color: rgb(207, 207, 207);
-    /* font-size: 1.08em; */
+.nav-item.dropdown:hover .dropdown-menu {
+  display: block;
 }
 
 .hidden {
     display:none;
 }
 
-
-.doctable {
-    border-collapse: separate;
-    border-spacing: 0;
+pre {
+    background-color: rgb(63, 63, 63);
 }
 
-.doctable th, .doctable td {
-    border: 1px solid var(--slate-gray);
+/* Container for each function entry */
+.apiitem.function {
+    padding-bottom: 4px;
+    margin: 16px 0px;
+    color: var(--antiflash-white);
+    background-color: var(--eerie-black);
+    border-radius: 16px;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    transition: box-shadow 0.3s ease;
 }
 
-.doctable, td:nth-child(1) {
-    width: 20%;
-}
-.doctable, td:nth-child(2) {
-    width: 100%;
+.apiitem.function:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.doctable thead tr:first-child th:first-child {
-    border-top-left-radius: 8px;
+.apidetails {
+    padding-left:  8px;
+    padding-top:   8px;
+    padding-right: 8px;
 }
-.doctable thead tr:first-child th:last-child {
+
+.item-decl {
+    border-top-left-radius:  8px;
     border-top-right-radius: 8px;
+    font-weight: bold;
+    display: block;
+    padding-top:    4px;
+    padding-left:   8px;
+    padding-bottom: 8px;
+    background-color: #cc4d4b;
 }
-.doctable tbody tr:last-child td:first-child {
-    border-bottom-left-radius: 8px;
+
+.item-desc {
+    margin-bottom: 12px;
+    line-height: 1.5;
 }
-.doctable tbody tr:last-child td:last-child {
-    border-bottom-right-radius: 8px;
+
+
+/* Optional: subtle anchor link for quick access */
+.apiitem.function .item-decl::before {
+    content: "§ ";
+    font-size: 0.9rem;
+    visibility: hidden;
+}
+
+.apiitem.function:hover .item-decl::before {
+    visibility: visible;
+}
+
+/* Table inside API item */
+.apiitem.function table {
+    /*width: 100%;*/
+    border-collapse: collapse;
+    margin-top: 8px;
+    font-size: 0.8em;
+    table-layout: fixed; /* key: ensures column widths are consistent */
+}
+
+.apiitem.function table td {
+    /*border: 1px solid #555;*/
+    padding: 8px 12px;
+    font-size: 0.95rem;
+}
+
+.apiitem.function table td:first-child {
+    /*font-weight: bold;*/
+    color: var(--orange-peel);
+}
+
+.apiitem.function table tr:nth-child(even) {
+    background-color: var(--eerie-black); /* slightly lighter than container */
+}
+
+/* Set a fixed min-width for the first column */
+.apiitem.function table td:first-child {
+    width: 150px;
+    min-width: 150px;  /* adjust as needed */
+    text-align: right;  /* optional: aligns parameter names to the right */
 }
