@@ -3972,6 +3972,7 @@ int wWinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPWSTR cmdline, int n
 #import <stdlib.h>
 #import <stdio.h>
 #import <pthread.h>
+#include <semaphore.h>
 #define VD_FW_G Vd_Fw_Globals
 
 typedef struct {
@@ -3983,9 +3984,19 @@ typedef struct {
     CGFloat                     scale;
     int                         wheel_moved;
     float                       wheel[2];
+    NSPoint                     drag_start_location;
+    BOOL                        dragging;
+
+/* ----RENDER THREAD - WINDOW THREAD SYNC---------------------------------------------------------------------------- */
+    pthread_mutex_t             mtx;
+    pthread_cond_t              cond_var;
+    pthread_t                   window_thread;
+    sem_t                       sem_window_ready;
+
 } VdFw__MacOsInternalData;
 
 static VdFw__MacOsInternalData Vd_Fw_Globals;
+static void* vd_fw__mac_thread_proc(void *arg);
 
 @interface VdFwWindowDelegate : NSObject<NSApplicationDelegate, NSWindowDelegate>
 @end
@@ -3993,6 +4004,9 @@ static VdFw__MacOsInternalData Vd_Fw_Globals;
 static VdFwWindowDelegate *Vd_Fw_Delegate;
 
 @implementation VdFwWindowDelegate
+    NSPoint initialLocation;
+
+
 - (void)windowWillClose:(NSNotification*)notification {
     VD_FW_G.should_close = YES;
 }
@@ -4015,23 +4029,39 @@ static VdFwWindowDelegate *Vd_Fw_Delegate;
 - (BOOL)canDrawConcurrently {
     return YES;
 }
-- (NSRect)contentRectForFrameRect:(NSRect)windowFrame
-{
-    windowFrame.origin = NSZeroPoint;
-    return NSInsetRect(
-        windowFrame, 16, 16);
+// - (NSRect)contentRectForFrameRect:(NSRect)windowFrame
+// {
+//     windowFrame.origin = NSZeroPoint;
+//     return NSInsetRect(
+//         windowFrame, 16, 16);
+// }
+- (void)mouseDragged:(NSEvent *)event {
+    NSWindow *window = VD_FW_G.window;
+    NSPoint currentLocation = [window convertPointToScreen:[event locationInWindow]];
+    NSPoint newOrigin = NSMakePoint(currentLocation.x - initialLocation.x,
+                                    currentLocation.y - initialLocation.y);
+
+    [window setFrameOrigin:newOrigin];
 }
 @end
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
+    pthread_mutex_init(&VD_FW_G.mtx, NULL);
+    pthread_cond_init(&VD_FW_G.cond_var, NULL);
+    sem_init(&VD_FW_G.sem_window_ready, 0, 0);
+    pthread_create(&VD_FW_G.window_thread, 0, vd_fw__mac_thread_proc, 0);
+
     [NSApplication sharedApplication];
-    [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+    [NSApp setActivationPolicy: NSApplicationActivationPolicyRegular];
     [NSEvent setMouseCoalescingEnabled:NO];
 
-    // @autoreleasepool {
-        VD_FW_G.scale = [[NSScreen mainScreen] backingScaleFactor];
+    // @autoreleasepool
+    {
+        NSScreen *main_screen = [NSScreen mainScreen];
+        VD_FW_G.scale = [main_screen backingScaleFactor];
 
+        NSRect screen_rect = [main_screen frame];
 
         VdFwWindowDelegate *delegate = [[VdFwWindowDelegate alloc] init];
         [NSApp setDelegate: delegate];
@@ -4049,13 +4079,14 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
             keyEquivalent:@"q"];
         [appMenu addItem:quitMenuItem];
         [appMenuItem setSubmenu:appMenu];
-
         int w = 640;
         int h = 480;
-        NSRect frame = NSMakeRect(0, 0, w, h);
+        int x = screen_rect.size.width  * 0.5f - w * 0.5f;
+        int y = screen_rect.size.height * 0.5f - h * 0.5f;
+        NSRect frame = NSMakeRect(x, y, w, h);
         VD_FW_G.window = [[NSWindow alloc] initWithContentRect:frame
                                            styleMask:(
-                                                NSWindowStyleMaskTitled |
+                                                // NSWindowStyleMaskTitled |
                                                 NSWindowStyleMaskClosable |
                                                 NSWindowStyleMaskMiniaturizable |
                                                 NSWindowStyleMaskResizable)
@@ -4063,9 +4094,14 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
                                            defer: NO];
         [VD_FW_G.window setTitle:[NSString stringWithUTF8String:"FW Window"]];
         [VD_FW_G.window makeKeyAndOrderFront:NSApp];
-
+        [VD_FW_G.window setHasShadow:YES];
         [VD_FW_G.window setAllowsConcurrentViewDrawing:YES];
-
+        [VD_FW_G.window setTitlebarAppearsTransparent:YES];
+        [VD_FW_G.window setOpaque:NO];
+        [VD_FW_G.window setBackgroundColor:[NSColor clearColor]];
+        [VD_FW_G.window setLevel:NSNormalWindowLevel];  // Not floating above all apps
+        [VD_FW_G.window setCollectionBehavior:NSWindowCollectionBehaviorFullScreenPrimary |
+                                      NSWindowCollectionBehaviorManaged]; 
         NSOpenGLPixelFormatAttribute attrs[] = {
             NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersion3_2Core,
             NSOpenGLPFAColorSize, 24,
@@ -4078,12 +4114,17 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 
         NSOpenGLPixelFormat *pf = [[NSOpenGLPixelFormat alloc] initWithAttributes:attrs];
         VD_FW_G.gl_context = [[NSOpenGLContext alloc] initWithFormat:pf shareContext:nil];
-        [VD_FW_G.gl_context setView:[VD_FW_G.window contentView]];
+        NSView *content_view = [VD_FW_G.window contentView];
+        [content_view setWantsLayer: YES];
+        content_view.layer.cornerRadius = 12.0;
+        content_view.layer.masksToBounds = YES;
+
+        [VD_FW_G.gl_context setView: content_view];
         [VD_FW_G.gl_context makeCurrentContext];
 
         [VD_FW_G.window setDelegate:delegate];
         [NSApp activateIgnoringOtherApps:YES];
-    // }
+    }
 
     VdFwGlVersion version = VD_FW_GL_VERSION_3_3;
     if (info && info->gl.version != 0) {
@@ -4164,12 +4205,58 @@ VD_FW_API int vd_fw_running(void)
             NSEventType type = [event type];
 
             switch (type) {
-                case NSScrollWheel: {
+                case NSEventTypeScrollWheel: {
 
-                    VD_FW_G.wheel[0] += [event deltaX];
-                    VD_FW_G.wheel[1] += [event deltaY];
+                    if ([event hasPreciseScrollingDeltas]) {
+                        VD_FW_G.wheel[0] += [event scrollingDeltaX] * 0.05f;
+                        VD_FW_G.wheel[1] += [event scrollingDeltaY] * 0.05f;
+                    } else {
+                        VD_FW_G.wheel[0] += [event deltaX];
+                        VD_FW_G.wheel[1] += [event deltaY];
+                    }
 
                     VD_FW_G.wheel_moved = 1;
+                } break;
+
+                case NSEventTypeLeftMouseDown: {
+                    NSPoint view_point = [event locationInWindow];
+
+                    NSView *cv = [VD_FW_G.window contentView];
+                    NSRect cvf = [cv frame];
+
+                    NSPoint p = NSMakePoint(view_point.x, view_point.y);
+
+                    NSRect drag_area = NSMakeRect(0, cvf.size.height - 40, cvf.size.width, 40);
+
+                    if (NSPointInRect(p, drag_area)) {
+
+                        NSPoint loc = [VD_FW_G.window convertPointToScreen:view_point];
+                        NSRect window_frame = [VD_FW_G.window frame];
+
+                        loc.x -= window_frame.origin.x;
+                        loc.y -= window_frame.origin.y;
+                        VD_FW_G.drag_start_location = loc;
+                        VD_FW_G.dragging = TRUE;
+                    }
+                } break;
+
+                case NSEventTypeLeftMouseUp: {
+                    VD_FW_G.dragging = FALSE;
+                } break;
+
+                case NSEventTypeLeftMouseDragged: {
+
+                    NSPoint view_point = [event locationInWindow];
+
+                    NSPoint p = [VD_FW_G.window convertPointToScreen: view_point];
+
+                    if (VD_FW_G.dragging) {
+
+                        NSPoint new_pos = NSMakePoint(p.x - VD_FW_G.drag_start_location.x,
+                                                      p.y - VD_FW_G.drag_start_location.y);
+
+                        [VD_FW_G.window setFrameOrigin: new_pos];
+                    }
                 } break;
 
                 default: break;
@@ -4225,6 +4312,12 @@ VD_FW_API int vd_fw_set_vsync_on(int on)
         }
     }
     return 1;
+}
+
+static void *vd_fw__mac_thread_proc(void *arg)
+{
+    // @todo(mdodis): Move window code here
+    return NULL;
 }
 
 VD_FW_API int vd_fw__any_time_higher(int num_files, const char **files, unsigned long long *check_against)

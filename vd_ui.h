@@ -2282,6 +2282,10 @@ VD_UI_API void vd_ui_event_mouse_location(float mx, float my)
 VD_UI_API void vd_ui_event_mouse_wheel(float dx, float dy)
 {
     VdUiContext *ctx = vd_ui_context_get();
+#if __APPLE__
+    ctx->wheel_current[0] = dx;
+    ctx->wheel_current[1] = dy;
+#else
     ctx->wheel_target[0] = dx;
     ctx->wheel_target[1] = dy;
 
@@ -2289,6 +2293,7 @@ VD_UI_API void vd_ui_event_mouse_wheel(float dx, float dy)
     static float yvel = 0.f;
     ctx->wheel_current[0] = vd_ui__smooth_damp(ctx->wheel_current[0], ctx->wheel_target[0], &xvel, 0.11f, 300.f, ctx->delta_seconds);
     ctx->wheel_current[1] = vd_ui__smooth_damp(ctx->wheel_current[1], ctx->wheel_target[1], &yvel, 0.11f, 300.f, ctx->delta_seconds);
+#endif
 }
 
 VD_UI_API void vd_ui_event_mouse_button(int index, int down)
