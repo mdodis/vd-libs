@@ -3986,6 +3986,7 @@ typedef struct {
     float                       wheel[2];
     NSPoint                     drag_start_location;
     BOOL                        dragging;
+    BOOL                        draw_decorations;
 
 /* ----RENDER THREAD - WINDOW THREAD SYNC---------------------------------------------------------------------------- */
     pthread_mutex_t             mtx;
@@ -4030,6 +4031,11 @@ static VdFwWindowDelegate *Vd_Fw_Delegate;
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
+    VD_FW_G.draw_decorations = 1;
+    if (info) {
+        VD_FW_G.draw_decorations = info->window_options.draw_default_borders;
+    }
+
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy: NSApplicationActivationPolicyRegular];
     [NSEvent setMouseCoalescingEnabled:NO];
@@ -4062,24 +4068,23 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         int x = screen_rect.size.width  * 0.5f - w * 0.5f;
         int y = screen_rect.size.height * 0.5f - h * 0.5f;
         NSRect frame = NSMakeRect(x, y, w, h);
-        VD_FW_G.window = [[NSWindow alloc] initWithContentRect:frame
-                                           styleMask:(
-                                                // NSWindowStyleMaskTitled |
-                                                NSWindowStyleMaskClosable |
-                                                NSWindowStyleMaskMiniaturizable |
-                                                NSWindowStyleMaskResizable)
-                                           backing: NSBackingStoreBuffered
-                                           defer: NO];
-        [VD_FW_G.window setTitle:[NSString stringWithUTF8String:"FW Window"]];
-        [VD_FW_G.window makeKeyAndOrderFront:NSApp];
-        [VD_FW_G.window setHasShadow:YES];
-        [VD_FW_G.window setAllowsConcurrentViewDrawing:YES];
-        [VD_FW_G.window setTitlebarAppearsTransparent:YES];
-        [VD_FW_G.window setOpaque:NO];
-        [VD_FW_G.window setBackgroundColor:[NSColor clearColor]];
-        [VD_FW_G.window setLevel:NSNormalWindowLevel];  // Not floating above all apps
-        [VD_FW_G.window setCollectionBehavior:NSWindowCollectionBehaviorFullScreenPrimary |
-                                      NSWindowCollectionBehaviorManaged]; 
+        NSWindowStyleMask window_style_mask = NSWindowStyleMaskClosable |
+                                              NSWindowStyleMaskMiniaturizable |
+                                              NSWindowStyleMaskResizable;
+        if (VD_FW_G.draw_decorations) {
+            window_style_mask              |= NSWindowStyleMaskTitled;
+        }
+
+        VD_FW_G.window = [[NSWindow alloc] initWithContentRect: frame
+                                                     styleMask: window_style_mask
+                                                       backing: NSBackingStoreBuffered
+                                                         defer: NO];
+
+        [VD_FW_G.window                       setTitle: [NSString stringWithUTF8String: "FW Window"]];
+        [VD_FW_G.window           makeKeyAndOrderFront: NSApp];
+        [VD_FW_G.window                   setHasShadow: YES];
+        [VD_FW_G.window setAllowsConcurrentViewDrawing: YES];
+
         NSOpenGLPixelFormatAttribute attrs[] = {
             NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersion3_2Core,
             NSOpenGLPFAColorSize, 24,
@@ -4090,13 +4095,12 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
             0
         };
 
-        NSOpenGLPixelFormat *pf = [[NSOpenGLPixelFormat alloc] initWithAttributes:attrs];
-        VD_FW_G.gl_context = [[NSOpenGLContext alloc] initWithFormat:pf shareContext:nil];
+        NSOpenGLPixelFormat *pf = [[NSOpenGLPixelFormat alloc] initWithAttributes: attrs];
+        VD_FW_G.gl_context = [[NSOpenGLContext alloc]              initWithFormat: pf
+                                                                     shareContext: nil];
+
         NSView *content_view = [VD_FW_G.window contentView];
         [content_view setWantsLayer: YES];
-        content_view.layer.cornerRadius = 12.0;
-        content_view.layer.masksToBounds = YES;
-
         [VD_FW_G.gl_context setView: content_view];
         [VD_FW_G.gl_context makeCurrentContext];
 

@@ -1,3 +1,4 @@
+#include "disable_clang_deprecations.h"
 #define VD_FW_NO_CRT 1
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS
 #include "vd_fw.h"
@@ -178,3 +179,4 @@ int main(int argc, char const *argv[])
 
 #define VD_FW_IMPL
 #include "vd_fw.h"
+#include "disable_clang_deprecations.h"

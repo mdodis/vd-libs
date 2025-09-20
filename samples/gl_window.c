@@ -1,3 +1,4 @@
+#include "disable_clang_deprecations.h"
 #define VD_FW_NO_CRT 0
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_CONSOLE
 #include "vd_fw.h"
@@ -12,7 +13,7 @@ int main(int argc, char const *argv[])
             .version = VD_FW_GL_VERSION_3_3,
         },
         .window_options = {
-            .draw_default_borders = 0,
+            .draw_default_borders = 1,
         }
     });
     vd_fw_set_vsync_on(0);
@@ -34,3 +35,4 @@ int main(int argc, char const *argv[])
 
 #define VD_FW_IMPL
 #include "vd_fw.h"
+#include "disable_clang_deprecations.h"

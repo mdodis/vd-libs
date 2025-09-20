@@ -1,3 +1,4 @@
+#include "disable_clang_deprecations.h"
 #define VD_FW_NO_CRT 1
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS
 #include "vd_fw.h"
@@ -42,7 +43,6 @@ int main(int argc, char const *argv[])
     glBindVertexArray(0);
 
     while (vd_fw_running()) {
-        vd_fw_begin_render();
 
         int w, h;
         vd_fw_get_size(&w, &h);
@@ -57,7 +57,7 @@ int main(int argc, char const *argv[])
         glBindVertexArray(vao);
         glDrawArrays(GL_TRIANGLES, 0, 3);
 
-        vd_fw_end_render();
+        vd_fw_swap_buffers();
     }
 
     return 0;
@@ -65,3 +65,4 @@ int main(int argc, char const *argv[])
 
 #define VD_FW_IMPL
 #include "vd_fw.h"
+#include "disable_clang_deprecations.h"
