@@ -31,8 +31,8 @@
  * - Change default behavior of init to use window with decorations
  * - If ncrects are never specified, move the whole window with mouse?
  * - Remove PostThreadMessageA and use a lightweight circular message queue with InterlockedXYZ functions
- * - Move MacOS window creation and handling to another thread
- *   so that we can draw continuously and not care about display events maybe
+ * - MacOS APIs can't be used on another thread other than main thread :/
+ *   so, just initialize display link and wait on condition variable + mutex when drawing while resizing
  */
 
 /**
@@ -3991,12 +3991,9 @@ typedef struct {
     pthread_mutex_t             mtx;
     pthread_cond_t              cond_var;
     pthread_t                   window_thread;
-    sem_t                       sem_window_ready;
-
 } VdFw__MacOsInternalData;
 
 static VdFw__MacOsInternalData Vd_Fw_Globals;
-static void* vd_fw__mac_thread_proc(void *arg);
 
 @interface VdFwWindowDelegate : NSObject<NSApplicationDelegate, NSWindowDelegate>
 @end
@@ -4029,29 +4026,10 @@ static VdFwWindowDelegate *Vd_Fw_Delegate;
 - (BOOL)canDrawConcurrently {
     return YES;
 }
-// - (NSRect)contentRectForFrameRect:(NSRect)windowFrame
-// {
-//     windowFrame.origin = NSZeroPoint;
-//     return NSInsetRect(
-//         windowFrame, 16, 16);
-// }
-- (void)mouseDragged:(NSEvent *)event {
-    NSWindow *window = VD_FW_G.window;
-    NSPoint currentLocation = [window convertPointToScreen:[event locationInWindow]];
-    NSPoint newOrigin = NSMakePoint(currentLocation.x - initialLocation.x,
-                                    currentLocation.y - initialLocation.y);
-
-    [window setFrameOrigin:newOrigin];
-}
 @end
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
-    pthread_mutex_init(&VD_FW_G.mtx, NULL);
-    pthread_cond_init(&VD_FW_G.cond_var, NULL);
-    sem_init(&VD_FW_G.sem_window_ready, 0, 0);
-    pthread_create(&VD_FW_G.window_thread, 0, vd_fw__mac_thread_proc, 0);
-
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy: NSApplicationActivationPolicyRegular];
     [NSEvent setMouseCoalescingEnabled:NO];
@@ -4312,12 +4290,6 @@ VD_FW_API int vd_fw_set_vsync_on(int on)
         }
     }
     return 1;
-}
-
-static void *vd_fw__mac_thread_proc(void *arg)
-{
-    // @todo(mdodis): Move window code here
-    return NULL;
 }
 
 VD_FW_API int vd_fw__any_time_higher(int num_files, const char **files, unsigned long long *check_against)

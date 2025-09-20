@@ -27,6 +27,7 @@ pushd ./build
 echo "Compiling $SAMPLE_TO_COMPILE ..."
 
 cc \
+    -pthread \
     -x objective-c \
     $CFLAGS \
     -fsanitize=address \
@@ -39,7 +40,7 @@ cc \
     -framework IOSurface \
     -framework IOKit \
     -framework Foundation \
-    -framework OpenGL
+    -framework OpenGL \
 
 
 popd
