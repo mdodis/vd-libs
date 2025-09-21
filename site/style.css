@@ -2,6 +2,10 @@
     transition: box-shadow 0.2s ease-in-out;
 }
 
+html {
+scroll-padding-top: 80px; /* match your navbar height */
+}
+
 :root {
     --bittersweet: #ee5a58ff;
     --eerie-black: #1e1b18ff;
@@ -18,9 +22,12 @@
     background-color: var(--eerie-black);
 }*/
 
-.toc {
-    position: sticky;
-    top: 20px; /* distance from top when scrolling */
+.toc-outline {
+    position: fixed;
+    top: 80px; /* adjust for your navbar height */
+    right: 8px; /* adjust as needed */
+    width: auto;
+    z-index: 100;
 }
 
 .nav-item.dropdown:hover .dropdown-menu {
@@ -44,6 +51,12 @@ pre {
     border-radius: 16px;
     font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
     transition: box-shadow 0.3s ease;
+}
+
+.span-image {
+    /*border: 1px solid red;*/
+    height: 6em;
+    width: 100%;
 }
 
 .apiitem.function:hover {
@@ -113,4 +126,9 @@ pre {
     width: 150px;
     min-width: 150px;  /* adjust as needed */
     text-align: right;  /* optional: aligns parameter names to the right */
+}
+
+.toc {
+    position: sticky;
+    top: 20px;
 }

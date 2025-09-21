@@ -7,7 +7,7 @@
         <link rel="manifest" href="/site.webmanifest">
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>VD Libs - vd_fw.h</title>
+        <title>VD Libs - vd.h</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
         <link rel="stylesheet" href="/style.css">
     </head>
@@ -38,8 +38,8 @@
                                 Documentation
                             </a>
                             <ul class="dropdown-menu" aria-labelledby="documentationDropdown">
-                                <li><a class="dropdown-item"        href="/vd/index.html"   >vd.h</a></li>
-                                <li><a class="dropdown-item active" href="/vd_fw/index.html">vd_fw.h</a></li>
+                                <li><a class="dropdown-item active" href="/vd/index.html"   >vd.h</a></li>
+                                <li><a class="dropdown-item"        href="/vd_fw/index.html">vd_fw.h</a></li>
                             </ul>
                         </li>
                         <!--   End Files -->
@@ -50,17 +50,16 @@
         </nav>
         <!--   End Navbar -->
 
-
         <!-- Begin Content -->
         <div class="container flex-grow-1">
             <div class="row justify-content-center">
-                <div class="col-12 col-sm-10 col-md-8 col-lg-8 text-start mx-auto">
-                    <img class="span-image img-fluid" src="/assets/vd-fw-logo.svg">
+                <div class="col-12 col-sm-10 col-md-8 col-lg-8 text-start">
+                    <img class="span-image img-fluid" src="/assets/vd-base-logo.svg">
 
                     <h4 id="brief">Brief</h4>
                     <p class="p-2">
-                        A library that gets you a semi-customizable window and an OpenGL context, minimizing 
-                        dependencies and hiding the complexities of doing proper windowing on each platform.
+                        A base layer for C applications. Includes memory allocators basic data structures,
+                        and a testing framework.
                     </p>
 
                     <h4 id="support-table">Support Table</h4>
@@ -206,22 +205,9 @@
 
                 </div>
 
-                <div class="toc-outline d-none d-lg-flex">
-                    <div class="p-0">
-                        <ul class="nav flex-column">
-                            <li class="nav-item"><a class="nav-link" href="#macos">Section 1</a></li>
-                            <li class="nav-item"><a class="nav-link" href="#section2">Section 2</a></li>
-                            <li class="nav-item"><a class="nav-link" href="#section3">Section 3</a></li>
-                        </ul>
-                    </div>
-                </div>
-
             </div>
-        </div>
+          </div>
         <!--   End Content -->
-
-
-
 
         <footer class="footer mt-auto py-3 bg-dark">
             <div class="container">
