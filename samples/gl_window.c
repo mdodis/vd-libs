@@ -24,7 +24,7 @@ int main(int argc, char const *argv[])
         vd_fw_get_size(&w, &h);
 
         glViewport(0, 0, w, h);
-        glClearColor(0.3f, 0.2f, 0.2f, 1.0f);
+        glClearColor(0.5f, 0.3f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         vd_fw_swap_buffers();

@@ -54,41 +54,73 @@
         <!-- Begin Content -->
         <div class="container flex-grow-1">
             <div class="row justify-content-center">
-                <div class="col-12 col-sm-10 col-md-8 col-lg-8 text-start mx-auto">
+                <div class="col-12 col-sm-10 col-md-8 col-lg-8 text-start mx-auto"
+                     data-bs-spy="scroll" data-bs-target="#toc" data-bs-smooth-scroll="true">
                     <img class="span-image img-fluid" src="/assets/vd-fw-logo.svg">
 
-                    <h4 id="brief">Brief</h4>
-                    <p class="p-2">
-                        A library that gets you a semi-customizable window and an OpenGL context, minimizing 
-                        dependencies and hiding the complexities of doing proper windowing on each platform.
-                    </p>
+                    <div id="brief">
+                        <h4 id="brief">Brief</h4>
+                        <p class="p-2">
+                            A library that gets you a semi-customizable window and an OpenGL context, minimizing 
+                            dependencies and hiding the complexities of doing proper windowing on each platform.
+                        </p>
+                        <div class="alert alert-primary d-flex align-items-center" role="alert">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="bi flex-shrink-0 me-2" viewBox="0 0 16 16" role="img" aria-label="Warning:">
+                                <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/>
+                            </svg>
+                            <div>
+                                Note that you don't need to use an OpenGL loader or include any OS specific OpenGL libraries.
+                                <br>
+                                The library does the loading for you.
+                            </div>
+                        </div>
+                    </div>
 
-                    <h4 id="support-table">Support Table</h4>
-                    <table class="table">
-                        <tr>
-                            <th scope="col">Platform</th>
-                            <th scope="col">Supported</th>
-                        </tr>
-                        <tbody>
+                    <div id="support-table">
+                        <h4>Support Table</h4>
+                        <table class="table">
                             <tr>
-                                <td>Windows</td>
-                                <td class="table-success">Yes</td>
+                                <th scope="col">Platform</th>
+                                <th scope="col">Supported</th>
                             </tr>
-                            <tr>
-                                <td>MacOS</td>
-                                <td class="table-success">Yes</td>
-                            </tr>
-                            <tr>
-                                <td>Linux (X11)</td>
-                                <td class="table-warning">Coming soon...</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                            <tbody>
+                                <tr>
+                                    <td>Windows</td>
+                                    <td class="table-success">Yes</td>
+                                </tr>
+                                <tr>
+                                    <td>MacOS</td>
+                                    <td class="table-success">Yes</td>
+                                </tr>
+                                <tr>
+                                    <td>Linux (X11)</td>
+                                    <td>Coming soon...</td>
+                                </tr>
+                                <tr>
+                                    <td>Linux (Wayland)</td>
+                                    <td>Not Planned</td>
+                                </tr>
+                                <tr>
+                                    <td>iOS</td>
+                                    <td>Planned</td>
+                                </tr>
+                                <tr>
+                                    <td>Android</td>
+                                    <td>Not Planned</td>
+                                </tr>
+                                <tr>
+                                    <td>Web</td>
+                                    <td>Not Planned</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
 
-                    <h4 id="usage">Usage</h4>
-                    <p class="p-2">
-                        This is all you need to create a simple window. By default it creates an OpenGL 3.3 core profile context
-                    </p>
+                    <div id="usage">
+                        <h4>Usage</h4>
+                        <p class="p-2">
+                            This is all you need to create a simple window. By default it creates an OpenGL 3.3 core profile context
+                        </p>
 
 <!-- https://codebeautify.org/code-highlighter -->
 <!-- Theme: Zenburn -->
@@ -107,46 +139,54 @@
 <span style="color:rgb(127, 159, 127); font-weight:400;">#<span style="color:rgb(227, 206, 171); font-weight:400;">define</span> VD_FW_IMPL                                           <span style="color:rgb(127, 159, 127); font-weight:400;">// Include implementation code</span></span>
 <span style="color:rgb(127, 159, 127); font-weight:400;">#<span style="color:rgb(227, 206, 171); font-weight:400;">include</span> <span style="color:rgb(204, 147, 147); font-weight:400;">&quot;vd_fw.h&quot;</span></span>
 </code></pre>
+                    <img class="img-fluid" src="/assets/fw-window-simple.png">
+                    </div>
 <hr>
-                    <h4 id="linking-and-dependencies">Linking & Dependencies</h4>
 
-                    <h4 id="windows">Windows</h4>
-                    <p class="p-2">
-                        With MSVC you don't really need to link anything, since linker comments in the
-                        translation unit that includes vd_fw.h are defined so that the appropriate libraries
-                        and subsystem are used. But for reference, here they are:
-                    </p>
-                    <ol class="list-group">
-                        <li class="list-group-item">User32</li>
-                        <li class="list-group-item">OpenGL32</li>
-                        <li class="list-group-item">Dwmapi</li>
-                        <li class="list-group-item">Shcore</li>
-                        <li class="list-group-item">Gdi32</li>
-                        <li class="list-group-item">uxtheme</li>
-                        <li class="list-group-item">shell32</li>
-                        <li class="list-group-item">kernel32</li>
-                        <li class="list-group-item">winmm</li>
-                    </ol>
-                    <br>
+                    <div id="linking-and-dependencies">
+                        <h4>Linking & Dependencies</h4>
 
-                    <h4 id="macos">MacOS</h4>
-                    <p class="p-2">
-                        For MacOS, it's a bit different. with clang, you must link several frameworks (via <code>-framework framework_name</code>).
-                        Additionally, <code>-x objective-c</code> must be used since the Mac APIs use Objective-C.
-                    </p>
-                    <ol class="list-group">
-                        <li class="list-group-item">pthread (compiler flag)</li>
-                        <li class="list-group-item">Cocoa</li>
-                        <li class="list-group-item">Metal</li>
-                        <li class="list-group-item">QuartzCore</li>
-                        <li class="list-group-item">CoreGraphics</li>
-                        <li class="list-group-item">IOSurface</li>
-                        <li class="list-group-item">IOKit</li>
-                        <li class="list-group-item">Foundation</li>
-                        <li class="list-group-item">OpenGL</li>
-                    </ol>
+                        <div id="windows">
+                            <h4 id="windows">Windows</h4>
+                            <p class="p-2">
+                                With MSVC you don't really need to link anything, since linker comments in the
+                                translation unit that includes vd_fw.h are defined so that the appropriate libraries
+                                and subsystem are used. But for reference, here they are:
+                            </p>
+                            <ol class="list-group">
+                                <li class="list-group-item">User32</li>
+                                <li class="list-group-item">OpenGL32</li>
+                                <li class="list-group-item">Dwmapi</li>
+                                <li class="list-group-item">Shcore</li>
+                                <li class="list-group-item">Gdi32</li>
+                                <li class="list-group-item">uxtheme</li>
+                                <li class="list-group-item">shell32</li>
+                                <li class="list-group-item">kernel32</li>
+                                <li class="list-group-item">winmm</li>
+                            </ol>
+                            <br>
+                        </div>
 
-                    <br>
+                        <div id="macos">
+                            <h4 id="macos">MacOS</h4>
+                            <p class="p-2">
+                                For MacOS, it's a bit different. with clang, you must link several frameworks (via <code>-framework framework_name</code>).
+                                Additionally, <code>-x objective-c</code> must be used since the Mac APIs use Objective-C.
+                            </p>
+                            <ol class="list-group">
+                                <li class="list-group-item">pthread (compiler flag)</li>
+                                <li class="list-group-item">Cocoa</li>
+                                <li class="list-group-item">Metal</li>
+                                <li class="list-group-item">QuartzCore</li>
+                                <li class="list-group-item">CoreGraphics</li>
+                                <li class="list-group-item">IOSurface</li>
+                                <li class="list-group-item">IOKit</li>
+                                <li class="list-group-item">Foundation</li>
+                                <li class="list-group-item">OpenGL</li>
+                            </ol>
+                            <br>
+                        </div>
+                    </div>
 
                     <h4 id="api-ref">Reference</h4>
 
@@ -206,13 +246,20 @@
 
                 </div>
 
-                <div class="toc-outline d-none d-lg-flex">
+                <div class="toc-outline d-none d-xl-flex">
                     <div class="p-0">
-                        <ul class="nav flex-column">
-                            <li class="nav-item"><a class="nav-link" href="#macos">Section 1</a></li>
-                            <li class="nav-item"><a class="nav-link" href="#section2">Section 2</a></li>
-                            <li class="nav-item"><a class="nav-link" href="#section3">Section 3</a></li>
-                        </ul>
+                        <p class="outline-title">Outline</p>
+                        <nav class="nav outline-section flex-column">
+                            <a class="nav-link" href="#brief">Brief</a>
+                            <a class="nav-link" href="#support-table">Support</a>
+                            <a class="nav-link" href="#usage">Usage</a>
+                            <a class="nav-link" href="#linking-and-dependencies">Linking & Dependencies</a>
+                            <nav class="nav outline-section flex-column">
+                                <a class="nav-link ms-3" href="#windows">Windows</a>
+                                <a class="nav-link ms-3" href="#macos">MacOS</a>
+                            </ul>
+                            <a class="nav-link" href="#api-ref">Reference</a>
+                        </nav>
                     </div>
                 </div>
 

@@ -2,10 +2,10 @@
     transition: box-shadow 0.2s ease-in-out;
 }
 
-html {
+/*html {
 scroll-padding-top: 80px; /* match your navbar height */
 }
-
+*/
 :root {
     --bittersweet: #ee5a58ff;
     --eerie-black: #1e1b18ff;
@@ -131,4 +131,18 @@ pre {
 .toc {
     position: sticky;
     top: 20px;
+}
+
+.outline-title {
+}
+
+.outline-section .nav-link {
+    color: #ffffff55;
+    font-size: 0.9em;
+    padding-top: 2px;
+    padding-bottom: 2px;
+}
+
+.outline-section .nav-link.active {
+    color: #ffffffff;
 }
