@@ -51,6 +51,7 @@ pre {
     border-radius: 16px;
     font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
     transition: box-shadow 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .span-image {
@@ -60,7 +61,7 @@ pre {
 }
 
 .apiitem.function:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 
 .apidetails {
@@ -145,4 +146,67 @@ pre {
 
 .outline-section .nav-link.active {
     color: #ffffffff;
+}
+
+
+.hljs {
+  display: block;
+  overflow-x: auto;
+  padding: 0.5em;
+}
+
+.hljs {
+  color: #ddd;
+  background: #303030;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-link {
+  color: white;
+}
+
+
+.hljs-subst {
+  /* default */
+}
+
+.hljs-string,
+.hljs-title,
+.hljs-name,
+.hljs-type,
+.hljs-attribute,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-built_in,
+.hljs-addition,
+.hljs-variable,
+.hljs-template-tag,
+.hljs-template-variable {
+  color: #d88;
+}
+
+.hljs-comment,
+.hljs-quote,
+.hljs-deletion,
+.hljs-meta {
+  color: #979797;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-title,
+.hljs-section,
+.hljs-doctag,
+.hljs-type,
+.hljs-name,
+.hljs-strong {
+  font-weight: bold;
+}
+
+.hljs-emphasis {
+  font-style: italic;
 }
