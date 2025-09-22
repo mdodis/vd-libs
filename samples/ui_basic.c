@@ -24,10 +24,11 @@ int main(int argc, char const *argv[])
     vd_ui_debug_set_draw_cursor_on(0);
     vd_ui_debug_set_inspector_on(0);
     vd_ui_debug_set_metrics_on(0);
+    vd_ui_debug_set_layout_recompute_vis_on(0);
 
     vd_fw_init(& (VdFwInitInfo) {
         .gl = {
-            .debug_on = 0,
+            .debug_on = 1,
             .version = VD_FW_GL_VERSION_3_3,
         },
 
@@ -109,6 +110,36 @@ int main(int argc, char const *argv[])
         vd_ui_demo();
 
         vd_ui_frame_end();
+
+        vd_ui_render_begin();
+        {
+            int nc_rect[4];
+            int rects[16][4];
+            int written = 0;
+            int total = 0;
+            int changed = vd_ui_ws_nc_area_get(nc_rect, 16, &total, &written, rects);
+            if (changed) {
+                printf("NC Area changed\n");
+                vd_fw_set_ncrects(nc_rect, written, rects);
+            }
+
+            // float nc_rectf[4] = {
+            //     (float)nc_rect[0], (float)nc_rect[1],
+            //     (float)nc_rect[2], (float)nc_rect[3],
+            // };
+            // vd_ui_push_rectgrad(nc_rectf, vd_ui_gradient1(vd_ui_f4(0.5f, 0.3f, 0.2f, 0.5f)).e, 0.f, 0.f, 0.f);
+
+            for (int i = 0; i < written; ++i) {
+
+                float rectf[4] = {
+                    (float)rects[i][0], (float)rects[i][1],
+                    (float)rects[i][2], (float)rects[i][3],
+                };
+
+                vd_ui_push_rectgrad(rectf, vd_ui_gradient1(vd_ui_f4(0.8f, 0.1f, 0.1f, 0.8f)).e, 0.f, 0.f, 0.f);
+            }
+        }
+        vd_ui_render_end();
 
         // Process updates
         size_t num_updates;

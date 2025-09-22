@@ -41,6 +41,7 @@
 #define VD_UI_VERSION_PATCH    1
 #define VD_UI_VERSION          ((VD_UI_VERSION_MAJOR << 16) | (VD_UI_VERSION_MINOR << 8) | (VD_UI_VERSION_PATCH))
 
+/* ----CONFIGURATION------------------------------------------------------------------------------------------------- */
 #include <stdarg.h>
 
 #ifndef VD_UNUSED
@@ -60,6 +61,15 @@
 typedef char VdUiBool;
 
 /**
+ * Override to change the max rectangles that will be used to compute non-client area
+ * @see vd_ui_ws_nc_area_mark, vd_ui_ws_nc_area_get
+ */
+#ifndef    VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX
+#define    VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX 16
+#endif // !VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX
+
+
+/**
  * To use a custom id for a texture, define a struct like so:
  * typedef struct {
  *     <Your custom texture id stuff>
@@ -74,12 +84,6 @@ typedef char VdUiBool;
  * Initialize the ui.
  */
 VD_UI_API void             vd_ui_init(void);
-
-/**
- * Get the minimum size required to hold the vertex buffer. Using this, you should allocate the buffer
- * @return  The size (in bytes) of the vertex buffer.
- */
-VD_UI_API size_t           vd_ui_get_min_vertex_buffer_size(void);
 
 /**
  * Begin a new frame. Call this before any ui layout or rendering calls
@@ -265,6 +269,7 @@ struct VdUiDiv {
 
     size_t      h;
     size_t      last_frame_touched;
+    int         size_changed;
 
     VdUiDiv     *hnext;
     VdUiDiv     *hprev;
@@ -282,6 +287,7 @@ struct VdUiDiv {
     float       active_t;
     float       timeout_t;
     float       timeout_inv_t;
+    float       size_timeout_t;
 
     VdUiBool    is_null;
 };
@@ -489,11 +495,11 @@ typedef struct {
         } new_texture;
 
         struct {
-            int               width, height;
+            int               width, height; // in:  width and height of the texture (just for reuse (for now))
             VdUiTextureFormat format;        // in:  format of the texture
-            void              *buffer;
-            size_t            size;
-            VdUiTextureId     texture;
+            void              *buffer;       // in:  buffer to update the texture with
+            size_t            size;          // in:  texture buffer size
+            VdUiTextureId     texture;       // in:  texture to update
         } write_texture;
 
         struct {
@@ -501,6 +507,12 @@ typedef struct {
         } change_capture;
     } data;
 } VdUiUpdate;
+
+/**
+ * Get the minimum size required to hold the vertex buffer. Using this, you should allocate the buffer
+ * @return  The size (in bytes) of the vertex buffer.
+ */
+VD_UI_API size_t           vd_ui_get_min_vertex_buffer_size(void);
 
 /**
  * Get the updates required to render the ui. You must handle all of these before any rendering of the UI occurs.
@@ -522,6 +534,27 @@ VD_UI_API void*            vd_ui_frame_get_vertex_buffer(size_t *buffer_size);
  * @return            The pass data
  */
 VD_UI_API VdUiRenderPass*  vd_ui_frame_get_render_passes(unsigned int *num_passes);
+
+/**
+ * Begin custom rendering. You do not need to call this unless you want to push extra vertices after vd_ui renders
+ * the ui tree.
+ */
+VD_UI_API void             vd_ui_render_begin(void);
+
+/**
+ * End custom rendering. @see vd_ui_render_begin
+ */
+VD_UI_API void             vd_ui_render_end(void);
+
+/**
+ * Push a gradient-colored rectangle to athe vertex buffer
+ * @param rect  The coordinates of the rectangle (left, top, right, bottom)
+ * @param color The gradient of the rectangle, mapped to each corner (left, top, right, bottom)
+ */
+VD_UI_API void             vd_ui_push_rectgrad(float rect[4], float color[16],
+                                               float corner_radius,
+                                               float edge_softness,
+                                               float border_thickness);
 
 /* ----FONTS--------------------------------------------------------------------------------------------------------- */
 VD_UI_API VdUiFontId       vd_ui_font_add_ttf(void *buffer, size_t size);
@@ -564,34 +597,31 @@ VD_UI_API void             vd_ui_measure_text_size(VdUiFontId font, VdUiStr str,
 VD_UI_API void             vd_ui_debug_set_draw_cursor_on(VdUiBool on);
 VD_UI_API void             vd_ui_debug_set_inspector_on(VdUiBool on);
 VD_UI_API void             vd_ui_debug_set_metrics_on(VdUiBool on);
+VD_UI_API void             vd_ui_debug_set_layout_recompute_vis_on(VdUiBool on);
 
 /* ----INTEGRATION - WINDOW SYSTEMS---------------------------------------------------------------------------------- */
 
 /**
- * Begin measuring non client (draggable) area
- * @param  nc_div The div that indicates the non client area
+ * Mark the div which will correspond the non-client area of a borderless window
+ * @param  div The div which will encompass the non-client area
  */
-VD_UI_API void             vd_ui_ws_nc_area_begin(VdUiDiv *nc_div);
-
-/**
- * End measuring non client area. Functions below this one are then available
- * @return  [description]
- */
-VD_UI_API void             vd_ui_ws_nc_area_end(void);
+VD_UI_API void             vd_ui_ws_nc_area_mark(VdUiDiv *div);
 
 /**
  * Gets the non client area. The area is defined by:
  * - 1 rectangle that indicates the whole area (the one passed to vd_ui_ws_nc_area_begin)
  * - N rectangles that indicate areas to exclude from the hit test
  * 
- * @param nc_area_rect          The whole area (including buttons)
- * @param num_max_exclude_rects The maximum number of area rects pointed to by @ref exclude_rects
- * @param num_exclude_rects     The number of rects that were written
- * @param exclude_rects         Pointer to rects array. Must be at least num_max_exclude_rects
- * @return                      1 if the non client area has changed, due to a resize, or any other reason
+ * @param nc_area_rect            The whole area (including buttons)
+ * @param num_max_exclude_rects   The maximum number of area rects pointed to by @ref exclude_rects
+ * @param num_total_exclude_rects The number of rects that would have been written if @ref num_max_exclude_rects was infinite
+ * @param num_exclude_rects       The number of rects that were written
+ * @param exclude_rects           Pointer to rects array. Must be at least num_max_exclude_rects
+ * @return                        1 if the non client area has changed, due to a resize, or any other reason
  */
-VD_UI_API int              vd_ui_ws_nc_area_get(float nc_area_rect[4],
+VD_UI_API int              vd_ui_ws_nc_area_get(int nc_area_rect[4],
                                                 int num_max_exclude_rects,
+                                                int *num_total_exclude_rects,
                                                 int *num_exclude_rects, int (*exclude_rects)[4]);
 
 /* ----INTEGRATION - OPENGL------------------------------------------------------------------------------------------ */
@@ -1008,40 +1038,47 @@ static float        vd_ui__clampf(float x, float a, float b);
 static float        vd_ui__smooth_damp(float current, float target, float *velocity,
                                        float smooth_time, float max_speed, float delta_seconds);
 static float        vd_ui__lerp(float a, float b, float t);
+static int          vd_ui__float_eq(float a, float b);
 static VdUiF4       vd_ui__lerp4(VdUiF4 a, VdUiF4 b, float t);
 static VdUiGradient vd_ui__lerpgrad(VdUiGradient a, VdUiGradient b, float t);
 static int          vd_ui__utf8decs(VdUiStr *str, unsigned int *out);
 
 static void         vd_ui__do_inspector(VdUiContext *ctx);
+static void         vd_ui__size_changed(VdUiContext *ctx, VdUiDiv *div);
+
+static int          vd_ui_ws_nc_area__calc(VdUiContext *ctx, VdUiDiv *curr,
+                                                             int num_max_exclude_rects,
+                                                             int *num_total_exclude_rects,
+                                                             int *num_exclude_rects, int (*exclude_rects)[4]);
 
 struct VdUiContext {
-    VdUiDiv                 root;
+    VdUiDiv                 root;                                                  // Root div. Every frame begins with this div
+                                                                                   // as the parent.
 
+    unsigned int            parents_next;                                          // Parent stack.
     VdUiDiv                 *parents[VD_UI_PARENT_STACK_MAX];
-    unsigned int            parents_next;
 
-    unsigned int            vbuf_count;
+    unsigned int            vbuf_count;                                            // Vertex buffer
     VdUiVertex              vbuf[VD_UI_VBUF_COUNT_MAX];
 
-    unsigned int            num_passes;
-    VdUiRenderPass          passes[VD_UI_RP_COUNT_MAX];
+    unsigned int            num_passes;                                            // Render Passes. Each rp gets added if texture
+    VdUiRenderPass          passes[VD_UI_RP_COUNT_MAX];                            // config or layer differs
 
-    unsigned int            num_updates;
+    unsigned int            num_updates;                                           // Updates. Requests to the user/graphics api
     VdUiUpdate              updates[VD_UI_UPDATE_COUNT_MAX];
 
-    unsigned int            num_fonts;
+    unsigned int            num_fonts;                                             // Fonts. Holds all font data
     VdUiFont                fonts[VD_UI_FONT_COUNT_MAX];
 
-    unsigned int            clip_stack_count;
+    unsigned int            clip_stack_count;                                      // Clip stack
     float                   clip_stack[VD_UI_CLIP_STACK_MAX][4];
 
-    // Divs
-    VdUiDiv                 *divs;
+    VdUiDiv                 *divs;                                                 // The actual divs hashmap
     unsigned int            divs_cap;
     unsigned int            divs_cap_total;
 
-    VdUiDiv                 *null_divs;
-    unsigned int            null_divs_len;
+    VdUiDiv                 *null_divs;                                            // Growable buffer for null divs. Currently
+    unsigned int            null_divs_len;                                         // used for spacer divs
     unsigned int            null_divs_cap;
 
     // Glyph Cache
@@ -1068,19 +1105,18 @@ struct VdUiContext {
     float                   dpi_scale;
 
     // Per frame info
-    size_t                  frame_index;
-    size_t                  last_frame_index;
-    float                   delta_seconds;
+    size_t                  frame_index;                                           // The current frame index. Incremented on every vd_ui_frame_begin()
+    size_t                  last_frame_index;                                      // The previous frame's index
+    float                   delta_seconds;                                         // Delta time to advance animations by
 
-    int                     focus;
+    int                     focus;                                                 // Determines if this UI tree has any focus
 
-    float                   mouse[VD_UI_AXES];
-    float                   mouse_last[VD_UI_AXES];
+    float                   mouse[VD_UI_AXES];                                     // The current mouse coordinates. Passed via vd_ui_event_mouse_location()
+    float                   mouse_last[VD_UI_AXES];                                // The last known mouse coordinates.
 
-    float                   wheel[VD_UI_AXES];
-    float                   wheel_current[VD_UI_AXES];
-    float                   wheel_target[VD_UI_AXES];
-    float                   window[VD_UI_AXES];
+    float                   wheel_current[VD_UI_AXES];                             // The current wheel state. Smoothed on mouse sources
+    float                   wheel_target[VD_UI_AXES];                              // The target wheel state
+    float                   window[VD_UI_AXES];                                    // The window size, in pixels
     int                     mouse_left;
     int                     mouse_left_last;
     int                     mouse_right;
@@ -1108,30 +1144,54 @@ struct VdUiContext {
         VdUiBool           metrics_on;
         VdUiBool           custom_cursor_on;
         VdUiBool           inspector_on;
-    } debug;
 
-    struct {
-        float              lclick_timeout_t;
-    } animation;
+        VdUiBool           layout_recompute_vis_on;
+        float              layout_recompute_vis_timeout;
+    } debug;
+    
+    struct {                                                                       // NC AREA
+        VdUiDiv            *div;                                                   // The div marked for nc area computation in this frame
+        int                changed;                                                // Whether the nc area changed this frame (computed in vd_ui_frame_end)
+
+        struct {
+            int            rect[4];                                                // The last nc area rect
+            int            num_excluded;                                           // The last nc area excluded rect count
+            int            excluded[VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX][4];        // The last nc area excluded rects
+        } last;
+
+        struct {
+            int            rect[4];                                                // The current nc area rect
+            int            num_excluded;                                           // The current nc area excluded rect count
+            int            excluded[VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX][4];        // The current nc area excluded rects
+            int            num_excluded_unbound;                                   // The current nc area excluded rect count, if VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX was infinite
+        } now;
+    } nc_area;
 };
 
 VD_UI_API void vd_ui_frame_begin(float delta_seconds)
 {
     VdUiContext *ctx = vd_ui_context_get();
-    ctx->root.first           = 0;
-    ctx->root.next            = 0;
-    ctx->root.last            = 0;
-    ctx->root.prev            = 0;
-    ctx->root.parent          = 0;
+    ctx->root.first           = NULL;
+    ctx->root.next            = NULL;
+    ctx->root.last            = NULL;
+    ctx->root.prev            = NULL;
+    ctx->root.parent          = NULL;
+    ctx->root.size_changed    = 0;
+
+    ctx->nc_area.div          = NULL;
+    ctx->nc_area.changed      = 0;
+
     ctx->wheel_target[0]      = 0.f;
     ctx->wheel_target[1]      = 0.f;
     ctx->mouse_last[0]        = ctx->mouse[0];
     ctx->mouse_last[1]        = ctx->mouse[1];
+    ctx->delta_seconds        = delta_seconds;
 
-    ctx->null_divs_len = 0;
+    ctx->strbuf_len           = 0;
+    ctx->null_divs_len        = 0;
+
     vd_ui_parent_push(&ctx->root);
 
-    ctx->delta_seconds = delta_seconds;
 
     ctx->last_frame_index = ctx->frame_index;
     ctx->frame_index++;
@@ -1140,7 +1200,6 @@ VD_UI_API void vd_ui_frame_begin(float delta_seconds)
         ctx->frame_index = 1;
     }
 
-    ctx->strbuf_len = 0;
 }
 
 VD_UI_API void vd_ui_frame_end(void)
@@ -1157,8 +1216,13 @@ VD_UI_API void vd_ui_frame_end(void)
     ctx->root.rect[1]      = 0.f;
     ctx->root.rect[2]      = ctx->window[0];
     ctx->root.rect[3]      = ctx->window[1];
+    if (!vd_ui__float_eq(ctx->root.comp_size[0],ctx->window[0]) ||
+        !vd_ui__float_eq(ctx->root.comp_size[1],ctx->window[1])) {
+        ctx->root.size_changed = 1;
+    }
     ctx->root.comp_size[0] = ctx->window[0];
     ctx->root.comp_size[1] = ctx->window[1];
+
     ctx->root.style.size[0].mode     = VD_UI_SIZE_MODE_ABSOLUTE;
     ctx->root.style.size[0].value    = ctx->window[0];
     ctx->root.style.size[0].niceness = 0.f;
@@ -1166,10 +1230,86 @@ VD_UI_API void vd_ui_frame_end(void)
     ctx->root.style.size[1].value    = ctx->window[1];
     ctx->root.style.size[1].niceness = 0.f;
     ctx->clip_stack_count = 0;
-    ctx->animation.lclick_timeout_t = vd_ui__clampf01(ctx->animation.lclick_timeout_t + ctx->delta_seconds);
+
+    if (ctx->debug.layout_recompute_vis_on) {
+        ctx->debug.layout_recompute_vis_timeout = vd_ui__lerp(ctx->debug.layout_recompute_vis_timeout, 0.f,
+                                                              ctx->delta_seconds * 11.f);
+    }
 
     // Layout UI
     vd_ui__layout(ctx);
+
+    // Calculate nc_area, if any
+    if (ctx->nc_area.div != 0) {
+        VdUiDiv *nc_div = ctx->nc_area.div;
+
+        // Reset excluded rect count
+        ctx->nc_area.now.num_excluded_unbound = 0;
+        ctx->nc_area.now.num_excluded = 0;
+
+        // Output full nc area rect as the div
+        ctx->nc_area.now.rect[0] = (int)nc_div->rect[0];  ctx->nc_area.now.rect[1] = (int)nc_div->rect[1];
+        ctx->nc_area.now.rect[2] = (int)nc_div->rect[2];  ctx->nc_area.now.rect[3] = (int)nc_div->rect[3];
+
+        // Output child areas
+        VdUiDiv *child = nc_div->first;
+        while (child != 0) {
+            vd_ui_ws_nc_area__calc(ctx, child,
+                                        VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX,
+                                        &ctx->nc_area.now.num_excluded_unbound,
+                                        &ctx->nc_area.now.num_excluded, ctx->nc_area.now.excluded);
+            child = child->next;
+        }
+
+        int changed = 0;
+
+        // Check if whole rect changed
+        int whole_rect_changed = (ctx->nc_area.now.rect[0] != ctx->nc_area.last.rect[0]) ||
+                                 (ctx->nc_area.now.rect[1] != ctx->nc_area.last.rect[1]) ||
+                                 (ctx->nc_area.now.rect[2] != ctx->nc_area.last.rect[2]) ||
+                                 (ctx->nc_area.now.rect[3] != ctx->nc_area.last.rect[3]);
+
+        if (whole_rect_changed) {
+            changed = 1;
+        }
+
+        // Check if excluded count changed
+        if (ctx->nc_area.now.num_excluded != ctx->nc_area.last.num_excluded) {
+            changed = 1;
+        }
+
+        // If nothing changed so far, check if any of the rectangles inside changed
+        if (!changed) {
+            for (int i = 0; i < ctx->nc_area.now.num_excluded; ++i) {
+                int excluded_rect_changed = (ctx->nc_area.now.excluded[i][0] != ctx->nc_area.last.excluded[i][0]) ||
+                                            (ctx->nc_area.now.excluded[i][1] != ctx->nc_area.last.excluded[i][1]) ||
+                                            (ctx->nc_area.now.excluded[i][2] != ctx->nc_area.last.excluded[i][2]) ||
+                                            (ctx->nc_area.now.excluded[i][3] != ctx->nc_area.last.excluded[i][3]);
+                if (excluded_rect_changed) {
+                    changed = 1;
+                    break;
+                }
+            }
+        }
+
+        // If the rectangles changed, copy them
+        if (changed) {
+            // Copy now to last
+            ctx->nc_area.last.num_excluded = ctx->nc_area.now.num_excluded;
+
+            ctx->nc_area.last.rect[0] = ctx->nc_area.now.rect[0]; ctx->nc_area.last.rect[1] = ctx->nc_area.now.rect[1];
+            ctx->nc_area.last.rect[2] = ctx->nc_area.now.rect[2]; ctx->nc_area.last.rect[3] = ctx->nc_area.now.rect[3];
+
+            for (int i = 0; i < ctx->nc_area.now.num_excluded; ++i) {
+                ctx->nc_area.last.excluded[i][0] = ctx->nc_area.now.excluded[i][0];
+                ctx->nc_area.last.excluded[i][1] = ctx->nc_area.now.excluded[i][1];
+                ctx->nc_area.last.excluded[i][2] = ctx->nc_area.now.excluded[i][2];
+                ctx->nc_area.last.excluded[i][3] = ctx->nc_area.now.excluded[i][3];
+            }
+        }
+
+        ctx->nc_area.changed = changed;
+    }
 
     vd_ui__push_clip(ctx, (float[]){0.f, 0.f, ctx->window[0], ctx->window[1]});
 
@@ -1195,6 +1335,7 @@ VD_UI_API void vd_ui_frame_end(void)
     vd_ui__update_all_fonts(ctx);
 }
 
+/* ----RENDERING IMPL------------------------------------------------------------------------------------------------ */
 VD_UI_API size_t vd_ui_get_min_vertex_buffer_size(void)
 {
     return sizeof(VdUiVertex) * VD_UI_VBUF_COUNT_MAX;
@@ -1220,6 +1361,26 @@ VD_UI_API VdUiRenderPass *vd_ui_frame_get_render_passes(unsigned int *num_passes
     VdUiContext *ctx = vd_ui_context_get();
     *num_passes = ctx->num_passes;
     return ctx->passes; 
+}
+
+VD_UI_API void vd_ui_render_begin(void)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    vd_ui__push_clip(ctx, (float[]){0.f, 0.f, ctx->window[0], ctx->window[1]});
+}
+
+VD_UI_API void vd_ui_render_end(void)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    vd_ui__pop_clip(ctx);
+}
+
+VD_UI_API void vd_ui_push_rectgrad(float rect[4], float color[16],
+                                   float corner_radius,
+                                   float edge_softness,
+                                   float border_thickness)
+{
+    vd_ui__push_rectgrad(vd_ui_context_get(), rect, color, corner_radius, edge_softness, border_thickness);
 }
 
 /* ----UI IMPL------------------------------------------------------------------------------------------------------- */
@@ -1671,6 +1832,11 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     result->style.padding[2] = 0.f;
     result->style.padding[3] = 0.f;
     result->style.text_font_size = ctx->def.font_size * ctx->dpi_scale;
+    if (result->is_null) {
+        result->size_changed = 1;
+    } else {
+        result->size_changed = 0;
+    }
 
     VdUiDiv *parent = ctx->parents[ctx->parents_next - 1];
     result->parent = parent;
@@ -1813,7 +1979,7 @@ VD_UI_API void vd_ui_demo(void)
     {
         {
             VdUiDiv *decorations = vd_ui_div_newf(VD_UI_FLAG_FLEX_HORIZONTAL | VD_UI_FLAG_ALIGN_CENTER | VD_UI_FLAG_BACKGROUND, "##decorations");
-            // vd_ui_ws_nc_area_begin(decorations);
+            vd_ui_ws_nc_area_mark(decorations);
 
             decorations->style.size[0].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
             decorations->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
@@ -1850,8 +2016,6 @@ VD_UI_API void vd_ui_demo(void)
                 vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_CANCEL), "##close");
             }
             vd_ui_parent_pop();
-
-            // vd_ui_ws_nc_area_end();
         }
         static float scrollx = 0.f;
         static float scrolly = 0.f;
@@ -1959,20 +2123,26 @@ static void vd_ui__calc_fixed_size(VdUiContext *ctx, VdUiDiv *curr)
 
     for (int i = 0; i < VD_UI_AXES; ++i) {
 
+        float new_comp_size = 0.f;
+        switch (curr->style.size[i].mode) {
+            case VD_UI_SIZE_MODE_ABSOLUTE:     new_comp_size = curr->style.size[i].value; break;
+            case VD_UI_SIZE_MODE_TEXT_CONTENT: new_comp_size = text_sizes[i];             break;
+            default: break;
+        }
 
         switch (curr->style.size[i].mode) {
-
-            case VD_UI_SIZE_MODE_ABSOLUTE: {
-                curr->comp_size[i] = curr->style.size[i].value;
-
-                curr->comp_size[0] += curr->style.padding[0] + curr->style.padding[2];
-                curr->comp_size[1] += curr->style.padding[1] + curr->style.padding[3];
-            } break;
-
+            case VD_UI_SIZE_MODE_ABSOLUTE:
             case VD_UI_SIZE_MODE_TEXT_CONTENT: {
-                curr->comp_size[i] = text_sizes[i];
-                curr->comp_size[0] += curr->style.padding[0] + curr->style.padding[2];
-                curr->comp_size[1] += curr->style.padding[1] + curr->style.padding[3];
+                if (i == VD_UI_AXISH) {
+                    new_comp_size += curr->style.padding[VD_UI_LEFT] + curr->style.padding[VD_UI_RIGHT];
+                } else {
+                    new_comp_size += curr->style.padding[VD_UI_TOP]  + curr->style.padding[VD_UI_BOTTOM];
+                }
+
+                if (!vd_ui__float_eq(new_comp_size, curr->comp_size[i])) {
+                    vd_ui__size_changed(ctx, curr);
+                    curr->comp_size[i] = new_comp_size;
+                }
             } break;
 
             default: break;
@@ -1992,7 +2162,12 @@ static void vd_ui__calc_dyn_size_up(VdUiContext *ctx, VdUiDiv *curr)
             case VD_UI_SIZE_MODE_PERCENT_OF_PARENT: {
                 if (!curr->parent) break;
 
-                curr->comp_size[i] = curr->style.size[i].value * curr->parent->comp_size[i];
+                float new_comp_size = curr->style.size[i].value * curr->parent->comp_size[i];
+                if (curr->is_null || !vd_ui__float_eq(new_comp_size, curr->comp_size[i])) {
+                    vd_ui__size_changed(ctx, curr);
+                    // printf("up size changed for %.*s\n", curr->id_str.l, curr->id_str.s);
+                    curr->comp_size[i] = new_comp_size;
+                }
             } break;
 
             default: break;
@@ -2019,8 +2194,13 @@ static void vd_ui__calc_dyn_size_down(VdUiContext *ctx, VdUiDiv *curr)
     vd_ui__get_axes_for_div(curr, &daxis, &faxis, &daxisf, &faxisf);
 
     VdUiDiv *child = curr->first;
+    int size_will_change = 0;
     while (child != 0) {
         vd_ui__calc_dyn_size_down(ctx, child);
+
+        if (child->is_null || child->size_changed) {
+            size_will_change = 1;
+        }
 
         if ((child->flags & VD_UI_FLAG_FLOAT) == 0) {
             full_size[daxis] += child->comp_size[daxis];
@@ -2030,10 +2210,16 @@ static void vd_ui__calc_dyn_size_down(VdUiContext *ctx, VdUiDiv *curr)
         child = child->next;
     }
 
+
     for (int i = 0; i < VD_UI_AXES; ++i) {
         switch (curr->style.size[i].mode) {
 
             case VD_UI_SIZE_MODE_CONTAIN_CHILDREN: {
+
+                if (!vd_ui__float_eq(curr->comp_size[i], full_size[i])) {
+                    vd_ui__size_changed(ctx, curr);
+                }
+
                 curr->comp_size[i] = full_size[i];
             } break;
 
@@ -2301,7 +2487,7 @@ VD_UI_API void vd_ui_event_mouse_button(int index, int down)
     VdUiContext *ctx = vd_ui_context_get();
     switch (index)
     {
-        case VD_UI_MOUSE_LEFT:   ctx->mouse_left_last = ctx->mouse_left; ctx->mouse_left = down; if (down) ctx->animation.lclick_timeout_t = 0.f; break;
+        case VD_UI_MOUSE_LEFT:   ctx->mouse_left_last = ctx->mouse_left; ctx->mouse_left = down; break;
         case VD_UI_MOUSE_RIGHT:  ctx->mouse_right  = down; break;
         case VD_UI_MOUSE_MIDDLE: ctx->mouse_middle = down; break;
         default: break;
@@ -2805,7 +2991,7 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
 
             switch (curr->style.text_halign) {
                 case VD_UI_TEXT_HALIGN_LEFT: {
-                    x = curr->rect[0] + curr->style.padding[0] * 2;
+                    x = curr->rect[0] + curr->style.padding[VD_UI_LEFT];
                 } break;
 
                 case VD_UI_TEXT_HALIGN_CENTER: {
@@ -2856,6 +3042,12 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
 
             if ((curr->style.text_visibility & VD_UI_VISBILITY_DONT_DISPLAY) == 0) {
                 vd_ui__put_line(ctx, curr->content_str, x, y, curr->style.text_font_size);
+            }
+
+            if (ctx->debug.layout_recompute_vis_on) {
+                curr->size_timeout_t = vd_ui__lerp(curr->size_timeout_t, 0.f, ctx->delta_seconds * 11.f);
+                VdUiGradient grad = vd_ui_gradient1(vd_ui_f4(0.922f, 0.753f, 0.306f, curr->size_timeout_t));
+                vd_ui__push_rectgrad(ctx, curr->rect, grad.e, 0.f, 0.f, 0.f);
             }
         }
     }
@@ -2925,6 +3117,16 @@ static float vd_ui__smooth_damp(float current, float target, float *velocity,
 static float vd_ui__lerp(float a, float b, float t)
 {
     return (1.0f - t) * a + t * b;
+}
+
+static int vd_ui__float_eq(float a, float b)
+{
+    float d = a - b;
+    if (d < 0.f) {
+        d = -d;
+    }
+
+    return (d < 0.000001f);
 }
 
 static VdUiF4 vd_ui__lerp4(VdUiF4 a, VdUiF4 b, float t)
@@ -3410,6 +3612,98 @@ VD_UI_API void vd_ui_debug_set_metrics_on(VdUiBool on)
 {
     VdUiContext *ctx = vd_ui_context_get();
     ctx->debug.metrics_on = on;
+}
+
+VD_UI_API void vd_ui_debug_set_layout_recompute_vis_on(VdUiBool on)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    ctx->debug.layout_recompute_vis_on = on;
+}
+
+/* ----INTEGRATION - WINDOW SYSTEMS IMPL----------------------------------------------------------------------------- */
+VD_UI_API void vd_ui_ws_nc_area_mark(VdUiDiv *div)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    ctx->nc_area.div = div;
+}
+
+static int vd_ui_ws_nc_area__calc(VdUiContext *ctx, VdUiDiv *curr, int num_max_exclude_rects,
+                                                                   int *num_total_exclude_rects,
+                                                                   int *num_exclude_rects, int (*exclude_rects)[4])
+{
+
+    int changed = curr->is_null ? 0 : curr->size_changed;
+
+    if (curr->flags & VD_UI_FLAG_CLICKABLE) {
+        // changed = curr->size_changed;
+        // Get rect area for this div
+        int rect[4] = {
+            (int)curr->rect[0], (int)curr->rect[1],
+            (int)curr->rect[2], (int)curr->rect[3],
+        };
+
+        if (*num_exclude_rects < num_max_exclude_rects) {
+            int i = (*num_exclude_rects)++;
+            exclude_rects[i][0] = rect[0]; exclude_rects[i][1] = rect[1];
+            exclude_rects[i][2] = rect[2]; exclude_rects[i][3] = rect[3];
+
+            (*num_total_exclude_rects)++;
+        }
+    }
+
+    VdUiDiv *child = curr->first;
+    while (child != 0) {
+
+        int child_changed = vd_ui_ws_nc_area__calc(ctx, child,
+                                                   num_max_exclude_rects, num_total_exclude_rects,
+                                                   num_exclude_rects,
+                                                   exclude_rects);
+
+        changed = changed || child_changed;
+
+        child = child->next;
+    }
+ 
+    return changed;
+}
+
+VD_UI_API int vd_ui_ws_nc_area_get(int nc_area_rect[4],
+                                   int num_max_exclude_rects,
+                                   int *num_total_exclude_rects,
+                                   int *num_exclude_rects, int (*exclude_rects)[4])
+{
+    VdUiContext *ctx = vd_ui_context_get();
+
+    // if (!ctx->nc_area.changed) {
+    //     return 0;
+    // }
+
+    nc_area_rect[0] = ctx->nc_area.now.rect[0]; nc_area_rect[1] = ctx->nc_area.now.rect[1];
+    nc_area_rect[2] = ctx->nc_area.now.rect[2]; nc_area_rect[3] = ctx->nc_area.now.rect[3];
+
+    if (num_total_exclude_rects) *num_total_exclude_rects = ctx->nc_area.now.num_excluded_unbound;
+
+    int count = ctx->nc_area.now.num_excluded;
+    if (count > num_max_exclude_rects) {
+        count = num_max_exclude_rects;
+    }
+
+    *num_exclude_rects = count;
+    for (int i = 0; i < count; ++i) {
+        exclude_rects[i][0] = ctx->nc_area.now.excluded[i][0]; exclude_rects[i][1] = ctx->nc_area.now.excluded[i][1];
+        exclude_rects[i][2] = ctx->nc_area.now.excluded[i][2]; exclude_rects[i][3] = ctx->nc_area.now.excluded[i][3];
+    }
+
+    return ctx->nc_area.changed;
+}
+
+static void vd_ui__size_changed(VdUiContext *ctx, VdUiDiv *div)
+{
+    div->size_changed = 1;
+    if (ctx->debug.layout_recompute_vis_on) {
+        ctx->debug.layout_recompute_vis_timeout = 1.f;
+        div->size_timeout_t = 1.f;
+    }
 }
 
 static struct {

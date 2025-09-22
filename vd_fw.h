@@ -3113,7 +3113,11 @@ VD_FW_API void vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4])
     VD_FW_G.nccaption[3] = caption[3];
 
     VD_FW_G.ncrect_count = count;
-    for (int i = 0; i < count; ++i) {
+    int c = count;
+    if (c > 16) {
+        c = 16;
+    }
+    for (int i = 0; i < c; ++i) {
         VD_FW_G.ncrects[i][0] = rects[i][0];
         VD_FW_G.ncrects[i][1] = rects[i][1];
         VD_FW_G.ncrects[i][2] = rects[i][2];
@@ -3400,22 +3404,31 @@ static int vd_fw__hit_test(int x, int y)
         return HTRIGHT;
     }
 
-    for (int ri = 0; ri < VD_FW_G.ncrect_count; ++ri) {
-        int rect[4] = {
-            VD_FW_G.ncrects[ri][0],
-            VD_FW_G.ncrects[ri][1],
-            VD_FW_G.ncrects[ri][2],
-            VD_FW_G.ncrects[ri][3],
-        };
+    int inside_caption = 
+        ((mouse.x >= VD_FW_G.nccaption[0]) && (mouse.x <= VD_FW_G.nccaption[2])) &&
+        ((mouse.y >= VD_FW_G.nccaption[1]) && (mouse.y <= VD_FW_G.nccaption[3]));
 
-        int inside =
-            ((mouse.x >= rect[0]) && (mouse.x <= rect[2])) &&
-            ((mouse.y >= rect[1]) && (mouse.x <= rect[3]));
+    if (inside_caption) {
+        for (int ri = 0; ri < VD_FW_G.ncrect_count; ++ri) {
+            int rect[4] = {
+                VD_FW_G.ncrects[ri][0],
+                VD_FW_G.ncrects[ri][1],
+                VD_FW_G.ncrects[ri][2],
+                VD_FW_G.ncrects[ri][3],
+            };
 
-        if (inside) {
-            return HTCAPTION;
+            int inside =
+                ((mouse.x >= rect[0]) && (mouse.x <= rect[2])) &&
+                ((mouse.y >= rect[1]) && (mouse.y <= rect[3]));
+
+            if (inside) {
+                return HTCLIENT;
+            }
         }
+
+        return HTCAPTION;
     }
+
     return HTCLIENT;
 }
 
