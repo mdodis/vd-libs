@@ -33,6 +33,7 @@
  * - MacOS APIs can't be used on another thread other than main thread :/
  *   so, just initialize display link and wait on condition variable + mutex when drawing while resizing
  * - MacOS resize logic
+ * - On borderless, push mouse event right as we lose focus to a value outside of the window space
  */
 
 /**

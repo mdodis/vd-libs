@@ -21,9 +21,15 @@
  *    misrepresented as being the original software.
  * 3. This notice may not be removed or altered from any source distribution.
  * ---------------------------------------------------------------------------------------------------------------------
+ *
+ * | Widget                                | Function                                                           | Done |
+ * | ------------------------------------- | ------------------------------------------------------------------ | ---- |
+ * |                                       |                                                                    |      |
+ * 
  * @todo(mdodis):
- * - Figure out a good way to get non-client rects from the ui into the windowing framework
  * - New and improved render pass api using texture id + scissor + layer id as keys
+ * - Sliders
+ * - Move scrollbars into a separate function to use in general scroll view as well as lists and tables etc...
  * - Introduce comp_children_size when calculating child sizes 
  * - Allow active elements to capture the mouse
  * - Text Input
@@ -138,6 +144,13 @@ typedef struct {
     unsigned int codepoint;
 } VdUiSymbol;
 
+typedef enum {
+    VD_UI_DATA_TYPE_INVALID = 0,
+    VD_UI_DATA_TYPE_INT,                    // int32_t
+    VD_UI_DATA_TYPE_FLOAT,                  // float
+    VD_UI_DATA_TYPE_MAX,
+} VdUiDataType;
+
 static inline VdUiF4       vd_ui_f4(float x, float y, float z, float w);
 static inline VdUiF4       vd_ui_fall4(float s);
 static inline VdUiGradient vd_ui_gradient(VdUiF4 top_left, VdUiF4 top_right, VdUiF4 bottom_left, VdUiF4 bottom_right);
@@ -236,6 +249,8 @@ typedef struct {
 
     float           corner_radius;
 
+    float           edge_softness;
+
     /** The font size to use for the text & symbol, in pixels. */
     float           text_font_size;
 
@@ -283,6 +298,7 @@ struct VdUiDiv {
     float       comp_pos_rel[VD_UI_AXES];
     float       comp_size[VD_UI_AXES];
     float       rect[4];
+    int         zoffset;
 
     float       hot_t;
     float       active_t;
@@ -333,7 +349,7 @@ VD_UI_API VdUiReply        vd_ui_button(VdUiStr str);
  * @param  label The format text
  * @return       The interaction result
  */
-VD_UI_INL VdUiReply        vd_ui_buttonf(const char *label, ...)   { VD_UI_DOTTOSTR(label); return vd_ui_button(str); }
+VD_UI_INL VdUiReply        vd_ui_buttonf(const char *label, ...)                                                        { VD_UI_DOTTOSTR(label); return vd_ui_button(str); }
 
 /**
  * Displays a label
@@ -345,7 +361,7 @@ VD_UI_API void             vd_ui_label(VdUiStr str);
  * Displays a label (printf version)
  * @param  str The text to display
  */
-VD_UI_API void             vd_ui_labelf(const char *label, ...)    { VD_UI_DOTTOSTR(label); vd_ui_label(str); }
+VD_UI_INL void             vd_ui_labelf(const char *label, ...)                                                         { VD_UI_DOTTOSTR(label); vd_ui_label(str); }
 
 /**
  * Displays a checkbox
@@ -361,7 +377,7 @@ VD_UI_API VdUiReply        vd_ui_checkbox(int *b, VdUiStr str);
  * @param  label The text to display
  * @return       The interaction result
  */
-VD_UI_API VdUiReply        vd_ui_checkboxf(int *b, const char *label, ...) { VD_UI_DOTTOSTR(label); return vd_ui_checkbox(b, str); }
+VD_UI_INL VdUiReply        vd_ui_checkboxf(int *b, const char *label, ...)                                              { VD_UI_DOTTOSTR(label); return vd_ui_checkbox(b, str); }
 
 /**
  * Consumes all available space within the parent
@@ -382,7 +398,7 @@ VD_UI_API void             vd_ui_icon(VdUiSymbol symbol, VdUiStr str);
  * @param  str    The id (and/or text) to use
  * @return        The interaction result
  */
-VD_UI_API void             vd_ui_iconf(VdUiSymbol symbol, const char *label, ...) { VD_UI_DOTTOSTR(label); vd_ui_icon(symbol, str); }
+VD_UI_INL void             vd_ui_iconf(VdUiSymbol symbol, const char *label, ...)                                       { VD_UI_DOTTOSTR(label); vd_ui_icon(symbol, str); }
 
 /**
  * Displays a clickable icon with (optional) text
@@ -398,7 +414,25 @@ VD_UI_API VdUiReply        vd_ui_icon_button(VdUiSymbol symbol, VdUiStr str);
  * @param  str    The id (and/or text) to use
  * @return        The interaction result
  */
-VD_UI_API VdUiReply        vd_ui_icon_buttonf(VdUiSymbol symbol, const char *label, ...) { VD_UI_DOTTOSTR(label); return vd_ui_icon_button(symbol, str); }
+VD_UI_INL VdUiReply        vd_ui_icon_buttonf(VdUiSymbol symbol, const char *label, ...)                                { VD_UI_DOTTOSTR(label); return vd_ui_icon_button(symbol, str); }
+
+/**
+ * Show a draggable slider
+ * @param  value     Pointer to current value of the slider
+ * @param  min_value Pointer to minimum value
+ * @param  max_value Pointer to maximum value
+ * @param  type      The data type that value, min_value, and max_value point to. All pointers must be of the same
+ *                   underlying type
+ * @param  str       The id (and/or label text) to use
+ * @return           1 if the slider changed value this frame
+ */
+VD_UI_API int              vd_ui_slider(void *value, void *min_value, void *max_value,
+                                        VdUiDataType type, VdUiAxis orientation,
+                                        VdUiStr label);
+
+VD_UI_INL int              vd_ui_sliderf_float(float *value, float min_value, float max_value,
+                                               VdUiAxis orientation,
+                                               const char *label, ...)                                                  { VD_UI_DOTTOSTR(label); float ivp = min_value; float mvp = max_value; return vd_ui_slider(value, &ivp, &mvp, VD_UI_DATA_TYPE_FLOAT, orientation, str); }
 
 VD_UI_API void             vd_ui_scroll_begin(VdUiStr str, float *x, float *y);
 VD_UI_API void             vd_ui_scroll_end(void);
@@ -955,15 +989,12 @@ char Vd_Ui_CharBuf[VD_UI_CHAR_BUF_COUNT];
 
 typedef struct {
     VdUiTextureId *texture;
+    float         clip[4];
+    unsigned int  first_instance;
+    unsigned int  instance_count;
     int           num_vertices;
     VdUiVertex    vertices[VD_UI_VERTICES_PER_CHANNEL];
 } VdUiChannel;
-
-typedef struct {
-    int         clip_index;
-    int         num_channels;
-    VdUiChannel channels[VD_UI_CHANNELS_MAX];
-} VdUiLayer;
 
 typedef struct VdUiFont  VdUiFont;
 typedef struct VdUiGlyph VdUiGlyph;
@@ -1016,6 +1047,7 @@ static void vd_ui__push_vertexgrad(VdUiContext *ctx, VdUiTextureId *texture, flo
                                                                              float corner_radius,
                                                                              float edge_softness,
                                                                              float border_thickness);
+static void vd_ui__push_pass(VdUiContext *ctx);
 static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y, float size);
 static void vd_ui__put_symbol(VdUiContext *ctx, VdUiSymbol symbol, float *x, float y, float size);
 static void vd_ui__put_linef(VdUiContext *ctx, float x, float y, const char *fmt, ...);
@@ -1210,7 +1242,7 @@ VD_UI_API void vd_ui_frame_end(void)
     // Zero immediate mode stuff
     ctx->vbuf_count = 0;
     ctx->num_passes = 0;
-    ctx->num_updates = 0;
+    ctx->num_updates        = 0;
     ctx->current_texture_id = 0;
     ctx->root.rect[0]      = 0.f;
     ctx->root.rect[1]      = 0.f;
@@ -1455,8 +1487,8 @@ VD_UI_API VdUiReply vd_ui_checkbox(int *b, VdUiStr str)
     // @todo(mdodis): Figure out why putting in 4 everywhere doesn't work
     ckbx->style.padding[VD_UI_LEFT] = 2.f;
     ckbx->style.padding[VD_UI_RIGHT] = 2.f;
-    ckbx->style.padding[VD_UI_TOP] = 4.f;
-    ckbx->style.padding[VD_UI_BOTTOM] = 4.f;
+    ckbx->style.padding[VD_UI_TOP] = 2.f;
+    ckbx->style.padding[VD_UI_BOTTOM] = 2.f;
 
     VdUiReply reply = vd_ui_call(ckbx);
 
@@ -1500,7 +1532,6 @@ VD_UI_API void vd_ui_icon(VdUiSymbol symbol, VdUiStr str)
     div->style.text_valign = VD_UI_TEXT_VALIGN_MIDDLE;
     div->style.text_halign = VD_UI_TEXT_HALIGN_CENTER;
     div->style.symbol = symbol;
-    // div->style.normal_grad = vd_ui_gradient1(vd_ui_f4(1.f, 0.f, 0.f, 1.f));
 }
 
 VD_UI_API VdUiReply vd_ui_icon_button(VdUiSymbol symbol, VdUiStr str)
@@ -1528,6 +1559,59 @@ VD_UI_API VdUiReply vd_ui_icon_button(VdUiSymbol symbol, VdUiStr str)
     div->style.padding[3] = 0.f;
 
     return vd_ui_call(div);
+}
+
+VD_UI_API int vd_ui_slider(void *value, void *min_value, void *max_value,
+                           VdUiDataType type, VdUiAxis orientation,
+                           VdUiStr label)
+{
+    VdUiDiv *slider_group = vd_ui_div_new(VD_UI_FLAG_FLEX_HORIZONTAL | VD_UI_FLAG_ALIGN_CENTER, label);
+    slider_group->style.size[0].mode = VD_UI_SIZE_MODE_ABSOLUTE;
+    slider_group->style.size[0].value = 120.f;
+    slider_group->style.size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
+    slider_group->style.size[1].value = 16.f;
+
+    vd_ui_parent_push(slider_group);
+    {
+        VdUiDiv *track = vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("##track"));
+        track->style.size[0].mode     = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+        track->style.size[0].value    = 1.f;
+        track->style.size[0].niceness = 0.f;
+        track->style.size[1].mode     = VD_UI_SIZE_MODE_ABSOLUTE;
+        track->style.size[1].value    = 4.f;
+        track->style.size[1].niceness = 0.f;
+        track->style.corner_radius    = 2.f;
+        track->style.edge_softness    = 0.25f;
+        track->style.normal_grad      = vd_ui_gradient1(vd_ui_f4(0.4f, 0.4f, 0.4f, 1.f));
+
+        VdUiDiv *grip  = vd_ui_div_new(VD_UI_FLAG_BACKGROUND      |
+                                       VD_UI_FLAG_CLICKABLE       |
+                                       VD_UI_FLAG_FLOAT           |
+                                       VD_UI_FLAG_CAPTURES_MOUSE,
+                                       VD_UI_LIT("##grip"));
+
+        grip->style.size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
+        grip->style.size[0].value = 16.f;
+        grip->style.size[1].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
+        grip->style.size[1].value = 16.f;
+        grip->style.corner_radius = 8.f;
+        grip->style.edge_softness = 1.0f;
+        grip->style.normal_grad   = vd_ui_gradient1(vd_ui_f4(0.294f, 0.71f, 0.925f, 1.f));
+        grip->style.hot_grad      = vd_ui_gradient1(vd_ui_f4(0.294f, 0.71f, 0.925f, 1.f));
+        grip->style.active_grad   = vd_ui_gradient1(vd_ui_f4(0.294f, 0.71f, 0.925f, 1.f));
+        grip->zoffset             = 1;
+
+
+        grip->comp_pos_rel[0] = 0.f;
+        grip->comp_pos_rel[1] = 0.f;
+
+        vd_ui_call(grip);
+
+
+    }
+    vd_ui_parent_pop();
+
+    return 0;
 }
 
 VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
@@ -1602,8 +1686,8 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
         VdUiReply up_button_reply = vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_UP_OPEN), "##up");
 
         VdUiDiv *hspace = vd_ui_div_new(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_CLICKABLE, VD_UI_LIT("##scroll_vhandle_space"));
-        hspace->style.normal_grad = vd_ui_gradient(vd_ui_f4(0.7f, 0.f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.f, 0.2f, 0.f),
-                                                   vd_ui_f4(0.7f, 0.f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.f, 0.2f, 0.f));
+        hspace->style.normal_grad = vd_ui_gradient(vd_ui_f4(0.7f, 0.f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.f, 0.2f, 0.0f),
+                                                   vd_ui_f4(0.7f, 0.f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.f, 0.2f, 0.0f));
         hspace->style.hot_grad    = hspace->style.normal_grad;
         hspace->style.active_grad = hspace->style.normal_grad;
         hspace->style.size[0].mode     = VD_UI_SIZE_MODE_ABSOLUTE;
@@ -1834,6 +1918,7 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     result->style.padding[2] = 0.f;
     result->style.padding[3] = 0.f;
     result->style.text_font_size = ctx->def.font_size * ctx->dpi_scale;
+    result->zoffset = 0;
 
     if (result->is_null) {
         result->size_changed = 1;
@@ -2051,6 +2136,9 @@ VD_UI_API void vd_ui_demo(void)
             if (checkbox) {
                 vd_ui_labelf("Hidden content");
             }
+
+            static float slider_value = 50.f;
+            vd_ui_sliderf_float(&slider_value, 0.f, 100.f, VD_UI_AXISH, "A slider");
 
             for (int i = 0; i < num_items; ++i) {
                 vd_ui_buttonf("Button %d", i);
@@ -2645,18 +2733,8 @@ static void vd_ui__push_vertexgrad(VdUiContext *ctx, VdUiTextureId *texture, flo
 
     if ((ctx->current_texture_id != texture) || (!clip_same))
     {
-        VD_ASSERT(ctx->num_passes < VD_UI_RP_COUNT_MAX);
-        ctx->num_passes++;
-
-        VdUiRenderPass *pass   = &ctx->passes[ctx->num_passes - 1];
-        pass->clip[0] = current_clip[0];
-        pass->clip[1] = current_clip[1];
-        pass->clip[2] = current_clip[2];
-        pass->clip[3] = current_clip[3];
-        pass->selected_texture = texture;
-        pass->first_instance   = ctx->vbuf_count;
-        pass->instance_count   = 0;
         ctx->current_texture_id = texture;
+        vd_ui__push_pass(ctx);
     }
 
     VD_ASSERT(ctx->vbuf_count < VD_UI_VBUF_COUNT_MAX);
@@ -2685,6 +2763,24 @@ static void vd_ui__push_vertexgrad(VdUiContext *ctx, VdUiTextureId *texture, flo
     v->border_thickness = border_thickness;
 
     ctx->passes[ctx->num_passes - 1].instance_count++;
+}
+
+static void vd_ui__push_pass(VdUiContext *ctx)
+{
+    float current_clip[4];
+    vd_ui__get_clip(ctx, current_clip);
+
+    VD_ASSERT(ctx->num_passes < VD_UI_RP_COUNT_MAX);
+    ctx->num_passes++;
+
+    VdUiRenderPass *pass   = &ctx->passes[ctx->num_passes - 1];
+    pass->clip[0] = current_clip[0];
+    pass->clip[1] = current_clip[1];
+    pass->clip[2] = current_clip[2];
+    pass->clip[3] = current_clip[3];
+    pass->selected_texture = ctx->current_texture_id;
+    pass->first_instance   = ctx->vbuf_count;
+    pass->instance_count   = 0;
 }
 
 static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId *texture, float p0[2], float p1[2],
@@ -2975,11 +3071,15 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
     }
 
     if ((curr != &ctx->root) && !vd_ui__is_clipped(ctx, curr)) {
-        // After we've processed every child, we're ready to render ourselves
+
+        if (curr->zoffset) {
+            vd_ui__push_pass(ctx);
+        }
+
         if (curr->flags & VD_UI_FLAG_BACKGROUND) {
             VdUiGradient grad = vd_ui__lerpgrad(curr->style.normal_grad, curr->style.hot_grad, curr->hot_t);
             grad = vd_ui__lerpgrad(grad, curr->style.active_grad, curr->active_t);
-            vd_ui__push_rectgrad(ctx, curr->rect, grad.e, curr->style.corner_radius, 0.f, 0.f);
+            vd_ui__push_rectgrad(ctx, curr->rect, grad.e, curr->style.corner_radius, curr->style.edge_softness, 0.f);
         }
 
         if (curr->flags & VD_UI_FLAG_TEXT) {
@@ -3056,16 +3156,14 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
         }
     }
 
-    VdUiDiv *last_child  = curr->last;
-    VdUiDiv *child = last_child;
-
     if (curr->flags & VD_UI_FLAG_CLIP_CONTENT) {
         vd_ui__push_clip(ctx, curr->rect);
     }
 
+    VdUiDiv *child = curr->first;
     while (child != 0) {
         vd_ui__traverse_and_render_divs(ctx, child);
-        child = child->prev;
+        child = child->next;
     }
 
     if (curr->flags & VD_UI_FLAG_CLIP_CONTENT) {
