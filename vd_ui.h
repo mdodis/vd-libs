@@ -1314,7 +1314,14 @@ VD_UI_API void vd_ui_frame_end(void)
     vd_ui__push_clip(ctx, (float[]){0.f, 0.f, ctx->window[0], ctx->window[1]});
 
     // Render
-    vd_ui__traverse_and_render_divs(ctx, &ctx->root);
+    {
+        // Draw a black rectangle for the root
+        // vd_ui__push_rectgrad(ctx, ctx->root.rect, vd_ui_gradient1(vd_ui_f4(0.f, 0.f, 0.f, 1.f)).e,
+        //                                                                   0.f,
+        //                                                                   0.f,
+        //                                                                   0.f);
+        vd_ui__traverse_and_render_divs(ctx, &ctx->root);
+    }
 
     if (ctx->debug.custom_cursor_on) {
         vd_ui__push_rect(ctx,
@@ -1832,6 +1839,7 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     result->style.padding[2] = 0.f;
     result->style.padding[3] = 0.f;
     result->style.text_font_size = ctx->def.font_size * ctx->dpi_scale;
+
     if (result->is_null) {
         result->size_changed = 1;
     } else {

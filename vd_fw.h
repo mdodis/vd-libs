@@ -2918,7 +2918,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
             WGL_ACCELERATION_ARB,   WGL_FULL_ACCELERATION_ARB,
 
             WGL_PIXEL_TYPE_ARB,     WGL_TYPE_RGBA_ARB,
-            WGL_COLOR_BITS_ARB,     32,
+            WGL_COLOR_BITS_ARB,     24,
             WGL_ALPHA_BITS_ARB,     8,
             WGL_DEPTH_BITS_ARB,     24,
             WGL_STENCIL_BITS_ARB,   8,
@@ -3077,6 +3077,7 @@ VD_FW_API int vd_fw_running(void)
 VD_FW_API int vd_fw_swap_buffers(void)
 {
     SwapBuffers(VD_FW_G.hdc);
+    DwmFlush();
 
     if (glFenceSync && glClientWaitSync && glDeleteSync) {
         GLsync fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
@@ -3195,17 +3196,37 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     wcx.hInstance      = NULL;
     wcx.lpfnWndProc    = vd_fw__wndproc;
     wcx.lpszClassName  = TEXT("FWCLASS");
-    wcx.hbrBackground  = NULL; // (HBRUSH)GetStockObject(BLACK_BRUSH);
+    wcx.hbrBackground  = (HBRUSH)GetStockObject(BLACK_BRUSH);
     wcx.hCursor        = LoadCursor(NULL, IDC_ARROW);
     if (!RegisterClassEx(&wcx)) {
         return 0;
     }
 
+    DWORD window_style;
+    if (VD_FW_G.draw_decorations) {
+        window_style = WS_OVERLAPPEDWINDOW | WS_SIZEBOX;
+    } else {
+        window_style = WS_OVERLAPPED | WS_SIZEBOX | WS_MAXIMIZEBOX;
+    }
+
+    // @note(mdodis): Some tests with windows
+    // - WS_EX_OVERLAPPEDWINDOW:                      Doesn't do anything at all except paint a thick frame border when window gets focus
+    //                                                So we don't use it
+    //                                                
+    // - WS_EX_APPWINDOW:                             Doesn't do anything useful.
+    // - WS_EX_LAYERED:                               Doesn't do anything useful for non-transparent windows except make resizing reaaally slow
+    //                                                
+    // - WS_OVERLAPPEDWINDOW:                         Works even for DwmExtended windows, but DWM will draw the buttons and captions
+    //                                                of the window and mess up alpha composition
+    // 
+    // - WS_OVERLAPPED | WS_SIZEBOX | WS_MAXIMIZEBOX: Works perfectly.
+    // 
+
     VD_FW_G.hwnd = CreateWindowEx(
-        0, // WS_EX_APPWINDOW /* @todo(mdodis): for alpha windows: | WS_EX_LAYERED */,
+        0,
         TEXT("FWCLASS"),
         TEXT("FW Window"),
-        WS_OVERLAPPEDWINDOW | WS_SIZEBOX,
+        window_style,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
         1600,
@@ -3215,7 +3236,8 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
         0 /* hInstance */,
         0 /* lpParam */);
 
-    SetLayeredWindowAttributes(VD_FW_G.hwnd, RGB(255, 0, 255), 0, LWA_COLORKEY);
+    // @note(mdodis): This is an old thing from Windows 7 (I think... era). W
+    // SetLayeredWindowAttributes(VD_FW_G.hwnd, RGB(255, 0, 255), 255, LWA_COLORKEY);
 
     vd_fw__composition_changed();
     VD_FW_SANITY_CHECK();
@@ -3441,11 +3463,21 @@ static void vd_fw__composition_changed(void)
     VD_FW_G.composition_enabled = enabled;
 
     if (enabled) {
-        // MARGINS m = {0, 0, 1, 0};
         MARGINS m = {-1};
         VD_FW__CHECK_HRESULT(DwmExtendFrameIntoClientArea(VD_FW_G.hwnd, &m));
-        DWORD value = DWMNCRP_ENABLED;
-        VD_FW__CHECK_HRESULT(DwmSetWindowAttribute(VD_FW_G.hwnd, DWMWA_NCRENDERING_POLICY, &value, sizeof(value)));
+
+        // @note(mdodis): If we set this to disabled, then every time we resize the Windows 7 frame gets drawn behind
+        // Additionally alpha compositing is done on fragments that haven't received a full alpha.
+        // Also see vd_fw__wndproc, WM_NCPAINT
+        {
+            DWORD value = DWMNCRP_USEWINDOWSTYLE;
+            VD_FW__CHECK_HRESULT(DwmSetWindowAttribute(VD_FW_G.hwnd, DWMWA_NCRENDERING_POLICY, &value, sizeof(value)));
+        }
+        // {
+        //     BOOL value = TRUE;
+        //     VD_FW__CHECK_HRESULT(DwmSetWindowAttribute(VD_FW_G.hwnd, DWMWA_ALLOW_NCPAINT, &value, sizeof(value)));
+        // }
+
     }
 
     vd_fw__update_region();
@@ -3457,21 +3489,20 @@ static void vd_fw__update_region(void)
     RECT old_rgn = VD_FW_G.rgn;
 
     if (IsMaximized(VD_FW_G.hwnd)) {
+        // @note(mdodis): If the window is maximized when get the client and window rects and set the region subtracted
+        // by the overall window's top left coordinates
         WINDOWINFO window_info = {};
         window_info.cbSize = sizeof(window_info);
         GetWindowInfo(VD_FW_G.hwnd, &window_info);
-
         VD_FW_G.rgn = (RECT) {
             .left   = window_info.rcClient.left   - window_info.rcWindow.left,
             .top    = window_info.rcClient.top    - window_info.rcWindow.top,
             .right  = window_info.rcClient.right  - window_info.rcWindow.left,
             .bottom = window_info.rcClient.bottom - window_info.rcWindow.top,
-            // .left   = window_info.rcWindow.left,
-            // .top    = window_info.rcWindow.top,
-            // .right  = window_info.rcWindow.right,
-            // .bottom = window_info.rcWindow.bottom,
         };
     } else if (!VD_FW_G.composition_enabled) {
+        // @note(mdodis): If composition is enabled, set the window's region to something really high so that shadows of
+        // the window are still drawn
         VD_FW_G.rgn = (RECT) {
             .left   = 0,
             .top    = 0,
@@ -3479,6 +3510,7 @@ static void vd_fw__update_region(void)
             .bottom = 32767,
         };
     } else {
+        // @note(mdodis): Otherwise, the window's region is left unchanged
         VD_FW_G.rgn = (RECT) {
             .left   = 0,
             .top    = 0,
@@ -3590,13 +3622,14 @@ static void vd_fw__window_pos_changed(WINDOWPOS *pos)
 
 static LRESULT vd_fw__handle_invisible(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
+    // @note(mdodis): Prevent windows from drawing the default (Windows 7) titlebar and frames by toggling it temporarily
     VD_FW_WIN32_PROFILE_BEGIN(handle_invisible);
 
     LONG_PTR old_style = GetWindowLongPtr(hwnd, GWL_STYLE);
 
     SetWindowLongPtrW(hwnd, GWL_STYLE, old_style & ~WS_VISIBLE);    
     LRESULT result = DefWindowProcW(hwnd, msg, wparam, lparam);
-    SetWindowLongPtrW(hwnd, GWL_STYLE, old_style);    
+    SetWindowLongPtrW(hwnd, GWL_STYLE, old_style);
 
     VD_FW_WIN32_PROFILE_END(handle_invisible);
 
@@ -3651,6 +3684,58 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             VD_FW_WIN32_PROFILE_END(wm_paint);
         } break;
 
+        case WM_NCPAINT: {
+            // @note(mdodis): Theoretically, you should be able to DwmSetWindowAttribute(hwnd,
+            //                                                                           DWMWA_NCRENDERING_POLICY,
+            //                                                                           &DWMNCRP_DISABLED,
+            //                                                                           sizeof(DWMNCRP_DISABLED));
+            //                                                                           
+            // And disable the code below entirely, but in reality this makes the window very laggy when resizing
+            // You really only need to do this if you don't want the Window to be alpha-composited.
+            // 
+            // Anyhow... setting DWM Rendering Policy to enabled and redrawing on WM_PAINT produces the best possible
+            // _visual_ result the way we do it right now.
+            VD_FW_WIN32_PROFILE_BEGIN(wm_ncpaint);
+                // HDC hdc = GetWindowDC(hwnd);
+
+                // if (hdc) {
+                //     RECT rect;
+                //     GetWindowRect(hwnd, &rect);
+                //     OffsetRect(&rect, -rect.left, -rect.top); // Normalize to (0,0)
+
+                //     // Fill the entire non-client area with black
+                //     FillRect(hdc, &rect, (HBRUSH)GetStockObject(BLACK_BRUSH));
+
+                //     ReleaseDC(hwnd, hdc);
+                // }
+            if (VD_FW_G.composition_enabled) {
+                // HDC hdc;
+                // hdc = GetDCEx(hwnd, (HRGN)wparam, DCX_WINDOW|DCX_INTERSECTRGN);
+
+                // RECT rect;
+                // GetWindowRect(hwnd, &rect);
+
+                // // Normalize to window coordinates (0,0)
+                // OffsetRect(&rect, -rect.left, -rect.top);
+
+                // // Fill the entire window area black
+                // FillRect(hdc, &rect, (HBRUSH)GetStockObject(BLACK_BRUSH));
+
+                // ReleaseDC(hwnd, hdc);
+                // if (wparam == 1) {
+                //     result = 0;
+                // } else {
+                // }
+                // PAINTSTRUCT ps;
+                // HDC hdc = BeginPaint(hwnd, &ps);
+                // FillRect(hdc, &ps.rcPaint, (HBRUSH)GetStockObject(BLACK_BRUSH));
+                result = DefWindowProc(hwnd, msg, wparam, lparam);
+
+                // EndPaint(hwnd, &ps);
+            }
+            VD_FW_WIN32_PROFILE_END(wm_ncpaint);
+        } break;
+
         case WM_DPICHANGED: {
             RECT *rect = (RECT*)lparam;
             SetWindowPos(hwnd, 0, rect->left, rect->top, rect->right - rect->left, rect->bottom - rect->top, SWP_NOZORDER | SWP_NOACTIVATE);
@@ -3661,7 +3746,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         } break;
 
         case WM_NCACTIVATE: {
-            // DefWindowProc doesn't repaint border if lparam == -1
+            // @note(mdodis): DefWindowProc doesn't repaint border if lparam == -1
             // See: https://blogs.msdn.microsoft.com/wpfsdk/2008/09/08/custom-window-chrome-in-wpf/
             result = DefWindowProc(hwnd, msg, wparam, -1);
         } break;
@@ -3681,14 +3766,6 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             } else {
                 result = vd_fw__hit_test(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam));
             }
-        } break;
-
-        case WM_NCPAINT: {
-            VD_FW_WIN32_PROFILE_BEGIN(wm_ncpaint);
-            if (VD_FW_G.composition_enabled) {
-                result = DefWindowProc(hwnd, msg, wparam, lparam);
-            }
-            VD_FW_WIN32_PROFILE_END(wm_ncpaint);
         } break;
 
         case WM_NCUAHDRAWCAPTION:
@@ -3714,17 +3791,19 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             result = DefWindowProc(hwnd, msg, wparam, lparam);
         } break;
 
-        case WM_WINDOWPOSCHANGED: {
-            if (VD_FW_G.draw_decorations) {
-                result = DefWindowProc(hwnd, msg, wparam, lparam);
-            } else {
-                vd_fw__window_pos_changed((WINDOWPOS*)lparam);
-            }
-        } break;
+        // @note(mdodis): Theoretically, we _should_ handle WM_WINDOWPOSCHANGED, but we don't really need to since
+        // DefWindowProc does it well enough for the window type.
+        // case WM_WINDOWPOSCHANGED: {
+        //     if (VD_FW_G.draw_decorations) {
+        //         result = DefWindowProc(hwnd, msg, wparam, lparam);
+        //     } else {
+        //         vd_fw__window_pos_changed((WINDOWPOS*)lparam);
+        //     }
+        // } break;
 
-        // @note(mdodis): WM_SIZE will only get called if the WM_WINDOWPOSCHANGED isn't handled by our wndproc
-        //                In this case and in this case only, we already know that we're drawing default borders
         case WM_SIZE: {
+            // @note(mdodis): WM_SIZE will only get called if the WM_WINDOWPOSCHANGED isn't handled by our wndproc.
+            // In this case and in this case only, we already know that we're drawing default borders
             VD_FW_G.w = LOWORD(lparam);
             VD_FW_G.h = HIWORD(lparam);
         } break;
