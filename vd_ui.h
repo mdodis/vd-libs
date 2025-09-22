@@ -27,8 +27,16 @@
  * |                                       |                                                                    |      |
  * 
  * @todo(mdodis):
- * - New and improved render pass api using texture id + scissor + layer id as keys
+ * - VdUiStyle & VdUiFlags rework for visuals
+ *   > Move everying into
+ *   >   - VdUiStyle::text       (VD_UI_FLAG_TEXT)         }
+ *   >   - VdUiStyle::background (VD_UI_FLAG_BACKGROUND)   } -> All of these are of same type: VdUiStyleVisual
+ *   >   - VdUiStyle::border     (VD_UI_FLAG_BORDER)       }
  * - Sliders
+ * - Introduce Tree concept
+ *   > Right now, the whole UI system is done in one VdUiContext
+ *   > In reality, we only really need the font caching and rendering system in that context
+ *   > And then we can draw multiple UI trees
  * - Move scrollbars into a separate function to use in general scroll view as well as lists and tables etc...
  * - Introduce comp_children_size when calculating child sizes 
  * - Allow active elements to capture the mouse
@@ -37,6 +45,7 @@
  * - Support more of printf
  * - Proper standalone floating point printing implementation
  * - Cache div full size and compare to stop doing size_changed for VD_UI_SIZE_MODE_CONTAIN_CHILDREN
+ * - New and improved render pass api using texture id + scissor + layer id as keys
  *
  * EXAMPLE - OpenGL (@todo)
  * 
@@ -74,7 +83,6 @@ typedef char VdUiBool;
 #ifndef    VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX
 #define    VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX 16
 #endif // !VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX
-
 
 /**
  * To use a custom id for a texture, define a struct like so:
@@ -151,25 +159,27 @@ typedef enum {
     VD_UI_DATA_TYPE_MAX,
 } VdUiDataType;
 
-static inline VdUiF4       vd_ui_f4(float x, float y, float z, float w);
-static inline VdUiF4       vd_ui_fall4(float s);
-static inline VdUiGradient vd_ui_gradient(VdUiF4 top_left, VdUiF4 top_right, VdUiF4 bottom_left, VdUiF4 bottom_right);
-static inline VdUiGradient vd_ui_gradient1(VdUiF4 all);
-static inline VdUiSymbol   vd_ui_symbol(VdUiFontId id, unsigned int codepoint);
-static inline int          vd_ui_symbol_valid(VdUiSymbol symbol);
-static inline VdUiStr      vd_ui_symbol_as_str(VdUiSymbol symbol);
+VD_UI_INL VdUiF4           vd_ui_f4(float x, float y, float z, float w);
+VD_UI_INL VdUiF4           vd_ui_fall4(float s);
+VD_UI_INL VdUiGradient     vd_ui_gradient(VdUiF4 top_left, VdUiF4 top_right, VdUiF4 bottom_left, VdUiF4 bottom_right);
+VD_UI_INL VdUiGradient     vd_ui_gradient1(VdUiF4 all);
+VD_UI_INL VdUiSymbol       vd_ui_symbol(VdUiFontId id, unsigned int codepoint);
+VD_UI_INL int              vd_ui_symbol_valid(VdUiSymbol symbol);
+VD_UI_INL VdUiStr          vd_ui_symbol_as_str(VdUiSymbol symbol);
+VD_UI_INL float            vd_ui_fremap(float value, float low1, float high1, float low2, float high2);
 
 /* ----UI------------------------------------------------------------------------------------------------------------ */
 enum {
     // Per div flags
     VD_UI_FLAG_TEXT             = 1 << 0,
     VD_UI_FLAG_BACKGROUND       = 1 << 1,
-    VD_UI_FLAG_CLICKABLE        = 1 << 2,
-    VD_UI_FLAG_CLIP_CONTENT     = 1 << 3,
-    VD_UI_FLAG_FLEX_HORIZONTAL  = 1 << 4, // 0 here means Vertical
-    VD_UI_FLAG_ALIGN_CENTER     = 1 << 5,
-    VD_UI_FLAG_FLOAT            = 1 << 6,
-    VD_UI_FLAG_CAPTURES_MOUSE   = 1 << 7,
+    VD_UI_FLAG_BORDER           = 1 << 2,
+    VD_UI_FLAG_CLICKABLE        = 1 << 3,
+    VD_UI_FLAG_CLIP_CONTENT     = 1 << 4,
+    VD_UI_FLAG_FLEX_HORIZONTAL  = 1 << 5, // 0 here means Vertical
+    VD_UI_FLAG_ALIGN_CENTER     = 1 << 6,
+    VD_UI_FLAG_FLOAT            = 1 << 7,
+    VD_UI_FLAG_CAPTURES_MOUSE   = 1 << 8,
 
     // Mouse Enumerations
     VD_UI_MOUSE_LEFT        = 0,
@@ -231,7 +241,7 @@ enum {
 };
 typedef int VdUiTextVAlign;
 
-typedef struct {
+typedef struct VdUiStyle {
     /** Padding to put around text */
     float           padding[4];
 
@@ -246,6 +256,21 @@ typedef struct {
 
     /** Gradient to use for when the div is active */
     VdUiGradient    active_grad;
+
+    struct {
+        float           corner_radius;
+        float           edge_softness;
+        VdUiGradient    normal;
+        VdUiGradient    hot;
+        VdUiGradient    active;
+    } background;
+
+    struct {
+        float           thickness;
+        VdUiGradient    normal;
+        VdUiGradient    hot;
+        VdUiGradient    active;
+    } border;
 
     float           corner_radius;
 
@@ -846,7 +871,10 @@ static inline VdUiStr vd_ui_symbol_as_str(VdUiSymbol symbol)
     return result;    
 }
 
-
+VD_UI_INL float vd_ui_fremap(float value, float low1, float high1, float low2, float high2)
+{
+    return low2 + (value - low1) * (high2 - low2) / (high1 - low1);
+}
 
 #endif // !VD_UI_H
 
@@ -1600,13 +1628,28 @@ VD_UI_API int vd_ui_slider(void *value, void *min_value, void *max_value,
         grip->style.hot_grad      = vd_ui_gradient1(vd_ui_f4(0.294f, 0.71f, 0.925f, 1.f));
         grip->style.active_grad   = vd_ui_gradient1(vd_ui_f4(0.294f, 0.71f, 0.925f, 1.f));
         grip->zoffset             = 1;
+        VdUiReply grip_reply  = vd_ui_call(grip);
+
+        float track_size = track->comp_size[0];
+
+        float drag_amount = 0.f;
+        if (track_size > 0.0001f) {
+            drag_amount = grip_reply.drag[0] / track_size;
+
+            if (type == VD_UI_DATA_TYPE_FLOAT) {
+
+                float drag_amount_in_range = vd_ui_fremap(drag_amount, 0.f, 1.f, *((float*)min_value), *((float*)max_value));
+                *((float*)value) += drag_amount_in_range;
+
+                *((float*)value) = vd_ui__clampf(*((float*)value), *((float*)min_value), *((float*)max_value));
+            }
+        }
+
+        float new_value = vd_ui_fremap(*((float*)value), *((float*)min_value), *((float*)max_value), 0.f, track_size);
 
 
-        grip->comp_pos_rel[0] = 0.f;
+        grip->comp_pos_rel[0] = new_value - grip->style.size[0].value * 0.5f;
         grip->comp_pos_rel[1] = 0.f;
-
-        vd_ui_call(grip);
-
 
     }
     vd_ui_parent_pop();
@@ -2138,6 +2181,7 @@ VD_UI_API void vd_ui_demo(void)
             }
 
             static float slider_value = 50.f;
+            vd_ui_labelf("Slider Value: %f", slider_value);
             vd_ui_sliderf_float(&slider_value, 0.f, 100.f, VD_UI_AXISH, "A slider");
 
             for (int i = 0; i < num_items; ++i) {
