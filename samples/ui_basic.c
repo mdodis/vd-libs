@@ -68,9 +68,9 @@ int main(int argc, char const *argv[])
     glBindVertexArray(0);
 
     glEnable(GL_MULTISAMPLE);
+    glEnable(GL_SCISSOR_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_SCISSOR_TEST);
 
     // int rects[1][4] = {
     //     {0, 0, 100, 30},
@@ -129,15 +129,15 @@ int main(int argc, char const *argv[])
             // };
             // vd_ui_push_rectgrad(nc_rectf, vd_ui_gradient1(vd_ui_f4(0.5f, 0.3f, 0.2f, 0.5f)).e, 0.f, 0.f, 0.f);
 
-            for (int i = 0; i < written; ++i) {
+            // for (int i = 0; i < written; ++i) {
 
-                float rectf[4] = {
-                    (float)rects[i][0], (float)rects[i][1],
-                    (float)rects[i][2], (float)rects[i][3],
-                };
+            //     float rectf[4] = {
+            //         (float)rects[i][0], (float)rects[i][1],
+            //         (float)rects[i][2], (float)rects[i][3],
+            //     };
 
-                vd_ui_push_rectgrad(rectf, vd_ui_gradient1(vd_ui_f4(0.8f, 0.1f, 0.1f, 0.8f)).e, 0.f, 0.f, 0.f);
-            }
+            //     vd_ui_push_rectgrad(rectf, vd_ui_gradient1(vd_ui_f4(0.8f, 0.1f, 0.1f, 0.8f)).e, 0.f, 0.f, 0.f);
+            // }
         }
         vd_ui_render_end();
 
@@ -220,7 +220,7 @@ int main(int argc, char const *argv[])
         VdUiRenderPass *passes = vd_ui_frame_get_render_passes(&num_passes);
 
         glViewport(0, 0, w, h);
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         // Loop through render passes

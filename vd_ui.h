@@ -30,6 +30,7 @@
  * - Images
  * - Support more of printf
  * - Proper standalone floating point printing implementation
+ * - Cache div full size and compare to stop doing size_changed for VD_UI_SIZE_MODE_CONTAIN_CHILDREN
  *
  * EXAMPLE - OpenGL (@todo)
  * 
@@ -1146,7 +1147,6 @@ struct VdUiContext {
         VdUiBool           inspector_on;
 
         VdUiBool           layout_recompute_vis_on;
-        float              layout_recompute_vis_timeout;
     } debug;
     
     struct {                                                                       // NC AREA
@@ -1230,11 +1230,6 @@ VD_UI_API void vd_ui_frame_end(void)
     ctx->root.style.size[1].value    = ctx->window[1];
     ctx->root.style.size[1].niceness = 0.f;
     ctx->clip_stack_count = 0;
-
-    if (ctx->debug.layout_recompute_vis_on) {
-        ctx->debug.layout_recompute_vis_timeout = vd_ui__lerp(ctx->debug.layout_recompute_vis_timeout, 0.f,
-                                                              ctx->delta_seconds * 11.f);
-    }
 
     // Layout UI
     vd_ui__layout(ctx);
@@ -3052,11 +3047,12 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
                 vd_ui__put_line(ctx, curr->content_str, x, y, curr->style.text_font_size);
             }
 
-            if (ctx->debug.layout_recompute_vis_on) {
-                curr->size_timeout_t = vd_ui__lerp(curr->size_timeout_t, 0.f, ctx->delta_seconds * 11.f);
-                VdUiGradient grad = vd_ui_gradient1(vd_ui_f4(0.922f, 0.753f, 0.306f, curr->size_timeout_t));
-                vd_ui__push_rectgrad(ctx, curr->rect, grad.e, 0.f, 0.f, 0.f);
-            }
+        }
+
+        if (ctx->debug.layout_recompute_vis_on) {
+            curr->size_timeout_t = vd_ui__lerp(curr->size_timeout_t, 0.f, ctx->delta_seconds * 11.f);
+            VdUiGradient grad = vd_ui_gradient1(vd_ui_f4(0.922f, 0.753f, 0.306f, curr->size_timeout_t));
+            vd_ui__push_rectgrad(ctx, curr->rect, grad.e, 0.f, 0.f, 0.f);
         }
     }
 
@@ -3709,7 +3705,6 @@ static void vd_ui__size_changed(VdUiContext *ctx, VdUiDiv *div)
 {
     div->size_changed = 1;
     if (ctx->debug.layout_recompute_vis_on) {
-        ctx->debug.layout_recompute_vis_timeout = 1.f;
         div->size_timeout_t = 1.f;
     }
 }
