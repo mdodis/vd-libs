@@ -1,0 +1,6 @@
+@title("Basic")
+@category("docuspec-doc")
+
+@text {
+    This is a basic text box, kind of like a paragraph in HTML! b`bold text`
+}
