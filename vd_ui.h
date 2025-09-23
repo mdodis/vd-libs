@@ -319,7 +319,6 @@ struct VdUiDiv {
     VdUiStr     id_str;
 
     float       text_size[VD_UI_AXES];
-    float       offset[VD_UI_AXES];
     float       comp_pos_rel[VD_UI_AXES];
     float       comp_size[VD_UI_AXES];
     float       rect[4];
@@ -330,6 +329,9 @@ struct VdUiDiv {
     float       timeout_t;
     float       timeout_inv_t;
     float       size_timeout_t;
+
+    float       offset[VD_UI_AXES];
+    float       scale[VD_UI_AXES];
 
     VdUiBool    is_null;
 };
@@ -1075,6 +1077,7 @@ static void vd_ui__push_vertexgrad(VdUiContext *ctx, VdUiTextureId *texture, flo
                                                                              float corner_radius,
                                                                              float edge_softness,
                                                                              float border_thickness);
+static void vd_ui__get_transformed_rect(VdUiContext *ctx, VdUiDiv *div, float rect[4]);
 static void vd_ui__push_pass(VdUiContext *ctx);
 static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y, float size);
 static void vd_ui__put_symbol(VdUiContext *ctx, VdUiSymbol symbol, float *x, float y, float size);
@@ -1623,12 +1626,15 @@ VD_UI_API int vd_ui_slider(void *value, void *min_value, void *max_value,
         grip->style.size[1].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
         grip->style.size[1].value = 16.f;
         grip->style.corner_radius = 8.f;
-        grip->style.edge_softness = 1.0f;
+        grip->style.edge_softness = 0.8f;
         grip->style.normal_grad   = vd_ui_gradient1(vd_ui_f4(0.294f, 0.71f, 0.925f, 1.f));
         grip->style.hot_grad      = vd_ui_gradient1(vd_ui_f4(0.294f, 0.71f, 0.925f, 1.f));
         grip->style.active_grad   = vd_ui_gradient1(vd_ui_f4(0.294f, 0.71f, 0.925f, 1.f));
         grip->zoffset             = 1;
         VdUiReply grip_reply  = vd_ui_call(grip);
+
+        grip->scale[0] = vd_ui__clampf(grip->hot_t - (grip->active_t) * 0.2f, 0.8f, 1.f);
+        grip->scale[1] = vd_ui__clampf(grip->hot_t - (grip->active_t) * 0.2f, 0.8f, 1.f);
 
         float track_size = track->comp_size[0];
 
@@ -1956,6 +1962,8 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     result->last = 0;
     result->prev = 0;
     result->flags = flags;
+    result->offset[0] = 0.f; result->offset[1] = 0.f;
+    result->scale[0]  = 1.f; result->scale[1]  = 1.f;
     result->style.padding[0] = 0.f;
     result->style.padding[1] = 0.f;
     result->style.padding[2] = 0.f;
@@ -2517,6 +2525,7 @@ static void vd_ui__calc_positions(VdUiContext *ctx, VdUiDiv *curr)
             child->rect[VD_UI_BOTTOM] = child->rect[VD_UI_TOP]  + child->comp_size[1];
         }
 
+        // @todo(mdodis): Move this to vd_ui__traverse_and_render_divs
         child->rect[VD_UI_LEFT]  += child->offset[0]; child->rect[VD_UI_TOP]    += child->offset[1];
         child->rect[VD_UI_RIGHT] += child->offset[0]; child->rect[VD_UI_BOTTOM] += child->offset[1];
 
@@ -2807,6 +2816,22 @@ static void vd_ui__push_vertexgrad(VdUiContext *ctx, VdUiTextureId *texture, flo
     v->border_thickness = border_thickness;
 
     ctx->passes[ctx->num_passes - 1].instance_count++;
+}
+
+static void vd_ui__get_transformed_rect(VdUiContext *ctx, VdUiDiv *div, float rect[4])
+{
+    float cx = (div->rect[0] + div->rect[2]) * 0.5f;
+    float cy = (div->rect[1] + div->rect[3]) * 0.5f;
+    float w = (div->rect[2] - div->rect[0]) * div->scale[0];
+    float h = (div->rect[3] - div->rect[1]) * div->scale[1];
+
+    float hw = w * 0.5f;
+    float hh = h * 0.5f;
+
+    rect[0] = cx - hw + div->offset[0];
+    rect[1] = cy - hh + div->offset[1];
+    rect[2] = cx + hw + div->offset[0];
+    rect[3] = cy + hh + div->offset[1];
 }
 
 static void vd_ui__push_pass(VdUiContext *ctx)
@@ -3114,6 +3139,9 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
         return;
     }
 
+    float rect[4];
+    vd_ui__get_transformed_rect(ctx, curr, rect);
+
     if ((curr != &ctx->root) && !vd_ui__is_clipped(ctx, curr)) {
 
         if (curr->zoffset) {
@@ -3123,7 +3151,8 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
         if (curr->flags & VD_UI_FLAG_BACKGROUND) {
             VdUiGradient grad = vd_ui__lerpgrad(curr->style.normal_grad, curr->style.hot_grad, curr->hot_t);
             grad = vd_ui__lerpgrad(grad, curr->style.active_grad, curr->active_t);
-            vd_ui__push_rectgrad(ctx, curr->rect, grad.e, curr->style.corner_radius, curr->style.edge_softness, 0.f);
+
+            vd_ui__push_rectgrad(ctx, rect, grad.e, curr->style.corner_radius, curr->style.edge_softness, 0.f);
         }
 
         if (curr->flags & VD_UI_FLAG_TEXT) {
@@ -3138,12 +3167,12 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
 
             switch (curr->style.text_halign) {
                 case VD_UI_TEXT_HALIGN_LEFT: {
-                    x = curr->rect[0] + curr->style.padding[VD_UI_LEFT];
+                    x = rect[0] + curr->style.padding[VD_UI_LEFT];
                 } break;
 
                 case VD_UI_TEXT_HALIGN_CENTER: {
-                    float rect_left  = curr->rect[VD_UI_LEFT];
-                    float rect_right = curr->rect[VD_UI_RIGHT];
+                    float rect_left  = rect[VD_UI_LEFT];
+                    float rect_right = rect[VD_UI_RIGHT];
 
                     float rect_width = rect_right - rect_left;
 
@@ -3155,7 +3184,7 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
                 } break;
 
                 case VD_UI_TEXT_HALIGN_RIGHT: {
-                    x = curr->rect[0] + curr->style.padding[0] * 2;
+                    x = rect[0] + curr->style.padding[0] * 2;
                 } break;
 
                 default: break;
@@ -3163,13 +3192,13 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
 
             switch (curr->style.text_valign) {
                 case VD_UI_TEXT_VALIGN_BASELINE: {
-                    y = curr->rect[1] + curr->style.padding[1];
+                    y = rect[1] + curr->style.padding[1];
                     y += ydown;
                 } break;
 
                 case VD_UI_TEXT_VALIGN_MIDDLE: {
-                    float rect_top = curr->rect[VD_UI_TOP];
-                    float rect_bot = curr->rect[VD_UI_BOTTOM];
+                    float rect_top = rect[VD_UI_TOP];
+                    float rect_bot = rect[VD_UI_BOTTOM];
 
                     float rect_height = rect_bot - rect_top;
 
@@ -3196,12 +3225,12 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
         if (ctx->debug.layout_recompute_vis_on) {
             curr->size_timeout_t = vd_ui__lerp(curr->size_timeout_t, 0.f, ctx->delta_seconds * 11.f);
             VdUiGradient grad = vd_ui_gradient1(vd_ui_f4(0.922f, 0.753f, 0.306f, curr->size_timeout_t));
-            vd_ui__push_rectgrad(ctx, curr->rect, grad.e, 0.f, 0.f, 0.f);
+            vd_ui__push_rectgrad(ctx, rect, grad.e, 0.f, 0.f, 0.f);
         }
     }
 
     if (curr->flags & VD_UI_FLAG_CLIP_CONTENT) {
-        vd_ui__push_clip(ctx, curr->rect);
+        vd_ui__push_clip(ctx, rect);
     }
 
     VdUiDiv *child = curr->first;
