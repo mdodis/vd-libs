@@ -1636,25 +1636,24 @@ VD_UI_API int vd_ui_slider(void *value, void *min_value, void *max_value,
         grip->scale[0] = vd_ui__clampf(grip->hot_t - (grip->active_t) * 0.2f, 0.8f, 1.f);
         grip->scale[1] = vd_ui__clampf(grip->hot_t - (grip->active_t) * 0.2f, 0.8f, 1.f);
 
-        float track_size = track->comp_size[0];
+        float track_size = track->rect[2] - track->rect[0];
 
-        float drag_amount = 0.f;
-        if (track_size > 0.0001f) {
-            drag_amount = grip_reply.drag[0] / track_size;
+        if ((track_size > 0.0001f) &&
+            (grip_reply.pressed) && 
+            (grip_reply.mouse[0] >= track->rect[0]) &&
+            (grip_reply.mouse[0]) <= track->rect[2])
+        {
 
-            if (type == VD_UI_DATA_TYPE_FLOAT) {
+            float v = vd_ui_fremap(grip_reply.mouse[0], track->rect[0], track->rect[2], *((float*)min_value), *((float*)max_value));
+            *((float*)value) = v;
 
-                float drag_amount_in_range = vd_ui_fremap(drag_amount, 0.f, 1.f, *((float*)min_value), *((float*)max_value));
-                *((float*)value) += drag_amount_in_range;
-
-                *((float*)value) = vd_ui__clampf(*((float*)value), *((float*)min_value), *((float*)max_value));
-            }
         }
+        *((float*)value) = vd_ui__clampf(*((float*)value), *((float*)min_value), *((float*)max_value));
 
-        float new_value = vd_ui_fremap(*((float*)value), *((float*)min_value), *((float*)max_value), 0.f, track_size);
-
-
-        grip->comp_pos_rel[0] = new_value - grip->style.size[0].value * 0.5f;
+        float value_mapped_to_position_on_track = vd_ui_fremap(
+            *((float*)value), *((float*)min_value), *((float*)max_value),
+            0.f, track_size);
+        grip->comp_pos_rel[0] = value_mapped_to_position_on_track - grip->style.size[0].value * 0.5f;
         grip->comp_pos_rel[1] = 0.f;
 
     }
