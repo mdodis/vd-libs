@@ -129,6 +129,17 @@ int main(int argc, char const *argv[])
     GLuint program = 0;
     unsigned long long program_time = 0;
 
+    float camera_position[3] = {0.f, 0.f, -2.f};
+    float camera_yaw   = 0.f;
+    float camera_pitch = 30.f;
+    float deg2rad = 3.14159265359f / 180.f;
+
+    float mouse_last_x = 0.f;
+    float mouse_last_y = 0.f;
+
+
+    int first_mouse = 0;
+
     while (vd_fw_running()) {
         float ds = vd_fw_delta_s();
 
@@ -136,14 +147,51 @@ int main(int argc, char const *argv[])
         if (vd_fw_get_size(&w, &h)) {
             glViewport(0, 0, w, h);
         }
+
+        if (!first_mouse) {
+            first_mouse = 1;
+            vd_fw_get_mouse_statef(&mouse_last_x, &mouse_last_y);
+        }
+
         float fw, fh;
         fw = (float)w;
         fh = (float)h;
 
-        static float cy = 0.f;
-        static float cp = 0.f;
-
         vd_fw_compile_or_hotload_program(&program, &program_time, "./glsl/gl_cube.vert", "./glsl/gl_cube.frag");
+
+        float mouse_now_x, mouse_now_y;
+        vd_fw_get_mouse_statef(&mouse_now_x, &mouse_now_y);
+
+        float mouse_delta_x = mouse_now_x - mouse_last_x;
+        float mouse_delta_y = mouse_now_y - mouse_last_y;
+
+        mouse_last_x = mouse_now_x;
+        mouse_last_y = mouse_now_y;
+
+        camera_yaw   += mouse_delta_x;
+        camera_pitch -= mouse_delta_y;
+
+        if (camera_pitch < -89.9f) camera_pitch = -89.9f;
+        if (camera_pitch > +89.9f) camera_pitch = +89.9f;
+
+        if (camera_yaw > +360.f) camera_yaw -= 360.f;
+        if (camera_yaw < -360.f) camera_yaw += 360.f;
+
+        float camera_forward[3] = {
+            VD_FW_COS(deg2rad * camera_pitch) * VD_FW_SIN(deg2rad * camera_yaw),
+            VD_FW_SIN(deg2rad * camera_pitch),
+            VD_FW_COS(deg2rad * camera_pitch) * VD_FW_COS(deg2rad * camera_yaw)
+        };
+
+        float camera_forward_len = VD_FW_SQRT(
+            camera_forward[0]*camera_forward[0] +
+            camera_forward[1]*camera_forward[1] +
+            camera_forward[2]*camera_forward[2]);
+
+        camera_forward[0] = camera_forward[0] / camera_forward_len;
+        camera_forward[1] = camera_forward[1] / camera_forward_len;
+        camera_forward[2] = camera_forward[2] / camera_forward_len;
+
 
         glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -151,11 +199,11 @@ int main(int argc, char const *argv[])
         float projection[16] = {0.f};
         vd_fw_u_perspective(60.f, fw / fh, 0.1f, 100.0f, projection);
 
+
         float view[16] = {0.f};
-        float cpos[3] = {VD_FW_SIN(cy) * 5.f - 1.f, VD_FW_COS(cp) * 2.f - 1.f, -2.f};
-        float ctar[3] = {0.f, 0.f, 0.f};
+        float ctar[3] = {camera_position[0] + camera_forward[0], camera_position[1] + camera_forward[1], camera_position[2] + camera_forward[2]};
         float cup[3]  = {0.f, 1.f, 0.f};
-        vd_fw_u_lookat(cpos, ctar, cup, view);
+        vd_fw_u_lookat(camera_position, ctar, cup, view);
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, texture);
@@ -168,9 +216,6 @@ int main(int argc, char const *argv[])
         glBindVertexArray(VAO);
 
         glDrawArrays(GL_TRIANGLES, 0, 36);
-
-        cy += ds * 2.f;
-        cp += ds * 2.f;
 
         vd_fw_swap_buffers();
     }

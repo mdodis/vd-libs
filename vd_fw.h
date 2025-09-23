@@ -28,8 +28,8 @@
  *   on the big threes is OpenGL Core Profile 4.1 (MacOS limitation)
  *
  * TODO
+ * - Introduce vd_fw_get_mouse_delta to get the delta of the mouse move (using RAWINPUT)
  * - Change default behavior of init to use window with decorations
- * - If ncrects are never specified, move the whole window with mouse?
  * - MacOS APIs can't be used on another thread other than main thread :/
  *   so, just initialize display link and wait on condition variable + mutex when drawing while resizing
  * - MacOS resize logic
@@ -285,6 +285,7 @@ VD_FW_API void               vd_fw_set_mouse_capture(int on);
 VD_FW_API int                vd_fw_get_mouse_wheel(float *dx, float *dy);
 
 VD_FW_API int                vd_fw_get_key_pressed(VdFwKey key);
+VD_FW_API int                vd_fw_get_key_down(VdFwKey key);
 
 /**
  * Gets the backing scale factor
@@ -2624,6 +2625,7 @@ typedef struct {
     int                         ncrect_count;
     int                         ncrects[16][4];
     int                         nccaption[4];
+    int                         nccaption_set;
 
 /* ----RENDER THREAD - WINDOW THREAD SYNC---------------------------------------------------------------------------- */
     HANDLE                      sem_window_ready;
@@ -3109,6 +3111,7 @@ VD_FW_API int vd_fw_get_focused(int *focused)
 
 VD_FW_API void vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4])
 {
+    VD_FW_G.nccaption_set = 1;
     VD_FW_G.nccaption[0] = caption[0];
     VD_FW_G.nccaption[1] = caption[1];
     VD_FW_G.nccaption[2] = caption[2];
@@ -3425,6 +3428,10 @@ static int vd_fw__hit_test(int x, int y)
 
     if (mouse.x >= width - frame_size) {
         return HTRIGHT;
+    }
+
+    if (!VD_FW_G.nccaption_set) {
+        return HTCAPTION;
     }
 
     int inside_caption = 
