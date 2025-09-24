@@ -456,26 +456,29 @@ vd_fw_init(&init_info);
                         </p>
                         <pre class="rounded copy"><code class="language-cpp">
 #define VERTEX_SOURCE \
-"#version 330 core                                               \n" \
-"layout (location = 0) in vec2 aPos;                             \n" \
-"                                                                \n" \
-"uniform vec2 rect_off;                                          \n" \
-"uniform mat4 projection;                                        \n" \
-"                                                                \n" \
-"void main()                                                     \n" \
-"{                                                               \n" \
-"    gl_Position = projection * vec4(aPos.x, aPos.y, 0.0, 1.0f); \n" \
-"}                                                               \n" \
+"#version 330 core                                                                                                 \n" \
+"layout (location = 0) in vec2 aPos;                                                                               \n" \
+"                                                                                                                  \n" \
+"uniform vec2 rect_off;                                                                                            \n" \
+"uniform vec2 rect_size;                                                                                           \n" \
+"uniform mat4 projection;                                                                                          \n" \
+"                                                                                                                  \n" \
+"                                                                                                                  \n" \
+"void main()                                                                                                       \n" \
+"{                                                                                                                 \n" \
+"    gl_Position = projection * vec4(aPos * rect_size + rect_off, 0.0, 1.0f);                                      \n" \
+"}                                                                                                                 \n" \
 
 #define FRAGMENT_SOURCE \
-"#version 330 core                                               \n" \
-"out vec4 FragColor;                                             \n" \
-"                                                                \n" \
-"void main()                                                     \n" \
-"{                                                               \n" \
-"    FragColor = vec4(1.0, 0.0, 0.0, 1.0);                       \n" \
-"}                                                               \n" \
-
+"#version 330 core                                                                                                 \n" \
+"out vec4 FragColor;                                                                                               \n" \
+"                                                                                                                  \n" \
+"uniform vec4 rect_color;                                                                                          \n" \
+"                                                                                                                  \n" \
+"void main()                                                                                                       \n" \
+"{                                                                                                                 \n" \
+"    FragColor = rect_color;                                                                                       \n" \
+"}                                                                                                                 \n" \
                         </code></pre>
                         <br>
 
@@ -532,23 +535,108 @@ vd_fw_init(& (VdFwInitInfo) {
                     </section> 
                     <br>
 
+                    <section class="section" id="tutorials-creating-vertex-buffer">
+                        <h4>Drawing a Rectangle</h4>
+                        <p>
+                            Continuing from the previous section, we create a vertex buffer for a 2d rectangle:
+                        </p>
+                        <pre class="rounded copy"><code class="language-cpp">
+float rect_vertices[] = {
+     0.0f,  0.0f,
+    +1.0f,  0.0f,
+     0.0f, +1.0f,
+    +1.0f, +1.0f
+};
+
+unsigned int VBO, VAO;
+glGenVertexArrays(1, &VAO);
+glGenBuffers(1, &VBO);
+glBindVertexArray(VAO);
+glBindBuffer(GL_ARRAY_BUFFER, VBO);
+glBufferData(GL_ARRAY_BUFFER, sizeof(rect_vertices), rect_vertices, GL_STATIC_DRAW);
+glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+glEnableVertexAttribArray(0);
+                        </code></pre>
+                        <br>
+
+                        <p>
+                            And now for drawing a rectangle.
+                            <br>
+
+                            We'll use orthographic projection. vd_fw.h provides a simple utility function to compute it:
+                            <code>vd_fw_u_ortho</code>
+                        </p>
+                        <pre class="rounded copy"><code class="language-cpp">
+glUseProgram(program);
+glBindVertexArray(VAO);
+
+{
+    float projection[16];
+    vd_fw_u_ortho(0.f, (float)w, (float)h, 0.f, -1.f, 1.f, projection);
+    glUniformMatrix4fv(glGetUniformLocation(program, "projection"), 1, GL_FALSE, projection);
+}
+                        </code></pre>
+                        <br>
+
+                        <p>
+                            To test that the coordinate transformation is working, we'll map the top left of the rectangle
+                            to the mouse. To get the mouse position & buttons, use <code>vd_fw_get_mouse_state</code> or <code>vd_fw_get_mouse_statef</code>:
+                        </p>
+                        <pre class="rounded copy"><code class="language-cpp">
+float mx, my;
+vd_fw_get_mouse_statef(&mx, &my);
+
+glUniform4f(glGetUniformLocation(program, "rect_color"), 1.f, 0.f, 0.f, 1.f);
+glUniform2f(glGetUniformLocation(program, "rect_size"), 40.f, 40.f);
+glUniform2f(glGetUniformLocation(program, "rect_off"), mx, my);
+glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+glUseProgram(0);
+glBindVertexArray(0);
+                        </code></pre>
+                        <br>
+
+                        <img class="rounded img-fluid rmprint" src="/assets/fw/tutorials-drawing-a-rectangle.gif">
+
+                    </section> 
+                    <br>
+
+
                     <section class="section" id="tutorials-ncrects">
                         <h4>Set the Drag Area</h4>
+                        <p>
+                            Let's draw a simple window frame using our rectangle "renderer":
+                        </p>
+                        <pre class="rounded copy"><code class="language-cpp">
+glUniform4f(glGetUniformLocation(program, "rect_color"), 0.2f, 0.2f, 0.2f, 1.f);
+glUniform2f(glGetUniformLocation(program, "rect_size"), (float)w, 30.f);
+glUniform2f(glGetUniformLocation(program, "rect_off"), 0.f, 0.f);
+glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+                        </code></pre>
+                        <br>
+
+                        <img class="rounded img-fluid rmprint" src="/assets/fw/tutorials-ncrects-frame.gif">
+                        <br> <br>
+
                         <p>
                             In a borderless window, there is no specified non-client area. So to allow the user to drag the window
                             only from a specific place, we'll use <code>vd_fw_set_ncrects</code>.
                         </p>
                         <pre class="rounded copy"><code class="language-cpp">
-VdFwInitInfo init_info = {};
-init_info.window_options.borderless = 1;
-vd_fw_init(&init_info);
+int draggable_rect[4] = {
+    0,  // left
+    0,  // top
+    w,  // right
+    30, // bottom
+};
+vd_fw_set_ncrects(draggable_rect, 0, 0);
                         </code></pre>
                         <br>
 
                         <p>
-                            This will create a borderless window, that can be moved (by dragging any part of the window), and resized.
+                            Et voila!
                         </p>
-                        <img class="rounded img-fluid rmprint" src="/assets/fw/tutorials-borderless.gif">
+                        <img class="rounded img-fluid rmprint" src="/assets/fw/tutorials-ncrects-drag-frame.gif">
                     </section> 
                     <br>
 
@@ -645,6 +733,7 @@ vd_fw_init(&init_info);
                 <a class="nav-link" href="#tutorials-choose-version">Choose OpenGL Version</a>
                 <a class="nav-link" href="#tutorials-borderless-window">Create a Borderless Window</a>
                 <a class="nav-link" href="#tutorials-compiling-shaders">Create a Shader Program</a>
+                <a class="nav-link" href="#tutorials-creating-vertex-buffer">Drawing a Rectangle</a>
                 <a class="nav-link" href="#tutorials-ncrects">Set the Drag Area</a>
             </div>
             <a class="nav-link" href="#api-ref">Reference</a>

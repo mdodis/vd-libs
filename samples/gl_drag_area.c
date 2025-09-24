@@ -99,6 +99,21 @@ int main(int argc, char const *argv[])
         float mx, my;
         vd_fw_get_mouse_statef(&mx, &my);
 
+        int draggable_rect[4] = {
+            0,  // left
+            0,  // top
+            w,  // right
+            30, // bottom
+        };
+        vd_fw_set_ncrects(draggable_rect, 0, 0);
+
+        {
+            glUniform4f(glGetUniformLocation(program, "rect_color"), 0.2f, 0.2f, 0.2f, 1.f);
+            glUniform2f(glGetUniformLocation(program, "rect_size"), (float)w, 30.f);
+            glUniform2f(glGetUniformLocation(program, "rect_off"), 0.f, 0.f);
+            glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+        }
+
         {
             glUniform4f(glGetUniformLocation(program, "rect_color"), 1.f, 0.f, 0.f, 1.f);
             glUniform2f(glGetUniformLocation(program, "rect_size"), 40.f, 40.f);
