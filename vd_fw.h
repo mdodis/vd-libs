@@ -5488,9 +5488,23 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         //     // result = DefWindowProc(hwnd, msg, wparam, lparam);
         // } break;
 
+        case WM_NCMOUSEMOVE:
         case WM_MOUSEMOVE: {
+
             int x = GET_X_LPARAM(lparam);
             int y = GET_Y_LPARAM(lparam);
+
+            if (msg == WM_NCMOUSEMOVE) {
+                if (VD_FW_G.nccaption_set) {
+                   break; 
+                }
+
+                RECT rect;
+                GetWindowRect(hwnd, &rect);
+
+                x -= rect.left;
+                y -= rect.top;
+            }
 
             VdFw__Win32Message m;
             m.msg = VD_FW_WIN32_MESSAGE_TYPE_MOUSEMOVE;

@@ -8,20 +8,24 @@
 "layout (location = 0) in vec2 aPos;                                                                               \n" \
 "                                                                                                                  \n" \
 "uniform vec2 rect_off;                                                                                            \n" \
+"uniform vec2 rect_size;                                                                                           \n" \
 "uniform mat4 projection;                                                                                          \n" \
+"                                                                                                                  \n" \
 "                                                                                                                  \n" \
 "void main()                                                                                                       \n" \
 "{                                                                                                                 \n" \
-"    gl_Position = projection * vec4(aPos.x, aPos.y, 0.0, 1.0f);                                                   \n" \
+"    gl_Position = projection * vec4(aPos * rect_size + rect_off, 0.0, 1.0f);                                      \n" \
 "}                                                                                                                 \n" \
 
 #define FRAGMENT_SOURCE \
 "#version 330 core                                                                                                 \n" \
 "out vec4 FragColor;                                                                                               \n" \
 "                                                                                                                  \n" \
+"uniform vec4 rect_color;                                                                                          \n" \
+"                                                                                                                  \n" \
 "void main()                                                                                                       \n" \
 "{                                                                                                                 \n" \
-"    FragColor = vec4(1.0, 0.0, 0.0, 1.0);                                                                         \n" \
+"    FragColor = rect_color;                                                                                       \n" \
 "}                                                                                                                 \n" \
 
 
@@ -82,6 +86,27 @@ int main(int argc, char const *argv[])
         glViewport(0, 0, w, h);
         glClearColor(0.5f, 0.3f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
+
+        glUseProgram(program);
+        glBindVertexArray(VAO);
+
+        {
+            float projection[16];
+            vd_fw_u_ortho(0.f, (float)w, (float)h, 0.f, -1.f, 1.f, projection);
+            glUniformMatrix4fv(glGetUniformLocation(program, "projection"), 1, GL_FALSE, projection);
+        }
+
+        float mx, my;
+        vd_fw_get_mouse_statef(&mx, &my);
+
+        glUniform4f(glGetUniformLocation(program, "rect_color"), 1.f, 0.f, 0.f, 1.f);
+        glUniform2f(glGetUniformLocation(program, "rect_size"), 40.f, 40.f);
+        glUniform2f(glGetUniformLocation(program, "rect_off"), mx, my);
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+        glUseProgram(0);
+        glBindVertexArray(0);
+
 
         vd_fw_swap_buffers();
     }

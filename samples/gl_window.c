@@ -12,6 +12,9 @@ int main(int argc, char const *argv[])
         .gl = {
             .version = VD_FW_GL_VERSION_3_3,
         },
+        .window_options = {
+            .borderless = 0,
+        }
     });
     vd_fw_set_vsync_on(0);
 

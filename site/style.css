@@ -1,5 +1,6 @@
 #mainnav {
     transition: box-shadow 0.2s ease-in-out;
+    height: 50px;
 }
 
 .rmprint {
@@ -19,7 +20,7 @@ body {
 }
 
 section {
-    scroll-margin-top: 70px;
+    scroll-margin-top: 50px;
 }
 
 /*[data-bs-theme="dark"] {
