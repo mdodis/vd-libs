@@ -121,7 +121,7 @@ typedef enum {
     VD_FW_GL_VERSION_4_6   = 46,
 } VdFwGlVersion;
 
-typedef enum {
+enum {
     VD_FW_KEY_UNKNOWN = 0,
     VD_FW_KEY_A,      VD_FW_KEY_B,
     VD_FW_KEY_C,      VD_FW_KEY_D,
@@ -150,7 +150,9 @@ typedef enum {
     VD_FW_KEY_F21,    VD_FW_KEY_F22,
     VD_FW_KEY_F23,    VD_FW_KEY_F24,
     VD_FW_KEY_MAX,
-} VdFwKey;
+};
+
+typedef int VdFwKey;
 
 enum {
     VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN   = 1 << 0,
@@ -246,8 +248,8 @@ VD_FW_API void               vd_fw_set_mouse_locked(int locked);
  */
 VD_FW_API int                vd_fw_get_mouse_wheel(float *dx, float *dy);
 
-VD_FW_API int                vd_fw_get_key_pressed(VdFwKey key);
-VD_FW_API int                vd_fw_get_key_down(VdFwKey key);
+VD_FW_API int                vd_fw_get_key_pressed(int key);
+VD_FW_API int                vd_fw_get_key_down(int key);
 
 /**
  * Gets the backing scale factor
@@ -3697,6 +3699,7 @@ enum {
     VD_FW_WIN32_MESSAGE_TYPE_MOUSEMOVE   = 11,
     VD_FW_WIN32_MESSAGE_TYPE_MOUSEBTN    = 12,
     VD_FW_WIN32_MESSAGE_TYPE_CHANGEFOCUS = 13,
+    VD_FW_WIN32_MESSAGE_TYPE_KEYSTATE    = 14,
 
     VD_FW_WIN32_SHOW_CURSOR = WM_USER + 1,
 };
@@ -3714,7 +3717,7 @@ typedef struct {
         } scroll;
 
         struct {
-            int mx, my;
+            int   mx, my;
         } mousemove;
 
         struct {
@@ -3723,8 +3726,13 @@ typedef struct {
         } mousebtn;
 
         struct {
-            int got_focus;
+            int   got_focus;
         } changefocus;
+
+        struct {
+            WORD  vkcode;
+            int   down;
+        } keystate;
     } dat;
 } VdFw__Win32Message;
 
@@ -3770,6 +3778,8 @@ typedef struct {
     int                         nccaption_set;
     volatile LONG               mouse_delta_sink_index;
     float                       mouse_delta_sinks[2][2];
+    unsigned char               curr_key_states[VD_FW_KEY_MAX];
+    unsigned char               prev_key_states[VD_FW_KEY_MAX];
 
 /* ----RENDER THREAD - WINDOW THREAD SYNC---------------------------------------------------------------------------- */
     HANDLE                      sem_window_ready;
@@ -3780,8 +3790,6 @@ typedef struct {
     VdFw__Win32Frame            next_frame;
     VdFw__Win32Frame            curr_frame;
 
-    unsigned char               curr_key_states[VD_FW_KEY_MAX];
-    unsigned char               prev_key_states[VD_FW_KEY_MAX];
 } VdFw__Win32InternalData;
 
 #define VD_FW_RAW_INPUT_ALIGN(x)        (((x) + sizeof(unsigned __int64) - 1) & ~(sizeof(unsigned __int64) - 1))
@@ -4143,6 +4151,10 @@ VD_FW_API int vd_fw_running(void)
     VD_FW_G.wheel[1] = 0.f;
     VD_FW_G.focus_changed = 0;
 
+    for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
+        VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
+    }
+
     VdFw__Win32Message mm;
     while (vd_fw__msgbuf_r(&mm)) {
         switch (mm.msg) {
@@ -4169,6 +4181,16 @@ VD_FW_API int vd_fw_running(void)
             case VD_FW_WIN32_MESSAGE_TYPE_CHANGEFOCUS: {
                 VD_FW_G.focus_changed = 1;
                 VD_FW_G.focused = mm.dat.changefocus.got_focus;
+            } break;
+
+            case VD_FW_WIN32_MESSAGE_TYPE_KEYSTATE: {
+
+                int is_down = mm.dat.keystate.down;
+                VdFwKey key = vd_fw___vkcode_to_key(mm.dat.keystate.vkcode);
+
+                VD_FW_G.prev_key_states[key] = VD_FW_G.curr_key_states[key];
+                VD_FW_G.curr_key_states[key] = (unsigned char)is_down;
+
             } break;
 
             default: break;
@@ -4300,9 +4322,14 @@ VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
     return result;
 }
 
-VD_FW_API int vd_fw_get_key_pressed(VdFwKey key)
+VD_FW_API int vd_fw_get_key_pressed(int key)
 {
     return !VD_FW_G.prev_key_states[key] && VD_FW_G.curr_key_states[key];
+}
+
+VD_FW_API int vd_fw_get_key_down(int key)
+{
+    return VD_FW_G.curr_key_states[key];
 }
 
 VD_FW_API void vd_fw_set_mouse_capture(int on)
@@ -5033,12 +5060,15 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
         case WM_KEYUP:
         case WM_KEYDOWN: {
+
             WORD vkcode = (WORD)wparam;
-            VdFwKey key  = vd_fw___vkcode_to_key(vkcode);
             int is_down  = msg == WM_KEYDOWN;
 
-            VD_FW_G.prev_key_states[key] = VD_FW_G.curr_key_states[key];
-            VD_FW_G.curr_key_states[key] = (unsigned char)is_down;
+            VdFw__Win32Message m;
+            m.msg = VD_FW_WIN32_MESSAGE_TYPE_KEYSTATE;
+            m.dat.mousebtn.down   = is_down;
+            m.dat.keystate.vkcode = vkcode;
+            vd_fw__msgbuf_w(&m);
         } break;
 
         case WM_MBUTTONUP:
