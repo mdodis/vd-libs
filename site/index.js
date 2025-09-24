@@ -37,3 +37,31 @@ document.querySelectorAll('pre.copy').forEach(pre => {
     }).catch(err => console.error('Failed to copy: ', err));
   });
 });
+
+
+// Custom ScrollSpy parent highlighting for nested nav
+document.addEventListener('DOMContentLoaded', function () {
+    var toc = document.getElementById('toc');
+    if (!toc) return;
+    document.addEventListener('activate.bs.scrollspy', function (e) {
+        // Remove parent-active from all
+        toc.querySelectorAll('.nav-link').forEach(function(link) {
+            link.classList.remove('parent-active');
+        });
+        // Highlight parent if a subsection is active
+        var active = e.target;
+        if (active && active.classList.contains('nav-link')) {
+            // If this is a subsection, find the previous nav-link (the parent)
+            if (active.classList.contains('ms-3')) {
+                // Find the closest parent .outline-section > .nav-link before this div
+                var parentDiv = active.closest('.outline-section');
+                if (parentDiv) {
+                    var prev = parentDiv.previousElementSibling;
+                    if (prev && prev.classList.contains('nav-link')) {
+                        prev.classList.add('parent-active');
+                    }
+                }
+            }
+        }
+    });
+});
