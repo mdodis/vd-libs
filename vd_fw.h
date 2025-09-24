@@ -122,33 +122,114 @@ typedef enum {
 } VdFwGlVersion;
 
 enum {
-    VD_FW_KEY_UNKNOWN = 0,
-    VD_FW_KEY_A,      VD_FW_KEY_B,
-    VD_FW_KEY_C,      VD_FW_KEY_D,
-    VD_FW_KEY_E,      VD_FW_KEY_F,
-    VD_FW_KEY_G,      VD_FW_KEY_H,
-    VD_FW_KEY_I,      VD_FW_KEY_J,
-    VD_FW_KEY_K,      VD_FW_KEY_L,
-    VD_FW_KEY_M,      VD_FW_KEY_N,
-    VD_FW_KEY_O,      VD_FW_KEY_P,
-    VD_FW_KEY_Q,      VD_FW_KEY_R,
-    VD_FW_KEY_S,      VD_FW_KEY_T,
-    VD_FW_KEY_U,      VD_FW_KEY_V,
-    VD_FW_KEY_W,      VD_FW_KEY_X,
-    VD_FW_KEY_Y,      VD_FW_KEY_Z,
-    VD_FW_KEY_SPACE,  VD_FW_KEY_ESCAPE, VD_FW_KEY_BACKSPACE,
-    VD_FW_KEY_F1,     VD_FW_KEY_F2,
-    VD_FW_KEY_F3,     VD_FW_KEY_F4,
-    VD_FW_KEY_F5,     VD_FW_KEY_F6,
-    VD_FW_KEY_F7,     VD_FW_KEY_F8,
-    VD_FW_KEY_F9,     VD_FW_KEY_F10,
-    VD_FW_KEY_F11,    VD_FW_KEY_F12,
-    VD_FW_KEY_F13,    VD_FW_KEY_F14,
-    VD_FW_KEY_F15,    VD_FW_KEY_F16,
-    VD_FW_KEY_F17,    VD_FW_KEY_F18,
-    VD_FW_KEY_F19,    VD_FW_KEY_F20,
-    VD_FW_KEY_F21,    VD_FW_KEY_F22,
-    VD_FW_KEY_F23,    VD_FW_KEY_F24,
+    VD_FW_KEY_UNKNOWN       = 0,
+    VD_FW_KEY_F1            = 1,
+    VD_FW_KEY_F2            = 2,
+    VD_FW_KEY_F3            = 3,
+    VD_FW_KEY_F4            = 4,
+    VD_FW_KEY_F5            = 5,
+    VD_FW_KEY_F6            = 6,
+    VD_FW_KEY_F7            = 7,
+    VD_FW_KEY_F8            = 8,
+    VD_FW_KEY_F9            = 9,
+    VD_FW_KEY_F10           = 10,
+    VD_FW_KEY_F11           = 11,
+    VD_FW_KEY_F12           = 12,
+    VD_FW_KEY_F13           = 13,
+    VD_FW_KEY_F14           = 14,
+    VD_FW_KEY_F15           = 15,
+    VD_FW_KEY_F16           = 16,
+    VD_FW_KEY_F17           = 17,
+    VD_FW_KEY_F18           = 18,
+    VD_FW_KEY_F19           = 19,
+    VD_FW_KEY_F20           = 20,
+    VD_FW_KEY_F21           = 21,
+    VD_FW_KEY_F22           = 22,
+    VD_FW_KEY_F23           = 23,
+    VD_FW_KEY_F24           = 24,
+    VD_FW_KEY_BACKSPACE     = 25,  
+    VD_FW_KEY_INS           = 26,
+    VD_FW_KEY_HOME          = 27,
+    VD_FW_KEY_PGUP          = 28,
+    VD_FW_KEY_DEL           = 29,
+    VD_FW_KEY_END           = 30,
+    VD_FW_KEY_PGDN          = 31,
+    VD_FW_KEY_SPACE         = 32,  // ' ' 
+    VD_FW_KEY_LCONTROL      = 33,
+    VD_FW_KEY_RCONTROL      = 34,
+    VD_FW_KEY_LALT          = 35,
+    VD_FW_KEY_RALT          = 36,
+    VD_FW_KEY_LSHIFT        = 37,
+    VD_FW_KEY_RSHIFT        = 38,
+    VD_FW_KEY_QUOTE         = 39,  // '\''
+    VD_FW_KEY_ARROW_UP      = 40,
+    VD_FW_KEY_ARROW_LEFT    = 41,
+    VD_FW_KEY_ARROW_DOWN    = 42,
+    VD_FW_KEY_ARROW_RIGHT   = 43,
+    VD_FW_KEY_COMMA         = 44,  // ','
+    VD_FW_KEY_MINUS         = 45,  // '-'
+    VD_FW_KEY_DOT           = 46,  // '.'
+    VD_FW_KEY_SLASH_FORWARD = 47,  // '/'
+    VD_FW_KEY_0             = 48,  // '0'
+    VD_FW_KEY_1             = 49,  // '1'
+    VD_FW_KEY_2             = 50,  // '2'
+    VD_FW_KEY_3             = 51,  // '3'
+    VD_FW_KEY_4             = 52,  // '4'
+    VD_FW_KEY_5             = 53,  // '5'
+    VD_FW_KEY_6             = 54,  // '6'
+    VD_FW_KEY_7             = 55,  // '7'
+    VD_FW_KEY_8             = 56,  // '8'
+    VD_FW_KEY_9             = 57,  // '9'
+    VD_FW_KEY_ENTER         = 58,
+    VD_FW_KEY_SEMICOLON     = 59,  // ';'
+    VD_FW_KEY_TAB           = 60,
+    VD_FW_KEY_EQUALS        = 61,  // '='
+    VD_FW_KEY_CAPITAL       = 62,
+    VD_FW_KEY_ESCAPE        = 63,
+    VD_FW_KEY_RESERVED1     = 64,  // '@'
+    VD_FW_KEY_A             = 65,  // 'A'
+    VD_FW_KEY_B             = 66,  // 'B'
+    VD_FW_KEY_C             = 67,  // 'C'
+    VD_FW_KEY_D             = 68,  // 'D'
+    VD_FW_KEY_E             = 69,  // 'E'
+    VD_FW_KEY_F             = 70,  // 'F'
+    VD_FW_KEY_G             = 71,  // 'G'
+    VD_FW_KEY_H             = 72,  // 'H'
+    VD_FW_KEY_I             = 73,  // 'I'
+    VD_FW_KEY_J             = 74,  // 'J'
+    VD_FW_KEY_K             = 75,  // 'K'
+    VD_FW_KEY_L             = 76,  // 'L'
+    VD_FW_KEY_M             = 77,  // 'M'
+    VD_FW_KEY_N             = 78,  // 'N'
+    VD_FW_KEY_O             = 79,  // 'O'
+    VD_FW_KEY_P             = 80,  // 'P'
+    VD_FW_KEY_Q             = 81,  // 'Q'
+    VD_FW_KEY_R             = 82,  // 'R'
+    VD_FW_KEY_S             = 83,  // 'S'
+    VD_FW_KEY_T             = 84,  // 'T'
+    VD_FW_KEY_U             = 85,  // 'U'
+    VD_FW_KEY_V             = 86,  // 'V'
+    VD_FW_KEY_W             = 87,  // 'W'
+    VD_FW_KEY_X             = 88,  // 'X'
+    VD_FW_KEY_Y             = 89,  // 'Y'
+    VD_FW_KEY_Z             = 90,  // 'Z'
+    VD_FW_KEY_BRACKET_OPEN  = 91,  // '['
+    VD_FW_KEY_SLASH_BACK    = 92,  // '\\'
+    VD_FW_KEY_BRACKET_CLOSE = 93,  // ']'
+    VD_FW_KEY_MEDIA_NEXT    = 94,  // Media Next Track
+    VD_FW_KEY_MEDIA_PREV    = 95,  // Media Prev Track
+    VD_FW_KEY_BACKTICK      = 96,  // '`'
+    VD_FW_KEY_MEDIA_PLAY    = 97,  // Media Play/Pause
+    VD_FW_KEY_NUMPAD_0      = 98,  // Numpad 0
+    VD_FW_KEY_NUMPAD_1      = 99,  // Numpad 1
+    VD_FW_KEY_NUMPAD_2      = 100, // Numpad 2
+    VD_FW_KEY_NUMPAD_3      = 101, // Numpad 3
+    VD_FW_KEY_NUMPAD_4      = 102, // Numpad 4
+    VD_FW_KEY_NUMPAD_5      = 103, // Numpad 5
+    VD_FW_KEY_NUMPAD_6      = 104, // Numpad 6
+    VD_FW_KEY_NUMPAD_7      = 105, // Numpad 7
+    VD_FW_KEY_NUMPAD_8      = 106, // Numpad 8
+    VD_FW_KEY_NUMPAD_9      = 107, // Numpad 9
     VD_FW_KEY_MAX,
 };
 
@@ -239,6 +320,7 @@ VD_FW_INL int                vd_fw_get_mouse_statef(float *x, float *y);
 VD_FW_API void               vd_fw_set_mouse_capture(int on);
 VD_FW_API void               vd_fw_get_mouse_delta(float *dx, float *dy);
 VD_FW_API void               vd_fw_set_mouse_locked(int locked);
+VD_FW_API int                vd_fw_get_mouse_locked(void);
 
 /**
  * Read the mouse wheel state.
@@ -3797,63 +3879,265 @@ typedef struct {
 
 VdFwKey vd_fw___vkcode_to_key(WORD vkcode)
 {
-    switch (vkcode)
-    {
-        case 'A':  return VD_FW_KEY_A;
-        case 'B':  return VD_FW_KEY_B;
-        case 'C':  return VD_FW_KEY_C;
-        case 'D':  return VD_FW_KEY_D;
-        case 'E':  return VD_FW_KEY_E;
-        case 'F':  return VD_FW_KEY_F;
-        case 'G':  return VD_FW_KEY_G;
-        case 'H':  return VD_FW_KEY_H;
-        case 'I':  return VD_FW_KEY_I;
-        case 'J':  return VD_FW_KEY_J;
-        case 'K':  return VD_FW_KEY_K;
-        case 'L':  return VD_FW_KEY_L;
-        case 'M':  return VD_FW_KEY_M;
-        case 'N':  return VD_FW_KEY_N;
-        case 'O':  return VD_FW_KEY_O;
-        case 'P':  return VD_FW_KEY_P;
-        case 'Q':  return VD_FW_KEY_Q;
-        case 'R':  return VD_FW_KEY_R;
-        case 'S':  return VD_FW_KEY_S;
-        case 'T':  return VD_FW_KEY_T;
-        case 'U':  return VD_FW_KEY_U;
-        case 'V':  return VD_FW_KEY_V;
-        case 'W':  return VD_FW_KEY_W;
-        case 'X':  return VD_FW_KEY_X;
-        case 'Y':  return VD_FW_KEY_Y;
-        case 'Z':  return VD_FW_KEY_Z;
-        case 0x1b: return VD_FW_KEY_ESCAPE;
-        case 0x20: return VD_FW_KEY_SPACE;
-        case 0x08: return VD_FW_KEY_BACKSPACE;
-        case 0x70: return VD_FW_KEY_F1;
-        case 0x71: return VD_FW_KEY_F2;
-        case 0x72: return VD_FW_KEY_F3;
-        case 0x73: return VD_FW_KEY_F4;
-        case 0x74: return VD_FW_KEY_F5;
-        case 0x75: return VD_FW_KEY_F6;
-        case 0x76: return VD_FW_KEY_F7;
-        case 0x77: return VD_FW_KEY_F8;
-        case 0x78: return VD_FW_KEY_F9;
-        case 0x79: return VD_FW_KEY_F10;
-        case 0x7a: return VD_FW_KEY_F11;
-        case 0x7b: return VD_FW_KEY_F12;
-        case 0x7c: return VD_FW_KEY_F13;
-        case 0x7d: return VD_FW_KEY_F14;
-        case 0x7e: return VD_FW_KEY_F15;
-        case 0x7f: return VD_FW_KEY_F16;
-        case 0x80: return VD_FW_KEY_F17;
-        case 0x81: return VD_FW_KEY_F18;
-        case 0x82: return VD_FW_KEY_F19;
-        case 0x83: return VD_FW_KEY_F20;
-        case 0x84: return VD_FW_KEY_F21;
-        case 0x85: return VD_FW_KEY_F22;
-        case 0x86: return VD_FW_KEY_F23;
-        case 0x87: return VD_FW_KEY_F24;
-        default: return VD_FW_KEY_UNKNOWN;
-    }
+    static VdFwKey translation_table[0xFF] = {
+        VD_FW_KEY_UNKNOWN,       //                                     0x00    Invalid Key
+        VD_FW_KEY_UNKNOWN,       // VK_LBUTTON                          0x01    Left mouse button
+        VD_FW_KEY_UNKNOWN,       // VK_RBUTTON                          0x02    Right mouse button
+        VD_FW_KEY_UNKNOWN,       // VK_CANCEL                           0x03    Control-break processing
+        VD_FW_KEY_UNKNOWN,       // VK_MBUTTON                          0x04    Middle mouse button
+        VD_FW_KEY_UNKNOWN,       // VK_XBUTTON1                         0x05    X1 mouse button
+        VD_FW_KEY_UNKNOWN,       // VK_XBUTTON2                         0x06    X2 mouse button
+        VD_FW_KEY_UNKNOWN,       //                                     0x07    Reserved
+        VD_FW_KEY_BACKSPACE,     // VK_BACK                             0x08    Backspace key
+        VD_FW_KEY_TAB,           // VK_TAB                              0x09    Tab key
+        VD_FW_KEY_UNKNOWN,       //                                     0x0A    Reserved
+        VD_FW_KEY_UNKNOWN,       //                                     0x0B    Reserved
+        VD_FW_KEY_UNKNOWN,       // VK_CLEAR                            0x0C    Clear key
+        VD_FW_KEY_ENTER,         // VK_RETURN                           0x0D    Enter key
+        VD_FW_KEY_UNKNOWN,       //                                     0x0E    Unassigned
+        VD_FW_KEY_UNKNOWN,       //                                     0x0F    Unassigned
+        VD_FW_KEY_UNKNOWN,       // VK_SHIFT                            0x10    Shift key
+        VD_FW_KEY_UNKNOWN,       // VK_CONTROL                          0x11    Ctrl key
+        VD_FW_KEY_UNKNOWN,       // VK_MENU                             0x12    Alt key
+        VD_FW_KEY_UNKNOWN,       // VK_PAUSE                            0x13    Pause key
+        VD_FW_KEY_CAPITAL,       // VK_CAPITAL                          0x14    Caps lock key
+        VD_FW_KEY_UNKNOWN,       // VK_KANA                             0x15    IME Kana mode / IME Hangul mode
+        VD_FW_KEY_UNKNOWN,       // VK_IME_ON                           0x16    IME On
+        VD_FW_KEY_UNKNOWN,       // VK_JUNJA                            0x17    IME Junja mode
+        VD_FW_KEY_UNKNOWN,       // VK_FINAL                            0x18    IME final mode
+        VD_FW_KEY_UNKNOWN,       // VK_HANJA                            0x19    IME Hanja mode / IME Kanji mode
+        VD_FW_KEY_UNKNOWN,       // VK_IME_OFF                          0x1A    IME Off
+        VD_FW_KEY_ESCAPE,        // VK_ESCAPE                           0x1B    Esc key
+        VD_FW_KEY_UNKNOWN,       // VK_CONVERT                          0x1C    IME convert
+        VD_FW_KEY_UNKNOWN,       // VK_NONCONVERT                       0x1D    IME nonconvert
+        VD_FW_KEY_UNKNOWN,       // VK_ACCEPT                           0x1E    IME accept
+        VD_FW_KEY_UNKNOWN,       // VK_MODECHANGE                       0x1F    IME mode change request
+        VD_FW_KEY_SPACE,         // VK_SPACE                            0x20    Spacebar key
+        VD_FW_KEY_PGUP,          // VK_PRIOR                            0x21    Page up key
+        VD_FW_KEY_PGDN,          // VK_NEXT                             0x22    Page down key
+        VD_FW_KEY_END,           // VK_END                              0x23    End key
+        VD_FW_KEY_HOME,          // VK_HOME                             0x24    Home key
+        VD_FW_KEY_ARROW_LEFT,    // VK_LEFT                             0x25    Left arrow key
+        VD_FW_KEY_ARROW_UP,      // VK_UP                               0x26    Up arrow key
+        VD_FW_KEY_ARROW_RIGHT,   // VK_RIGHT                            0x27    Right arrow key
+        VD_FW_KEY_ARROW_DOWN,    // VK_DOWN                             0x28    Down arrow key
+        VD_FW_KEY_UNKNOWN,       // VK_SELECT                           0x29    Select key
+        VD_FW_KEY_UNKNOWN,       // VK_PRINT                            0x2A    Print key
+        VD_FW_KEY_UNKNOWN,       // VK_EXECUTE                          0x2B    Execute key
+        VD_FW_KEY_UNKNOWN,       // VK_SNAPSHOT                         0x2C    Print screen key
+        VD_FW_KEY_INS,           // VK_INSERT                           0x2D    Insert key
+        VD_FW_KEY_DEL,           // VK_DELETE                           0x2E    Delete key
+        VD_FW_KEY_UNKNOWN,       // VK_HELP                             0x2F    Help key
+        VD_FW_KEY_0,             // `0`                                 0x30    0 key
+        VD_FW_KEY_1,             // `1`                                 0x31    1 key
+        VD_FW_KEY_2,             // `2`                                 0x32    2 key
+        VD_FW_KEY_3,             // `3`                                 0x33    3 key
+        VD_FW_KEY_4,             // `4`                                 0x34    4 key
+        VD_FW_KEY_5,             // `5`                                 0x35    5 key
+        VD_FW_KEY_6,             // `6`                                 0x36    6 key
+        VD_FW_KEY_7,             // `7`                                 0x37    7 key
+        VD_FW_KEY_8,             // `8`                                 0x38    8 key
+        VD_FW_KEY_9,             // `9`                                 0x39    9 key
+        VD_FW_KEY_UNKNOWN,       //                                     0x3A    Undefined
+        VD_FW_KEY_UNKNOWN,       //                                     0x3B    Undefined
+        VD_FW_KEY_UNKNOWN,       //                                     0x3C    Undefined
+        VD_FW_KEY_UNKNOWN,       //                                     0x3D    Undefined
+        VD_FW_KEY_UNKNOWN,       //                                     0x3E    Undefined
+        VD_FW_KEY_UNKNOWN,       //                                     0x3F    Undefined
+        VD_FW_KEY_UNKNOWN,       //                                     0x40    Undefined
+        VD_FW_KEY_A,             // 'A'                                 0x41    A key
+        VD_FW_KEY_B,             // 'B'                                 0x42    B key
+        VD_FW_KEY_C,             // 'C'                                 0x43    C key
+        VD_FW_KEY_D,             // 'D'                                 0x44    D key
+        VD_FW_KEY_E,             // 'E'                                 0x45    E key
+        VD_FW_KEY_F,             // 'F'                                 0x46    F key
+        VD_FW_KEY_G,             // 'G'                                 0x47    G key
+        VD_FW_KEY_H,             // 'H'                                 0x48    H key
+        VD_FW_KEY_I,             // 'I'                                 0x49    I key
+        VD_FW_KEY_J,             // 'J'                                 0x4A    J key
+        VD_FW_KEY_K,             // 'K'                                 0x4B    K key
+        VD_FW_KEY_L,             // 'L'                                 0x4C    L key
+        VD_FW_KEY_M,             // 'M'                                 0x4D    M key
+        VD_FW_KEY_N,             // 'N'                                 0x4E    N key
+        VD_FW_KEY_O,             // 'O'                                 0x4F    O key
+        VD_FW_KEY_P,             // 'P'                                 0x50    P key
+        VD_FW_KEY_Q,             // 'Q'                                 0x51    Q key
+        VD_FW_KEY_R,             // 'R'                                 0x52    R key
+        VD_FW_KEY_S,             // 'S'                                 0x53    S key
+        VD_FW_KEY_T,             // 'T'                                 0x54    T key
+        VD_FW_KEY_U,             // 'U'                                 0x55    U key
+        VD_FW_KEY_V,             // 'V'                                 0x56    V key
+        VD_FW_KEY_W,             // 'W'                                 0x57    W key
+        VD_FW_KEY_X,             // 'X'                                 0x58    X key
+        VD_FW_KEY_Y,             // 'Y'                                 0x59    Y key
+        VD_FW_KEY_Z,             // 'Z'                                 0x5A    Z key
+        VD_FW_KEY_UNKNOWN,       // VK_LWIN                             0x5B    Left Windows logo key
+        VD_FW_KEY_UNKNOWN,       // VK_RWIN                             0x5C    Right Windows logo key
+        VD_FW_KEY_UNKNOWN,       // VK_APPS                             0x5D    Application key
+        VD_FW_KEY_UNKNOWN,       //                                     0x5E    Reserved
+        VD_FW_KEY_UNKNOWN,       // VK_SLEEP                            0x5F    Computer Sleep key
+        VD_FW_KEY_NUMPAD_0,      // VK_NUMPAD0                          0x60    Numeric keypad 0 key
+        VD_FW_KEY_NUMPAD_1,      // VK_NUMPAD1                          0x61    Numeric keypad 1 key
+        VD_FW_KEY_NUMPAD_2,      // VK_NUMPAD2                          0x62    Numeric keypad 2 key
+        VD_FW_KEY_NUMPAD_3,      // VK_NUMPAD3                          0x63    Numeric keypad 3 key
+        VD_FW_KEY_NUMPAD_4,      // VK_NUMPAD4                          0x64    Numeric keypad 4 key
+        VD_FW_KEY_NUMPAD_5,      // VK_NUMPAD5                          0x65    Numeric keypad 5 key
+        VD_FW_KEY_NUMPAD_6,      // VK_NUMPAD6                          0x66    Numeric keypad 6 key
+        VD_FW_KEY_NUMPAD_7,      // VK_NUMPAD7                          0x67    Numeric keypad 7 key
+        VD_FW_KEY_NUMPAD_8,      // VK_NUMPAD8                          0x68    Numeric keypad 8 key
+        VD_FW_KEY_NUMPAD_9,      // VK_NUMPAD9                          0x69    Numeric keypad 9 key
+        VD_FW_KEY_UNKNOWN,       // VK_MULTIPLY                         0x6A    Multiply key
+        VD_FW_KEY_UNKNOWN,       // VK_ADD                              0x6B    Add key
+        VD_FW_KEY_UNKNOWN,       // VK_SEPARATOR                        0x6C    Separator key
+        VD_FW_KEY_UNKNOWN,       // VK_SUBTRACT                         0x6D    Subtract key
+        VD_FW_KEY_UNKNOWN,       // VK_DECIMAL                          0x6E    Decimal key
+        VD_FW_KEY_UNKNOWN,       // VK_DIVIDE                           0x6F    Divide key
+        VD_FW_KEY_F1,            // VK_F1                               0x70    F1 key
+        VD_FW_KEY_F2,            // VK_F2                               0x71    F2 key
+        VD_FW_KEY_F3,            // VK_F3                               0x72    F3 key
+        VD_FW_KEY_F4,            // VK_F4                               0x73    F4 key
+        VD_FW_KEY_F5,            // VK_F5                               0x74    F5 key
+        VD_FW_KEY_F6,            // VK_F6                               0x75    F6 key
+        VD_FW_KEY_F7,            // VK_F7                               0x76    F7 key
+        VD_FW_KEY_F8,            // VK_F8                               0x77    F8 key
+        VD_FW_KEY_F9,            // VK_F9                               0x78    F9 key
+        VD_FW_KEY_F10,           // VK_F10                              0x79    F10 key
+        VD_FW_KEY_F11,           // VK_F11                              0x7A    F11 key
+        VD_FW_KEY_F12,           // VK_F12                              0x7B    F12 key
+        VD_FW_KEY_F13,           // VK_F13                              0x7C    F13 key
+        VD_FW_KEY_F14,           // VK_F14                              0x7D    F14 key
+        VD_FW_KEY_F15,           // VK_F15                              0x7E    F15 key
+        VD_FW_KEY_F16,           // VK_F16                              0x7F    F16 key
+        VD_FW_KEY_F17,           // VK_F17                              0x80    F17 key
+        VD_FW_KEY_F18,           // VK_F18                              0x81    F18 key
+        VD_FW_KEY_F19,           // VK_F19                              0x82    F19 key
+        VD_FW_KEY_F20,           // VK_F20                              0x83    F20 key
+        VD_FW_KEY_F21,           // VK_F21                              0x84    F21 key
+        VD_FW_KEY_F22,           // VK_F22                              0x85    F22 key
+        VD_FW_KEY_F23,           // VK_F23                              0x86    F23 key
+        VD_FW_KEY_F24,           // VK_F24                              0x87    F24 key
+        VD_FW_KEY_UNKNOWN,       //                                     0x88    Reserved
+        VD_FW_KEY_UNKNOWN,       //                                     0x89    Reserved
+        VD_FW_KEY_UNKNOWN,       //                                     0x8A    Reserved
+        VD_FW_KEY_UNKNOWN,       //                                     0x8B    Reserved
+        VD_FW_KEY_UNKNOWN,       //                                     0x8C    Reserved
+        VD_FW_KEY_UNKNOWN,       //                                     0x8D    Reserved
+        VD_FW_KEY_UNKNOWN,       //                                     0x8E    Reserved
+        VD_FW_KEY_UNKNOWN,       //                                     0x8F    Reserved
+        VD_FW_KEY_UNKNOWN,       // VK_NUMLOCK                          0x90    Num lock key
+        VD_FW_KEY_UNKNOWN,       // VK_SCROLL                           0x91    Scroll lock key
+        VD_FW_KEY_UNKNOWN,       //                                     0x92    OEM specific
+        VD_FW_KEY_UNKNOWN,       //                                     0x93    OEM specific
+        VD_FW_KEY_UNKNOWN,       //                                     0x94    OEM specific
+        VD_FW_KEY_UNKNOWN,       //                                     0x95    OEM specific
+        VD_FW_KEY_UNKNOWN,       //                                     0x96    OEM specific
+        VD_FW_KEY_UNKNOWN,       //                                     0x97    Unassigned 
+        VD_FW_KEY_UNKNOWN,       //                                     0x98    Unassigned 
+        VD_FW_KEY_UNKNOWN,       //                                     0x99    Unassigned 
+        VD_FW_KEY_UNKNOWN,       //                                     0x9A    Unassigned 
+        VD_FW_KEY_UNKNOWN,       //                                     0x9B    Unassigned 
+        VD_FW_KEY_UNKNOWN,       //                                     0x9C    Unassigned 
+        VD_FW_KEY_UNKNOWN,       //                                     0x9D    Unassigned 
+        VD_FW_KEY_UNKNOWN,       //                                     0x9E    Unassigned 
+        VD_FW_KEY_UNKNOWN,       //                                     0x9F    Unassigned 
+        VD_FW_KEY_LSHIFT,        // VK_LSHIFT                           0xA0    Left Shift key
+        VD_FW_KEY_RSHIFT,        // VK_RSHIFT                           0xA1    Right Shift key
+        VD_FW_KEY_LCONTROL,      // VK_LCONTROL                         0xA2    Left Ctrl key
+        VD_FW_KEY_RCONTROL,      // VK_RCONTROL                         0xA3    Right Ctrl key
+        VD_FW_KEY_LALT,          // VK_LMENU                            0xA4    Left Alt key
+        VD_FW_KEY_RALT,          // VK_RMENU                            0xA5    Right Alt key
+        VD_FW_KEY_UNKNOWN,       // VK_BROWSER_BACK                     0xA6    Browser Back key
+        VD_FW_KEY_UNKNOWN,       // VK_BROWSER_FORWARD                  0xA7    Browser Forward key
+        VD_FW_KEY_UNKNOWN,       // VK_BROWSER_REFRESH                  0xA8    Browser Refresh key
+        VD_FW_KEY_UNKNOWN,       // VK_BROWSER_STOP                     0xA9    Browser Stop key
+        VD_FW_KEY_UNKNOWN,       // VK_BROWSER_SEARCH                   0xAA    Browser Search key
+        VD_FW_KEY_UNKNOWN,       // VK_BROWSER_FAVORITES                0xAB    Browser Favorites key
+        VD_FW_KEY_UNKNOWN,       // VK_BROWSER_HOME                     0xAC    Browser Start and Home key
+        VD_FW_KEY_UNKNOWN,       // VK_VOLUME_MUTE                      0xAD    Volume Mute key
+        VD_FW_KEY_UNKNOWN,       // VK_VOLUME_DOWN                      0xAE    Volume Down key
+        VD_FW_KEY_UNKNOWN,       // VK_VOLUME_UP                        0xAF    Volume Up key
+        VD_FW_KEY_MEDIA_NEXT,    // VK_MEDIA_NEXT_TRACK                 0xB0    Next Track key
+        VD_FW_KEY_MEDIA_PREV,    // VK_MEDIA_PREV_TRACK                 0xB1    Previous Track key
+        VD_FW_KEY_UNKNOWN,       // VK_MEDIA_STOP                       0xB2    Stop Media key
+        VD_FW_KEY_MEDIA_PLAY,    // VK_MEDIA_PLAY_PAUSE                 0xB3    Play/Pause Media key
+        VD_FW_KEY_UNKNOWN,       // VK_LAUNCH_MAIL                      0xB4    Start Mail key
+        VD_FW_KEY_UNKNOWN,       // VK_LAUNCH_MEDIA_SELECT              0xB5    Select Media key
+        VD_FW_KEY_UNKNOWN,       // VK_LAUNCH_APP1                      0xB6    Start Application 1 key
+        VD_FW_KEY_UNKNOWN,       // VK_LAUNCH_APP2                      0xB7    Start Application 2 key
+        VD_FW_KEY_UNKNOWN,       //                                     0xB8    Reserved
+        VD_FW_KEY_UNKNOWN,       //                                     0xB9    Reserved
+        VD_FW_KEY_SEMICOLON,     // VK_OEM_1                            0xBA    It can vary by keyboard. For the US ANSI keyboard , the Semiсolon and Colon key
+        VD_FW_KEY_EQUALS,        // VK_OEM_PLUS                         0xBB    For any country/region, the Equals and Plus key
+        VD_FW_KEY_COMMA,         // VK_OEM_COMMA                        0xBC    For any country/region, the Comma and Less Than key
+        VD_FW_KEY_MINUS,         // VK_OEM_MINUS                        0xBD    For any country/region, the Dash and Underscore key
+        VD_FW_KEY_DOT,           // VK_OEM_PERIOD                       0xBE    For any country/region, the Period and Greater Than key
+        VD_FW_KEY_SLASH_FORWARD, // VK_OEM_2                            0xBF    It can vary by keyboard. For the US ANSI keyboard, the Forward Slash and Question Mark key
+        VD_FW_KEY_BACKTICK,      // VK_OEM_3                            0xC0    It can vary by keyboard. For the US ANSI keyboard, the Grave Accent and Tilde key
+        VD_FW_KEY_UNKNOWN,       //                                     0xC1    Reserved
+        VD_FW_KEY_UNKNOWN,       //                                     0xC2    Reserved
+        VD_FW_KEY_UNKNOWN,       // VK_GAMEPAD_A                        0xC3    Gamepad A button
+        VD_FW_KEY_UNKNOWN,       // VK_GAMEPAD_B                        0xC4    Gamepad B button
+        VD_FW_KEY_UNKNOWN,       // VK_GAMEPAD_X                        0xC5    Gamepad X button
+        VD_FW_KEY_UNKNOWN,       // VK_GAMEPAD_Y                        0xC6    Gamepad Y button
+        VD_FW_KEY_UNKNOWN,       // VK_GAMEPAD_RIGHT_SHOULDER           0xC7    Gamepad Right Shoulder button
+        VD_FW_KEY_UNKNOWN,       // VK_GAMEPAD_LEFT_SHOULDER            0xC8    Gamepad Left Shoulder button
+        VD_FW_KEY_UNKNOWN,       // VK_GAMEPAD_LEFT_TRIGGER             0xC9    Gamepad Left Trigger button
+        VD_FW_KEY_UNKNOWN,       // VK_GAMEPAD_RIGHT_TRIGGER            0xCA    Gamepad Right Trigger button
+        VD_FW_KEY_UNKNOWN,       // VK_GAMEPAD_DPAD_UP                  0xCB    Gamepad D-pad Up button
+        VD_FW_KEY_UNKNOWN,       // VK_GAMEPAD_DPAD_DOWN                0xCC    Gamepad D-pad Down button
+        VD_FW_KEY_UNKNOWN,       // VK_GAMEPAD_DPAD_LEFT                0xCD    Gamepad D-pad Left button
+        VD_FW_KEY_UNKNOWN,       // VK_GAMEPAD_DPAD_RIGHT               0xCE    Gamepad D-pad Right button
+        VD_FW_KEY_UNKNOWN,       // VK_GAMEPAD_MENU                     0xCF    Gamepad Menu/Start button
+        VD_FW_KEY_UNKNOWN,       // VK_GAMEPAD_VIEW                     0xD0    Gamepad View/Back button
+        VD_FW_KEY_UNKNOWN,       // VK_GAMEPAD_LEFT_THUMBSTICK_BUTTON   0xD1    Gamepad Left Thumbstick button
+        VD_FW_KEY_UNKNOWN,       // VK_GAMEPAD_RIGHT_THUMBSTICK_BUTTON  0xD2    Gamepad Right Thumbstick button
+        VD_FW_KEY_UNKNOWN,       // VK_GAMEPAD_LEFT_THUMBSTICK_UP       0xD3    Gamepad Left Thumbstick up
+        VD_FW_KEY_UNKNOWN,       // VK_GAMEPAD_LEFT_THUMBSTICK_DOWN     0xD4    Gamepad Left Thumbstick down
+        VD_FW_KEY_UNKNOWN,       // VK_GAMEPAD_LEFT_THUMBSTICK_RIGHT    0xD5    Gamepad Left Thumbstick right
+        VD_FW_KEY_UNKNOWN,       // VK_GAMEPAD_LEFT_THUMBSTICK_LEFT     0xD6    Gamepad Left Thumbstick left
+        VD_FW_KEY_UNKNOWN,       // VK_GAMEPAD_RIGHT_THUMBSTICK_UP      0xD7    Gamepad Right Thumbstick up
+        VD_FW_KEY_UNKNOWN,       // VK_GAMEPAD_RIGHT_THUMBSTICK_DOWN    0xD8    Gamepad Right Thumbstick down
+        VD_FW_KEY_UNKNOWN,       // VK_GAMEPAD_RIGHT_THUMBSTICK_RIGHT   0xD9    Gamepad Right Thumbstick right
+        VD_FW_KEY_UNKNOWN,       // VK_GAMEPAD_RIGHT_THUMBSTICK_LEFT    0xDA    Gamepad Right Thumbstick left
+        VD_FW_KEY_BRACKET_OPEN,  // VK_OEM_4                            0xDB    It can vary by keyboard. For the US ANSI keyboard, the Left Brace key
+        VD_FW_KEY_SLASH_BACK,    // VK_OEM_5                            0xDC    It can vary by keyboard. For the US ANSI keyboard, the Backslash and Pipe key
+        VD_FW_KEY_BRACKET_CLOSE, // VK_OEM_6                            0xDD    It can vary by keyboard. For the US ANSI keyboard, the Right Brace key
+        VD_FW_KEY_QUOTE,         // VK_OEM_7                            0xDE    It can vary by keyboard. For the US ANSI keyboard, the Apostrophe and Double Quotation Mark key
+        VD_FW_KEY_UNKNOWN,       // VK_OEM_8                            0xDF    It can vary by keyboard. For the Canadian CSA keyboard, the Right Ctrl key
+        VD_FW_KEY_UNKNOWN,       //                                     0xE0    Reserved
+        VD_FW_KEY_UNKNOWN,       //                                     0xE1    OEM specific
+        VD_FW_KEY_UNKNOWN,       // VK_OEM_102                          0xE2    It can vary by keyboard. For the European ISO keyboard, the Backslash and Pipe key
+        VD_FW_KEY_UNKNOWN,       //                                     0xE3    OEM specific
+        VD_FW_KEY_UNKNOWN,       //                                     0xE4    OEM specific
+        VD_FW_KEY_UNKNOWN,       // VK_PROCESSKEY                       0xE5    IME PROCESS key
+        VD_FW_KEY_UNKNOWN,       //                                     0xE6    OEM specific
+        VD_FW_KEY_UNKNOWN,       // VK_PACKET                           0xE7    Used to pass Unicode characters as if they were keystrokes. The VK_PACKET key is the low word of a 32-bit Virtual Key value used for non-keyboard input methods. For more information, see Remark in KEYBDINPUT, SendInput, WM_KEYDOWN, and WM_KEYUP
+        VD_FW_KEY_UNKNOWN,       //                                     0xE8    Unassigned
+        VD_FW_KEY_UNKNOWN,       //                                     0xE9    OEM specific
+        VD_FW_KEY_UNKNOWN,       //                                     0xEA    OEM specific
+        VD_FW_KEY_UNKNOWN,       //                                     0xEB    OEM specific
+        VD_FW_KEY_UNKNOWN,       //                                     0xEC    OEM specific
+        VD_FW_KEY_UNKNOWN,       //                                     0xED    OEM specific
+        VD_FW_KEY_UNKNOWN,       //                                     0xEE    OEM specific
+        VD_FW_KEY_UNKNOWN,       //                                     0xEF    OEM specific
+        VD_FW_KEY_UNKNOWN,       //                                     0xF0    OEM specific
+        VD_FW_KEY_UNKNOWN,       //                                     0xF1    OEM specific
+        VD_FW_KEY_UNKNOWN,       //                                     0xF2    OEM specific
+        VD_FW_KEY_UNKNOWN,       //                                     0xF3    OEM specific
+        VD_FW_KEY_UNKNOWN,       //                                     0xF4    OEM specific
+        VD_FW_KEY_UNKNOWN,       //                                     0xF5    OEM specific
+        VD_FW_KEY_UNKNOWN,       // VK_ATTN                             0xF6    Attn key
+        VD_FW_KEY_UNKNOWN,       // VK_CRSEL                            0xF7    CrSel key
+        VD_FW_KEY_UNKNOWN,       // VK_EXSEL                            0xF8    ExSel key
+        VD_FW_KEY_UNKNOWN,       // VK_EREOF                            0xF9    Erase EOF key
+        VD_FW_KEY_UNKNOWN,       // VK_PLAY                             0xFA    Play key
+        VD_FW_KEY_UNKNOWN,       // VK_ZOOM                             0xFB    Zoom key
+        VD_FW_KEY_UNKNOWN,       // VK_NONAME                           0xFC    Reserved
+        VD_FW_KEY_UNKNOWN,       // VK_PA1                              0xFD    PA1 key
+        VD_FW_KEY_UNKNOWN,       // VK_OEM_CLEAR                        0xFE    Clear key
+    };
+
+    return translation_table[vkcode];
 }
 
 static VdFw__Win32InternalData Vd_Fw_Globals = {0};
@@ -4367,6 +4651,11 @@ VD_FW_API void vd_fw_set_mouse_locked(int locked)
             1, /* WPARAM */
             0  /* LPARAM */));
     }
+}
+
+VD_FW_API int vd_fw_get_mouse_locked(void)
+{
+    return VD_FW_G.mouse_is_locked;
 }
 
 VD_FW_API int vd_fw_get_mouse_wheel(float *dx, float *dy)
