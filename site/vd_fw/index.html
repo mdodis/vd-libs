@@ -106,7 +106,7 @@
                             This is all you need to create a simple window. By default it creates an OpenGL 3.3 core profile context
                         </p>
 
-                        <pre class="rounded copy"><code class="language-c">
+                        <pre class="rounded copy"><code class="language-cpp">
 #include "vd_fw.h"                                           // Include library
 int main() {
     vd_fw_init(NULL);                                        // Initialize library
@@ -322,6 +322,78 @@ freely, subject to the following restrictions:
                     </div>
                     <br>
 
+                    <div class="section" id="tutorials">
+                        <h4>Tutorials</h4>
+                        <hr>
+                        <p>
+                            A collection of tutorials for how to use the library.
+                        </p>
+                    </div>
+
+                    <div class="section" id="tutorials-choose-version">
+                        <h4>Choose OpenGL Version</h4>
+                        <p>
+                            To specify the OpenGL version, create a <code>VdFwInitInfo</code> struct, populate the
+                            <code>VdFwInitInfo::gl::version</code> member, and pass it to <code>vd_fw_init</code>.
+                        </p>
+                        <pre class="rounded copy"><code class="language-cpp">
+VdFwInitInfo init_info = {};
+init_info.gl.version = VD_FW_GL_VERSION_4_5; // Set OpenGL Version
+vd_fw_init(&init_info);
+                        </code></pre>
+
+                        <p>
+                            For reference, here's all of the possible versions:
+                        </p>
+
+                        <pre class="rounded"><code class="language-cpp">
+typedef enum {
+    VD_FW_GL_VERSION_BASIC = 0,
+    VD_FW_GL_VERSION_1_0   = 1,
+    VD_FW_GL_VERSION_1_2   = 12,
+    VD_FW_GL_VERSION_1_3   = 13,
+    VD_FW_GL_VERSION_1_4   = 14,
+    VD_FW_GL_VERSION_1_5   = 15,
+    VD_FW_GL_VERSION_2_0   = 20,
+    VD_FW_GL_VERSION_2_1   = 21,
+    VD_FW_GL_VERSION_3_0   = 30,
+    VD_FW_GL_VERSION_3_1   = 31,
+    VD_FW_GL_VERSION_3_2   = 32,
+    VD_FW_GL_VERSION_3_3   = 33,
+    VD_FW_GL_VERSION_4_0   = 40,
+    VD_FW_GL_VERSION_4_1   = 41,
+    VD_FW_GL_VERSION_4_2   = 42,
+    VD_FW_GL_VERSION_4_3   = 43,
+    VD_FW_GL_VERSION_4_4   = 44,
+    VD_FW_GL_VERSION_4_5   = 45,
+    VD_FW_GL_VERSION_4_6   = 46,
+} VdFwGlVersion;
+                        </code></pre>
+
+                    </div> 
+
+                    <div class="section" id="tutorials-borderless-window">
+                        <h4>Create a borderless window</h4>
+                        <p>
+                            To create a borderless window, create a <code>VdFwInitInfo</code> struct, set
+                            <code>VdFwInitInfo::window_options::borderless</code> to 1, and pass it to <code>vd_fw_init</code>.
+                        </p>
+                        <pre class="rounded copy"><code class="language-cpp">
+VdFwInitInfo init_info = {};
+init_info.window_options.borderless = 1;
+vd_fw_init(&init_info);
+                        </code></pre>
+                        <br>
+
+                        <p>
+                            This will create a borderless window, that can be moved (by dragging any part of the window), and resized.
+                        </p>
+
+                        <img class="rounded img-fluid" src="/assets/fw/tutorials-borderless.gif">
+                    </div> 
+
+                    <br>
+
                     <!-- Begin API -->
                     <div class="section" id="api-ref">
                         <h4>Reference</h4>
@@ -400,6 +472,11 @@ freely, subject to the following restrictions:
                             <div class="nav outline-section flex-column ms-3">
                                 <a class="nav-link" href="#platforms">Platforms</a>
                                 <a class="nav-link" href="#revisions">Revisions</a>
+                            </div>
+                            <a class="nav-link" href="#tutorials">Tutorials</a>
+                            <div class="nav outline-section flex-column ms-3">
+                                <a class="nav-link" href="#tutorials-choose-version">Choose OpenGL Version</a>
+                                <a class="nav-link" href="#tutorials-borderless-window">Create a borderless window</a>
                             </div>
                             <a class="nav-link" href="#api-ref">Reference</a>
                         </nav>
