@@ -4225,7 +4225,8 @@ static void *vd_fw__gl_get_proc_address(const char *name)
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
-    SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+    // SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     timeBeginPeriod(1);
     QueryPerformanceFrequency(&VD_FW_G.frequency);
 
