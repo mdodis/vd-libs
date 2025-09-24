@@ -60,9 +60,10 @@
             <div class="row justify-content-center">
               <div class="col-12 col-sm-10 col-md-8 col-lg-8 text-start">
                 <h4>FAQ</h4>
+                <hr>
 
                 <!-- What is this? -->
-                <div class="accordion p-2" id="faq">
+                <div class="accordion" id="faq">
                     <div class="accordion-item">
                         <p class="accordion-header">
                             <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
@@ -83,7 +84,7 @@
                 <!-- /What is this? -->
 
                 <!-- What's the license? -->
-                <div class="accordion p-2" id="faq">
+                <div class="accordion" id="faq">
                     <div class="accordion-item">
                         <p class="accordion-header">
                             <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTwo" aria-expanded="true" aria-controls="collapseTwo">
@@ -102,24 +103,184 @@
                     </div>
                 </div>
                 <!-- /What's the license? -->
+                <br>
 
-                <h4>Paragraph</h4>
-                <p class="p-2">
-                  On mobile screens this text will stretch wider (col-12 / col-sm-10),
-                  while on larger screens it stays narrower (col-md-8 / col-lg-7) and 
-                  remains aligned to the left, but centered in the viewport.
-                </p>
+                <h4>Released Libraries</h4>
+                <hr>
 
+                <div class="d-flex flex-row align-items-start mb-3">
+                    <a class="libcard card text-decoration-none d-flex justify-content-center" href="/vd_fw/index.html">
+                        <div class="row g-0">
+                            <div class="col-md-4 d-flex justify-content-center p-2">
+                                <img src="/assets/vd-fw-logo.svg" class="cardliblogo center img-fluid" alt="...">
+                            </div>
+                            <div class="col-md-8">
+                                <div class="card-body">
+                                    <h5 class="card-title">vd_fw.h</h5>
+                                    <p class="card-text">
+                                        Windowing & OpenGL Context library
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                    <a class="libcard card text-decoration-none d-flex justify-content-center" href="/vd/index.html">
+                        <div class="row g-0">
+                            <div class="col-md-4 d-flex justify-content-center p-2">
+                                <img src="/assets/vd-base-logo.svg" class="cardliblogo center img-fluid" alt="...">
+                            </div>
+                            <div class="col-md-8">
+                                <div class="card-body">
+                                    <h5 class="card-title">vd.h</h5>
+                                    <p class="card-text">
+                                        Base layer for C Projects
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
 
+                <div>
+                    <h4>Purpose</h4>
+                    <hr>
+
+                    <p>
+                        Dear reader,
+
+                        <br> <br>
+
+                        In the modern day, programming has become complex. Too complex for what most of the applications
+                        can actually do.
+
+                        <br> <br>
+
+                        One common theme that one will see mentioned in various topics, like building a rendering engine
+                        , or even something as simple as a static website, is The Stack&trade;: A collection of
+                        libraries and frameworks for building solutions to problems <i>the right way</i>.
+
+                        <br> <br>
+
+                        This is most commonly sourced from an aggregate of opinions, an admiration of complexity, even
+                        sheer ego, but it rarely comes from the complexity or expansiveness of the problem itself.
+
+                        <br> <br>
+
+                        And partially, it's to be expected; not just because software is affected by business decisions,
+                        timelines, and all the various aspects of every-day life - but because it's easy to admire a
+                        body of work that appears enormous. We are fascinated and astonished by big buildings and huge
+                        imposing sculptures, because that's a signal of dedication and craftsmanship; to some even
+                        divine intervention.
+
+                        <br> <br>
+
+                        The reality though, at least for software, is that in most situations, complicated doesn't mean
+                        good. For that matter, small & short doesn't mean good either. And as of late, it has become
+                        increasingly hard for developers to understand the cost of sourcing external work.
+
+                        <br> <br>
+
+                        Let me be clear; I don't mean that everyone should go back to C, or program in Assembly,
+                        and I don't expect anyone to do so, because this pattern of library overuse
+                        is present in every programming field. The only reason that there aren't that many instances of
+                        C/C++ programmers doing it (mainly C now...) is that it's harder to source external libraries
+                        than to actually write them yourself.
+
+                        <br> <br>
+
+                        I encourage anyone who reads this to take a look at any modern project of say, a calculator,
+                        and try to tell me if it doesn't look a <b>tad</b> too complicated. Because in most cases, you
+                        will see:
+
+                        <ul>
+                            <li>Some kind of package manager manifest</li>
+                            <li>A UI library (depending on the language context)</li>
+                            <li>Some kind of math library</li>
+                            <li>And right after the important ones, a ton of other small libraries that do random things
+                            </li>
+                            <li>Not to mention, that each package has dependencies, which all get resolved into at least
+                                a medium size codebase</li>
+                        </ul>
+
+                        People will argue that these complexities are required because they solve various problems in
+                        the best way possible, and are portable and cross-platform (or cross-browser), so this is just
+                        the price you have to pay nowadays.
+
+                        <br> <br>
+
+                        I don't necesarily disagree with this take. I will <b>just</b> point out, that usually, for most
+                        of the dependencies these projects bring in into the codebase, they only use a small fraction of
+                        the functionalities they provide.
+
+                        <br> <br>
+
+                        And if you, dear reader, think that because you program in C/C++, you are exempted from this,
+                        please consider that there are a ton of projects out there that bring in a huge dependency, like
+                        SDL (I've got nothing against SDL, just an example), and then use C++ threads, spdlog, printf,
+                        <code>std::cout</code>, instead of the portable cross-platform functions that SDL already
+                        provides.
+
+                        <br> <br>
+
+                        I won't say that those projects are necessarily doing something wrong; if it works, it works.
+                        But I will say that there are hidden or unnoticeable costs to bringing in any dependency into
+                        a project.
+
+                        <br> <br>
+
+                        And here we come back to the first point of this section. Why do people use SDL, and what do
+                        they use it for?
+
+                        <br> <br>
+
+                        I'll wager that most people use it because that's what they've been told to do, or because
+                        someone told them the Win32 API is too complicated, or even convinced them that it'll be better
+                        to bring it in early, because then their application will be cross-platform without much work.
+
+                        <br> <br>
+
+                        (Note that I'm using Win32 API as an example here, but this is the same for any platform.)
+
+                        <br> <br>
+
+                        It's not. Really. It's not that complicated, and you can make a wrapper for it in 5 days at
+                        most, that will get you 99% of the way there and cover what all of these libraries do for the
+                        common case. And you will not have to learn another API to use this one, or look out for
+                        updates, or have to fiddle with those libraries' deprecations and introcacies.
+
+                        <br> <br>
+
+                        And this is the purpose of the libraries in here. As I'm writing my engines and doing other
+                        experiments, I found it best to wrap some functionality I actually want into libraries that
+                        provide solutions to specific problems, and not general ones.
+
+                        <br> <br>
+
+                        I encourage everyone to read the code themselves, not because it's the best or the most bug
+                        free, but because I want you, dear reader, to see how simple things can be, even for
+                        someone who's not a massive genius or expert in the field.
+                    </p>
+                </div>
+                <br>
+
+                <div>
+                    <h4>About Me</h4>
+                    <hr>
+
+                    <p>
+                        Hi, I'm Michael Dodis.<br>
+                        A software engineer from Greece, and I love working on low-level stuff,
+                        graphics especially.
+                    </p>
+                </div>
+
+                <div class="d-flex">
+                    <span class="text-muted flex-grow-1 align-self-end">&copy; Michael Dodis, 2025-2026.</span>
+                </div>
               </div>
             </div>
           </div>
 
-        <footer class="footer mt-auto py-3 bg-dark">
-            <div class="container">
-                <span class="text-muted">&copy; Michael Dodis, 2025-2026.</span>
-            </div>
-        </footer>
 
         <!--   End Content -->
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"

@@ -19,6 +19,10 @@ section {
     scroll-margin-top: 50px;
 }
 
+.cardliblogo {
+    width: 95px;
+}
+
 /*[data-bs-theme="dark"] {
     --bs-body-bg: var(--slate-gray);
 }
@@ -26,6 +30,10 @@ section {
 [data-bs-theme="dark"] .navbar {
     background-color: var(--eerie-black);
 }*/
+
+.card {
+    border-radius: 0px;
+}
 
 .toc-outline {
     position: fixed;
@@ -37,6 +45,20 @@ section {
 
 .nav-item.dropdown:hover .dropdown-menu {
     display: block;
+}
+
+.libcard {
+    transition: background-color 0.2s ease-in-out;
+    /*width: 564px;*/
+    height: 120px;
+}
+
+.libcard:hover {
+    background-color: var(--eerie-black);
+}
+
+.center {
+    align-self: center;
 }
 
 @media print {
