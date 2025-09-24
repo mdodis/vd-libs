@@ -27,7 +27,6 @@
  *   on the big threes is OpenGL Core Profile 4.1 (MacOS limitation)
  *
  * TODO
- * - Add remaining OpenGL core profiles
  * - vd_fw_set_fullscreen
  * - MacOS APIs can't be used on another thread other than main thread :/
  *   so, just initialize display link and wait on condition variable + mutex when drawing while resizing
@@ -5351,7 +5350,9 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                 &data_size,
                 sizeof(RAWINPUTHEADER));
 
-            VD_FW__CHECK_TRUE(num_bytes_copied != ((UINT)-1));
+            if (num_bytes_copied == ((UINT)-1)) {
+                break;
+            }
 
             RAWINPUT *raw = VD_FW_G.raw_input_buffer;
             if (raw->header.dwType == RIM_TYPEMOUSE) {

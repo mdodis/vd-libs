@@ -1,5 +1,5 @@
 #include "disable_clang_deprecations.h"
-#define VD_FW_NO_CRT 0
+#define VD_FW_NO_CRT 1
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS
 #include "vd_fw.h"
 
@@ -11,10 +11,11 @@
 "out vec2 TexCoord;                                                                                                \n" \
 "                                                                                                                  \n" \
 "uniform mat4 projection;                                                                                          \n" \
+"uniform mat4 view;                                                                                                \n" \
 "                                                                                                                  \n" \
 "void main()                                                                                                       \n" \
 "{                                                                                                                 \n" \
-"    gl_Position = projection * vec4(aPos, 1.0f);                                                                  \n" \
+"    gl_Position = projection * view * vec4(aPos, 1.0f);                                                           \n" \
 "    TexCoord = vec2(aTexCoord.x, 1.0 - aTexCoord.y);                                                              \n" \
 "}                                                                                                                 \n" \
 
@@ -28,7 +29,7 @@
 "                                                                                                                  \n" \
 "void main()                                                                                                       \n" \
 "{                                                                                                                 \n" \
-"    FragColor = vec4(TexCoord.xy, 0.0, 1.0);                                                                      \n" \
+"    FragColor = texture(texture1, TexCoord);                                                                      \n" \
 "}                                                                                                                 \n" \
 
 #include <string.h>
@@ -40,14 +41,14 @@ int main(int argc, char const *argv[])
 
     vd_fw_init(& (VdFwInitInfo) {
         .gl = {
-            .version = VD_FW_GL_VERSION_3_3,
+            .version = VD_FW_GL_VERSION_4_5,
             .debug_on = 1,
         },
         .window_options = {
             .borderless = 0,
         }
     });
-    vd_fw_set_vsync_on(0);
+    vd_fw_set_vsync_on(1);
 
     float vertices[] = {
         -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
@@ -126,8 +127,16 @@ int main(int argc, char const *argv[])
 
     glEnable(GL_DEPTH_TEST);
 
-    GLuint program = 0;
-    unsigned long long program_time = 0;
+    GLuint vshd = vd_fw_compile_shader(GL_VERTEX_SHADER, VERTEX_SOURCE);
+    GLuint fshd = vd_fw_compile_shader(GL_FRAGMENT_SHADER, FRAGMENT_SOURCE);
+    GLuint program = glCreateProgram();
+    glAttachShader(program, vshd);
+    glAttachShader(program, fshd);
+
+    vd_fw_link_program(program);
+
+    glDeleteShader(vshd);
+    glDeleteShader(fshd);
 
     float camera_position[3] = {0.f, 0.f, -2.f};
     float camera_yaw   = 0.f;
@@ -155,8 +164,6 @@ int main(int argc, char const *argv[])
         float fw, fh;
         fw = (float)w;
         fh = (float)h;
-
-        vd_fw_compile_or_hotload_program(&program, &program_time, "./glsl/gl_cube.vert", "./glsl/gl_cube.frag");
 
         if (vd_fw_get_mouse_locked()) {
             float mouse_delta_x, mouse_delta_y;

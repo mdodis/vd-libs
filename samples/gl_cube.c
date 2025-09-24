@@ -11,10 +11,11 @@
 "out vec2 TexCoord;                                                                                                \n" \
 "                                                                                                                  \n" \
 "uniform mat4 projection;                                                                                          \n" \
+"uniform mat4 view;                                                                                                \n" \
 "                                                                                                                  \n" \
 "void main()                                                                                                       \n" \
 "{                                                                                                                 \n" \
-"    gl_Position = projection * vec4(aPos, 1.0f);                                                                  \n" \
+"    gl_Position = projection * view * vec4(aPos, 1.0f);                                                           \n" \
 "    TexCoord = vec2(aTexCoord.x, 1.0 - aTexCoord.y);                                                              \n" \
 "}                                                                                                                 \n" \
 
@@ -28,7 +29,7 @@
 "                                                                                                                  \n" \
 "void main()                                                                                                       \n" \
 "{                                                                                                                 \n" \
-"    FragColor = vec4(TexCoord.xy, 0.0, 1.0);                                                                      \n" \
+"    FragColor = texture(texture1, TexCoord);                                                                      \n" \
 "}                                                                                                                 \n" \
 
 #include <string.h>
@@ -106,6 +107,17 @@ int main(int argc, char const *argv[])
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
+    GLuint vshd = vd_fw_compile_shader(GL_VERTEX_SHADER, VERTEX_SOURCE);
+    GLuint fshd = vd_fw_compile_shader(GL_FRAGMENT_SHADER, FRAGMENT_SOURCE);
+    GLuint program = glCreateProgram();
+    glAttachShader(program, vshd);
+    glAttachShader(program, fshd);
+
+    vd_fw_link_program(program);
+
+    glDeleteShader(vshd);
+    glDeleteShader(fshd);
+
     unsigned int checkerboard[] = {
         0xFFFFFFFF, 0xFF000000,
         0xFF000000, 0xFFFFFFFF
@@ -123,9 +135,6 @@ int main(int argc, char const *argv[])
 
     glEnable(GL_DEPTH_TEST);
 
-    GLuint program = 0;
-    unsigned long long program_time = 0;
-
     while (vd_fw_running()) {
         float ds = vd_fw_delta_s();
 
@@ -139,8 +148,6 @@ int main(int argc, char const *argv[])
 
         static float cy = 0.f;
         static float cp = 0.f;
-
-        vd_fw_compile_or_hotload_program(&program, &program_time, "./glsl/gl_cube.vert", "./glsl/gl_cube.frag");
 
         glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
