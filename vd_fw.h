@@ -29,6 +29,7 @@
  *
  * TODO
  * - Introduce vd_fw_get_mouse_delta to get the delta of the mouse move (using RAWINPUT)
+ * - Add remaining OpenGL core profiles
  * - Change default behavior of init to use window with decorations
  * - MacOS APIs can't be used on another thread other than main thread :/
  *   so, just initialize display link and wait on condition variable + mutex when drawing while resizing
@@ -98,9 +99,9 @@
 #define VD_FW_API extern
 #endif // VD_FW_STATIC
 
-#ifndef VD_FW_INLINE
-#define VD_FW_INLINE static inline
-#endif // VD_FW_INLINE
+#ifndef VD_FW_INL
+#define VD_FW_INL static inline
+#endif // VD_FW_INL
 
 #ifndef VD_FW_NO_CRT
 #define VD_FW_NO_CRT 0
@@ -257,7 +258,7 @@ VD_FW_API void               vd_fw_set_ncrects(int caption[4], int count, int (*
  * @return  The delta time (in nanoseconds)
  */
 VD_FW_API unsigned long long vd_fw_delta_ns(void);
-VD_FW_INLINE float           vd_fw_delta_s(void);
+VD_FW_INL float              vd_fw_delta_s(void);
 
 /**
  * Set VSYNC to the number of frames to sync on
@@ -273,8 +274,9 @@ VD_FW_API int                vd_fw_set_vsync_on(int on);
  * @return   The mouse button state
  */
 VD_FW_API int                vd_fw_get_mouse_state(int *x, int *y);
-VD_FW_INLINE int             vd_fw_get_mouse_statef(float *x, float *y);
+VD_FW_INL int                vd_fw_get_mouse_statef(float *x, float *y);
 VD_FW_API void               vd_fw_set_mouse_capture(int on);
+VD_FW_API void               vd_fw_get_mouse_delta(float *dx, float *dy);
 
 /**
  * Read the mouse wheel state.
@@ -340,7 +342,7 @@ VD_FW_API int                vd_fw_compile_or_hotload_program(unsigned int *prog
  * @param far    The far plane
  * @param out    The output matrix
  */
-VD_FW_INLINE void            vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16]);
+VD_FW_INL void            vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16]);
 
 /**
  * Construct a perspective projection matrix
@@ -350,7 +352,7 @@ VD_FW_INLINE void            vd_fw_u_ortho(float left, float right, float bottom
  * @param near   The near plane
  * @param out    The output matrix
  */
-VD_FW_INLINE void            vd_fw_u_perspective(float fov, float aspect, float near, float far, float out[16]);
+VD_FW_INL void            vd_fw_u_perspective(float fov, float aspect, float near, float far, float out[16]);
 
 /**
  * Construct a view matrix
@@ -359,9 +361,9 @@ VD_FW_INLINE void            vd_fw_u_perspective(float fov, float aspect, float 
  * @param  updir The up direction
  * @param    out The output matrix
  */
-VD_FW_INLINE void            vd_fw_u_lookat(float eye[3], float target[3], float updir[3], float out[16]);
+VD_FW_INL void            vd_fw_u_lookat(float eye[3], float target[3], float updir[3], float out[16]);
 
-VD_FW_INLINE float vd_fw_delta_s(void)
+VD_FW_INL float vd_fw_delta_s(void)
 {
     unsigned long long ns  = vd_fw_delta_ns();
     double ms              = (double)ns / 1000000.0;
@@ -370,7 +372,7 @@ VD_FW_INLINE float vd_fw_delta_s(void)
     return s;
 }
 
-VD_FW_INLINE int vd_fw_get_mouse_statef(float *x, float *y)
+VD_FW_INL int vd_fw_get_mouse_statef(float *x, float *y)
 {
     int xi, yi;
     int result = vd_fw_get_mouse_state(&xi, &yi);
@@ -381,13 +383,13 @@ VD_FW_INLINE int vd_fw_get_mouse_statef(float *x, float *y)
     return result;
 }
 
-VD_FW_INLINE float vd_fw__fabs(float x)
+VD_FW_INL float vd_fw__fabs(float x)
 {
     if (x < 0.f) return x;
     return x;
 }
 
-VD_FW_INLINE int vd_fw__cmp_float(float x, float y)
+VD_FW_INL int vd_fw__cmp_float(float x, float y)
 {
     float precision = 1.1920929e-07f;
 
@@ -400,7 +402,7 @@ VD_FW_INLINE int vd_fw__cmp_float(float x, float y)
     }
 }
 
-VD_FW_INLINE float vd_fw_cos(float x)
+VD_FW_INL float vd_fw_cos(float x)
 {
     if (x < 0.f) {
         x = -x;
@@ -421,12 +423,12 @@ VD_FW_INLINE float vd_fw_cos(float x)
     }
 }
 
-VD_FW_INLINE float vd_fw_sin(float x)
+VD_FW_INL float vd_fw_sin(float x)
 {
     return vd_fw_cos(x - VD_FW_FPIH);
 }
 
-VD_FW_INLINE float vd_fw_tan(float x)
+VD_FW_INL float vd_fw_tan(float x)
 {
 
     float x2 = x * x;
@@ -440,7 +442,7 @@ VD_FW_INLINE float vd_fw_tan(float x)
                  )))))) );
 }
 
-VD_FW_INLINE float vd_fw_sqrt(float x)
+VD_FW_INL float vd_fw_sqrt(float x)
 {
     if (x <= 0.0f) return 0.0f; // Handle non-positive inputs safely
 
@@ -456,7 +458,7 @@ VD_FW_INLINE float vd_fw_sqrt(float x)
     return g; 
 }
 
-VD_FW_INLINE void vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16])
+VD_FW_INL void vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16])
 {
     out[0]  = 2.0f / (right - left);               out[1]  = 0.0f;                              out[2]  = 0.0f;                          out[3]  = 0.0f;
     out[4]  = 0.0f;                                out[5]  = 2.0f / (top - bottom);             out[6]  = 0.0f;                          out[7]  = 0.0f;
@@ -464,7 +466,7 @@ VD_FW_INLINE void vd_fw_u_ortho(float left, float right, float bottom, float top
     out[12] = - (right + left) / (right - left);   out[13] = - (top + bottom) / (top - bottom); out[14] = - (far + near) / (far - near); out[15] = 1.0f;
 }
 
-VD_FW_INLINE void vd_fw_u_perspective(float fov, float aspect, float near, float far, float out[16])
+VD_FW_INL void vd_fw_u_perspective(float fov, float aspect, float near, float far, float out[16])
 {
     float fovrad = (fov / 2.f) * (VD_FW_FPI / 180.f);
     float tangent = VD_FW_TAN(fovrad);
@@ -479,7 +481,7 @@ VD_FW_INLINE void vd_fw_u_perspective(float fov, float aspect, float near, float
     out[15] = 0.f;
 }
 
-VD_FW_INLINE void vd_fw_u_lookat(float eye[3], float target[3], float updir[3], float out[16])
+VD_FW_INL void vd_fw_u_lookat(float eye[3], float target[3], float updir[3], float out[16])
 {
     // Forward vector (camera looks along -Z)
     float forward[3] = { target[0] - eye[0], target[1] - eye[1], target[2] - eye[2] };
@@ -2560,6 +2562,7 @@ enum {
     VD_FW_WIN32_FLAGS_SIZE_CHANGED  = 1 << 1,
 
     VD_FW_WIN32_MESSAGE_BUFFER_SIZE = 256,
+    VD_FW_WIN32_RAW_INPUT_BUFFER_COUNT = 1024,
 
     VD_FW_WIN32_MESSAGE_TYPE_SCROLL    = 10,
     VD_FW_WIN32_MESSAGE_TYPE_MOUSEMOVE = 11,
@@ -2601,6 +2604,7 @@ typedef struct {
     DWORD                       main_thread_id;
     BOOL                        focus_changed;
     BOOL                        focused;
+    RAWINPUT                    raw_input_buffer[VD_FW_WIN32_RAW_INPUT_BUFFER_COUNT];
 
 /* ----RENDER THREAD ONLY-------------------------------------------------------------------------------------------- */
     HANDLE                      win_thread;
@@ -2617,6 +2621,8 @@ typedef struct {
     DWORD                       lmousedown;
     DWORD                       rmousedown;
     DWORD                       mmousedown;
+    float                       mouse_delta[2];
+
 
 /* ----RENDER THREAD - WINDOW THREAD DATA---------------------------------------------------------------------------- */
     VdFw__Win32Message          msgbuf[VD_FW_WIN32_MESSAGE_BUFFER_SIZE];
@@ -2626,6 +2632,8 @@ typedef struct {
     int                         ncrects[16][4];
     int                         nccaption[4];
     int                         nccaption_set;
+    volatile LONG               mouse_delta_sink_index;
+    float                       mouse_delta_sinks[2][2];
 
 /* ----RENDER THREAD - WINDOW THREAD SYNC---------------------------------------------------------------------------- */
     HANDLE                      sem_window_ready;
@@ -2640,6 +2648,8 @@ typedef struct {
     unsigned char               prev_key_states[VD_FW_KEY_MAX];
 } VdFw__Win32InternalData;
 
+#define VD_FW_RAW_INPUT_ALIGN(x)        (((x) + sizeof(unsigned __int64) - 1) & ~(sizeof(unsigned __int64) - 1))
+#define VD_FW_NEXT_RAW_INPUT_BLOCK(ptr) ((PRAWINPUT)VD_FW_RAW_INPUT_ALIGN((ULONG_PTR)((PBYTE)(ptr) + (ptr)->header.dwSize)))
 
 VdFwKey vd_fw___vkcode_to_key(WORD vkcode)
 {
@@ -2846,6 +2856,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 
     WaitForSingleObject(VD_FW_G.sem_window_ready, INFINITE);
 
+
     VD_FW_G.hdc = GetDC(VD_FW_G.hwnd);
 
     // Create context
@@ -3017,45 +3028,27 @@ VD_FW_API int vd_fw_running(void)
         }
     }
 
-    // Peek Messages
-    // MSG msg;
-    // while (PeekMessage(&msg, 0, 0, 0, PM_REMOVE)) {
-    //     TranslateMessage(&msg);
+    // @note(mdodis): For Raw Input mouse handling, instead of using the message queue
+    // We use two sinks with an atomic write index.
+    {
 
-    //     UINT   message = msg.message;
-    //     WPARAM wparam = msg.lParam;
-    //     (void)wparam;
-    //     LPARAM lparam = msg.wParam;
+        // Get Raw Input mouse delta sink
+        LONG curr_sink_index = VD_FW_G.mouse_delta_sink_index;
+        LONG next_sink_index = (curr_sink_index + 1) % 2;
 
-    //     switch (message) {
+        // Clear the next sink
+        VD_FW_G.mouse_delta_sinks[next_sink_index][0] = 0.f;
+        VD_FW_G.mouse_delta_sinks[next_sink_index][1] = 0.f;
 
-    //         case WM_MOUSEWHEEL: {
-    //             VD_FW_G.wheel_moved = 1;
-    //             int delta = GET_WHEEL_DELTA_WPARAM(lparam);
-    //             float dy = (float)delta / (float)WHEEL_DELTA;
-    //             VD_FW_G.wheel[1] += dy;
-    //         } break;
+        MemoryBarrier();
 
-    //         case WM_MOUSEHWHEEL: {
-    //             VD_FW_G.wheel_moved = 1;
-    //             int delta = GET_WHEEL_DELTA_WPARAM(lparam);
-    //             float dx = (float)delta / (float)WHEEL_DELTA;
-    //             VD_FW_G.wheel[0] += dx;
-    //         } break;
+        // Exchange write index with next_sink_index
+        InterlockedExchange(&VD_FW_G.mouse_delta_sink_index, next_sink_index);
 
-    //         case WM_SETFOCUS: {
-    //             VD_FW_G.focused = 1;
-    //             VD_FW_G.focus_changed = 1;
-    //         } break;
-
-    //         case WM_KILLFOCUS: {
-    //             VD_FW_G.focused = 0;
-    //             VD_FW_G.focus_changed = 1;
-    //         } break;
-
-    //         default: break;
-    //     }
-    // }
+        // Now we can safely read from the curr_sink_index
+        VD_FW_G.mouse_delta[0] = VD_FW_G.mouse_delta_sinks[curr_sink_index][0];
+        VD_FW_G.mouse_delta[1] = VD_FW_G.mouse_delta_sinks[curr_sink_index][1];
+    }
 
     EnterCriticalSection(&VD_FW_G.critical_section);
     VD_FW_G.curr_frame = VD_FW_G.next_frame;
@@ -3164,6 +3157,12 @@ VD_FW_API void vd_fw_set_mouse_capture(int on)
     }
 }
 
+VD_FW_API void vd_fw_get_mouse_delta(float *dx, float *dy)
+{
+    if (dx) *dx = VD_FW_G.mouse_delta[0];
+    if (dy) *dy = VD_FW_G.mouse_delta[1];
+}
+
 VD_FW_API int vd_fw_get_mouse_wheel(float *dx, float *dy)
 {
     if (dx) *dx = VD_FW_G.wheel[0];
@@ -3261,6 +3260,17 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     VD_FW__CHECK_NONZERO(UpdateWindow(VD_FW_G.hwnd));
 
     VD_FW__CHECK_TRUE(ReleaseSemaphore(VD_FW_G.sem_window_ready, 1, NULL));
+
+    // Register raw input mouse
+    {
+        RAWINPUTDEVICE rid = {
+            .usUsagePage   = 0x01, // Generic desktop controls
+            .usUsage       = 0x02, // Mouse
+            .dwFlags       = 0, // RIDEV_INPUTSINK,
+            .hwndTarget    = VD_FW_G.hwnd,
+        };
+        VD_FW__CHECK_TRUE(RegisterRawInputDevices(&rid, 1, sizeof(rid)));
+    }
 
     VD_FW_G.t_paint_ready = 1;
 
@@ -3814,6 +3824,32 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             // In this case and in this case only, we already know that we're drawing default borders
             VD_FW_G.w = LOWORD(lparam);
             VD_FW_G.h = HIWORD(lparam);
+        } break;
+
+        case WM_INPUT: {
+            UINT data_size = sizeof(RAWINPUT) * VD_FW_WIN32_RAW_INPUT_BUFFER_COUNT;
+            UINT num_bytes_copied = GetRawInputData(
+                (HRAWINPUT)lparam,
+                RID_INPUT,
+                VD_FW_G.raw_input_buffer,
+                &data_size,
+                sizeof(RAWINPUTHEADER));
+
+            VD_FW__CHECK_TRUE(num_bytes_copied != ((UINT)-1));
+
+            RAWINPUT *raw = VD_FW_G.raw_input_buffer;
+            if (raw->header.dwType == RIM_TYPEMOUSE) {
+                LONG dx = raw->data.mouse.lLastX;
+                LONG dy = raw->data.mouse.lLastY;
+
+                MemoryBarrier();
+                LONG write_index = VD_FW_G.mouse_delta_sink_index;
+                MemoryBarrier();
+
+                VD_FW_G.mouse_delta_sinks[write_index][0] = VD_FW_G.mouse_delta_sinks[write_index][0] * 0.8f + dx * 0.2f;
+                VD_FW_G.mouse_delta_sinks[write_index][1] = VD_FW_G.mouse_delta_sinks[write_index][1] * 0.8f + dy * 0.2f;
+            }
+
         } break;
 
         case WM_KEYUP:
