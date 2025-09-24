@@ -133,11 +133,18 @@ int main(int argc, char const *argv[])
     float camera_yaw   = 0.f;
     float camera_pitch = 30.f;
     float deg2rad = 3.14159265359f / 180.f;
+    float camera_speed = 2.f;
 
     vd_fw_set_mouse_locked(1);
 
+    vd_fw_set_title("GL Camera - Left Shift + F1 to toggle mouse, WASDQE to move camera");
+
     while (vd_fw_running()) {
         float ds = vd_fw_delta_s();
+
+        if (vd_fw_get_key_pressed(VD_FW_KEY_F1) && vd_fw_get_key_down(VD_FW_KEY_LSHIFT)) {
+            vd_fw_set_mouse_locked(!vd_fw_get_mouse_locked());
+        }
 
         static int w, h;
         if (vd_fw_get_size(&w, &h)) {
@@ -151,11 +158,13 @@ int main(int argc, char const *argv[])
 
         vd_fw_compile_or_hotload_program(&program, &program_time, "./glsl/gl_cube.vert", "./glsl/gl_cube.frag");
 
-        float mouse_delta_x, mouse_delta_y;
-        vd_fw_get_mouse_delta(&mouse_delta_x, &mouse_delta_y);
+        if (vd_fw_get_mouse_locked()) {
+            float mouse_delta_x, mouse_delta_y;
+            vd_fw_get_mouse_delta(&mouse_delta_x, &mouse_delta_y);
 
-        camera_yaw   += mouse_delta_x;
-        camera_pitch -= mouse_delta_y;
+            camera_yaw   += mouse_delta_x;
+            camera_pitch -= mouse_delta_y;
+        };
 
         if (camera_pitch < -89.9f) camera_pitch = -89.9f;
         if (camera_pitch > +89.9f) camera_pitch = +89.9f;
@@ -170,14 +179,56 @@ int main(int argc, char const *argv[])
         };
 
         float camera_forward_len = VD_FW_SQRT(
-            camera_forward[0]*camera_forward[0] +
-            camera_forward[1]*camera_forward[1] +
-            camera_forward[2]*camera_forward[2]);
+            camera_forward[0] * camera_forward[0] +
+            camera_forward[1] * camera_forward[1] +
+            camera_forward[2] * camera_forward[2]);
 
         camera_forward[0] = camera_forward[0] / camera_forward_len;
         camera_forward[1] = camera_forward[1] / camera_forward_len;
         camera_forward[2] = camera_forward[2] / camera_forward_len;
 
+        float camera_ref_up[3] = {0.f, 1.f, 0.f};
+        float camera_right[3] = {
+            camera_forward[1] * camera_ref_up[2] - camera_forward[2] * camera_ref_up[1],
+            camera_forward[2] * camera_ref_up[0] - camera_forward[0] * camera_ref_up[2],
+            camera_forward[0] * camera_ref_up[1] - camera_forward[1] * camera_ref_up[0],
+        };
+
+        float camera_right_len = VD_FW_SQRT(
+            camera_right[0] * camera_right[0] +
+            camera_right[1] * camera_right[1] +
+            camera_right[2] * camera_right[2]);
+
+        camera_right[0] = camera_right[0] / camera_right_len;
+        camera_right[1] = camera_right[1] / camera_right_len;
+        camera_right[2] = camera_right[2] / camera_right_len;
+
+        float fwdir = (float)(vd_fw_get_key_down('W') - vd_fw_get_key_down('S'));
+        float rgdir = (float)(vd_fw_get_key_down('A') - vd_fw_get_key_down('D'));
+        float updir = (float)(vd_fw_get_key_down('Q') - vd_fw_get_key_down('E'));
+
+        float camera_move_dir[3] = {
+            fwdir * camera_forward[0] + rgdir * camera_right[0] + updir * camera_ref_up[0],
+            fwdir * camera_forward[1] + rgdir * camera_right[1] + updir * camera_ref_up[1],
+            fwdir * camera_forward[2] + rgdir * camera_right[2] + updir * camera_ref_up[2],
+        };
+
+        float camera_dir_lensq = 
+            camera_move_dir[0] * camera_move_dir[0] +
+            camera_move_dir[1] * camera_move_dir[1] +
+            camera_move_dir[2] * camera_move_dir[2];
+
+        if (camera_dir_lensq > 0.0001f) {
+            float camera_move_dir_len = VD_FW_SQRT(camera_dir_lensq);
+
+            camera_move_dir[0] = camera_move_dir[0] / camera_move_dir_len;
+            camera_move_dir[1] = camera_move_dir[1] / camera_move_dir_len;
+            camera_move_dir[2] = camera_move_dir[2] / camera_move_dir_len;
+
+            camera_position[0] += camera_move_dir[0] * camera_speed * ds;
+            camera_position[1] += camera_move_dir[1] * camera_speed * ds;
+            camera_position[2] += camera_move_dir[2] * camera_speed * ds;
+        }
 
         glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

@@ -3783,7 +3783,8 @@ enum {
     VD_FW_WIN32_MESSAGE_TYPE_CHANGEFOCUS = 13,
     VD_FW_WIN32_MESSAGE_TYPE_KEYSTATE    = 14,
 
-    VD_FW_WIN32_SHOW_CURSOR = WM_USER + 1,
+    VD_FW_WIN32_SHOW_CURSOR  = WM_USER + 1,
+    VD_FW_WIN32_UPDATE_TITLE = WM_USER + 2, 
 };
 
 typedef struct {
@@ -3862,6 +3863,8 @@ typedef struct {
     float                       mouse_delta_sinks[2][2];
     unsigned char               curr_key_states[VD_FW_KEY_MAX];
     unsigned char               prev_key_states[VD_FW_KEY_MAX];
+    char                        title[128];
+    int                         title_len;
 
 /* ----RENDER THREAD - WINDOW THREAD SYNC---------------------------------------------------------------------------- */
     HANDLE                      sem_window_ready;
@@ -4672,8 +4675,26 @@ VD_FW_API float vd_fw_get_scale(void)
 
 VD_FW_API void vd_fw_set_title(const char *title)
 {
-    // @todo(mdodis): This doesn't work
-    SetWindowTextA(VD_FW_G.hwnd, title);
+    int len = 0;
+    const char *t = title;
+    while (*t++) len++;
+
+    if (len > 127) {
+        len = 127;
+    }
+
+    for (int i = 0; i < len; ++i) {
+        VD_FW_G.title[i] = title[i];
+    }
+    VD_FW_G.title_len = len;
+
+    VD_FW_G.title[len] = 0;
+
+    VD_FW__CHECK_TRUE(PostMessageA(
+        VD_FW_G.hwnd,
+        VD_FW_WIN32_UPDATE_TITLE,
+        0, /* WPARAM */
+        0  /* LPARAM */));
 }
 
 VD_FW_API unsigned long long vd_fw_delta_ns(void)
@@ -5349,9 +5370,27 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
         case WM_KEYUP:
         case WM_KEYDOWN: {
+            WORD vkcode = LOWORD(wparam);
+            
+            WORD keyflags = HIWORD(lparam);
 
-            WORD vkcode = (WORD)wparam;
-            int is_down  = msg == WM_KEYDOWN;
+            WORD scancode = LOBYTE(keyflags);                             // scan code
+            BOOL isextendedkey = (keyflags & KF_EXTENDED) == KF_EXTENDED; // extended-key flag, 1 if scancode has 0xE0 prefix
+            
+            if (isextendedkey)
+                scancode = MAKEWORD(scancode, 0xE0);
+
+            // if we want to distinguish these keys:
+            switch (vkcode)
+            {
+                case VK_SHIFT:   // converts to VK_LSHIFT or VK_RSHIFT
+                case VK_CONTROL: // converts to VK_LCONTROL or VK_RCONTROL
+                case VK_MENU:    // converts to VK_LMENU or VK_RMENU
+                    vkcode = LOWORD(MapVirtualKeyW(scancode, MAPVK_VSC_TO_VK_EX));
+                    break;
+            }
+
+            int is_down = msg == WM_KEYDOWN;
 
             VdFw__Win32Message m;
             m.msg = VD_FW_WIN32_MESSAGE_TYPE_KEYSTATE;
@@ -5461,6 +5500,10 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         case VD_FW_WIN32_SHOW_CURSOR: {
             BOOL should_show = (BOOL)wparam;
             ShowCursor(should_show);
+        } break;
+
+        case VD_FW_WIN32_UPDATE_TITLE: {
+            SetWindowTextA(VD_FW_G.hwnd, VD_FW_G.title);
         } break;
 
         case WM_MOUSEHWHEEL: {
