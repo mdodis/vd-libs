@@ -1,5 +1,5 @@
 #include "disable_clang_deprecations.h"
-#define VD_FW_NO_CRT 1
+#define VD_FW_NO_CRT 0
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS
 #include "vd_fw.h"
 
@@ -41,7 +41,7 @@ int main(int argc, char const *argv[])
     vd_fw_init(& (VdFwInitInfo) {
         .gl = {
             .version = VD_FW_GL_VERSION_3_3,
-            .debug_on = 0,
+            .debug_on = 1,
         },
         .window_options = {
             .draw_default_borders = 1,
@@ -134,11 +134,7 @@ int main(int argc, char const *argv[])
     float camera_pitch = 30.f;
     float deg2rad = 3.14159265359f / 180.f;
 
-    float mouse_last_x = 0.f;
-    float mouse_last_y = 0.f;
-
-
-    int first_mouse = 0;
+    vd_fw_set_mouse_locked(1);
 
     while (vd_fw_running()) {
         float ds = vd_fw_delta_s();
@@ -148,10 +144,6 @@ int main(int argc, char const *argv[])
             glViewport(0, 0, w, h);
         }
 
-        if (!first_mouse) {
-            first_mouse = 1;
-            vd_fw_get_mouse_statef(&mouse_last_x, &mouse_last_y);
-        }
 
         float fw, fh;
         fw = (float)w;
@@ -159,14 +151,8 @@ int main(int argc, char const *argv[])
 
         vd_fw_compile_or_hotload_program(&program, &program_time, "./glsl/gl_cube.vert", "./glsl/gl_cube.frag");
 
-        float mouse_now_x, mouse_now_y;
-        vd_fw_get_mouse_statef(&mouse_now_x, &mouse_now_y);
-
-        float mouse_delta_x = mouse_now_x - mouse_last_x;
-        float mouse_delta_y = mouse_now_y - mouse_last_y;
-
-        mouse_last_x = mouse_now_x;
-        mouse_last_y = mouse_now_y;
+        float mouse_delta_x, mouse_delta_y;
+        vd_fw_get_mouse_delta(&mouse_delta_x, &mouse_delta_y);
 
         camera_yaw   += mouse_delta_x;
         camera_pitch -= mouse_delta_y;

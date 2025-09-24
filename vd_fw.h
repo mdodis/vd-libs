@@ -1,5 +1,4 @@
 /**
- * \internal
  * vd_fw.h - Gets you a window with OpenGL running on platforms that support it
  * ---------------------------------------------------------------------------------------------------------------------
  * zlib License
@@ -35,52 +34,6 @@
  *   so, just initialize display link and wait on condition variable + mutex when drawing while resizing
  * - MacOS resize logic
  * - On borderless, push mouse event right as we lose focus to a value outside of the window space
- */
-
-/**
- * @example "vd_fw.h: Create a basic window"
- * @code{.c}
- * #include "vd_fw.h"                                           // Include library
- * int main() {
- *     vd_fw_init(NULL);                                        // Initialize library
- *
- *     while (vd_fw_running()) {                                // Check if the window is running & gather events
- *         glClearColor(0.5f, 0.3f, 0.2f, 1.0f);
- *         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
- *
- *         vd_fw_swap_buffers();                                // Swap buffers
- *     }
- *     return 0;
- * }
- * 
- * #define VD_FW_IMPL                                           // Include implementation code
- * #include "vd_fw.h"
- * @endcode
- */
-
-/**
- * @example "vd_fw.h: Create a borderless window"
- * @code{.c}
- * #include "vd_fw.h"                                           // Include library
- * int main() {
- *     // Create a borderless window:
- *     // 1. Specify borderless mode
- *     // 2. Specify general draggable rectangle
- *     // 3. Specify non draggable parts of rect (if any)
- *     vd_fw_init(NULL);                                        // Initialize library
- *
- *     while (vd_fw_running()) {                                // Check if the window is running & gather events
- *         glClearColor(0.5f, 0.3f, 0.2f, 1.0f);
- *         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
- *
- *         vd_fw_swap_buffers();                                // Swap buffers
- *     }
- *     return 0;
- * }
- * 
- * #define VD_FW_IMPL                                           // Include implementation code
- * #include "vd_fw.h"
- * @endcode
  */
 #ifndef VD_FW_H
 #define VD_FW_H
@@ -277,6 +230,7 @@ VD_FW_API int                vd_fw_get_mouse_state(int *x, int *y);
 VD_FW_INL int                vd_fw_get_mouse_statef(float *x, float *y);
 VD_FW_API void               vd_fw_set_mouse_capture(int on);
 VD_FW_API void               vd_fw_get_mouse_delta(float *dx, float *dy);
+VD_FW_API void               vd_fw_set_mouse_locked(int locked);
 
 /**
  * Read the mouse wheel state.
@@ -2564,9 +2518,12 @@ enum {
     VD_FW_WIN32_MESSAGE_BUFFER_SIZE = 256,
     VD_FW_WIN32_RAW_INPUT_BUFFER_COUNT = 1024,
 
-    VD_FW_WIN32_MESSAGE_TYPE_SCROLL    = 10,
-    VD_FW_WIN32_MESSAGE_TYPE_MOUSEMOVE = 11,
-    VD_FW_WIN32_MESSAGE_TYPE_MOUSEBTN  = 12,
+    VD_FW_WIN32_MESSAGE_TYPE_SCROLL      = 10,
+    VD_FW_WIN32_MESSAGE_TYPE_MOUSEMOVE   = 11,
+    VD_FW_WIN32_MESSAGE_TYPE_MOUSEBTN    = 12,
+    VD_FW_WIN32_MESSAGE_TYPE_CHANGEFOCUS = 13,
+
+    VD_FW_WIN32_SHOW_CURSOR = WM_USER + 1,
 };
 
 typedef struct {
@@ -2589,6 +2546,10 @@ typedef struct {
             DWORD vkbutton;
             int   down;
         } mousebtn;
+
+        struct {
+            int got_focus;
+        } changefocus;
     } dat;
 } VdFw__Win32Message;
 
@@ -2622,7 +2583,7 @@ typedef struct {
     DWORD                       rmousedown;
     DWORD                       mmousedown;
     float                       mouse_delta[2];
-
+    BOOL                        mouse_is_locked;
 
 /* ----RENDER THREAD - WINDOW THREAD DATA---------------------------------------------------------------------------- */
     VdFw__Win32Message          msgbuf[VD_FW_WIN32_MESSAGE_BUFFER_SIZE];
@@ -3024,6 +2985,11 @@ VD_FW_API int vd_fw_running(void)
                 }
             } break;
 
+            case VD_FW_WIN32_MESSAGE_TYPE_CHANGEFOCUS: {
+                VD_FW_G.focus_changed = 1;
+                VD_FW_G.focused = mm.dat.changefocus.got_focus;
+            } break;
+
             default: break;
         }
     }
@@ -3066,6 +3032,18 @@ VD_FW_API int vd_fw_running(void)
     VD_FW_G.last_ns = ns;
 
     VD_FW_G.performance_counter = now_performance_counter;
+
+    if (VD_FW_G.mouse_is_locked && VD_FW_G.focused) {
+        // @todo(mdodis): Only confine cursor if hwnd is focused
+
+        RECT rect;
+        GetWindowRect(VD_FW_G.hwnd, &rect);
+
+        INT center_x = (rect.left + rect.right)  / 2;
+        INT center_y = (rect.top  + rect.bottom) / 2;
+
+        SetCursorPos(center_x, center_y);
+    }
 
     return 1;
 }
@@ -3161,6 +3139,28 @@ VD_FW_API void vd_fw_get_mouse_delta(float *dx, float *dy)
 {
     if (dx) *dx = VD_FW_G.mouse_delta[0];
     if (dy) *dy = VD_FW_G.mouse_delta[1];
+}
+
+VD_FW_API void vd_fw_set_mouse_locked(int locked)
+{
+    if (VD_FW_G.mouse_is_locked == locked) {
+        return;
+    }
+
+    VD_FW_G.mouse_is_locked = locked;
+    if (locked) {
+        VD_FW__CHECK_TRUE(PostMessageA(
+            VD_FW_G.hwnd,
+            VD_FW_WIN32_SHOW_CURSOR,
+            0, /* WPARAM */
+            0  /* LPARAM */));
+    } else {
+        VD_FW__CHECK_TRUE(PostMessageA(
+            VD_FW_G.hwnd,
+            VD_FW_WIN32_SHOW_CURSOR,
+            1, /* WPARAM */
+            0  /* LPARAM */));
+    }
 }
 
 VD_FW_API int vd_fw_get_mouse_wheel(float *dx, float *dy)
@@ -3922,10 +3922,14 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         // } break;
 
         // @todo(mdodis):
-        // case WM_SETFOCUS:
-        // case WM_KILLFOCUS: {
-
-        // } break;
+        case WM_SETFOCUS:
+        case WM_KILLFOCUS: {
+            int got_focus = msg == WM_SETFOCUS;
+            VdFw__Win32Message m;
+            m.msg = VD_FW_WIN32_MESSAGE_TYPE_CHANGEFOCUS;
+            m.dat.changefocus.got_focus = got_focus;
+            vd_fw__msgbuf_w(&m);
+        } break;
 
         // case WM_NCMOUSEMOVE: {
         //     if (!VD_FW_G.draw_decorations) {
@@ -3954,6 +3958,11 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             m.dat.mousemove.mx = x;
             m.dat.mousemove.my = y;
             vd_fw__msgbuf_w(&m);
+        } break;
+
+        case VD_FW_WIN32_SHOW_CURSOR: {
+            BOOL should_show = (BOOL)wparam;
+            ShowCursor(should_show);
         } break;
 
         case WM_MOUSEHWHEEL: {
