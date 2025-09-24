@@ -44,7 +44,7 @@ int main(int argc, char const *argv[])
             .debug_on = 1,
         },
         .window_options = {
-            .draw_default_borders = 1,
+            .borderless = 0,
         }
     });
     vd_fw_set_vsync_on(0);

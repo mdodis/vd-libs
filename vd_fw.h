@@ -27,7 +27,6 @@
  *   on the big threes is OpenGL Core Profile 4.1 (MacOS limitation)
  *
  * TODO
- * - Introduce vd_fw_get_mouse_delta to get the delta of the mouse move (using RAWINPUT)
  * - Add remaining OpenGL core profiles
  * - Change default behavior of init to use window with decorations
  * - MacOS APIs can't be used on another thread other than main thread :/
@@ -162,8 +161,8 @@ typedef struct {
     } gl;
 
     struct {
-        /** Set to 1 to draw default borders. This is experimental and subject to change (possibly inverted value as a better default) */
-        int           draw_default_borders;
+        /** Set to 1 to disable window frame. */
+        int           borderless;
     } window_options;
 } VdFwInitInfo;
 
@@ -2761,9 +2760,10 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     QueryPerformanceFrequency(&VD_FW_G.frequency);
 
     VD_FW_G.focused = 1;
+    VD_FW_G.draw_decorations = 1;
 
     if (info != NULL) {
-        VD_FW_G.draw_decorations = info->window_options.draw_default_borders;
+        VD_FW_G.draw_decorations = !info->window_options.borderless;
     }
 
     if (info != NULL) {
@@ -3034,8 +3034,6 @@ VD_FW_API int vd_fw_running(void)
     VD_FW_G.performance_counter = now_performance_counter;
 
     if (VD_FW_G.mouse_is_locked && VD_FW_G.focused) {
-        // @todo(mdodis): Only confine cursor if hwnd is focused
-
         RECT rect;
         GetWindowRect(VD_FW_G.hwnd, &rect);
 

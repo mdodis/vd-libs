@@ -33,7 +33,7 @@ int main(int argc, char const *argv[])
         },
 
         .window_options = {
-            .draw_default_borders = 0,
+            .borderless = 1,
         },
     });
 
