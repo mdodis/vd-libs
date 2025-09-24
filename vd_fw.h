@@ -28,6 +28,8 @@
  *
  * TODO
  * - Properly handle vd_fw_set_receive_ncmouse for clicks and scrolls
+ * - Set Icon
+ * - Set mouse cursor to constants (resize, I, etc...)
  * - vd_fw_set_fullscreen
  * - MacOS APIs can't be used on another thread other than main thread :/
  *   so, just initialize display link and wait on condition variable + mutex when drawing while resizing
