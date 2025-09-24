@@ -38,7 +38,6 @@ document.querySelectorAll('pre.copy').forEach(pre => {
   });
 });
 
-
 // Custom ScrollSpy parent highlighting for nested nav
 document.addEventListener('DOMContentLoaded', function () {
     var toc = document.getElementById('toc');

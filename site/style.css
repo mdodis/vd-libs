@@ -14,6 +14,14 @@
     --orange-peel: #ffa630ff;
 }
 
+body {
+    position: relative;
+}
+
+section {
+    scroll-margin-top: 70px;
+}
+
 /*[data-bs-theme="dark"] {
     --bs-body-bg: var(--slate-gray);
 }
@@ -56,7 +64,7 @@
     .toc-outline {
         display: none !important;
     }
-    .section {
+    section {
         break-inside: avoid !important;
     }
     #main-content {

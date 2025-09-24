@@ -11,7 +11,7 @@
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
         <link rel="stylesheet" href="/style.css">
     </head>
-    <body>
+    <body data-bs-spy="scroll" data-bs-target="#toc" data-bs-threshold="[0.1, 0.5, 1.0]", data-bs-offset="70">
         <!-- Begin Navbar -->
         <nav id="mainnav" class="navbar sticky-top navbar-expand-md bg-body-tertiary">
             <div class="container-fluid">
@@ -52,13 +52,12 @@
 
 
         <!-- Begin Content -->
-        <div class="container flex-grow-1">
+        <div class="container">
             <div class="row justify-content-center">
-                <div id="main-content" class="col-12 col-sm-10 col-md-8 col-lg-8 text-start mx-auto"
-                     data-bs-spy="scroll" data-bs-target="#toc" data-bs-smooth-scroll="true" tabindex="0">
+                <div id="main-content" class="col-12 col-sm-10 col-md-8 col-lg-8 text-start mx-auto" style="margin-top: 0px;">
                     <img class="span-image img-fluid" src="/assets/vd-fw-logo.svg">
 
-                    <div class="section" id="brief">
+                    <section class="section" id="brief">
                         <h4 id="brief">Brief</h4>
                         <hr>
                         <p>
@@ -97,9 +96,9 @@
                                 The library does the loading for you.
                             </div>
                         </div>
-                    </div>
+                    </section>
 
-                    <div class="section" id="usage">
+                    <section class="section" id="usage">
                         <h4>Usage</h4>
                         <hr>
                         <p>
@@ -141,19 +140,21 @@ int main() {
                                 <span class="visually-hidden">Next</span>
                             </button>
                         </div>
-                    </div>
+                    </section>
                     <br>
 
-                    <div class="section" id="linking">
+                    <section class="section" id="linking">
                         <h4>Linking & Dependencies</h4>
                         <hr>
 
+
                         The library is distributed as a single, header-only file, thus the following instructions are meant to
                         be considered for your final application/dynamic library.
-                    </div>
+                    </section>
                     <br>
 
-                    <div id="linking-windows">
+
+                    <section id="linking-windows">
                         <h4>Windows</h4>
                         <p>
                             With MSVC you don't really need to link anything, since linker directives in the
@@ -193,9 +194,9 @@ int main() {
                             It's highly recommended to <code>#define VD_FW_NO_CRT 1</code> so that the CRT is removed
                             when linking. This can reduce the final executable size by a factor of 10 (for small applications).
                         </p>
-                    </div>
+                    </section>
 
-                    <div id="linking-macos">
+                    <section id="linking-macos">
                         <h4>MacOS</h4>
                         <p>
                             For MacOS, it's a bit different. with clang, you must link several frameworks (via <code>-framework framework_name</code>).
@@ -213,10 +214,10 @@ int main() {
                             <li class="list-group-item">OpenGL</li>
                         </ol>
                         <br>
-                    </div>
+                    </section>
                     <br>
 
-                    <div class="section" id="support">
+                    <section class="section" id="support">
                         <h4>Support</h4>
                         <hr>
 
@@ -251,13 +252,13 @@ freely, subject to the following restrictions:
                         </p>
 
                         <p><a class="link-opacity-100" href="https://github.com/mdodis/vd-libs/issues/new">Submit issues here</a></p>
-                    </div>
+                    </section>
 
-                    <div class="section" id="platforms">
+                    <section class="section" id="platforms">
                         <h4>Platforms</h4>
                         <p>
-                            Due to platform limitations, platform-specific APIs and frameworks, vd_fw.h will not
-                            ever have support for some platforms. One example is Android, where Java is required.
+                            Due to platform limitations, platform-specific APIs and frameworks, vd_fw.h will
+                            never have support for some platforms. One example is Android, where Java is required.
                         </p>
                         <p>
                             Though, I'm still thinking about how this can be done easily, so I will leave the possibility
@@ -299,9 +300,9 @@ freely, subject to the following restrictions:
                                 </tr>
                             </tbody>
                         </table>
-                    </div>
+                    </section>
 
-                    <div class="section" id="revisions">
+                    <section class="section" id="revisions">
                         <h4>Revisions</h4> 
                         <div class="list-group">
                             <a class="list-group-item">
@@ -319,10 +320,10 @@ freely, subject to the following restrictions:
                             </a>
                         </div>
 
-                    </div>
+                    </section>
                     <br>
 
-                    <div class="section" id="tutorials">
+                    <section class="section" id="tutorials">
                         <h4>Tutorials</h4>
                         <hr>
                         <p>
@@ -333,11 +334,11 @@ freely, subject to the following restrictions:
                             These do not show proper code, nor do they show correct OpenGL API usage, but they show various
                             features of vd_fw.h
                         </p>
-                    </div>
+                    </section>
                     <br>
 
 
-                    <div class="section" id="tutorials-main-loop">
+                    <section class="section" id="tutorials-main-loop">
                         <h4>Main Loop</h4>
                         <p>
                             Let's look at the main loop.
@@ -378,10 +379,10 @@ int main(int argc, char const *argv[])
                         </p>
 
                         <img class="rounded img-fluid rmprint" src="/assets/fw/tutorials-main-loop.gif">
-                    </div> 
+                    </section> 
                     <br>
 
-                    <div class="section" id="tutorials-choose-version">
+                    <section class="section" id="tutorials-choose-version">
                         <h4>Choose OpenGL Version</h4>
                         <p>
                             To specify the OpenGL version, create a <code>VdFwInitInfo</code> struct, populate the
@@ -421,11 +422,11 @@ typedef enum {
 } VdFwGlVersion;
                         </code></pre>
 
-                    </div> 
+                    </section> 
                     <br>
 
-                    <div class="section" id="tutorials-borderless-window">
-                        <h4>Create a borderless window</h4>
+                    <section class="section" id="tutorials-borderless-window">
+                        <h4>Create a Borderless Window</h4>
                         <p>
                             To create a borderless window, create a <code>VdFwInitInfo</code> struct, set
                             <code>VdFwInitInfo::window_options::borderless</code> to 1, and pass it to <code>vd_fw_init</code>.
@@ -440,14 +441,119 @@ vd_fw_init(&init_info);
                         <p>
                             This will create a borderless window, that can be moved (by dragging any part of the window), and resized.
                         </p>
-
                         <img class="rounded img-fluid rmprint" src="/assets/fw/tutorials-borderless.gif">
-                    </div> 
+                    </section> 
+                    <br>
 
+                    <section class="section" id="tutorials-compiling-shaders">
+                        <h4>Create a Shader Program</h4>
+                        <p>
+                            Let's create a simple 2D rectangle application.
+                            <br>
+
+                            We'll create some in-source shaders, and compile them, as we would in any OpenGL application.
+                            If you'd like to follow along, here are the shaders we'll be using:
+                        </p>
+                        <pre class="rounded copy"><code class="language-cpp">
+#define VERTEX_SOURCE \
+"#version 330 core                                               \n" \
+"layout (location = 0) in vec2 aPos;                             \n" \
+"                                                                \n" \
+"uniform vec2 rect_off;                                          \n" \
+"uniform mat4 projection;                                        \n" \
+"                                                                \n" \
+"void main()                                                     \n" \
+"{                                                               \n" \
+"    gl_Position = projection * vec4(aPos.x, aPos.y, 0.0, 1.0f); \n" \
+"}                                                               \n" \
+
+#define FRAGMENT_SOURCE \
+"#version 330 core                                               \n" \
+"out vec4 FragColor;                                             \n" \
+"                                                                \n" \
+"void main()                                                     \n" \
+"{                                                               \n" \
+"    FragColor = vec4(1.0, 0.0, 0.0, 1.0);                       \n" \
+"}                                                               \n" \
+
+                        </code></pre>
+                        <br>
+
+                        <p>
+                            And the typical OpenGL shader compilation code:
+                        </p>
+                        <pre class="rounded copy"><code class="language-cpp">
+const char *vertex_shader_source = VERTEX_SOURCE;
+const char *fragment_shader_source = FRAGMENT_SOURCE;
+
+// Compile shaders
+GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER);
+glShaderSource(vertex_shader, 1, &vertex_shader_source, 0);
+glCompileShader(vertex_shader);
+
+GLuint fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
+glShaderSource(fragment_shader, 1, &fragment_shader_source, 0);
+glCompileShader(fragment_shader);
+
+GLuint program = glCreateProgram();
+glAttachShader(program, vertex_shader);
+glAttachShader(program, fragment_shader);
+glLinkProgram(program);
+                        </code></pre>
+
+                        <p>
+                            In most tutorials, you'll be prompted to do error checking by doing <code>glGetShaderiv</code>,
+                            then <code>glGetShaderInfoLog</code> and printing it out...
+                            <br>
+
+                            This library provides a convenience function (and more) to do that, and will also log the errors:
+                        </p>
+                        <pre class="rounded copy"><code class="language-cpp">
+GLuint vertex_shader   = vd_fw_compile_shader(GL_VERTEX_SHADER,   VERTEX_SOURCE);
+GLuint fragment_shader = vd_fw_compile_shader(GL_FRAGMENT_SHADER, FRAGMENT_SOURCE);
+                        </code></pre>
+
+                        <p>
+                            For error logging, make sure to set <code>VdFwInitInfo::gl::debug_on</code> to 1 when initializing the library.
+                            Here's the <code>vd_fw_init</code> call we'll be using for the rest of these tutorials:
+                        </p>
+                        <pre class="rounded copy"><code class="language-cpp">
+vd_fw_init(& (VdFwInitInfo) {
+    .gl = {
+        .version = VD_FW_GL_VERSION_3_3,
+        .debug_on = 1,
+    },
+    .window_options = {
+        .borderless = 1,
+    }
+});
+                        </code></pre>
+
+                    </section> 
+                    <br>
+
+                    <section class="section" id="tutorials-ncrects">
+                        <h4>Set the Drag Area</h4>
+                        <p>
+                            In a borderless window, there is no specified non-client area. So to allow the user to drag the window
+                            only from a specific place, we'll use <code>vd_fw_set_ncrects</code>.
+                        </p>
+                        <pre class="rounded copy"><code class="language-cpp">
+VdFwInitInfo init_info = {};
+init_info.window_options.borderless = 1;
+vd_fw_init(&init_info);
+                        </code></pre>
+                        <br>
+
+                        <p>
+                            This will create a borderless window, that can be moved (by dragging any part of the window), and resized.
+                        </p>
+                        <img class="rounded img-fluid rmprint" src="/assets/fw/tutorials-borderless.gif">
+                    </section> 
                     <br>
 
                     <!-- Begin API -->
-                    <div class="section" id="api-ref">
+                    <section class="section" id="api-ref">
                         <h4>Reference</h4>
                         <hr>
                         <!-- VD_FW_API int                vd_fw_init(VdFwInitInfo *info); -->
@@ -500,51 +606,49 @@ vd_fw_init(&init_info);
                                 </table>
                             </div>
                         </div>
-                    </div>
+                    </section>
                     <!--   End API -->
 
-                    <div class="d-flex justify-content-end">
+                    <div class="d-flex">
+                        <span class="text-muted flex-grow-1 align-self-end">&copy; Michael Dodis, 2025-2026.</span>
                         <button type="button" class="btn ms-2 btn-outline-success" onclick="window.print();">PDF</button>
                         <a download type="button" class="btn ms-2 btn-outline-success" href="https://raw.githubusercontent.com/mdodis/vd-libs/main/vd_fw.h">Download</a>
                     </div>
 
                 </div>
 
-                <div class="toc-outline d-none d-xl-flex">
-                    <div class="p-0">
-                        <nav id="toc" class="nav outline-section flex-column">
-                            <a class="nav-link" href="#brief">Brief</a>
-                            <a class="nav-link" href="#usage">Usage</a>
-                            <a class="nav-link" href="#linking">Linking & Dependencies</a>
-                            <div class="nav outline-section flex-column ms-3">
-                                <a class="nav-link" href="#linking-windows">Windows</a>
-                                <a class="nav-link" href="#linking-macos">MacOS</a>
-                            </div>
-                            <a class="nav-link" href="#support">Support</a>
-                            <div class="nav outline-section flex-column ms-3">
-                                <a class="nav-link" href="#platforms">Platforms</a>
-                                <a class="nav-link" href="#revisions">Revisions</a>
-                            </div>
-                            <a class="nav-link" href="#tutorials">Tutorials</a>
-                            <div class="nav outline-section flex-column ms-3">
-                                <a class="nav-link" href="#tutorials-main-loop">Main Loop</a>
-                                <a class="nav-link" href="#tutorials-choose-version">Choose OpenGL Version</a>
-                                <a class="nav-link" href="#tutorials-borderless-window">Create a borderless window</a>
-                            </div>
-                            <a class="nav-link" href="#api-ref">Reference</a>
-                        </nav>
-                    </div>
-                </div>
+        <footer class="footer mt-auto py-3 bg-dark">
+            <div class="container">
+            </div>
+        </footer>
 
             </div>
         </div>
         <!--   End Content -->
 
-        <footer class="footer mt-auto py-3 bg-dark">
-            <div class="container">
-                <span class="text-muted">&copy; Michael Dodis, 2025-2026.</span>
+        <nav id="toc" class="toc-outline d-none d-xl-flex p-0 nav outline-section flex-column">
+            <a class="nav-link" href="#brief">Brief</a>
+            <a class="nav-link" href="#usage">Usage</a>
+            <a class="nav-link" href="#linking">Linking & Dependencies</a>
+            <div class="nav outline-section flex-column ms-3">
+                <a class="nav-link" href="#linking-windows">Windows</a>
+                <a class="nav-link" href="#linking-macos">MacOS</a>
             </div>
-        </footer>
+            <a class="nav-link" href="#support">Support</a>
+            <div class="nav outline-section flex-column ms-3">
+                <a class="nav-link" href="#platforms">Platforms</a>
+                <a class="nav-link" href="#revisions">Revisions</a>
+            </div>
+            <a class="nav-link" href="#tutorials">Tutorials</a>
+            <div class="nav outline-section flex-column ms-3">
+                <a class="nav-link" href="#tutorials-main-loop">Main Loop</a>
+                <a class="nav-link" href="#tutorials-choose-version">Choose OpenGL Version</a>
+                <a class="nav-link" href="#tutorials-borderless-window">Create a Borderless Window</a>
+                <a class="nav-link" href="#tutorials-compiling-shaders">Create a Shader Program</a>
+                <a class="nav-link" href="#tutorials-ncrects">Set the Drag Area</a>
+            </div>
+            <a class="nav-link" href="#api-ref">Reference</a>
+        </nav>
 
         <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/default.min.css"> -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
