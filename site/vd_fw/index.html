@@ -328,7 +328,58 @@ freely, subject to the following restrictions:
                         <p>
                             A collection of tutorials for how to use the library.
                         </p>
+
+                        <p>
+                            These do not show proper code, nor do they show correct OpenGL API usage, but they show various
+                            features of vd_fw.h
+                        </p>
                     </div>
+                    <br>
+
+
+                    <div class="section" id="tutorials-main-loop">
+                        <h4>Main Loop</h4>
+                        <p>
+                            Let's look at the main loop.
+                        </p>
+                        <pre class="rounded copy"><code class="language-cpp">
+#define VD_FW_NO_CRT 0                                       // Disable CRT, this is highly recommended,
+                                                             // if you know what you're doing.
+#define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS  // Disable console (Windows)
+#include "vd_fw.h"
+
+int main(int argc, char const *argv[])
+{
+    vd_fw_init(NULL);                                        // Initialize library
+    vd_fw_set_vsync_on(1);                                   // Enable VSYNC
+
+    while (vd_fw_running()) {                                // Check if user closed the window
+
+        int w, h;
+        vd_fw_get_size(&w, &h);                              // Get window size, in pixels.
+
+        glViewport(0, 0, w, h);                              // Setup viewport
+        glClearColor(0.5f, 0.3f, 0.2f, 1.0f);                // Select clear color
+        glClear(GL_COLOR_BUFFER_BIT);                        // Clear
+
+        vd_fw_swap_buffers();                                // Swap buffers
+    }
+
+    return 0;
+}
+
+#define VD_FW_IMPL                                           // Include implementation
+#include "vd_fw.h"
+                        </code></pre>
+                        <br>
+
+                        <p>
+                            This will create a window, that can be moved and resized.
+                        </p>
+
+                        <img class="rounded img-fluid rmprint" src="/assets/fw/tutorials-main-loop.gif">
+                    </div> 
+                    <br>
 
                     <div class="section" id="tutorials-choose-version">
                         <h4>Choose OpenGL Version</h4>
@@ -371,6 +422,7 @@ typedef enum {
                         </code></pre>
 
                     </div> 
+                    <br>
 
                     <div class="section" id="tutorials-borderless-window">
                         <h4>Create a borderless window</h4>
@@ -389,7 +441,7 @@ vd_fw_init(&init_info);
                             This will create a borderless window, that can be moved (by dragging any part of the window), and resized.
                         </p>
 
-                        <img class="rounded img-fluid" src="/assets/fw/tutorials-borderless.gif">
+                        <img class="rounded img-fluid rmprint" src="/assets/fw/tutorials-borderless.gif">
                     </div> 
 
                     <br>
@@ -475,6 +527,7 @@ vd_fw_init(&init_info);
                             </div>
                             <a class="nav-link" href="#tutorials">Tutorials</a>
                             <div class="nav outline-section flex-column ms-3">
+                                <a class="nav-link" href="#tutorials-main-loop">Main Loop</a>
                                 <a class="nav-link" href="#tutorials-choose-version">Choose OpenGL Version</a>
                                 <a class="nav-link" href="#tutorials-borderless-window">Create a borderless window</a>
                             </div>
