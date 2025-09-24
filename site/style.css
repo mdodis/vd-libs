@@ -15,10 +15,6 @@
     --orange-peel: #ffa630ff;
 }
 
-body {
-    position: relative;
-}
-
 section {
     scroll-margin-top: 50px;
 }

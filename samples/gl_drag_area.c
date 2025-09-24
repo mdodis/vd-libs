@@ -78,6 +78,8 @@ int main(int argc, char const *argv[])
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
+    vd_fw_set_receive_ncmouse(1);
+
     while (vd_fw_running()) {
 
         int w, h;
@@ -105,7 +107,16 @@ int main(int argc, char const *argv[])
             w,  // right
             30, // bottom
         };
-        vd_fw_set_ncrects(draggable_rect, 0, 0);
+
+        int exclude_rects[1][4] = {
+            {
+                w - 30, // left
+                0,      // top
+                w,      // right
+                30,     // bottom
+            }
+        };
+        vd_fw_set_ncrects(draggable_rect, 1, exclude_rects);
 
         {
             glUniform4f(glGetUniformLocation(program, "rect_color"), 0.2f, 0.2f, 0.2f, 1.f);
@@ -115,9 +126,21 @@ int main(int argc, char const *argv[])
         }
 
         {
-            glUniform4f(glGetUniformLocation(program, "rect_color"), 1.f, 0.f, 0.f, 1.f);
-            glUniform2f(glGetUniformLocation(program, "rect_size"), 40.f, 40.f);
-            glUniform2f(glGetUniformLocation(program, "rect_off"), mx, my);
+            float button_color[4] = {1.0f, 0.0f, 0.0f, 1.0f};
+            int mouse_inside_close_button =
+                (mx > ((float)w - 30.f)) &&
+                (my > (0.f) && my < (30.f));
+
+            if (mouse_inside_close_button) {
+                button_color[0] = 0.7f;    
+                button_color[1] = 0.0f;    
+                button_color[2] = 0.0f;    
+                button_color[3] = 1.0f;    
+            }
+
+            glUniform4f(glGetUniformLocation(program, "rect_color"), button_color[0], button_color[1], button_color[2], button_color[3]);
+            glUniform2f(glGetUniformLocation(program, "rect_size"), 30.f, 30.f);
+            glUniform2f(glGetUniformLocation(program, "rect_off"), (float)w - 30.f, 0.f);
             glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
         }
 

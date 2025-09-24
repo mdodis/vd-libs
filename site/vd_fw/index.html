@@ -11,7 +11,7 @@
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
         <link rel="stylesheet" href="/style.css">
     </head>
-    <body data-bs-spy="scroll" data-bs-target="#toc" data-bs-threshold="[0.1, 0.5, 1.0]", data-bs-offset="50">
+    <body data-bs-spy="scroll" data-bs-target="#toc" data-bs-threshold="[0.1, 0.5, 1.0]" data-bs-offset="50">
         <!-- Begin Navbar -->
         <nav id="mainnav" class="navbar sticky-top navbar-expand-md bg-body-tertiary">
             <div class="container-fluid">
@@ -55,11 +55,36 @@
         <div class="container">
             <div class="row justify-content-center">
                 <div id="main-content" class="col-12 col-sm-10 col-md-8 col-lg-8 text-start mx-auto" style="margin-top: 0px;">
-                    <img class="span-image img-fluid" src="/assets/vd-fw-logo.svg">
+
+                <nav id="toc" class="toc-outline d-none d-xl-flex p-0 nav outline-section flex-column">
+                    <a class="nav-link" href="#brief">Brief</a>
+                    <a class="nav-link" href="#linking">Linking & Dependencies</a>
+                    <div class="nav outline-section flex-column ms-3">
+                        <a class="nav-link" href="#linking-windows">Windows</a>
+                        <a class="nav-link" href="#linking-macos">MacOS</a>
+                    </div>
+                    <a class="nav-link" href="#support">Support</a>
+                    <div class="nav outline-section flex-column ms-3">
+                        <a class="nav-link" href="#platforms">Platforms</a>
+                        <a class="nav-link" href="#revisions">Revisions</a>
+                    </div>
+                    <a class="nav-link" href="#tutorials">Tutorials</a>
+                    <div class="nav outline-section flex-column ms-3">
+                        <a class="nav-link" href="#tutorials-main-loop">Main Loop</a>
+                        <a class="nav-link" href="#tutorials-choose-version">Choose OpenGL Version</a>
+                        <a class="nav-link" href="#tutorials-borderless-window">Create a Borderless Window</a>
+                        <a class="nav-link" href="#tutorials-compiling-shaders">Create a Shader Program</a>
+                        <a class="nav-link" href="#tutorials-creating-vertex-buffer">Drawing a Rectangle</a>
+                        <a class="nav-link" href="#tutorials-ncrects">Set the Drag Area</a>
+                    </div>
+                    <a class="nav-link" href="#api-ref">Reference</a>
+                </nav>
+
 
                     <section class="section" id="brief">
                         <h4 id="brief">Brief</h4>
                         <hr>
+                        <img class="span-image img-fluid" src="/assets/vd-fw-logo.svg">
                         <p>
                             A library that gets you a semi-customizable window and an OpenGL context, minimizing 
                             dependencies and hiding the complexities of doing proper windowing on each platform.
@@ -82,11 +107,29 @@
                                 <li>Handle child/parent window relationships</li>
                                 <li>Provide aliases for common usermode operations (show file dialog, message box)</li>
                                 <li>Support many more platforms, even ones that don't include a windowing system.</li>
+                                <li>Support multiple graphics APIs for initialization.</li>
                                 <li>Provide a high level drawing interface.</li>
                                 <li>Provide a high level sound interface.</li>
                                 <li>Allow for entirely customized windows.</li>
                                 <li>And much more...</li>
                             </ul>
+
+                            But in their attempt to be "generic" and "robust", they fail to provide a good and simple interface
+                            that covers 90% of the use cases, that is implemented in the best way possible for each platform
+                        </p>
+
+                        <p>
+                            One common example is that every other popular windowing library on Windows does not allow the
+                            developer to draw while resizing or moving the window.
+
+                            This is an introcacy of the Win32 API (and actually the same is true for MacOS), and the recommended way
+                            is not exactly obvious to a new developer, or one unfamiliar with the platform.
+                            <br>
+                        </p>
+
+                        <p>
+                            Another one would be what is the best way to make a custom window frame (custom window chrome on Windows),
+                            by drawing over the non-client area (the part with the decorations).
                         </p>
 
                         <div class="alert alert-primary d-flex align-items-center" role="alert">
@@ -96,11 +139,7 @@
                                 The library does the loading for you.
                             </div>
                         </div>
-                    </section>
 
-                    <section class="section" id="usage">
-                        <h4>Usage</h4>
-                        <hr>
                         <p>
                             This is all you need to create a simple window. By default it creates an OpenGL 3.3 core profile context
                         </p>
@@ -124,10 +163,10 @@ int main() {
                         <div id="fw-window-simple" class="rounded carousel slide">
                             <div class="carousel-inner">
                                <div class="carousel-item active">
-                                    <img class="img-fluid" src="/assets/fw-window-simple-win32.png">
+                                    <img class="img-fluid" src="/assets/fw/window-simple-win32.png">
                                </div> 
                                <div class="carousel-item">
-                                    <img class="img-fluid" src="/assets/fw-window-simple-macos.png">
+                                    <img class="img-fluid" src="/assets/fw/window-simple-macos.png">
                                </div> 
                             </div>
                             <button class="carousel-control-prev" type="button" data-bs-target="#fw-window-simple" data-bs-slide="prev">
@@ -333,6 +372,15 @@ freely, subject to the following restrictions:
                         <p>
                             These do not show proper code, nor do they show correct OpenGL API usage, but they show various
                             features of vd_fw.h
+                        </p>
+
+                        <p>
+                            We will start from creating a simple window, and continue with:
+                            <ul>
+                                <li>Making it borderless</li>
+                                <li>Drawing a rectangle, and last</li>
+                                <li>Setting the drag area</li>
+                            </ul>
                         </p>
                     </section>
                     <br>
@@ -637,6 +685,95 @@ vd_fw_set_ncrects(draggable_rect, 0, 0);
                             Et voila!
                         </p>
                         <img class="rounded img-fluid rmprint" src="/assets/fw/tutorials-ncrects-drag-frame.gif">
+                        <br> <br>
+
+                        <p>
+                            Now you may, ask: <b>Why does the rectangle not move above the border when the mouse hovers it?</b>
+                            <br> <br>
+
+                            Well, by default, this library does not send mouse events in the non-excluded drag area. This is done
+                            to prevent unwanted mouse movements inside an application's draggable area. To receive all non-client area events call:
+                        </p>
+
+                        <pre class="rounded copy"><code class="language-cpp">
+vd_fw_set_receive_ncmouse(1);
+                        </code></pre>
+
+                        <p>
+                            After you've initialized the library.
+                        </p>
+
+                        <p>
+                            Now, for the 2 last parameters to <code>vd_fw_set_ncrects</code>:<br>
+                            <ul>
+                                <li>count: Number of excluded rects</li>
+                                <li>rects: Pointer to array of <code>count</code> rects</li>
+                            </ul>
+
+                            These allow you to set areas inside the drag area, that are not draggable.
+                        </p>
+
+                        <p>
+                            Let's draw a red 'close' button in our title bar, and if the mouse is over it, darken it:
+                        </p>
+
+                        <pre class="rounded copy"><code class="language-cpp">
+float button_color[4] = {1.0f, 0.0f, 0.0f, 1.0f};
+int mouse_inside_close_button =
+    (mx > ((float)w - 30.f)) &&
+    (my > (0.f) && my < (30.f));
+
+if (mouse_inside_close_button) {
+    button_color[0] = 0.7f;    
+    button_color[1] = 0.0f;    
+    button_color[2] = 0.0f;    
+    button_color[3] = 1.0f;    
+}
+
+glUniform4f(glGetUniformLocation(program, "rect_color"), button_color[0],
+                                                         button_color[1],
+                                                         button_color[2],
+                                                         button_color[3]);
+glUniform2f(glGetUniformLocation(program, "rect_size"), 30.f, 30.f);
+glUniform2f(glGetUniformLocation(program, "rect_off"), (float)w - 30.f, 0.f);
+glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+                        </code></pre>
+
+                        <img class="rounded img-fluid rmprint" src="/assets/fw/tutorials-ncrects-button.gif">
+                        <br> <br>
+
+                        <p>
+                            As you can see, we can still drag the window even if the mouse is on the button. <br>
+                            <br>
+                            To fix that, we have to update our call to <code>vd_fw_set_ncrects</code>:
+                        </p>
+
+                        <pre class="rounded copy"><code class="language-cpp">
+int draggable_rect[4] = {
+    0,  // left
+    0,  // top
+    w,  // right
+    30, // bottom
+};
+
+int exclude_rects[1][4] = {
+    {
+        w - 30, // left
+        0,      // top
+        w,      // right
+        30,     // bottom
+    }
+};
+vd_fw_set_ncrects(draggable_rect, 1, exclude_rects);
+                        </code></pre>
+
+                        <img class="rounded img-fluid rmprint" src="/assets/fw/tutorials-ncrects-button-no-drag.gif">
+                        <br> <br>
+
+                        <p>
+                            The code is straightforward; we exclude the exact position of our red button.
+                        </p>
+
                     </section> 
                     <br>
 
@@ -713,31 +850,6 @@ vd_fw_set_ncrects(draggable_rect, 0, 0);
             </div>
         </div>
         <!--   End Content -->
-
-        <nav id="toc" class="toc-outline d-none d-xl-flex p-0 nav outline-section flex-column">
-            <a class="nav-link" href="#brief">Brief</a>
-            <a class="nav-link" href="#usage">Usage</a>
-            <a class="nav-link" href="#linking">Linking & Dependencies</a>
-            <div class="nav outline-section flex-column ms-3">
-                <a class="nav-link" href="#linking-windows">Windows</a>
-                <a class="nav-link" href="#linking-macos">MacOS</a>
-            </div>
-            <a class="nav-link" href="#support">Support</a>
-            <div class="nav outline-section flex-column ms-3">
-                <a class="nav-link" href="#platforms">Platforms</a>
-                <a class="nav-link" href="#revisions">Revisions</a>
-            </div>
-            <a class="nav-link" href="#tutorials">Tutorials</a>
-            <div class="nav outline-section flex-column ms-3">
-                <a class="nav-link" href="#tutorials-main-loop">Main Loop</a>
-                <a class="nav-link" href="#tutorials-choose-version">Choose OpenGL Version</a>
-                <a class="nav-link" href="#tutorials-borderless-window">Create a Borderless Window</a>
-                <a class="nav-link" href="#tutorials-compiling-shaders">Create a Shader Program</a>
-                <a class="nav-link" href="#tutorials-creating-vertex-buffer">Drawing a Rectangle</a>
-                <a class="nav-link" href="#tutorials-ncrects">Set the Drag Area</a>
-            </div>
-            <a class="nav-link" href="#api-ref">Reference</a>
-        </nav>
 
         <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/default.min.css"> -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>

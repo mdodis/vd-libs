@@ -27,6 +27,7 @@
  *   on the big threes is OpenGL Core Profile 4.1 (MacOS limitation)
  *
  * TODO
+ * - Properly handle vd_fw_set_receive_ncmouse for clicks and scrolls
  * - vd_fw_set_fullscreen
  * - MacOS APIs can't be used on another thread other than main thread :/
  *   so, just initialize display link and wait on condition variable + mutex when drawing while resizing
@@ -293,6 +294,7 @@ VD_FW_API int                vd_fw_get_focused(int *focused);
 - Pass n rects for excluded
  */
 VD_FW_API void               vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4]);
+VD_FW_API void               vd_fw_set_receive_ncmouse(int on);
 
 /**
  * Get the time (in nanoseconds) since the last call to @see vd_fw_swap_buffers
@@ -3858,6 +3860,7 @@ typedef struct {
     int                         ncrects[16][4];
     int                         nccaption[4];
     int                         nccaption_set;
+    int                         receive_ncmouse_on;
     volatile LONG               mouse_delta_sink_index;
     float                       mouse_delta_sinks[2][2];
     unsigned char               curr_key_states[VD_FW_KEY_MAX];
@@ -4587,6 +4590,11 @@ VD_FW_API void vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4])
         VD_FW_G.ncrects[i][2] = rects[i][2];
         VD_FW_G.ncrects[i][3] = rects[i][3];
     }
+}
+
+VD_FW_API void vd_fw_set_receive_ncmouse(int on)
+{
+    VD_FW_G.receive_ncmouse_on = on;
 }
 
 VD_FW_API int vd_fw_set_vsync_on(int on)
@@ -5495,8 +5503,8 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             int y = GET_Y_LPARAM(lparam);
 
             if (msg == WM_NCMOUSEMOVE) {
-                if (VD_FW_G.nccaption_set) {
-                   break; 
+                if (!VD_FW_G.receive_ncmouse_on && VD_FW_G.nccaption_set) {
+                    break;
                 }
 
                 RECT rect;
