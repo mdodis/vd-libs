@@ -110,7 +110,7 @@ function createHierarchy(headers, minLevel, useSectionLevel) {
 function parseNavNodes(nodes) {
   // Create <nav> root
   var nav = document.createElement('nav');
-  nav.className = 'toc-outline d-none d-lg-flex p-0 nav outline-section flex-column';
+  nav.className = 'toc-outline p-0 nav outline-section flex-column';
   var minLevel = arguments[1];
   nodes.forEach(function(node) {
     nav.appendChild(parseNavNode(node, minLevel));
