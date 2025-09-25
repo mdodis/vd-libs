@@ -39,13 +39,14 @@ function activateKeyboard() {
     
     window.addEventListener('keydown', event => {
         if (!keyboardShown) return;
-        event.preventDefault();
+        const keyboardInput = document.getElementById('keyboard');
+        if (document.activeElement !== keyboardInput) return;
+        // event.preventDefault();
         const visual = findVisualKeyForEvent(event);
         if (visual) {
             flashKey(visual);
             showKey(visual.dataset.fwcode);
         }
-        
     });
     
     keyboardInput.addEventListener('click', event => {
@@ -57,6 +58,12 @@ function activateKeyboard() {
 
 document.getElementById('keyboard-backdrop').addEventListener('shown.bs.modal', function () {
     activateKeyboard();
+    // Make keyboardInput focusable and focus it
+    const keyboardInput = document.getElementById('keyboard');
+    if (keyboardInput) {
+        keyboardInput.setAttribute('tabindex', '0');
+        keyboardInput.focus();
+    }
 });
 
 document.getElementById('keyboard-backdrop').addEventListener('hidden.bs.modal', function () {

@@ -1268,16 +1268,136 @@ if (vd_fw_get_key_pressed(VD_FW_KEY_F1) && vd_fw_get_key_down(VD_FW_KEY_LSHIFT))
                         <hr>
 
                         <section id="keymap" class="L2 section">
-                            <h4>Key Mappings</h4>
+                            <h4>Input Mappings</h4>
 
                             <p>
                                 This is a complete list of all possible input mappings supported by this library.
+                                Alternatively, click below to open an interactive interface:
                             </p>
 
-                            <button type="button" class="btn btn-primary"
-                                    data-bs-toggle="modal" data-bs-target="#keyboard-backdrop">
-                                Open Input Mappings
-                            </button>
+                            <div class="d-flex justify-content-end">
+                                <button type="button" class="btn btn-primary"
+                                        data-bs-toggle="modal" data-bs-target="#keyboard-backdrop">
+                                    Open Input Mappings
+                                </button>
+                            </div>
+
+                            <hr>
+
+                            <h4>Keyboard</h4>
+                            <pre class="rounded copy"><code class="language-cpp">
+enum {
+    VD_FW_KEY_UNKNOWN       = 0,
+    VD_FW_KEY_F1            = 1,
+    VD_FW_KEY_F2            = 2,
+    VD_FW_KEY_F3            = 3,
+    VD_FW_KEY_F4            = 4,
+    VD_FW_KEY_F5            = 5,
+    VD_FW_KEY_F6            = 6,
+    VD_FW_KEY_F7            = 7,
+    VD_FW_KEY_F8            = 8,
+    VD_FW_KEY_F9            = 9,
+    VD_FW_KEY_F10           = 10,
+    VD_FW_KEY_F11           = 11,
+    VD_FW_KEY_F12           = 12,
+    VD_FW_KEY_F13           = 13,
+    VD_FW_KEY_F14           = 14,
+    VD_FW_KEY_F15           = 15,
+    VD_FW_KEY_F16           = 16,
+    VD_FW_KEY_F17           = 17,
+    VD_FW_KEY_F18           = 18,
+    VD_FW_KEY_F19           = 19,
+    VD_FW_KEY_F20           = 20,
+    VD_FW_KEY_F21           = 21,
+    VD_FW_KEY_F22           = 22,
+    VD_FW_KEY_F23           = 23,
+    VD_FW_KEY_F24           = 24,
+    VD_FW_KEY_BACKSPACE     = 25,  
+    VD_FW_KEY_INS           = 26,
+    VD_FW_KEY_HOME          = 27,
+    VD_FW_KEY_PGUP          = 28,
+    VD_FW_KEY_DEL           = 29,
+    VD_FW_KEY_END           = 30,
+    VD_FW_KEY_PGDN          = 31,
+    VD_FW_KEY_SPACE         = 32,  // ' ' 
+    VD_FW_KEY_LCONTROL      = 33,
+    VD_FW_KEY_RCONTROL      = 34,
+    VD_FW_KEY_LALT          = 35,
+    VD_FW_KEY_RALT          = 36,
+    VD_FW_KEY_LSHIFT        = 37,
+    VD_FW_KEY_RSHIFT        = 38,
+    VD_FW_KEY_QUOTE         = 39,  // '\''
+    VD_FW_KEY_ARROW_UP      = 40,
+    VD_FW_KEY_ARROW_LEFT    = 41,
+    VD_FW_KEY_ARROW_DOWN    = 42,
+    VD_FW_KEY_ARROW_RIGHT   = 43,
+    VD_FW_KEY_COMMA         = 44,  // ','
+    VD_FW_KEY_MINUS         = 45,  // '-'
+    VD_FW_KEY_DOT           = 46,  // '.'
+    VD_FW_KEY_SLASH_FORWARD = 47,  // '/'
+    VD_FW_KEY_0             = 48,  // '0'
+    VD_FW_KEY_1             = 49,  // '1'
+    VD_FW_KEY_2             = 50,  // '2'
+    VD_FW_KEY_3             = 51,  // '3'
+    VD_FW_KEY_4             = 52,  // '4'
+    VD_FW_KEY_5             = 53,  // '5'
+    VD_FW_KEY_6             = 54,  // '6'
+    VD_FW_KEY_7             = 55,  // '7'
+    VD_FW_KEY_8             = 56,  // '8'
+    VD_FW_KEY_9             = 57,  // '9'
+    VD_FW_KEY_ENTER         = 58,
+    VD_FW_KEY_SEMICOLON     = 59,  // ';'
+    VD_FW_KEY_TAB           = 60,
+    VD_FW_KEY_EQUALS        = 61,  // '='
+    VD_FW_KEY_CAPITAL       = 62,
+    VD_FW_KEY_ESCAPE        = 63,
+    VD_FW_KEY_RESERVED1     = 64,  // '@'
+    VD_FW_KEY_A             = 65,  // 'A'
+    VD_FW_KEY_B             = 66,  // 'B'
+    VD_FW_KEY_C             = 67,  // 'C'
+    VD_FW_KEY_D             = 68,  // 'D'
+    VD_FW_KEY_E             = 69,  // 'E'
+    VD_FW_KEY_F             = 70,  // 'F'
+    VD_FW_KEY_G             = 71,  // 'G'
+    VD_FW_KEY_H             = 72,  // 'H'
+    VD_FW_KEY_I             = 73,  // 'I'
+    VD_FW_KEY_J             = 74,  // 'J'
+    VD_FW_KEY_K             = 75,  // 'K'
+    VD_FW_KEY_L             = 76,  // 'L'
+    VD_FW_KEY_M             = 77,  // 'M'
+    VD_FW_KEY_N             = 78,  // 'N'
+    VD_FW_KEY_O             = 79,  // 'O'
+    VD_FW_KEY_P             = 80,  // 'P'
+    VD_FW_KEY_Q             = 81,  // 'Q'
+    VD_FW_KEY_R             = 82,  // 'R'
+    VD_FW_KEY_S             = 83,  // 'S'
+    VD_FW_KEY_T             = 84,  // 'T'
+    VD_FW_KEY_U             = 85,  // 'U'
+    VD_FW_KEY_V             = 86,  // 'V'
+    VD_FW_KEY_W             = 87,  // 'W'
+    VD_FW_KEY_X             = 88,  // 'X'
+    VD_FW_KEY_Y             = 89,  // 'Y'
+    VD_FW_KEY_Z             = 90,  // 'Z'
+    VD_FW_KEY_BRACKET_OPEN  = 91,  // '['
+    VD_FW_KEY_SLASH_BACK    = 92,  // '\\'
+    VD_FW_KEY_BRACKET_CLOSE = 93,  // ']'
+    VD_FW_KEY_MEDIA_NEXT    = 94,  // Media Next Track
+    VD_FW_KEY_MEDIA_PREV    = 95,  // Media Prev Track
+    VD_FW_KEY_BACKTICK      = 96,  // '`'
+    VD_FW_KEY_MEDIA_PLAY    = 97,  // Media Play/Pause
+    VD_FW_KEY_NUMPAD_0      = 98,  // Numpad 0
+    VD_FW_KEY_NUMPAD_1      = 99,  // Numpad 1
+    VD_FW_KEY_NUMPAD_2      = 100, // Numpad 2
+    VD_FW_KEY_NUMPAD_3      = 101, // Numpad 3
+    VD_FW_KEY_NUMPAD_4      = 102, // Numpad 4
+    VD_FW_KEY_NUMPAD_5      = 103, // Numpad 5
+    VD_FW_KEY_NUMPAD_6      = 104, // Numpad 6
+    VD_FW_KEY_NUMPAD_7      = 105, // Numpad 7
+    VD_FW_KEY_NUMPAD_8      = 106, // Numpad 8
+    VD_FW_KEY_NUMPAD_9      = 107, // Numpad 9
+    VD_FW_KEY_MAX,
+};
+                            </code></pre>
                             
                         </section>
 
@@ -1731,7 +1851,6 @@ vd_fw_init(& (VdFwInitInfo) {
                                         .input-split {
                                             display: flex;
                                             flex-direction: row;
-                                            align-items: center;
                                             flex-wrap: wrap;
                                             justify-content: center;
                                         }
@@ -1739,7 +1858,7 @@ vd_fw_init(& (VdFwInitInfo) {
                                         #keyboard-output {
                                             display: flex;
                                             flex-grow: 1;
-                                            height: 278px;
+                                            height: 300px;
                                             max-width: 774px;
                                             margin: 2px 2px 2px 2px;
                                         }
@@ -1855,7 +1974,10 @@ vd_fw_init(& (VdFwInitInfo) {
                                             </div>
                                         </div>
 
-                                        <div id="keyboard-output">
+                                        <div id="keyboard-output" class="flex-column">
+                                            <p>
+                                                Click anywhere on the keyboard, or use your own keyboard.
+                                            </p>
                                             <code></code>
                                         </div>
                                     </div>
