@@ -34,6 +34,7 @@ section, .apiitem {
     flex-direction: row;
     top: 80px;
     right: 8px;
+    width: 20vw;
     z-index: 100;
     max-height: calc(100vh - 100px); /* adjust offset as needed */
     overflow-y: auto;
@@ -42,6 +43,33 @@ section, .apiitem {
     scrollbar-gutter: stable both-edges;
 }
 
+@media (min-width: 1200px) {
+    #toc {
+        right: 16px;
+        width: 20vw;
+    }    
+}
+
+@media (min-width: 1600px) {
+    #toc {
+        right: 16px;
+        width: 25vw;
+    }    
+}
+
+@media (min-width: 2400px) {
+    #toc {
+        right: 32px;
+        width: 32vw;
+    }
+}
+
+/*@media (min-width: 2400px) {
+    #toc {
+        width: 40vw;
+    }
+}
+*/
 .nav-item.dropdown:hover .dropdown-menu {
     display: block;
 }
@@ -189,7 +217,7 @@ pre {
 /* Set a fixed min-width for the first column */
 .apiitem.function table td:first-child {
     width: 300px;
-    text-align: right;  /* optional: aligns parameter names to the right */
+    text-align: left;
 }
 
 .dropdown-item:active {

@@ -54,9 +54,9 @@
         <!-- Begin Content -->
         <div class="container">
             <div class="row justify-content-center">
-                <div id="main-content" class="col-12 col-sm-10 col-md-8 col-lg-8 text-start mx-auto" style="margin-top: 0px;">
+                <div id="main-content" class="col-12 col-sm-10 col-md-8 col-lg-6 col-xl-7 text-start mx-auto mx-lg-4" style="margin-top: 0px;">
 
-                    <nav id="toc" data-toc class="toc-outline d-none d-xl-flex p-0 nav outline-section flex-column">
+                    <nav id="toc" data-toc class="toc-outline d-none d-lg-flex p-0 nav outline-section flex-column">
                         
                     </nav>
 
@@ -1463,7 +1463,176 @@ vd_fw_init(& (VdFwInitInfo) {
                             </div>
                         </div>
 
-                        <!-- VD_FW_API unsigned int      vd_fw_compile_shader(unsigned int type, const char *source)-->
+                        <!-- VD_FW_API int                vd_fw_get_size(int *w, int *h); -->
+                        <div id="vd_fw_get_size" class="L2 apiitem function">
+                            <span class="item-decl">int vd_fw_get_size(int *w, int *h)</span>
+                            <div class="apidetails">
+                                <p class="item-desc">
+                                    Get the window size, in pixels.
+                                </p>
+                                <table class="table">
+                                <tbody>
+                                    <tr><td>w</td>
+                                        <td>Pointer to int that will receive window width.</td>
+                                    </tr>
+                                    <tr><td>h</td>
+                                        <td>Pointer to int that will receive window height.</td>
+                                    </tr>
+                                    <tr><td>Return Value</td>
+                                        <td>1 if the window size changed since last frame.</td>
+                                    </tr>
+                                </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- VD_FW_API int                vd_fw_get_focused(int *focused); -->
+                        <div id="vd_fw_get_focused" class="L2 apiitem function">
+                            <span class="item-decl">int vd_fw_get_focused(int *focused)</span>
+                            <div class="apidetails">
+                                <p class="item-desc">
+                                    Get whether the window is focused.
+                                </p>
+                                <table class="table">
+                                <tbody>
+                                    <tr><td>focused</td>
+                                        <td>Pointer to int that will receive window focus state.</td>
+                                    </tr>
+                                    <tr><td>Return Value</td>
+                                        <td>1 if the window focus changed since last frame.</td>
+                                    </tr>
+                                </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- VD_FW_API unsigned long long vd_fw_delta_ns(void); -->
+                        <div id="vd_fw_delta_ns" class="L2 apiitem function">
+                            <span class="item-decl">unsigned long long vd_fw_delta_ns(void)</span>
+                            <div class="apidetails">
+                                <p class="item-desc">
+                                    Get the delta time since last frame, in nanoseconds.
+                                </p>
+                                <table class="table">
+                                <tbody>
+                                    <tr><td>Return Value</td>
+                                        <td>The delta time, in nanoseconds.</td>
+                                    </tr>
+                                </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- VD_FW_INL float              vd_fw_delta_s(void); -->
+                        <div id="vd_fw_delta_s" class="L2 apiitem function">
+                            <span class="item-decl">float vd_fw_delta_s(void)</span>
+                            <div class="apidetails">
+                                <p class="item-desc">
+                                    Utility function. Get the delta time since last frame, in seconds.
+                                </p>
+                                <table class="table">
+                                <tbody>
+                                    <tr><td>Return Value</td>
+                                        <td>The delta time, in seconds.</td>
+                                    </tr>
+                                </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- VD_FW_API int                vd_fw_set_vsync_on(int on); -->
+                        <div id="vd_fw_set_vsync_on" class="L2 apiitem function">
+                            <span class="item-decl">int vd_fw_set_vsync_on(int on)</span>
+                            <div class="apidetails">
+                                <p class="item-desc">
+                                    Set the VSYNC count.
+                                </p>
+                                <table class="table">
+                                <tbody>
+                                    <tr><td>on</td>
+                                        <td>Whether vsync is on. Additionally, the number of frames to sync on.</td>
+                                    </tr>
+                                    <tr><td>Return Value</td>
+                                        <td>Whether the requested vsync count was accepted.</td>
+                                    </tr>
+                                </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- VD_FW_API int                vd_fw_get_mouse_state(int *x, int *y); -->
+                        <div id="vd_fw_get_mouse_state" class="L2 apiitem function">
+                            <span class="item-decl">int vd_fw_get_mouse_state(int *x, int *y);</span>
+                            <div class="apidetails">
+                                <p class="item-desc">
+                                    Get the current mouse state.
+                                </p>
+                                <table class="table">
+                                <tbody>
+                                    <tr><td>x</td>
+                                        <td>Pointer to int that will receive the mouse X coordinate relative to the window.</td>
+                                    </tr>
+                                    <tr><td>y</td>
+                                        <td>Pointer to int that will receive the mouse Y coordinate relative to the window.</td>
+                                    </tr>
+                                    <tr><td>Return Value</td>
+                                        <td>
+                                            The mouse state flags:<br>
+                                            <ul>
+                                                <li><code>VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN</code>: Left mouse button</li>
+                                                <li><code>VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN</code>: Right mouse button</li>
+                                                <li><code>VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN</code>: Middle mouse button</li>
+                                            </ul>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- VD_FW_API void               vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4]); -->
+                        <div id="vd_fw_set_ncrects" class="L2 apiitem function">
+                            <span class="item-decl">void vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4])</span>
+                            <div class="apidetails">
+                                <p class="item-desc">
+                                    Set the non client rectangles where the window will be draggable, and also set the
+                                    optionally the rectangles that will be excluded from the drag area.
+                                </p>
+                                <table class="table">
+                                <tbody>
+                                    <tr><td>caption</td>
+                                        <td>An all encompassing rectangle that determines the drag area.</td>
+                                    </tr>
+                                    <tr><td>count</td>
+                                        <td>The number of excluded rectangles</td>
+                                    </tr>
+                                    <tr><td>rects</td>
+                                        <td>An array of <code>count</code> rectangles (left, top, right, bottom), that will be excluded.</td>
+                                    </tr>
+                                </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- VD_FW_API void               vd_fw_set_receive_ncmouse(int on); -->
+                        <div id="vd_fw_set_receive_ncmouse" class="L2 apiitem function">
+                            <span class="item-decl">void vd_fw_set_receive_ncmouse(int on)</span>
+                            <div class="apidetails">
+                                <p class="item-desc">
+                                    Sets whether or not mouse events will be pushed if the mouse is inside the drag area<br>
+                                    and not inside any of the excluded rectangles (if any).
+                                </p>
+                                <table class="table">
+                                <tbody>
+                                    <tr><td>on</td>
+                                        <td>Whether to enable this functionality.</td>
+                                    </tr>
+                                </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- VD_FW_API unsigned int       vd_fw_compile_shader(unsigned int type, const char *source); -->
                         <div id="vd_fw_compile_shader" class="L2 apiitem function">
                             <span class="item-decl">unsigned int vd_fw_compile_shader(unsigned int type, const char *source)</span>
                             <div class="apidetails">
@@ -1483,17 +1652,6 @@ vd_fw_init(& (VdFwInitInfo) {
                                     </tr>
                                 </tbody>
                                 </table>
-                                <h6>Remarks</h6>
-                                <p>
-                                    As mentioned in <a href="#vd_fw_running">vd_fw_running</a>, this function does a bit
-                                    more than just swapping buffers:
-                                    <ul>
-                                        <li>It (of course) swaps the buffers.</li>
-                                        <li>Performs glFenceSync/glClientWaitSync to better synchronize frame
-                                            timing</li>
-                                        <li>Wakes up window thread (if it needs to be woken up)</li>
-                                    </ul>
-                                </p>
                             </div>
                         </div>
 
