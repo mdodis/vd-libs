@@ -11,10 +11,10 @@
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
         <link rel="stylesheet" href="/style.css">
     </head>
-    <body data-bs-spy="scroll" data-bs-target="#toc" data-bs-offset="70" tabindex="0">
+    <body data-bs-spy="scroll" data-bs-target="#toc" data-bs-offset="50" tabindex="0">
         <!-- Begin Navbar -->
         <nav id="mainnav" class="navbar sticky-top navbar-expand-md bg-body-tertiary">
-            <div class="container-fluid">
+            <div class="container-fluid bg-body-tertiary">
                 <a class="navbar-brand" href="/index.html">
                     <img    src="/assets/vd-logo-p@1x.png"
                          srcset="/assets/vd-logo-p@1x.png 1x, /assets/vd-logo-p@2x.png 2x"
@@ -1472,8 +1472,14 @@ vd_fw_init(& (VdFwInitInfo) {
                                 </p>
                                 <table class="table">
                                 <tbody>
+                                    <tr><td>type</td>
+                                        <td>Shader type (as you would pass in <code>glCreateShader</code>).</td>
+                                    </tr>
+                                    <tr><td>source</td>
+                                        <td>Null terminated string containing the source code.</td>
+                                    </tr>
                                     <tr><td>Return Value</td>
-                                        <td>(Reserved for future use)</td>
+                                        <td>The shader id.</td>
                                     </tr>
                                 </tbody>
                                 </table>
