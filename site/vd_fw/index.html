@@ -1266,6 +1266,22 @@ if (vd_fw_get_key_pressed(VD_FW_KEY_F1) && vd_fw_get_key_down(VD_FW_KEY_LSHIFT))
                     <section class="L1 section" id="api-ref">
                         <h4>Reference</h4>
                         <hr>
+
+                        <section id="keymap" class="L2 section">
+                            <h4>Key Mappings</h4>
+
+                            <p>
+                                This is a complete list of all possible input mappings supported by this library.
+                            </p>
+
+                            <button type="button" class="btn btn-primary"
+                                    data-bs-toggle="modal" data-bs-target="#keyboard-backdrop">
+                                Open Input Mappings
+                            </button>
+                            
+                        </section>
+
+
                         <!-- VD_FW_API int                vd_fw_init(VdFwInitInfo *info); -->
                         <div id="vd_fw_init" class="L2 apiitem function">
                             <span class="item-decl">int vd_fw_init(VdFwInitInfo *info)</span>
@@ -1655,12 +1671,203 @@ vd_fw_init(& (VdFwInitInfo) {
                         <a download type="button" class="btn ms-2 btn-outline-success" href="https://raw.githubusercontent.com/mdodis/vd-libs/main/vd_fw.h">Download</a>
                     </div>
 
-                </div>
+                    <!-- Begin Keyboard -->
+                    <div class="modal fade" id="keyboard-backdrop" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="keyboard-backdrop-label" aria-hidden="true">
+                        <div class="modal-dialog modal-fullscreen">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h4 class="modal-title fs-5" id="keyboard-backdrop-label">Input Mappings</h4>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
+                                    </button>
+                                </div>
 
-        <footer class="footer mt-auto py-3 bg-dark">
-            <div class="container">
-            </div>
-        </footer>
+                                <div class="modal-body">
+
+                                    <style>
+                                        #keyboard {
+                                            border-radius: 8px;
+                                            padding: 4px;
+                                            background-color: rgba(201, 201, 201, 0.514);
+                                            margin: 4px;
+                                        }
+                                        .keyboard-row {
+                                            display: flex;
+                                            flex-direction: row;
+                                            margin-bottom: 4px;
+                                        }
+
+                                        .key {
+                                            --w: 48px;
+                                            height: 44px;
+                                            min-width: var(--w);
+                                            padding: 6px 8px;
+                                            display: flex;
+                                            align-items: center;
+                                            justify-content: center;
+                                            border-radius: 4px;
+
+                                            background-color: var(--eerie-black);
+                                            padding: 4px 4px;
+                                            margin-right: 4px;
+                                            user-select: none;
+                                            transition: background-color 0.2s ease-in-out;
+                                        }
+
+                                        .key-size-b     { --w: 100px; }
+                                        .key-size-s     { --w: 74px;  }
+                                        .key-size-c     { --w: 86px;  }
+                                        .key-size-e     { --w: 114px; }
+                                        .key-size-hfs   { --w: 16px;  }
+                                        .key-size-hfsm  { --w: 28px;  }
+                                        .key-size-ls    { --w: 100px; }
+                                        .key-size-rs    { --w: 152px; }
+                                        .key-size-ct    { --w: 82px;  }
+                                        .key-size-al    { --w: 57px;  }
+                                        .key-size-space { --w: 298px; }
+                                        .key-clear {
+                                            opacity: 0.0;
+                                        }
+
+                                        .input-split {
+                                            display: flex;
+                                            flex-direction: row;
+                                            align-items: center;
+                                            flex-wrap: wrap;
+                                            justify-content: center;
+                                        }
+
+                                        #keyboard-output {
+                                            display: flex;
+                                            flex-grow: 1;
+                                            height: 278px;
+                                            max-width: 774px;
+                                            margin: 2px 2px 2px 2px;
+                                        }
+                                        #keyboard-output code {
+                                            display: flex;
+                                            flex-grow: 1;
+                                            background: #222;
+                                            color: #eee;
+                                            padding: 16px;
+                                            white-space: pre;
+                                            overflow-y: auto;
+                                        }
+
+                                        .key.pressed {
+                                            background-color: var(--bittersweet);
+                                        }
+
+
+                                    </style>
+
+                                    <!-- Begin Split -->
+                                    <div class="input-split">
+                                        <div id="keyboard">
+                                            <div class="keyboard-row" data-row="0">
+                                                <div class="key small"                      data-fwcode="VD_FW_KEY_ESCAPE"                        data-key="`">ESC</div>
+                                                <div class="key key-clear"                  data-fwcode=""                                        data-key="null"></div>
+                                                <div class="key"                            data-fwcode="VD_FW_KEY_F1"                            data-key="f1">F1</div>
+                                                <div class="key"                            data-fwcode="VD_FW_KEY_F2"                            data-key="f2">F2</div>
+                                                <div class="key"                            data-fwcode="VD_FW_KEY_F3"                            data-key="f3">F3</div>
+                                                <div class="key"                            data-fwcode="VD_FW_KEY_F4"                            data-key="f4">F4</div>
+                                                <div class="key key-size-hfs key-clear"     data-fwcode="null"                                    data-key="null"></div>
+                                                <div class="key"                            data-fwcode="VD_FW_KEY_F5"                            data-key="f5">F5</div>
+                                                <div class="key"                            data-fwcode="VD_FW_KEY_F6"                            data-key="f6">F6</div>
+                                                <div class="key"                            data-fwcode="VD_FW_KEY_F7"                            data-key="f7">F7</div>
+                                                <div class="key"                            data-fwcode="VD_FW_KEY_F8"                            data-key="f8">F8</div>
+                                                <div class="key key-size-hfsm key-clear"    data-fwcode="null"                                    data-key="null"></div>
+                                                <div class="key"                            data-fwcode="VD_FW_KEY_F9"                            data-key="f9">F9</div>
+                                                <div class="key"                            data-fwcode="VD_FW_KEY_F10"                           data-key="f10">F10</div>
+                                                <div class="key"                            data-fwcode="VD_FW_KEY_F11"                           data-key="f11">F11</div>
+                                                <div class="key"                            data-fwcode="VD_FW_KEY_F12"                           data-key="f12">F12</div>
+                                            </div>
+                                            <div class="keyboard-row" data-row="1">
+                                                <div class="key small"                      data-code="Backquote" data-fwcode="VD_FW_KEY_BACKTICK"    data-key="`">`</div>
+                                                <div class="key"                            data-code="Digit1"    data-fwcode="VD_FW_KEY_1"           data-key="1">1</div>
+                                                <div class="key"                            data-code="Digit2"    data-fwcode="VD_FW_KEY_2"           data-key="2">2</div>
+                                                <div class="key"                            data-code="Digit3"    data-fwcode="VD_FW_KEY_3"           data-key="3">3</div>
+                                                <div class="key"                            data-code="Digit4"    data-fwcode="VD_FW_KEY_4"           data-key="4">4</div>
+                                                <div class="key"                            data-code="Digit5"    data-fwcode="VD_FW_KEY_5"           data-key="5">5</div>
+                                                <div class="key"                            data-code="Digit6"    data-fwcode="VD_FW_KEY_6"           data-key="6">6</div>
+                                                <div class="key"                            data-code="Digit7"    data-fwcode="VD_FW_KEY_7"           data-key="7">7</div>
+                                                <div class="key"                            data-code="Digit8"    data-fwcode="VD_FW_KEY_8"           data-key="8">8</div>
+                                                <div class="key"                            data-code="Digit9"    data-fwcode="VD_FW_KEY_9"           data-key="9">9</div>
+                                                <div class="key"                            data-code="Digit0"    data-fwcode="VD_FW_KEY_0"           data-key="0">0</div>
+                                                <div class="key"                            data-code="Minus"     data-fwcode="VD_FW_KEY_MINUS"       data-key="-">−</div>
+                                                <div class="key"                            data-code="Equal"     data-fwcode="VD_FW_KEY_EQUALS"      data-key="=">=</div>
+                                                <div class="key key-size-b operator small"  data-code="Backspace" data-fwcode="VD_FW_KEY_BACKSPACE"   data-key="Backspace">⌫</div>
+                                            </div>
+                                            <div class="keyboard-row" data-row="2">
+                                                <div class="key key-size-s operator wide"   data-code="Tab"          data-fwcode="VD_FW_KEY_TAB"           data-key="Tab">Tab</div>
+                                                <div class="key"                            data-code="KeyQ"         data-fwcode="VD_FW_KEY_Q"             data-key="q">Q</div>
+                                                <div class="key"                            data-code="KeyW"         data-fwcode="VD_FW_KEY_W"             data-key="w">W</div>
+                                                <div class="key"                            data-code="KeyE"         data-fwcode="VD_FW_KEY_E"             data-key="e">E</div>
+                                                <div class="key"                            data-code="KeyR"         data-fwcode="VD_FW_KEY_R"             data-key="r">R</div>
+                                                <div class="key"                            data-code="KeyT"         data-fwcode="VD_FW_KEY_T"             data-key="t">T</div>
+                                                <div class="key"                            data-code="KeyY"         data-fwcode="VD_FW_KEY_Y"             data-key="y">Y</div>
+                                                <div class="key"                            data-code="KeyU"         data-fwcode="VD_FW_KEY_U"             data-key="u">U</div>
+                                                <div class="key"                            data-code="KeyI"         data-fwcode="VD_FW_KEY_I"             data-key="i">I</div>
+                                                <div class="key"                            data-code="KeyO"         data-fwcode="VD_FW_KEY_O"             data-key="o">O</div>
+                                                <div class="key"                            data-code="KeyP"         data-fwcode="VD_FW_KEY_P"             data-key="p">P</div>
+                                                <div class="key"                            data-code="BracketLeft"  data-fwcode="VD_FW_KEY_BRACKET_OPEN"  data-key="[">[</div>
+                                                <div class="key"                            data-code="BracketRight" data-fwcode="VD_FW_KEY_BRACKET_CLOSE" data-key="]">]</div>
+                                                <div class="key key-size-s operator"        data-code="Backslash"    data-fwcode="VD_FW_KEY_SLASH_BACK"    data-key="\">\</div>
+                                            </div>
+                                            <div class="keyboard-row" data-row="3">
+                                                <div class="key key-size-c operator wider"   data-code="CapsLock"  data-fwcode="VD_FW_KEY_CAPITAL"         data-key="Caps">Caps</div>
+                                                <div class="key"                             data-code="KeyA"      data-fwcode="VD_FW_KEY_A"               data-key="a">A</div>
+                                                <div class="key"                             data-code="KeyS"      data-fwcode="VD_FW_KEY_S"               data-key="s">S</div>
+                                                <div class="key"                             data-code="KeyD"      data-fwcode="VD_FW_KEY_D"               data-key="d">D</div>
+                                                <div class="key"                             data-code="KeyF"      data-fwcode="VD_FW_KEY_F"               data-key="f">F</div>
+                                                <div class="key"                             data-code="KeyG"      data-fwcode="VD_FW_KEY_G"               data-key="g">G</div>
+                                                <div class="key"                             data-code="KeyH"      data-fwcode="VD_FW_KEY_H"               data-key="h">H</div>
+                                                <div class="key"                             data-code="KeyJ"      data-fwcode="VD_FW_KEY_J"               data-key="j">J</div>
+                                                <div class="key"                             data-code="KeyK"      data-fwcode="VD_FW_KEY_K"               data-key="k">K</div>
+                                                <div class="key"                             data-code="KeyL"      data-fwcode="VD_FW_KEY_L"               data-key="l">L</div>
+                                                <div class="key"                             data-code="Semicolon" data-fwcode="VD_FW_KEY_SEMICOLON"       data-key=";">;</div>
+                                                <div class="key"                             data-code="Quote"     data-fwcode="VD_FW_KEY_QUOTE"           data-key="'">'</div>
+                                                <div class="key operator key-size-e"         data-code="Enter"     data-fwcode="VD_FW_KEY_ENTER"           data-key="Enter">Enter</div>
+                                            </div>
+
+                                            <div class="keyboard-row" data-row="4">
+                                                <div class="key key-size-ls operator wide"  data-code="ShiftLeft"  data-fwcode="VD_FW_KEY_LSHIFT"          data-key="Shift">Shift</div>
+                                                <div class="key"                            data-code="KeyZ"       data-fwcode="VD_FW_KEY_Z"               data-key="z">Z</div>
+                                                <div class="key"                            data-code="KeyX"       data-fwcode="VD_FW_KEY_X"               data-key="x">X</div>
+                                                <div class="key"                            data-code="KeyC"       data-fwcode="VD_FW_KEY_C"               data-key="c">C</div>
+                                                <div class="key"                            data-code="KeyV"       data-fwcode="VD_FW_KEY_V"               data-key="v">V</div>
+                                                <div class="key"                            data-code="KeyB"       data-fwcode="VD_FW_KEY_B"               data-key="b">B</div>
+                                                <div class="key"                            data-code="KeyN"       data-fwcode="VD_FW_KEY_N"               data-key="n">N</div>
+                                                <div class="key"                            data-code="KeyM"       data-fwcode="VD_FW_KEY_M"               data-key="m">M</div>
+                                                <div class="key"                            data-code="Comma"      data-fwcode="VD_FW_KEY_COMMA"           data-key=",">,</div>
+                                                <div class="key"                            data-code="Period"     data-fwcode="VD_FW_KEY_DOT"             data-key=".">.</div>
+                                                <div class="key"                            data-code="Slash"      data-fwcode="VD_FW_KEY_SLASH_FORWARD"   data-key="/">/</div>
+                                                <div class="key key-size-rs operator wide"  data-code="ShiftRight" data-fwcode="VD_FW_KEY_RSHIFT"          data-key="Shift">Shift</div>
+                                            </div>
+                                            <div class="keyboard-row" data-row="5">
+                                                <div class="key key-size-ct small operator" data-code="ControlLeft"  data-fwcode="VD_FW_KEY_LCONTROL"                      data-key="Ctrl">Ctrl</div>
+                                                <div class="key key-size-al small operator" data-code="MetaLeft"     data-fwcode="VD_FW_KEY_UNKNOWN"                       data-key="Meta">Win</div>
+                                                <div class="key key-size-al small operator" data-code="AltLeft"      data-fwcode="VD_FW_KEY_LALT"                          data-key="Alt">Alt</div>
+                                                <div class="key key-size-space extrawide"   data-code="Space"        data-fwcode="VD_FW_KEY_SPACE"                         data-key=" ">Space</div>
+                                                <div class="key key-size-al small operator" data-code="AltRight"     data-fwcode="VD_FW_KEY_RALT"                          data-key="AltGr">AltGr</div>
+                                                <div class="key key-size-al small operator"                          data-fwcode="VD_FW_KEY_UNKNOWN"                       data-key="Win">Win</div>
+                                                <div class="key key-size-al small operator" data-code="ContextMenu"  data-fwcode="VD_FW_KEY_UNKNOWN"                       data-key="Menu">☰</div>
+                                                <div class="key key-size-ct small operator" data-code="ControlRight" data-fwcode="VD_FW_KEY_RCONTROL"                      data-key="Ctrl">Ctrl</div>
+                                            </div>
+                                        </div>
+
+                                        <div id="keyboard-output">
+                                            <code></code>
+                                        </div>
+                                    </div>
+                                    <!-- End  Split -->
+                                    
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- End   Keyboard -->
+
+                </div>
 
             </div>
         </div>
@@ -1678,5 +1885,6 @@ vd_fw_init(& (VdFwInitInfo) {
                 crossorigin="anonymous" referrerpolicy="no-referrer"></script>
         <script src="/auto-toc.js"></script>
         <script src="/index.js"></script>
+        <script src="/vd_fw/fw.js"></script>
     </body>
 </html>

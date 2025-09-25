@@ -13,10 +13,21 @@ body {
 
 :root {
     --bittersweet: #ee5a58ff;
+    --bittersweet50: #ee5a5888;
     --eerie-black: #1e1b18ff;
     --antiflash-white: #e8e9ebff;
     --slate-gray: #6b717eff;
     --orange-peel: #ffa630ff;
+
+    .btn-primary {
+        background-color: var(--bittersweet);
+        border-color: transparent;
+    }
+
+    .btn-primary:active {
+        background-color: var(--bittersweet50);
+        border-color: var(--antiflash-white);
+    }
 }
 
 section, .apiitem {
@@ -173,11 +184,10 @@ pre {
 /* Container for each function entry */
 .apiitem.function {
     padding-bottom: 4px;
-    margin: 16px 8px;
+    margin: 16px 0px;
     color: var(--antiflash-white);
     /*background-color: var(--eerie-black);*/
     border-radius: 16px;
-    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
     transition: box-shadow 0.3s ease;
     box-shadow: 0 0px 12px rgba(0, 0, 0, 0.7);
     /*margin-bottom: min(100vh, 50%);*/
