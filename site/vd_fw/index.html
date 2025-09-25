@@ -56,7 +56,7 @@
             <div class="row justify-content-center">
                 <div id="main-content" class="col-12 col-sm-10 col-md-8 col-lg-8 text-start mx-auto" style="margin-top: 0px;">
 
-                    <nav id="toc" data-toc class="toc-outline d-none d-lg-flex p-0 nav outline-section flex-column">
+                    <nav id="toc" data-toc class="toc-outline d-none d-xl-flex p-0 nav outline-section flex-column">
                         
                     </nav>
 
@@ -200,9 +200,114 @@ int main() {
                         <h4>Linking & Dependencies</h4>
                         <hr>
 
+                        <p>
+                            This library is distributed as a single, header-only file, thus the following instructions are meant to
+                            be considered for your final application/dynamic library.
+                            <br> <br>
 
-                        The library is distributed as a single, header-only file, thus the following instructions are meant to
-                        be considered for your final application/dynamic library.
+                            In general, I make use of the up-to-date platform specific APIs, that should be available
+                            with every distribution of said platform's development environment.
+                            <br> <br>
+
+                            Some preprocessor directives to set depending on your needs:
+
+                        </p>
+
+                        <table class="table">
+                            <tr>
+                                <th scope="col">Option</th>
+                                <th scope="col">Description</th>
+                            </tr>
+                            <tbody>
+                                <tr>
+                                    <td><code>VD_FW_VERSION_MAJOR</code></td>
+                                    <td>Major version number of the library</td>
+                                </tr>
+                                <tr>
+                                    <td><code>VD_FW_VERSION_MINOR</code></td>
+                                    <td>Minor version number of the library</td>
+                                </tr>
+                                <tr>
+                                    <td><code>VD_FW_VERSION_PATCH</code></td>
+                                    <td>Patch version number of the library</td>
+                                </tr>
+                                <tr>
+                                    <td><code>VD_FW_VERSION</code></td>
+                                    <td>Combined version (major, minor, patch) number of the library</td>
+                                </tr>
+                                <tr>
+                                    <td><code>#define VD_FW_STATIC</code></td>
+                                    <td>Set to use this library statically.</td>
+                                </tr>
+                                <tr>
+                                    <td><code>#define VD_FW_API // (static, extern, ...dllexport)</code></td>
+                                    <td>Set to change the function signature (useful for precompiling the library).</td>
+                                </tr>
+                                <tr>
+                                    <td><code>#define VD_FW_INL</code></td>
+                                    <td>Set to change inlined functions' signatures.</td>
+                                </tr>
+                                <tr>
+                                    <td><code>#define VD_FW_NO_CRT</code></td>
+                                    <td>
+                                        Options:
+                                        <ul>
+                                            <li>Set to '1' to disable including C standard library</li>
+                                            <li>Set to '0' to enable including C standard library</li>
+                                        </ul>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><code>#define VD_FW_SIN</code></td>
+                                    <td>
+                                        Options:
+                                        <ul>
+                                            <li>If <code>VD_FW_NO_CRT == 1</code> it's resolved to libc <code>sinf</code></li>
+                                            <li>If <code>VD_FW_NO_CRT == 0</code> it's resolved to vd_fw_sin (custom implementation).</li>
+                                        </ul>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><code>#define VD_FW_COS</code></td>
+                                    <td>
+                                        Options:
+                                        <ul>
+                                            <li>If <code>VD_FW_NO_CRT == 1</code> it's resolved to libc <code>cosf</code></li>
+                                            <li>If <code>VD_FW_NO_CRT == 0</code> it's resolved to vd_fw_cos (custom implementation).</li>
+                                        </ul>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><code>#define VD_FW_TAN</code></td>
+                                    <td>
+                                        Options:
+                                        <ul>
+                                            <li>If <code>VD_FW_NO_CRT == 1</code> it's resolved to libc <code>tanf</code></li>
+                                            <li>If <code>VD_FW_NO_CRT == 0</code> it's resolved to vd_fw_tan (custom implementation).</li>
+                                        </ul>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><code>#define VD_FW_SQRT</code></td>
+                                    <td>
+                                        Options:
+                                        <ul>
+                                            <li>If <code>VD_FW_NO_CRT == 1</code> it's resolved to libc <code>sqrtf</code></li>
+                                            <li>If <code>VD_FW_NO_CRT == 0</code> it's resolved to vd_fw_sqrt (custom implementation).</li>
+                                        </ul>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <code>#define VD_FW_WIN32_SUBSYSTEM</code><br>
+                                        <code>// Can be one of the following:</code><br>
+                                        <code>// VD_FW_WIN32_SUBSYSTEM_CONSOLE</code><br>
+                                        <code>// VD_FW_WIN32_SUBSYSTEM_WINDOWS</code>
+                                    </td>
+                                    <td>Change the <a href="https://learn.microsoft.com/en-us/cpp/build/reference/subsystem-specify-subsystem?view=msvc-170">Subsystem</a> (Windows only).</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </section>
                     <br>
 
@@ -925,7 +1030,7 @@ glGenerateMipmap(GL_TEXTURE_2D);
                             enabled for the 3D part of our rendering;
                         </p>
 
-                        <pre><code class="language-cpp">
+                        <pre class="rounded copy"><code class="language-cpp">
 glDisable(GL_DEPTH_TEST);
 glUseProgram(program);
 glBindVertexArray(VAO);
@@ -943,7 +1048,7 @@ glEnable(GL_DEPTH_TEST);
                             Before our main loop, we're also going to add some variables for the camera:
                         </p>
 
-                        <pre><code class="language-cpp">
+                        <pre class="rounded copy"><code class="language-cpp">
 float camera_position[3] = {0.f, 0.f, -2.f};
 float camera_yaw   = 0.f;
 float camera_pitch = 30.f;
@@ -955,7 +1060,7 @@ float camera_speed = 2.f;
                             Now for rendering the cube depending on camera position:
                         </p>
 
-                        <pre><code class="language-cpp">
+                        <pre class="rounded copy"><code class="language-cpp">
 glEnable(GL_DEPTH_TEST);
 float fw = (float)w;
 float fh = (float)h;
@@ -1055,7 +1160,7 @@ glDrawArrays(GL_TRIANGLES, 0, 36);
                             So let's add some camera manipulation, we'll start by getting the delta time in seconds:
                         </p>
 
-                        <pre><code class="language-cpp">
+                        <pre class="rounded copy"><code class="language-cpp">
 float ds = vd_fw_delta_s();
                         </code></pre>
 
@@ -1064,7 +1169,7 @@ float ds = vd_fw_delta_s();
                             application;
                         </p>
 
-                        <pre><code class="language-cpp">
+                        <pre class="rounded copy"><code class="language-cpp">
 vd_fw_set_mouse_locked(1);
                         </code></pre>
 
@@ -1072,7 +1177,7 @@ vd_fw_set_mouse_locked(1);
                             Here's also the snippet for how to move the camera
                         </p>
 
-                        <pre><code class="language-cpp">
+                        <pre class="rounded copy"><code class="language-cpp">
 // Get key states
 float fwdir = (float)(vd_fw_get_key_down('W') - vd_fw_get_key_down('S'));
 float rgdir = (float)(vd_fw_get_key_down('A') - vd_fw_get_key_down('D'));
@@ -1109,7 +1214,7 @@ if (camera_dir_lensq > 0.0001f) {
                             Finally, inside of our rendering loop, we compute the camera's pitch and yaw based on the mouse:
                         </p>
 
-                        <pre><code class="language-cpp">
+                        <pre class="rounded copy"><code class="language-cpp">
 if (vd_fw_get_mouse_locked()) {
     float mouse_delta_x, mouse_delta_y;
     vd_fw_get_mouse_delta(&mouse_delta_x, &mouse_delta_y);
@@ -1137,7 +1242,7 @@ float camera_forward[3] = {
                             is confined. Let's make 'Shift + F1' unlock the mouse:
                         </p>
 
-                        <pre><code class="language-cpp">
+                        <pre class="rounded copy"><code class="language-cpp">
 if (vd_fw_get_mouse_locked()) {
     float mouse_delta_x, mouse_delta_y;
     vd_fw_get_mouse_delta(&mouse_delta_x, &mouse_delta_y);
@@ -1171,7 +1276,7 @@ float camera_forward[3] = {
                         <h4>Reference</h4>
                         <hr>
                         <!-- VD_FW_API int                vd_fw_init(VdFwInitInfo *info); -->
-                        <div id="vd_fw_init" class="apiitem function">
+                        <div id="vd_fw_init" class="L2 apiitem function">
                             <span class="item-decl">int vd_fw_init(VdFwInitInfo *info)</span>
                             <div class="apidetails">
                                 <p class="item-desc">
@@ -1184,6 +1289,25 @@ float camera_forward[3] = {
                                     </tr>
                                 </tbody>
                                 </table>
+
+                                <h6>Remarks</h6>
+                                <p>
+                                    - Why not use a parameter list?<br>
+                                    It's easier update the function's signature, and much easier for the user to just 
+                                    copy and paste a struct, and modify its values.
+                                </p>
+
+                                <p>
+                                    In C99, you can also do this:
+                        <pre class="rounded copy"><code class="language-cpp">
+vd_fw_init(& (VdFwInitInfo) {
+    .gl = {
+        .version = VD_FW_GL_VERSION_3_3,
+    },
+});
+                        </code></pre>
+
+                                </p>
                             </div>
                         </div>
 
@@ -1209,9 +1333,59 @@ float camera_forward[3] = {
                                 </table>
                             </div>
                         </div>
-                        <!--                                                 VdFwInitInfo -->
 
-                        <div id="vd_fw_running" class="apiitem function">
+                        <div id="VdFwGlVersion" class="L2 apiitem function">
+                            <span class="item-decl">VdFwGlVersion</span>
+                            <div class="apidetails">
+                                <p class="item-desc">
+                                    OpenGL version to use, passed in <code>VdFwInitInfo</code>.
+                                </p>
+                                <table class="table">
+                                <tbody>
+                                    <tr><td>VD_FW_GL_VERSION_BASIC</td>
+                                        <td>Defaults to a known good version of OpenGL (3.3).</td> 
+                                    <tr><td>VD_FW_GL_VERSION_1_0</td>
+                                        <td>OpenGL Version 1.0</td> 
+                                    <tr><td>VD_FW_GL_VERSION_1_2</td>
+                                        <td>OpenGL Version 1.2</td> 
+                                    <tr><td>VD_FW_GL_VERSION_1_3</td>
+                                        <td>OpenGL Version 1.3</td> 
+                                    <tr><td>VD_FW_GL_VERSION_1_4</td>
+                                        <td>OpenGL Version 1.4</td> 
+                                    <tr><td>VD_FW_GL_VERSION_1_5</td>
+                                        <td>OpenGL Version 1.5</td> 
+                                    <tr><td>VD_FW_GL_VERSION_2_0</td>
+                                        <td>OpenGL Version 2.0</td> 
+                                    <tr><td>VD_FW_GL_VERSION_2_1</td>
+                                        <td>OpenGL Version 2.1</td> 
+                                    <tr><td>VD_FW_GL_VERSION_3_0</td>
+                                        <td>OpenGL Version 3.0</td> 
+                                    <tr><td>VD_FW_GL_VERSION_3_1</td>
+                                        <td>OpenGL Version 3.1</td> 
+                                    <tr><td>VD_FW_GL_VERSION_3_2</td>
+                                        <td>OpenGL Version 3.2</td> 
+                                    <tr><td>VD_FW_GL_VERSION_3_3</td>
+                                        <td>OpenGL Version 3.3</td> 
+                                    <tr><td>VD_FW_GL_VERSION_4_0</td>
+                                        <td>OpenGL Version 4.0</td> 
+                                    <tr><td>VD_FW_GL_VERSION_4_1</td>
+                                        <td>OpenGL Version 4.1</td> 
+                                    <tr><td>VD_FW_GL_VERSION_4_2</td>
+                                        <td>OpenGL Version 4.2</td> 
+                                    <tr><td>VD_FW_GL_VERSION_4_3</td>
+                                        <td>OpenGL Version 4.3</td> 
+                                    <tr><td>VD_FW_GL_VERSION_4_4</td>
+                                        <td>OpenGL Version 4.4</td> 
+                                    <tr><td>VD_FW_GL_VERSION_4_5</td>
+                                        <td>OpenGL Version 4.5</td> 
+                                    <tr><td>VD_FW_GL_VERSION_4_6</td>
+                                        <td>OpenGL Version 4.6</td> 
+                                </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div id="vd_fw_running" class="L2 apiitem function">
                             <span class="item-decl">int vd_fw_running(void)</span>
                             <div class="apidetails">
                                 <p class="item-desc">
@@ -1224,11 +1398,45 @@ float camera_forward[3] = {
                                     </tr>
                                 </tbody>
                                 </table>
+
+                                <h6>Remarks</h6>
+                                <p>
+                                    Some details about the internals of this function:<br>
+                                    <br>
+                                    Typically, most graphics applications use only one thread, the main thread.
+                                    This covers most of the use cases, but many windowing APIs (at least for the big
+                                    threes: Windows, MacOS and Linux) block or enter some kind of internal loop when
+                                    the window is moved or resized.
+                                    <br><br>
+                                    This results in the application freezing once these events happen. Most solutions
+                                    to this are implemented by creating a separate thread to which rendering is
+                                    delegated to, and updating a condition variable or some other synchronization
+                                    construct to signal to the render thread that it should render, or wait for the
+                                    appropriate time to render. 
+                                    <br><br>
+                                    Here, we do kind of the reverse: We spawn a separate thread for the windowing and
+                                    input, and do the rendering on the main thread.
+                                    <br><br>
+                                    For input, most of the input events are cached or swallowed into sinks to make the
+                                    interface of the library immediate-mode and easy to use. But for the most part
+                                    the windowing thread Sleeps on messages.
+                                    <br><br>
+                                    This function, as well as <a href="#vd_fw_swap_buffers">vd_fw_swap_buffers</a> do
+                                    a bit more than just checking if the window is running and swapping buffers. This
+                                    function for example:
+                                    <ul>
+                                        <li>Checks a semaphore to see if the window was closed.</li>
+                                        <li>Zeroes/Updates cached key/mouse states.</li>
+                                        <li>Checks messages on a small interlocked circular queue.</li>
+                                        <li>Enters Mutex/Critical Section and gets frame info (width, height)</li>
+                                        <li>Handles mouse locking behavior.</li>
+                                    </ul>
+                                </p>
                             </div>
                         </div>
 
                         <!-- VD_FW_API int                vd_fw_swap_buffers(void); -->
-                        <div id="vd_fw_init" class="apiitem function">
+                        <div id="vd_fw_swap_buffers" class="L2 apiitem function">
                             <span class="item-decl">int vd_fw_swap_buffers(void)</span>
                             <div class="apidetails">
                                 <p class="item-desc">
@@ -1241,8 +1449,48 @@ float camera_forward[3] = {
                                     </tr>
                                 </tbody>
                                 </table>
+                                <h6>Remarks</h6>
+                                <p>
+                                    As mentioned in <a href="#vd_fw_running">vd_fw_running</a>, this function does a bit
+                                    more than just swapping buffers:
+                                    <ul>
+                                        <li>It (of course) swaps the buffers.</li>
+                                        <li>Performs glFenceSync/glClientWaitSync to better synchronize frame
+                                            timing</li>
+                                        <li>Wakes up window thread (if it needs to be woken up)</li>
+                                    </ul>
+                                </p>
                             </div>
                         </div>
+
+                        <!-- VD_FW_API unsigned int      vd_fw_compile_shader(unsigned int type, const char *source)-->
+                        <div id="vd_fw_compile_shader" class="L2 apiitem function">
+                            <span class="item-decl">unsigned int vd_fw_compile_shader(unsigned int type, const char *source)</span>
+                            <div class="apidetails">
+                                <p class="item-desc">
+                                    Compiles a shader from <code>source</code> with type <code>type</code>.
+                                </p>
+                                <table class="table">
+                                <tbody>
+                                    <tr><td>Return Value</td>
+                                        <td>(Reserved for future use)</td>
+                                    </tr>
+                                </tbody>
+                                </table>
+                                <h6>Remarks</h6>
+                                <p>
+                                    As mentioned in <a href="#vd_fw_running">vd_fw_running</a>, this function does a bit
+                                    more than just swapping buffers:
+                                    <ul>
+                                        <li>It (of course) swaps the buffers.</li>
+                                        <li>Performs glFenceSync/glClientWaitSync to better synchronize frame
+                                            timing</li>
+                                        <li>Wakes up window thread (if it needs to be woken up)</li>
+                                    </ul>
+                                </p>
+                            </div>
+                        </div>
+
                     </section>
                     <!--   End API -->
 

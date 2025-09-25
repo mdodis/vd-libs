@@ -8,14 +8,14 @@ function makeToc(contentElement, tocSelector, options) {
   if (tocSelector == null) {
     throw new Error('need to provide a selector where inject the TOC');
   }
-  // Support <section class="L1 ...">, <section class="L2 ...">, etc.
-  var sections;
+  // Support <section class="Lx ..."> and <div class="Lx ...">
+  var elements;
   if (typeof contentElement === 'string') {
-    sections = document.querySelectorAll(contentElement + ' section[class^="L"]');
+    elements = document.querySelectorAll(contentElement + ' section[class^="L"], ' + contentElement + ' div[class^="L"]');
   } else {
-    sections = contentElement.querySelectorAll('section[class^="L"]');
+    elements = contentElement.querySelectorAll('section[class^="L"], div[class^="L"]');
   }
-  var allSections = Array.prototype.slice.call(sections);
+  var allSections = Array.prototype.slice.call(elements);
   var min = 6;
   var headers = allSections.filter(function(item) {
     var classesList = item.className.split(' ');
@@ -56,9 +56,15 @@ function createHierarchy(headers, minLevel, useSectionLevel) {
   var init = false;
   headers.forEach(function(header) {
     var headingNumber = useSectionLevel ? header._tocLevel : parseInt(header.nodeName.substr(1));
-    // Use first h4 inside section as title, fallback to section text
-    var h4 = header.querySelector('h4');
-    var title = h4 ? getText(h4) : getText(header);
+    var title = '';
+    if (header.tagName === 'SECTION') {
+      var h4 = header.querySelector('h4');
+      title = h4 ? getText(h4) : getText(header);
+    } else if (header.tagName === 'DIV') {
+      title = header.id ? header.id : getText(header);
+    } else {
+      title = getText(header);
+    }
     var object = {
       title: title,
       link: window.location.pathname + (header.id ? ('#' + header.id) : ''),

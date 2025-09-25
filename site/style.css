@@ -18,7 +18,7 @@ body {
     --orange-peel: #ffa630ff;
 }
 
-section {
+section, .apiitem {
     scroll-margin-top: 70px;
 }
 
@@ -28,12 +28,17 @@ section {
     object-fit: contain;
 }
 
-.toc-outline {
+#toc {
     position: fixed;
-    top: 80px; /* adjust for your navbar height */
-    right: 8px; /* adjust as needed */
-    width: auto;
+    flex-direction: row;
+    top: 80px;
+    right: 8px;
     z-index: 100;
+    max-height: calc(100vh - 100px); /* adjust offset as needed */
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-gutter: stable both-edges;
 }
 
 .nav-item.dropdown:hover .dropdown-menu {
@@ -98,13 +103,13 @@ pre {
 /* Container for each function entry */
 .apiitem.function {
     padding-bottom: 4px;
-    margin: 16px 0px;
+    margin: 16px 8px;
     color: var(--antiflash-white);
-    background-color: var(--eerie-black);
+    /*background-color: var(--eerie-black);*/
     border-radius: 16px;
     font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
     transition: box-shadow 0.3s ease;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 0px 12px rgba(0, 0, 0, 0.7);
 }
 
 .span-image {
@@ -115,7 +120,7 @@ pre {
 }
 
 .apiitem.function:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 0px 24px rgba(0, 0, 0, 0.9);
 }
 
 .apidetails {
@@ -133,6 +138,10 @@ pre {
     padding-left:   8px;
     padding-bottom: 8px;
     background-color: #55555555;
+    /*background-color: var(--antiflash-white);*/
+    background: #EE5A58FF;
+    background: linear-gradient(90deg,rgba(238, 90, 88, 0.7) 20%, rgba(238, 90, 88, 0.23) 100%);
+    transition: background-image 0.2s ease-in-out;
 }
 
 .item-desc {
@@ -180,11 +189,6 @@ pre {
 .apiitem.function table td:first-child {
     width: 300px;
     text-align: right;  /* optional: aligns parameter names to the right */
-}
-
-.toc {
-    position: sticky;
-    top: 20px;
 }
 
 .dropdown-item:active {

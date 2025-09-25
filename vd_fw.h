@@ -47,11 +47,13 @@
 #define _CRT_SECURE_NO_WARNINGS
 #endif // !_CRT_SECURE_NO_WARNINGS
 
+#ifndef VD_FW_API
 #ifdef VD_FW_STATIC
 #define VD_FW_API static
 #else
 #define VD_FW_API extern
 #endif // VD_FW_STATIC
+#endif // !VD_FW_API
 
 #ifndef VD_FW_INL
 #define VD_FW_INL static inline
