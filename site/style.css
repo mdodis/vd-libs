@@ -1,6 +1,5 @@
 #mainnav {
     transition: box-shadow 0.2s ease-in-out;
-    height: 50px;
 }
 
 .rmprint {
@@ -16,23 +15,13 @@
 }
 
 section {
-    scroll-margin-top: 50px;
+    scroll-margin-top: 70px;
 }
 
-.cardliblogo {
-    width: 95px;
-}
-
-/*[data-bs-theme="dark"] {
-    --bs-body-bg: var(--slate-gray);
-}
-
-[data-bs-theme="dark"] .navbar {
-    background-color: var(--eerie-black);
-}*/
-
-.card {
-    border-radius: 0px;
+.libcardlogo {
+    width: 100px;
+    height: auto;
+    object-fit: contain;
 }
 
 .toc-outline {
@@ -50,7 +39,7 @@ section {
 .libcard {
     transition: background-color 0.2s ease-in-out;
     /*width: 564px;*/
-    height: 120px;
+    /*height: 120px;*/
 }
 
 .libcard:hover {
@@ -115,9 +104,10 @@ pre {
 }
 
 .span-image {
-    /*border: 1px solid red;*/
-    height: 6em;
-    width: 100%;
+    display: block;
+    margin: auto;
+    max-width: 100%;
+    height: auto;
 }
 
 .apiitem.function:hover {
