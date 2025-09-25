@@ -6,6 +6,10 @@
 
 }
 
+body {
+    position: relative;
+}
+
 :root {
     --bittersweet: #ee5a58ff;
     --eerie-black: #1e1b18ff;
@@ -123,7 +127,7 @@ pre {
 .item-decl {
     border-top-left-radius:  8px;
     border-top-right-radius: 8px;
-    font-weight: bold;
+    /*font-weight: bold;*/
     display: block;
     padding-top:    4px;
     padding-left:   8px;
@@ -174,8 +178,7 @@ pre {
 
 /* Set a fixed min-width for the first column */
 .apiitem.function table td:first-child {
-    width: 150px;
-    min-width: 150px;  /* adjust as needed */
+    width: 300px;
     text-align: right;  /* optional: aligns parameter names to the right */
 }
 

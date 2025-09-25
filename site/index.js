@@ -38,6 +38,10 @@ document.querySelectorAll('pre.copy').forEach(pre => {
   });
 });
 
+// document.addEventListener('DOMContentLoaded', function () {
+//   makeToc("#main-content", "[section]", {});
+// });
+
 // // Custom ScrollSpy parent highlighting for nested nav
 // document.addEventListener('DOMContentLoaded', function () {
 //     var toc = document.getElementById('toc');

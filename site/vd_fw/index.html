@@ -56,7 +56,11 @@
             <div class="row justify-content-center">
                 <div id="main-content" class="col-12 col-sm-10 col-md-8 col-lg-8 text-start mx-auto" style="margin-top: 0px;">
 
-                    <nav id="toc" class="toc-outline d-none d-lg-flex p-0 nav outline-section flex-column">
+                    <nav id="toc" data-toc class="toc-outline d-none d-lg-flex p-0 nav outline-section flex-column">
+                        
+                    </nav>
+
+                    <!-- <nav id="toc" class="toc-outline d-none d-lg-flex p-0 nav outline-section flex-column">
                         <a class="nav-link" href="#brief">Brief</a>
                         <a class="nav-link" href="#linking">Linking & Dependencies</a>
                         <div class="nav outline-section flex-column ms-3">
@@ -80,9 +84,9 @@
                             <a class="nav-link" href="#tutorials-input">Input</a>
                         </div>
                         <a class="nav-link" href="#api-ref">Reference</a>
-                    </nav>
+                    </nav> -->
 
-                    <section class="section" id="brief">
+                    <section class="L1 section" id="brief">
                         <h4 id="brief">Brief</h4>
                         <hr>
 
@@ -192,7 +196,7 @@ int main() {
                     </section>
                     <br>
 
-                    <section class="section" id="linking">
+                    <section class="L1 section" id="linking">
                         <h4>Linking & Dependencies</h4>
                         <hr>
 
@@ -203,7 +207,7 @@ int main() {
                     <br>
 
 
-                    <section id="linking-windows">
+                    <section class="L2 section" id="linking-windows">
                         <h4>Windows</h4>
                         <p>
                             With MSVC you don't really need to link anything, since linker directives in the
@@ -245,7 +249,7 @@ int main() {
                         </p>
                     </section>
 
-                    <section id="linking-macos">
+                    <section class="L2 section" id="linking-macos">
                         <h4>MacOS</h4>
                         <p>
                             For MacOS, it's a bit different. with clang, you must link several frameworks (via <code>-framework framework_name</code>).
@@ -266,7 +270,7 @@ int main() {
                     </section>
                     <br>
 
-                    <section class="section" id="support">
+                    <section class="L1 section" id="support">
                         <h4>Support</h4>
                         <hr>
 
@@ -303,7 +307,7 @@ freely, subject to the following restrictions:
                         <p><a class="link-opacity-100" href="https://github.com/mdodis/vd-libs/issues/new">Submit issues here</a></p>
                     </section>
 
-                    <section class="section" id="platforms">
+                    <section class="L2 section" id="platforms">
                         <h4>Platforms</h4>
                         <p>
                             Due to platform limitations, platform-specific APIs and frameworks, vd_fw.h will
@@ -351,7 +355,7 @@ freely, subject to the following restrictions:
                         </table>
                     </section>
 
-                    <section class="section" id="revisions">
+                    <section class="L2 section" id="revisions">
                         <h4>Revisions</h4> 
                         <div class="list-group">
                             <a class="list-group-item">
@@ -372,7 +376,7 @@ freely, subject to the following restrictions:
                     </section>
                     <br>
 
-                    <section class="section" id="tutorials">
+                    <section class="L1 section" id="tutorials">
                         <h4>Tutorials</h4>
                         <hr>
                         <p>
@@ -408,7 +412,7 @@ freely, subject to the following restrictions:
                     <br>
 
 
-                    <section class="section" id="tutorials-main-loop">
+                    <section class="L2 section" id="tutorials-main-loop">
                         <h4>Main Loop</h4>
                         <p>
                             Let's look at the main loop.
@@ -452,7 +456,7 @@ int main(int argc, char const *argv[])
                     </section> 
                     <br>
 
-                    <section class="section" id="tutorials-choose-version">
+                    <section class="L2 section" id="tutorials-choose-version">
                         <h4>Choose OpenGL Version</h4>
                         <p>
                             To specify the OpenGL version, create a <code>VdFwInitInfo</code> struct, populate the
@@ -495,7 +499,7 @@ typedef enum {
                     </section> 
                     <br>
 
-                    <section class="section" id="tutorials-borderless-window">
+                    <section class="L2 section" id="tutorials-borderless-window">
                         <h4>Create a Borderless Window</h4>
                         <p>
                             To create a borderless window, create a <code>VdFwInitInfo</code> struct, set
@@ -515,7 +519,7 @@ vd_fw_init(&init_info);
                     </section> 
                     <br>
 
-                    <section class="section" id="tutorials-compiling-shaders">
+                    <section class="L2 section" id="tutorials-compiling-shaders">
                         <h4>Create a Shader Program</h4>
                         <p>
                             Let's create a simple 2D rectangle application.
@@ -605,7 +609,7 @@ vd_fw_init(& (VdFwInitInfo) {
                     </section> 
                     <br>
 
-                    <section class="section" id="tutorials-creating-vertex-buffer">
+                    <section class="L2 section" id="tutorials-creating-vertex-buffer">
                         <h4>Draw a Rectangle</h4>
                         <p>
                             Continuing from the previous section, we create a vertex buffer for a 2d rectangle:
@@ -672,7 +676,7 @@ glBindVertexArray(0);
                     <br>
 
 
-                    <section class="section" id="tutorials-ncrects">
+                    <section class="L2 section" id="tutorials-ncrects">
                         <h4>Set the Drag Area</h4>
                         <p>
                             Let's draw a simple window frame using our rectangle "renderer":
@@ -799,7 +803,7 @@ vd_fw_set_ncrects(draggable_rect, 1, exclude_rects);
                     </section> 
                     <br>
 
-                    <section class="section" id="tutorials-rendering-3d">
+                    <section class="L2 section" id="tutorials-rendering-3d">
                         <h4>Render 3D</h4>
                         <p>
                             Let's render some 3D geometry.
@@ -1031,7 +1035,7 @@ glDrawArrays(GL_TRIANGLES, 0, 36);
                     </section> 
                     <br>
 
-                    <section class="section" id="tutorials-input">
+                    <section class="L2 section" id="tutorials-input">
                         <h4>Input</h4> 
 
                         <p>
@@ -1163,7 +1167,7 @@ float camera_forward[3] = {
                     </section>
 
                     <!-- Begin API -->
-                    <section class="section" id="api-ref">
+                    <section class="L1 section" id="api-ref">
                         <h4>Reference</h4>
                         <hr>
                         <!-- VD_FW_API int                vd_fw_init(VdFwInitInfo *info); -->
@@ -1183,7 +1187,30 @@ float camera_forward[3] = {
                             </div>
                         </div>
 
-                        <!-- VD_FW_API int                vd_fw_running(void); -->
+                        <!--                                                 VdFwInitInfo -->
+                        <div id="VdFwInitInfo" class="L2 apiitem function">
+                            <span class="item-decl">VdFwInitInfo</span>
+                            <div class="apidetails">
+                                <p class="item-desc">
+                                    Info struct passed to <code>vd_fw_init</code>.
+                                </p>
+                                <table class="table">
+                                <tbody>
+                                    <tr><td>VdFwInitInfo::gl::version</td>
+                                        <td>Version of OpenGL to load.</td>
+                                    </tr>
+                                    <tr><td>VdFwInitInfo::gl::debug_on</td>
+                                        <td>Enable <a href="https://www.khronos.org/opengl/wiki/Debugging_Tools#Debug_Output">debugging for OpenGL</a>.</td>
+                                    </tr>
+                                    <tr><td>VdFwInitInfo::window_options::borderless</td>
+                                        <td>Set to 1 to disable window decorations.</td>
+                                    </tr>
+                                </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <!--                                                 VdFwInitInfo -->
+
                         <div id="vd_fw_running" class="apiitem function">
                             <span class="item-decl">int vd_fw_running(void)</span>
                             <div class="apidetails">
@@ -1246,6 +1273,7 @@ float camera_forward[3] = {
         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"
                 integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg=="
                 crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+        <script src="/auto-toc.js"></script>
         <script src="/index.js"></script>
     </body>
 </html>
