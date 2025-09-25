@@ -102,8 +102,8 @@
 
                         <p>
                             It's written with performance in mind; though performance is not the main focus of it.
-                            <b>Maintainability</b>, <b>support</b> for the defined feature set and <b>ease of use</b> are the primary
-                            targets of this library.
+                            <b>Maintainability</b>, <b>support</b> for the defined feature set and <b>ease of use</b>
+                            are the primary targets of this library.
                         </p>
 
                         <p>
@@ -124,29 +124,32 @@
                                 <li>And much more...</li>
                             </ul>
 
-                            But in their attempt to be "generic" and "robust", they fail to provide a good and simple interface
-                            that covers 90% of the use cases, that is implemented in the best way possible for each platform
+                            But in their attempt to be "generic" and "robust", they fail to provide a good and simple
+                            interface that covers 90% of the use cases, and is implemented in the best way possible for
+                            each platform.
                         </p>
 
                         <p>
-                            One common example is that every other popular windowing library on Windows does not allow the
-                            developer to draw while resizing or moving the window.
+                            One common example is that almost every popular windowing library on Windows does not allow
+                            the developer to draw while resizing or moving the window.
 
-                            This is an introcacy of the Win32 API (and actually the same is true for MacOS), and the recommended way
-                            is not exactly obvious to a new developer, or one unfamiliar with the platform.
+                            This is an introcacy of the Win32 API (and actually the same is true for MacOS), and the
+                            recommended way is not exactly obvious to a new developer, or one unfamiliar with the
+                            platform.
                             <br>
                         </p>
 
                         <p>
-                            Another gripe I have with these libraries is that for OpenGL you are <b>required</b> to either bring
-                            in your own loader, or use an off the shelf one, even though when someone is only starting to learn
-                            graphics programming, they don't know the difference between "Core Profile", "Compatibility Profile",
-                            or even what an extension is.
+                            Another gripe I have with these libraries is that for OpenGL you are <b>required</b> to
+                            either bring in your own loader, or use an off the shelf one, even though when someone is
+                            only starting to learn graphics programming, they don't know the difference between "Core
+                            Profile", "Compatibility Profile", or even what an extension is.
                         </p>
 
                         <div class="alert alert-primary d-flex align-items-center" role="alert">
                             <div>
-                                Note that you don't need to use an OpenGL loader or include any OS specific OpenGL libraries.
+                                Note that you don't need to use an OpenGL loader or include any OS specific OpenGL
+                                libraries.
                                 <br>
                                 The library does the loading for you.
                             </div>
@@ -201,8 +204,8 @@ int main() {
                         <hr>
 
                         <p>
-                            This library is distributed as a single, header-only file, thus the following instructions are meant to
-                            be considered for your final application/dynamic library.
+                            This library is distributed as a single, header-only file, thus the following instructions
+                            are meant to be considered for your final application/dynamic library.
                             <br> <br>
 
                             In general, I make use of the up-to-date platform specific APIs, that should be available
@@ -497,8 +500,10 @@ freely, subject to the following restrictions:
                             We will start by creating a simple window, and continue with:
                             <ul>
                                 <li>Making it borderless</li>
-                                <li>Drawing a rectangle, and last</li>
+                                <li>Drawing a rectangle</li>
                                 <li>Setting the drag area</li>
+                                <li>Drawing some 3D geometry</li>
+                                <li>Handling input in a user-friendly way</li>
                             </ul>
 
                             You can safely read each tutorial on its own, or in order. It will guide you through
@@ -835,7 +840,7 @@ vd_fw_set_receive_ncmouse(1);
                         </p>
 
                         <p>
-                            Now, for the 2 last parameters to <code>vd_fw_set_ncrects</code>:<br>
+                            Now, for the 2 last parameters to <code>vd_fw_set_ncrects</code>:
                             <ul>
                                 <li>count: Number of excluded rects</li>
                                 <li>rects: Pointer to array of <code>count</code> rects</li>
@@ -916,33 +921,33 @@ vd_fw_set_ncrects(draggable_rect, 1, exclude_rects);
                         </p>
                         <pre class="rounded copy"><code class="language-cpp">
 #define VERTEX_SOURCE3D \
-"#version 330 core                                                                                                 \n" \
-"layout (location = 0) in vec3 aPos;                                                                               \n" \
-"layout (location = 1) in vec2 aTexCoord;                                                                          \n" \
-"                                                                                                                  \n" \
-"out vec2 TexCoord;                                                                                                \n" \
-"                                                                                                                  \n" \
-"uniform mat4 projection;                                                                                          \n" \
-"uniform mat4 view;                                                                                                \n" \
-"                                                                                                                  \n" \
-"void main()                                                                                                       \n" \
-"{                                                                                                                 \n" \
-"    gl_Position = projection * view * vec4(aPos, 1.0f);                                                           \n" \
-"    TexCoord = vec2(aTexCoord.x, 1.0 - aTexCoord.y);                                                              \n" \
-"}                                                                                                                 \n" \
+"#version 330 core                                        \n" \
+"layout (location = 0) in vec3 aPos;                      \n" \
+"layout (location = 1) in vec2 aTexCoord;                 \n" \
+"                                                         \n" \
+"out vec2 TexCoord;                                       \n" \
+"                                                         \n" \
+"uniform mat4 projection;                                 \n" \
+"uniform mat4 view;                                       \n" \
+"                                                         \n" \
+"void main()                                              \n" \
+"{                                                        \n" \
+"    gl_Position = projection * view * vec4(aPos, 1.0f);  \n" \
+"    TexCoord = vec2(aTexCoord.x, 1.0 - aTexCoord.y);     \n" \
+"}                                                        \n" \
 
 #define FRAGMENT_SOURCE3D \
-"#version 330 core                                                                                                 \n" \
-"out vec4 FragColor;                                                                                               \n" \
-"                                                                                                                  \n" \
-"in vec2 TexCoord;                                                                                                 \n" \
-"                                                                                                                  \n" \
-"uniform sampler2D texture1;                                                                                       \n" \
-"                                                                                                                  \n" \
-"void main()                                                                                                       \n" \
-"{                                                                                                                 \n" \
-"    FragColor = texture(texture1, TexCoord);                                                                      \n" \
-"}                                                                                                                 \n" \
+"#version 330 core                                        \n" \
+"out vec4 FragColor;                                      \n" \
+"                                                         \n" \
+"in vec2 TexCoord;                                        \n" \
+"                                                         \n" \
+"uniform sampler2D texture1;                              \n" \
+"                                                         \n" \
+"void main()                                              \n" \
+"{                                                        \n" \
+"    FragColor = texture(texture1, TexCoord);             \n" \
+"}                                                        \n" \
                         </code></pre>
                         <br>
 
@@ -1144,7 +1149,7 @@ glDrawArrays(GL_TRIANGLES, 0, 36);
                         <h4>Input</h4> 
 
                         <p>
-                            We've already seen some mouse state handling, bu let's look at the main functions used for
+                            We've already seen some mouse state handling, but let's look at the main functions used for
                             input:
                             <ul>
                                 <li><code>vd_fw_delta_s</code>, to get delta time since last frame</li>
@@ -1166,7 +1171,7 @@ float ds = vd_fw_delta_s();
 
                         <p>
                             It's also common to lock the mouse and hide it, so let's do that as well at the start of the
-                            application;
+                            application:
                         </p>
 
                         <pre class="rounded copy"><code class="language-cpp">
@@ -1174,7 +1179,7 @@ vd_fw_set_mouse_locked(1);
                         </code></pre>
 
                         <p>
-                            Here's also the snippet for how to move the camera
+                            Here's also the snippet moving the camera:
                         </p>
 
                         <pre class="rounded copy"><code class="language-cpp">
@@ -1197,7 +1202,7 @@ float camera_dir_lensq =
     camera_move_dir[2] * camera_move_dir[2];
 
 if (camera_dir_lensq > 0.0001f) {
-    // 
+    // Normalize move direction and apply it to the camera's position
     float camera_move_dir_len = VD_FW_SQRT(camera_dir_lensq);
 
     camera_move_dir[0] = camera_move_dir[0] / camera_move_dir_len;
@@ -1243,30 +1248,16 @@ float camera_forward[3] = {
                         </p>
 
                         <pre class="rounded copy"><code class="language-cpp">
-if (vd_fw_get_mouse_locked()) {
-    float mouse_delta_x, mouse_delta_y;
-    vd_fw_get_mouse_delta(&mouse_delta_x, &mouse_delta_y);
-
-    camera_yaw   += mouse_delta_x;
-    camera_pitch -= mouse_delta_y;
-};
-
-if (camera_pitch < -89.9f) camera_pitch = -89.9f;
-if (camera_pitch > +89.9f) camera_pitch = +89.9f;
-
-if (camera_yaw > +360.f) camera_yaw -= 360.f;
-if (camera_yaw < -360.f) camera_yaw += 360.f;
-
-float camera_forward[3] = {
-    VD_FW_COS(deg2rad * camera_pitch) * VD_FW_SIN(deg2rad * camera_yaw),
-    // ..
+if (vd_fw_get_key_pressed(VD_FW_KEY_F1) && vd_fw_get_key_down(VD_FW_KEY_LSHIFT)) {
+    vd_fw_set_mouse_locked(!vd_fw_get_mouse_locked());
+}
                         </code></pre>
 
                         <img class="rounded img-fluid rmprint" src="/assets/fw/tutorials-rendering-cubeapp.gif">
                         <br> <br>
 
                         <p>
-                            And we finally have, a resizable, draggable window with our own custom button and cube.
+                            And we finally have a resizable, draggable window with our own custom button and cube.
                         </p>
 
                     </section>
@@ -1418,8 +1409,8 @@ vd_fw_init(& (VdFwInitInfo) {
                                     input, and do the rendering on the main thread.
                                     <br><br>
                                     For input, most of the input events are cached or swallowed into sinks to make the
-                                    interface of the library immediate-mode and easy to use. But for the most part
-                                    the windowing thread Sleeps on messages.
+                                    interface of the library immediate-mode and easy to use. For the most part
+                                    the windowing thread sleeps on messages.
                                     <br><br>
                                     This function, as well as <a href="#vd_fw_swap_buffers">vd_fw_swap_buffers</a> do
                                     a bit more than just checking if the window is running and swapping buffers. This
