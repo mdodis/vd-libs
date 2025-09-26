@@ -2,11 +2,11 @@
 let keyboardInitialized = false;
 let keyboardShown = false;
 
+const keyboardInput  = document.getElementById('keyboard-input60');
+const keyboardOutput = document.getElementById('keyboard-output');
+const keyboardCode = keyboardOutput.querySelector('code');
 function activateKeyboard() {
     keyboardShown = true;
-    const keyboardInput  = document.getElementById('keyboard');
-    const keyboardOutput = document.getElementById('keyboard-output');
-    const keyboardCode = keyboardOutput.querySelector('code');
     keyboardCode.textContent = '';
     
     if (keyboardInitialized) return;
@@ -16,7 +16,7 @@ function activateKeyboard() {
         // match by code first, fall back to matching by printed key (case-insensitive)
         const byCode = document.querySelector(`[data-code="${e.code}"]`);
         if(byCode) return byCode;
-        const candidate = Array.from(document.querySelectorAll('.key')).find(k=>{
+        const candidate = Array.from(keyboardInput.querySelectorAll('.key')).find(k=>{
             const dk = k.dataset.key;
             return dk && dk.toLowerCase() === e.key.toLowerCase();
         });
@@ -33,13 +33,10 @@ function activateKeyboard() {
         if (!(fwkey === "null" || fwkey === "Unknown")) {
             keyboardCode.textContent = code + "\n" + keyboardCode.textContent;
         }
-        // keep only last 50 entries
-        if(historyList.children.length > 50){ historyList.removeChild(historyList.lastChild); }
     }
     
     window.addEventListener('keydown', event => {
         if (!keyboardShown) return;
-        const keyboardInput = document.getElementById('keyboard');
         if (document.activeElement !== keyboardInput) return;
         // event.preventDefault();
         const visual = findVisualKeyForEvent(event);
@@ -51,15 +48,15 @@ function activateKeyboard() {
     
     keyboardInput.addEventListener('click', event => {
         const keyEl = event.target.closest('.key');
-        flashKey(keyEl);
-        showKey(keyEl.dataset.fwcode);
+        if (keyEl) {
+            flashKey(keyEl);
+            showKey(keyEl.dataset.fwcode);
+        }
     });
 }
 
 document.getElementById('keyboard-backdrop').addEventListener('shown.bs.modal', function () {
     activateKeyboard();
-    // Make keyboardInput focusable and focus it
-    const keyboardInput = document.getElementById('keyboard');
     if (keyboardInput) {
         keyboardInput.setAttribute('tabindex', '0');
         keyboardInput.focus();
