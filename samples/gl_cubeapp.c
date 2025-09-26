@@ -1,6 +1,6 @@
 #include "disable_clang_deprecations.h"
 #define VD_FW_NO_CRT 0
-#define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_CONSOLE
+#define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS
 #include "vd_fw.h"
 
 #define VERTEX_SOURCE \
@@ -65,7 +65,7 @@ int main(int argc, char const *argv[])
     vd_fw_init(& (VdFwInitInfo) {
         .gl = {
             .version = VD_FW_GL_VERSION_3_3,
-            .debug_on = 1,
+            .debug_on = 0,
         },
         .window_options = {
             .borderless = 1,
@@ -202,7 +202,29 @@ int main(int argc, char const *argv[])
     float deg2rad = 3.14159265359f / 180.f;
     float camera_speed = 2.f;
 
-    vd_fw_set_mouse_locked(1);
+    // vd_fw_set_mouse_locked(1);
+
+    {
+        unsigned int icon_pixels[32*32];
+        for (int y = 0; y < 32; ++y) {
+            for (int x = 0; x < 32; ++x) {
+
+                float t = ((float)(y * 32 + x)) / (32.f * 32.f);
+
+                t = (VD_FW_SIN(t * 2) + 1.0f) * 0.5f;
+
+                float r = 0.7f * t;
+                float g = 0.2f * t;
+                float b = 0.0f * t;
+
+                icon_pixels[y * 32 + x] = 0xFF << 24                       |
+                                          ((unsigned char)(r * 255)) << 16 |
+                                          ((unsigned char)(g * 255)) <<  8 |
+                                          ((unsigned char)(b * 255)) <<  0;
+            }
+        }
+        vd_fw_set_app_icon(icon_pixels, 32, 32);
+    }
 
     while (vd_fw_running()) {
 

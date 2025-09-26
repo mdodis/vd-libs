@@ -27,9 +27,11 @@
  *   on the big threes is OpenGL Core Profile 4.1 (MacOS limitation)
  *
  * TODO
- * - Properly handle vd_fw_set_receive_ncmouse for clicks and scrolls
  * - Set Icon
+ * - Use or don't use stdlib memcpy
+ * - Properly handle vd_fw_set_receive_ncmouse for clicks and scrolls
  * - Set mouse cursor to constants (resize, I, etc...)
+ * - Should vd_fw_set_receive_ncmouse be default 0 or 1?
  * - vd_fw_set_fullscreen
  * - MacOS APIs can't be used on another thread other than main thread :/
  *   so, just initialize display link and wait on condition variable + mutex when drawing while resizing
@@ -349,6 +351,7 @@ VD_FW_API float              vd_fw_get_scale(void);
  * @param  title The new title of the window
  */
 VD_FW_API void               vd_fw_set_title(const char *title);
+VD_FW_API void               vd_fw_set_app_icon(void *pixels, int width, int height);
 
 /**
  * Compile a GLSL shader and check for errors
@@ -4707,6 +4710,53 @@ VD_FW_API void vd_fw_set_title(const char *title)
         VD_FW_WIN32_UPDATE_TITLE,
         0, /* WPARAM */
         0  /* LPARAM */));
+}
+
+static inline void *vd_fw_memcpy(void *dst, void *src, size_t count)
+{
+    for (size_t i = 0; i < count; ++i) ((unsigned char*)dst)[i] = ((unsigned char*)src)[i];
+    return dst;
+}
+
+VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
+{
+    BITMAPINFO bmi = {0};
+    bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth       = width;
+    bmi.bmiHeader.biHeight      = height;
+    bmi.bmiHeader.biPlanes      = 1;
+    bmi.bmiHeader.biBitCount    = 32;
+    bmi.bmiHeader.biCompression = BI_RGB; 
+
+    void *bits = 0;
+    HDC hdc = GetDC(NULL);
+    HBITMAP hbitmap = CreateDIBSection(hdc, &bmi, DIB_RGB_COLORS, &bits, NULL, 0);
+    VD_FW__CHECK_NULL(hbitmap);
+    HBITMAP hmaskbitmap = CreateBitmap(width, height, 1, 1, NULL);
+    VD_FW__CHECK_NULL(hmaskbitmap);
+    ReleaseDC(NULL, hdc);
+
+    VD_FW__CHECK_NULL(hbitmap);
+
+    vd_fw_memcpy(bits, pixels, width * height * 4);
+
+    ICONINFO ii = {0};
+    ii.fIcon    = TRUE;
+    ii.hbmColor = hbitmap;
+    ii.hbmMask  = hmaskbitmap;
+    HICON icon = CreateIconIndirect(&ii);
+    VD_FW__CHECK_NULL(icon);
+
+    VD_FW__CHECK_TRUE(PostMessageA(
+        VD_FW_G.hwnd,
+        WM_SETICON,
+        ICON_SMALL, /* WPARAM */
+        (LPARAM)icon));
+    VD_FW__CHECK_TRUE(PostMessageA(
+        VD_FW_G.hwnd,
+        WM_SETICON,
+        ICON_BIG, /* WPARAM */
+        (LPARAM)icon));
 }
 
 VD_FW_API unsigned long long vd_fw_delta_ns(void)
