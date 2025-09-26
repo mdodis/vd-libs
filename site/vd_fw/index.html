@@ -1837,6 +1837,7 @@ vd_fw_init(& (VdFwInitInfo) {
 
                                         .key-size-b     { --w: 100px; }
                                         .key-size-s     { --w: 74px;  }
+                                        .key-size-n0    { --w: 100px; text-align: left; }
                                         .key-size-c     { --w: 86px;  }
                                         .key-size-e     { --w: 114px; }
                                         .key-size-hfs   { --w: 16px;  }
@@ -1880,6 +1881,17 @@ vd_fw_init(& (VdFwInitInfo) {
 
                                         .key.pressed {
                                             background-color: var(--bittersweet);
+                                        }
+
+                                        .key-numpad-top {
+                                            border-bottom-right-radius: 0px;
+                                            border-bottom-left-radius: 0px;
+                                            transform: translateY(2px) scale(1.0, 1.1);
+                                        }
+
+                                        .key-numpad-bot {
+                                            border-top-right-radius: 0px;
+                                            border-top-left-radius: 0px;
                                         }
 
 
@@ -1931,6 +1943,11 @@ vd_fw_init(& (VdFwInitInfo) {
                                                     <div class="key"                            data-code="Insert"    data-fwcode="VD_FW_KEY_INS"         >Ins</div>
                                                     <div class="key"                            data-code="Home"      data-fwcode="VD_FW_KEY_HOME"        >Hme</div>
                                                     <div class="key"                            data-code="PageUp"    data-fwcode="VD_FW_KEY_PGUP"        >PgUp</div>
+                                                    <div class="key key-size-hfs key-clear"     data-fwcode="null"                                        data-key="null"></div>
+                                                    <div class="key"                            data-code="NumLock"        data-fwcode="VD_FW_KEY_UNKNOWN"     >Num</div>
+                                                    <div class="key"                            data-code="NumpadDivide"   data-fwcode="VD_FW_KEY_UNKNOWN"     >/</div>
+                                                    <div class="key"                            data-code="NumpadMultiply" data-fwcode="VD_FW_KEY_UNKNOWN"     >*</div>
+                                                    <div class="key"                            data-code="NumpadSubtract" data-fwcode="VD_FW_KEY_UNKNOWN"     >-</div>
                                                 </div>
                                                 <div class="keyboard-row" data-row="2">
                                                     <div class="key key-size-s operator wide"   data-code="Tab"          data-fwcode="VD_FW_KEY_TAB"           data-key="Tab">Tab</div>
@@ -1951,6 +1968,11 @@ vd_fw_init(& (VdFwInitInfo) {
                                                     <div class="key"                            data-code="Delete"       data-fwcode="VD_FW_KEY_DEL"         >Del</div>
                                                     <div class="key"                            data-code="End"          data-fwcode="VD_FW_KEY_END"         >End</div>
                                                     <div class="key"                            data-code="PageDown"     data-fwcode="VD_FW_KEY_PGDN"        >PgDn</div>
+                                                    <div class="key key-size-hfs key-clear"     data-fwcode="null"                                        data-key="null"></div>
+                                                    <div class="key"                            data-code="Numpad7"      data-fwcode="VD_FW_KEY_NUMPAD_7"     >7</div>
+                                                    <div class="key"                            data-code="Numpad8"      data-fwcode="VD_FW_KEY_NUMPAD_8"     >8</div>
+                                                    <div class="key"                            data-code="Numpad9"      data-fwcode="VD_FW_KEY_NUMPAD_9"     >9</div>
+                                                    <div class="key key-numpad-top"             data-code="NumpadAdd"    data-fwcode="VD_FW_KEY_UNKNOWN"      >+</div>
                                                 </div>
                                                 <div class="keyboard-row" data-row="3">
                                                     <div class="key key-size-c operator wider"   data-code="CapsLock"  data-fwcode="VD_FW_KEY_CAPITAL"         data-key="Caps">Caps</div>
@@ -1966,6 +1988,15 @@ vd_fw_init(& (VdFwInitInfo) {
                                                     <div class="key"                             data-code="Semicolon" data-fwcode="VD_FW_KEY_SEMICOLON"       data-key=";">;</div>
                                                     <div class="key"                             data-code="Quote"     data-fwcode="VD_FW_KEY_QUOTE"           data-key="'">'</div>
                                                     <div class="key operator key-size-e"         data-code="Enter"     data-fwcode="VD_FW_KEY_ENTER"           data-key="Enter">Enter</div>
+                                                    <div class="key key-size-hfs key-clear"      data-fwcode="null"                                        data-key="null"></div>
+                                                    <div class="key key-clear"                   data-fwcode="null"                                        data-key="null"></div>
+                                                    <div class="key key-clear"                   data-fwcode="null"                                        data-key="null"></div>
+                                                    <div class="key key-clear"                   data-fwcode="null"                                        data-key="null"></div>
+                                                    <div class="key key-size-hfs key-clear"      data-fwcode="null"                                        data-key="null"></div>
+                                                    <div class="key"                             data-code="Numpad4"      data-fwcode="VD_FW_KEY_NUMPAD_4"     >4</div>
+                                                    <div class="key"                             data-code="Numpad5"      data-fwcode="VD_FW_KEY_NUMPAD_5"     >5</div>
+                                                    <div class="key"                             data-code="Numpad6"      data-fwcode="VD_FW_KEY_NUMPAD_6"     >6</div>
+                                                    <div class="key key-numpad-bot"              data-code="NumpadAdd"    data-fwcode="VD_FW_KEY_UNKNOWN"      ></div>
                                                 </div>
                                                 <div class="keyboard-row" data-row="4">
                                                     <div class="key key-size-ls operator wide"  data-code="ShiftLeft"  data-fwcode="VD_FW_KEY_LSHIFT"          data-key="Shift">Shift</div>
@@ -1983,29 +2014,42 @@ vd_fw_init(& (VdFwInitInfo) {
                                                     <div class="key key-size-hfs key-clear"     data-fwcode="null"                                             data-key="null"></div>
                                                     <div class="key key-clear"                                                                                 data-key="null"></div>
                                                     <div class="key"                            data-code="ArrowUp"    data-fwcode="VD_FW_KEY_ARROW_UP"        >↑</div>
+                                                    <div class="key key-clear"                                                                                 data-key="null"></div>
+                                                    <div class="key key-size-hfs key-clear"     data-fwcode="null"                                        data-key="null"></div>
+                                                    <div class="key"                            data-code="Numpad1"       data-fwcode="VD_FW_KEY_NUMPAD_1"     >1</div>
+                                                    <div class="key"                            data-code="Numpad2"       data-fwcode="VD_FW_KEY_NUMPAD_2"     >2</div>
+                                                    <div class="key"                            data-code="Numpad3"       data-fwcode="VD_FW_KEY_NUMPAD_3"     >3</div>
+                                                    <div class="key key-numpad-top"             data-code="NumpadEnter"   data-fwcode="VD_FW_KEY_UNKNOWN"      >En</div>
                                                 </div>
                                                 <div class="keyboard-row" data-row="5">
-                                                    <div class="key key-size-ct small operator" data-code="ControlLeft"  data-fwcode="VD_FW_KEY_LCONTROL"                      data-key="Ctrl">Ctrl</div>
-                                                    <div class="key key-size-al small operator" data-code="MetaLeft"     data-fwcode="VD_FW_KEY_UNKNOWN"                       data-key="Meta">Win</div>
-                                                    <div class="key key-size-al small operator" data-code="AltLeft"      data-fwcode="VD_FW_KEY_LALT"                          data-key="Alt">Alt</div>
-                                                    <div class="key key-size-space extrawide"   data-code="Space"        data-fwcode="VD_FW_KEY_SPACE"                         data-key=" ">Space</div>
-                                                    <div class="key key-size-al small operator" data-code="AltRight"     data-fwcode="VD_FW_KEY_RALT"                          data-key="AltGr">AltGr</div>
-                                                    <div class="key key-size-al small operator"                          data-fwcode="VD_FW_KEY_UNKNOWN"                       data-key="Win">Win</div>
-                                                    <div class="key key-size-al small operator" data-code="ContextMenu"  data-fwcode="VD_FW_KEY_UNKNOWN"                       data-key="Menu">☰</div>
-                                                    <div class="key key-size-ct small operator" data-code="ControlRight" data-fwcode="VD_FW_KEY_RCONTROL"                      data-key="Ctrl">Ctrl</div>
-                                                    <div class="key key-size-hfs key-clear"     data-fwcode="null"                                             data-key="null"></div>
-                                                    <div class="key"                            data-code="ArrowLeft"    data-fwcode="VD_FW_KEY_ARROW_LEFT"        >←</div>
-                                                    <div class="key"                            data-code="ArrowDown"    data-fwcode="VD_FW_KEY_ARROW_DOWN"        >↓</div>
-                                                    <div class="key"                            data-code="ArrowRight"   data-fwcode="VD_FW_KEY_ARROW_RIGHT"       >→</div>
+                                                    <div class="key key-size-ct small operator" data-code="ControlLeft"   data-fwcode="VD_FW_KEY_LCONTROL"                      data-key="Ctrl">Ctrl</div>
+                                                    <div class="key key-size-al small operator" data-code="MetaLeft"      data-fwcode="VD_FW_KEY_UNKNOWN"                       data-key="Meta">Win</div>
+                                                    <div class="key key-size-al small operator" data-code="AltLeft"       data-fwcode="VD_FW_KEY_LALT"                          data-key="Alt">Alt</div>
+                                                    <div class="key key-size-space extrawide"   data-code="Space"         data-fwcode="VD_FW_KEY_SPACE"                         data-key=" ">Space</div>
+                                                    <div class="key key-size-al small operator" data-code="AltRight"      data-fwcode="VD_FW_KEY_RALT"                          data-key="AltGr">AltGr</div>
+                                                    <div class="key key-size-al small operator"                           data-fwcode="VD_FW_KEY_UNKNOWN"                       data-key="Win">Win</div>
+                                                    <div class="key key-size-al small operator" data-code="ContextMenu"   data-fwcode="VD_FW_KEY_UNKNOWN"                       data-key="Menu">☰</div>
+                                                    <div class="key key-size-ct small operator" data-code="ControlRight"  data-fwcode="VD_FW_KEY_RCONTROL"                      data-key="Ctrl">Ctrl</div>
+                                                    <div class="key key-size-hfs key-clear"     data-fwcode="null"                                              data-key="null"></div>
+                                                    <div class="key"                            data-code="ArrowLeft"     data-fwcode="VD_FW_KEY_ARROW_LEFT"        >←</div>
+                                                    <div class="key"                            data-code="ArrowDown"     data-fwcode="VD_FW_KEY_ARROW_DOWN"        >↓</div>
+                                                    <div class="key"                            data-code="ArrowRight"    data-fwcode="VD_FW_KEY_ARROW_RIGHT"       >→</div>
+                                                    <div class="key key-size-hfs key-clear"     data-fwcode="null"                                              data-key="null"></div>
+                                                    <div class="key key-size-n0"                data-code="Numpad0"       data-fwcode="VD_FW_KEY_NUMPAD_0"       >0</div>
+                                                    <div class="key"                            data-code="NumpadDecimal" data-fwcode="VD_FW_KEY_UNKNOWN"     >.</div>
+                                                    <div class="key key-numpad-bot"             data-code="NumpadEnter"   data-fwcode="VD_FW_KEY_UNKNOWN"      ></div>
                                                 </div>
                                             </div>
                                             <!-- End   keyboard-input60 -->
                                         </div>
 
                                         <div id="keyboard-output" class="flex-column">
-                                            <p>
-                                                Click anywhere on the keyboard, or use your own keyboard.
-                                            </p>
+                                            <div class="d-flex flex-row justify-content-between align-items-center">
+                                                <p>
+                                                    Click anywhere on the keyboard, or use your own keyboard.
+                                                </p>
+                                                <button type="button" class="btn btn-primary" onclick="clearKeyboardOutput();">Clear</button>
+                                            </div>
                                             <code></code>
                                         </div>
                                     </div>

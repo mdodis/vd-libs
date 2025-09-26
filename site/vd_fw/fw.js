@@ -66,3 +66,7 @@ document.getElementById('keyboard-backdrop').addEventListener('shown.bs.modal', 
 document.getElementById('keyboard-backdrop').addEventListener('hidden.bs.modal', function () {
     keyboardShown = false;
 });
+
+function clearKeyboardOutput() {
+    keyboardCode.textContent = '';
+}
