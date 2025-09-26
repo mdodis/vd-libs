@@ -1262,6 +1262,48 @@ if (vd_fw_get_key_pressed(VD_FW_KEY_F1) && vd_fw_get_key_down(VD_FW_KEY_LSHIFT))
 
                     </section>
 
+                    <section class="L2" id="tutorials-icon">
+                        <h4>Set the Window Icon</h4>
+
+                        <p>
+                            To set the window icon, call:
+                        </p>
+
+                        <pre class="rounded copy"><code class="language-cpp">
+// Image format must be in ARGB little-endian (i.e 0xAARRGGBB)
+vd_fw_set_app_icon(pixels, width, height);
+                        </code></pre>
+
+                        <p>
+                            If you're following along with the tutorial, we will temporarily change the window to have
+                            decorations, so that we can see the icon drawn by Windows in the caption:
+                        </p>
+
+                        <pre class="rounded copy"><code class="language-cpp">
+vd_fw_init(& (VdFwInitInfo) {
+    .gl = {
+        .version = VD_FW_GL_VERSION_3_3,
+        .debug_on = 0,
+    },
+    .window_options = {
+        .borderless = 0, // <---
+    }
+});
+                        </code></pre>
+
+                        <img class="rounded img-fluid rmprint" src="/assets/fw/tutorials-appicon.gif">
+                        <br> <br>
+
+                        <p>
+                            On Windows, the icon will also be shown in:
+                            <ul>
+                                <li>The App Bar (Taskbar), and</li>
+                                <li>The Window switcher (Alt + Tab)</li>
+                            </ul>
+                        </p>
+
+                    </section>
+
                     <!-- Begin API -->
                     <section class="L1 section" id="api-ref">
                         <h4>Reference</h4>
