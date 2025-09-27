@@ -32,10 +32,11 @@
  * - Properly handle vd_fw_set_receive_ncmouse for clicks and scrolls
  * - Set mouse cursor to constants (resize, I, etc...)
  * - Should vd_fw_set_receive_ncmouse be default 0 or 1?
+ *   - Actually, consider removing it entirely
+ * - MacOS: vd_fw_get_focused
  * - vd_fw_set_fullscreen
  * - MacOS APIs can't be used on another thread other than main thread :/
  *   so, just initialize display link and wait on condition variable + mutex when drawing while resizing
- * - MacOS resize logic
  * - On borderless, push mouse event right as we lose focus to a value outside of the window space
  */
 #ifndef VD_FW_H
@@ -6159,6 +6160,7 @@ VD_FW_API int vd_fw_swap_buffers(void)
 
 VD_FW_API int vd_fw_get_focused(int *focused)
 {
+    // @todo(mdodis): 
     *focused = 1;
     return 0;
 }
