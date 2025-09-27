@@ -5775,6 +5775,10 @@ typedef struct {
     NSPoint                     drag_start_pos_window_coords;
     BOOL                        dragging;
     BOOL                        draw_decorations;
+    int                         ncrect_count;
+    NSRect                      ncrects[16];
+    NSRect                      nccaption;
+    int                         nccaption_set;
 
 /* ----RENDER THREAD - WINDOW THREAD SYNC---------------------------------------------------------------------------- */
     pthread_mutex_t             mtx;
@@ -5875,7 +5879,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
     VD_FW_G.draw_decorations = 1;
     if (info) {
-        VD_FW_G.draw_decorations = info->window_options.draw_default_borders;
+        VD_FW_G.draw_decorations = !info->window_options.borderless;
     }
 
     [NSApplication sharedApplication];
@@ -6058,15 +6062,26 @@ VD_FW_API int vd_fw_running(void)
                 case NSEventTypeLeftMouseDown: {
                     NSPoint view_point = [event locationInWindow];
 
-                    NSView *cv = [VD_FW_G.window contentView];
-                    NSRect cvf = [cv frame];
-
                     NSPoint p = NSMakePoint(view_point.x, view_point.y);
 
-                    NSRect drag_area = NSMakeRect(0, cvf.size.height - 40, cvf.size.width, 40);
+                    int hit_drag_area = 0;
 
-                    if (NSPointInRect(p, drag_area)) {
+                    p.x *= VD_FW_G.scale;
+                    p.y *= VD_FW_G.scale;
 
+                    if (!VD_FW_G.nccaption_set) {
+                        hit_drag_area = 1;
+                    } else if (NSPointInRect(p, VD_FW_G.nccaption)) {
+                        hit_drag_area = 1;
+                        for (int ri = 0; ri < VD_FW_G.ncrect_count; ++ri) {
+                            if (NSPointInRect(p, VD_FW_G.ncrects[ri])) {
+                                hit_drag_area = 0;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (hit_drag_area) {
                         NSPoint loc = [VD_FW_G.window convertPointToScreen:view_point];
                         NSRect window_frame = [VD_FW_G.window frame];
 
@@ -6129,6 +6144,42 @@ VD_FW_API int vd_fw_get_size(int *w, int *h)
     if (w) *w = (int)rect.size.width * VD_FW_G.scale;
     if (h) *h = (int)rect.size.height * VD_FW_G.scale;
     return 0;
+}
+
+VD_FW_API void vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4])
+{
+    NSView *cv = [VD_FW_G.window contentView];
+    NSRect cvf = [cv frame];
+
+    cvf.size.width  *= VD_FW_G.scale;
+    cvf.size.height *= VD_FW_G.scale;
+
+    VD_FW_G.nccaption_set = 1;
+    VD_FW_G.nccaption.origin.x    = caption[0];
+    VD_FW_G.nccaption.origin.y    = cvf.size.height - (caption[3] - caption[1]);
+    VD_FW_G.nccaption.size.width  = caption[2] - caption[0];
+    VD_FW_G.nccaption.size.height = (caption[3] - caption[1]);
+
+    printf("Frame Dimensions: %f %f\n", cvf.size.width, cvf.size.height);
+
+    printf("NS Rect Drag Area is: %f %f (%f %f)\n",
+        VD_FW_G.nccaption.origin.x,
+        VD_FW_G.nccaption.origin.y,
+        VD_FW_G.nccaption.size.width,
+        VD_FW_G.nccaption.size.height);
+
+    VD_FW_G.ncrect_count = count;
+    int c = count;
+    if (c > 16) {
+        c = 16;
+    }
+    for (int i = 0; i < c; ++i) {
+
+        VD_FW_G.ncrects[i].origin.x    = rects[i][0];
+        VD_FW_G.ncrects[i].origin.y    = cvf.size.height - (rects[i][3] - rects[i][1]);
+        VD_FW_G.ncrects[i].size.width  = rects[i][2] - rects[i][0];
+        VD_FW_G.ncrects[i].size.height = (rects[i][3] - rects[i][1]);
+    }
 }
 
 VD_FW_API float vd_fw_get_scale(void)
