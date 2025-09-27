@@ -5762,8 +5762,15 @@ int wWinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPWSTR cmdline, int n
 #include <semaphore.h>
 #define VD_FW_G Vd_Fw_Globals
 
+@interface VdFwWindowDelegate : NSObject<NSApplicationDelegate, NSWindowDelegate>
+@end
+@interface VdFwContentView : NSView
+@end
+@interface VdFwWindow : NSWindow
+@end
+
 typedef struct {
-    NSWindow                    *window;
+    VdFwWindow                  *window;
     NSOpenGLContext             *gl_context;
     BOOL                        should_close;
     mach_timebase_info_data_t   time_base;
@@ -5788,8 +5795,7 @@ typedef struct {
 
 static VdFw__MacOsInternalData Vd_Fw_Globals;
 
-@interface VdFwWindowDelegate : NSObject<NSApplicationDelegate, NSWindowDelegate>
-@end
+
 
 static VdFwWindowDelegate *Vd_Fw_Delegate;
 
@@ -5799,13 +5805,8 @@ NSCursor *_diag1Cursor; // top-left / bottom-right
 NSCursor *_diag2Cursor; // top-right / bottom-left
 NSCursor *_currentCursor;
 
-@interface VdFwContentView : NSView
-
-@end
-
 @implementation VdFwWindowDelegate
     NSPoint initialLocation;
-
 
 - (void)windowWillClose:(NSNotification*)notification {
     VD_FW_G.should_close = YES;
@@ -5838,13 +5839,21 @@ NSCursor *_currentCursor;
 }
 @end
 
+@implementation VdFwWindow
+
+- (BOOL)_usesCustomDrawing {
+    return YES;
+}
+
+@end
+
 @implementation VdFwContentView
 // @todo(mdodis): Resize logic
 // - (void)mouseMoved:(NSEvent *)event {
 //     // Compute mouse in view coordinates
 //     NSPoint p = [self convertPoint:[event locationInWindow] fromView:nil];
 
-//     CGFloat margin = 6.0; // same as standard macOS hit area (tweak if needed)
+//     CGFloat margin = 6.0;
 //     CGFloat w = NSWidth(self.bounds);
 //     CGFloat h = NSHeight(self.bounds);
 
@@ -5869,7 +5878,7 @@ NSCursor *_currentCursor;
 //     }
 
 //     if (wanted != _currentCursor) {
-//         [wanted set];            // immediately change cursor
+//         [wanted set];
 //         _currentCursor = wanted;
 //     }
 // }
@@ -5916,16 +5925,28 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         NSRect frame = NSMakeRect(x, y, w, h);
         NSWindowStyleMask window_style_mask = NSWindowStyleMaskClosable |
                                               NSWindowStyleMaskMiniaturizable |
+                                              NSWindowStyleMaskTitled |
                                               NSWindowStyleMaskResizable;
-        if (VD_FW_G.draw_decorations) {
-            window_style_mask              |= NSWindowStyleMaskTitled;
-        }
+        // if (!VD_FW_G.draw_decorations) {
+        //     window_style_mask              |= NSWindowStyleMaskFullSizeContentView;
+        // }
 
-        VD_FW_G.window = [[NSWindow alloc] initWithContentRect: frame
+        VD_FW_G.window = [[VdFwWindow alloc] initWithContentRect: frame
                                                      styleMask: window_style_mask
                                                        backing: NSBackingStoreBuffered
                                                          defer: NO];
 
+        if (!VD_FW_G.draw_decorations) {
+            VD_FW_G.window.titleVisibility = NSWindowTitleHidden;
+            VD_FW_G.window.titlebarAppearsTransparent = YES;
+            [[VD_FW_G.window standardWindowButton:NSWindowCloseButton] setHidden:YES];
+            [[VD_FW_G.window standardWindowButton:NSWindowMiniaturizeButton] setHidden:YES];
+            [[VD_FW_G.window standardWindowButton:NSWindowZoomButton] setHidden:YES];
+            VD_FW_G.window.styleMask |= NSWindowStyleMaskFullSizeContentView;
+            [VD_FW_G.window setMovable:NO];
+            [VD_FW_G.window setMovableByWindowBackground:NO];
+
+        }
         [VD_FW_G.window                       setTitle: [NSString stringWithUTF8String: "FW Window"]];
         [VD_FW_G.window           makeKeyAndOrderFront: nil];
         [VD_FW_G.window                   setHasShadow: YES];
@@ -6068,6 +6089,10 @@ VD_FW_API int vd_fw_running(void)
 
                     p.x *= VD_FW_G.scale;
                     p.y *= VD_FW_G.scale;
+
+                    if (VD_FW_G.draw_decorations) {
+                        break;
+                    }
 
                     if (!VD_FW_G.nccaption_set) {
                         hit_drag_area = 1;
