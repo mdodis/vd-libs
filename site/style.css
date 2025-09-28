@@ -34,6 +34,11 @@ section, .apiitem {
     scroll-margin-top: 50px;
 }
 
+.revision-planned {
+    background-color: var(--eerie-black);    
+    opacity: 0.4;
+}
+
 .libcardlogo {
     width: 100px;
     height: auto;

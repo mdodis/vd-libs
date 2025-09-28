@@ -34,6 +34,8 @@
  * - Should vd_fw_set_receive_ncmouse be default 0 or 1?
  *   - Actually, consider removing it entirely
  * - MacOS: vd_fw_get_focused
+ * - MacOS: vd_fw_set_app_icon
+ * - MacOS: vd_fw_set_mouse_locked
  * - vd_fw_set_fullscreen
  * - MacOS APIs can't be used on another thread other than main thread :/
  *   so, just initialize display link and wait on condition variable + mutex when drawing while resizing
@@ -5787,6 +5789,10 @@ typedef struct {
     NSRect                      ncrects[16];
     NSRect                      nccaption;
     int                         nccaption_set;
+    BOOL                        mouse_is_locked;
+    NSPoint                     last_mouse;
+    NSPoint                     mouse_delta;
+    NSPoint                     mouse_pos_scaled;
 
 /* ----RENDER THREAD - WINDOW THREAD SYNC---------------------------------------------------------------------------- */
     pthread_mutex_t             mtx;
@@ -6008,6 +6014,12 @@ VD_FW_API unsigned long long vd_fw_delta_ns(void)
     return ns;
 }
 
+VD_FW_API void vd_fw_get_mouse_delta(float *dx, float *dy)
+{
+    if (dx) *dx = VD_FW_G.mouse_delta.x; 
+    if (dy) *dy = VD_FW_G.mouse_delta.y;
+}
+
 VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
 {
     int result = 0;
@@ -6019,20 +6031,23 @@ VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
             return 0;
         }
 
-        // Mouse location in screen coordinates
-        NSPoint loc = [NSEvent mouseLocation];
+        // // Mouse location in screen coordinates
+        // NSPoint loc = [NSEvent mouseLocation];
 
-        // Convert to window coordinates
-        NSPoint window_point = [VD_FW_G.window convertPointFromScreen:loc];
+        // // Convert to window coordinates
+        // NSPoint window_point = [VD_FW_G.window convertPointFromScreen:loc];
 
-        // Convert to content view coordinates
-        NSView *cv = [VD_FW_G.window contentView];
-        NSPoint view_point = [cv convertPoint:window_point fromView:nil];
-        NSRect cvf = [cv frame];
+        // // Convert to content view coordinates
+        // NSView *cv = [VD_FW_G.window contentView];
+        // NSPoint view_point = [cv convertPoint:window_point fromView:nil];
+        // NSRect cvf = [cv frame];
 
-        // Cocoa’s origin is bottom-left, OpenGL expects same
-        if (x) *x = (view_point.x) * VD_FW_G.scale;
-        if (y) *y = (cvf.size.height - view_point.y) * VD_FW_G.scale;
+        // // Cocoa’s origin is bottom-left, OpenGL expects same
+        // if (x) *x = (view_point.x) * VD_FW_G.scale;
+        // if (y) *y = (cvf.size.height - view_point.y) * VD_FW_G.scale;
+
+        if (x) *x = VD_FW_G.mouse_pos_scaled.x;
+        if (y) *y = VD_FW_G.mouse_pos_scaled.y;
 
         // Get the mouse state
         BOOL left_down  = ([NSEvent pressedMouseButtons] & (1 << 0)) != 0;
@@ -6043,6 +6058,26 @@ VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
     }
 
     return result;
+}
+
+VD_FW_API void vd_fw_set_mouse_locked(int locked)
+{
+    if (VD_FW_G.mouse_is_locked == locked) {
+        return;
+    }
+
+    VD_FW_G.mouse_is_locked = locked;
+
+    if (locked) {
+        CGDisplayHideCursor(kCGDirectMainDisplay);
+    } else {
+        CGDisplayShowCursor(kCGDirectMainDisplay);
+    }
+}
+
+VD_FW_API int vd_fw_get_mouse_locked(void)
+{
+    return VD_FW_G.mouse_is_locked;
 }
 
 VD_FW_API int vd_fw_get_mouse_wheel(float *dx, float *dy)
@@ -6057,6 +6092,9 @@ VD_FW_API int vd_fw_running(void)
     VD_FW_G.wheel_moved = 0;
     VD_FW_G.wheel[0] = 0.f;
     VD_FW_G.wheel[1] = 0.f;
+
+    VD_FW_G.mouse_delta.x = 0.f;
+    VD_FW_G.mouse_delta.y = 0.f;
 
     @autoreleasepool {
         NSEvent *event;
@@ -6123,6 +6161,32 @@ VD_FW_API int vd_fw_running(void)
                     VD_FW_G.dragging = FALSE;
                 } break;
 
+                case NSEventTypeMouseMoved: {
+
+                    NSPoint loc = [event locationInWindow];
+
+                    // Convert to content view coordinates
+                    NSView *cv = [VD_FW_G.window contentView];
+                    NSRect cvf = [cv frame];
+
+                    NSPoint loc_top_left_origin = NSMakePoint(loc.x, cvf.size.height - loc.y);
+
+                    NSPoint delta = NSMakePoint(
+                        loc_top_left_origin.x - VD_FW_G.last_mouse.x,
+                        loc_top_left_origin.y - VD_FW_G.last_mouse.y
+                    );
+
+                    VD_FW_G.mouse_delta.x += delta.x;
+                    VD_FW_G.mouse_delta.y += delta.y;
+
+                    VD_FW_G.mouse_pos_scaled = NSMakePoint(
+                        loc_top_left_origin.x * VD_FW_G.scale,
+                        loc_top_left_origin.y * VD_FW_G.scale
+                    );
+
+                    VD_FW_G.last_mouse = loc_top_left_origin;
+                } break;
+
                 case NSEventTypeLeftMouseDragged: {
 
                     NSPoint view_point = [event locationInWindow];
@@ -6142,6 +6206,31 @@ VD_FW_API int vd_fw_running(void)
             }
 
             [NSApp sendEvent:event];
+
+            switch (type) {
+                case NSEventTypeLeftMouseDragged:
+                case NSEventTypeRightMouseDragged:
+                case NSEventTypeOtherMouseDragged:
+                case NSEventTypeMouseMoved: {
+                    if (!VD_FW_G.mouse_is_locked) {
+                        break;
+                    }
+
+                    NSRect cvf = [VD_FW_G.window frame];
+
+                    NSPoint screen_loc = [NSEvent mouseLocation];
+
+                    CGFloat w = NSMaxX(cvf) - NSMinX(cvf);
+                    CGFloat h = NSMaxY(cvf) - NSMinY(cvf);
+
+                    if (!NSPointInRect(screen_loc, cvf)) {
+                        CGWarpMouseCursorPosition(CGPointMake(NSMinX(cvf) + w * .5f, NSMinY(cvf) + h * .5f));
+                        VD_FW_G.last_mouse.x = w * .5f;
+                        VD_FW_G.last_mouse.y = h * .5f;
+                    }
+                } break;
+                default: break;
+            }
         }
     }
 
