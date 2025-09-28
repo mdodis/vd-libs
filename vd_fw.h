@@ -34,8 +34,9 @@
  * - Should vd_fw_set_receive_ncmouse be default 0 or 1?
  *   - Actually, consider removing it entirely
  * - MacOS: vd_fw_get_focused
+ * - MacOS: Figure out why F keys or escape don't get pressed
+ * - MacOS: Figure out how to only send event for Quit 
  * - MacOS: vd_fw_set_app_icon
- * - MacOS: vd_fw_set_mouse_locked
  * - vd_fw_set_fullscreen
  * - MacOS APIs can't be used on another thread other than main thread :/
  *   so, just initialize display link and wait on condition variable + mutex when drawing while resizing
@@ -4488,7 +4489,7 @@ VD_FW_API int vd_fw_running(void)
                 int is_down = mm.dat.keystate.down;
                 VdFwKey key = vd_fw___vkcode_to_key(mm.dat.keystate.vkcode);
 
-                VD_FW_G.prev_key_states[key] = VD_FW_G.curr_key_states[key];
+                // VD_FW_G.prev_key_states[key] = VD_FW_G.curr_key_states[key];
                 VD_FW_G.curr_key_states[key] = (unsigned char)is_down;
 
             } break;
@@ -5793,6 +5794,8 @@ typedef struct {
     NSPoint                     last_mouse;
     NSPoint                     mouse_delta;
     NSPoint                     mouse_pos_scaled;
+    unsigned char               curr_key_states[VD_FW_KEY_MAX];
+    unsigned char               prev_key_states[VD_FW_KEY_MAX];
 
 /* ----RENDER THREAD - WINDOW THREAD SYNC---------------------------------------------------------------------------- */
     pthread_mutex_t             mtx;
@@ -5802,15 +5805,129 @@ typedef struct {
 
 static VdFw__MacOsInternalData Vd_Fw_Globals;
 
+static VdFwKey vd_fw__translate_mac_keycode(unsigned short keycode)
+{
+    static VdFwKey translation_table[280] = {
+        VD_FW_KEY_A,                 // 0,     KEY_A
+        VD_FW_KEY_S,                 // 1,     KEY_S
+        VD_FW_KEY_D,                 // 2,     KEY_D
+        VD_FW_KEY_F,                 // 3,     KEY_F
+        VD_FW_KEY_H,                 // 4,     KEY_H
+        VD_FW_KEY_G,                 // 5,     KEY_G
+        VD_FW_KEY_Z,                 // 6,     KEY_Z
+        VD_FW_KEY_X,                 // 7,     KEY_X
+        VD_FW_KEY_C,                 // 8,     KEY_C
+        VD_FW_KEY_V,                 // 9,     KEY_V
+        VD_FW_KEY_UNKNOWN,           // 10,    -----
+        VD_FW_KEY_B,                 // 11,    KEY_B
+        VD_FW_KEY_Q,                 // 12,    KEY_Q
+        VD_FW_KEY_W,                 // 13,    KEY_W
+        VD_FW_KEY_E,                 // 14,    KEY_E
+        VD_FW_KEY_R,                 // 15,    KEY_R
+        VD_FW_KEY_Y,                 // 16,    KEY_Y
+        VD_FW_KEY_T,                 // 17,    KEY_T
+        VD_FW_KEY_1,                 // 18,    KEY_1
+        VD_FW_KEY_2,                 // 19,    KEY_2
+        VD_FW_KEY_3,                 // 20,    KEY_3
+        VD_FW_KEY_4,                 // 21,    KEY_4
+        VD_FW_KEY_6,                 // 22,    KEY_6
+        VD_FW_KEY_5,                 // 23,    KEY_5
+        VD_FW_KEY_EQUALS,            // 24,    KEY_EQUAL
+        VD_FW_KEY_9,                 // 25,    KEY_9
+        VD_FW_KEY_7,                 // 26,    KEY_7
+        VD_FW_KEY_MINUS,             // 27,    KEY_MINUS
+        VD_FW_KEY_8,                 // 28,    KEY_8
+        VD_FW_KEY_0,                 // 29,    KEY_0
+        VD_FW_KEY_BRACKET_CLOSE,     // 30,    KEY_CLOSE_BRACE/KEY_CLOSE_BRACKET
+        VD_FW_KEY_O,                 // 31,    KEY_O
+        VD_FW_KEY_U,                 // 32,    KEY_U
+        VD_FW_KEY_BRACKET_OPEN,      // 33,    KEY_OPEN_BRACE/KEY_OPEN_BRACKET
+        VD_FW_KEY_I,                 // 34,    KEY_I
+        VD_FW_KEY_P,                 // 35,    KEY_P
+        VD_FW_KEY_ENTER,             // 36,    KEY_ENTER
+        VD_FW_KEY_L,                 // 37,    KEY_L
+        VD_FW_KEY_J,                 // 38,    KEY_J
+        VD_FW_KEY_QUOTE,             // 39,    KEY_DOUBLE_QUOTES/KEY_SIMPLE_QUOTE
+        VD_FW_KEY_K,                 // 40,    KEY_K
+        VD_FW_KEY_SEMICOLON,         // 41,    KEY_COLON/KEY_SEMI_COLON
+        VD_FW_KEY_SLASH_BACK,        // 42,    KEY_BACKSLASH/KEY_PIPE
+        VD_FW_KEY_COMMA,             // 43,    KEY_COMMA/KEY_LESS_THAN
+        VD_FW_KEY_SLASH_FORWARD,     // 44,    KEY_QUESTION_MARK/KEY_SLASH
+        VD_FW_KEY_N,                 // 45,    KEY_N
+        VD_FW_KEY_M,                 // 46,    KEY_M
+        VD_FW_KEY_DOT,               // 47,    KEY_DOT/KEY_GREATER_THAN
+        VD_FW_KEY_TAB,               // 48,    KEY_TAB
+        VD_FW_KEY_SPACE,             // 49,    KEY_SPACEBAR
+        VD_FW_KEY_BACKTICK,          // 50,    KEY_TILDE
+        VD_FW_KEY_BACKSPACE,         // 51,    KEY_BACKSPACE
+        VD_FW_KEY_ESCAPE,            // 53,    KEY_ESCAPE
+        VD_FW_KEY_F17,               // 64,    KEY_F17
+        VD_FW_KEY_UNKNOWN,           // 65,    KEY_PAD_DOT
+        VD_FW_KEY_UNKNOWN,           // 67,    KEY_PAD_MULTIPLY
+        VD_FW_KEY_UNKNOWN,           // 69,    KEY_PAD_ADD
+        VD_FW_KEY_UNKNOWN,           // 71,    KEY_CLEAR
+        VD_FW_KEY_UNKNOWN,           // 75,    KEY_PAD_DIVIDE
+        VD_FW_KEY_UNKNOWN,           // 76,    KEY_PAD_ENTER
+        VD_FW_KEY_UNKNOWN,           // 78,    KEY_PAD_SUB
+        VD_FW_KEY_F18,               // 79,    KEY_F18
+        VD_FW_KEY_F19,               // 80,    KEY_F19
+        VD_FW_KEY_UNKNOWN,           // 81,    KEY_PAD_EQUAL
+        VD_FW_KEY_NUMPAD_0,          // 82,    KEY_PAD_0
+        VD_FW_KEY_NUMPAD_1,          // 83,    KEY_PAD_1
+        VD_FW_KEY_NUMPAD_2,          // 84,    KEY_PAD_2
+        VD_FW_KEY_NUMPAD_3,          // 85,    KEY_PAD_3
+        VD_FW_KEY_NUMPAD_4,          // 86,    KEY_PAD_4
+        VD_FW_KEY_NUMPAD_5,          // 87,    KEY_PAD_5
+        VD_FW_KEY_NUMPAD_6,          // 88,    KEY_PAD_6
+        VD_FW_KEY_NUMPAD_7,          // 89,    KEY_PAD_7
+        VD_FW_KEY_NUMPAD_8,          // 91,    KEY_PAD_8
+        VD_FW_KEY_NUMPAD_9,          // 92,    KEY_PAD_9
+        VD_FW_KEY_F5,                // 96,    KEY_F5
+        VD_FW_KEY_F6,                // 97,    KEY_F6
+        VD_FW_KEY_F7,                // 98,    KEY_F7
+        VD_FW_KEY_F3,                // 99,    KEY_F3
+        VD_FW_KEY_F8,                // 100,   KEY_F8
+        VD_FW_KEY_F9,                // 101,   KEY_F9
+        VD_FW_KEY_F11,               // 103,   KEY_F11
+        VD_FW_KEY_F13,               // 105,   KEY_F13
+        VD_FW_KEY_F16,               // 106,   KEY_F16
+        VD_FW_KEY_F14,               // 107,   KEY_F14
+        VD_FW_KEY_F10,               // 109,   KEY_F10
+        VD_FW_KEY_F12,               // 111,   KEY_F12
+        VD_FW_KEY_F15,               // 113,   KEY_F15
+        VD_FW_KEY_HOME,              // 115,   KEY_HOME
+        VD_FW_KEY_PGUP,              // 116,   KEY_PAGE_UP
+        VD_FW_KEY_DEL,               // 117,   KEY_DEL
+        VD_FW_KEY_F4,                // 118,   KEY_F4
+        VD_FW_KEY_END,               // 119,   KEY_END
+        VD_FW_KEY_F2,                // 120,   KEY_F2
+        VD_FW_KEY_PGDN,              // 121,   KEY_PAGE_DOWN
+        VD_FW_KEY_F1,                // 122,   KEY_F1
+        VD_FW_KEY_ARROW_LEFT,        // 123,   KEY_LEFT
+        VD_FW_KEY_ARROW_RIGHT,       // 124,   KEY_RIGHT
+        VD_FW_KEY_ARROW_DOWN,        // 125,   KEY_DOWN
+        VD_FW_KEY_ARROW_UP,          // 126,   KEY_UP
+        VD_FW_KEY_LCONTROL,          // 256,   KEY_CTRL_LEFT
+        VD_FW_KEY_LSHIFT,            // 257,   KEY_SHIFT_LEFT
+        VD_FW_KEY_RSHIFT,            // 258,   KEY_SHIFT_RIGHT
+        VD_FW_KEY_LALT,              // 259,   KEY_COMMAND_LEFT
+        VD_FW_KEY_RALT,              // 260,   KEY_COMMAND_RIGHT
+        VD_FW_KEY_UNKNOWN,           // 261,   KEY_OPTION_LEFT
+        VD_FW_KEY_UNKNOWN,           // 262,   KEY_ALT_GR
+        VD_FW_KEY_RCONTROL,          // 269,   KEY_CTRL_RIGHT
+        VD_FW_KEY_CAPITAL,           // 272,   KEY_CAPSLOCK
+        VD_FW_KEY_UNKNOWN,           // 279,   KEY_FN
+    };
+
+    if (keycode < 280) {
+        return translation_table[keycode];
+    } else {
+        return VD_FW_KEY_UNKNOWN;
+    }
+}
 
 
 static VdFwWindowDelegate *Vd_Fw_Delegate;
-
-NSCursor *_lrCursor;
-NSCursor *_udCursor;
-NSCursor *_diag1Cursor; // top-left / bottom-right
-NSCursor *_diag2Cursor; // top-right / bottom-left
-NSCursor *_currentCursor;
 
 @implementation VdFwWindowDelegate
     NSPoint initialLocation;
@@ -5855,39 +5972,13 @@ NSCursor *_currentCursor;
 @end
 
 @implementation VdFwContentView
-// @todo(mdodis): Resize logic
-// - (void)mouseMoved:(NSEvent *)event {
-//     // Compute mouse in view coordinates
-//     NSPoint p = [self convertPoint:[event locationInWindow] fromView:nil];
 
-//     CGFloat margin = 6.0;
-//     CGFloat w = NSWidth(self.bounds);
-//     CGFloat h = NSHeight(self.bounds);
-
-//     BOOL left   = (p.x <= margin);
-//     BOOL right  = (p.x >= (w - margin));
-//     BOOL bottom = (p.y <= margin);
-//     BOOL top    = (p.y >= (h - margin));
-
-//     NSCursor *wanted = nil;
-
-//     // corners take precedence
-//     if ((left && bottom) || (right && top)) {
-//         wanted = _diag1Cursor;
-//     } else if ((right && bottom) || (left && top)) {
-//         wanted = _diag2Cursor;
-//     } else if (left || right) {
-//         wanted = _lrCursor;
-//     } else if (top || bottom) {
-//         wanted = _udCursor;
-//     } else {
-//         wanted = [NSCursor arrowCursor];
+// - (BOOL)performKeyEquivalent:(NSEvent *)event {
+//     if (event.type == NSEventTypeKeyDown) {
+//         // swallow key events you don't want to beep
+//         return YES;
 //     }
-
-//     if (wanted != _currentCursor) {
-//         [wanted set];
-//         _currentCursor = wanted;
-//     }
+//     return [super performKeyEquivalent:event];
 // }
 @end
 
@@ -5958,9 +6049,6 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         [VD_FW_G.window           makeKeyAndOrderFront: nil];
         [VD_FW_G.window                   setHasShadow: YES];
         [VD_FW_G.window setAllowsConcurrentViewDrawing: YES];
-
-        _lrCursor = [NSCursor resizeLeftRightCursor];
-        _udCursor = [NSCursor resizeUpDownCursor];
 
         NSOpenGLPixelFormatAttribute attrs[] = {
             NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersion3_2Core,
@@ -6087,6 +6175,16 @@ VD_FW_API int vd_fw_get_mouse_wheel(float *dx, float *dy)
     return VD_FW_G.wheel_moved;
 }
 
+VD_FW_API int vd_fw_get_key_pressed(int key)
+{
+    return !VD_FW_G.prev_key_states[key] && VD_FW_G.curr_key_states[key];
+}
+
+VD_FW_API int vd_fw_get_key_down(int key)
+{
+    return VD_FW_G.curr_key_states[key];    
+}
+
 VD_FW_API int vd_fw_running(void)
 {
     VD_FW_G.wheel_moved = 0;
@@ -6095,6 +6193,10 @@ VD_FW_API int vd_fw_running(void)
 
     VD_FW_G.mouse_delta.x = 0.f;
     VD_FW_G.mouse_delta.y = 0.f;
+
+    for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
+        VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
+    }
 
     @autoreleasepool {
         NSEvent *event;
@@ -6117,6 +6219,23 @@ VD_FW_API int vd_fw_running(void)
                     }
 
                     VD_FW_G.wheel_moved = 1;
+                } break;
+
+                case NSEventTypeKeyUp:
+                case NSEventTypeKeyDown: {
+                    BOOL is_key_down = [event type] == NSEventTypeKeyDown;
+                    // BOOL is_repeat = [event isARepeat];
+                    unsigned short keycode = [event keyCode];
+
+                    VdFwKey key = vd_fw__translate_mac_keycode(keycode);
+
+                    if (key == VD_FW_KEY_F1) {
+                        printf("F1\n");
+                    }
+
+                    // VD_FW_G.prev_key_states[key] = VD_FW_G.curr_key_states[key];
+                    VD_FW_G.curr_key_states[key] = (unsigned char)is_key_down;
+
                 } break;
 
                 case NSEventTypeLeftMouseDown: {
@@ -6205,8 +6324,6 @@ VD_FW_API int vd_fw_running(void)
                 default: break;
             }
 
-            [NSApp sendEvent:event];
-
             switch (type) {
                 case NSEventTypeLeftMouseDragged:
                 case NSEventTypeRightMouseDragged:
@@ -6231,6 +6348,8 @@ VD_FW_API int vd_fw_running(void)
                 } break;
                 default: break;
             }
+
+            [NSApp sendEvent:event];
         }
     }
 
@@ -6275,14 +6394,6 @@ VD_FW_API void vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4])
     VD_FW_G.nccaption.origin.y    = cvf.size.height - (caption[3] - caption[1]);
     VD_FW_G.nccaption.size.width  = caption[2] - caption[0];
     VD_FW_G.nccaption.size.height = (caption[3] - caption[1]);
-
-    printf("Frame Dimensions: %f %f\n", cvf.size.width, cvf.size.height);
-
-    printf("NS Rect Drag Area is: %f %f (%f %f)\n",
-        VD_FW_G.nccaption.origin.x,
-        VD_FW_G.nccaption.origin.y,
-        VD_FW_G.nccaption.size.width,
-        VD_FW_G.nccaption.size.height);
 
     VD_FW_G.ncrect_count = count;
     int c = count;
