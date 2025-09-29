@@ -291,6 +291,17 @@ int main() {
                                     </td>
                                 </tr>
                                 <tr>
+                                    
+                                    <td>
+                                            <code>#define VD_FW_PREFER_DISCRETE_GPU</code><br>
+                                            <code>// Or</code><br>
+                                            <code>#define VD_FW_PREFER_INTEGRATED_GPU</code><br>
+                                    </td>
+                                    <td>
+                                        Change the preferred GPU for the OpenGL context.
+                                    </td>
+                                </tr>
+                                <tr>
                                     <td><code>#define VD_FW_SQRT</code></td>
                                     <td>
                                         Options:
@@ -298,6 +309,17 @@ int main() {
                                             <li>If <code>VD_FW_NO_CRT == 1</code> it's resolved to libc <code>sqrtf</code></li>
                                             <li>If <code>VD_FW_NO_CRT == 0</code> it's resolved to vd_fw_sqrt (custom implementation).</li>
                                         </ul>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    
+                                    <td>
+                                            <code>#define VD_FW_PREFER_DISCRETE_GPU</code><br>
+                                            <code>// Or</code><br>
+                                            <code>#define VD_FW_PREFER_INTEGRATED_GPU</code><br>
+                                    </td>
+                                    <td>
+                                        Change the preferred GPU for the OpenGL context.
                                     </td>
                                 </tr>
                                 <tr>
@@ -390,6 +412,27 @@ int main() {
                             <li class="list-group-item">OpenGL</li>
                         </ol>
                         <br>
+                        <p>
+                            OpenGL on MacOS is deprecated, and including it will throw a ton of warnings about
+                            deprected functionality. It's maximum supported version of OpenGL is <b>4.1</b>.
+                        </p>
+                        <p>
+                            To disable those warnings, you can create the following header file when and use it
+                            before and after including vd_fw.h:
+                        </p>
+                        <pre class="rounded copy"><code class="language-cpp">
+#ifndef DISABLE_CLANG_DEPRECATIONS_H1
+#define DISABLE_CLANG_DEPRECATIONS_H1
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif // defined(__clang__)
+#else
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif // defined(__clang__)
+#endif // DISABLE_CLANG_DEPRECATIONS_H1
+                        </code></pre>
                     </section>
                     <br>
 
@@ -419,7 +462,7 @@ freely, subject to the following restrictions:
                         </code></pre>
 
                         <p>
-                            As stated in the license, no warranty or guarantee is provided by the use of this software library.    
+                            As stated in the license, no warranty or guarantee is provided by the use of this library.    
                         </p>
 
                         <p>
@@ -489,7 +532,8 @@ freely, subject to the following restrictions:
                                 <p class="mb-1">
                                     <ul>
                                         <li>Audio Buffer</li>
-                                        <li>Distribution Docs</li>
+                                        <li>Distribution</li>
+                                        <li>GL Extensions</li>
                                     </ul>
                                 </p>
                             </a>
@@ -963,7 +1007,7 @@ vd_fw_set_ncrects(draggable_rect, 1, exclude_rects);
                     <br>
 
                     <section class="L2 section" id="tutorials-rendering-3d">
-                        <h4>Render 3D</h4>
+                        <h4>Draw a Cube</h4>
                         <p>
                             Let's render some 3D geometry.
                             For this, we'll need separate shaders; if you're following the tutorial in order, here they are:
@@ -1195,7 +1239,7 @@ glDrawArrays(GL_TRIANGLES, 0, 36);
                     <br>
 
                     <section class="L2 section" id="tutorials-input">
-                        <h4>Input</h4> 
+                        <h4>Handle Input</h4> 
 
                         <p>
                             We've already seen some mouse state handling, but let's look at the main functions used for
@@ -1377,6 +1421,62 @@ vd_fw_set_app_icon(icon_pixels, 32, 32);
                             </ul>
                         </p>
 
+                    </section>
+
+                    <section class="L2" id="discrete-integrated-gpu">
+                        <h4>Use the Discrete GPU</h4>
+                        <p>
+                            The OpenGL specification makes no distinction between the presence of multiple GPUs inside
+                            the target system; one will be automatically selected based on vendor preference settings
+                            host OS, and other factors that the developer will not be able to affect.
+                        </p>
+                        <p>
+                            However, for most systems there is a way to tell the OS at least what <i>kind</i> of GPU
+                            the application prefers. This library can be instructed to do that through using:
+                        </p>
+                        <pre class="rounded copy"><code class="language-cpp">
+#define VD_FW_PREFER_DISCRETE_GPU    // Prefer D-GPU
+// Or
+#define VD_FW_PREFER_INTEGRATED_GPU  // Prefer I-GPU (The one inside your CPU)
+                        </code></pre>
+                        <br>
+
+                        <p>
+                            Of course, this doesn't mean that your target application will only use the GPU type you
+                            specified, but it will signal to whatever system decides this that the application prefers
+                            that type of GPU.
+                        </p>
+
+                        <p>
+                            There are many more technicalities, the most important of which to know is: The OpenGL
+                            backend will change/swap GPUs if run on an Optimus, or other kind of laptop that features
+                            GPU switching. It will also change (depending on the operating system, version, etc.), if
+                            the window enters a full-screen state. 
+                        </p>
+
+                        <p>
+                            Most of these 2 GPU devices are high end gaming laptops, which use the integrated GPU for
+                            low priority tasks, such as the web browser, and keep the discrete GPU turned off until a
+                            demanding task, like a game needs it. 
+                        </p>
+
+                        <p>
+                            My suggestion is:
+                            <ul>
+                                <li>
+                                    For GUI applications:<br> 
+                                    <b>Don't set any GPU preference</b>. These apps are supposed to use few system
+                                    resources anyway. This will guarantee that resizing, going fullscreen, etc.. will
+                                    match the display context to the currently used one by other applications.
+                                </li>
+                                <li>
+                                    For games:<br>
+                                    <b>Always use the discrete GPU</b>, since those are the ones that implement the most
+                                    OpenGL extensions, as well as the fastest ones. But be aware that initial startup
+                                    time (especially on gaming laptops with 2 GPUs), will be affected.        
+                                </li>
+                            </ul>
+                        </p>
                     </section>
 
                     <!-- Begin API -->
@@ -1929,6 +2029,7 @@ vd_fw_init(& (VdFwInitInfo) {
                                             background-color: rgba(201, 201, 201, 0.514);
                                             margin: 4px;
                                         }
+
                                         .keyboard-row {
                                             display: flex;
                                             flex-direction: row;
@@ -1973,7 +2074,7 @@ vd_fw_init(& (VdFwInitInfo) {
 
                                         .input-split {
                                             display: flex;
-                                            flex-direction: column;
+                                            flex-direction: row;
                                             justify-content: center;
                                             /*align-items: flex-start;*/
                                             align-items: center;
@@ -1983,7 +2084,7 @@ vd_fw_init(& (VdFwInitInfo) {
                                             display: flex;
                                             flex-grow: 1;
                                             height: 300px;
-                                            min-width: 774px;
+                                            min-width: 100px;
                                             margin: 2px 2px 2px 2px;
                                         }
                                         #keyboard-output code {
@@ -2016,7 +2117,7 @@ vd_fw_init(& (VdFwInitInfo) {
 
                                     <!-- Begin Split -->
                                     <div class="input-split">
-                                        <div id="keyboard-input">
+                                        <!-- <div id="keyboard-input"> -->
                                             <!-- Begin keyboard-input60 -->
                                             <div class="keyboard" id="keyboard-input60">
                                                 <div class="keyboard-row first-keyboard-row" data-row="0">
@@ -2158,7 +2259,7 @@ vd_fw_init(& (VdFwInitInfo) {
                                                 </div>
                                             </div>
                                             <!-- End   keyboard-input60 -->
-                                        </div>
+                                        <!-- </div> -->
 
                                         <div id="keyboard-output" class="flex-column">
                                             <div class="d-flex flex-row justify-content-between align-items-center">

@@ -33,11 +33,13 @@
  * - Set mouse cursor to constants (resize, I, etc...)
  * - Should vd_fw_set_receive_ncmouse be default 0 or 1?
  *   - Actually, consider removing it entirely
+ * - set min/max window size
+ * - set window unresizable
  * - MacOS: vd_fw_get_focused
  * - MacOS: Figure out why F keys or escape don't get pressed
  * - MacOS: Figure out how to only send event for Quit 
  * - MacOS: vd_fw_set_app_icon
- * - vd_fw_set_fullscreen
+ * - MacOS: vd_fw_set_fullscreen
  * - MacOS APIs can't be used on another thread other than main thread :/
  *   so, just initialize display link and wait on condition variable + mutex when drawing while resizing
  * - On borderless, push mouse event right as we lose focus to a value outside of the window space
@@ -291,6 +293,7 @@ VD_FW_API int                vd_fw_swap_buffers(void);
  * @return   (Reserved)
  */
 VD_FW_API int                vd_fw_get_size(int *w, int *h);
+VD_FW_API void               vd_fw_set_size(int w, int h);
 
 /**
  * Maximize window and disable borders.
@@ -3847,6 +3850,7 @@ enum {
     VD_FW_WIN32_SHOW_CURSOR  = WM_USER + 1,
     VD_FW_WIN32_UPDATE_TITLE = WM_USER + 2, 
     VD_FW_WIN32_FULLSCREEN   = WM_USER + 3, 
+    VD_FW_WIN32_SIZE         = WM_USER + 4, 
 };
 
 typedef struct {
@@ -4630,6 +4634,19 @@ VD_FW_API int vd_fw_get_size(int *w, int *h)
     *w = VD_FW_G.curr_frame.w;
     *h = VD_FW_G.curr_frame.h;
     return VD_FW_G.curr_frame.flags & VD_FW_WIN32_FLAGS_SIZE_CHANGED;
+}
+
+VD_FW_API void vd_fw_set_size(int w, int h)
+{
+    WORD ww = (WORD)w;
+    WORD wh = (WORD)h;
+    LPARAM lparam = MAKELPARAM(ww, wh);
+
+    VD_FW__CHECK_TRUE(PostMessageA(
+        VD_FW_G.hwnd,
+        VD_FW_WIN32_SIZE,
+        0, /* WPARAM */
+        lparam));
 }
 
 VD_FW_API void vd_fw_set_fullscreen(int on)
@@ -5714,6 +5731,27 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             }
 
             VD_FW_WIN32_PROFILE_END(fw_fullscreen);
+        } break;
+
+        case VD_FW_WIN32_SIZE: {
+            WORD width  = LOWORD(lparam);
+            WORD height = HIWORD(lparam);
+
+            RECT rect;
+            GetWindowRect(VD_FW_G.hwnd, &rect);
+
+            RECT newrect;
+            newrect.left = rect.left;
+            newrect.right = rect.left + width;
+            newrect.top = rect.top;
+            newrect.bottom = rect.top + height;
+
+            SetWindowPos(VD_FW_G.hwnd, HWND_TOP,
+                         newrect.left, newrect.top,
+                         newrect.right - newrect.left,
+                         newrect.bottom - newrect.top,
+                         SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+
         } break;
 
         case VD_FW_WIN32_UPDATE_TITLE: {
