@@ -68,7 +68,7 @@ int main(int argc, char const *argv[])
             .debug_on = 0,
         },
         .window_options = {
-            .borderless = 1,
+            .borderless = 0,
         }
     });
     vd_fw_set_vsync_on(0);
@@ -295,6 +295,10 @@ int main(int argc, char const *argv[])
 
         if (vd_fw_get_key_pressed(VD_FW_KEY_F1) && vd_fw_get_key_down(VD_FW_KEY_LSHIFT)) {
             vd_fw_set_mouse_locked(!vd_fw_get_mouse_locked());
+        }
+
+        if (vd_fw_get_key_pressed(VD_FW_KEY_F11)) {
+            vd_fw_set_fullscreen(!vd_fw_get_fullscreen());
         }
 
         glEnable(GL_DEPTH_TEST);

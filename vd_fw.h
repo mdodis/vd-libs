@@ -293,6 +293,12 @@ VD_FW_API int                vd_fw_swap_buffers(void);
 VD_FW_API int                vd_fw_get_size(int *w, int *h);
 
 /**
+ * Maximize window and disable borders.
+ */
+VD_FW_API void               vd_fw_set_fullscreen(int on);
+VD_FW_API int                vd_fw_get_fullscreen(void);
+
+/**
  * Gets whether the window is focused
  * @param  focused Pointer to int which will receive the value of focus
  * @return         1 if the focus has changed. There's no point in checking the value of focused otherwise.
@@ -561,10 +567,10 @@ VD_FW_INL void vd_fw_u_lookat(float eye[3], float target[3], float updir[3], flo
     };
 
     // Column-major matrix
-    out[0] = left[0];  out[4] = left[1];  out[8]  = left[2];  out[12] = - (left[0]*eye[0] + left[1]*eye[1] + left[2]*eye[2]);
-    out[1] = up[0];    out[5] = up[1];    out[9]  = up[2];    out[13] = - (up[0]*eye[0] + up[1]*eye[1] + up[2]*eye[2]);
-    out[2] = -forward[0]; out[6] = -forward[1]; out[10] = -forward[2]; out[14] = forward[0]*eye[0] + forward[1]*eye[1] + forward[2]*eye[2];
-    out[3] = 0.0f;    out[7] = 0.0f;    out[11] = 0.0f;    out[15] = 1.0f;
+    out[0] = left[0];      out[4] = left[1];     out[8]  = left[2];     out[12] = - (left[0]    * eye[0] + left[1]    * eye[1] + left[2]    * eye[2]);
+    out[1] = up[0];        out[5] = up[1];       out[9]  = up[2];       out[13] = - (up[0]      * eye[0] + up[1]      * eye[1] + up[2]      * eye[2]);
+    out[2] = -forward[0];  out[6] = -forward[1]; out[10] = -forward[2]; out[14] =    forward[0] * eye[0] + forward[1] * eye[1] + forward[2] * eye[2];
+    out[3] = 0.0f;         out[7] = 0.0f;        out[11] = 0.0f;        out[15] = 1.0f;
 }
 
 /* ----INTERNAL API-------------------------------------------------------------------------------------------------- */
@@ -3807,6 +3813,7 @@ enum {
 
     VD_FW_WIN32_SHOW_CURSOR  = WM_USER + 1,
     VD_FW_WIN32_UPDATE_TITLE = WM_USER + 2, 
+    VD_FW_WIN32_FULLSCREEN   = WM_USER + 3, 
 };
 
 typedef struct {
@@ -3854,6 +3861,10 @@ typedef struct {
     BOOL                        focus_changed;
     BOOL                        focused;
     RAWINPUT                    raw_input_buffer[VD_FW_WIN32_RAW_INPUT_BUFFER_COUNT];
+    LONG                        last_window_style;
+    RECT                        windowed_rect;
+    WINDOWPLACEMENT             last_window_placement;
+    BOOL                        going_fullscreen;
 
 /* ----RENDER THREAD ONLY-------------------------------------------------------------------------------------------- */
     HANDLE                      win_thread;
@@ -3872,6 +3883,7 @@ typedef struct {
     DWORD                       mmousedown;
     float                       mouse_delta[2];
     BOOL                        mouse_is_locked;
+    BOOL                        is_fullscreen;
 
 /* ----RENDER THREAD - WINDOW THREAD DATA---------------------------------------------------------------------------- */
     VdFw__Win32Message          msgbuf[VD_FW_WIN32_MESSAGE_BUFFER_SIZE];
@@ -4586,6 +4598,26 @@ VD_FW_API int vd_fw_get_size(int *w, int *h)
     return VD_FW_G.curr_frame.flags & VD_FW_WIN32_FLAGS_SIZE_CHANGED;
 }
 
+VD_FW_API void vd_fw_set_fullscreen(int on)
+{
+    if (VD_FW_G.is_fullscreen == on) {
+        return;
+    }
+
+    VD_FW_G.is_fullscreen = on;
+
+    VD_FW__CHECK_TRUE(PostMessageA(
+        VD_FW_G.hwnd,
+        VD_FW_WIN32_FULLSCREEN,
+        0, /* WPARAM */
+        on /* LPARAM */));
+}
+
+VD_FW_API int vd_fw_get_fullscreen(void)
+{
+    return VD_FW_G.is_fullscreen;
+}
+
 VD_FW_API int vd_fw_get_focused(int *focused)
 {
     *focused = VD_FW_G.focused;
@@ -4797,7 +4829,7 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
         return 0;
     }
 
-    DWORD window_style;
+    LONG window_style;
     if (VD_FW_G.draw_decorations) {
         window_style = WS_OVERLAPPEDWINDOW | WS_SIZEBOX;
     } else {
@@ -4864,6 +4896,7 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
         VD_FW__CHECK_TRUE(RegisterRawInputDevices(&rid, 1, sizeof(rid)));
     }
 
+    VD_FW_G.last_window_style = window_style;
     VD_FW_G.t_paint_ready = 1;
 
     while (VD_FW_G.t_running) {
@@ -5000,65 +5033,67 @@ static int vd_fw__hit_test(int x, int y)
         return HTNOWHERE;
     }
 
-    if (mouse.y < frame_size) {
-        if (mouse.x < diagonal_width) {
-            return HTTOPLEFT;
-        }
-
-        if (mouse.x >= width - diagonal_width) {
-            return HTTOPRIGHT;
-        }
-
-        return HTTOP;
-    }
-
-    if (mouse.y >= height - frame_size) {
-        if (mouse.x < diagonal_width) {
-            return HTBOTTOMLEFT;
-        }
-
-        if (mouse.x >= width - diagonal_width) {
-            return HTBOTTOMRIGHT;
-        }
-
-        return HTBOTTOM;
-    }
-
-    if (mouse.x < frame_size) {
-        return HTLEFT;
-    }
-
-    if (mouse.x >= width - frame_size) {
-        return HTRIGHT;
-    }
-
-    if (!VD_FW_G.nccaption_set) {
-        return HTCAPTION;
-    }
-
-    int inside_caption = 
-        ((mouse.x >= VD_FW_G.nccaption[0]) && (mouse.x <= VD_FW_G.nccaption[2])) &&
-        ((mouse.y >= VD_FW_G.nccaption[1]) && (mouse.y <= VD_FW_G.nccaption[3]));
-
-    if (inside_caption) {
-        for (int ri = 0; ri < VD_FW_G.ncrect_count; ++ri) {
-            int rect[4] = {
-                VD_FW_G.ncrects[ri][0],
-                VD_FW_G.ncrects[ri][1],
-                VD_FW_G.ncrects[ri][2],
-                VD_FW_G.ncrects[ri][3],
-            };
-
-            int inside =
-                ((mouse.x >= rect[0]) && (mouse.x <= rect[2])) &&
-                ((mouse.y >= rect[1]) && (mouse.y <= rect[3]));
-
-            if (inside) {
-                return HTCLIENT;
+    if (!VD_FW_G.is_fullscreen) {
+        if (mouse.y < frame_size) {
+            if (mouse.x < diagonal_width) {
+                return HTTOPLEFT;
             }
+
+            if (mouse.x >= width - diagonal_width) {
+                return HTTOPRIGHT;
+            }
+
+            return HTTOP;
         }
 
-        return HTCAPTION;
+        if (mouse.y >= height - frame_size) {
+            if (mouse.x < diagonal_width) {
+                return HTBOTTOMLEFT;
+            }
+
+            if (mouse.x >= width - diagonal_width) {
+                return HTBOTTOMRIGHT;
+            }
+
+            return HTBOTTOM;
+        }
+
+        if (mouse.x < frame_size) {
+            return HTLEFT;
+        }
+
+        if (mouse.x >= width - frame_size) {
+            return HTRIGHT;
+        }
+
+        if (!VD_FW_G.nccaption_set) {
+            return HTCAPTION;
+        }
+
+        int inside_caption = 
+            ((mouse.x >= VD_FW_G.nccaption[0]) && (mouse.x <= VD_FW_G.nccaption[2])) &&
+            ((mouse.y >= VD_FW_G.nccaption[1]) && (mouse.y <= VD_FW_G.nccaption[3]));
+
+        if (inside_caption) {
+            for (int ri = 0; ri < VD_FW_G.ncrect_count; ++ri) {
+                int rect[4] = {
+                    VD_FW_G.ncrects[ri][0],
+                    VD_FW_G.ncrects[ri][1],
+                    VD_FW_G.ncrects[ri][2],
+                    VD_FW_G.ncrects[ri][3],
+                };
+
+                int inside =
+                    ((mouse.x >= rect[0]) && (mouse.x <= rect[2])) &&
+                    ((mouse.y >= rect[1]) && (mouse.y <= rect[3]));
+
+                if (inside) {
+                    return HTCLIENT;
+                }
+            }
+
+            return HTCAPTION;
+        }
     }
 
     return HTCLIENT;
@@ -5271,6 +5306,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
         case WM_PAINT: {
             if (!VD_FW_G.t_paint_ready) break;
+            // if (VD_FW_G.going_fullscreen) break;
 
             VD_FW_WIN32_PROFILE_BEGIN(wm_paint);
 
@@ -5592,6 +5628,47 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         case VD_FW_WIN32_SHOW_CURSOR: {
             BOOL should_show = (BOOL)wparam;
             ShowCursor(should_show);
+        } break;
+
+        case VD_FW_WIN32_FULLSCREEN: {
+            BOOL should_be_fullscreen = (BOOL)lparam;
+
+
+            VD_FW_G.going_fullscreen = TRUE;
+            MemoryBarrier();
+
+            if (should_be_fullscreen) {
+
+                GetWindowRect(VD_FW_G.hwnd, &VD_FW_G.windowed_rect);
+                GetWindowPlacement(VD_FW_G.hwnd, &VD_FW_G.last_window_placement);
+
+                HMONITOR monitor = MonitorFromWindow(VD_FW_G.hwnd, MONITOR_DEFAULTTOPRIMARY);
+                MONITORINFO monitor_info = {0};
+                monitor_info.cbSize = sizeof(monitor_info);
+                VD_FW__CHECK_NONZERO(GetMonitorInfo(monitor, &monitor_info));
+
+                LONG style = WS_POPUP | WS_VISIBLE;
+
+                SetWindowLong(VD_FW_G.hwnd, GWL_STYLE, style);
+                SetWindowPos(VD_FW_G.hwnd, HWND_TOP,
+                             monitor_info.rcMonitor.left, monitor_info.rcMonitor.top,
+                             monitor_info.rcMonitor.right - monitor_info.rcMonitor.left,
+                             monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top,
+                             SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+            } else {
+                SetWindowLong(VD_FW_G.hwnd, GWL_STYLE, VD_FW_G.last_window_style);
+                SetWindowPlacement(VD_FW_G.hwnd, &VD_FW_G.last_window_placement);
+                SetWindowPos(VD_FW_G.hwnd, HWND_TOP,
+                             0,
+                             0,
+                             0,
+                             0,
+                             SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+                             SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+            }
+
+            MemoryBarrier();
+            VD_FW_G.going_fullscreen = FALSE;
         } break;
 
         case VD_FW_WIN32_UPDATE_TITLE: {
