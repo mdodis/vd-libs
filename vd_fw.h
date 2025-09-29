@@ -3798,6 +3798,39 @@ typedef BOOL (WINAPI * PFNWGLSWAPINTERVALEXTPROC) (int interval);
 typedef HGLRC (WINAPI * PFNWGLCREATECONTEXTATTRIBSARBPROC) (HDC hDC, HGLRC hShareContext, const int *attribList);
 typedef BOOL (WINAPI * PFNWGLCHOOSEPIXELFORMATARBPROC) (HDC hdc, const int *piAttribIList, const FLOAT *pfAttribFList, UINT nMaxFormats, int *piFormats, UINT *nNumFormats);
 
+#define VD_FW_DISPLAY_PREFERENCE_DGPU 1
+#define VD_FW_DISPLAY_PREFERENCE_IGPU 2
+
+#if defined(VD_FW_PREFER_DISCRETE_GPU) && defined(VD_FW_PREFER_INTEGRATED_GPU)
+#warning "You cannot defined VD_FW_PREFER_DISCRETE_GPU and VD_FW_PREFER_INTEGRATED_GPU at the same time."
+#endif
+
+#ifdef VD_FW_PREFER_DISCRETE_GPU
+#define VD_FW_DISPLAY_PREFERENCE VD_FW_DISPLAY_PREFERENCE_DGPU
+#elif defined(VD_FW_PREFER_INTEGRATED_GPU)
+#define VD_FW_DISPLAY_PREFERENCE VD_FW_DISPLAY_PREFERENCE_IGPU
+#endif // VD_FW_PREFER_DISCRETE_GPU
+
+#if VD_FW_DISPLAY_PREFERENCE == VD_FW_DISPLAY_PREFERENCE_DGPU
+#if defined(__cplusplus)
+extern "C" {
+#endif
+    __declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
+    __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+#if defined(__cplusplus)
+}
+#endif
+#elif VD_FW_DISPLAY_PREFERENCE == VD_FW_DISPLAY_PREFERENCE_IGPU
+#if defined(__cplusplus)
+extern "C" {
+#endif
+    __declspec(dllexport) DWORD NvOptimusEnablement = 0x00000000;
+    __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 0;
+#if defined(__cplusplus)
+}
+#endif
+#endif // VD_FW_DISPLAY_PREFERENCE
+
 enum {
     VD_FW_WIN32_FLAGS_WAKE_COND_VAR = 1 << 0,
     VD_FW_WIN32_FLAGS_SIZE_CHANGED  = 1 << 1,
@@ -3864,7 +3897,6 @@ typedef struct {
     LONG                        last_window_style;
     RECT                        windowed_rect;
     WINDOWPLACEMENT             last_window_placement;
-    BOOL                        going_fullscreen;
 
 /* ----RENDER THREAD ONLY-------------------------------------------------------------------------------------------- */
     HANDLE                      win_thread;
@@ -4575,6 +4607,8 @@ VD_FW_API int vd_fw_running(void)
 VD_FW_API int vd_fw_swap_buffers(void)
 {
     SwapBuffers(VD_FW_G.hdc);
+    // @note(mdodis): This needs to happen, otherwise the window animations and taskbar don't get redrawn if the window
+    // is maximized to either section of the screen or the whole screen
     DwmFlush();
 
     if (glFenceSync && glClientWaitSync && glDeleteSync) {
@@ -4833,7 +4867,7 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     if (VD_FW_G.draw_decorations) {
         window_style = WS_OVERLAPPEDWINDOW | WS_SIZEBOX;
     } else {
-        window_style = WS_OVERLAPPED | WS_SIZEBOX | WS_MAXIMIZEBOX;
+        window_style = WS_OVERLAPPED | WS_SIZEBOX | WS_MAXIMIZEBOX | WS_MINIMIZEBOX;
     }
 
     // @note(mdodis): Some tests with windows
@@ -5306,7 +5340,6 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
         case WM_PAINT: {
             if (!VD_FW_G.t_paint_ready) break;
-            // if (VD_FW_G.going_fullscreen) break;
 
             VD_FW_WIN32_PROFILE_BEGIN(wm_paint);
 
@@ -5331,6 +5364,10 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         } break;
 
         case WM_NCPAINT: {
+            if (VD_FW_G.draw_decorations) {
+                result = DefWindowProc(hwnd, msg, wparam, lparam);
+                break;
+            }
             // @note(mdodis): Theoretically, you should be able to DwmSetWindowAttribute(hwnd,
             //                                                                           DWMWA_NCRENDERING_POLICY,
             //                                                                           &DWMNCRP_DISABLED,
@@ -5392,48 +5429,59 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         } break;
 
         case WM_NCACTIVATE: {
-            // @note(mdodis): DefWindowProc doesn't repaint border if lparam == -1
-            // See: https://blogs.msdn.microsoft.com/wpfsdk/2008/09/08/custom-window-chrome-in-wpf/
-            result = DefWindowProc(hwnd, msg, wparam, -1);
+            if (!VD_FW_G.draw_decorations) {
+                // @note(mdodis): DefWindowProc doesn't repaint border if lparam == -1
+                // See: https://blogs.msdn.microsoft.com/wpfsdk/2008/09/08/custom-window-chrome-in-wpf/
+                result = DefWindowProc(hwnd, msg, wparam, -1);
+            } else {
+                result = DefWindowProc(hwnd, msg, wparam, lparam);
+            }
         } break;
 
         case WM_NCCALCSIZE: {
-            if (VD_FW_G.draw_decorations) {
-                result = DefWindowProc(hwnd, msg, wparam, lparam);
-            } else {
+            if (!VD_FW_G.draw_decorations) {
                 vd_fw__nccalcsize(wparam, lparam);
+            } else {
+                result = DefWindowProc(hwnd, msg, wparam, lparam);
             }
         } break;
 
 
         case WM_NCHITTEST: {
-            if (VD_FW_G.draw_decorations) {
-                result = DefWindowProc(hwnd, msg, wparam, lparam);
-            } else {
+            if (!VD_FW_G.draw_decorations) {
                 result = vd_fw__hit_test(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam));
+            } else {
+                result = DefWindowProc(hwnd, msg, wparam, lparam);
             }
         } break;
 
         case WM_NCUAHDRAWCAPTION:
         case WM_NCUAHDRAWFRAME: {
-            if (VD_FW_G.draw_decorations) {
-                result = DefWindowProc(hwnd, msg, wparam, lparam);
-            } else {
+            if (!VD_FW_G.draw_decorations) {
                 result = 0;
+            } else {
+                result = DefWindowProc(hwnd, msg, wparam, lparam);
             }
         } break;
 
         case WM_SETICON:
         case WM_SETTEXT: {
-            if (!VD_FW_G.composition_enabled && !VD_FW_G.theme_enabled) {
-                result = vd_fw__handle_invisible(hwnd, msg, wparam, lparam);
+            if (!VD_FW_G.draw_decorations) {
+                if (!VD_FW_G.composition_enabled && !VD_FW_G.theme_enabled) {
+                    result = vd_fw__handle_invisible(hwnd, msg, wparam, lparam);
+                } else {
+                    result = DefWindowProc(hwnd, msg, wparam, lparam);
+                }
             } else {
                 result = DefWindowProc(hwnd, msg, wparam, lparam);
             }
         } break;
 
         case WM_THEMECHANGED: {
-            vd_fw__theme_changed();
+            if (!VD_FW_G.draw_decorations) {
+                vd_fw__theme_changed();
+            }
+
             result = DefWindowProc(hwnd, msg, wparam, lparam);
         } break;
 
@@ -5631,11 +5679,8 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         } break;
 
         case VD_FW_WIN32_FULLSCREEN: {
+            VD_FW_WIN32_PROFILE_BEGIN(fw_fullscreen);
             BOOL should_be_fullscreen = (BOOL)lparam;
-
-
-            VD_FW_G.going_fullscreen = TRUE;
-            MemoryBarrier();
 
             if (should_be_fullscreen) {
 
@@ -5647,18 +5692,19 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                 monitor_info.cbSize = sizeof(monitor_info);
                 VD_FW__CHECK_NONZERO(GetMonitorInfo(monitor, &monitor_info));
 
-                LONG style = WS_POPUP | WS_VISIBLE;
+                LONG style = VD_FW_G.last_window_style & ~(WS_OVERLAPPEDWINDOW);
+                style |= WS_VISIBLE;
 
                 SetWindowLong(VD_FW_G.hwnd, GWL_STYLE, style);
                 SetWindowPos(VD_FW_G.hwnd, HWND_TOP,
                              monitor_info.rcMonitor.left, monitor_info.rcMonitor.top,
                              monitor_info.rcMonitor.right - monitor_info.rcMonitor.left,
                              monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top,
-                             SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+                             SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
             } else {
                 SetWindowLong(VD_FW_G.hwnd, GWL_STYLE, VD_FW_G.last_window_style);
                 SetWindowPlacement(VD_FW_G.hwnd, &VD_FW_G.last_window_placement);
-                SetWindowPos(VD_FW_G.hwnd, HWND_TOP,
+                SetWindowPos(VD_FW_G.hwnd, NULL,
                              0,
                              0,
                              0,
@@ -5667,8 +5713,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                              SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
             }
 
-            MemoryBarrier();
-            VD_FW_G.going_fullscreen = FALSE;
+            VD_FW_WIN32_PROFILE_END(fw_fullscreen);
         } break;
 
         case VD_FW_WIN32_UPDATE_TITLE: {
