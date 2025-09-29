@@ -301,6 +301,10 @@ int main() {
                                     </td>
                                 </tr>
                                 <tr>
+                                    <td><b>Win32 Specific</b></td>
+                                    <td></td>
+                                </tr>
+                                <tr>
                                     <td>
                                         <code>#define VD_FW_WIN32_SUBSYSTEM</code><br>
                                         <code>// Can be one of the following:</code><br>
@@ -308,6 +312,12 @@ int main() {
                                         <code>// VD_FW_WIN32_SUBSYSTEM_WINDOWS</code>
                                     </td>
                                     <td>Change the <a href="https://learn.microsoft.com/en-us/cpp/build/reference/subsystem-specify-subsystem?view=msvc-170">Subsystem</a> (Windows only).</td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <code>#define VD_FW_WIN32_NO_LINKER_COMMENTS</code>
+                                    </td>
+                                    <td>Disable automatic linker comments (Windows only).</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -354,6 +364,11 @@ int main() {
                         <p>
                             It's highly recommended to <code>#define VD_FW_NO_CRT 1</code> so that the CRT is removed
                             when linking. This can reduce the final executable size by a factor of 10 (for small applications).
+                        </p>
+
+                        <p>
+                            If you'd like to define options by yourself,
+                            <code>#define VD_FW_WIN32_NO_LINKER_COMMENTS</code> before including the implementation.
                         </p>
                     </section>
 

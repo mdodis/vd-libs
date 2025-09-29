@@ -580,6 +580,12 @@ VD_FW_API void vd_fw__free_mem(void *memory);
 #endif // !VD_FW_WIN32_SUBSYSTEM
 #endif // _WIN32
 
+#ifdef VD_FW_WIN32_NO_LINKER_COMMENTS
+#define VD_FW_WIN32_LINKER_COMMENTS 0
+#else
+#define VD_FW_WIN32_LINKER_COMMENTS 1
+#endif // !VD_FW_WIN32_NO_LINKER_COMMENTS
+
 #if defined(__APPLE__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
@@ -3668,6 +3674,8 @@ extern PFNGLPOLYGONOFFSETCLAMPPROC             glPolygonOffsetClamp;
 static void vd_fw__load_opengl(VdFwGlVersion version);
 
 #ifdef _WIN32
+
+#if VD_FW_WIN32_LINKER_COMMENTS
 #pragma comment(lib, "User32.lib")
 #pragma comment(lib, "OpenGL32.lib")
 #pragma comment(lib, "Dwmapi.lib")
@@ -3690,6 +3698,8 @@ static void vd_fw__load_opengl(VdFwGlVersion version);
 #pragma comment(linker, "/NODEFAULTLIB:oldnames.lib")
 #pragma execution_character_set("utf-8")
 #endif // VD_FW_NO_CRT
+#endif // VD_FW_WIN32_LINKER_COMMENTS
+
 // #define WIN32_LEAN_AND_MEAN
 #define NOGDICAPMASKS
 // #define NOSYSMETRICS
