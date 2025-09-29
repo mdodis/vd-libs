@@ -34,6 +34,10 @@ section, .apiitem {
     scroll-margin-top: 50px;
 }
 
+.page-break {
+    min-height: 500px;
+}
+
 .revision-planned {
     background-color: var(--eerie-black);    
     opacity: 0.4;
