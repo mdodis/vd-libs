@@ -120,6 +120,9 @@ typedef enum {
     VD_DSPC__TOKEN_TYPE_TAGS_BEGIN,
     VD_DSPC__TOKEN_TYPE_TAGS_END,
     VD_DSPC__TOKEN_TYPE_QUOTED_STRING,
+    VD_DSPC__TOKEN_TYPE_SECTION_BEGIN,
+    VD_DSPC__TOKEN_TYPE_SECTION_END,
+    VD_DSPC__TOKEN_TYPE_TEXT_CONTENT,
     VD_DSPC__TOKEN_TYPE_END        = -1,
 } VdDspc__TokenType;
 
@@ -152,6 +155,7 @@ VD_DSPC_API int  vd_dspc_document_add(VdDspcDocument *doc, const char *content, 
 
 #if VD_DSPC_STDLIB
 #include <stdlib.h>
+#include <string.h>
 #include <assert.h>
 static void *vd_dspc__stdlib_alloc(void *prev, size_t prev_size, size_t new_size)
 {
@@ -212,6 +216,9 @@ static VdDspc__Token vd_dspc__lex_token(VdDspc__Lex *lex);
 static void          vd_dspc__lex_consume(VdDspc__Lex *lex, VdDspc__Token *token);
 static VdDspc__Token vd_dspc__token_new(VdDspc__Lex *lex, VdDspc__TokenType type);
 static void          vd_dspc__token_log(VdDspc__Token *tok);
+static int           vd_dspc__skip_whitespace_all(VdDspc__Lex *lex);
+static VdDspc__Lex   vd_dspc__lex_save(VdDspc__Lex *lex);
+static void          vd_dspc__lex_load(VdDspc__Lex *target, VdDspc__Lex *src);
 
 /* ----PARSER-------------------------------------------------------------------------------------------------------- */
 static int vd_dspc__lang_section(VdDspcDocument *doc);
@@ -309,7 +316,8 @@ static int vd_dspc__lex_char(VdDspc__Lex *lex)
 
 static VdDspc__Token vd_dspc__lex_token(VdDspc__Lex *lex)
 {
-    VdDspc__Lex saved_state = *lex;
+    vd_dspc__skip_whitespace_all(lex);
+    VdDspc__Lex saved_state = vd_dspc__lex_save(lex);
 
     VdDspc__Token result;
     result.type     = VD_DSPC__TOKEN_TYPE_UNKNOWN;
@@ -318,10 +326,12 @@ static VdDspc__Token vd_dspc__lex_token(VdDspc__Lex *lex)
     int c = vd_dspc__lex_char(lex);
 
     switch (c) {
-        case '@': result.type = VD_DSPC__TOKEN_TYPE_AT;         vd_dspc__lex_nextn(&result.lexstate, 1); break;
-        case '(': result.type = VD_DSPC__TOKEN_TYPE_TAGS_BEGIN; vd_dspc__lex_nextn(&result.lexstate, 1); break;
-        case ')': result.type = VD_DSPC__TOKEN_TYPE_TAGS_END;   vd_dspc__lex_nextn(&result.lexstate, 1); break;
-        case -1:  result.type = VD_DSPC__TOKEN_TYPE_END; break;
+        case '@':             result.type = VD_DSPC__TOKEN_TYPE_AT;            vd_dspc__lex_nextn(&result.lexstate, 1); break;
+        case '(':             result.type = VD_DSPC__TOKEN_TYPE_TAGS_BEGIN;    vd_dspc__lex_nextn(&result.lexstate, 1); break;
+        case ')':             result.type = VD_DSPC__TOKEN_TYPE_TAGS_END;      vd_dspc__lex_nextn(&result.lexstate, 1); break;
+        case '{':             result.type = VD_DSPC__TOKEN_TYPE_SECTION_BEGIN; vd_dspc__lex_nextn(&result.lexstate, 1); break;
+        case '}':             result.type = VD_DSPC__TOKEN_TYPE_SECTION_END;   vd_dspc__lex_nextn(&result.lexstate, 1); break;
+        case -1:              result.type = VD_DSPC__TOKEN_TYPE_END;                                                    break;
         case '\"': {
             // Parse quoted string
             vd_dspc__lex_nextn(&result.lexstate, 1);
@@ -380,9 +390,40 @@ static VdDspc__Token vd_dspc__token_new(VdDspc__Lex *lex, VdDspc__TokenType type
 
 static void vd_dspc__token_log(VdDspc__Token *tok)
 {
-    VD_DSPC_LOG("%llu:%llu: %s", tok->lexstate.line, tok->lexstate.column,
+    VD_DSPC_LOG("%llu:%llu: %s", tok->lexstate.line + 1, tok->lexstate.column + 1,
                                  vd_dspc__token_type_to_string(tok->type));
-    VD_DSPC_LOG("\t%.*s", (int)vd_dspc__token_string_size(tok), vd_dspc__token_string_begin(tok));
+    VD_DSPC_LOG("%.*s", (int)vd_dspc__token_string_size(tok), vd_dspc__token_string_begin(tok));
+}
+
+static int vd_dspc__skip_whitespace_all(VdDspc__Lex *lex)
+{
+    int c = vd_dspc__lex_char(lex);
+    int any_whitespace_skipped = 0;
+    while (vd_dspc__is_whitespace(c)) {
+        if (!vd_dspc__lex_nextn(lex, 1)) {
+            return 0;
+        }
+        any_whitespace_skipped = 1;
+        c = vd_dspc__lex_char(lex);
+    }
+
+    if (any_whitespace_skipped && vd_dspc__is_whitespace(c)) {
+        vd_dspc__lex_nextn(lex, 1);
+        lex->cur_back = lex->cur_fwd;
+    }
+
+    return 1;
+}
+
+static VdDspc__Lex vd_dspc__lex_save(VdDspc__Lex *lex)
+{
+    VdDspc__Lex result = *lex;
+    return result;
+}
+
+static void vd_dspc__lex_load(VdDspc__Lex *target, VdDspc__Lex *src)
+{
+    *target = *src;
 }
 
 /* ----TREES IMPL---------------------------------------------------------------------------------------------------- */
@@ -503,6 +544,9 @@ static char *vd_dspc__token_type_to_string(VdDspc__TokenType ttype)
         case VD_DSPC__TOKEN_TYPE_TAGS_BEGIN:    return "tags_begin";
         case VD_DSPC__TOKEN_TYPE_TAGS_END:      return "tags_end";
         case VD_DSPC__TOKEN_TYPE_QUOTED_STRING: return "\"quoted\"";
+        case VD_DSPC__TOKEN_TYPE_SECTION_BEGIN: return "section_begin";
+        case VD_DSPC__TOKEN_TYPE_SECTION_END:   return "section_end";
+        case VD_DSPC__TOKEN_TYPE_TEXT_CONTENT:  return "text_content";
         default: break;
     }
 
@@ -511,7 +555,31 @@ static char *vd_dspc__token_type_to_string(VdDspc__TokenType ttype)
 
 static VD_DSPC_PROC_LOG(vd_dspc__log_stdout)
 {
-    printf("%s\n", message);
+    size_t max_line = 100;
+    size_t curr_line = 0;
+
+    size_t len = strlen(message);
+
+    for (size_t i = 0; i < len; ++i) {
+        curr_line++;
+
+        char c = message[i];
+
+        switch (c) {
+            case '\n': printf("\\n"); break;
+            case '\r': printf("\\r"); break;
+            case '\t': printf("\\t"); break;
+            default: {
+                fputc(message[i], stdout);
+            } break;
+        }
+
+        if (curr_line >= max_line) {
+            curr_line = 0;
+            printf("\n");
+        }
+    }
+    printf("\n");
 }
 
 #endif // VD_DSPC_IMPL
