@@ -8,6 +8,12 @@
             Then, do that
         }
 
+        @code("cpp" class="rounded copy") {
+            text {
+                Some code here
+            } 
+        }
+
         @img(src="/assets/img.png")
     }
 }

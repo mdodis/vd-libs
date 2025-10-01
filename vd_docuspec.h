@@ -57,17 +57,20 @@ typedef struct VdDspc__Arena {
 
 typedef struct VdDspcStr {
     const char *s;
-    int        l;
+    size_t     l;
 } VdDspcStr;
 
 typedef struct VdDspcStrNode VdDspcStrNode; 
 struct VdDspcStrNode {
     VdDspcStrNode *next;
     VdDspcStrNode *prev;
+    const char    *str;
+    size_t        len;
 };
 
 typedef struct VdDspcStrList {
-    VdDspcStrNode sentinel;
+    VdDspcStrNode *first;
+    VdDspcStrNode *last;
 } VdDspcStrList;
 
 typedef struct VdDspcTag VdDspcTag;
@@ -87,6 +90,7 @@ struct VdDspcSection {
     VdDspcSection *last;
     VdDspcSection *parent;
 
+    VdDspcStr     section_id;
     VdDspcTag     tag_sentinel;
 
     VdDspcStrList text_content;
@@ -123,12 +127,20 @@ typedef enum {
     VD_DSPC__TOKEN_TYPE_SECTION_BEGIN,
     VD_DSPC__TOKEN_TYPE_SECTION_END,
     VD_DSPC__TOKEN_TYPE_TEXT_CONTENT,
+    VD_DSPC__TOKEN_TYPE_ASSIGNMENT,
     VD_DSPC__TOKEN_TYPE_END        = -1,
 } VdDspc__TokenType;
 
 typedef struct VdDspc__Token {
     VdDspc__Lex       lexstate;
     VdDspc__TokenType type;
+    union {
+        VdDspcStrList text_content;
+        struct {
+            char      *str;
+            size_t    len;
+        } quoted_string;
+    } dat;
 } VdDspc__Token;
 
 typedef struct VdDspcDocument {
@@ -139,15 +151,17 @@ typedef struct VdDspcDocument {
     int             arenas_cap;
     VdDspc__Arena   *arenas;
 
+    VdDspcSection   *curr_section;
     VdDspc__Lex     lexstate;
 } VdDspcDocument;
 
 #define VD_DSPC_PROC_LOG(name) void name(const char *message)
 typedef VD_DSPC_PROC_LOG(VdDspcProcLog);
 
-VD_DSPC_API void vd_dspc_set_log_fn(VdDspcProcLog *log_fptr);
-VD_DSPC_API void vd_dspc_document_init(VdDspcDocument *doc, void* (*alloc)(void *, size_t, size_t));
-VD_DSPC_API int  vd_dspc_document_add(VdDspcDocument *doc, const char *content, size_t content_size);
+VD_DSPC_API void             vd_dspc_set_log_fn(VdDspcProcLog *log_fptr);
+VD_DSPC_API void             vd_dspc_document_init(VdDspcDocument *doc, void* (*alloc)(void *, size_t, size_t));
+VD_DSPC_API int              vd_dspc_document_add(VdDspcDocument *doc, const char *content, size_t content_size);
+VD_DSPC_API VdDspcTree*      vd_dspc_document_first_tree(VdDspcDocument *doc);
 
 #endif // !VD_DSPC_H
 
@@ -191,34 +205,41 @@ static VD_DSPC_PROC_LOG(vd_dspc__log_stdout);
     } while(0)
 
 /* ----UTILITIES----------------------------------------------------------------------------------------------------- */
-static int    vd_dspc__is_alpha(int c);
-static int    vd_dspc__is_num(int c);
-static int    vd_dspc__is_whitespace(int c);
-static int    vd_dspc__is_newline(int c);
-static int    vd_dspc__is_consumable_whitespace(int c);
-static int    vd_dspc__is_valid_id_continue(int c);
-static char*  vd_dspc__token_type_to_string(VdDspc__TokenType ttype);
-static size_t vd_dspc__token_string_size(VdDspc__Token *tok);
-static char*  vd_dspc__token_string_begin(VdDspc__Token *tok);
+static int             vd_dspc__is_alpha(int c);
+static int             vd_dspc__is_num(int c);
+static int             vd_dspc__is_whitespace(int c);
+static int             vd_dspc__is_newline(int c);
+static int             vd_dspc__is_consumable_whitespace(int c);
+static int             vd_dspc__is_valid_id_continue(int c);
+static char*           vd_dspc__token_type_to_string(VdDspc__TokenType ttype);
+static size_t          vd_dspc__token_string_size(VdDspc__Token *tok);
+static char*           vd_dspc__token_string_begin(VdDspc__Token *tok);
 
 /* ----ARENAS-------------------------------------------------------------------------------------------------------- */
-static void *vd_dspc__push(VdDspcDocument *doc, size_t size);
+static void*           vd_dspc__push(VdDspcDocument *doc, size_t size);
 
 /* ----TREES--------------------------------------------------------------------------------------------------------- */
-static VdDspcTree *vd_dspc__push_tree(VdDspcDocument *doc);
-static VdDspcTree *vd_dspc__tree(VdDspcDocument *doc);
+static VdDspcTree*     vd_dspc__push_tree(VdDspcDocument *doc);
+static VdDspcTree*     vd_dspc__tree(VdDspcDocument *doc);
+
+/* ----SECTIONS------------------------------------------------------------------------------------------------------ */
+static VdDspcSection*  vd_dspc__push_section(VdDspcDocument *doc, const char *id_begin_string, size_t id_len_string);
+
+/* ----STRLIST------------------------------------------------------------------------------------------------------- */
+static void            vd_dspc__str_list_push_token(VdDspcDocument *doc, VdDspcStrList *list, VdDspc__Token *tok);
+static VdDspcStrNode*  vd_dspc__push_str_node(VdDspcDocument *doc);
 
 /* ----LEXER--------------------------------------------------------------------------------------------------------- */
-static int           vd_dspc__lex_end(VdDspc__Lex *lex);
-static int           vd_dspc__lex_nextn(VdDspc__Lex *lex, size_t n);
-static int           vd_dspc__lex_char(VdDspc__Lex *lex);
-static VdDspc__Token vd_dspc__lex_token(VdDspc__Lex *lex);
-static void          vd_dspc__lex_consume(VdDspc__Lex *lex, VdDspc__Token *token);
-static VdDspc__Token vd_dspc__token_new(VdDspc__Lex *lex, VdDspc__TokenType type);
-static void          vd_dspc__token_log(VdDspc__Token *tok);
-static int           vd_dspc__skip_whitespace_all(VdDspc__Lex *lex);
-static VdDspc__Lex   vd_dspc__lex_save(VdDspc__Lex *lex);
-static void          vd_dspc__lex_load(VdDspc__Lex *target, VdDspc__Lex *src);
+static int             vd_dspc__lex_end(VdDspc__Lex *lex);
+static int             vd_dspc__lex_nextn(VdDspc__Lex *lex, size_t n);
+static int             vd_dspc__lex_char(VdDspc__Lex *lex);
+static VdDspc__Token   vd_dspc__lex_token(VdDspcDocument *doc, VdDspc__Lex *lex);
+static void            vd_dspc__lex_consume(VdDspc__Lex *lex, VdDspc__Token *token);
+static VdDspc__Token   vd_dspc__token_new(VdDspc__Lex *lex, VdDspc__TokenType type);
+static void            vd_dspc__token_log(VdDspc__Token *tok);
+static int             vd_dspc__skip_whitespace_all(VdDspc__Lex *lex);
+static VdDspc__Lex     vd_dspc__lex_save(VdDspc__Lex *lex);
+static void            vd_dspc__lex_load(VdDspc__Lex *target, VdDspc__Lex *src);
 
 /* ----PARSER-------------------------------------------------------------------------------------------------------- */
 static int vd_dspc__lang_section(VdDspcDocument *doc);
@@ -264,14 +285,63 @@ VD_DSPC_API int vd_dspc_document_add(VdDspcDocument *doc, const char *content, s
     return 0;
 }
 
+VD_DSPC_API VdDspcTree *vd_dspc_document_first_tree(VdDspcDocument *doc)
+{
+    return (doc->sentinel.next != &doc->sentinel) ? doc->sentinel.next : 0;
+}
+
 /* ----PARSER IMPL--------------------------------------------------------------------------------------------------- */
 static int vd_dspc__lang_section(VdDspcDocument *doc)
 {
-    VdDspc__Token token = vd_dspc__lex_token(&doc->lexstate);
-    vd_dspc__token_log(&token);
-    vd_dspc__lex_consume(&doc->lexstate, &token);
+    VdDspc__Token token = vd_dspc__lex_token(doc, &doc->lexstate);
 
-    return (token.type != VD_DSPC__TOKEN_TYPE_END) && (token.type != VD_DSPC__TOKEN_TYPE_UNKNOWN);
+    if (token.type == VD_DSPC__TOKEN_TYPE_AT) {
+        vd_dspc__lex_consume(&doc->lexstate, &token);
+
+        VdDspc__Token id_token = vd_dspc__lex_token(doc, &doc->lexstate);
+        if (id_token.type != VD_DSPC__TOKEN_TYPE_ID) {
+            VD_DSPC_LOG("Error: %llu:%llu expected: id token, instead got: %s",
+                id_token.lexstate.line + 1, id_token.lexstate.column + 1,
+                vd_dspc__token_type_to_string(id_token.type));
+            return 0;
+        }
+        vd_dspc__lex_consume(&doc->lexstate, &id_token);
+
+        // Push new section
+        const char *id_begin_string = vd_dspc__token_string_begin(&id_token);
+        size_t id_len_string        = vd_dspc__token_string_size(&id_token);
+        VdDspcSection *new_section  = vd_dspc__push_section(doc, id_begin_string, id_len_string);
+
+        // Parse tags
+        VdDspc__Token tags_begin_token = vd_dspc__lex_token(doc, &doc->lexstate);
+        if (tags_begin_token.type != VD_DSPC__TOKEN_TYPE_TAGS_BEGIN) {
+
+            VD_DSPC_LOG("Error: %llu:%llu expected: '(' token, instead got: %s",
+                tags_begin_token.lexstate.line + 1, tags_begin_token.lexstate.column + 1,
+                vd_dspc__token_type_to_string(tags_begin_token.type));
+        }
+
+        VdDspc__Token t = tags_begin_token;
+        while (t.type != VD_DSPC__TOKEN_TYPE_TAGS_END) {
+            vd_dspc__lex_consume(&doc->lexstate, &t);
+            t = vd_dspc__lex_token(doc, &doc->lexstate);
+        }
+
+        // Consume tags end token
+        vd_dspc__lex_consume(&doc->lexstate, &t);
+
+        // Parse Section content
+        VdDspc__Token token_after_tags = vd_dspc__lex_token(doc, &doc->lexstate);
+
+        if (t.type != VD_DSPC__TOKEN_TYPE_SECTION_BEGIN) {
+            // We can continue parsing for a new section since this one has no children
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
+    return 0;
 }
 
 /* ----LEXER IMPL---------------------------------------------------------------------------------------------------- */
@@ -310,7 +380,7 @@ static int vd_dspc__lex_char(VdDspc__Lex *lex)
     return lex->content[lex->cur_fwd];
 }
 
-static VdDspc__Token vd_dspc__lex_token(VdDspc__Lex *lex)
+static VdDspc__Token vd_dspc__lex_token(VdDspcDocument *doc, VdDspc__Lex *lex)
 {
     vd_dspc__skip_whitespace_all(lex);
     VdDspc__Lex saved_state = vd_dspc__lex_save(lex);
@@ -327,6 +397,7 @@ static VdDspc__Token vd_dspc__lex_token(VdDspc__Lex *lex)
         case ')':             result.type = VD_DSPC__TOKEN_TYPE_TAGS_END;      vd_dspc__lex_nextn(&result.lexstate, 1); break;
         case '{':             result.type = VD_DSPC__TOKEN_TYPE_SECTION_BEGIN; vd_dspc__lex_nextn(&result.lexstate, 1); break;
         case '}':             result.type = VD_DSPC__TOKEN_TYPE_SECTION_END;   vd_dspc__lex_nextn(&result.lexstate, 1); break;
+        case '=':             result.type = VD_DSPC__TOKEN_TYPE_ASSIGNMENT;    vd_dspc__lex_nextn(&result.lexstate, 1); break;
         case -1:              result.type = VD_DSPC__TOKEN_TYPE_END;                                                    break;
         case '\"': {
             // Parse quoted string
@@ -377,8 +448,55 @@ static VdDspc__Token vd_dspc__lex_token(VdDspc__Lex *lex)
                         (content[result.lexstate.cur_back + 3] == text[3]);
 
                     if (id_is_equal_to_text) {
-                        result.type = VD_DSPC__TOKEN_TYPE_UNKNOWN;
-                        VD_DSPC_LOG("FOUND TEXT");
+                        result.type = VD_DSPC__TOKEN_TYPE_TEXT_CONTENT;
+                        // Go into inner loop to get the text content
+
+                        // Skip whitespace and find '{'
+                        vd_dspc__skip_whitespace_all(&result.lexstate);
+
+                        if (vd_dspc__lex_char(&result.lexstate) != '{') {
+                            VD_DSPC_LOG("Error: %llu:%llu Expected \'{\' after \'text\' section.",
+                                        result.lexstate.line + 1, result.lexstate.column + 1);
+                            result.type = VD_DSPC__TOKEN_TYPE_UNKNOWN;
+                            return result;
+                        }
+                        vd_dspc__lex_nextn(&result.lexstate, 1);
+
+                        // Skip leading whitespace, if any
+                        vd_dspc__skip_whitespace_all(&result.lexstate);
+
+                        VdDspc__Token text_content_token = result;
+                        text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
+
+                        int text_parsing_ended = 0;
+
+                        VdDspcStrList list = {0};
+
+                        while (!text_parsing_ended) {
+
+                            c = vd_dspc__lex_char(&text_content_token.lexstate);
+
+                            if (c == '}') {
+                                text_parsing_ended = 1;
+                                continue;
+                            }
+
+                            if (vd_dspc__is_consumable_whitespace(c)) {
+                                vd_dspc__str_list_push_token(doc, &list, &text_content_token);
+
+                                vd_dspc__skip_whitespace_all(&text_content_token.lexstate);
+                                text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
+                            } else {
+                                vd_dspc__lex_nextn(&text_content_token.lexstate, 1);
+                            }
+                        }
+
+                        if (text_content_token.lexstate.cur_fwd != text_content_token.lexstate.cur_back) {
+                            vd_dspc__str_list_push_token(doc, &list, &text_content_token);
+                        }
+
+                        result.lexstate.cur_fwd = text_content_token.lexstate.cur_fwd;
+                        result.dat.text_content = list;
                     }
                 }
             }
@@ -407,7 +525,18 @@ static void vd_dspc__token_log(VdDspc__Token *tok)
 {
     VD_DSPC_LOG("%llu:%llu: %s", tok->lexstate.line + 1, tok->lexstate.column + 1,
                                  vd_dspc__token_type_to_string(tok->type));
-    VD_DSPC_LOG("%.*s", (int)vd_dspc__token_string_size(tok), vd_dspc__token_string_begin(tok));
+    if (tok->type == VD_DSPC__TOKEN_TYPE_TEXT_CONTENT) {
+
+        VdDspcStrNode *curr_node = tok->dat.text_content.first;
+
+        while (curr_node) {
+            VD_DSPC_LOG("%.*s", (int)curr_node->len, curr_node->str);
+            curr_node = curr_node->next;
+        }
+
+    } else {
+        VD_DSPC_LOG("%.*s", (int)vd_dspc__token_string_size(tok), vd_dspc__token_string_begin(tok));
+    }
 }
 
 static int vd_dspc__skip_whitespace_all(VdDspc__Lex *lex)
@@ -457,8 +586,65 @@ static VdDspcTree *vd_dspc__push_tree(VdDspcDocument *doc)
     new_tree->global.first = 0;
     new_tree->global.last = 0;
     new_tree->global.parent = 0;
+    new_tree->global.section_id.s = ".global";
+    new_tree->global.section_id.l = sizeof(".global") - 1;
+
+    doc->curr_section = &new_tree->global;
 
     return new_tree;
+}
+
+static VdDspcStrNode *vd_dspc__push_str_node(VdDspcDocument *doc)
+{
+    VdDspcStrNode *new_node = vd_dspc__push(doc, sizeof(VdDspcStrNode));
+    new_node->next = 0;
+    new_node->prev = 0;
+    return new_node;
+}
+
+/* ----SECTIONS IMPL------------------------------------------------------------------------------------------------- */
+static VdDspcSection *vd_dspc__push_section(VdDspcDocument *doc, const char *id_begin_string, size_t id_len_string)
+{
+    VdDspcSection *parent = doc->curr_section;
+    VdDspcSection *new_section = vd_dspc__push(doc, sizeof(VdDspcSection));
+
+    new_section->first = 0;
+    new_section->last = 0;
+    new_section->next = 0;
+    new_section->prev = 0;
+    new_section->parent = parent;
+    new_section->section_id.s = id_begin_string;
+    new_section->section_id.l = id_len_string;
+
+    if (!parent->first) {
+        // First child of this parent
+        parent->first = new_section;
+        parent->last = new_section;
+    } else {
+        // Append to end of children
+        new_section->prev = parent->last;
+        parent->last->next = new_section;
+        parent->last = new_section;
+    }
+
+    return new_section;
+}
+
+/* ----STRLIST IMPL-------------------------------------------------------------------------------------------------- */
+static void vd_dspc__str_list_push_token(VdDspcDocument *doc, VdDspcStrList *list, VdDspc__Token *tok)
+{
+    VdDspcStrNode *node = vd_dspc__push_str_node(doc);
+    if (list->first == 0) {
+        list->first = node;
+        list->last = node;
+    } else {
+        node->prev = list->last;
+        list->last->next = node;
+        list->last = node;
+    }
+
+    node->str = tok->lexstate.content + tok->lexstate.cur_back;
+    node->len = tok->lexstate.cur_fwd - tok->lexstate.cur_back;
 }
 
 static VdDspcTree *vd_dspc__tree(VdDspcDocument *doc)
@@ -564,6 +750,7 @@ static char *vd_dspc__token_type_to_string(VdDspc__TokenType ttype)
         case VD_DSPC__TOKEN_TYPE_SECTION_BEGIN: return "section_begin";
         case VD_DSPC__TOKEN_TYPE_SECTION_END:   return "section_end";
         case VD_DSPC__TOKEN_TYPE_TEXT_CONTENT:  return "text_content";
+        case VD_DSPC__TOKEN_TYPE_ASSIGNMENT:    return "=";
         default: break;
     }
 
