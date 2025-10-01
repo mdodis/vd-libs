@@ -1,6 +1,7 @@
 #include "disable_clang_deprecations.h"
 #define VD_FW_NO_CRT 0
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS
+#define VD_FW_PREFER_INTEGRATED_GPU
 #include "vd_fw.h"
 
 #define VERTEX_SOURCE \
@@ -68,10 +69,10 @@ int main(int argc, char const *argv[])
             .debug_on = 0,
         },
         .window_options = {
-            .borderless = 0,
+            .borderless = 1,
         }
     });
-    vd_fw_set_vsync_on(0);
+    vd_fw_set_vsync_on(1);
 
     const char *vertex_shader_source = VERTEX_SOURCE;
     const char *fragment_shader_source = FRAGMENT_SOURCE;

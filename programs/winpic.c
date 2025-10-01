@@ -267,7 +267,7 @@ static void resize(void)
 
 static void start_render_tick_update(void)
 {
-    int tick_rate = 12;
+    int tick_rate = 8;
 
     if (!App.render_tick_timer_active) {
         App.render_tick_timer_active = 1;
@@ -312,11 +312,10 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpara
             DestroyWindow(hwnd);
         } break;
         
-        // case WM_PAINT: {
-        //     PAINTSTRUCT ps;
-        //     BeginPaint(hwnd, &ps);
-        //     EndPaint(hwnd, &ps);
-        // } break;
+        case WM_PAINT: {
+            render();
+            SwapBuffers(App.hdc);
+        } break;
 
         case WM_SIZE: {
             App.client_width  = LOWORD(lparam);
@@ -330,7 +329,8 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpara
             App.client_height = rect->bottom - rect->top;
             
             resize();
-            //render(&g_app);
+            // render();
+            // SwapBuffers(App.hdc);
         } break;
         
         case WM_ENTERSIZEMOVE: {

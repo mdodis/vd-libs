@@ -113,16 +113,19 @@ typedef union __VD_CG_f4 {
 
 typedef union __VD_CG_f2x2 {
     VdCgf32 e[2][2];
+    VdCgf32 p[4];
     Vdf2  c[2];
 } Vdf2x2;
 
 typedef union __VD_CG_f3x3 {
     VdCgf32 e[3][3];
+    VdCgf32 p[9];
     Vdf3  c[3];
 } Vdf3x3;
 
 typedef union __VD_CG_f4x4 {
     VdCgf32 e[4][4];
+    VdCgf32 p[16];
     Vdf4  c[4];
     struct { VdCgf32 a0, a1, a2, a3, b0, b1, b2, b3, c0, c1, c2, c3, d0, d1, d2, d3; };
 } Vdf4x4;
@@ -371,6 +374,7 @@ static VD_INLINE Vdr3    vd_rcross3          (Vdr3 a, Vdr3 b)                   
 /* ----MATRIX ALGEBRA------------------------------------------------------------------------------------------------ */
 static VD_INLINE Vdf4x4  vd_ftranspose4x4     (Vdf4x4 *m);
 static VD_INLINE Vdf4x4  vd_fmul4x4           (Vdf4x4 *a, Vdf4x4 *b);
+static VD_INLINE Vdf4x4  vd_fmul4x4col        (Vdf4x4 *a, Vdf4x4 *b);
 
 /* ----QUATERNION ALGEBRA-------------------------------------------------------------------------------------------- */
 static VD_INLINE Vdfquat vd_fidentityquat    (void)                                           { return vd_fmquat(vd_fzero3(), 1.f); }
@@ -402,8 +406,11 @@ static VD_INLINE Vdf4x4  vd_fperspective4x4   (VdCgf32 fovyrad, VdCgf32 aspect, 
 static VD_INLINE Vdf4x4  vd_fperspective4x4_vk(VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr, VdCgf32 pfr);
 static VD_INLINE Vdf4x4  vd_flookat4x4        (Vdf3 fwd, Vdf3 up, Vdf3 right);
 static VD_INLINE Vdf4x4  vd_ftranslation4x4   (Vdf3 v);
+static VD_INLINE Vdf4x4  vd_ftranslation4x4col(Vdf3 v);
 static VD_INLINE Vdf4x4  vd_frotation_yaw4x4  (VdCgf32 rad);
 static VD_INLINE void    vd_ftranslate4x4     (Vdf4x4 *m, Vdf3 v);
+static VD_INLINE void    vd_ftranslate4x4col  (Vdf4x4 *m, Vdf3 v);
+static VD_INLINE void    vd_frotatequat4x4    (Vdf4x4 *m, Vdfquat quat);
 static VD_INLINE void    vd_frotate_yaw4x4    (Vdf4x4 *m, VdCgf32 rad);
 static VD_INLINE Vdf4x4  vd_fvk_to_dx4x4      (void);
 
@@ -428,14 +435,55 @@ static VD_INLINE Vdf4x4 vd_ftranspose4x4(Vdf4x4 *m)
 
 static VD_INLINE Vdf4x4 vd_fmul4x4(Vdf4x4 *a, Vdf4x4 *b)
 {
-    Vdf4x4 result = vd_fall4x4(0.f);
-    for (int r = 0; r < 4; ++r) {
-        for (int c = 0; c < 4; ++c) {
-            for (int k = 0; k < 4; ++k) {
-                result.e[r][c] += a->e[r][k] * b->e[k][c];
-            }
-        }
-    }
+    Vdf4x4 result;
+    // Row 0
+    result.e[0][0] = a->e[0][0]*b->e[0][0] + a->e[0][1]*b->e[1][0] + a->e[0][2]*b->e[2][0] + a->e[0][3]*b->e[3][0];
+    result.e[0][1] = a->e[0][0]*b->e[0][1] + a->e[0][1]*b->e[1][1] + a->e[0][2]*b->e[2][1] + a->e[0][3]*b->e[3][1];
+    result.e[0][2] = a->e[0][0]*b->e[0][2] + a->e[0][1]*b->e[1][2] + a->e[0][2]*b->e[2][2] + a->e[0][3]*b->e[3][2];
+    result.e[0][3] = a->e[0][0]*b->e[0][3] + a->e[0][1]*b->e[1][3] + a->e[0][2]*b->e[2][3] + a->e[0][3]*b->e[3][3];
+    // Row 1
+    result.e[1][0] = a->e[1][0]*b->e[0][0] + a->e[1][1]*b->e[1][0] + a->e[1][2]*b->e[2][0] + a->e[1][3]*b->e[3][0];
+    result.e[1][1] = a->e[1][0]*b->e[0][1] + a->e[1][1]*b->e[1][1] + a->e[1][2]*b->e[2][1] + a->e[1][3]*b->e[3][1];
+    result.e[1][2] = a->e[1][0]*b->e[0][2] + a->e[1][1]*b->e[1][2] + a->e[1][2]*b->e[2][2] + a->e[1][3]*b->e[3][2];
+    result.e[1][3] = a->e[1][0]*b->e[0][3] + a->e[1][1]*b->e[1][3] + a->e[1][2]*b->e[2][3] + a->e[1][3]*b->e[3][3];
+    // Row 2
+    result.e[2][0] = a->e[2][0]*b->e[0][0] + a->e[2][1]*b->e[1][0] + a->e[2][2]*b->e[2][0] + a->e[2][3]*b->e[3][0];
+    result.e[2][1] = a->e[2][0]*b->e[0][1] + a->e[2][1]*b->e[1][1] + a->e[2][2]*b->e[2][1] + a->e[2][3]*b->e[3][1];
+    result.e[2][2] = a->e[2][0]*b->e[0][2] + a->e[2][1]*b->e[1][2] + a->e[2][2]*b->e[2][2] + a->e[2][3]*b->e[3][2];
+    result.e[2][3] = a->e[2][0]*b->e[0][3] + a->e[2][1]*b->e[1][3] + a->e[2][2]*b->e[2][3] + a->e[2][3]*b->e[3][3];
+    // Row 3
+    result.e[3][0] = a->e[3][0]*b->e[0][0] + a->e[3][1]*b->e[1][0] + a->e[3][2]*b->e[2][0] + a->e[3][3]*b->e[3][0];
+    result.e[3][1] = a->e[3][0]*b->e[0][1] + a->e[3][1]*b->e[1][1] + a->e[3][2]*b->e[2][1] + a->e[3][3]*b->e[3][1];
+    result.e[3][2] = a->e[3][0]*b->e[0][2] + a->e[3][1]*b->e[1][2] + a->e[3][2]*b->e[2][2] + a->e[3][3]*b->e[3][2];
+    result.e[3][3] = a->e[3][0]*b->e[0][3] + a->e[3][1]*b->e[1][3] + a->e[3][2]*b->e[2][3] + a->e[3][3]*b->e[3][3];
+
+    return result;
+}
+
+static VD_INLINE Vdf4x4 vd_fmul4x4col(Vdf4x4 *a, Vdf4x4 *b)
+{
+    Vdf4x4 result;
+    // Row 0
+    result.e[0][0] = a->e[0][0]*b->e[0][0] + a->e[1][0]*b->e[0][1] + a->e[2][0]*b->e[0][2] + a->e[3][0]*b->e[0][3];
+    result.e[1][0] = a->e[0][0]*b->e[1][0] + a->e[1][0]*b->e[1][1] + a->e[2][0]*b->e[1][2] + a->e[3][0]*b->e[1][3];
+    result.e[2][0] = a->e[0][0]*b->e[2][0] + a->e[1][0]*b->e[2][1] + a->e[2][0]*b->e[2][2] + a->e[3][0]*b->e[2][3];
+    result.e[3][0] = a->e[0][0]*b->e[3][0] + a->e[1][0]*b->e[3][1] + a->e[2][0]*b->e[3][2] + a->e[3][0]*b->e[3][3];
+    // Row 1
+    result.e[0][1] = a->e[0][1]*b->e[0][0] + a->e[1][1]*b->e[0][1] + a->e[2][1]*b->e[0][2] + a->e[3][1]*b->e[0][3];
+    result.e[1][1] = a->e[0][1]*b->e[1][0] + a->e[1][1]*b->e[1][1] + a->e[2][1]*b->e[1][2] + a->e[3][1]*b->e[1][3];
+    result.e[2][1] = a->e[0][1]*b->e[2][0] + a->e[1][1]*b->e[2][1] + a->e[2][1]*b->e[2][2] + a->e[3][1]*b->e[2][3];
+    result.e[3][1] = a->e[0][1]*b->e[3][0] + a->e[1][1]*b->e[3][1] + a->e[2][1]*b->e[3][2] + a->e[3][1]*b->e[3][3];
+    // Row 2
+    result.e[0][2] = a->e[0][2]*b->e[0][0] + a->e[1][2]*b->e[0][1] + a->e[2][2]*b->e[0][2] + a->e[3][2]*b->e[0][3];
+    result.e[1][2] = a->e[0][2]*b->e[1][0] + a->e[1][2]*b->e[1][1] + a->e[2][2]*b->e[1][2] + a->e[3][2]*b->e[1][3];
+    result.e[2][2] = a->e[0][2]*b->e[2][0] + a->e[1][2]*b->e[2][1] + a->e[2][2]*b->e[2][2] + a->e[3][2]*b->e[2][3];
+    result.e[3][2] = a->e[0][2]*b->e[3][0] + a->e[1][2]*b->e[3][1] + a->e[2][2]*b->e[3][2] + a->e[3][2]*b->e[3][3];
+    // Row 3
+    result.e[0][3] = a->e[0][3]*b->e[0][0] + a->e[1][3]*b->e[0][1] + a->e[2][3]*b->e[0][2] + a->e[3][3]*b->e[0][3];
+    result.e[1][3] = a->e[0][3]*b->e[1][0] + a->e[1][3]*b->e[1][1] + a->e[2][3]*b->e[1][2] + a->e[3][3]*b->e[1][3];
+    result.e[2][3] = a->e[0][3]*b->e[2][0] + a->e[1][3]*b->e[2][1] + a->e[2][3]*b->e[2][2] + a->e[3][3]*b->e[2][3];
+    result.e[3][3] = a->e[0][3]*b->e[3][0] + a->e[1][3]*b->e[3][1] + a->e[2][3]*b->e[3][2] + a->e[3][3]*b->e[3][3];
+
     return result;
 }
 
@@ -569,6 +617,15 @@ static VD_INLINE Vdf4x4 vd_ftranslation4x4(Vdf3 v)
         0.f, 0.f, 0.f, 1.f);
 }
 
+static VD_INLINE Vdf4x4 vd_ftranslation4x4col(Vdf3 v)
+{
+    return vd_fm4x4(
+        1.f, 0.f, 0.f, 0.f,
+        0.f, 1.f, 0.f, 0.f,
+        0.f, 0.f, 1.f, 0.f,
+        v.x, v.y, v.z, 1.f);
+}
+
 static VD_INLINE Vdf4x4 vd_frotation_yaw4x4(VdCgf32 rad)
 {
     return vd_fm4x4(
@@ -583,6 +640,18 @@ static VD_INLINE void vd_ftranslate4x4(Vdf4x4 *m, Vdf3 v)
     Vdf4x4 t = vd_ftranslation4x4(v);
     Vdf4x4 r = vd_fmul4x4(m, &t);
     *m = r;
+}
+
+static VD_INLINE void vd_ftranslate4x4col(Vdf4x4 *m, Vdf3 v)
+{
+    Vdf4x4 t = vd_ftranslation4x4col(v);
+    Vdf4x4 r = vd_fmul4x4(m, &t);
+    *m = r;
+}
+
+static VD_INLINE void vd_frotatequat4x4(Vdf4x4 *m, Vdfquat quat)
+{
+
 }
 
 static VD_INLINE void vd_frotate_yaw4x4(Vdf4x4 *m, VdCgf32 rad)
@@ -749,6 +818,7 @@ static VD_INLINE void vd_fprint4x4(Vdf4x4 *m)
 /* ----MATRIX ALGEBRA------------------------------------------------------------------------------------------------ */
 #define ftranspose4x4            vd_ftranspose4x4 
 #define fmul4x4                  vd_fmul4x4 
+#define fmul4x4col               vd_fmul4x4col
 
 /* ----QUATERNION ALGEBRA-------------------------------------------------------------------------------------------- */
 #define fidentityquat            vd_fidentityquat 
@@ -776,8 +846,10 @@ static VD_INLINE void vd_fprint4x4(Vdf4x4 *m)
 #define fperspective4x4_vk       vd_fperspective4x4_vk 
 #define flookat4x4               vd_flookat4x4 
 #define ftranslation4x4          vd_ftranslation4x4 
+#define ftranslation4x4col       vd_ftranslation4x4col
 #define frotation_yaw4x4         vd_frotation_yaw4x4 
 #define ftranslate4x4            vd_ftranslate4x4 
+#define ftranslate4x4col         vd_ftranslate4x4col
 #define frotate_yaw4x4           vd_frotate_yaw4x4 
 #define fvk_to_dx4x4             vd_fvk_to_dx4x4 
 
