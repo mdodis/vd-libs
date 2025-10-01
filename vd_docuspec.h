@@ -271,10 +271,6 @@ static int vd_dspc__lang_section(VdDspcDocument *doc)
     vd_dspc__token_log(&token);
     vd_dspc__lex_consume(&doc->lexstate, &token);
 
-    // if (token.type != VD_DSPC__TOKEN_TYPE_AT) {
-    //     vd_dspc__lex_consume(&doc->lexstate, &token);
-    // }
-
     return (token.type != VD_DSPC__TOKEN_TYPE_END) && (token.type != VD_DSPC__TOKEN_TYPE_UNKNOWN);
 }
 
@@ -366,6 +362,25 @@ static VdDspc__Token vd_dspc__lex_token(VdDspc__Lex *lex)
                 } 
 
                 result.type = VD_DSPC__TOKEN_TYPE_ID;
+
+                const char *text = "text";
+                size_t text_len = 4;
+                int id_is_equal_to_text = 0;
+                size_t id_size = result.lexstate.cur_fwd - result.lexstate.cur_back;
+
+                if (id_size == text_len) {
+                    const char *content = result.lexstate.content;
+                    id_is_equal_to_text = 
+                        (content[result.lexstate.cur_back + 0] == text[0]) &&
+                        (content[result.lexstate.cur_back + 1] == text[1]) &&
+                        (content[result.lexstate.cur_back + 2] == text[2]) &&
+                        (content[result.lexstate.cur_back + 3] == text[3]);
+
+                    if (id_is_equal_to_text) {
+                        result.type = VD_DSPC__TOKEN_TYPE_UNKNOWN;
+                        VD_DSPC_LOG("FOUND TEXT");
+                    }
+                }
             }
 
         } break;
@@ -407,8 +422,10 @@ static int vd_dspc__skip_whitespace_all(VdDspc__Lex *lex)
         c = vd_dspc__lex_char(lex);
     }
 
-    if (any_whitespace_skipped && vd_dspc__is_whitespace(c)) {
-        vd_dspc__lex_nextn(lex, 1);
+    if (any_whitespace_skipped) {
+        if (vd_dspc__is_whitespace(c)) {
+            vd_dspc__lex_nextn(lex, 1);
+        }
         lex->cur_back = lex->cur_fwd;
     }
 

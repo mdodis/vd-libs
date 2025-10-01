@@ -3,8 +3,7 @@
 
 @section("Tutorials") {
     @section("Draw a Rectangle") {
-
-        @text {
+        text {
             To Draw a rectangle do this.
             Then, do that
         }
