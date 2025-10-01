@@ -333,12 +333,31 @@ static int vd_dspc__lang_section(VdDspcDocument *doc)
         // Parse Section content
         VdDspc__Token token_after_tags = vd_dspc__lex_token(doc, &doc->lexstate);
 
-        if (t.type != VD_DSPC__TOKEN_TYPE_SECTION_BEGIN) {
+        if (token_after_tags.type != VD_DSPC__TOKEN_TYPE_SECTION_BEGIN) {
             // We can continue parsing for a new section since this one has no children
             return 1;
-        } else {
-            return 0;
         }
+
+        VdDspc__Token section_begin_token = token_after_tags;
+        vd_dspc__lex_consume(&doc->lexstate, &section_begin_token);
+
+        // At this point, we push into the child
+        doc->curr_section = new_section;
+
+        {
+            VdDspc__Lex saved_state = vd_dspc__lex_save(&doc->lexstate);
+            vd_dspc__lang_section(doc);
+        }
+
+        t = vd_dspc__lex_token(doc, &doc->lexstate);
+        while (t.type != VD_DSPC__TOKEN_TYPE_SECTION_END) {
+            vd_dspc__lex_consume(&doc->lexstate, &t);
+            t = vd_dspc__lex_token(doc, &doc->lexstate);
+        }
+
+        doc->curr_section = new_section->parent;
+
+        return 1;
     }
 
     return 0;
