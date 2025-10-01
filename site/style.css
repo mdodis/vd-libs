@@ -1,38 +1,186 @@
 #mainnav {
     transition: box-shadow 0.2s ease-in-out;
+    height: 50px;
 }
 
-/*html {
-scroll-padding-top: 80px; /* match your navbar height */
+.rmprint {
+
 }
-*/
+
+body {
+    position: relative;
+}
+
 :root {
     --bittersweet: #ee5a58ff;
+    --bittersweet50: #ee5a5888;
     --eerie-black: #1e1b18ff;
     --antiflash-white: #e8e9ebff;
     --slate-gray: #6b717eff;
     --orange-peel: #ffa630ff;
+
+    .btn-primary {
+        background-color: var(--bittersweet);
+        border-color: transparent;
+    }
+
+    .btn-primary:active {
+        background-color: var(--bittersweet50);
+        border-color: var(--antiflash-white);
+    }
 }
 
-/*[data-bs-theme="dark"] {
-    --bs-body-bg: var(--slate-gray);
+section, .apiitem {
+    scroll-margin-top: 50px;
 }
 
-[data-bs-theme="dark"] .navbar {
-    background-color: var(--eerie-black);
-}*/
+.page-break {
+    min-height: 500px;
+}
 
-.toc-outline {
+.revision-planned {
+    background-color: var(--eerie-black);    
+    opacity: 0.4;
+}
+
+.libcardlogo {
+    width: 100px;
+    height: auto;
+    object-fit: contain;
+}
+
+#toc {
     position: fixed;
-    top: 80px; /* adjust for your navbar height */
-    right: 8px; /* adjust as needed */
-    width: auto;
+    flex-direction: row;
+    top: 80px;
+    right: 8px;
+    width: 20vw;
     z-index: 100;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-gutter: stable both-edges;
 }
 
-.nav-item.dropdown:hover .dropdown-menu {
-  display: block;
+.flexijustify {
+    justify-content: start;
 }
+
+.flexijustify-midpoint {
+
+}
+
+.midpoint-flex {
+}
+@media (min-width: 800px) {
+    .flexijustify {
+        justify-content: start !important;
+    }
+
+    .midpoint-flex {
+        display: flex !important;
+    }
+
+}
+
+@media (min-width: 800px) and (max-width: 1199px) {
+    .flexijustify-midpoint {
+        flex-grow: 1 !important;
+        padding-right: 200px;
+    }
+}
+
+@media (min-width: 1200px) {
+    .flexijustify {
+        justify-content: center !important;
+    }
+}
+
+@media (min-width: 800px) {
+    #toc {
+        right: 2px;
+        width: 25vw;
+    }
+}
+
+@media (min-width: 1200px) {
+    #toc {
+        right: 16px;
+        width: 20vw;
+    }    
+}
+
+@media (min-width: 1600px) {
+    #toc {
+        right: 64px;
+        width: 20vw;
+    }    
+}
+
+@media (min-width: 2400px) {
+    #toc {
+        right: 32px;
+        width: 32vw;
+    }
+}
+
+/*@media (min-width: 2400px) {
+    #toc {
+        width: 40vw;
+    }
+}
+*/
+.nav-item.dropdown:hover .dropdown-menu {
+    display: block;
+}
+
+.libcard {
+    transition: background-color 0.2s ease-in-out;
+    /*width: 564px;*/
+    /*height: 120px;*/
+}
+
+.libcard:hover {
+    background-color: var(--eerie-black);
+}
+
+.center {
+    align-self: center;
+}
+
+@media print {
+    .navbar {
+        display: none !important;
+    }
+    .toc {
+        display: none !important;
+    }
+    .btn {
+        display: none !important;
+    }
+    .carousel-control-prev {
+        display: none !important;
+    }
+    .carousel-control-next {
+        display: none !important;
+    }
+    footer {
+        break-inside: avoid !important;
+    }
+    .toc-outline {
+        display: none !important;
+    }
+    section {
+        break-inside: avoid !important;
+    }
+    #main-content {
+        width: 100% !important;
+    }
+    .rmprint {
+        display: none !important;
+    }
+}    
 
 .hidden {
     display:none;
@@ -47,21 +195,22 @@ pre {
     padding-bottom: 4px;
     margin: 16px 0px;
     color: var(--antiflash-white);
-    background-color: var(--eerie-black);
+    /*background-color: var(--eerie-black);*/
     border-radius: 16px;
-    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
     transition: box-shadow 0.3s ease;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 0px 12px rgba(0, 0, 0, 0.7);
+    /*margin-bottom: min(100vh, 50%);*/
 }
 
 .span-image {
-    /*border: 1px solid red;*/
-    height: 6em;
-    width: 100%;
+    display: block;
+    margin: auto;
+    max-width: 100%;
+    height: auto;
 }
 
 .apiitem.function:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 0px 24px rgba(0, 0, 0, 0.9);
 }
 
 .apidetails {
@@ -73,12 +222,16 @@ pre {
 .item-decl {
     border-top-left-radius:  8px;
     border-top-right-radius: 8px;
-    font-weight: bold;
+    /*font-weight: bold;*/
     display: block;
     padding-top:    4px;
     padding-left:   8px;
     padding-bottom: 8px;
-    background-color: #cc4d4b;
+    background-color: #55555555;
+    /*background-color: var(--antiflash-white);*/
+    background: #EE5A58FF;
+    background: linear-gradient(90deg,rgba(238, 90, 88, 0.7) 20%, rgba(238, 90, 88, 0.23) 100%);
+    transition: background-image 0.2s ease-in-out;
 }
 
 .item-desc {
@@ -124,17 +277,16 @@ pre {
 
 /* Set a fixed min-width for the first column */
 .apiitem.function table td:first-child {
-    width: 150px;
-    min-width: 150px;  /* adjust as needed */
-    text-align: right;  /* optional: aligns parameter names to the right */
+    width: 300px;
+    text-align: left;
 }
 
-.toc {
-    position: sticky;
-    top: 20px;
+.dropdown-item:active {
+    background-color: var(--slate-gray);
 }
 
-.outline-title {
+.dropdown-item.active {
+    background-color: var(--bittersweet);
 }
 
 .outline-section .nav-link {
@@ -142,10 +294,14 @@ pre {
     font-size: 0.9em;
     padding-top: 2px;
     padding-bottom: 2px;
+    transform: translate(0px);
+    transition: transform 0.2s ease-in-out,
+                color     0.2s ease-in-out;
 }
 
 .outline-section .nav-link.active {
     color: #ffffffff;
+    transform: translate(-10px);
 }
 
 

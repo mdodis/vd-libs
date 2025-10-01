@@ -22,7 +22,7 @@ int main(int argc, char const *argv[])
 
     vd_ui_init();
     vd_ui_debug_set_draw_cursor_on(0);
-    vd_ui_debug_set_inspector_on(1);
+    vd_ui_debug_set_inspector_on(0);
     vd_ui_debug_set_metrics_on(0);
     vd_ui_debug_set_layout_recompute_vis_on(0);
 
@@ -33,7 +33,7 @@ int main(int argc, char const *argv[])
         },
 
         .window_options = {
-            .draw_default_borders = 0,
+            .borderless = 1,
         },
     });
 

@@ -13,7 +13,7 @@ int main(int argc, char const *argv[])
             .version = VD_FW_GL_VERSION_3_3,
         },
         .window_options = {
-            .draw_default_borders = 1,
+            .borderless = 0,
         }
     });
     vd_fw_set_vsync_on(0);

@@ -1,5 +1,4 @@
 /**
- * \internal
  * vd.h - A 'batteries-included' header file to use with C99
  * 
  * zlib License
@@ -21,14 +20,6 @@
  * 2. Altered source versions must be plainly marked as such, and must not be
  *    misrepresented as being the original software.
  * 3. This notice may not be removed or altered from any source distribution.
- *
- * @table Sections
- * | Name              | Description                                     | Status |
- * | ----------------- | ----------------------------------------------- | ------ |
- * | MACRO HELPERS     | Various macros for building other ones          | DONE   |
- * | ----------------  | ----------------------------------------------- | ------ |
- * | HOST COMPILER     |                                                 |        |
- * | ----------------  | ----------------------------------------------- | ------ |
  */
 #ifndef VD_H
 #define VD_H
@@ -39,6 +30,17 @@
 
 #include <stdint.h>
 #include <stddef.h>
+
+/* ----API----------------------------------------------------------------------------------------------------------- */
+#ifndef VD_STATIC
+#define VD_API extern
+#else
+#define VD_API static
+#endif // !VD_STATIC
+
+typedef struct VdInitInfo VdInitInfo;
+
+VD_API void vd_init(VdInitInfo *info);
 
 /* ----MACRO HELPERS------------------------------------------------------------------------------------------------- */
 #ifndef VD_MACRO_ABBREVIATIONS
@@ -528,7 +530,7 @@ VD_API void          vd_system_heap_empty(VdSystemHeap *h);
 static VD_INLINE void *vd_realloc(void *ptr, Vdusize old_size, Vdusize new_size)
 {
     VdSystemHeap *h = vd_system_heap_global();
-    void *result = vd_system_heap_alloc(h, new_size, 0);
+    void *result = vd_system_heap_alloc(h, new_size, 2 * sizeof(void*));
 
     if (ptr) {
         VD_MEMCPY(result, ptr, old_size);
@@ -596,6 +598,7 @@ VD_INLINE VdArenaSave       vd_arena_save(VdArena *a)                           
 VD_INLINE void              vd_arena_restore(VdArenaSave save)                                              { save.arena->prev_offset = save.prev_offset; save.arena->curr_offset = save.curr_offset; }
 VD_INLINE void*             vd_arena_alloc(VdArena *a, size_t size)                                         { return vd_arena_alloc_align(a, size, VD_ARENA_DEFAULT_ALIGNMENT);}
 VD_INLINE void*             vd_arena_resize(VdArena *a, void *old_memory, size_t old_size, size_t new_size) { return vd_arena_resize_align(a, old_memory, old_size, new_size, VD_ARENA_DEFAULT_ALIGNMENT); }
+VD_INLINE VdArena           vd_arena_from_malloc(size_t size)                                               { VdArena result; vd_arena_init(&result, VD_MALLOC(size), size); return result; }
 
 #define VD_ARENA_PUSH_ARRAY(a, x, count) (x*)vd_arena_alloc(a, sizeof(x) * count)
 #define VD_ARENA_PUSH_STRUCT(a, x)       VD_ARENA_PUSH_ARRAY(a, x, 1)
@@ -877,6 +880,8 @@ typedef struct __VD_Str {
     Vdusize   len;
 } VdStr;
 
+#define VD_STR_MAX (~(0ull))
+
 VD_INLINE Vdb32      vd_cstr_cmp(Vdcstr _a, Vdcstr _b);
 VD_INLINE Vdusize    vd_cstr_len(Vdcstr a);
 VD_INLINE Vdcstr     vd_cstr_dup(VdArena *arena, Vdcstr s);
@@ -889,7 +894,9 @@ VD_INLINE VdStr      vd_str_from_cstr(Vdcstr s)                                 
 VD_INLINE VdStr      vd_str_dup(VdArena *a, VdStr s);
 VD_INLINE VdStr      vd_str_dup_from_cstr(VdArena *a, Vdcstr s);
 VD_INLINE Vdusize    vd_str_first_of(VdStr s, VdStr q, Vdu64 start);
+VD_INLINE Vdusize    vd_str_last_of(VdStr s, VdStr q, Vdu64 start);
 VD_INLINE Vdb32      vd_str_split(VdStr s, Vdusize at, VdStr *left, VdStr *right);
+VD_INLINE Vdb32      vd_str_splitse(VdStr s, Vdusize start, Vdusize end, VdStr *left, VdStr *right);
 VD_INLINE VdStr      vd_str_chop_left(VdStr s, Vdusize at)                              { VdStr left, right; return vd_str_split(s, at, &left, &right) ? right : vd_str_null(); }
 VD_INLINE VdStr      vd_str_chop_right(VdStr s, Vdusize at)                             { VdStr left, right; return vd_str_split(s, at, &left, &right) ? left : vd_str_null(); }
 VD_INLINE Vdb32      vd_str_eq(VdStr a, VdStr b);
@@ -951,6 +958,31 @@ VD_INLINE Vdusize vd_str_first_of(VdStr s, VdStr q, Vdu64 start) {
     return s.len;
 }
 
+VD_INLINE Vdusize vd_str_last_of(VdStr s, VdStr q, Vdu64 start)
+{
+    if (s.len == 0) return s.len;
+
+    start = s.len < start ? s.len : start;
+
+    Vdusize sindex = q.len;
+    Vdusize i      = start;
+
+    while (i != 0) {
+        i--;
+        sindex--;
+
+        if (s.s[i] != q.s[sindex]) {
+            sindex = q.len;
+        }
+
+        if (sindex == 0) {
+            return i;
+        }
+    }
+
+    return s.len;
+}
+
 VD_INLINE Vdb32 vd_str_split(VdStr s, Vdusize at, VdStr *left, VdStr *right)
 {
     if ((s.len < at) || (at >= s.len)) {
@@ -961,6 +993,20 @@ VD_INLINE Vdb32 vd_str_split(VdStr s, Vdusize at, VdStr *left, VdStr *right)
     left->len  = at + 1;
     right->s   = s.s + at + 1;
     right->len = s.len - (at + 1);
+
+    return VD_TRUE;
+}
+
+VD_INLINE Vdb32 vd_str_splitse(VdStr s, Vdusize start, Vdusize end, VdStr *left, VdStr *right)
+{
+    if (start > end || end > s.len) {
+        return VD_FALSE;
+    }
+
+    left->s = s.s;
+    left->len = start;
+    right->s = s.s + end;
+    right->len = s.len - end;
 
     return VD_TRUE;
 }
@@ -1040,7 +1086,9 @@ VD_INLINE Vdcstr vd_cstr_from_str(VdArena *arena, VdStr s)
 #define str_dup             vd_str_dup
 #define str_dup_from_cstr   vd_str_dup_from_cstr
 #define str_first_of        vd_str_first_of
+#define str_last_of         vd_str_last_of
 #define str_split           vd_str_split
+#define str_splitse         vd_str_splitse
 #define str_chop_left       vd_str_chop_left
 #define str_chop_right      vd_str_chop_right
 #define str_eq              vd_str_eq
@@ -1069,7 +1117,93 @@ static VD_INLINE Vdu8 vd_utf8_codepoint_len(Vdu32 codepoint)
 #endif // VD_MACRO_ABBREVIATIONS
 
 /* ----STR BUILDER--------------------------------------------------------------------------------------------------- */
+typedef enum {
+    VD__STR_BUILDER_NODE_TYPE_STRING,
+} Vd__StrBuilderNodeType;
 
+typedef struct Vd__StrBuilderNode Vd__StrBuilderNode;
+struct Vd__StrBuilderNode {
+    Vd__StrBuilderNodeType type;
+    VdDListNode            node;
+    union {
+        VdStr string;
+    } dat;
+};
+
+typedef struct {
+    VdDList      list;
+    VdArena      *arena;
+} VdStrBuilder;
+
+VD_INLINE void  vd_str_builder_init(VdStrBuilder *builder, VdArena *arena);
+VD_INLINE void  vd_str_builder_push_cstr(VdStrBuilder *builder, const char *cstring);
+VD_INLINE void  vd_str_builder_push_str(VdStrBuilder *builder, VdStr str);
+VD_INLINE VdStr vd_str_builder_compose(VdStrBuilder *builder, VdArena *opt_arena);
+
+VD_INLINE void vd_str_builder_init(VdStrBuilder *builder, VdArena *arena)
+{
+    vd_dlist_init(&builder->list);
+    builder->arena = arena;
+}
+
+VD_INLINE void vd_str_builder_push_cstr(VdStrBuilder *builder, const char *cstring)
+{
+    vd_str_builder_push_str(builder, vd_str_from_cstr((char*)cstring));
+}
+
+VD_INLINE void vd_str_builder_push_str(VdStrBuilder *builder, VdStr str)
+{
+    Vd__StrBuilderNode *node = VD_ARENA_PUSH_STRUCT(builder->arena, Vd__StrBuilderNode);
+    node->type = VD__STR_BUILDER_NODE_TYPE_STRING;
+    node->dat.string = vd_str_dup(builder->arena, str);
+    vd_dlist_node_init(&node->node);
+    vd_dlist_append(&builder->list, &node->node);
+}
+
+VD_INLINE VdStr vd_str_builder_compose(VdStrBuilder *builder, VdArena *opt_arena)
+{
+    VdArena *arena = opt_arena == NULL ? builder->arena : opt_arena;
+
+    char *mem_result = 0;
+    Vdusize mem_size = 0;
+    VD_DLIST_FOR_EACH(&builder->list, it) {
+        Vd__StrBuilderNode *node = VD_CONTAINER_OF(it, Vd__StrBuilderNode, node);
+
+        Vdusize req_size = 0;
+        switch (node->type) {
+            case VD__STR_BUILDER_NODE_TYPE_STRING: {
+                req_size = node->dat.string.len * sizeof(char);
+            } break;
+
+            default: VD_IMPOSSIBLE();
+        }
+
+        mem_result = (char*)vd_arena_resize(arena, mem_result, mem_size, mem_size + req_size);
+
+        switch (node->type) {
+            case VD__STR_BUILDER_NODE_TYPE_STRING: {
+                for (Vdusize i = 0; i < node->dat.string.len; ++i) {
+                    mem_result[mem_size + i] = node->dat.string.s[i];
+                }
+            } break;
+
+            default: VD_IMPOSSIBLE();
+        }
+
+        mem_size += req_size;
+    }
+
+    VdStr result = { mem_result, mem_size };
+    return result;
+}
+
+#if VD_MACRO_ABBREVIATIONS
+#define StrBuilder            VdStrBuilder
+#define str_builder_init      vd_str_builder_init
+#define str_builder_push_str  vd_str_builder_push_str
+#define str_builder_push_cstr vd_str_builder_push_cstr
+#define str_builder_compose   vd_str_builder_compose
+#endif 
 /* ----PARSING------------------------------------------------------------------------------------------------------- */
 VD_INLINE Vdb32      vd_is_ascii_digit(int c);
 VD_INLINE Vdb32      vd_is_letter(int c);
@@ -1523,8 +1657,8 @@ typedef VD_PROC_LOG(VdProcLog);
 #define VD_LOG_VERBOSITY_DEBUG      (100)
 
 #ifndef VD_CUSTOM_LOG
-#define VD_LOG_BUFFER       0
-#define VD_LOG_BUFFER_SIZE  0
+#define VD_LOG_BUFFER                    0
+#define VD_LOG_BUFFER_SIZE               0
 #define VD_LOG_CALL(verbosity, message)
 #endif // !VD_CUSTOM_LOG
 
@@ -1547,24 +1681,49 @@ typedef VD_PROC_LOG(VdProcLog);
 #define DBGF(fmt, ...)    VD_DBGF(fmt, __VA_ARGS__)
 #endif // VD_MACRO_ABBREVIATIONS
 
+VD_INLINE VdStr vd_log_verbosity_to_str(int verbosity);
+VD_INLINE VdStr vd_log_verbosity_to_str(int verbosity)
+{
+    VdStr                                        result = VD_LIT("ERR");
+    if (verbosity >= VD_LOG_VERBOSITY_WARNING) { result = VD_LIT("WRN"); }
+    if (verbosity >= VD_LOG_VERBOSITY_LOG)     { result = VD_LIT("LOG"); }
+    if (verbosity >= VD_LOG_VERBOSITY_DEBUG)   { result = VD_LIT("DBG"); }
+
+    return result;
+}
+
 /* ----THREAD CONTEXT------------------------------------------------------------------------------------------------ */
 #ifndef VD_CUSTOM_THREAD_CONTEXT
+#undef  VD_LOG_BUFFER_SIZE
+#define VD_LOG_BUFFER_SIZE               1024
 typedef struct {
     VdScratch scratch;
+    VdProcLog *log;
+    char      log_buffer[VD_LOG_BUFFER_SIZE];
 } VdThreadContext;
 
 #define VD_THREAD_CONTEXT_TYPE          VdThreadContext
 #define VD_THREAD_CONTEXT_VARNAME       Thread_Context
 #define VD_THREAD_CONTEXT_SCRATCH(tc)   (&tc->scratch)
+
 #endif // !VD_CUSTOM_THREAD_CONTEXT
 
 #define VD_THREAD_CONTEXT_GET()         (VD_THREAD_CONTEXT_VARNAME)
+#define VD_THREAD_CONTEXT_SCRATCH_OFF() VD_OFFSET_OF(VdThreadContext, scratch)
+#define VD_THREAD_CONTEXT_LOG_OFF()     VD_OFFSET_OF(VdThreadContext, log)
 #define VD_THREAD_CONTEXT_SET(value)    (VD_THREAD_CONTEXT_VARNAME = value)
 extern VD_THREAD_CONTEXT_TYPE * VD_THREAD_CONTEXT_VARNAME;
 
 #define VD_SCRATCH()                    VD_THREAD_CONTEXT_SCRATCH(VD_THREAD_CONTEXT_GET())
 #define VD_GET_SCRATCH_ARENA()          vd_scratch_get_arena(VD_SCRATCH())
 #define VD_RETURN_SCRATCH_ARENA(a)      vd_scratch_return_arena(VD_SCRATCH(), a)
+
+#ifndef VD_CUSTOM_LOG
+#undef  VD_LOG_BUFFER
+#define VD_LOG_BUFFER                   (VD_THREAD_CONTEXT_GET()->log_buffer)
+#undef  VD_LOG_CALL
+#define VD_LOG_CALL(verbosity, message) (VD_THREAD_CONTEXT_GET()->log(verbosity, message))
+#endif // !VD_CUSTOM_LOG
 
 #ifndef VD_ENABLE_SCRATCH_USE_IN_LIBRARY
 #define VD_ENABLE_SCRATCH_USE_IN_LIBRARY 0
@@ -1694,6 +1853,12 @@ extern void vd_test_main(void);
 #define VD_INCLUDE_INTERNAL_TESTS 0
 #endif // !VD_INCLUDE_INTERNAL_TESTS
 
+/* ----INIT INFO----------------------------------------------------------------------------------------------------- */
+struct VdInitInfo {
+    unsigned int thread_id;
+    VdProcLog    *proc_log;
+    void         **thread_context_ptr;
+};
 
 #endif // !VD_H
 
@@ -1702,6 +1867,49 @@ extern void vd_test_main(void);
 /* ------------------------------------------------------------------------------------------------------------------ */
 
 #ifdef VD_IMPL
+
+static VD_PROC_LOG(vd__default_log);
+
+VD_API void vd_init(VdInitInfo *info) {
+    void **thread_context_ptr = &VD_THREAD_CONTEXT_VARNAME;
+    if (info && info->thread_context_ptr) {
+        thread_context_ptr = info->thread_context_ptr;
+    }
+
+    Vdusize total_required_size = (VD_SCRATCH_PAGE_SIZE * VD_SCRATCH_PAGE_COUNT) +
+                                  sizeof(VdScratch) +
+                                  sizeof(VD_THREAD_CONTEXT_TYPE);
+
+    Vduptr allocation = (Vduptr)VD_MALLOC(total_required_size);
+    VD_MEMSET((void*)allocation, 0, total_required_size);
+
+    void *thread_context = (void*)allocation;
+    *thread_context_ptr = thread_context;
+    VdScratch *scratch = (VdScratch*)((Vduptr)(thread_context) + VD_THREAD_CONTEXT_SCRATCH_OFF());
+    VdProcLog **proc_log = (VdProcLog**)((Vduptr)(thread_context) + VD_THREAD_CONTEXT_LOG_OFF());
+    *proc_log = vd__default_log;
+
+    allocation += sizeof(VD_THREAD_CONTEXT_TYPE);
+
+    for (Vdusize i = 0; i < VD_SCRATCH_PAGE_COUNT; ++i)
+    {
+        void *a = (void*)allocation;
+        vd_arena_init(&scratch->arenas[i], a, VD_SCRATCH_PAGE_SIZE);
+        allocation += VD_SCRATCH_PAGE_SIZE;
+    }
+}
+
+#if VD_USE_CRT
+#include <stdio.h>
+#endif
+
+static VD_PROC_LOG(vd__default_log)
+{
+    VdStr verbosity_str = vd_log_verbosity_to_str(verbosity);
+#if VD_USE_CRT
+    printf("[%.*s]: %s", VD_STR_EXPAND(verbosity_str), string);
+#endif
+}
 
 /* ----TIMING IMPL--------------------------------------------------------------------------------------------------- */
 #if VD_PLATFORM_WINDOWS
@@ -1937,7 +2145,7 @@ void vd_vm_release(void *addr, Vdusize len)
 #endif // VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
 
 /* ----SYSTEM ALLOCATOR IMPL----------------------------------------------------------------------------------------- */
-#define VD_SYSTEM_HEAP_RESERVE_PAGE_COUNT 16777216
+#define VD_SYSTEM_HEAP_RESERVE_PAGE_COUNT 16000
 
 static VdSystemHeap Vd_System_Heap_Global = {0};
 
@@ -1999,10 +2207,10 @@ VD_API void *vd_system_heap_alloc(VdSystemHeap *h, Vdusize size, Vdusize align)
         VD_DEBUG_BREAK();
     }
 
-    if ((desired_end - curr_ptr) <= now) {
+    if (desired_end <= now) {
         // Allocation fits inside the page(s)
         // no need to commit more
-        h->offset += offset;
+        h->offset = offset + size;
 
         return (void*)desired;
     } else {
@@ -2012,9 +2220,9 @@ VD_API void *vd_system_heap_alloc(VdSystemHeap *h, Vdusize size, Vdusize align)
 
         h->committed += num_pages * h->page_size;
         VD_ASSERT(h->committed % h->page_size == 0);
-        VD_ASSERT(vd_vm_commit((void*)(h->buf + h->committed), num_pages * h->page_size) != 0);
+        VD_ASSERT(vd_vm_commit((void*)(now), num_pages * h->page_size) != 0);
 
-        h->offset += offset;
+        h->offset = offset + size;
         return (void*)desired;
     }
 }
