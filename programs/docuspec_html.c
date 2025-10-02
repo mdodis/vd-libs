@@ -35,7 +35,15 @@ static void traverse_section(VdDspcSection *section, int inset)
     if (!section) return;
 
     for (int i = 0; i < inset; ++i) printf(" ");
-    printf("%.*s\n", (int)section->section_id.l, section->section_id.s);
+    printf("%.*s", (int)section->section_id.l, section->section_id.s);
+    printf(" (");
+    for (VdDspcTag *tag = vd_dspc_section_first_tag(section); tag; tag = vd_dspc_section_next_tag(section, tag)) {
+        printf("%.*s = \"%.*s\"",
+               (int)tag->name.l, tag->name.s,
+               (int)tag->value.l, tag->value.s);
+    }
+    printf(") ");
+    printf("\n");
 
     for (VdDspcSection *child = section->first; child; child = child->next) {
         traverse_section(child, inset + 2);

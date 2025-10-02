@@ -16,4 +16,11 @@
 
         @img(src="/assets/img.png")
     }
+
+    @section("Draw a Cube") {
+        text {
+            To draw a cube, do the rectangle six times.
+            Then, do the other thing
+        }
+    }
 }
