@@ -1581,6 +1581,30 @@ VD_INLINE Vdb32 vd__kvmap_set(void *map, void *key, void *value, Vd__KVMapSetMod
 #endif // VD_MACRO_ABBREVIATIONS
 
 /* ----FILESYSTEM---------------------------------------------------------------------------------------------------- */
+#if VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
+typedef enum {
+    VD_DIRECTORY_RECURSIVE = 1 << 0,
+} VdDirectoryFlags;
+
+typedef struct VdDirectory {
+    void             *handle;
+    VdStr            filename;
+    VdDirectoryFlags flags;
+
+#if VD_PLATFORM_WINDOWS
+    int windows_is_on_first_file;
+#endif // VD_PLATFORM_WINDOWS
+} VdDirectory;
+
+typedef struct {
+    VdStr name;
+} VdFile;
+
+VD_API int vd_directory_open(VdDirectory *directory, const char *path, VdDirectoryFlags flags);
+VD_API int vd_directory_get_file(VdDirectory *directory, VdFile *file);
+VD_API int vd_directory_close(VdDirectory *directory);
+#endif // VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
+
 #include <stdio.h>
 VD_INLINE Vdu8*  vd_dump_file_to_bytes(VdArena *arena, Vdcstr file_path, Vdusize *len);
 VD_INLINE Vdcstr vd_dump_file_to_cstr(VdArena *arena, Vdcstr file_path, Vdusize *len);
@@ -1615,6 +1639,12 @@ VD_INLINE Vdcstr vd_dump_file_to_cstr(VdArena *arena, Vdcstr file_path, Vdusize 
 }
 
 #if VD_MACRO_ABBREVIATIONS
+#define Directory                                 VdDirectory
+#define File                                      VdFile
+#define directory_open                            vd_directory_open
+#define directory_get_file                        vd_directory_get_file
+#define directory_close                           vd_directory_close
+#define DIRECTORY_RECURSIVE                       VD_DIRECTORY_RECURSIVE
 #define dump_file_to_bytes(arena, file_path, len) vd_dump_file_to_bytes(arena, file_path, len);
 #define dump_file_to_cstr(arena, file_path, len)  vd_dump_file_to_cstr(arena, file_path, len);
 #endif // VD_MACRO_ABBREVIATIONS
@@ -3002,6 +3032,77 @@ Vd__KVMapBinPrefix *vd__kvmap_get_bin(void *map, void *key, Vd__KVMapGetBinFlags
     vd__kvmap_copy_key(map, key, new_bin);
     return new_bin;
 }
+
+/* ----FILESYSTEM IMPL----------------------------------------------------------------------------------------------- */
+#if VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
+#if VD_PLATFORM_WINDOWS
+#include <windows.h>
+static wchar_t Cached_Directory_Entry[1024];
+static char    Filename_Cache[256];
+
+VD_API int vd_directory_open(VdDirectory *directory, const char *path, VdDirectoryFlags flags)
+{
+    directory->filename = vd_str_from_cstr((char*)path);
+    directory->flags = flags;
+    directory->windows_is_on_first_file = VD_FALSE;
+    return 1;
+}
+
+VD_API int vd_directory_get_file(VdDirectory *directory, VdFile *file)
+{
+    WIN32_FIND_DATAW dataw;
+    Vdb32 was_found = VD_FALSE;
+
+    if (!directory->windows_is_on_first_file) {
+        int lenw = MultiByteToWideChar(
+            CP_UTF8,
+            MB_ERR_INVALID_CHARS,
+            (const char*)directory->filename.s, (Vdu32)directory->filename.len,
+            Cached_Directory_Entry,
+            VD_ARRAY_COUNT(Cached_Directory_Entry));
+
+        if (Cached_Directory_Entry[lenw -1] != L'/' || Cached_Directory_Entry[lenw -1] != L'\\') {
+            Cached_Directory_Entry[lenw++] = L'/';
+        }
+
+        Cached_Directory_Entry[lenw++] = L'*';
+        Cached_Directory_Entry[lenw]   = 0;
+
+        directory->handle = FindFirstFileW(Cached_Directory_Entry, &dataw);
+
+        was_found = directory->handle != INVALID_HANDLE_VALUE;
+        directory->windows_is_on_first_file = VD_TRUE;
+    } else {
+        was_found = FindNextFileW(directory->handle, &dataw);
+    }
+
+    if (!was_found) {
+        return VD_FALSE;
+    }
+
+    int num_bytes = WideCharToMultiByte(
+        CP_UTF8,
+        WC_ERR_INVALID_CHARS,
+        dataw.cFileName, -1,
+        Filename_Cache,
+        sizeof(Filename_Cache),
+        0, 0);
+
+    file->name.s = Filename_Cache;
+    file->name.len = num_bytes - 1;
+    return VD_TRUE;
+}
+
+VD_API int vd_directory_close(VdDirectory *directory)
+{
+    FindClose((HANDLE)directory->handle);    
+    return 1;
+}
+
+#else
+#error "Filesystem implementation not available on this platform"
+#endif // VD_PLATFORM_WINDOWS, else
+#endif // VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
 
 /* ----TESTING IMPL-------------------------------------------------------------------------------------------------- */
 #if VD_INCLUDE_TESTS

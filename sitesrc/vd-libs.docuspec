@@ -1,0 +1,43 @@
+@title("VD Libs")
+@category("landing")
+
+@paste("header")
+
+@var("v_zlib_link" url="https://choosealicense.com/licenses/zlib/") 
+
+@section("FAQ") {
+    @AccordionGroup() {
+        @Accordion("What is this?") {
+            text {
+                A collection of header-only libraries for C & C++ that are written to be concise and as dependency
+                free as possible.
+            }
+        }
+
+        @Accordion("What's the license?") {
+            text {
+                These libraries use the `v_zlib_link zlib` license. If it prevents you from using the
+                libraries, or a dual licensing
+                scheme would be better, please let me know in the issues!
+            }
+        }
+    }
+}
+
+@section("Purpose") {
+    text {
+        Dear reader,
+
+        In the modern day, programming has become complex. Too complex for what most of the applications can actually
+        do.
+
+        One common theme that one will see mentioned in various topics, like building a rendering engine, or even
+        something as simple as a static website, is The Stack™: A collection of libraries and frameworks for building
+        solutions to problems the right way.
+
+        This is most commonly sourced from an aggregate of opinions, an admiration of complexity, even sheer ego, but it
+        rarely comes from the complexity or expansiveness of the problem itself.
+    }
+}
+
+@paste("footer")
