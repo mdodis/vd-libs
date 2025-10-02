@@ -21,6 +21,39 @@
         }
     }
 }
+@br()
+
+@section("Released Libraries") {
+    @div(class="d-flex flex-row flex-wrap") {
+        @a(class="libcard card text-decoration-none d-flex justify-content-center mt-2 mx-1 flex-grow-1" href="/vd_fw.html") {
+            @div(class="row g-0") {
+                @div(class="col-md-4 d-flex justify-content-center p-2") {
+                    @img(src="/assets/fw/vd-fw-logo@1x.png"
+                         srcset="/assets/fw/vd-fw-logo@1x.png 1x, /assets/fw/vd-fw-logo@2x.png 2x"
+                         width="128"
+                         height="106.5"
+                         class="libcardlogo")
+                }
+
+                @div(class="col-md-8") {
+                    @div(class="card-body") {
+                        @h5(class="card-title") {
+                            text {
+                                vd_fw.h
+                            }
+                        }
+                        @p(class="card-text") {
+                            text {
+                                Windowing & OpenGL library
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+@br()
 
 @section("Purpose") {
     text {
@@ -139,5 +172,15 @@
         someone who's not a massive genius or expert in the field.
     }
 }
+
+@section("About Me") {
+    text {
+        Hi, I'm Michael Dodis.<br>
+        A software engineer from Greece, and I love working on low-level stuff,
+        graphics especially.
+    }
+}
+
+@copyright()
 
 @paste("footer")

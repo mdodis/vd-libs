@@ -6,6 +6,8 @@
 #include "vd_docuspec.h"
 
 #define PUT_LINE(fmt, ...) fprintf(out, fmt "\n", __VA_ARGS__)
+#define PUT(fmt, ...) fprintf(out, fmt , __VA_ARGS__)
+
 #define ERR_EXIT(fmt, ...) do { \
         fprintf(stderr, fmt, __VA_ARGS__); \
         exit(-1);                          \
@@ -16,18 +18,42 @@ typedef struct {
     void  (*process)(VdDspcSection*, FILE*, int);
 } Processor;
 
+typedef struct {
+    Str         file_path_relative_to_source_dir;
+    Str         title;
+} SourceFile;
+
+typedef struct {
+    Arena               global_arena;
+    Str                 source_dir;
+    dynarray SourceFile *source_files;
+    VdDspcDocument      document;
+} Workspace;
+
 static Str make_str_from_section_id(VdDspcSection *section);
+static Str make_str_from_tag_name(VdDspcTag *tag);
 static Str make_str_from_tag_value(VdDspcTag *tag);
 static Str make_str_from_str_node(VdDspcStrNode *node);
+static Workspace *get_workspace(void);
 static void process_child(VdDspcSection *section,   FILE *out, int depth);
+static void process_verbatim_html(VdDspcSection *section, FILE *out, int depth);
 
+static void process_copyright(VdDspcSection *section, FILE *out, int depth);
+static void process_br(VdDspcSection *section, FILE *out, int depth);
 static void process_accordion(VdDspcSection *section, FILE *out, int depth);
 static void process_section(VdDspcSection *section, FILE *out, int depth);
 static void process_text(VdDspcSection *section, FILE *out, int depth);
 static Processor Processor_Table[] = {
+    {LIT_INLINE("copyright"),         process_copyright},
+    {LIT_INLINE("br"),                process_br},
     {LIT_INLINE("accordion"),         process_accordion},
     {LIT_INLINE("section"),           process_section},
     {LIT_INLINE("text"),              process_text},
+    {LIT_INLINE("div"),               process_verbatim_html},
+    {LIT_INLINE("img"),               process_verbatim_html},
+    {LIT_INLINE("h5"),                process_verbatim_html},
+    {LIT_INLINE("p"),                 process_verbatim_html},
+    {LIT_INLINE("a"),                 process_verbatim_html},
 };
 
 
@@ -44,8 +70,19 @@ static Processor Processor_Table[] = {
 
 
 
+static void process_copyright(VdDspcSection *section, FILE *out, int depth)
+{
+    PUT_LINE("<div class=\"d-flex\">");
+        PUT_LINE("<span class=\"text-muted flex-grow-1 align-self-end\">&copy; Michael Dodis, 2025-2026.</span>");
+        PUT_LINE("<span class=\"text-muted flex-grow-0 text-end align-self-end\">This page was created with DOCUSPEC</span>");
+    PUT_LINE("</div>");
+}
 
 
+static void process_br(VdDspcSection *section, FILE *out, int depth)
+{
+    PUT_LINE("<br>");
+}
 
 static void process_accordion(VdDspcSection *section, FILE *out, int depth)
 {
@@ -138,16 +175,7 @@ static void traverse_section(VdDspcSection *section, int inset);
 static void collect_source_file(File *file, void *userdata);
 static void generate_html_for_tree(VdDspcTree *tree, FILE *out);
 
-typedef struct {
-    Str         file_path_relative_to_source_dir;
-} SourceFile;
-
-typedef struct {
-    Arena               global_arena;
-    Str                 source_dir;
-    dynarray SourceFile *source_files;
-    VdDspcDocument      document;
-} Workspace;
+static Workspace *Global_Workspace;
 
 int main(int argc, char const *argv[])
 {
@@ -194,6 +222,8 @@ int main(int argc, char const *argv[])
         .global_arena = vd_arena_from_malloc(MEGABYTES(64)),
     };
 
+    Global_Workspace = &workspace;
+
     dynarray_init_with_cap(workspace.source_files, &workspace.global_arena, 8);
     vd_directory_walk_recursively(directory_to_open, collect_source_file, &workspace);;
 
@@ -205,6 +235,9 @@ int main(int argc, char const *argv[])
         SourceFile *source_file = &workspace.source_files[i];
 
         Arena *temp_arena = VD_GET_SCRATCH_ARENA();
+        Str title = source_file->file_path_relative_to_source_dir;
+        title = str_chop_right(title, str_last_of(title, LIT("."), VD_STR_MAX) - 1);
+        source_file->title = title;
 
         StrBuilder bld;
         str_builder_init(&bld, temp_arena);
@@ -251,6 +284,25 @@ int main(int argc, char const *argv[])
     return 0;
 }
 
+static void process_verbatim_html(VdDspcSection *section, FILE *out, int depth)
+{
+    Str section_id = make_str_from_section_id(section);
+
+    PUT("<%.*s ", STR_EXPAND(section_id));
+
+    for (VdDspcTag *tag = vd_dspc_section_first_tag(section); tag; tag = vd_dspc_section_next_tag(section, tag)) {
+        Str tag_name = make_str_from_tag_name(tag);
+        Str tag_value = make_str_from_tag_value(tag);
+        PUT("%.*s=\"%.*s\" ", STR_EXPAND(tag_name), STR_EXPAND(tag_value));
+    }
+    PUT(">\n");
+
+    for (VdDspcSection *child = section->first; child; child = child->next) {
+        process_child(child, out, depth);
+    }
+
+    PUT("</%.*s>\n", STR_EXPAND(section_id));
+}
 
 static void process_child(VdDspcSection *section, FILE *out, int depth)
 {
@@ -264,6 +316,10 @@ static void process_child(VdDspcSection *section, FILE *out, int depth)
     }
 }
 
+static Workspace *get_workspace(void)
+{
+    return Global_Workspace;
+}
 
 static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
 {
@@ -319,7 +375,17 @@ static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
                                     PUT_LINE("Documentation");
                                 PUT_LINE("</a>");
                                 PUT_LINE("<ul class=\"dropdown-menu\" aria-labelledby=\"documentationDropdown\">");
-                                    PUT_LINE("<li><a class=\"dropdown-item\" href=\"/vd_fw.html\">vd_fw.h</a></li>");
+                                    for (VdDspcTree *tree = vd_dspc_document_first_tree(&get_workspace()->document); tree; tree = vd_dspc_document_next_tree(&get_workspace()->document, tree)) {
+                                        SourceFile *source_file = (SourceFile*)tree->userdata;
+
+                                        if (str_eq(source_file->title, LIT("index"))) {
+                                            continue;
+                                        }
+
+                                        PUT_LINE("<li><a class=\"dropdown-item\" href=\"/%.*s.html\">%.*s.h</a></li>",
+                                            STR_EXPAND(source_file->title),
+                                            STR_EXPAND(source_file->title));
+                                    }
                                 PUT_LINE("</ul>");
                             PUT_LINE("</li>");
                             PUT_LINE("<!--   End Files -->");
@@ -373,6 +439,12 @@ static void collect_source_file(File *file, void *userdata)
 static Str make_str_from_section_id(VdDspcSection *section)
 {
     Str result = {(char*)section->section_id.s, section->section_id.l};   
+    return result;
+}
+
+static Str make_str_from_tag_name(VdDspcTag *tag)
+{
+    Str result = {(char*)tag->name.s, tag->name.l};
     return result;
 }
 
