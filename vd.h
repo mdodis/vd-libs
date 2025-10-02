@@ -511,21 +511,9 @@ VD_API void          vd_system_heap_set_reserve_page_count(VdSystemHeap *h, Vdus
 VD_API void*         vd_system_heap_alloc(VdSystemHeap *h, Vdusize size, Vdusize align);
 VD_API void          vd_system_heap_empty(VdSystemHeap *h);
 
-
-
 #ifndef VD_ALLOC_OVERRIDE
 #define VD_ALLOC_OVERRIDE 0
 #endif // VD_ALLOC_OVERRIDE
-
-#if VD_USE_CRT
-#if !VD_ALLOC_OVERRIDE
-#include <stdlib.h>
-#define VD_REALLOC(ptr, old_size, new_size) realloc(ptr, new_size)
-#define VD_FREE(ptr, old_size)              free(ptr)
-#endif // !VD_ALLOC_OVERRIDE
-#else
-#define VD_REALLOC(ptr, old_size, new_size) vd_realloc(ptr, old_size, new_size);
-#define VD_FREE(ptr, old_size)              vd_free(ptr, new_size);
 
 static VD_INLINE void *vd_realloc(void *ptr, Vdusize old_size, Vdusize new_size)
 {
@@ -547,9 +535,18 @@ static VD_INLINE void *vd_free(void *ptr, Vdusize old_size)
     return 0;
 }
 
+#if !VD_ALLOC_OVERRIDE
+#if VD_USE_CRT
+#include <stdlib.h>
+#define VD_REALLOC(ptr, old_size, new_size) realloc(ptr, new_size)
+#define VD_FREE(ptr, old_size)              free(ptr)
+#else
+#define VD_REALLOC(ptr, old_size, new_size) vd_realloc(ptr, old_size, new_size)
+#define VD_FREE(ptr, old_size)              vd_free(ptr, new_size)
 #endif // VD_USE_CRT
+#endif // !VD_ALLOC_OVERRIDE
 
-#define VD_MALLOC(size) VD_REALLOC(0, 0, size)
+#define VD_MALLOC(size) VD_REALLOC(0, 0, (size))
 
 /* ----ALLOCATOR----------------------------------------------------------------------------------------------------- */
 #ifndef VD_ALLOC_DEFAULT_ALIGNMENT 

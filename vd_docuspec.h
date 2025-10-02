@@ -161,6 +161,9 @@ VD_DSPC_API int              vd_dspc_document_add(VdDspcDocument *doc, const cha
 VD_DSPC_API VdDspcTree*      vd_dspc_document_first_tree(VdDspcDocument *doc);
 VD_DSPC_API VdDspcTag*       vd_dspc_section_first_tag(VdDspcSection *section);
 VD_DSPC_API VdDspcTag*       vd_dspc_section_next_tag(VdDspcSection *section, VdDspcTag *tag);
+VD_DSPC_API VdDspcStrNode*   vd_dspc_str_list_first_node(VdDspcStrList *list);
+VD_DSPC_API VdDspcStrNode*   vd_dspc_str_list_next_node(VdDspcStrNode *node);
+VD_DSPC_API int              vd_dspc_str_list_is_empty(VdDspcStrList *list);
 
 #endif // !VD_DSPC_H
 
@@ -303,6 +306,21 @@ VD_DSPC_API VdDspcTag *vd_dspc_section_next_tag(VdDspcSection *section, VdDspcTa
     return (tag->next != &section->tag_sentinel) ? tag->next : 0;
 }
 
+VD_DSPC_API VdDspcStrNode *vd_dspc_str_list_first_node(VdDspcStrList *list)
+{
+    return list->first;
+}
+
+VD_DSPC_API VdDspcStrNode *vd_dspc_str_list_next_node(VdDspcStrNode *node)
+{
+    return node->next;
+}
+
+VD_DSPC_API int vd_dspc_str_list_is_empty(VdDspcStrList *list)
+{
+    return list->first == 0;
+}
+
 /* ----PARSER IMPL--------------------------------------------------------------------------------------------------- */
 static int vd_dspc__lang_section(VdDspcDocument *doc)
 {
@@ -420,8 +438,12 @@ static int vd_dspc__lang_section(VdDspcDocument *doc)
 
         return 1;
     } else if (token.type == VD_DSPC__TOKEN_TYPE_TEXT_CONTENT) {
-        doc->curr_section->text_content = token.dat.text_content;
         vd_dspc__lex_consume(&doc->lexstate, &token);
+
+        const char *id_begin_string = "text";
+        size_t id_len_string        = 4;
+        VdDspcSection *new_section  = vd_dspc__push_section(doc, id_begin_string, id_len_string);
+        new_section->text_content = token.dat.text_content;
         return 1;
     }
 
@@ -585,13 +607,6 @@ static VdDspc__Token vd_dspc__lex_token(VdDspcDocument *doc, VdDspc__Lex *lex)
 
                         result.lexstate.cur_fwd = text_content_token.lexstate.cur_fwd;
                         result.dat.text_content = list;
-
-                        VD_DSPC_LOG("%s", "-------");
-                        VdDspcStrNode *curr_node = list.first;
-                        while (curr_node) {
-                            VD_DSPC_LOG("STRNODE: %.*s", (int)curr_node->len, curr_node->str);
-                            curr_node = curr_node->next;
-                        }
                     }
                 }
             }
