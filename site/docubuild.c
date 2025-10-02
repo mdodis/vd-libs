@@ -5,10 +5,130 @@
 #include "vd.h"
 #include "vd_docuspec.h"
 
+#define PUT_LINE(fmt, ...) fprintf(out, fmt "\n", __VA_ARGS__)
 #define ERR_EXIT(fmt, ...) do { \
         fprintf(stderr, fmt, __VA_ARGS__); \
         exit(-1);                          \
     } while (0)
+
+typedef struct {
+    Str   id;
+    void  (*process)(VdDspcSection*, FILE*, int);
+} Processor;
+
+static Str make_str_from_section_id(VdDspcSection *section);
+static Str make_str_from_tag_value(VdDspcTag *tag);
+static Str make_str_from_str_node(VdDspcStrNode *node);
+static void process_child(VdDspcSection *section,   FILE *out, int depth);
+
+static void process_accordion(VdDspcSection *section, FILE *out, int depth);
+static void process_section(VdDspcSection *section, FILE *out, int depth);
+static void process_text(VdDspcSection *section, FILE *out, int depth);
+static Processor Processor_Table[] = {
+    {LIT_INLINE("accordion"),         process_accordion},
+    {LIT_INLINE("section"),           process_section},
+    {LIT_INLINE("text"),              process_text},
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+static void process_accordion(VdDspcSection *section, FILE *out, int depth)
+{
+    VdDspcTag *tag_id = vd_dspc_section_find_tag_with_name(section, "id");
+    Str tag_id_value = make_str_from_tag_value(tag_id);
+    if (!tag_id) {
+        ERR_EXIT("@accordion must have id!");
+    }
+
+    PUT_LINE("<div class=\"accordion\" id=\"%.*s\">", STR_EXPAND(tag_id_value));
+
+    int child_count = 0;
+    for (VdDspcSection *child = section->first; child; child = child->next) {
+        Str child_id_str = make_str_from_section_id(child);
+        
+        if (!str_eq(child_id_str, LIT("accordion-item"))) {
+            ERR_EXIT("Expected accordion-item under accordion directive!");
+        }
+
+        VdDspcTag *tag_title = vd_dspc_section_find_tag_with_name(child, NULL);
+        Str tag_title_value = make_str_from_tag_value(tag_title);
+
+        PUT_LINE("<div class=\"accordion-item\">");
+        PUT_LINE("<p class=\"accordion-header\">");
+        PUT_LINE("<button class=\"accordion-button\" type=\"button\""
+                 "        data-bs-toggle=\"collapse\" data-bs-target=\"#%.*scollapse%d\""
+                 "        aria-expanded=\"true\" aria-controls=\"%.*scollapse%d\">",
+                 STR_EXPAND(tag_id_value), child_count,
+                 STR_EXPAND(tag_id_value), child_count);
+        PUT_LINE("%.*s", STR_EXPAND(tag_title_value));
+        PUT_LINE("</button>");
+        PUT_LINE("</p>");
+
+        PUT_LINE("<div id=\"%.*scollapse%d\" class=\"accordion-collapse collapse\""
+                 "     data-bs-parent=\"#%.*s\">",
+                 STR_EXPAND(tag_id_value), child_count,
+                 STR_EXPAND(tag_id_value));
+        PUT_LINE("<div class=\"accordion-body\">");
+        process_child(child->first, out, depth);
+        PUT_LINE("</div>");
+        PUT_LINE("</div>");
+
+        PUT_LINE("</div>");
+
+        child_count++;
+
+    }
+
+    PUT_LINE("</div>");
+}
+
+static void process_text(VdDspcSection *section, FILE *out, int depth)
+{
+    PUT_LINE("<p>");
+    VdDspcStrNode *node = vd_dspc_str_list_first_node(&section->text_content);
+    while (node) {
+
+        PUT_LINE("%.*s", STR_EXPAND(make_str_from_str_node(node)));
+
+        node = vd_dspc_str_list_next_node(node);
+    }
+    PUT_LINE("</p>");
+}
+
+static void process_section(VdDspcSection *section, FILE *out, int depth)
+{
+    Str title = make_str_from_tag_value(vd_dspc_section_first_tag(section));
+    PUT_LINE("<section class=\"L%d section\">", depth);
+    PUT_LINE("<h4>%.*s</h4>", STR_EXPAND(title));
+    if (depth == 1) {
+        PUT_LINE("<hr>");
+    }
+    for (VdDspcSection *child = section->first; child; child = child->next) {
+        process_child(child, out, depth + 1);
+    }
+    PUT_LINE("</section>");
+}
+
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/* ----DOCUBUILD IMPLEMENTATION-------------------------------------------------------------------------------------- */
+/* ------------------------------------------------------------------------------------------------------------------ */
+static int Processor_Table_Length;
 
 #define INVOC_EXIT() ERR_EXIT("Invocation: docubuild <Directory>\n" \
                                                      "\t-o\tSet output directory." \
@@ -32,7 +152,7 @@ typedef struct {
 int main(int argc, char const *argv[])
 {
     vd_init(NULL);
-
+    Processor_Table_Length = ARRAY_COUNT(Processor_Table);
 
     if (argc < 2) {
         INVOC_EXIT();
@@ -105,10 +225,6 @@ int main(int argc, char const *argv[])
         VD_RETURN_SCRATCH_ARENA(temp_arena);
     }
 
-    for (usize i = 0; i < dynarray_len(workspace.source_files); ++i) {
-
-    }
-
     for (VdDspcTree *tree = vd_dspc_document_first_tree(&workspace.document); tree; tree = vd_dspc_document_next_tree(&workspace.document, tree)) {
         Arena *temp_arena = VD_GET_SCRATCH_ARENA();
         SourceFile *source_file = (SourceFile*)tree->userdata;
@@ -135,65 +251,19 @@ int main(int argc, char const *argv[])
     return 0;
 }
 
-static void traverse_section(VdDspcSection *section, int inset)
-{
-    if (!section) return;
 
-    for (int i = 0; i < inset; ++i) printf(" ");
-    printf("%.*s", (int)section->section_id.l, section->section_id.s);
-    printf(" (");
-    for (VdDspcTag *tag = vd_dspc_section_first_tag(section); tag; tag = vd_dspc_section_next_tag(section, tag)) {
-        printf("%.*s = \"%.*s\"",
-               (int)tag->name.l, tag->name.s,
-               (int)tag->value.l, tag->value.s);
-    }
-    printf(") ");
-    printf("\n");
-
-    if (!vd_dspc_str_list_is_empty(&section->text_content)) {
-        
-        for (VdDspcStrNode *node = vd_dspc_str_list_first_node(&section->text_content);
-             node;
-             node = vd_dspc_str_list_next_node(node)) 
-        {
-            for (int i = 0; i < inset; ++i) printf(" ");
-            printf("%.*s\n", (int)node->len, node->str);
-        }
-    }
-
-    for (VdDspcSection *child = section->first; child; child = child->next) {
-        traverse_section(child, inset + 2);
-    }
-}
-
-#define PUT_LINE(fmt, ...) fprintf(out, fmt "\n", __VA_ARGS__)
-
-static Str make_str_from_tag_value(VdDspcTag *tag) {
-    Str result = {(char*)tag->value.s, tag->value.l};
-    return result;
-}
-
-static void generate_html_for_section_recursively(VdDspcSection *section, FILE *out, int section_depth)
+static void process_child(VdDspcSection *section, FILE *out, int depth)
 {
     Str section_id = {(char*)section->section_id.s, section->section_id.l};
-    b32 is_section_directive = str_eq(section_id, LIT("section"));
 
-    if (is_section_directive) {
-        VdDspcTag *tag_title = vd_dspc_section_first_tag(section);
-        Str value_str = make_str_from_tag_value(tag_title);
-
-        PUT_LINE("<section class=\"section L%d\">", section_depth);
-        PUT_LINE("<h4>%.*s</h4>", STR_EXPAND(value_str));
-    } else if (str_eq(section_id, LIT("AccordionGroup"))) {
-
-    }
-
-    int next_section_depth = is_section_directive ? section_depth + 1 : section_depth;
-
-    for (VdDspcSection *child = section->first; child; child = child->next) {
-        generate_html_for_section_recursively(child, out, next_section_depth);
+    for (int i = 0; i < Processor_Table_Length; ++i) {
+        if (str_eq(section_id, Processor_Table[i].id)) {
+            Processor_Table[i].process(section, out, depth);
+            break;
+        }
     }
 }
+
 
 static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
 {
@@ -267,13 +337,19 @@ static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
             VdDspcTag *tag_category = vd_dspc_section_first_tag(child);
             PUT_LINE("<!-- category: %.*s -->", (int)tag_category->value.l, tag_category->value.s);
         } else {
-            generate_html_for_section_recursively(child, out, 1);
+            process_child(child, out, 1);
         }
     }
 
             PUT_LINE("</div>");
         PUT_LINE("</div>");
     PUT_LINE("</div>");
+
+    PUT_LINE("<script src=\"https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js\"");
+    PUT_LINE("        integrity=\"sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI\"");
+    PUT_LINE("        crossorigin=\"anonymous\"></script>");
+    PUT_LINE("<script src=\"https://cdn.jsdelivr.net/npm/fuse.js@6.6.2/dist/fuse.min.js\"></script>");
+    PUT_LINE("<script src=\"./index.js\"></script>");
 
     PUT_LINE("</body>");
     PUT_LINE("</html>");
@@ -292,6 +368,24 @@ static void collect_source_file(File *file, void *userdata)
         .file_path_relative_to_source_dir = str_dup(&workspace->global_arena, file->name),
     };
     dynarray_add(workspace->source_files, new_source_file);
+}
+
+static Str make_str_from_section_id(VdDspcSection *section)
+{
+    Str result = {(char*)section->section_id.s, section->section_id.l};   
+    return result;
+}
+
+static Str make_str_from_tag_value(VdDspcTag *tag)
+{
+    Str result = {(char*)tag->value.s, tag->value.l};
+    return result;
+}
+
+static Str make_str_from_str_node(VdDspcStrNode *node)
+{
+    Str result = {(char*)node->str, node->len};
+    return result;
 }
 
 #define VD_DSPC_IMPL

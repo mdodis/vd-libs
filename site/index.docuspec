@@ -3,21 +3,19 @@
 
 @paste("header")
 
-@link("l_zlib" url="https://choosealicense.com/licenses/zlib/") 
-
 @section("FAQ") {
     @accordion(id="faq") {
-        @accordion_item("What is this?" group="faq") {
+        @accordion-item("What is this?") {
             text {
                 A collection of header-only libraries for C & C++ that are written to be concise and as dependency
                 free as possible.
             }
         }
 
-        @accordion_item("What's the license?" group="faq") {
+        @accordion-item("What's the license?") {
             text {
-                These libraries use the `l_zlib zlib` license. If it prevents you from using the
-                libraries, or a dual licensing
+                These libraries use the <a href="https://choosealicense.com/licenses/zlib/">zlib</a> license.
+                If it prevents you from using the libraries, or a dual licensing
                 scheme would be better, please let me know in the issues!
             }
         }
@@ -28,15 +26,117 @@
     text {
         Dear reader,
 
-        In the modern day, programming has become complex. Too complex for what most of the applications can actually
-        do.
+        <br> <br>
 
-        One common theme that one will see mentioned in various topics, like building a rendering engine, or even
-        something as simple as a static website, is The Stack™: A collection of libraries and frameworks for building
-        solutions to problems the right way.
+        In the modern day, programming has become complex. Too complex for what most of the applications
+        can actually do.
 
-        This is most commonly sourced from an aggregate of opinions, an admiration of complexity, even sheer ego, but it
-        rarely comes from the complexity or expansiveness of the problem itself.
+        <br> <br>
+
+        One common theme that one will see mentioned in various topics, like building a rendering engine
+        , or even something as simple as a static website, is The Stack&trade;: A collection of
+        libraries and frameworks for building solutions to problems <i>the right way</i>.
+
+        <br> <br>
+
+        This is most commonly sourced from an aggregate of opinions, an admiration of complexity, even
+        sheer ego, but it rarely comes from the complexity or expansiveness of the problem itself.
+
+        <br> <br>
+
+        And partially, it's to be expected; not just because software is affected by business decisions,
+        timelines, and all the various aspects of every-day life - but because it's easy to admire a
+        body of work that appears enormous. We are fascinated and astonished by big buildings and huge
+        imposing sculptures, because that's a signal of dedication and craftsmanship; to some even
+        divine intervention.
+
+        <br> <br>
+
+        The reality though, at least for software, is that in most situations, complicated doesn't mean
+        good. For that matter, small & short doesn't mean good either. And as of late, it has become
+        increasingly hard for developers to understand the cost of sourcing external work.
+
+        <br> <br>
+
+        Let me be clear; I don't mean that everyone should go back to C, or program in Assembly,
+        and I don't expect anyone to do so, because this pattern of library overuse
+        is present in every programming field. The only reason that there aren't that many instances of
+        C/C++ programmers doing it (mainly C now...) is that it's harder to source external libraries
+        than to actually write them yourself.
+
+        <br> <br>
+
+        I encourage anyone who reads this to take a look at any modern project of say, a calculator,
+        and try to tell me if it doesn't look a <b>tad</b> too complicated. Because in most cases, you
+        will see:
+
+        <ul>
+            <li>Some kind of package manager manifest</li>
+            <li>A UI library (depending on the language context)</li>
+            <li>Some kind of math library</li>
+            <li>And right after the important ones, a ton of other small libraries that do random things
+            </li>
+            <li>Not to mention, that each package has dependencies, which all get resolved into at least
+                a medium size codebase</li>
+        </ul>
+
+        People will argue that these complexities are required because they solve various problems in
+        the best way possible, and are portable and cross-platform (or cross-browser), so this is just
+        the price you have to pay nowadays.
+
+        <br> <br>
+
+        I don't necesarily disagree with this take. I will <b>just</b> point out, that usually, for most
+        of the dependencies these projects bring in into the codebase, they only use a small fraction of
+        the functionalities they provide.
+
+        <br> <br>
+
+        And if you, dear reader, think that because you program in C/C++, you are exempted from this,
+        please consider that there are a ton of projects out there that bring in a huge dependency, like
+        SDL (I've got nothing against SDL, just an example), and then use C++ threads, spdlog, printf,
+        <code>std::cout</code>, instead of the portable cross-platform functions that SDL already
+        provides.
+
+        <br> <br>
+
+        I won't say that those projects are necessarily doing something wrong; if it works, it works.
+        But I will say that there are hidden or unnoticeable costs to bringing in any dependency into
+        a project.
+
+        <br> <br>
+
+        And here we come back to the first point of this section. Why do people use SDL, and what do
+        they use it for?
+
+        <br> <br>
+
+        I'll wager that most people use it because that's what they've been told to do, or because
+        someone told them the Win32 API is too complicated, or even convinced them that it'll be better
+        to bring it in early, because then their application will be cross-platform without much work.
+
+        <br> <br>
+
+        (Note that I'm using Win32 API as an example here, but this is the same for any platform.)
+
+        <br> <br>
+
+        It's not. Really. It's not that complicated, and you can make a wrapper for it in 5 days at
+        most, that will get you 99% of the way there and cover what all of these libraries do for the
+        common case. And you will not have to learn another API to use this one, or look out for
+        updates, or have to fiddle with those libraries' deprecations and introcacies.
+
+        <br> <br>
+
+        And this is the purpose of the libraries in here. As I'm writing my engines and doing other
+        experiments, I found it best to wrap some functionality I actually want into libraries that
+        provide solutions to specific problems, and not general ones.
+
+        <br> <br>
+
+        I encourage everyone to read the code themselves, not because it's the best or the most bug
+        free, but because I want you, dear reader, to see how simple things can be, even for
+        someone who's not a massive genius or expert in the field.
     }
 }
 

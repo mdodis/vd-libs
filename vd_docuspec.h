@@ -165,6 +165,7 @@ VD_DSPC_API VdDspcTree*      vd_dspc_document_next_tree(VdDspcDocument *doc, VdD
 VD_DSPC_API VdDspcSection*   vd_dspc_tree_first_section(VdDspcTree *tree);
 VD_DSPC_API VdDspcTag*       vd_dspc_section_first_tag(VdDspcSection *section);
 VD_DSPC_API VdDspcTag*       vd_dspc_section_next_tag(VdDspcSection *section, VdDspcTag *tag);
+VD_DSPC_API VdDspcTag*       vd_dspc_section_find_tag_with_name(VdDspcSection *section, const char *search);
 VD_DSPC_API VdDspcStrNode*   vd_dspc_str_list_first_node(VdDspcStrList *list);
 VD_DSPC_API VdDspcStrNode*   vd_dspc_str_list_next_node(VdDspcStrNode *node);
 VD_DSPC_API int              vd_dspc_str_list_is_empty(VdDspcStrList *list);
@@ -320,6 +321,36 @@ VD_DSPC_API VdDspcTag *vd_dspc_section_first_tag(VdDspcSection *section)
 VD_DSPC_API VdDspcTag *vd_dspc_section_next_tag(VdDspcSection *section, VdDspcTag *tag)
 {
     return (tag->next != &section->tag_sentinel) ? tag->next : 0;
+}
+
+static int vd_dspc_str_eq(VdDspcStr a, VdDspcStr b)
+{
+    if (a.l != b.l) return 0;
+
+    for (size_t i = 0; i < a.l; ++i) {
+        if (a.s[i] != b.s[i]) return 0;
+    }
+
+    return 1;
+}
+
+VD_DSPC_API VdDspcTag *vd_dspc_section_find_tag_with_name(VdDspcSection *section, const char *search)
+{
+    int len = search == 0 ? 0 : strlen(search);
+
+    VdDspcStr search_str = { search, len };
+
+    for (VdDspcTag *tag = vd_dspc_section_first_tag(section); tag; tag = vd_dspc_section_next_tag(section, tag)) {
+        if (len == 0 && tag->name.l == 0) {
+            return tag;
+        }
+
+        if (vd_dspc_str_eq(tag->name, search_str)) {
+            return tag;
+        }
+    }
+
+    return 0;
 }
 
 VD_DSPC_API VdDspcStrNode *vd_dspc_str_list_first_node(VdDspcStrList *list)
