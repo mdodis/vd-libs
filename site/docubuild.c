@@ -16,6 +16,13 @@
 
 static void traverse_section(VdDspcSection *section, int inset);
 
+static void on_file(File *file, void *userdata)
+{
+    (void)userdata;
+
+    printf("File: %.*s\n", (int)file->name.len, file->name.s);
+}
+
 int main(int argc, char const *argv[])
 {
     if (argc < 2) {
@@ -47,14 +54,7 @@ int main(int argc, char const *argv[])
         }
     }
 
-    Directory directory;
-    directory_open(&directory, directory_to_open, DIRECTORY_RECURSIVE);
-    File file;
-    while (directory_get_file(&directory, &file)) {
-        printf("%.*s\n", (int)file.name.len, file.name.s);
-    }
-
-    directory_close(&directory);
+    vd_directory_walk_recursively(directory_to_open, on_file, 0);;
     return 0;
 }
 

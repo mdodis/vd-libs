@@ -1582,27 +1582,30 @@ VD_INLINE Vdb32 vd__kvmap_set(void *map, void *key, void *value, Vd__KVMapSetMod
 
 /* ----FILESYSTEM---------------------------------------------------------------------------------------------------- */
 #if VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
-typedef enum {
-    VD_DIRECTORY_RECURSIVE = 1 << 0,
-} VdDirectoryFlags;
+enum {
+    VD_FILE_FLAG_DIRECTORY = 1 << 0,
+};
+typedef Vdu32 VdFileFlags;
 
 typedef struct VdDirectory {
     void             *handle;
     VdStr            filename;
-    VdDirectoryFlags flags;
 
 #if VD_PLATFORM_WINDOWS
-    int windows_is_on_first_file;
+    int     windows_is_on_first_file;
+    int     windows_is_on_directory;
 #endif // VD_PLATFORM_WINDOWS
 } VdDirectory;
 
 typedef struct {
-    VdStr name;
+    VdStr       name;
+    VdFileFlags flags;
 } VdFile;
 
-VD_API int vd_directory_open(VdDirectory *directory, const char *path, VdDirectoryFlags flags);
-VD_API int vd_directory_get_file(VdDirectory *directory, VdFile *file);
-VD_API int vd_directory_close(VdDirectory *directory);
+VD_API int  vd_directory_open(VdDirectory *directory, const char *path);
+VD_API int  vd_directory_get_file(VdDirectory *directory, VdFile *file);
+VD_API int  vd_directory_close(VdDirectory *directory);
+VD_API void vd_directory_walk_recursively(const char *path, void (*visit)(VdFile*, void*), void *userdata);
 #endif // VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
 
 #include <stdio.h>
@@ -1644,7 +1647,6 @@ VD_INLINE Vdcstr vd_dump_file_to_cstr(VdArena *arena, Vdcstr file_path, Vdusize 
 #define directory_open                            vd_directory_open
 #define directory_get_file                        vd_directory_get_file
 #define directory_close                           vd_directory_close
-#define DIRECTORY_RECURSIVE                       VD_DIRECTORY_RECURSIVE
 #define dump_file_to_bytes(arena, file_path, len) vd_dump_file_to_bytes(arena, file_path, len);
 #define dump_file_to_cstr(arena, file_path, len)  vd_dump_file_to_cstr(arena, file_path, len);
 #endif // VD_MACRO_ABBREVIATIONS
@@ -3040,29 +3042,30 @@ Vd__KVMapBinPrefix *vd__kvmap_get_bin(void *map, void *key, Vd__KVMapGetBinFlags
 static wchar_t Cached_Directory_Entry[1024];
 static char    Filename_Cache[256];
 
-VD_API int vd_directory_open(VdDirectory *directory, const char *path, VdDirectoryFlags flags)
+VD_API int vd_directory_open(VdDirectory *directory, const char *path)
 {
     directory->filename = vd_str_from_cstr((char*)path);
-    directory->flags = flags;
-    directory->windows_is_on_first_file = VD_FALSE;
+    directory->windows_is_on_first_file = VD_TRUE;
+    directory->windows_is_on_directory  = VD_FALSE;
     return 1;
 }
 
 VD_API int vd_directory_get_file(VdDirectory *directory, VdFile *file)
 {
+query_file:
     WIN32_FIND_DATAW dataw;
     Vdb32 was_found = VD_FALSE;
 
-    if (!directory->windows_is_on_first_file) {
-        int lenw = MultiByteToWideChar(
+    if (directory->windows_is_on_first_file) {
+        Vdu32 lenw = MultiByteToWideChar(
             CP_UTF8,
             MB_ERR_INVALID_CHARS,
             (const char*)directory->filename.s, (Vdu32)directory->filename.len,
             Cached_Directory_Entry,
             VD_ARRAY_COUNT(Cached_Directory_Entry));
 
-        if (Cached_Directory_Entry[lenw -1] != L'/' || Cached_Directory_Entry[lenw -1] != L'\\') {
-            Cached_Directory_Entry[lenw++] = L'/';
+        if (Cached_Directory_Entry[lenw -1] != L'/' && Cached_Directory_Entry[lenw -1] != L'\\') {
+            Cached_Directory_Entry[lenw++] = L'\\';
         }
 
         Cached_Directory_Entry[lenw++] = L'*';
@@ -3071,7 +3074,7 @@ VD_API int vd_directory_get_file(VdDirectory *directory, VdFile *file)
         directory->handle = FindFirstFileW(Cached_Directory_Entry, &dataw);
 
         was_found = directory->handle != INVALID_HANDLE_VALUE;
-        directory->windows_is_on_first_file = VD_TRUE;
+        directory->windows_is_on_first_file = VD_FALSE;
     } else {
         was_found = FindNextFileW(directory->handle, &dataw);
     }
@@ -3090,6 +3093,16 @@ VD_API int vd_directory_get_file(VdDirectory *directory, VdFile *file)
 
     file->name.s = Filename_Cache;
     file->name.len = num_bytes - 1;
+
+    if (vd_str_eq(file->name, VD_LIT(".")) || vd_str_eq(file->name, VD_LIT(".."))) {
+        goto query_file;
+    }
+
+    file->flags = 0;
+    if (dataw.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+        file->flags |= VD_FILE_FLAG_DIRECTORY;
+    }
+
     return VD_TRUE;
 }
 
@@ -3102,6 +3115,79 @@ VD_API int vd_directory_close(VdDirectory *directory)
 #else
 #error "Filesystem implementation not available on this platform"
 #endif // VD_PLATFORM_WINDOWS, else
+
+static void vd_directory__iter_recursive(VdDirectory *directory, char *buf, int buf_len,
+                                         int length_to_searched_directory,
+                                         void (*visit)(VdFile*, void*),
+                                         void *userdata)
+{
+    VdFile file;
+    while (vd_directory_get_file(directory, &file)) {
+
+        if (file.flags & VD_FILE_FLAG_DIRECTORY) {
+            // Construct Path
+            VD_MEMCPY(buf + buf_len, file.name.s, file.name.len);
+            int new_buf_len = buf_len + (int)file.name.len;
+            buf[new_buf_len++] = '/';
+            buf[new_buf_len] = 0;
+
+            VdDirectory new_directory;
+            if (directory_open(&new_directory, buf)) {
+                vd_directory__iter_recursive(&new_directory, buf, new_buf_len, length_to_searched_directory,
+                                             visit, userdata);
+            }
+        } else {
+
+            // Append file.name into buf and call visit
+            VD_MEMCPY(buf + buf_len, file.name.s, file.name.len);
+
+            file.name.s = buf + length_to_searched_directory;
+            file.name.len = file.name.len + buf_len - length_to_searched_directory;
+            visit(&file, userdata);
+        }
+    }
+
+    vd_directory_close(directory);
+}
+
+VD_API void vd_directory_walk_recursively(const char *path, void (*visit)(VdFile*, void*), void *userdata)
+{
+    char buf[256] = {0};
+    int buf_len = 0;
+
+    buf_len = (int)vd_cstr_len((char*)path);
+    VD_MEMCPY(buf, path, buf_len);
+
+    if (buf[buf_len - 1] != '\\' && buf[buf_len - 1] != '/') {
+        buf[buf_len++] = '/';
+    }
+
+    VdDirectory first_directory;
+    if (!vd_directory_open(&first_directory, path)) {
+        return;
+    }
+
+    VdFile file;
+    while (vd_directory_get_file(&first_directory, &file)) {
+
+        if (file.flags & VD_FILE_FLAG_DIRECTORY) {
+            VD_MEMCPY(buf + buf_len, file.name.s, file.name.len);
+            int new_buf_len = buf_len + (int)file.name.len;
+            buf[new_buf_len++] = '/';
+            buf[new_buf_len] = 0;
+
+            VdDirectory new_directory;
+            if (directory_open(&new_directory, buf)) {
+                vd_directory__iter_recursive(&new_directory, buf, new_buf_len, buf_len, visit, userdata);
+            }
+            continue;
+        }
+
+        visit(&file, userdata);
+    }
+
+    vd_directory_close(&first_directory);
+}
 #endif // VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
 
 /* ----TESTING IMPL-------------------------------------------------------------------------------------------------- */
