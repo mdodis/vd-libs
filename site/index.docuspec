@@ -6,15 +6,15 @@
 @link("l_zlib" url="https://choosealicense.com/licenses/zlib/") 
 
 @section("FAQ") {
-    @AccordionGroup() {
-        @Accordion("What is this?") {
+    @accordion(id="faq") {
+        @accordion_item("What is this?" group="faq") {
             text {
                 A collection of header-only libraries for C & C++ that are written to be concise and as dependency
                 free as possible.
             }
         }
 
-        @Accordion("What's the license?") {
+        @accordion_item("What's the license?" group="faq") {
             text {
                 These libraries use the `l_zlib zlib` license. If it prevents you from using the
                 libraries, or a dual licensing

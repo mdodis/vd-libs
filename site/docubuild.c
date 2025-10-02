@@ -173,8 +173,26 @@ static Str make_str_from_tag_value(VdDspcTag *tag) {
     return result;
 }
 
-static void generate_html_for_section_recursively(VdDspcSection *section, FILE *out) {
+static void generate_html_for_section_recursively(VdDspcSection *section, FILE *out, int section_depth)
+{
+    Str section_id = {(char*)section->section_id.s, section->section_id.l};
+    b32 is_section_directive = str_eq(section_id, LIT("section"));
 
+    if (is_section_directive) {
+        VdDspcTag *tag_title = vd_dspc_section_first_tag(section);
+        Str value_str = make_str_from_tag_value(tag_title);
+
+        PUT_LINE("<section class=\"section L%d\">", section_depth);
+        PUT_LINE("<h4>%.*s</h4>", STR_EXPAND(value_str));
+    } else if (str_eq(section_id, LIT("AccordionGroup"))) {
+
+    }
+
+    int next_section_depth = is_section_directive ? section_depth + 1 : section_depth;
+
+    for (VdDspcSection *child = section->first; child; child = child->next) {
+        generate_html_for_section_recursively(child, out, next_section_depth);
+    }
 }
 
 static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
@@ -210,8 +228,8 @@ static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
             PUT_LINE("<nav id=\"mainnav\" class=\"navbar sticky-top navbar-expand-md bg-body-tertiary\">");
                 PUT_LINE("<div class=\"container-fluid bg-body-tertiary\">");
                     PUT_LINE("<a class=\"navbar-brand\" href=\"#\">");
-                        PUT_LINE("<img    src=\"./assets/vd-logo-p@1x.png\"");
-                            PUT_LINE("srcset=\"./assets/vd-logo-p@1x.png 1x, ./assets/vd-logo-p@2x.png 2x\"");
+                        PUT_LINE("<img    src=\"/assets/vd-logo-p@1x.png\"");
+                            PUT_LINE("srcset=\"/assets/vd-logo-p@1x.png 1x, /assets/vd-logo-p@2x.png 2x\"");
                                 PUT_LINE("alt=\"Brand\"");
                             PUT_LINE("width=\"64\"");
                             PUT_LINE("height=\"38.5\">");
@@ -223,7 +241,7 @@ static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
                     PUT_LINE("<div class=\"collapse navbar-collapse\" id=\"navbarNav\">");
                         PUT_LINE("<ul class=\"navbar-nav\">");
                             PUT_LINE("<li class=\"nav-item\">");
-                                PUT_LINE("<a class=\"nav-link active\" aria-current=\"page\" href=\"#\">Home</a>");
+                                PUT_LINE("<a class=\"nav-link\" aria-current=\"page\" href=\"/index.html\">Home</a>");
                             PUT_LINE("</li>");
                             PUT_LINE("<!-- Begin Files -->");
                             PUT_LINE("<li class=\"nav-item dropdown\">");
@@ -231,8 +249,7 @@ static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
                                     PUT_LINE("Documentation");
                                 PUT_LINE("</a>");
                                 PUT_LINE("<ul class=\"dropdown-menu\" aria-labelledby=\"documentationDropdown\">");
-                                    PUT_LINE("<li><a class=\"dropdown-item\" href=\"/vd/index.html\">vd.h</a></li>");
-                                    PUT_LINE("<li><a class=\"dropdown-item\" href=\"/vd_fw/index.html\">vd_fw.h</a></li>");
+                                    PUT_LINE("<li><a class=\"dropdown-item\" href=\"/vd_fw.html\">vd_fw.h</a></li>");
                                 PUT_LINE("</ul>");
                             PUT_LINE("</li>");
                             PUT_LINE("<!--   End Files -->");
@@ -242,11 +259,21 @@ static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
             PUT_LINE("</nav>");
             PUT_LINE("<!--   End Navbar -->");
 
+            PUT_LINE("<div class=\"container flex-grow-1\">");
+                PUT_LINE("<div class=\"row justify-content-center\">");
+                    PUT_LINE("<div class=\"col-12 col-sm-10 col-md-8 col-lg-8 text-start\">");
+
         } else if (str_eq(section_id, LIT("category"))) {
             VdDspcTag *tag_category = vd_dspc_section_first_tag(child);
             PUT_LINE("<!-- category: %.*s -->", (int)tag_category->value.l, tag_category->value.s);
-        } 
+        } else {
+            generate_html_for_section_recursively(child, out, 1);
+        }
     }
+
+            PUT_LINE("</div>");
+        PUT_LINE("</div>");
+    PUT_LINE("</div>");
 
     PUT_LINE("</body>");
     PUT_LINE("</html>");

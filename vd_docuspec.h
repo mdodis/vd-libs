@@ -866,7 +866,7 @@ static int vd_dspc__is_consumable_whitespace(int c)
 }
 
 static int vd_dspc__is_valid_id_continue(int c) {
-    return vd_dspc__is_alpha(c) || vd_dspc__is_num(c);
+    return vd_dspc__is_alpha(c) || vd_dspc__is_num(c) || c == '-' || c == '_';
 }
 
 static size_t vd_dspc__token_string_size(VdDspc__Token *tok)
