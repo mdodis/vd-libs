@@ -3,7 +3,7 @@
 
 @paste("header")
 
-@var("v_zlib_link" url="https://choosealicense.com/licenses/zlib/") 
+@link("l_zlib" url="https://choosealicense.com/licenses/zlib/") 
 
 @section("FAQ") {
     @AccordionGroup() {
@@ -16,7 +16,7 @@
 
         @Accordion("What's the license?") {
             text {
-                These libraries use the `v_zlib_link zlib` license. If it prevents you from using the
+                These libraries use the `l_zlib zlib` license. If it prevents you from using the
                 libraries, or a dual licensing
                 scheme would be better, please let me know in the issues!
             }

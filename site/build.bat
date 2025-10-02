@@ -4,7 +4,7 @@ set SCRIPT_DIR=%~dp0
 
 pushd %SCRIPT_DIR%\..
 set PRJ_DIR=%cd%
-set SRC_DIR=%PRJ_DIR%\sitesrc
+set SRC_DIR=%PRJ_DIR%\site
 
 if not exist build mkdir build
 pushd build
