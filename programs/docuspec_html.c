@@ -56,7 +56,7 @@ int main(int argc, char const *argv[])
 
     VdDspcDocument document;
     vd_dspc_document_init(&document, NULL);
-    vd_dspc_document_add(&document, result, size);
+    vd_dspc_document_add(&document, result, size, NULL);
 
     VdDspcTree *tree = vd_dspc_document_first_tree(&document);
     traverse_section(&tree->global, 0);

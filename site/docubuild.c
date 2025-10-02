@@ -19,7 +19,7 @@ static void collect_source_file(File *file, void *userdata);
 static void generate_html_for_tree(VdDspcTree *tree, FILE *out);
 
 typedef struct {
-    Str file_path_relative_to_source_dir;
+    Str         file_path_relative_to_source_dir;
 } SourceFile;
 
 typedef struct {
@@ -39,6 +39,7 @@ int main(int argc, char const *argv[])
     }
 
     const char *directory_to_open = 0;
+    const char *directory_to_write_to = 0;
 
     Arg arg = arg_new(argc, argv);
     arg_skip_program_name(&arg);
@@ -60,7 +61,12 @@ int main(int argc, char const *argv[])
             if (!arg_get_str(&arg, &argvalue_str)) {
                 ERR_EXIT("Expected argument after -o!");
             }
+            directory_to_write_to = argvalue_str.s;
         }
+    }
+
+    if (directory_to_write_to == 0) {
+        ERR_EXIT("You need to specify write directory with -o!");
     }
 
     Workspace workspace = {
@@ -93,16 +99,38 @@ int main(int argc, char const *argv[])
         VD_ASSERT(file != 0);
 
         {
-            vd_dspc_document_add(&workspace.document, (char*)file, len);
+            vd_dspc_document_add(&workspace.document, (char*)file, len, source_file);
         }
 
         VD_RETURN_SCRATCH_ARENA(temp_arena);
     }
 
-    VdDspcTree *tree = vd_dspc_document_first_tree(&workspace.document);
-    FILE *f = fopen("./siteout.html", "w");
-    generate_html_for_tree(tree, f);
-    fclose(f);
+    for (usize i = 0; i < dynarray_len(workspace.source_files); ++i) {
+
+    }
+
+    for (VdDspcTree *tree = vd_dspc_document_first_tree(&workspace.document); tree; tree = vd_dspc_document_next_tree(&workspace.document, tree)) {
+        Arena *temp_arena = VD_GET_SCRATCH_ARENA();
+        SourceFile *source_file = (SourceFile*)tree->userdata;
+
+        Str file_path_relative_to_source_dir_without_extension = str_chop_right(
+            source_file->file_path_relative_to_source_dir,
+            str_last_of(source_file->file_path_relative_to_source_dir, LIT("."), VD_STR_MAX) - 1);
+
+        StrBuilder bld;
+        str_builder_init(&bld, temp_arena);
+        str_builder_push_cstr(&bld, directory_to_write_to);
+        str_builder_push_str(&bld, file_path_relative_to_source_dir_without_extension);
+        str_builder_push_cstr(&bld, ".html");
+        str_builder_null_terminate(&bld);
+        Str output_file = str_builder_compose(&bld, NULL);
+
+        FILE *f = fopen(output_file.s, "w");
+        generate_html_for_tree(tree, f);
+        fclose(f);
+
+        VD_RETURN_SCRATCH_ARENA(temp_arena);
+    }
 
     return 0;
 }
@@ -152,6 +180,7 @@ static void generate_html_for_section_recursively(VdDspcSection *section, FILE *
 static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
 {
     PUT_LINE("<!DOCTYPE html>");
+    PUT_LINE("<html lang=\"en\" data-bs-theme=\"dark\">");
 
     VdDspcSection *global_section = vd_dspc_tree_first_section(tree);
     for (VdDspcSection *child = global_section->first; child; child = child->next) {
@@ -165,22 +194,62 @@ static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
             PUT_LINE("<head>");
             PUT_LINE("<meta charset=\"utf-8\">");
             PUT_LINE("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
-            PUT_LINE("<title>%.*s</title>", STR_EXPAND(value_str));
             PUT_LINE("<link rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"/apple-touch-icon.png\">");
             PUT_LINE("<link rel=\"icon\" type=\"image/png\" sizes=\"32x32\" href=\"/favicon-32x32.png\">");
             PUT_LINE("<link rel=\"icon\" type=\"image/png\" sizes=\"16x16\" href=\"/favicon-16x16.png\">");
             PUT_LINE("<link rel=\"manifest\" href=\"/site.webmanifest\">");
             PUT_LINE("<meta charset=\"utf-8\">");
             PUT_LINE("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
+            PUT_LINE("<title>%.*s</title>", STR_EXPAND(value_str));
             PUT_LINE("<link href=\"https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css\" rel=\"stylesheet\" integrity=\"sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB\" crossorigin=\"anonymous\">");
             PUT_LINE("<link rel=\"stylesheet\" href=\"/style.css\">");;
             PUT_LINE("</head>");
+
+            PUT_LINE("<body class=\"d-flex flex-column min-vh-100\">");
+            PUT_LINE("<!-- Begin Navbar -->");
+            PUT_LINE("<nav id=\"mainnav\" class=\"navbar sticky-top navbar-expand-md bg-body-tertiary\">");
+                PUT_LINE("<div class=\"container-fluid bg-body-tertiary\">");
+                    PUT_LINE("<a class=\"navbar-brand\" href=\"#\">");
+                        PUT_LINE("<img    src=\"./assets/vd-logo-p@1x.png\"");
+                            PUT_LINE("srcset=\"./assets/vd-logo-p@1x.png 1x, ./assets/vd-logo-p@2x.png 2x\"");
+                                PUT_LINE("alt=\"Brand\"");
+                            PUT_LINE("width=\"64\"");
+                            PUT_LINE("height=\"38.5\">");
+                    PUT_LINE("</a>");
+                    PUT_LINE("<button class=\"navbar-toggler\" type=\"button\" data-bs-toggle=\"collapse\" data-bs-target=\"#navbarNav\" ");
+                            PUT_LINE("aria-controls=\"navbarNav\" aria-expanded=\"false\" aria-label=\"Toggle navigation\">");
+                        PUT_LINE("<span class=\"navbar-toggler-icon\"></span>");
+                    PUT_LINE("</button>");
+                    PUT_LINE("<div class=\"collapse navbar-collapse\" id=\"navbarNav\">");
+                        PUT_LINE("<ul class=\"navbar-nav\">");
+                            PUT_LINE("<li class=\"nav-item\">");
+                                PUT_LINE("<a class=\"nav-link active\" aria-current=\"page\" href=\"#\">Home</a>");
+                            PUT_LINE("</li>");
+                            PUT_LINE("<!-- Begin Files -->");
+                            PUT_LINE("<li class=\"nav-item dropdown\">");
+                                PUT_LINE("<a class=\"nav-link dropdown-toggle\" href=\"#\" id=\"documentationDropdown\" role=\"button\"  data-bs-toggle=\"dropdown\" aria-expanded=\"false\">");
+                                    PUT_LINE("Documentation");
+                                PUT_LINE("</a>");
+                                PUT_LINE("<ul class=\"dropdown-menu\" aria-labelledby=\"documentationDropdown\">");
+                                    PUT_LINE("<li><a class=\"dropdown-item\" href=\"/vd/index.html\">vd.h</a></li>");
+                                    PUT_LINE("<li><a class=\"dropdown-item\" href=\"/vd_fw/index.html\">vd_fw.h</a></li>");
+                                PUT_LINE("</ul>");
+                            PUT_LINE("</li>");
+                            PUT_LINE("<!--   End Files -->");
+                        PUT_LINE("</ul>");
+                    PUT_LINE("</div>");
+                PUT_LINE("</div>");
+            PUT_LINE("</nav>");
+            PUT_LINE("<!--   End Navbar -->");
 
         } else if (str_eq(section_id, LIT("category"))) {
             VdDspcTag *tag_category = vd_dspc_section_first_tag(child);
             PUT_LINE("<!-- category: %.*s -->", (int)tag_category->value.l, tag_category->value.s);
         } 
     }
+
+    PUT_LINE("</body>");
+    PUT_LINE("</html>");
 }
 
 static void collect_source_file(File *file, void *userdata)

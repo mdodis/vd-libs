@@ -101,6 +101,7 @@ struct VdDspcTree {
     VdDspcTree    *next;
     VdDspcTree    *prev;
     VdDspcSection global;
+    void          *userdata;
 };
 
 typedef struct VdDspc__Lex {
@@ -157,8 +158,10 @@ typedef VD_DSPC_PROC_LOG(VdDspcProcLog);
 
 VD_DSPC_API void             vd_dspc_set_log_fn(VdDspcProcLog *log_fptr);
 VD_DSPC_API void             vd_dspc_document_init(VdDspcDocument *doc, void* (*alloc)(void *, size_t, size_t));
-VD_DSPC_API int              vd_dspc_document_add(VdDspcDocument *doc, const char *content, size_t content_size);
+VD_DSPC_API int              vd_dspc_document_add(VdDspcDocument *doc, const char *content, size_t content_size,
+                                                  void *userdata);
 VD_DSPC_API VdDspcTree*      vd_dspc_document_first_tree(VdDspcDocument *doc);
+VD_DSPC_API VdDspcTree*      vd_dspc_document_next_tree(VdDspcDocument *doc, VdDspcTree *tree);
 VD_DSPC_API VdDspcSection*   vd_dspc_tree_first_section(VdDspcTree *tree);
 VD_DSPC_API VdDspcTag*       vd_dspc_section_first_tag(VdDspcSection *section);
 VD_DSPC_API VdDspcTag*       vd_dspc_section_next_tag(VdDspcSection *section, VdDspcTag *tag);
@@ -273,9 +276,11 @@ VD_DSPC_API void vd_dspc_document_init(VdDspcDocument *doc, void* (*alloc)(void 
     }
 }
 
-VD_DSPC_API int vd_dspc_document_add(VdDspcDocument *doc, const char *content, size_t content_size)
+VD_DSPC_API int vd_dspc_document_add(VdDspcDocument *doc, const char *content, size_t content_size, void *userdata)
 {
-    vd_dspc__push_tree(doc);
+    VdDspcTree *tree = vd_dspc__push_tree(doc);
+    tree->userdata = userdata;
+
     doc->lexstate.content      = content;
     doc->lexstate.content_size = content_size;
     doc->lexstate.cur_fwd      = 0;
@@ -295,6 +300,11 @@ VD_DSPC_API int vd_dspc_document_add(VdDspcDocument *doc, const char *content, s
 VD_DSPC_API VdDspcTree *vd_dspc_document_first_tree(VdDspcDocument *doc)
 {
     return (doc->sentinel.next != &doc->sentinel) ? doc->sentinel.next : 0;
+}
+
+VD_DSPC_API VdDspcTree *vd_dspc_document_next_tree(VdDspcDocument *doc, VdDspcTree *tree)
+{
+    return (tree->next != &doc->sentinel) ? tree->next : 0;
 }
 
 VD_DSPC_API VdDspcSection *vd_dspc_tree_first_section(VdDspcTree *tree)
