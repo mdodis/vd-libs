@@ -1129,18 +1129,21 @@ struct Vd__StrBuilderNode {
 
 typedef struct {
     VdDList      list;
+    int          will_null_terminate;
     VdArena      *arena;
 } VdStrBuilder;
 
 VD_INLINE void  vd_str_builder_init(VdStrBuilder *builder, VdArena *arena);
 VD_INLINE void  vd_str_builder_push_cstr(VdStrBuilder *builder, const char *cstring);
 VD_INLINE void  vd_str_builder_push_str(VdStrBuilder *builder, VdStr str);
+VD_INLINE void  vd_str_builder_null_terminate(VdStrBuilder *builder);
 VD_INLINE VdStr vd_str_builder_compose(VdStrBuilder *builder, VdArena *opt_arena);
 
 VD_INLINE void vd_str_builder_init(VdStrBuilder *builder, VdArena *arena)
 {
     vd_dlist_init(&builder->list);
     builder->arena = arena;
+    builder->will_null_terminate = 0;
 }
 
 VD_INLINE void vd_str_builder_push_cstr(VdStrBuilder *builder, const char *cstring)
@@ -1157,9 +1160,18 @@ VD_INLINE void vd_str_builder_push_str(VdStrBuilder *builder, VdStr str)
     vd_dlist_append(&builder->list, &node->node);
 }
 
+VD_INLINE void vd_str_builder_null_terminate(VdStrBuilder *builder)
+{
+    builder->will_null_terminate = 1;
+}
+
 VD_INLINE VdStr vd_str_builder_compose(VdStrBuilder *builder, VdArena *opt_arena)
 {
     VdArena *arena = opt_arena == NULL ? builder->arena : opt_arena;
+
+    int allocate_space_for_null = builder->will_null_terminate;
+
+    VdDListNode *last_node = vd_dlist_last(&builder->list);
 
     char *mem_result = 0;
     Vdusize mem_size = 0;
@@ -1175,6 +1187,10 @@ VD_INLINE VdStr vd_str_builder_compose(VdStrBuilder *builder, VdArena *opt_arena
             default: VD_IMPOSSIBLE();
         }
 
+        if (allocate_space_for_null && (it == last_node)) {
+            req_size += 1;
+        }
+
         mem_result = (char*)vd_arena_resize(arena, mem_result, mem_size, mem_size + req_size);
 
         switch (node->type) {
@@ -1187,6 +1203,7 @@ VD_INLINE VdStr vd_str_builder_compose(VdStrBuilder *builder, VdArena *opt_arena
             default: VD_IMPOSSIBLE();
         }
 
+        mem_result[mem_size + req_size] = 0;
         mem_size += req_size;
     }
 
@@ -1195,11 +1212,12 @@ VD_INLINE VdStr vd_str_builder_compose(VdStrBuilder *builder, VdArena *opt_arena
 }
 
 #if VD_MACRO_ABBREVIATIONS
-#define StrBuilder            VdStrBuilder
-#define str_builder_init      vd_str_builder_init
-#define str_builder_push_str  vd_str_builder_push_str
-#define str_builder_push_cstr vd_str_builder_push_cstr
-#define str_builder_compose   vd_str_builder_compose
+#define StrBuilder                 VdStrBuilder
+#define str_builder_init           vd_str_builder_init
+#define str_builder_push_str       vd_str_builder_push_str
+#define str_builder_push_cstr      vd_str_builder_push_cstr
+#define str_builder_compose        vd_str_builder_compose
+#define str_builder_null_terminate vd_str_builder_null_terminate
 #endif 
 /* ----PARSING------------------------------------------------------------------------------------------------------- */
 VD_INLINE Vdb32      vd_is_ascii_digit(int c);
