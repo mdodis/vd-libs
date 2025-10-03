@@ -82,6 +82,11 @@ int main() {
 #define VD_FW_IMPL                                           // Include implementation code
 #include "vd_fw.h"
     ```
+
+    @carousel("fw-window-simple") {
+        @carousel-item("/assets/fw/window-simple-win32.png")
+        @carousel-item("/assets/fw/window-simple-macos.png")
+    }
 }
 
 

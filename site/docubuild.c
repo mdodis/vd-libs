@@ -38,6 +38,7 @@ static Workspace *get_workspace(void);
 static void process_child(VdDspcSection *section,   FILE *out, int depth);
 static void process_verbatim_html(VdDspcSection *section, FILE *out, int depth);
 
+static void process_carousel(VdDspcSection *section, FILE *out, int depth);
 static void process_code(VdDspcSection *section, FILE *out, int depth);
 static void process_copyright(VdDspcSection *section, FILE *out, int depth);
 static void process_br(VdDspcSection *section, FILE *out, int depth);
@@ -48,6 +49,7 @@ static Processor Processor_Table[] = {
     {LIT_INLINE("copyright"),         process_copyright},
     {LIT_INLINE("br"),                process_br},
     {LIT_INLINE("accordion"),         process_accordion},
+    {LIT_INLINE("carousel"),          process_carousel},
     {LIT_INLINE("section"),           process_section},
     {LIT_INLINE("text"),              process_text},
     {LIT_INLINE("verb"),              process_code},
@@ -70,7 +72,47 @@ static Processor Processor_Table[] = {
 
 
 
+static void process_carousel(VdDspcSection *section, FILE *out, int depth)
+{
+    VdDspcTag *carousel_tag = vd_dspc_section_first_tag(section);
+    Str carousel_tag_id = make_str_from_tag_value(carousel_tag);
 
+    PUT_LINE("<div id=\"%.*s\" class=\"rounded carousel slide\">", STR_EXPAND(carousel_tag_id));
+        PUT_LINE("<div class=\"carousel-inner\">");
+            int first = 0;
+            for (VdDspcSection *child = section->first; child; child = child->next) {
+                Str child_image_path = make_str_from_tag_value(vd_dspc_section_first_tag(child));
+
+                if (!first) {
+                    PUT_LINE("<div class=\"carousel-item active\">");
+                    first = 1;
+                } else {
+                    PUT_LINE("<div class=\"carousel-item\">");
+                }
+
+                PUT_LINE("<img class=\"img-fluid\" src=\"%.*s\">", STR_EXPAND(child_image_path));
+
+                PUT_LINE("</div>");
+            }
+        PUT_LINE("</div>");
+
+        PUT_LINE("<button class=\"carousel-control-prev\" type=\"button\" data-bs-target=\"#%.*s\""
+                 "        data-bs-slide=\"prev\">",
+                 STR_EXPAND(carousel_tag_id));
+            PUT_LINE("<span class=\"carousel-control-prev-icon\" style=\"filter: invert(1) grayscale(100%%) brightness(200%%);\""
+                     "      aria-hidden=\"true\"></span>");
+            PUT_LINE("<span class=\"visually-hidden\">Previous</span>");
+        PUT_LINE("</button>");
+
+        PUT_LINE("<button class=\"carousel-control-next\" type=\"button\" data-bs-target=\"#%.*s\""
+                 "        data-bs-slide=\"next\">",
+                 STR_EXPAND(carousel_tag_id));
+            PUT_LINE("<span class=\"carousel-control-next-icon\" style=\"filter: invert(1) grayscale(100%%) brightness(200%%);\""
+                     "      aria-hidden=\"true\"></span>");
+            PUT_LINE("<span class=\"visually-hidden\">Next</span>");
+        PUT_LINE("</button>");
+    PUT_LINE("</div>");
+}
 
 static void process_copyright(VdDspcSection *section, FILE *out, int depth)
 {
@@ -79,7 +121,6 @@ static void process_copyright(VdDspcSection *section, FILE *out, int depth)
         PUT_LINE("<span class=\"text-muted flex-grow-0 text-end align-self-end\">This page was created with DOCUSPEC</span>");
     PUT_LINE("</div>");
 }
-
 
 static void process_br(VdDspcSection *section, FILE *out, int depth)
 {
@@ -151,7 +192,7 @@ static void process_text(VdDspcSection *section, FILE *out, int depth)
 
 static void process_code(VdDspcSection *section, FILE *out, int depth)
 {
-    PUT_LINE("<pre class=\"rounded copy\"><code class\"language-cpp\">");
+    PUT_LINE("<pre class=\"rounded copy\"><code class=\"language-cpp\">");
     VdDspcStrNode *node = vd_dspc_str_list_first_node(&section->text_content);
     Str s = make_str_from_str_node(node);
     for (usize i = 0; i < s.len; ++i) {
