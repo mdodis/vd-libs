@@ -21,6 +21,7 @@ typedef struct {
 typedef struct {
     Str         file_path_relative_to_source_dir;
     Str         title;
+    b32         notoc;
 } SourceFile;
 
 typedef struct {
@@ -33,6 +34,7 @@ typedef struct {
     Str                 source_dir;
     dynarray SourceFile *source_files;
     VdDspcDocument      document;
+    SourceFile          *current_source_file;
 } Workspace;
 
 static Str make_str_from_section_id(VdDspcSection *section);
@@ -40,10 +42,12 @@ static Str make_str_from_tag_name(VdDspcTag *tag);
 static Str make_str_from_tag_value(VdDspcTag *tag);
 static Str make_str_from_str_node(VdDspcStrNode *node);
 static Workspace *get_workspace(void);
+static SourceFile *get_current_source_file(void);
 static void process_child(VdDspcSection *section, FILE *out, int depth);
 static void process_children(VdDspcSection *section, FILE *out, int depth);
 static void process_verbatim_html(VdDspcSection *section, FILE *out, int depth);
 
+static void process_notoc(VdDspcSection *section, FILE *out, int depth);
 static void process_paste(VdDspcSection *section, FILE *out, int depth);
 static void process_api_remarks(VdDspcSection *section, FILE *out, int depth);
 static void process_api_params(VdDspcSection *section, FILE *out, int depth);
@@ -63,6 +67,7 @@ static void process_text(VdDspcSection *section, FILE *out, int depth);
 static void process_para(VdDspcSection *section, FILE *out, int depth);
 static Processor Processor_Table[] = {
     {LIT_INLINE("paste"),             process_paste},
+    {LIT_INLINE("notoc"),             process_notoc},
     {LIT_INLINE("api"),               process_api},
     {LIT_INLINE("api-decl"),          process_api_decl},
     {LIT_INLINE("api-details"),       process_api_details},
@@ -95,6 +100,10 @@ static Processor Processor_Table[] = {
 
 
 
+static void process_notoc(VdDspcSection *section, FILE *out, int depth)
+{
+    get_current_source_file()->notoc = VD_TRUE;
+}
 
 static void process_paste(VdDspcSection *section, FILE *out, int depth)
 {
@@ -517,6 +526,7 @@ int main(int argc, char const *argv[])
         str_builder_null_terminate(&bld);
         Str output_file = str_builder_compose(&bld, NULL);
 
+        workspace.current_source_file = source_file;
         FILE *f = fopen(output_file.s, "w");
         generate_html_for_tree(tree, f);
         fclose(f);
@@ -743,6 +753,11 @@ static Workspace *get_workspace(void)
     return Global_Workspace;
 }
 
+static SourceFile *get_current_source_file(void)
+{
+    return get_workspace()->current_source_file;
+}
+
 static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
 {
     PUT_LINE("<!DOCTYPE html>");
@@ -847,7 +862,9 @@ static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
     PUT_LINE("        integrity=\"sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI\"");
     PUT_LINE("        crossorigin=\"anonymous\"></script>");
     PUT_LINE("<script src=\"https://cdn.jsdelivr.net/npm/fuse.js@6.6.2/dist/fuse.min.js\"></script>");
-    PUT_LINE("<script src=\"/auto-toc.js\"></script>");
+    if (!get_current_source_file()->notoc) {
+        PUT_LINE("<script src=\"/auto-toc.js\"></script>");
+    }
     PUT_LINE("<script src=\"/search.js\"></script>");
     PUT_LINE("<script src=\"/index.js\"></script>");
 
@@ -866,6 +883,8 @@ static void collect_source_file(File *file, void *userdata)
     Workspace *workspace = (Workspace*)userdata;
     SourceFile new_source_file = {
         .file_path_relative_to_source_dir = str_dup(&workspace->global_arena, file->name),
+        .title = str_null(),
+        .notoc = VD_FALSE,
     };
     dynarray_add(workspace->source_files, new_source_file);
 }

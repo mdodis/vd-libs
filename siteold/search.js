@@ -7,7 +7,9 @@ fetch("/search-index.json")
         const options = {
           keys: ["contents"],
           includeScore: true,
-          threshold: 0.3
+          threshold: 0.4,
+          minMatchCharLength: 3,
+          ignoreLocation: true,
         };
         searchIndex = data;
 
@@ -30,6 +32,7 @@ function searchBoxDebounce(fn, delay) {
 
 function searchBoxRenderResults(results) {
     searchBoxResults.innerHTML = "";
+    searchBoxResults.scrollTop = 0;
     if (results.length === 0) {
         searchBoxResults.style.display = "none";
         return;
@@ -37,13 +40,26 @@ function searchBoxRenderResults(results) {
 
     results.forEach(result => {
         const li = document.createElement("li");
-        li.className = "list-group-item list-group-item-action search-result";
-        li.textContent = result.item.page + " - " + result.item.section;
+        li.className = "list-group-item d-flex align-items-start list-group-item-action search-result";
+        // li.textContent = result.item.page + " - " + result.item.section;
         li.tabIndex = 0;
+
+        const subheadingContainer = document.createElement("div");
+        subheadingContainer.className="ms-2 me-auto";
+        li.appendChild(subheadingContainer);
+
+        const subheading = document.createElement("div");
+        subheading.className = "fw-bold";
+        subheading.textContent = result.item.page;
+        subheadingContainer.appendChild(subheading);
+
+        const sectionText = document.createTextNode(result.item.section);
+        subheadingContainer.appendChild(sectionText);
 
         li.addEventListener("click", () => {
             const url = `${result.item.page}#${result.item.section}`;
             window.location.href = url;
+            searchBoxResults.style.display = "none";
         })
         searchBoxResults.appendChild(li);
     });

@@ -39,8 +39,26 @@ section, .apiitem {
     cursor: pointer;
 }
 
+#searchbox {
+    width: 100%;
+}
+
 .search-container {
     flex-grow: 0.2;
+    position: relative;
+    /*min-width: 320px;*/
+    display: flex;
+    flex-direction: column;
+}
+
+#search-results {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    max-height: 50vh;
+    overflow-y: scroll;
+    width: calc();
 }
 
 .page-break {

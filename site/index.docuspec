@@ -1,5 +1,6 @@
 @title("VD Libs")
 @category("landing")
+@notoc()
 
 @section("FAQ") {
     @accordion(id="faq") {
