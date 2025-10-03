@@ -86,6 +86,20 @@ int main() {
         @carousel-item("/assets/fw/window-simple-win32.png")
         @carousel-item("/assets/fw/window-simple-macos.png")
     }
+
+    @div(class="d-flex justify-content-end") {
+        @button(type="button" class="btn ms-2 btn-outline-success" onclick="window.print();") {
+            text {
+                PDF
+            }
+        }
+        @a(type="button" class="btn ms-2 btn-outline-success" href="https://raw.githubusercontent.com/mdodis/vd-libs/main/vd_fw.h") {
+            text {
+                Download
+            }
+        }
+    }
+    @br()
 }
 
 @section("Linking & Dependencies") {

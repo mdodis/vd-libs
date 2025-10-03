@@ -85,6 +85,7 @@ static Processor Processor_Table[] = {
     {LIT_INLINE("tblock"),            process_tblock},
     {LIT_INLINE("rev"),               process_rev},
     {LIT_INLINE("div"),               process_verbatim_html},
+    {LIT_INLINE("span"),              process_verbatim_html},
     {LIT_INLINE("img"),               process_verbatim_html},
     {LIT_INLINE("h5"),                process_verbatim_html},
     {LIT_INLINE("p"),                 process_verbatim_html},
@@ -557,7 +558,6 @@ int main(int argc, char const *argv[])
 
         search_and_add_indexed_sections(vd_dspc_tree_first_section(tree), &indexed_sections, &index_id);
 
-
         for (usize i = 0; i < dynarray_len(indexed_sections); ++i) {
             IndexedSection *indexed_section = &indexed_sections[i];
 
@@ -638,74 +638,6 @@ static void search_and_add_indexed_sections(VdDspcSection *section, IndexedSecti
 
     for (VdDspcSection *child = section->first; child; child = child->next) {
         search_and_add_indexed_sections(child, indexed_sections, index_id);
-    }
-}
-
-static void put_index_strings_for_section_index_entry(VdDspcSection *section, FILE *out)
-{
-    Str section_id = make_str_from_section_id(section);
-    if (str_eq(section_id, LIT("section"))) {
-        return;
-    }
-
-    for (VdDspcStrNode *node = vd_dspc_str_list_first_node(&section->text_content); node; node = vd_dspc_str_list_next_node(node)) {
-        Str text = make_str_from_str_node(node);
-
-        for (usize i = 0; i < text.len; ++i) {
-            char c = text.s[i];
-            int c_is_whitespace = 
-                (c == '\t') ||
-                (c == '\r') ||
-                (c == '\n') ||
-                (c == '\b');
-
-            if (c_is_whitespace) {
-                PUT(" ");
-            } else {
-                if (c == '\'' || c == '\"') {
-                    continue;
-                }
-                PUT("%c", text.s[i]);
-            }
-        }
-    }
-
-    for (VdDspcSection *child = section->first; child; child = child->next) {
-        put_index_strings_for_section_index_entry(child, out);
-    }
-}
-
-static void generate_index_entry_for_section(VdDspcSection *section, SourceFile *source_file, FILE *out, int *index_id)
-{
-    Str section_id = make_str_from_section_id(section);
-    if (0) {
-    } else if (str_eq(section_id, LIT("section"))) {
-        // Print out all text
-        if ((*index_id) == 0) {
-            PUT_LINE("{");
-        } else {
-            PUT_LINE(",{");
-        }
-
-        int written_id = (*index_id)++;
-
-        PUT_LINE("\"id\": %d,", written_id);
-        PUT_LINE("\"page\": \"%.*s.html\",", STR_EXPAND(source_file->title));
-        PUT("\"section\": \"");
-        output_section_id(section, out);
-        PUT("\",\n");
-
-        PUT("\"contents\": \"");
-        for (VdDspcSection *child = section->first; child; child = child->next) {
-            put_index_strings_for_section_index_entry(child, out);
-        }
-
-        PUT("\"");
-        PUT_LINE("}");
-    } else {
-        for (VdDspcSection *child = section->first; child; child = child->next) {
-            generate_index_entry_for_section(child, source_file, out, index_id);
-        }
     }
 }
 
