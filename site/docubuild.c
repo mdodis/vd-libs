@@ -38,6 +38,7 @@ static Workspace *get_workspace(void);
 static void process_child(VdDspcSection *section,   FILE *out, int depth);
 static void process_verbatim_html(VdDspcSection *section, FILE *out, int depth);
 
+static void process_rev(VdDspcSection *section, FILE *out, int depth);
 static void process_tblock(VdDspcSection *section, FILE *out, int depth);
 static void process_carousel(VdDspcSection *section, FILE *out, int depth);
 static void process_code(VdDspcSection *section, FILE *out, int depth);
@@ -57,6 +58,7 @@ static Processor Processor_Table[] = {
     {LIT_INLINE("para"),              process_para},
     {LIT_INLINE("verb"),              process_code},
     {LIT_INLINE("tblock"),            process_tblock},
+    {LIT_INLINE("rev"),               process_rev},
     {LIT_INLINE("div"),               process_verbatim_html},
     {LIT_INLINE("img"),               process_verbatim_html},
     {LIT_INLINE("h5"),                process_verbatim_html},
@@ -79,6 +81,32 @@ static Processor Processor_Table[] = {
 
 
 
+static void process_rev(VdDspcSection *section, FILE *out, int depth)
+{
+    PUT_LINE("<div class=\"list-group\">");
+    for (VdDspcSection *child = section->first; child; child = child->next) {
+        Str version_str = make_str_from_tag_value(vd_dspc_section_find_tag_with_name(child, "version"));
+        Str date_str = make_str_from_tag_value(vd_dspc_section_find_tag_with_name(child, "date"));
+        Str avail_str = make_str_from_tag_value(vd_dspc_section_find_tag_with_name(child, "available"));
+
+        if (str_eq(avail_str, LIT("no"))) {
+            PUT_LINE("<a class=\"list-group-item revision-planned\">");
+        } else {
+            PUT_LINE("<a class=\"list-group-item\">");
+        }
+                PUT_LINE("<div class=\"d-flex w-100 justify-content-between\">");
+
+                    PUT_LINE("<h5 class=\"mb-1\">%.*s</h5>", STR_EXPAND(version_str));
+                    PUT_LINE("<small class=\"text-body-secondary\">%.*s</small>", STR_EXPAND(date_str));
+                PUT_LINE("</div>");
+
+                PUT_LINE("<p class=\"mb-1\">");
+                    process_child(child->first, out, depth);
+                PUT_LINE("</p>");
+            PUT_LINE("</a>");
+    }
+    PUT_LINE("</div>");
+}
 
 static void process_tblock(VdDspcSection *section, FILE *out, int depth)
 {
@@ -266,6 +294,9 @@ static void process_section(VdDspcSection *section, FILE *out, int depth)
         process_child(child, out, depth + 1);
     }
     PUT_LINE("</section>");
+    if (depth != 1) {
+        PUT_LINE("<br>");
+    }
 }
 
 
