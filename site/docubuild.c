@@ -58,6 +58,11 @@ static Processor Processor_Table[] = {
     {LIT_INLINE("h5"),                process_verbatim_html},
     {LIT_INLINE("p"),                 process_verbatim_html},
     {LIT_INLINE("a"),                 process_verbatim_html},
+    {LIT_INLINE("table"),             process_verbatim_html},
+    {LIT_INLINE("tr"),                process_verbatim_html},
+    {LIT_INLINE("th"),                process_verbatim_html},
+    {LIT_INLINE("td"),                process_verbatim_html},
+    {LIT_INLINE("tbody"),             process_verbatim_html},
 };
 
 

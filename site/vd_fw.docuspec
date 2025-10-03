@@ -89,4 +89,178 @@ int main() {
     }
 }
 
+@section("Linking & Dependencies") {
+    text {
+        This library is distributed as a single, header-only file, thus the following instructions
+        are meant to be considered for your final application/dynamic library.
+        <br> <br>
+
+        In general, I make use of the up-to-date platform specific APIs, that should be available
+        with every distribution of said platform's development environment.
+        <br> <br>
+
+        Some preprocessor directives to set depending on your needs:
+    }
+
+    @table(class="table") {
+
+        @tr() {
+            @th(scope="col") { text { Option } }
+            @th(scope="col") { text { Description } }
+        }
+        @tbody() {
+            @tr() {
+                @td() { text{<code>VD_FW_VERSION_MAJOR</code>}}
+                @td() { text{Major version number of the library}}
+            }
+
+            @tr() {
+                @td() { text{<code>VD_FW_VERSION_MINOR</code>}}
+                @td() { text{Minor version number of the library}}
+            }
+
+            @tr() {
+                @td() { text{<code>VD_FW_VERSION_PATCH</code>}}
+                @td() { text{Patch version number of the library}}
+            }
+
+            @tr() {
+                @td() { text{<code>VD_FW_VERSION</code>}}
+                @td() { text{Combined version (major, minor, patch) number of the library}}
+            }
+
+            @tr() {
+                @td() { text{<code>#define VD_FW_STATIC</code>}}
+                @td() { text{Set to use this library statically.}}
+            }
+
+            @tr() {
+                @td() { text{<code>#define VD_FW_API // (static, extern, ...dllexport)</code>}}
+                @td() { text{Set to change the function signature (useful for precompiling the library).}}
+            }
+
+            @tr() {
+                @td() { text{<code>#define VD_FW_INL}}
+                @td() { text{Set to change the function signature (useful for precompiling the library).}}
+            }
+
+            @tr() {
+                @td() { text{<code>#define VD_FW_NO_CRT</code>}}
+                @td() {
+                    text {
+                        Options:
+                        <ul>
+                            <li>Set to '1' to disable including C standard library</li>
+                            <li>Set to '0' to enable including C standard library</li>
+                        </ul>
+                    }
+                }
+            }
+
+            @tr() {
+                @td() { text{<code>#define VD_FW_SIN</code>}}
+                @td() {
+                    text {
+                        Can be predefined to your implementation of sinf.
+                        Options:
+                        <ul>
+                            <li>If <code>VD_FW_NO_CRT == 1</code> it's resolved to libc <code>sinf</code></li>
+                            <li>If <code>VD_FW_NO_CRT == 0</code> it's resolved to vd_fw_sin (custom implementation).</li>
+                        </ul>
+                    }
+                }
+            }
+
+            @tr() {
+                @td() { text{<code>#define VD_FW_COS</code>}}
+                @td() {
+                    text {
+                        Can be predefined to your implementation of cosf.
+                        Options:
+                        <ul>
+                            <li>If <code>VD_FW_NO_CRT == 1</code> it's resolved to libc <code>cosf</code></li>
+                            <li>If <code>VD_FW_NO_CRT == 0</code> it's resolved to vd_fw_cos (custom implementation).</li>
+                        </ul>
+                    }
+                }
+            }
+
+            @tr() {
+                @td() { text{<code>#define VD_FW_TAN</code>}}
+                @td() {
+                    text {
+                        Can be predefined to your implementation of tanf.
+                        Options:
+                        <ul>
+                            <li>If <code>VD_FW_NO_CRT == 1</code> it's resolved to libc <code>tanf</code></li>
+                            <li>If <code>VD_FW_NO_CRT == 0</code> it's resolved to vd_fw_tan (custom implementation).</li>
+                        </ul>
+                    }
+                }
+            }
+
+            @tr() {
+                @td() { text{<code>#define VD_FW_SQRT</code>}}
+                @td() {
+                    text {
+                        Can be predefined to your implementation of sqrtf.
+                        Options:
+                        <ul>
+                            <li>If <code>VD_FW_NO_CRT == 1</code> it's resolved to libc <code>sqrtf</code></li>
+                            <li>If <code>VD_FW_NO_CRT == 0</code> it's resolved to vd_fw_sqrt (custom implementation).</li>
+                        </ul>
+                    }
+                }
+            }
+
+            @tr() {
+                @td() {
+                    text {
+                        <code>#define VD_FW_PREFER_DISCRETE_GPU</code><br>
+                        <code>// Or</code><br>
+                        <code>#define VD_FW_PREFER_INTEGRATED_GPU</code><br>
+                    }
+                }
+                @td() {
+                    text {
+                        Change the preferred GPU for the OpenGL context.
+                    }
+                }
+            }
+
+            @tr() {
+                @td() { text{<b>Win32 Specific</b>}}
+                @td() {}
+            }
+
+            @tr() {
+                @td() {
+                    text {
+                        <code>#define VD_FW_WIN32_SUBSYSTEM</code><br>
+                        <code>// Can be one of the following:</code><br>
+                        <code>// VD_FW_WIN32_SUBSYSTEM_CONSOLE</code><br>
+                        <code>// VD_FW_WIN32_SUBSYSTEM_WINDOWS</code>
+                    }
+                }
+                @td() {
+                    text {
+                        Change the <a href="https://learn.microsoft.com/en-us/cpp/build/reference/subsystem-specify-subsystem?view=msvc-170">Subsystem</a>
+                        (Windows only).
+                    }
+                }
+            }
+
+            @tr() {
+                @td() { text{<code>#define VD_FW_WIN32_NO_LINKER_COMMENTS</code>}}
+                @td() {
+                    text {
+                        Disable automatic linker comments (Windows only).
+                    }
+                }
+            }
+        }
+    }
+}
+
+
 
