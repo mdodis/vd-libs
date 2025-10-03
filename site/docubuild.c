@@ -38,6 +38,7 @@ static Workspace *get_workspace(void);
 static void process_child(VdDspcSection *section,   FILE *out, int depth);
 static void process_verbatim_html(VdDspcSection *section, FILE *out, int depth);
 
+static void process_code(VdDspcSection *section, FILE *out, int depth);
 static void process_copyright(VdDspcSection *section, FILE *out, int depth);
 static void process_br(VdDspcSection *section, FILE *out, int depth);
 static void process_accordion(VdDspcSection *section, FILE *out, int depth);
@@ -49,6 +50,7 @@ static Processor Processor_Table[] = {
     {LIT_INLINE("accordion"),         process_accordion},
     {LIT_INLINE("section"),           process_section},
     {LIT_INLINE("text"),              process_text},
+    {LIT_INLINE("verb"),              process_code},
     {LIT_INLINE("div"),               process_verbatim_html},
     {LIT_INLINE("img"),               process_verbatim_html},
     {LIT_INLINE("h5"),                process_verbatim_html},
@@ -145,6 +147,22 @@ static void process_text(VdDspcSection *section, FILE *out, int depth)
         node = vd_dspc_str_list_next_node(node);
     }
     PUT_LINE("</p>");
+}
+
+static void process_code(VdDspcSection *section, FILE *out, int depth)
+{
+    PUT_LINE("<pre class=\"rounded copy\"><code class\"language-cpp\">");
+    VdDspcStrNode *node = vd_dspc_str_list_first_node(&section->text_content);
+    Str s = make_str_from_str_node(node);
+    for (usize i = 0; i < s.len; ++i) {
+        char c = s.s[i];
+
+        if (c == '\r') {
+            continue;
+        }
+        PUT("%c", c);
+    }
+    PUT_LINE("</code></pre>");
 }
 
 static void process_section(VdDspcSection *section, FILE *out, int depth)
@@ -425,6 +443,8 @@ static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
         PUT_LINE("</div>");
     PUT_LINE("</div>");
 
+    PUT_LINE("<script src=\"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js\"></script>");
+    PUT_LINE("<script>hljs.highlightAll();</script>");
     PUT_LINE("<script src=\"https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js\"");
     PUT_LINE("        integrity=\"sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI\"");
     PUT_LINE("        crossorigin=\"anonymous\"></script>");

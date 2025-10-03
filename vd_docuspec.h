@@ -129,6 +129,7 @@ typedef enum {
     VD_DSPC__TOKEN_TYPE_SECTION_END,
     VD_DSPC__TOKEN_TYPE_TEXT_CONTENT,
     VD_DSPC__TOKEN_TYPE_ASSIGNMENT,
+    VD_DSPC__TOKEN_TYPE_CODE_CONTENT,
     VD_DSPC__TOKEN_TYPE_END        = -1,
 } VdDspc__TokenType;
 
@@ -138,6 +139,7 @@ typedef struct VdDspc__Token {
     union {
         VdDspcStrList text_content;
         VdDspcStr     quoted_string;
+        VdDspcStr     verbatim_string;
     } dat;
 } VdDspc__Token;
 
@@ -238,6 +240,7 @@ static VdDspcTag*      vd_dspc__push_tag(VdDspcDocument *doc, VdDspcSection *sec
 
 /* ----STRLIST------------------------------------------------------------------------------------------------------- */
 static void            vd_dspc__str_list_push_token(VdDspcDocument *doc, VdDspcStrList *list, VdDspc__Token *tok);
+static void            vd_dspc__str_list_push_verbatim(VdDspcDocument *doc, VdDspcStrList *list, VdDspc__Token *tok);
 static VdDspcStrNode*  vd_dspc__push_str_node(VdDspcDocument *doc);
 
 /* ----LEXER--------------------------------------------------------------------------------------------------------- */
@@ -249,6 +252,7 @@ static void            vd_dspc__lex_consume(VdDspc__Lex *lex, VdDspc__Token *tok
 static VdDspc__Token   vd_dspc__token_new(VdDspc__Lex *lex, VdDspc__TokenType type);
 static void            vd_dspc__token_log(VdDspc__Token *tok);
 static int             vd_dspc__skip_whitespace_all(VdDspc__Lex *lex);
+static int             vd_dspc__skip_newlines(VdDspc__Lex *lex);
 static VdDspc__Lex     vd_dspc__lex_save(VdDspc__Lex *lex);
 static void            vd_dspc__lex_load(VdDspc__Lex *target, VdDspc__Lex *src);
 
@@ -492,6 +496,16 @@ static int vd_dspc__lang_section(VdDspcDocument *doc)
         VdDspcSection *new_section  = vd_dspc__push_section(doc, id_begin_string, id_len_string);
         new_section->text_content = token.dat.text_content;
         return 1;
+    } else if (token.type == VD_DSPC__TOKEN_TYPE_CODE_CONTENT) {
+        vd_dspc__lex_consume(&doc->lexstate, &token);
+
+        const char *id_begin_string = "verb";
+        size_t id_len_string        = 4;
+        VdDspcSection *new_section  = vd_dspc__push_section(doc, id_begin_string, id_len_string);
+        VdDspcStrList list = {0};
+        vd_dspc__str_list_push_verbatim(doc, &list, &token);
+        new_section->text_content = list;
+        return 1;
     }
 
     return 0;
@@ -589,71 +603,149 @@ static VdDspc__Token vd_dspc__lex_token(VdDspcDocument *doc, VdDspc__Lex *lex)
 
                 result.type = VD_DSPC__TOKEN_TYPE_ID;
 
-                const char *text = "text";
-                size_t text_len = 4;
-                int id_is_equal_to_text = 0;
-                size_t id_size = result.lexstate.cur_fwd - result.lexstate.cur_back;
+                // TEXT CONTENT
+                {
+                    const char *text = "text";
+                    size_t text_len = 4;
+                    int id_is_equal_to_text = 0;
+                    size_t id_size = result.lexstate.cur_fwd - result.lexstate.cur_back;
 
-                if (id_size == text_len) {
-                    const char *content = result.lexstate.content;
-                    id_is_equal_to_text = 
-                        (content[result.lexstate.cur_back + 0] == text[0]) &&
-                        (content[result.lexstate.cur_back + 1] == text[1]) &&
-                        (content[result.lexstate.cur_back + 2] == text[2]) &&
-                        (content[result.lexstate.cur_back + 3] == text[3]);
+                    if (id_size == text_len) {
+                        const char *content = result.lexstate.content;
+                        id_is_equal_to_text = 
+                            (content[result.lexstate.cur_back + 0] == text[0]) &&
+                            (content[result.lexstate.cur_back + 1] == text[1]) &&
+                            (content[result.lexstate.cur_back + 2] == text[2]) &&
+                            (content[result.lexstate.cur_back + 3] == text[3]);
 
-                    if (id_is_equal_to_text) {
-                        result.type = VD_DSPC__TOKEN_TYPE_TEXT_CONTENT;
-                        // Go into inner loop to get the text content
+                        if (id_is_equal_to_text) {
+                            result.type = VD_DSPC__TOKEN_TYPE_TEXT_CONTENT;
+                            // Go into inner loop to get the text content
 
-                        // Skip whitespace and find '{'
-                        vd_dspc__skip_whitespace_all(&result.lexstate);
+                            // Skip whitespace and find '{'
+                            vd_dspc__skip_whitespace_all(&result.lexstate);
 
-                        if (vd_dspc__lex_char(&result.lexstate) != '{') {
-                            VD_DSPC_LOG("Error: %llu:%llu Expected \'{\' after \'text\' section.",
-                                        result.lexstate.line + 1, result.lexstate.column + 1);
-                            result.type = VD_DSPC__TOKEN_TYPE_UNKNOWN;
-                            return result;
-                        }
-                        vd_dspc__lex_nextn(&result.lexstate, 1);
+                            if (vd_dspc__lex_char(&result.lexstate) != '{') {
+                                VD_DSPC_LOG("Error: %llu:%llu Expected \'{\' after \'text\' section.",
+                                            result.lexstate.line + 1, result.lexstate.column + 1);
+                                result.type = VD_DSPC__TOKEN_TYPE_UNKNOWN;
+                                return result;
+                            }
+                            vd_dspc__lex_nextn(&result.lexstate, 1);
 
-                        // Skip leading whitespace, if any
-                        vd_dspc__skip_whitespace_all(&result.lexstate);
+                            // Skip leading whitespace, if any
+                            vd_dspc__skip_whitespace_all(&result.lexstate);
 
-                        VdDspc__Token text_content_token = result;
-                        text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
+                            VdDspc__Token text_content_token = result;
+                            text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
 
-                        int text_parsing_ended = 0;
+                            int text_parsing_ended = 0;
 
-                        VdDspcStrList list = {0};
+                            VdDspcStrList list = {0};
 
-                        while (!text_parsing_ended) {
+                            while (!text_parsing_ended) {
 
-                            c = vd_dspc__lex_char(&text_content_token.lexstate);
+                                c = vd_dspc__lex_char(&text_content_token.lexstate);
 
-                            if (c == '}') {
-                                text_parsing_ended = 1;
-                                continue;
+                                if (c == '}') {
+                                    text_parsing_ended = 1;
+                                    continue;
+                                }
+
+                                if (vd_dspc__is_consumable_whitespace(c)) {
+                                    vd_dspc__str_list_push_token(doc, &list, &text_content_token);
+
+                                    vd_dspc__skip_whitespace_all(&text_content_token.lexstate);
+                                    text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
+                                } else {
+                                    vd_dspc__lex_nextn(&text_content_token.lexstate, 1);
+                                }
                             }
 
-                            if (vd_dspc__is_consumable_whitespace(c)) {
+                            if (text_content_token.lexstate.cur_fwd != text_content_token.lexstate.cur_back) {
                                 vd_dspc__str_list_push_token(doc, &list, &text_content_token);
-
-                                vd_dspc__skip_whitespace_all(&text_content_token.lexstate);
-                                text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
-                            } else {
-                                vd_dspc__lex_nextn(&text_content_token.lexstate, 1);
                             }
+
+                            vd_dspc__lex_nextn(&text_content_token.lexstate, 1);
+
+                            result.lexstate.cur_fwd = text_content_token.lexstate.cur_fwd;
+                            result.dat.text_content = list;
+                            break;
                         }
+                    }
+                }
 
-                        if (text_content_token.lexstate.cur_fwd != text_content_token.lexstate.cur_back) {
-                            vd_dspc__str_list_push_token(doc, &list, &text_content_token);
+                // CODE CONTENT
+                {
+                    const char *code = "verb";
+                    size_t code_len = 4;
+                    int id_is_equal_to_code = 0;
+                    size_t id_size = result.lexstate.cur_fwd - result.lexstate.cur_back;
+
+                    if (id_size == code_len) {
+                        const char *content = result.lexstate.content;
+                        id_is_equal_to_code = 
+                            (content[result.lexstate.cur_back + 0] == code[0]) &&
+                            (content[result.lexstate.cur_back + 1] == code[1]) &&
+                            (content[result.lexstate.cur_back + 2] == code[2]) &&
+                            (content[result.lexstate.cur_back + 3] == code[3]);
+
+                        if (id_is_equal_to_code) {
+                            result.type = VD_DSPC__TOKEN_TYPE_CODE_CONTENT;
+                            vd_dspc__skip_whitespace_all(&result.lexstate);
+
+                            // Check for ```
+                            {
+                                int count = 0;
+
+                                while (count < 3) {
+                                    if (vd_dspc__lex_char(&result.lexstate) != '`') {
+                                        VD_DSPC_LOG("Error: %llu:%llu Expected \'```\' after \'code\' section.",
+                                                    result.lexstate.line + 1, result.lexstate.column + 1);
+                                        result.type = VD_DSPC__TOKEN_TYPE_UNKNOWN;
+                                        return result;
+                                    }
+                                    vd_dspc__lex_nextn(&result.lexstate, 1);
+                                    count++;
+                                }
+                            }
+
+                            vd_dspc__skip_newlines(&result.lexstate);
+
+                            VdDspc__Token code_content_token = result;
+                            code_content_token.lexstate.cur_back = code_content_token.lexstate.cur_fwd;
+                            int text_parsing_ended = 0;
+
+                            while (!text_parsing_ended) {
+
+                                c = vd_dspc__lex_char(&code_content_token.lexstate);
+
+                                if (c == '`') {
+                                    int count = 0;
+
+                                    while (count < 3) {
+                                        if (vd_dspc__lex_char(&code_content_token.lexstate) != '`') {
+                                            break;
+                                        }
+                                        vd_dspc__lex_nextn(&code_content_token.lexstate, 1);
+                                        count++;
+                                    }
+
+                                    if (count == 3) {
+                                        text_parsing_ended = 1;
+                                        continue;
+                                    }
+                                } else {
+                                    vd_dspc__lex_nextn(&code_content_token.lexstate, 1);
+                                }
+
+                            }
+
+                            result.dat.verbatim_string.s = vd_dspc__token_string_begin(&code_content_token);
+                            result.dat.verbatim_string.l = vd_dspc__token_string_size(&code_content_token) - 3;
+                            result.lexstate.cur_fwd = code_content_token.lexstate.cur_fwd;
+                            break;
                         }
-
-                        vd_dspc__lex_nextn(&text_content_token.lexstate, 1);
-
-                        result.lexstate.cur_fwd = text_content_token.lexstate.cur_fwd;
-                        result.dat.text_content = list;
                     }
                 }
             }
@@ -710,6 +802,28 @@ static int vd_dspc__skip_whitespace_all(VdDspc__Lex *lex)
 
     if (any_whitespace_skipped) {
         if (vd_dspc__is_whitespace(c)) {
+            vd_dspc__lex_nextn(lex, 1);
+        }
+        lex->cur_back = lex->cur_fwd;
+    }
+
+    return 1;
+}
+
+static int vd_dspc__skip_newlines(VdDspc__Lex *lex)
+{
+    int c = vd_dspc__lex_char(lex);
+    int any_whitespace_skipped = 0;
+    while (vd_dspc__is_newline(c)) {
+        if (!vd_dspc__lex_nextn(lex, 1)) {
+            return 0;
+        }
+        any_whitespace_skipped = 1;
+        c = vd_dspc__lex_char(lex);
+    }
+
+    if (any_whitespace_skipped) {
+        if (vd_dspc__is_newline(c)) {
             vd_dspc__lex_nextn(lex, 1);
         }
         lex->cur_back = lex->cur_fwd;
@@ -823,6 +937,22 @@ static void vd_dspc__str_list_push_token(VdDspcDocument *doc, VdDspcStrList *lis
     node->len = tok->lexstate.cur_fwd - tok->lexstate.cur_back;
 }
 
+static void vd_dspc__str_list_push_verbatim(VdDspcDocument *doc, VdDspcStrList *list, VdDspc__Token *tok)
+{
+    VdDspcStrNode *node = vd_dspc__push_str_node(doc);
+    if (list->first == 0) {
+        list->first = node;
+        list->last = node;
+    } else {
+        node->prev = list->last;
+        list->last->next = node;
+        list->last = node;
+    }
+
+    node->str = tok->dat.verbatim_string.s;
+    node->len = tok->dat.verbatim_string.l;
+}
+
 static VdDspcTree *vd_dspc__tree(VdDspcDocument *doc)
 {
     return (doc->sentinel.prev == &doc->sentinel) ? 0 : doc->sentinel.prev;
@@ -927,6 +1057,7 @@ static char *vd_dspc__token_type_to_string(VdDspc__TokenType ttype)
         case VD_DSPC__TOKEN_TYPE_SECTION_END:   return "section_end";
         case VD_DSPC__TOKEN_TYPE_TEXT_CONTENT:  return "text_content";
         case VD_DSPC__TOKEN_TYPE_ASSIGNMENT:    return "=";
+        case VD_DSPC__TOKEN_TYPE_CODE_CONTENT:  return "code";
         default: break;
     }
 
