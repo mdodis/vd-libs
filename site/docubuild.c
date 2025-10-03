@@ -38,6 +38,7 @@ static Workspace *get_workspace(void);
 static void process_child(VdDspcSection *section,   FILE *out, int depth);
 static void process_verbatim_html(VdDspcSection *section, FILE *out, int depth);
 
+static void process_tblock(VdDspcSection *section, FILE *out, int depth);
 static void process_carousel(VdDspcSection *section, FILE *out, int depth);
 static void process_code(VdDspcSection *section, FILE *out, int depth);
 static void process_copyright(VdDspcSection *section, FILE *out, int depth);
@@ -45,6 +46,7 @@ static void process_br(VdDspcSection *section, FILE *out, int depth);
 static void process_accordion(VdDspcSection *section, FILE *out, int depth);
 static void process_section(VdDspcSection *section, FILE *out, int depth);
 static void process_text(VdDspcSection *section, FILE *out, int depth);
+static void process_para(VdDspcSection *section, FILE *out, int depth);
 static Processor Processor_Table[] = {
     {LIT_INLINE("copyright"),         process_copyright},
     {LIT_INLINE("br"),                process_br},
@@ -52,7 +54,9 @@ static Processor Processor_Table[] = {
     {LIT_INLINE("carousel"),          process_carousel},
     {LIT_INLINE("section"),           process_section},
     {LIT_INLINE("text"),              process_text},
+    {LIT_INLINE("para"),              process_para},
     {LIT_INLINE("verb"),              process_code},
+    {LIT_INLINE("tblock"),            process_tblock},
     {LIT_INLINE("div"),               process_verbatim_html},
     {LIT_INLINE("img"),               process_verbatim_html},
     {LIT_INLINE("h5"),                process_verbatim_html},
@@ -76,6 +80,21 @@ static Processor Processor_Table[] = {
 
 
 
+static void process_tblock(VdDspcSection *section, FILE *out, int depth)
+{
+    PUT_LINE("<pre class=\"rounded copy\"><code class=\"language-txt\">");
+    VdDspcStrNode *node = vd_dspc_str_list_first_node(&section->first->text_content);
+    Str s = make_str_from_str_node(node);
+    for (usize i = 0; i < s.len; ++i) {
+        char c = s.s[i];
+
+        if (c == '\r') {
+            continue;
+        }
+        PUT("%c", c);
+    }
+    PUT_LINE("</code></pre>");
+}
 
 static void process_carousel(VdDspcSection *section, FILE *out, int depth)
 {
@@ -184,6 +203,17 @@ static void process_accordion(VdDspcSection *section, FILE *out, int depth)
 
 static void process_text(VdDspcSection *section, FILE *out, int depth)
 {
+    VdDspcStrNode *node = vd_dspc_str_list_first_node(&section->text_content);
+    while (node) {
+
+        PUT_LINE("%.*s", STR_EXPAND(make_str_from_str_node(node)));
+
+        node = vd_dspc_str_list_next_node(node);
+    }
+}
+
+static void process_para(VdDspcSection *section, FILE *out, int depth)
+{
     PUT_LINE("<p>");
     VdDspcStrNode *node = vd_dspc_str_list_first_node(&section->text_content);
     while (node) {
@@ -221,6 +251,8 @@ static void process_section(VdDspcSection *section, FILE *out, int depth)
             PUT("%c", uppercase_to_lowercase(c));
         } else if (c == ' ') {
             PUT("-");
+        } else if (c == '&') {
+            PUT("and");
         } else {
             PUT("%c", c);
         }

@@ -8,19 +8,18 @@
          class="span-image")
 
 
-    text {
-
+    para {
         A library that gets you a semi-customizable window and an OpenGL context, minimizing dependencies and hiding the
         complexities of doing proper windowing on each platform.
     }
 
-    text {
+    para {
         It's written with performance in mind; though performance is not the main focus of it.
         <b>Maintainability</b>, <b>support</b> for the defined feature set and <b>ease of use</b>
         are the primary targets of this library.
     }
 
-    text {
+    para {
         <b>Why should you use this library over, GLFW, SDL, SFML, ...?</b>
         <br>
 
@@ -43,7 +42,7 @@
         each platform.
     }
 
-    text {
+    para {
         One common example is that almost every popular windowing library on Windows does not allow
         the developer to draw while resizing or moving the window.
 
@@ -62,7 +61,7 @@
         }
     }
 
-    text {
+    para {
         Here is all you need (and should need) to create a simple window.
         <br>
         By default it creates an OpenGL 3.3 core profile context:
@@ -90,7 +89,7 @@ int main() {
 }
 
 @section("Linking & Dependencies") {
-    text {
+    para {
         This library is distributed as a single, header-only file, thus the following instructions
         are meant to be considered for your final application/dynamic library.
         <br> <br>
@@ -260,7 +259,190 @@ int main() {
             }
         }
     }
+
+    @section("Windows") {
+        para {
+            With MSVC you don't really need to link anything, since linker directives in the
+            translation unit that includes vd_fw.h are defined, so that the appropriate libraries
+            and subsystem are used. But for reference, here they are:
+
+            <ol class="list-group">
+                <li class="list-group-item">User32</li>
+                <li class="list-group-item">OpenGL32</li>
+                <li class="list-group-item">Dwmapi</li>
+                <li class="list-group-item">Shcore</li>
+                <li class="list-group-item">Gdi32</li>
+                <li class="list-group-item">uxtheme</li>
+                <li class="list-group-item">shell32</li>
+                <li class="list-group-item">kernel32</li>
+                <li class="list-group-item">winmm</li>
+            </ol>
+            <br>
+        }
+
+        para {
+
+            To set the subsystem of the application: 
+            <ul>
+                <li> Windows: <code>#define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS</code> </li>
+                <li> Console: <code>#define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_CONSOLE</code> </li>
+            </ul>
+        }
+
+        para {
+            If you're on the Windows subsystem, but would still like a console for debugging purposes, this
+            can be done by setting <code>VdFwInitInfo::gl_options::debug_on = 1</code> when calling
+            <code>vd_fw_init</code>.
+
+            <br>
+            This will allocate a console and set-up the relevant gl debug callback for you.
+        }
+
+        para {
+            It's highly recommended to <code>#define VD_FW_NO_CRT 1</code> so that the CRT is removed
+            when linking. This can reduce the final executable size by a factor of 10 (for small applications).
+        }
+
+        para {
+            If you'd like to define options by yourself,
+            <code>#define VD_FW_WIN32_NO_LINKER_COMMENTS</code> before including the implementation.
+        }
+    }
+
+    @section("MacOS") {
+        para {
+            For MacOS, it's a bit different. with clang, you must link several frameworks (via 
+            <code>-framework framework_name</code>). itionally, <code>-x objective-c</code> must be used since the
+            Mac APIs use Objective-C.
+
+            <ol class="list-group">
+                <li class="list-group-item">pthread (compiler flag)</li>
+                <li class="list-group-item">Cocoa</li>
+                <li class="list-group-item">Metal</li>
+                <li class="list-group-item">QuartzCore</li>
+                <li class="list-group-item">CoreGraphics</li>
+                <li class="list-group-item">IOSurface</li>
+                <li class="list-group-item">IOKit</li>
+                <li class="list-group-item">Foundation</li>
+                <li class="list-group-item">OpenGL</li>
+            </ol>
+        }
+
+        para {
+            OpenGL on MacOS is deprecated, and including it will throw a ton of warnings about
+            each function. Its maximum supported version of OpenGL is <b>4.1</b>.
+        }
+
+        para {
+            To disable those warnings, you can create the following header file and use it
+            before and after including vd_fw.h:
+        }
+
+        verb ```
+#ifndef DISABLE_CLANG_DEPRECATIONS_H1
+#define DISABLE_CLANG_DEPRECATIONS_H1
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif // defined(__clang__)
+#else
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif // defined(__clang__)
+#endif // DISABLE_CLANG_DEPRECATIONS_H1
+        ```
+    }
 }
 
+@section("Support") {
+    @tblock() {
+        verb```
+zlib License
 
+(C) Copyright 2025-2026 Michael Dodis (michaeldodisgr@gmail.com)
+ This software is provided 'as-is', without any express or implied
+warranty.  In no event will the authors be held liable for any damages
+arising from the use of this software.
 
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would be
+   appreciated but is not required.
+2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+3. This notice may not be removed or altered from any source distribution.
+        ```
+    }
+
+    para {
+        As stated in the license, no warranty or guarantee is provided by the use of this library.
+    }
+
+    para {
+        That being said, I will look at issues when I have the time, and/or if they are important to the core
+        principles of this library.
+    }
+
+    para {
+        <a class="link-opacity-100" href="https://github.com/mdodis/vd-libs/issues/new">Submit issues here</a>
+    }
+
+    @section("Platforms") {
+        para {
+            Due to platform limitations, platform-specific APIs and frameworks, vd_fw.h will
+            never have support for some platforms. One example is Android, where Java is required.
+        }
+
+        para {
+            Though, I'm still thinking about how this can be done easily, so I will leave the possibility
+            open.
+        }
+
+        @table(class="table") {
+            @tr() {
+                @th(scope="col") {text{Platform}}
+                @th(scope="col") {text{Supported}}
+            }
+            @tbody() {
+                @tr() {
+                    @td(){text{Windows}}
+                    @td(class="table-success"){text{Yes}}
+                }
+                @tr() {
+                    @td(){text{MacOS}}
+                    @td(class="table-warning"){text{In Progress}}
+                }
+                @tr() {
+                    @td(){text{Linux (X11)}}
+                    @td(class="table-warning"){text{Coming soon...}}
+                }
+                @tr() {
+                    @td(){text{Linux (Wayland)}}
+                    @td(){text{Planned}}
+                }
+                @tr() {
+                    @td(){text{iOS}}
+                    @td(){text{Planned}}
+                }
+                @tr() {
+                    @td(){text{Android}}
+                    @td(){text{Not Planned}}
+                }
+                @tr() {
+                    @td(){text{Web}}
+                    @td(){text{Not Planned}}
+                }
+            }
+        }
+    }
+
+    @section("Revisions") {
+
+    }
+}
+
+@copyright()

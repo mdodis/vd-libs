@@ -56,7 +56,7 @@
 @br()
 
 @section("Purpose") {
-    text {
+    para {
         Dear reader,
 
         <br> <br>
@@ -174,7 +174,7 @@
 }
 
 @section("About Me") {
-    text {
+    para {
         Hi, I'm Michael Dodis.<br>
         A software engineer from Greece, and I love working on low-level stuff,
         graphics especially.

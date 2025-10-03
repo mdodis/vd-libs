@@ -128,6 +128,7 @@ typedef enum {
     VD_DSPC__TOKEN_TYPE_SECTION_BEGIN,
     VD_DSPC__TOKEN_TYPE_SECTION_END,
     VD_DSPC__TOKEN_TYPE_TEXT_CONTENT,
+    VD_DSPC__TOKEN_TYPE_PARAGRAPH,
     VD_DSPC__TOKEN_TYPE_ASSIGNMENT,
     VD_DSPC__TOKEN_TYPE_CODE_CONTENT,
     VD_DSPC__TOKEN_TYPE_END        = -1,
@@ -373,6 +374,16 @@ VD_DSPC_API int vd_dspc_str_list_is_empty(VdDspcStrList *list)
 }
 
 /* ----PARSER IMPL--------------------------------------------------------------------------------------------------- */
+static void vd_dspc__lang_text_content(VdDspcDocument *doc, VdDspc__Token *token, const char *identifier, size_t identifier_size)
+{
+    vd_dspc__lex_consume(&doc->lexstate, token);
+
+    const char *id_begin_string = identifier;
+    size_t id_len_string        = identifier_size;
+    VdDspcSection *new_section  = vd_dspc__push_section(doc, id_begin_string, id_len_string);
+    new_section->text_content = token->dat.text_content;
+}
+
 static int vd_dspc__lang_section(VdDspcDocument *doc)
 {
     VdDspc__Token token = vd_dspc__lex_token(doc, &doc->lexstate);
@@ -489,12 +500,10 @@ static int vd_dspc__lang_section(VdDspcDocument *doc)
 
         return 1;
     } else if (token.type == VD_DSPC__TOKEN_TYPE_TEXT_CONTENT) {
-        vd_dspc__lex_consume(&doc->lexstate, &token);
-
-        const char *id_begin_string = "text";
-        size_t id_len_string        = 4;
-        VdDspcSection *new_section  = vd_dspc__push_section(doc, id_begin_string, id_len_string);
-        new_section->text_content = token.dat.text_content;
+        vd_dspc__lang_text_content(doc, &token, "text", 4);
+        return 1;
+    } else if (token.type == VD_DSPC__TOKEN_TYPE_PARAGRAPH) {
+        vd_dspc__lang_text_content(doc, &token, "para", 4);
         return 1;
     } else if (token.type == VD_DSPC__TOKEN_TYPE_CODE_CONTENT) {
         vd_dspc__lex_consume(&doc->lexstate, &token);
@@ -545,6 +554,80 @@ static int vd_dspc__lex_char(VdDspc__Lex *lex)
     }
 
     return lex->content[lex->cur_fwd];
+}
+
+static int vd_dspc__lex_literal(VdDspcDocument *doc, VdDspc__Token *result, const char *identifier, size_t identifier_size, VdDspc__TokenType resulting_type)
+{
+    const char *text = identifier;
+    size_t text_len = identifier_size;
+    int id_is_equal_to_text = 0;
+    size_t id_size = result->lexstate.cur_fwd - result->lexstate.cur_back;
+
+    if (id_size == text_len) {
+        const char *content = result->lexstate.content;
+        id_is_equal_to_text = 
+            (content[result->lexstate.cur_back + 0] == text[0]) &&
+            (content[result->lexstate.cur_back + 1] == text[1]) &&
+            (content[result->lexstate.cur_back + 2] == text[2]) &&
+            (content[result->lexstate.cur_back + 3] == text[3]);
+
+        if (id_is_equal_to_text) {
+            result->type = resulting_type;
+            // Go into inner loop to get the text content
+
+            // Skip whitespace and find SECTION BEGIN
+            vd_dspc__skip_whitespace_all(&result->lexstate);
+
+            if (vd_dspc__lex_char(&result->lexstate) != '{') {
+                VD_DSPC_LOG("Error: %llu:%llu Expected \'{\' after \'text\' section.",
+                            result->lexstate.line + 1, result->lexstate.column + 1);
+                result->type = VD_DSPC__TOKEN_TYPE_UNKNOWN;
+                return 0;
+            }
+            vd_dspc__lex_nextn(&result->lexstate, 1);
+
+            // Skip leading whitespace, if any
+            vd_dspc__skip_whitespace_all(&result->lexstate);
+
+            VdDspc__Token text_content_token = *result;
+            text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
+
+            int text_parsing_ended = 0;
+
+            VdDspcStrList list = {0};
+
+            while (!text_parsing_ended) {
+
+                int c = vd_dspc__lex_char(&text_content_token.lexstate);
+
+                if (c == '}') {
+                    text_parsing_ended = 1;
+                    continue;
+                }
+
+                if (vd_dspc__is_consumable_whitespace(c)) {
+                    vd_dspc__str_list_push_token(doc, &list, &text_content_token);
+
+                    vd_dspc__skip_whitespace_all(&text_content_token.lexstate);
+                    text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
+                } else {
+                    vd_dspc__lex_nextn(&text_content_token.lexstate, 1);
+                }
+            }
+
+            if (text_content_token.lexstate.cur_fwd != text_content_token.lexstate.cur_back) {
+                vd_dspc__str_list_push_token(doc, &list, &text_content_token);
+            }
+
+            vd_dspc__lex_nextn(&text_content_token.lexstate, 1);
+
+            result->lexstate.cur_fwd = text_content_token.lexstate.cur_fwd;
+            result->dat.text_content = list;
+            return 1;
+        }
+    }
+
+    return 0;
 }
 
 static VdDspc__Token vd_dspc__lex_token(VdDspcDocument *doc, VdDspc__Lex *lex)
@@ -604,7 +687,15 @@ static VdDspc__Token vd_dspc__lex_token(VdDspcDocument *doc, VdDspc__Lex *lex)
                 result.type = VD_DSPC__TOKEN_TYPE_ID;
 
                 // TEXT CONTENT
-                {
+                if (vd_dspc__lex_literal(doc, &result, "text", 4, VD_DSPC__TOKEN_TYPE_TEXT_CONTENT)) {
+                    break;
+                }
+
+                if (vd_dspc__lex_literal(doc, &result, "para", 4, VD_DSPC__TOKEN_TYPE_PARAGRAPH)) {
+                    break;
+                }
+
+                if (0) {
                     const char *text = "text";
                     size_t text_len = 4;
                     int id_is_equal_to_text = 0;
@@ -1056,6 +1147,7 @@ static char *vd_dspc__token_type_to_string(VdDspc__TokenType ttype)
         case VD_DSPC__TOKEN_TYPE_SECTION_BEGIN: return "section_begin";
         case VD_DSPC__TOKEN_TYPE_SECTION_END:   return "section_end";
         case VD_DSPC__TOKEN_TYPE_TEXT_CONTENT:  return "text_content";
+        case VD_DSPC__TOKEN_TYPE_PARAGRAPH:     return "paragraph";
         case VD_DSPC__TOKEN_TYPE_ASSIGNMENT:    return "=";
         case VD_DSPC__TOKEN_TYPE_CODE_CONTENT:  return "code";
         default: break;
