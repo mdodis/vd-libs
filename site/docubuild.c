@@ -485,6 +485,7 @@ int main(int argc, char const *argv[])
         VD_RETURN_SCRATCH_ARENA(temp_arena);
     }
 
+    // Generate html for all source files
     for (VdDspcTree *tree = vd_dspc_document_first_tree(&workspace.document); tree; tree = vd_dspc_document_next_tree(&workspace.document, tree)) {
         Arena *temp_arena = VD_GET_SCRATCH_ARENA();
         SourceFile *source_file = (SourceFile*)tree->userdata;
@@ -504,6 +505,23 @@ int main(int argc, char const *argv[])
         FILE *f = fopen(output_file.s, "w");
         generate_html_for_tree(tree, f);
         fclose(f);
+
+        VD_RETURN_SCRATCH_ARENA(temp_arena);
+    }
+
+    // Generate search-index.json
+    for (VdDspcTree *tree = vd_dspc_document_first_tree(&workspace.document); tree; tree = vd_dspc_document_next_tree(&workspace.document, tree)) {
+        Arena *temp_arena = VD_GET_SCRATCH_ARENA();
+        SourceFile *source_file = (SourceFile*)tree->userdata;
+        StrBuilder bld;
+        str_builder_init(&bld, temp_arena);
+        str_builder_push_cstr(&bld, directory_to_write_to);
+        str_builder_push_str(&bld, LIT("search-index.json"));
+        str_builder_null_terminate(&bld);
+        const char *output_file = str_builder_compose(&bld, NULL).s;
+
+        // FILE *f = fopen(output_file, "w");
+        // fprintf(f, "{\n");
 
         VD_RETURN_SCRATCH_ARENA(temp_arena);
     }
@@ -624,6 +642,11 @@ static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
                             PUT_LINE("</li>");
                             PUT_LINE("<!--   End Files -->");
                         PUT_LINE("</ul>");
+                        PUT_LINE("<div class=\"search-container ms-auto me-auto me-sm-0\">");
+                            PUT_LINE("<input type=\"search\" id=\"searchbox\" class=\"form-control\" placeholder=\"Search\" aria-label=\"Search\" autocomplete=\"off\" autofocus>");
+                            PUT_LINE("<ul id=\"search-results\" class=\"list-group position-absolute\" style=\"top:100%; z-index:1000; display:none;\"></ul>");
+                        PUT_LINE("</div>");
+
                     PUT_LINE("</div>");
                 PUT_LINE("</div>");
             PUT_LINE("</nav>");
@@ -655,6 +678,7 @@ static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
     PUT_LINE("        crossorigin=\"anonymous\"></script>");
     PUT_LINE("<script src=\"https://cdn.jsdelivr.net/npm/fuse.js@6.6.2/dist/fuse.min.js\"></script>");
     PUT_LINE("<script src=\"/auto-toc.js\"></script>");
+    PUT_LINE("<script src=\"/search.js\"></script>");
     PUT_LINE("<script src=\"/index.js\"></script>");
 
     PUT_LINE("</body>");
