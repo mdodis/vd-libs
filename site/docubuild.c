@@ -35,9 +35,16 @@ static Str make_str_from_tag_name(VdDspcTag *tag);
 static Str make_str_from_tag_value(VdDspcTag *tag);
 static Str make_str_from_str_node(VdDspcStrNode *node);
 static Workspace *get_workspace(void);
-static void process_child(VdDspcSection *section,   FILE *out, int depth);
+static void process_child(VdDspcSection *section, FILE *out, int depth);
+static void process_children(VdDspcSection *section, FILE *out, int depth);
 static void process_verbatim_html(VdDspcSection *section, FILE *out, int depth);
 
+static void process_api_remarks(VdDspcSection *section, FILE *out, int depth);
+static void process_api_params(VdDspcSection *section, FILE *out, int depth);
+static void process_api_brief(VdDspcSection *section, FILE *out, int depth);
+static void process_api_details(VdDspcSection *section, FILE *out, int depth);
+static void process_api_decl(VdDspcSection *section, FILE *out, int depth);
+static void process_api(VdDspcSection *section, FILE *out, int depth);
 static void process_rev(VdDspcSection *section, FILE *out, int depth);
 static void process_tblock(VdDspcSection *section, FILE *out, int depth);
 static void process_carousel(VdDspcSection *section, FILE *out, int depth);
@@ -49,6 +56,12 @@ static void process_section(VdDspcSection *section, FILE *out, int depth);
 static void process_text(VdDspcSection *section, FILE *out, int depth);
 static void process_para(VdDspcSection *section, FILE *out, int depth);
 static Processor Processor_Table[] = {
+    {LIT_INLINE("api"),               process_api},
+    {LIT_INLINE("api-decl"),          process_api_decl},
+    {LIT_INLINE("api-details"),       process_api_details},
+    {LIT_INLINE("api-brief"),         process_api_brief},
+    {LIT_INLINE("api-params"),        process_api_params},
+    {LIT_INLINE("api-remarks"),       process_api_remarks},
     {LIT_INLINE("copyright"),         process_copyright},
     {LIT_INLINE("br"),                process_br},
     {LIT_INLINE("accordion"),         process_accordion},
@@ -75,11 +88,61 @@ static Processor Processor_Table[] = {
 
 
 
+static void process_api_remarks(VdDspcSection *section, FILE *out, int depth)
+{
+    PUT_LINE("<h6>Remarks</h6>");
+    PUT_LINE("<p>");
+    process_children(section, out, depth);
+    PUT_LINE("</p>");
+}
 
+static void process_api_params(VdDspcSection *section, FILE *out, int depth)
+{
+    PUT_LINE("<table class=\"table\">");
+    PUT_LINE("<tbody>");
+    for (VdDspcSection *child = section->first; child; child = child->next) {
+        Str param_name = make_str_from_tag_value(vd_dspc_section_first_tag(child));
+        PUT_LINE("<tr>");
+        PUT_LINE("<td>%.*s</td>", STR_EXPAND(param_name));
+        PUT_LINE("<td>");
+        process_children(child, out, depth);
+        PUT_LINE("</td>");
+        PUT_LINE("</tr>");
+    }
+    PUT_LINE("</tbody>");
+    PUT_LINE("</table>");
+}
 
+static void process_api_brief(VdDspcSection *section, FILE *out, int depth)
+{
+    PUT_LINE("<p class=\"item-desc\">");
+    process_children(section, out, depth);
+    PUT_LINE("</p>");
+}
 
+static void process_api_details(VdDspcSection *section, FILE *out, int depth)
+{
+    PUT_LINE("<div class=\"apidetails\">");
+    process_children(section, out, depth);
+    PUT_LINE("</div>");
+}
 
+static void process_api_decl(VdDspcSection *section, FILE *out, int depth)
+{
+    Str decl_str = make_str_from_tag_value(vd_dspc_section_find_tag_with_name(section, NULL));
+    PUT_LINE("<span class=\"item-decl\">%.*s</span>", STR_EXPAND(decl_str));
+}
 
+static void process_api(VdDspcSection *section, FILE *out, int depth)
+{
+    Str id_str = make_str_from_tag_value(vd_dspc_section_find_tag_with_name(section, NULL));
+
+    PUT_LINE("<div id=\"%.*s\" class=\"L2 apiitem function\">", STR_EXPAND(id_str));
+
+    process_children(section, out, depth);
+
+    PUT_LINE("</div>");
+}
 
 static void process_rev(VdDspcSection *section, FILE *out, int depth)
 {
@@ -440,6 +503,13 @@ static void process_verbatim_html(VdDspcSection *section, FILE *out, int depth)
     }
 
     PUT("</%.*s>\n", STR_EXPAND(section_id));
+}
+
+static void process_children(VdDspcSection *section, FILE *out, int depth)
+{
+    for (VdDspcSection *child = section->first; child; child = child->next) {
+        process_child(child, out, depth);
+    }
 }
 
 static void process_child(VdDspcSection *section, FILE *out, int depth)
