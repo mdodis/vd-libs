@@ -1,1 +1,72 @@
 @title("vd_fw.h")
+
+@section("Brief") {
+    @img(src="/assets/fw/vd-fw-logo@1x.png"
+         srcset="/assets/fw/vd-fw-logo@1x.png 1x, /assets/fw/vd-fw-logo@2x.png 2x"
+         width="128"
+         height="106.5"
+         class="span-image")
+
+
+    text {
+
+        A library that gets you a semi-customizable window and an OpenGL context, minimizing dependencies and hiding the
+        complexities of doing proper windowing on each platform.
+    }
+
+    text {
+        It's written with performance in mind; though performance is not the main focus of it.
+        <b>Maintainability</b>, <b>support</b> for the defined feature set and <b>ease of use</b>
+        are the primary targets of this library.
+    }
+
+    text {
+        <b>Why should you use this library over, GLFW, SDL, SFML, ...?</b>
+        <br>
+
+        Those libraries solve a <b>much more</b> general problem than the one most developers have:
+        <ul>
+            <li>Create one or more windows</li>
+            <li>Enable/disable window styling</li>
+            <li>Handle child/parent window relationships</li>
+            <li>Provide aliases for common usermode operations (show file dialog, message box)</li>
+            <li>Support many more platforms, even ones that don't include a windowing system.</li>
+            <li>Support multiple graphics APIs for initialization.</li>
+            <li>Provide a high level drawing interface.</li>
+            <li>Provide a high level sound interface.</li>
+            <li>Allow for entirely customized windows.</li>
+            <li>And much more...</li>
+        </ul>
+
+        But in their attempt to be "generic" and "robust", they fail to provide a good and simple
+        interface that covers 90% of the use cases, and is implemented in the best way possible for
+        each platform.
+    }
+
+    text {
+        One common example is that almost every popular windowing library on Windows does not allow
+        the developer to draw while resizing or moving the window.
+
+        This is an introcacy of the Win32 API (and actually the same is true for MacOS), and the
+        recommended way is not exactly obvious to a new developer, or one unfamiliar with the
+        platform.
+        <br>
+    }
+
+    @div(class="alert alert-primary d-flex align-items-center" role="alert") {
+        text {
+            Note that you don't need to use an OpenGL loader or include any OS specific OpenGL
+            libraries.
+            <br>
+            The library does the loading for you.
+        }
+    }
+
+    text {
+        Here is all you need (and should need) to create a simple window.
+        <br>
+        By default it creates an OpenGL 3.3 core profile context:
+    }
+}
+
+

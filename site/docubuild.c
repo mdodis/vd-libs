@@ -150,7 +150,18 @@ static void process_text(VdDspcSection *section, FILE *out, int depth)
 static void process_section(VdDspcSection *section, FILE *out, int depth)
 {
     Str title = make_str_from_tag_value(vd_dspc_section_first_tag(section));
-    PUT_LINE("<section class=\"L%d section\">", depth);
+    PUT("<section class=\"L%d section\" id=\"", depth);
+    for (int i = 0; i < title.len; ++i) {
+        char c = title.s[i];
+        if (is_upppercase(c)) {
+            PUT("%c", uppercase_to_lowercase(c));
+        } else if (c == ' ') {
+            PUT("-");
+        } else {
+            PUT("%c", c);
+        }
+    }
+    PUT("\">\n");
     PUT_LINE("<h4>%.*s</h4>", STR_EXPAND(title));
     if (depth == 1) {
         PUT_LINE("<hr>");
@@ -349,7 +360,7 @@ static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
             PUT_LINE("<link rel=\"stylesheet\" href=\"/style.css\">");;
             PUT_LINE("</head>");
 
-            PUT_LINE("<body class=\"d-flex flex-column min-vh-100\">");
+            PUT_LINE("<body class=\"d-flex flex-column min-vh-100\" data-bs-spy=\"scroll\" data-bs-target=\"#toc\" data-bs-offset=\"50\" tabindex=\"0\">");
             PUT_LINE("<!-- Begin Navbar -->");
             PUT_LINE("<nav id=\"mainnav\" class=\"navbar sticky-top navbar-expand-md bg-body-tertiary\">");
                 PUT_LINE("<div class=\"container-fluid bg-body-tertiary\">");
@@ -397,7 +408,10 @@ static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
 
             PUT_LINE("<div class=\"container flex-grow-1\">");
                 PUT_LINE("<div class=\"row justify-content-center\">");
-                    PUT_LINE("<div class=\"col-12 col-sm-10 col-md-8 col-lg-8 text-start\">");
+                    PUT_LINE("<div id=\"main-content\" class=\"col-12 col-sm-12 flexijustify-midpoint col-md-8 col-lg-8 text-start mx-auto mx-lg-4\">");
+
+                        PUT_LINE("<nav id=\"toc\" data-toc class=\"toc-outline d-none midpoint-flex flexijustify-grow p-0 nav outline-section flex-column\">");
+                        PUT_LINE("</nav>");
 
         } else if (str_eq(section_id, LIT("category"))) {
             VdDspcTag *tag_category = vd_dspc_section_first_tag(child);
@@ -415,7 +429,8 @@ static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
     PUT_LINE("        integrity=\"sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI\"");
     PUT_LINE("        crossorigin=\"anonymous\"></script>");
     PUT_LINE("<script src=\"https://cdn.jsdelivr.net/npm/fuse.js@6.6.2/dist/fuse.min.js\"></script>");
-    PUT_LINE("<script src=\"./index.js\"></script>");
+    PUT_LINE("<script src=\"/auto-toc.js\"></script>");
+    PUT_LINE("<script src=\"/index.js\"></script>");
 
     PUT_LINE("</body>");
     PUT_LINE("</html>");

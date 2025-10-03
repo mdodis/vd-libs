@@ -1236,6 +1236,26 @@ VD_INLINE Vdb32 vd_is_letter(int c)
     return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
 }
 
+VD_INLINE Vdb32 vd_is_uppercase(int c)
+{
+    return (c >= 'A' && c <= 'Z');
+}
+
+VD_INLINE Vdb32 vd_is_lowercase(int c)
+{
+    return (c >= 'A' && c <= 'Z');
+}
+
+VD_INLINE int vd_uppercase_to_lowercase(int c)
+{
+    return c - 'A' + 'a';
+}
+
+VD_INLINE int vd_lowercase_to_uppercase(int c)
+{
+    return c - 'a' + 'A';
+}
+
 VD_INLINE Vdb32 vd_is_cdecl_start(int c)
 {
     return vd_is_letter(c) || c == '_';
@@ -1247,11 +1267,15 @@ VD_INLINE Vdb32 vd_is_cdecl_continue(int c)
 }
 
 #if VD_MACRO_ABBREVIATIONS
-#define is_ascii_digit       vd_is_ascii_digit
-#define is_letter            vd_is_letter
-#define is_cdecl_start       vd_is_cdecl_start
-#define is_cdecl_continue    vd_is_cdecl_continue
-#define parse_u64            vd_parse_u64
+#define is_ascii_digit          vd_is_ascii_digit
+#define is_letter               vd_is_letter
+#define is_upppercase           vd_is_uppercase
+#define is_lowercase            vd_is_lowercase
+#define uppercase_to_lowercase  vd_uppercase_to_lowercase 
+#define lowercase_to_uppercase  vd_lowercase_to_uppercase
+#define is_cdecl_start          vd_is_cdecl_start
+#define is_cdecl_continue       vd_is_cdecl_continue
+#define parse_u64               vd_parse_u64
 #endif // VD_MACRO_ABBREVIATIONS
 
 /* ----ARG----------------------------------------------------------------------------------------------------------- */
