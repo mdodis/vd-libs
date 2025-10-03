@@ -1,8 +1,6 @@
 @title("VD Libs")
 @category("landing")
 
-@paste("header")
-
 @section("FAQ") {
     @accordion(id="faq") {
         @accordion-item("What is this?") {
@@ -182,5 +180,3 @@
 }
 
 @copyright()
-
-@paste("footer")

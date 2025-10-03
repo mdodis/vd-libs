@@ -1372,6 +1372,21 @@ vd_fw_set_app_icon(icon_pixels, 32, 32);
             Alternatively, click below to open an interactive interface:
         }
 
+        @div(class="d-none d-lg-flex") {
+            @button(type="button" class="btn btn-primary"
+                    data-bs-toggle="modal" data-bs-target="#keyboard-backdrop") {
+                text {
+                    Open Input Mappings
+                } 
+            } 
+        }
+        @br()
+
+        para {
+            Here's all the mapped keybindings. For most of them, considerations were taken to map the values to ASCII
+            symbols that correspond to the physical key on a US ANSI/ISO keyboard layout.
+        }
+
         verb ```
 enum {
     VD_FW_KEY_UNKNOWN       = 0,
@@ -1502,14 +1517,14 @@ enum {
                     } 
                 }
             }
-
-            @api-remarks() {
-                text {
-                    Hello
-                } 
-            }
         }
     }
 }
 
 @copyright()
+
+@paste("site/vd_fw_input_mappings.html")
+
+@script() {
+    @paste("site/vd_fw.js")
+}

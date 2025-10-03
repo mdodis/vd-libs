@@ -39,6 +39,7 @@ static void process_child(VdDspcSection *section, FILE *out, int depth);
 static void process_children(VdDspcSection *section, FILE *out, int depth);
 static void process_verbatim_html(VdDspcSection *section, FILE *out, int depth);
 
+static void process_paste(VdDspcSection *section, FILE *out, int depth);
 static void process_api_remarks(VdDspcSection *section, FILE *out, int depth);
 static void process_api_params(VdDspcSection *section, FILE *out, int depth);
 static void process_api_brief(VdDspcSection *section, FILE *out, int depth);
@@ -56,6 +57,7 @@ static void process_section(VdDspcSection *section, FILE *out, int depth);
 static void process_text(VdDspcSection *section, FILE *out, int depth);
 static void process_para(VdDspcSection *section, FILE *out, int depth);
 static Processor Processor_Table[] = {
+    {LIT_INLINE("paste"),             process_paste},
     {LIT_INLINE("api"),               process_api},
     {LIT_INLINE("api-decl"),          process_api_decl},
     {LIT_INLINE("api-details"),       process_api_details},
@@ -82,11 +84,35 @@ static Processor Processor_Table[] = {
     {LIT_INLINE("th"),                process_verbatim_html},
     {LIT_INLINE("td"),                process_verbatim_html},
     {LIT_INLINE("tbody"),             process_verbatim_html},
+    {LIT_INLINE("button"),            process_verbatim_html},
+    {LIT_INLINE("script"),            process_verbatim_html},
 };
 
 
 
 
+static void process_paste(VdDspcSection *section, FILE *out, int depth)
+{
+    Arena *temp_arena = VD_GET_SCRATCH_ARENA();
+    Str filepath = make_str_from_tag_value(vd_dspc_section_first_tag(section));
+
+    StrBuilder bld;
+    str_builder_init(&bld, temp_arena);
+    str_builder_push_str(&bld, filepath);
+    str_builder_null_terminate(&bld);
+    const char *cstr_filepath = str_builder_compose(&bld, NULL).s;
+
+    FILE *f = fopen(cstr_filepath, "r");
+    char buf[1024];
+
+    while (fgets(buf, 1024, f)) {
+        PUT("%s", buf);
+    }
+
+    fclose(f);
+
+    VD_RETURN_SCRATCH_ARENA(temp_arena);
+}
 
 static void process_api_remarks(VdDspcSection *section, FILE *out, int depth)
 {
