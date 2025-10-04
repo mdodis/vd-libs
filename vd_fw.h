@@ -27,7 +27,6 @@
  *   on the big threes is OpenGL Core Profile 4.1 (MacOS limitation)
  *
  * TODO
- * - Set Icon
  * - Use or don't use stdlib memcpy
  * - Properly handle vd_fw_set_receive_ncmouse for clicks and scrolls
  * - Set mouse cursor to constants (resize, I, etc...)
