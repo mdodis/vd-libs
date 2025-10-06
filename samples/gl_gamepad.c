@@ -43,9 +43,40 @@ static GLuint rect_shader;
 typedef struct {
     float controller_pos[2];
     float controller_dim[2];
+
+    int button_a;
     float button_a_pos[2];
     float button_a_dim[2];
+
+    int button_b;
+    float button_b_pos[2];
+    float button_b_dim[2];
+
+    int button_x;
+    float button_x_pos[2];
+    float button_x_dim[2];
+
+    int button_y;
+    float button_y_pos[2];
+    float button_y_dim[2];
 } ControllerInfo;
+
+typedef union {
+    float e[4];
+    struct {
+        float r, g, b, a;
+    };
+} Color;
+
+Color make_color(float r, float g, float b, float a)
+{
+    Color result;
+    result.r = r;
+    result.g = g;
+    result.b = b;
+    result.a = a;
+    return result;
+}
 
 ControllerInfo Base_Controller_Info = {
     .controller_pos = {
@@ -55,9 +86,30 @@ ControllerInfo Base_Controller_Info = {
         151.680f, 85.120f,
     },
     .button_a_pos = {
-        103.75596, 33.260258f, 
+        100.07f, 29.76f, 
     },
     .button_a_dim = {
+        8.3549576f,  8.3549576f,
+    },
+
+    .button_b_pos = {
+        107.51f, 22.32f, 
+    },
+    .button_b_dim = {
+        8.3549576f,  8.3549576f,
+    },
+
+    .button_x_pos = {
+        92.49f, 22.03f, 
+    },
+    .button_x_dim = {
+        8.3549576f,  8.3549576f,
+    },
+
+    .button_y_pos = {
+        99.93f, 15.03f, 
+    },
+    .button_y_dim = {
         8.3549576f,  8.3549576f,
     },
 };
@@ -65,7 +117,7 @@ ControllerInfo Base_Controller_Info = {
 static struct {
     float controller_dim[2];
     GLuint tex_controller;
-    GLuint tex_button_a;
+    GLuint tex_button_a, tex_button_b, tex_button_x, tex_button_y;
 } all;
 
 typedef struct {
@@ -74,7 +126,13 @@ typedef struct {
 
 static GLuint load_image(const char *file, int *w, int *h);
 static void   put_image(GLuint texture, float x, float y, float w, float h, float color[4]);
-static void   put_controller(float left, float top, float size);
+static void   transform_controller_info(ControllerInfo *info, float x, float y, float wscale);
+static void   draw_controller_info(ControllerInfo *info);
+static Color  button_a_color(int pressed);
+static Color  button_b_color(int pressed);
+static Color  button_y_color(int pressed);
+static Color  button_x_color(int pressed);
+static Color  switch_color_digital(Color c1, Color c2, int p);
 
 int main(int argc, char const *argv[])
 {
@@ -99,6 +157,9 @@ int main(int argc, char const *argv[])
     all.controller_dim[1] = (float)ih;
 
     all.tex_button_a = load_image("assets/controller_a.png", &iw, &ih);
+    all.tex_button_b = load_image("assets/controller_b.png", &iw, &ih);
+    all.tex_button_y = load_image("assets/controller_y.png", &iw, &ih);
+    all.tex_button_x = load_image("assets/controller_x.png", &iw, &ih);
 
     GLuint vs = vd_fw_compile_shader(GL_VERTEX_SHADER, VERTEX_SOURCE);
     GLuint fs = vd_fw_compile_shader(GL_FRAGMENT_SHADER, FRAGMENT_SOURCE);
@@ -130,6 +191,7 @@ int main(int argc, char const *argv[])
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    ControllerInfo draw_info;
     while (vd_fw_running()) {
 
         int w, h;
@@ -148,25 +210,12 @@ int main(int argc, char const *argv[])
             glUniformMatrix4fv(glGetUniformLocation(rect_shader, "projection"), 1, GL_FALSE, projection);
         }
 
-        put_controller(0.f, 0.f, 1000.f);
-
-        // float image_ratio = all.controller_dim[0] / 151.680f;
-
-        // float color[4] = {
-        //     1.f, 1.f, 1.f, 1.f
-        // };
-        // put_image(all.tex_controller, 0.f, 0.f, all.controller_dim[0], all.controller_dim[1], color);
-
-        // {
-        //     float ax = Base_Controller_Info.button_a_pos[0] * image_ratio;
-        //     float ay = Base_Controller_Info.button_a_pos[1] * image_ratio;
-
-        //     float aw = Base_Controller_Info.button_a_dim[0] * image_ratio;
-        //     float ah = Base_Controller_Info.button_a_dim[1] * image_ratio;
-
-        //     put_image(all.tex_button_a, ax, ay, aw, ah, (float[]) { 1.f, 0.f, 0.f, 1.f});
-
-        // }
+        draw_info.button_a = 1;
+        draw_info.button_b = 1;
+        draw_info.button_x = 0;
+        draw_info.button_y = 0;
+        transform_controller_info(&draw_info, 25.f, 25.f, 1000.f);
+        draw_controller_info(&draw_info);
 
         vd_fw_swap_buffers();
     }
@@ -204,26 +253,99 @@ static void put_image(GLuint texture, float x, float y, float w, float h, float 
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
-static void put_controller(float left, float top, float size)
+static void transform_controller_info(ControllerInfo *info, float x, float y, float wscale)
 {
-    float ratio = size / 151.680f;
+    float ratio = wscale / 151.680f;
 
-    {
-        float w = Base_Controller_Info.controller_dim[0] * ratio;
-        float h = Base_Controller_Info.controller_dim[1] * ratio;
-        put_image(all.tex_controller, left, top, w, h, (float[]) { 0.6f, 0.6f, 0.6f, 1.f});
-    }
+    info->controller_dim[0] = Base_Controller_Info.controller_dim[0] * ratio;
+    info->controller_dim[1] = Base_Controller_Info.controller_dim[1] * ratio;
+    info->controller_pos[0] = Base_Controller_Info.controller_pos[0] * ratio + x;
+    info->controller_pos[1] = Base_Controller_Info.controller_pos[1] * ratio + y;
 
-    {
-        float ax = Base_Controller_Info.button_a_pos[0] * ratio + left;
-        float ay = Base_Controller_Info.button_a_pos[1] * ratio + top;
+    // A
+    info->button_a_dim[0] = Base_Controller_Info.button_a_dim[0] * ratio;
+    info->button_a_dim[1] = Base_Controller_Info.button_a_dim[1] * ratio;
+    info->button_a_pos[0] = Base_Controller_Info.button_a_pos[0] * ratio + x - (info->button_a_dim[0] * 0.5f);
+    info->button_a_pos[1] = Base_Controller_Info.button_a_pos[1] * ratio + y - (info->button_a_dim[1] * 0.5f);
 
-        float aw = Base_Controller_Info.button_a_dim[0] * ratio;
-        float ah = Base_Controller_Info.button_a_dim[1] * ratio;
+    // B
+    info->button_b_dim[0] = Base_Controller_Info.button_b_dim[0] * ratio;
+    info->button_b_dim[1] = Base_Controller_Info.button_b_dim[1] * ratio;
+    info->button_b_pos[0] = Base_Controller_Info.button_b_pos[0] * ratio + x - (info->button_b_dim[0] * 0.5f);
+    info->button_b_pos[1] = Base_Controller_Info.button_b_pos[1] * ratio + y - (info->button_b_dim[1] * 0.5f);
 
-        put_image(all.tex_button_a, ax, ay, aw, ah, (float[]) { 1.f, 0.f, 0.f, 1.f});
-    }
+    // X
+    info->button_x_dim[0] = Base_Controller_Info.button_x_dim[0] * ratio;
+    info->button_x_dim[1] = Base_Controller_Info.button_x_dim[1] * ratio;
+    info->button_x_pos[0] = Base_Controller_Info.button_x_pos[0] * ratio + x - (info->button_x_dim[0] * 0.5f);
+    info->button_x_pos[1] = Base_Controller_Info.button_x_pos[1] * ratio + y - (info->button_x_dim[1] * 0.5f);
 
+    // Y
+    info->button_y_dim[0] = Base_Controller_Info.button_y_dim[0] * ratio;
+    info->button_y_dim[1] = Base_Controller_Info.button_y_dim[1] * ratio;
+    info->button_y_pos[0] = Base_Controller_Info.button_y_pos[0] * ratio + x - (info->button_y_dim[0] * 0.5f);
+    info->button_y_pos[1] = Base_Controller_Info.button_y_pos[1] * ratio + y - (info->button_y_dim[1] * 0.5f);
+}
+
+static void draw_controller_info(ControllerInfo *info)
+{
+    put_image(all.tex_controller, info->controller_pos[0], info->controller_pos[1],
+                                  info->controller_dim[0], info->controller_dim[1],
+                                  (float[]){ 0.2f, 0.2f, 0.2f, 1.0f });
+
+    put_image(all.tex_button_a,   info->button_a_pos[0], info->button_a_pos[1],
+                                  info->button_a_dim[0], info->button_a_dim[1],
+                                  button_a_color(info->button_a).e);
+
+    put_image(all.tex_button_b,   info->button_b_pos[0], info->button_b_pos[1],
+                                  info->button_b_dim[0], info->button_b_dim[1],
+                                  button_b_color(info->button_b).e);
+
+    put_image(all.tex_button_x,   info->button_x_pos[0], info->button_x_pos[1],
+                                  info->button_x_dim[0], info->button_x_dim[1],
+                                  button_x_color(info->button_x).e);
+
+    put_image(all.tex_button_y,   info->button_y_pos[0], info->button_y_pos[1],
+                                  info->button_y_dim[0], info->button_y_dim[1],
+                                  button_y_color(info->button_y).e);
+}
+
+static Color button_a_color(int pressed)
+{
+    return switch_color_digital(
+        make_color(0.2f, 0.2f, 0.2f, 1.0f),
+        make_color(0.2f, 0.9f, 0.2f, 1.0f),
+        pressed);
+}
+
+static Color button_b_color(int pressed)
+{
+    return switch_color_digital(
+        make_color(0.2f, 0.2f, 0.2f, 1.0f),
+        make_color(0.9f, 0.2f, 0.2f, 1.0f),
+        pressed);
+}
+
+static Color button_y_color(int pressed)
+{
+    return switch_color_digital(
+        make_color(0.2f, 0.2f, 0.2f, 1.0f),
+        make_color(0.9f, 0.9f, 0.2f, 1.0f),
+        pressed);
+}
+
+static Color button_x_color(int pressed)
+{
+    return switch_color_digital(
+        make_color(0.2f, 0.2f, 0.2f, 1.0f),
+        make_color(0.2f, 0.2f, 0.9f, 1.0f),
+        pressed);
+}
+
+
+static Color switch_color_digital(Color c1, Color c2, int p)
+{
+    return p ? c2 : c1;
 }
 
 #define VD_FW_IMPL
