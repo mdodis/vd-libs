@@ -1,4 +1,4 @@
-/**
+/*
  * vd_fw.h - Gets you a window with OpenGL running on platforms that support it
  * ---------------------------------------------------------------------------------------------------------------------
  * zlib License
@@ -254,39 +254,40 @@ enum {
 
 typedef struct {
     struct {
-        /** What version of OpenGL you'd like to use. 3.3 and upwards recommended. */
+        /* What version of OpenGL you'd like to use. 3.3 and upwards recommended. */
         VdFwGlVersion version;
 
-        /** Whether to enable a debug console to show you errors produced by GL calls */
+        /* Whether to enable a debug console to show you errors produced by GL calls */
         int           debug_on;
     } gl;
 
     struct {
-        /** Set to 1 to disable window frame. */
+        /* Set to 1 to disable window frame. */
         int           borderless;
     } window_options;
 } VdFwInitInfo;
 
 /**
- * Initialize fw. Call this before any other call
+ * @brief Initialize fw. Call this before any other call
  * @param  info Custom options when initializing. Leave null for default
  * @return      (Reserved)
  */
 VD_FW_API int                vd_fw_init(VdFwInitInfo *info);
 
 /**
- * Check if the application is running. Call this every frame
+ * @brief Check if the application is running. Call this every frame
  * @return  1 if running, 0 if not
  */
 VD_FW_API int                vd_fw_running(void);
 
 /**
- * End rendering and swap buffers. Call this right at the end of your rendering code.
+ * @brief End rendering and swap buffers. Call this right at the end of your rendering code.
+ * @return  (Reserved)
  */
 VD_FW_API int                vd_fw_swap_buffers(void);
 
 /**
- * Get the size of the window, in pixels
+ * @brief Get the size of the window, in pixels
  * @param  w The width of the window, in pixels
  * @param  h The height of the window, in pixels
  * @return   (Reserved)
@@ -295,13 +296,19 @@ VD_FW_API int                vd_fw_get_size(int *w, int *h);
 VD_FW_API void               vd_fw_set_size(int w, int h);
 
 /**
- * Maximize window and disable borders.
+ * @brief Enter/exit fullscreen.
+ * @param  on Whether to enter or exit fullscreen.
  */
 VD_FW_API void               vd_fw_set_fullscreen(int on);
+
+/**
+ * @brief Get current fullscreen state.
+ * @return  1 if in fullscreen, 0 otherwise.
+ */
 VD_FW_API int                vd_fw_get_fullscreen(void);
 
 /**
- * Gets whether the window is focused
+ * @brief Gets whether the window is focused
  * @param  focused Pointer to int which will receive the value of focus
  * @return         1 if the focus has changed. There's no point in checking the value of focused otherwise.
  */
@@ -392,9 +399,7 @@ VD_FW_API int                vd_fw_link_program(unsigned int program);
  *                            link
  * 
  */
-VD_FW_API int                vd_fw_compile_or_hotload_program(unsigned int *program, unsigned long long *last_compile,
-                                                              const char *vertex_file_path,
-                                                              const char *fragment_file_path);
+VD_FW_API int                vd_fw_compile_or_hotload_program(unsigned int *program, unsigned long long *last_compile, const char *vertex_file_path, const char *fragment_file_path);
 
 /**
  * Construct an orthographic projection matrix

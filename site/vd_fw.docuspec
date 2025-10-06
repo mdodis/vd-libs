@@ -1516,6 +1516,8 @@ enum {
         ```
     }
 
+    @apigen("vd_fw.h")
+
     @api("vd_fw_init") {
         @api-decl("int vd_fw_init(VdFwInitInfo *info)")
         @api-details() {

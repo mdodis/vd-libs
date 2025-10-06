@@ -602,6 +602,7 @@ VD_INLINE VdArena           vd_arena_from_malloc(size_t size)                   
 #define VD_ARENA_FROM_SYSTEM(a, size)    (vd_arena_init(a, VD_MALLOC(size), size))
 
 #if VD_MACRO_ABBREVIATIONS
+#define ArenaSave                                                    VdArenaSave
 #define Arena                                                        VdArena
 #define ARENA_FLAGS_USE_MALLOC                                       VD_ARENA_FLAGS_USE_MALLOC
 #define arena_init(a, buf, len)                                      vd_arena_init(a, buf, len)

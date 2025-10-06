@@ -47,6 +47,8 @@ static void process_child(VdDspcSection *section, FILE *out, int depth);
 static void process_children(VdDspcSection *section, FILE *out, int depth);
 static void process_verbatim_html(VdDspcSection *section, FILE *out, int depth);
 
+
+static void process_apigen(VdDspcSection *section, FILE *out, int depth);
 static void process_notoc(VdDspcSection *section, FILE *out, int depth);
 static void process_paste(VdDspcSection *section, FILE *out, int depth);
 static void process_api_remarks(VdDspcSection *section, FILE *out, int depth);
@@ -79,6 +81,7 @@ static Processor Processor_Table[] = {
     {LIT_INLINE("accordion"),         process_accordion},
     {LIT_INLINE("carousel"),          process_carousel},
     {LIT_INLINE("section"),           process_section},
+    {LIT_INLINE("apigen"),            process_apigen},
     {LIT_INLINE("text"),              process_text},
     {LIT_INLINE("para"),              process_para},
     {LIT_INLINE("verb"),              process_code},
@@ -100,6 +103,35 @@ static Processor Processor_Table[] = {
 };
 
 
+
+
+
+
+static void parse_and_generate_tree(FILE *f, FILE *out, Arena *temp_arena);
+
+static void process_apigen(VdDspcSection *section, FILE *out, int depth)
+{
+    Arena *temp_arena = VD_GET_SCRATCH_ARENA();
+
+    Str file_str = make_str_from_tag_value(vd_dspc_section_first_tag(section));
+
+    StrBuilder bld;
+    str_builder_init(&bld, temp_arena);
+    str_builder_push_str(&bld, file_str);
+    str_builder_null_terminate(&bld);
+    const char *filepath = str_builder_compose(&bld, NULL).s;
+
+    LOGF("Reading api from: %s", filepath);
+
+    FILE *f = fopen(filepath, "rb");
+
+    parse_and_generate_tree(f, out, temp_arena);
+
+    fclose(f);
+
+
+    VD_RETURN_SCRATCH_ARENA(temp_arena);
+}
 
 static void process_notoc(VdDspcSection *section, FILE *out, int depth)
 {
@@ -409,6 +441,170 @@ static void process_section(VdDspcSection *section, FILE *out, int depth)
     }
 }
 
+static void parse_api_function(char *buf, size_t buf_len, FILE *f, FILE *out, Arena *temp_arena)
+{
+    ArenaSave save = arena_save(temp_arena);
+
+    char *brief_part = 0;
+    dynarray const char **param_part = 0;
+    dynarray_init_with_cap(param_part, temp_arena, 12);
+
+
+    while (fgets(buf, buf_len, f)) {
+
+        int i = 0;
+
+        if (buf[i + 0] == ' ' &&
+            buf[i + 1] == '*' &&
+            buf[i + 2] == '/')
+        {
+            break;
+        }
+
+        // Skip whitespaces
+        while ((i < buf_len) && (buf[i] == ' ' || buf[i] == '*') && (buf[i] != '\0')) {
+            i++;
+        }
+
+        // LOGF("Buf: %s parse", buf + i);
+        if (buf[i + 0] == '@' &&
+            buf[i + 1] == 'b' &&
+            buf[i + 2] == 'r' &&
+            buf[i + 3] == 'i' &&
+            buf[i + 4] == 'e' &&
+            buf[i + 5] == 'f')
+        {
+            const char *s = buf + i + 6;
+            brief_part = cstr_dup(temp_arena, (cstr)s);
+            continue;
+        }
+
+        if (buf[i + 0] == '@' &&
+            buf[i + 1] == 'p' &&
+            buf[i + 2] == 'a' &&
+            buf[i + 3] == 'r' &&
+            buf[i + 4] == 'a' &&
+            buf[i + 5] == 'm')
+        {
+            const char *s = buf + i + 6;
+            const char *sd = cstr_dup(temp_arena, (cstr)s);
+
+            dynarray_add(param_part, sd);
+        }
+
+    }
+
+    // Get the function decl
+    assert(fgets(buf, buf_len, f));
+    const char *func_decl = buf;
+
+    Str func_decl_str = str_from_cstr((char*)func_decl);
+    Str id_str = func_decl_str;
+
+    // Get function id
+    {
+        // Find first parenthesis
+        usize paren_pos = str_first_of(func_decl_str, LIT("("), 0);
+        usize id_pos = paren_pos;
+
+        // Walk backwards until we find a space
+        while (id_pos > 0 && func_decl_str.s[id_pos] != ' ') {
+            id_pos--;
+        }
+
+        id_str.s = func_decl_str.s + id_pos + 1;
+        id_str.len = paren_pos - id_pos - 1;
+
+    }
+    LOGF("%.*s", STR_EXPAND(id_str));
+
+    Str func_decl_pretty = func_decl_str;
+    // Get decl without _API, etc, i.e skip first word
+    {
+        u64 i = 0;
+        u64 l = func_decl_str.len;
+
+        while ((i < l) && (func_decl_str.s[i] != ' ')) {
+            i++;
+        }
+
+        func_decl_pretty = str_chop_left(func_decl_str, i);
+
+    }
+
+
+    PUT_LINE("<div id=\"%.*s\" class=\"L2 apiitem function\">", STR_EXPAND(id_str));
+        PUT_LINE("<span class=\"item-decl\">%.*s</span>", STR_EXPAND(func_decl_pretty));
+        PUT_LINE("<div class=\"apidetails\">");
+            PUT_LINE("<p class=\"item-desc\">");
+            PUT_LINE("%s", brief_part);
+            PUT_LINE("</p>");
+
+
+            PUT_LINE("<table class=\"table\">");
+            PUT_LINE("<tbody>");
+            for (usize pi = 0; pi < dynarray_len(param_part); ++pi) {
+                const char *param = param_part[pi];
+
+                Str param_name = str_null();
+                Str param_desc = str_null();
+
+                {
+                    usize l = cstr_len((char*)param);
+                    usize i = 0;
+
+                    // Find name part
+                    while ((i < l) && !is_letter(param[i])) {
+                        i++;
+                    }
+
+                    usize pos_param_name_start = i++;
+                    while ((i < l) && (param[i] != ' ')) {
+                        i++;
+                    }
+                    usize pos_param_name_end = i;
+
+                    while ((i < l) && !is_letter(param[i])) {
+                        i++;
+                    }
+                    usize pos_param_desc_start = i;
+
+                    param_name.s = (char*)param + pos_param_name_start;
+                    param_name.len = pos_param_name_end - pos_param_name_start;
+
+                    param_desc.s = (char*)param + pos_param_desc_start;
+                    param_desc.len = l - pos_param_desc_start;
+
+                }
+
+                PUT_LINE("<tr>");
+                PUT_LINE("<td>%.*s</td>", STR_EXPAND(param_name));
+                PUT_LINE("<td>");
+                PUT_LINE("%.*s", STR_EXPAND(param_desc));
+                PUT_LINE("</td>");
+                PUT_LINE("</tr>");
+            }
+            PUT_LINE("</tbody>");
+            PUT_LINE("</table>");
+        PUT_LINE("</div>");
+    PUT_LINE("</div>");
+
+    arena_restore(save);
+}
+
+static void parse_and_generate_tree(FILE *f, FILE *out, Arena *temp_arena)
+{
+    char buf[1024];
+
+    while (fgets(buf, 1024, f)) {
+        if (buf[0] == '/' &&
+            buf[1] == '*' &&
+            buf[2] == '*')
+        {
+            parse_api_function(buf, 1024, f, out, temp_arena);
+        }
+    }
+}
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /* ----DOCUBUILD IMPLEMENTATION-------------------------------------------------------------------------------------- */
