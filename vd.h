@@ -1942,7 +1942,7 @@ struct VdInitInfo {
 static VD_PROC_LOG(vd__default_log);
 
 VD_API void vd_init(VdInitInfo *info) {
-    void **thread_context_ptr = &VD_THREAD_CONTEXT_VARNAME;
+    void **thread_context_ptr = (void**)&VD_THREAD_CONTEXT_VARNAME;
     if (info && info->thread_context_ptr) {
         thread_context_ptr = info->thread_context_ptr;
     }
@@ -3153,6 +3153,57 @@ VD_API int vd_directory_close(VdDirectory *directory)
     FindClose((HANDLE)directory->handle);    
     return 1;
 }
+
+#elif VD_PLATFORM_LINUX || VD_PLATFORM_MACOS
+#include <dirent.h>
+#include <sys/stat.h>
+
+VD_API int vd_directory_open(VdDirectory *directory, const char *path)
+{
+    DIR *dir = opendir(path);
+    directory->filename = vd_str_from_cstr((char*)path);
+    directory->handle = (void*)dir;
+    return 1;
+}
+
+VD_API int vd_directory_get_file(VdDirectory *directory, VdFile *file)
+{
+    DIR *dir;
+    struct dirent *read_result;
+
+query_file:
+    dir = (DIR*)directory->handle;
+
+    read_result = readdir(dir);
+    if (!read_result) {
+        return 0;
+    }
+
+    file->name = vd_str_from_cstr(read_result->d_name);
+
+    if (vd_str_eq(file->name, VD_LIT(".")) || vd_str_eq(file->name, VD_LIT(".."))) {
+        goto query_file;
+    }
+
+
+    struct stat stat_struct;
+    stat(read_result->d_name, &stat_struct);    
+
+    file->flags = 0;
+    if (stat_struct.st_mode & S_IFDIR) {
+        file->flags |= VD_FILE_FLAG_DIRECTORY;
+    }
+
+    return 1;
+}
+
+VD_API int vd_directory_close(VdDirectory *directory)
+{
+    DIR *dir = directory->handle;
+    closedir(dir);
+    return 1;
+}
+
 
 #else
 #error "Filesystem implementation not available on this platform"

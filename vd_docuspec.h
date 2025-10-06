@@ -393,7 +393,7 @@ static int vd_dspc__lang_section(VdDspcDocument *doc)
 
         VdDspc__Token id_token = vd_dspc__lex_token(doc, &doc->lexstate);
         if (id_token.type != VD_DSPC__TOKEN_TYPE_ID) {
-            VD_DSPC_LOG("Error: %llu:%llu expected: id token, instead got: %s",
+            VD_DSPC_LOG("Error: %zu:%zu expected: id token, instead got: %s",
                 id_token.lexstate.line + 1, id_token.lexstate.column + 1,
                 vd_dspc__token_type_to_string(id_token.type));
             return 0;
@@ -409,7 +409,7 @@ static int vd_dspc__lang_section(VdDspcDocument *doc)
         VdDspc__Token tags_begin_token = vd_dspc__lex_token(doc, &doc->lexstate);
         if (tags_begin_token.type != VD_DSPC__TOKEN_TYPE_TAGS_BEGIN) {
 
-            VD_DSPC_LOG("Error: %llu:%llu expected: '(' token, instead got: %s",
+            VD_DSPC_LOG("Error: %zu:%zu expected: '(' token, instead got: %s",
                 tags_begin_token.lexstate.line + 1, tags_begin_token.lexstate.column + 1,
                 vd_dspc__token_type_to_string(tags_begin_token.type));
         }
@@ -434,7 +434,7 @@ static int vd_dspc__lang_section(VdDspcDocument *doc)
                 // Expect = "quoted"
                 VdDspc__Token assignment_token = vd_dspc__lex_token(doc, &doc->lexstate);
                 if (assignment_token.type != VD_DSPC__TOKEN_TYPE_ASSIGNMENT) {
-                    VD_DSPC_LOG("Error: %llu:%llu expected: '=' token, instead got: %s",
+                    VD_DSPC_LOG("Error: %zu:%zu expected: '=' token, instead got: %s",
                         assignment_token.lexstate.line + 1, assignment_token.lexstate.column + 1,
                         vd_dspc__token_type_to_string(assignment_token.type));
                     return 0;
@@ -443,7 +443,7 @@ static int vd_dspc__lang_section(VdDspcDocument *doc)
 
                 VdDspc__Token value_token = vd_dspc__lex_token(doc, &doc->lexstate);
                 if (value_token.type != VD_DSPC__TOKEN_TYPE_QUOTED_STRING) {
-                    VD_DSPC_LOG("Error: %llu:%llu expected: '\"quoted string\"' token, instead got: %s",
+                    VD_DSPC_LOG("Error: %zu:%zu expected: '\"quoted string\"' token, instead got: %s",
                         value_token.lexstate.line + 1, value_token.lexstate.column + 1,
                         vd_dspc__token_type_to_string(value_token.type));
                     return 0;
@@ -452,7 +452,7 @@ static int vd_dspc__lang_section(VdDspcDocument *doc)
                 tag_value = value_token.dat.quoted_string;
                 vd_dspc__lex_consume(&doc->lexstate, &value_token);
             } else {
-                VD_DSPC_LOG("Error: %llu:%llu expected either unnamed value or named valued, instead got: %s",
+                VD_DSPC_LOG("Error: %zu:%zu expected either unnamed value or named valued, instead got: %s",
                     t.lexstate.line + 1, t.lexstate.column + 1,
                     vd_dspc__token_type_to_string(t.type));
                 return 0;
@@ -490,7 +490,7 @@ static int vd_dspc__lang_section(VdDspcDocument *doc)
 
         t = vd_dspc__lex_token(doc, &doc->lexstate);
         if (t.type != VD_DSPC__TOKEN_TYPE_SECTION_END) {
-            VD_DSPC_LOG("Error: %llu:%llu expected '}', instead got: %s",
+            VD_DSPC_LOG("Error: %zu:%zu expected '}', instead got: %s",
                 t.lexstate.line + 1, t.lexstate.column + 1,
                 vd_dspc__token_type_to_string(t.type));
         }
@@ -579,7 +579,7 @@ static int vd_dspc__lex_literal(VdDspcDocument *doc, VdDspc__Token *result, cons
             vd_dspc__skip_whitespace_all(&result->lexstate);
 
             if (vd_dspc__lex_char(&result->lexstate) != '{') {
-                VD_DSPC_LOG("Error: %llu:%llu Expected \'{\' after \'text\' section.",
+                VD_DSPC_LOG("Error: %zu:%zu Expected \'{\' after \'text\' section.",
                             result->lexstate.line + 1, result->lexstate.column + 1);
                 result->type = VD_DSPC__TOKEN_TYPE_UNKNOWN;
                 return 0;
@@ -657,7 +657,7 @@ static VdDspc__Token vd_dspc__lex_token(VdDspcDocument *doc, VdDspc__Lex *lex)
             while (c != '\"') {
 
                 if (!vd_dspc__lex_nextn(&result.lexstate, 1)) {
-                    VD_DSPC_LOG("Error: %llu:%llu: Quoted string starting here was never unquoted!",
+                    VD_DSPC_LOG("Error: %zu:%zu: Quoted string starting here was never unquoted!",
                                 saved_state.line, saved_state.column);
                     return result;
                 }
@@ -717,7 +717,7 @@ static VdDspc__Token vd_dspc__lex_token(VdDspcDocument *doc, VdDspc__Lex *lex)
                             vd_dspc__skip_whitespace_all(&result.lexstate);
 
                             if (vd_dspc__lex_char(&result.lexstate) != '{') {
-                                VD_DSPC_LOG("Error: %llu:%llu Expected \'{\' after \'text\' section.",
+                                VD_DSPC_LOG("Error: %zu:%zu Expected \'{\' after \'text\' section.",
                                             result.lexstate.line + 1, result.lexstate.column + 1);
                                 result.type = VD_DSPC__TOKEN_TYPE_UNKNOWN;
                                 return result;
@@ -791,7 +791,7 @@ static VdDspc__Token vd_dspc__lex_token(VdDspcDocument *doc, VdDspc__Lex *lex)
 
                                 while (count < 3) {
                                     if (vd_dspc__lex_char(&result.lexstate) != '`') {
-                                        VD_DSPC_LOG("Error: %llu:%llu Expected \'```\' after \'code\' section.",
+                                        VD_DSPC_LOG("Error: %zu:%zu Expected \'```\' after \'code\' section.",
                                                     result.lexstate.line + 1, result.lexstate.column + 1);
                                         result.type = VD_DSPC__TOKEN_TYPE_UNKNOWN;
                                         return result;
@@ -863,7 +863,7 @@ static VdDspc__Token vd_dspc__token_new(VdDspc__Lex *lex, VdDspc__TokenType type
 
 static void vd_dspc__token_log(VdDspc__Token *tok)
 {
-    VD_DSPC_LOG("%llu:%llu: %s", tok->lexstate.line + 1, tok->lexstate.column + 1,
+    VD_DSPC_LOG("%zu:%zu: %s", tok->lexstate.line + 1, tok->lexstate.column + 1,
                                  vd_dspc__token_type_to_string(tok->type));
     if (tok->type == VD_DSPC__TOKEN_TYPE_TEXT_CONTENT) {
 

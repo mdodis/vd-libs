@@ -5,11 +5,11 @@
 #include "vd.h"
 #include "vd_docuspec.h"
 
-#define PUT_LINE(fmt, ...) fprintf(out, fmt "\n", __VA_ARGS__)
-#define PUT(fmt, ...) fprintf(out, fmt , __VA_ARGS__)
+#define PUT_LINE(fmt, ...) fprintf(out, fmt "\n", ## __VA_ARGS__)
+#define PUT(fmt, ...) fprintf(out, fmt , ## __VA_ARGS__)
 
 #define ERR_EXIT(fmt, ...) do { \
-        fprintf(stderr, fmt, __VA_ARGS__); \
+        fprintf(stderr, fmt, ## __VA_ARGS__); \
         exit(-1);                          \
     } while (0)
 
@@ -441,7 +441,7 @@ int main(int argc, char const *argv[])
     const char *directory_to_open = 0;
     const char *directory_to_write_to = 0;
 
-    Arg arg = arg_new(argc, argv);
+    Arg arg = arg_new(argc, (char**)argv);
     arg_skip_program_name(&arg);
 
     while (!arg_at_end(&arg)) {
@@ -761,7 +761,7 @@ static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
                         PUT_LINE("</ul>");
                         PUT_LINE("<div class=\"search-container ms-auto me-auto me-sm-0\">");
                             PUT_LINE("<input type=\"search\" id=\"searchbox\" class=\"form-control\" placeholder=\"Search\" aria-label=\"Search\" autocomplete=\"off\" autofocus>");
-                            PUT_LINE("<ul id=\"search-results\" class=\"list-group position-absolute\" style=\"top:100%; z-index:1000; display:none;\"></ul>");
+                            PUT_LINE("<ul id=\"search-results\" class=\"list-group position-absolute\" style=\"top:100%%; z-index:1000; display:none;\"></ul>");
                         PUT_LINE("</div>");
 
                     PUT_LINE("</div>");
