@@ -446,6 +446,7 @@ static void parse_api_function(char *buf, size_t buf_len, FILE *f, FILE *out, Ar
     ArenaSave save = arena_save(temp_arena);
 
     char *brief_part = 0;
+    char *return_part = 0;
     dynarray const char **param_part = 0;
     dynarray_init_with_cap(param_part, temp_arena, 12);
 
@@ -490,6 +491,23 @@ static void parse_api_function(char *buf, size_t buf_len, FILE *f, FILE *out, Ar
             const char *sd = cstr_dup(temp_arena, (cstr)s);
 
             dynarray_add(param_part, sd);
+            continue;
+        }
+
+        if (buf[i + 0] == '@' &&
+            buf[i + 1] == 'r' && 
+            buf[i + 2] == 'e' && 
+            buf[i + 3] == 't' && 
+            buf[i + 4] == 'u' && 
+            buf[i + 5] == 'r' && 
+            buf[i + 6] == 'n')
+        {
+
+            const char *s = buf + i + 7;
+            const char *sd = cstr_dup(temp_arena, (cstr)s);
+
+            return_part = (char*)sd;
+            continue;
         }
 
     }
@@ -584,6 +602,16 @@ static void parse_api_function(char *buf, size_t buf_len, FILE *f, FILE *out, Ar
                 PUT_LINE("</td>");
                 PUT_LINE("</tr>");
             }
+
+            if (return_part) {
+                PUT_LINE("<tr>");
+                PUT_LINE("<td>Returns</td>");
+                PUT_LINE("<td>");
+                PUT_LINE("%s", return_part);
+                PUT_LINE("</td>");
+                PUT_LINE("</tr>");
+            }
+
             PUT_LINE("</tbody>");
             PUT_LINE("</table>");
         PUT_LINE("</div>");

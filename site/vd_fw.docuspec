@@ -1517,24 +1517,6 @@ enum {
     }
 
     @apigen("vd_fw.h")
-
-    @api("vd_fw_init") {
-        @api-decl("int vd_fw_init(VdFwInitInfo *info)")
-        @api-details() {
-            @api-brief() {
-                text {
-                    Initializes the library. Any call before this is invalid.
-                } 
-            }
-            @api-params() {
-                @api-param("info") {
-                    text {
-                        Options for the window and OpenGL context. Leave null for default.
-                    } 
-                }
-            }
-        }
-    }
 }
 
 @copyright()

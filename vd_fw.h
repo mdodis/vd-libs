@@ -293,6 +293,12 @@ VD_FW_API int                vd_fw_swap_buffers(void);
  * @return   (Reserved)
  */
 VD_FW_API int                vd_fw_get_size(int *w, int *h);
+
+/**
+ * @brief Set the window size, in pixels
+ * @param  w The width of the window, in pixels
+ * @param  h The height of the window, in pixels
+ */
 VD_FW_API void               vd_fw_set_size(int w, int h);
 
 /**
@@ -313,67 +319,125 @@ VD_FW_API int                vd_fw_get_fullscreen(void);
  * @return         1 if the focus has changed. There's no point in checking the value of focused otherwise.
  */
 VD_FW_API int                vd_fw_get_focused(int *focused);
-/* 
-@todo(mdodis): Probably the simplest way to go about this is let the user:
-- Pass 1 rect for the caption
-- Pass n rects for excluded
+
+/**
+ * @brief Set the draggable area of the window, any sub-rectangles to ignore
+ * @param  caption  The whole draggable area
+ * @param  count    The count of sub-rectangles that will be excluded from dragging
+ * @param  rects    An array of count rectangles to exclude
  */
 VD_FW_API void               vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4]);
+
+/**
+ * @brief Set to receive mouse events outside of the non-client area
+ * @param  on 1 if you want to receive those events, 0 otherwise (default)
+ */
 VD_FW_API void               vd_fw_set_receive_ncmouse(int on);
 
 /**
- * Get the time (in nanoseconds) since the last call to @see vd_fw_swap_buffers
+ * @brief Get the time (in nanoseconds) since the last call to vd_fw_swap_buffers
  * @return  The delta time (in nanoseconds)
  */
 VD_FW_API unsigned long long vd_fw_delta_ns(void);
+
+/**
+ * @brief Get the time (in seconds) since the last call to vd_fw_swap_buffers
+ * @return  The delta time (in seconds)
+ */
 VD_FW_INL float              vd_fw_delta_s(void);
 
 /**
- * Set VSYNC to the number of frames to sync on
- * @param  on 0: no sync, 1: sync every frame, 2: sync every other frame
- * @return    1 if the change was applied successfully
+ * @brief Set the number of frames to sync on
+ * @param  on Use: 0 for no sync, 1 for sync every frame and 2 for sync every other frame
+ * @return 1 if the change was applied successfully
  */
 VD_FW_API int                vd_fw_set_vsync_on(int on);
 
 /**
- * Read the mouse state. @see above in the enumeration
+ * @brief Read the mouse state.
  * @param  x The horizontal position of the mouse, in pixels (left -> right)
  * @param  y The vertical position of the mouse, in pixels (top -> bottom)
  * @return   The mouse button state
  */
 VD_FW_API int                vd_fw_get_mouse_state(int *x, int *y);
+
+/**
+ * @brief Read the mouse state (float version).
+ * @param  x The horizontal position of the mouse, in pixels (left -> right)
+ * @param  y The vertical position of the mouse, in pixels (top -> bottom)
+ * @return   The mouse button state
+ */
 VD_FW_INL int                vd_fw_get_mouse_statef(float *x, float *y);
+
+/**
+ * @brief Capture mouse and receive events outside of the window region.
+ * @param  on Whether to set this behavior on (default: off).
+ */
 VD_FW_API void               vd_fw_set_mouse_capture(int on);
+
+/**
+ * @brief Get the mouse movement in raw smoothed pixels. Use this over computing delta yourself.
+ * @param  dx The horizontal delta movement of the mouse
+ * @param  dy The vertical delta movement of the mouse
+ */
 VD_FW_API void               vd_fw_get_mouse_delta(float *dx, float *dy);
+
+/**
+ * @brief Lock/Unlock the mouse to the center of the window, hiding its cursor
+ * @param  locked Whether to lock or unlock the mouse (default: unlocked)
+ */
 VD_FW_API void               vd_fw_set_mouse_locked(int locked);
+
+/**
+ * @brief Gets whether the mouse is locked (by vd_fw_set_mouse_locked).
+ * @return  Whether the mouse is locked (1 or 0)
+ */
 VD_FW_API int                vd_fw_get_mouse_locked(void);
 
 /**
- * Read the mouse wheel state.
+ * @brief Read the mouse wheel state.
  * @param  dx The delta of horizontal wheel (either trackpad swipe right, or ctrl + mousewheel)
  * @param  dy The delta of vertical wheel
  * @return    1 if the wheel moved, 0 if not
  */
 VD_FW_API int                vd_fw_get_mouse_wheel(float *dx, float *dy);
 
+/**
+ * @brief Get whether a key was just pressed this frame
+ * @param  key The key to check
+ * @return     Whether this key was pressed this frame
+ */
 VD_FW_API int                vd_fw_get_key_pressed(int key);
+
+/**
+ * @brief Get the last known state of this key
+ * @param  key The key to check
+ * @return     Whether this key is down currently
+ */
 VD_FW_API int                vd_fw_get_key_down(int key);
 
 /**
- * Gets the backing scale factor
- * @return  The backing scale factor
+ * @brief Gets the backing scale factor
+ * @return  The backing scale factor (1.0f: 1:1 scale, 2.0f, 2:1 scale, etc...)
  */
 VD_FW_API float              vd_fw_get_scale(void);
 
 /**
- * Sets the title of the window
+ * @brief Set the title of the window
  * @param  title The new title of the window
  */
 VD_FW_API void               vd_fw_set_title(const char *title);
+
+/**
+ * @brief Set the icon of the window and application
+ * @param  pixels A packed A8B8G8R8 pixel buffer
+ * @param  width  The width of the icon, in pixels, must be at least 16px
+ * @param  height The height of the icon, in pixels, must be at least 16px
+ */
 VD_FW_API void               vd_fw_set_app_icon(void *pixels, int width, int height);
 
 /**
- * Compile a GLSL shader and check for errors
+ * @brief Compile a GLSL shader and check for errors
  * @param  type   The shader type
  * @param  source The shader source code
  * @return        The shader handle
@@ -381,28 +445,24 @@ VD_FW_API void               vd_fw_set_app_icon(void *pixels, int width, int hei
 VD_FW_API unsigned int       vd_fw_compile_shader(unsigned int type, const char *source);
 
 /**
- * Link a GL program and check for errors
+ * @brief Link a GL program and check for errors
  * @param  program The program to link
  * @return         1 on success, 0 otherwise
  */
 VD_FW_API int                vd_fw_link_program(unsigned int program);
 
 /**
- * Compiles a program, if any of the shader sources have been modified. You should call this every frame
+ * @brief Compiles a program, if any of the shader sources have been modified. You should call this every frame
  * @param  program            Pointer to program (GLuint), initialize it to zero before rendering loop
- * @param  last_compile       Pointer to last compilation time, initialize it to zero before rendering loop,
- *                            and don't use it in any other way
+ * @param  last_compile       Pointer to last compilation time, initialize it to zero before rendering loop, and don't use it in any other way
  * @param  vertex_file_path   The relative (or absolute) path to the vertex shader source
  * @param  fragment_file_path The relative (or absolute) path to the fragment shader source
- * @return                    1 if successful, 0 if encountered any breaking error. You don't really need to check this,
- *                            as this function will keep the previously loaded program if the new one doesn't compile or
- *                            link
- * 
+ * @return                    1 if successful, 0 if encountered any breaking error. You don't really need to check this.
  */
 VD_FW_API int                vd_fw_compile_or_hotload_program(unsigned int *program, unsigned long long *last_compile, const char *vertex_file_path, const char *fragment_file_path);
 
 /**
- * Construct an orthographic projection matrix
+ * @brief Construct an orthographic projection matrix
  * @param left   The left side
  * @param right  The right side
  * @param top    The top side
@@ -414,7 +474,7 @@ VD_FW_API int                vd_fw_compile_or_hotload_program(unsigned int *prog
 VD_FW_INL void            vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16]);
 
 /**
- * Construct a perspective projection matrix
+ * @brief Construct a perspective projection matrix
  * @param fov    The vertical fov, in degrees
  * @param aspect The aspect ratio
  * @param far    The far plane
@@ -424,11 +484,11 @@ VD_FW_INL void            vd_fw_u_ortho(float left, float right, float bottom, f
 VD_FW_INL void            vd_fw_u_perspective(float fov, float aspect, float near, float far, float out[16]);
 
 /**
- * Construct a view matrix
- * @param    eye Position of the camera
+ * @brief Construct a view matrix
+ * @param eye Position of the camera
  * @param target Look target position
- * @param  updir The up direction
- * @param    out The output matrix
+ * @param updir The up direction
+ * @param out The output matrix
  */
 VD_FW_INL void            vd_fw_u_lookat(float eye[3], float target[3], float updir[3], float out[16]);
 
