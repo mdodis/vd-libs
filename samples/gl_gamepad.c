@@ -37,10 +37,44 @@
 "    FragColor = rect_color * texture(rect_texture, rect_uv);                                                      \n" \
 "}                                                                                                                 \n" \
 
-static GLuint load_image(const char *file, int *w, int *h);
-static void put_image(GLuint texture, float x, float y, float w, float h, float color[4]);
-
 static GLuint rect_shader;
+
+/** Controller of 151.680x85.120 (1200x673) */
+typedef struct {
+    float controller_pos[2];
+    float controller_dim[2];
+    float button_a_pos[2];
+    float button_a_dim[2];
+} ControllerInfo;
+
+ControllerInfo Base_Controller_Info = {
+    .controller_pos = {
+        0.f, 0.f,
+    },
+    .controller_dim = {
+        151.680f, 85.120f,
+    },
+    .button_a_pos = {
+        103.75596, 33.260258f, 
+    },
+    .button_a_dim = {
+        8.3549576f,  8.3549576f,
+    },
+};
+
+static struct {
+    float controller_dim[2];
+    GLuint tex_controller;
+    GLuint tex_button_a;
+} all;
+
+typedef struct {
+    int a;
+} ControllerState;
+
+static GLuint load_image(const char *file, int *w, int *h);
+static void   put_image(GLuint texture, float x, float y, float w, float h, float color[4]);
+static void   put_controller(float left, float top, float size);
 
 int main(int argc, char const *argv[])
 {
@@ -57,9 +91,14 @@ int main(int argc, char const *argv[])
         }
     });
     vd_fw_set_vsync_on(0);
+    vd_fw_set_title("Gamepad Sample");
 
     int iw, ih;
-    GLuint tex_controller = load_image("assets/controller.png", &iw, &ih);
+    all.tex_controller = load_image("assets/controller.png", &iw, &ih);
+    all.controller_dim[0] = (float)iw;
+    all.controller_dim[1] = (float)ih;
+
+    all.tex_button_a = load_image("assets/controller_a.png", &iw, &ih);
 
     GLuint vs = vd_fw_compile_shader(GL_VERTEX_SHADER, VERTEX_SOURCE);
     GLuint fs = vd_fw_compile_shader(GL_FRAGMENT_SHADER, FRAGMENT_SOURCE);
@@ -109,10 +148,25 @@ int main(int argc, char const *argv[])
             glUniformMatrix4fv(glGetUniformLocation(rect_shader, "projection"), 1, GL_FALSE, projection);
         }
 
-        float color[4] = {
-            1.f, 1.f, 1.f, 1.f
-        };
-        put_image(tex_controller, 0.f, 0.f, iw, ih, color);
+        put_controller(0.f, 0.f, 1000.f);
+
+        // float image_ratio = all.controller_dim[0] / 151.680f;
+
+        // float color[4] = {
+        //     1.f, 1.f, 1.f, 1.f
+        // };
+        // put_image(all.tex_controller, 0.f, 0.f, all.controller_dim[0], all.controller_dim[1], color);
+
+        // {
+        //     float ax = Base_Controller_Info.button_a_pos[0] * image_ratio;
+        //     float ay = Base_Controller_Info.button_a_pos[1] * image_ratio;
+
+        //     float aw = Base_Controller_Info.button_a_dim[0] * image_ratio;
+        //     float ah = Base_Controller_Info.button_a_dim[1] * image_ratio;
+
+        //     put_image(all.tex_button_a, ax, ay, aw, ah, (float[]) { 1.f, 0.f, 0.f, 1.f});
+
+        // }
 
         vd_fw_swap_buffers();
     }
@@ -148,6 +202,28 @@ static void put_image(GLuint texture, float x, float y, float w, float h, float 
     glUniform2f(glGetUniformLocation(rect_shader, "rect_off"), x, y);
     glUniform1i(glGetUniformLocation(rect_shader, "rect_texture"), 0);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+}
+
+static void put_controller(float left, float top, float size)
+{
+    float ratio = size / 151.680f;
+
+    {
+        float w = Base_Controller_Info.controller_dim[0] * ratio;
+        float h = Base_Controller_Info.controller_dim[1] * ratio;
+        put_image(all.tex_controller, left, top, w, h, (float[]) { 0.6f, 0.6f, 0.6f, 1.f});
+    }
+
+    {
+        float ax = Base_Controller_Info.button_a_pos[0] * ratio + left;
+        float ay = Base_Controller_Info.button_a_pos[1] * ratio + top;
+
+        float aw = Base_Controller_Info.button_a_dim[0] * ratio;
+        float ah = Base_Controller_Info.button_a_dim[1] * ratio;
+
+        put_image(all.tex_button_a, ax, ay, aw, ah, (float[]) { 1.f, 0.f, 0.f, 1.f});
+    }
+
 }
 
 #define VD_FW_IMPL
