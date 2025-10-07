@@ -35,7 +35,6 @@
  * - set min/max window size
  * - set window unresizable
  * - MacOS: vd_fw_get_focused
- * - MacOS: Figure out why F keys or escape don't get pressed
  * - MacOS: Figure out how to only send event for Quit 
  * - MacOS: vd_fw_set_app_icon
  * - MacOS: vd_fw_set_fullscreen
@@ -249,122 +248,6 @@ enum {
 
 typedef int VdFwKey;
 
-const char *vd_fw_get_key_name(VdFwKey k)
-{
-    static const char *translation_table[VD_FW_KEY_MAX] = {
-        "Unknown",       // VD_FW_KEY_UNKNOWN
-        "F1",            // VD_FW_KEY_F1
-        "F2",            // VD_FW_KEY_F2
-        "F3",            // VD_FW_KEY_F3
-        "F4",            // VD_FW_KEY_F4
-        "F5",            // VD_FW_KEY_F5
-        "F6",            // VD_FW_KEY_F6
-        "F7",            // VD_FW_KEY_F7
-        "F8",            // VD_FW_KEY_F8
-        "F9",            // VD_FW_KEY_F9
-        "F10",           // VD_FW_KEY_F10
-        "F11",           // VD_FW_KEY_F11
-        "F12",           // VD_FW_KEY_F12
-        "F13",           // VD_FW_KEY_F13
-        "F14",           // VD_FW_KEY_F14
-        "F15",           // VD_FW_KEY_F15
-        "F16",           // VD_FW_KEY_F16
-        "F17",           // VD_FW_KEY_F17
-        "F18",           // VD_FW_KEY_F18
-        "F19",           // VD_FW_KEY_F19
-        "F20",           // VD_FW_KEY_F20
-        "F21",           // VD_FW_KEY_F21
-        "F22",           // VD_FW_KEY_F22
-        "F23",           // VD_FW_KEY_F23
-        "F24",           // VD_FW_KEY_F24
-        "Backspace",     // VD_FW_KEY_BACKSPACE
-        "Ins",           // VD_FW_KEY_INS
-        "Home",          // VD_FW_KEY_HOME
-        "Pgup",          // VD_FW_KEY_PGUP
-        "Del",           // VD_FW_KEY_DEL
-        "End",           // VD_FW_KEY_END
-        "Pgdn",          // VD_FW_KEY_PGDN
-        "Space",         // VD_FW_KEY_SPACE
-        "Lcontrol",      // VD_FW_KEY_LCONTROL
-        "Rcontrol",      // VD_FW_KEY_RCONTROL
-        "Lalt",          // VD_FW_KEY_LALT
-        "Ralt",          // VD_FW_KEY_RALT
-        "Lshift",        // VD_FW_KEY_LSHIFT
-        "Rshift",        // VD_FW_KEY_RSHIFT
-        "Quote",         // VD_FW_KEY_QUOTE
-        "ArrowUp",       // VD_FW_KEY_ARROW_UP
-        "ArrowLeft",     // VD_FW_KEY_ARROW_LEFT
-        "ArrowDown",     // VD_FW_KEY_ARROW_DOWN
-        "ArrowRight",    // VD_FW_KEY_ARROW_RIGHT
-        "Comma",         // VD_FW_KEY_COMMA
-        "Minus",         // VD_FW_KEY_MINUS
-        "Dot",           // VD_FW_KEY_DOT
-        "SlashForward",  // VD_FW_KEY_SLASH_FORWARD
-        "0",             // VD_FW_KEY_0
-        "1",             // VD_FW_KEY_1
-        "2",             // VD_FW_KEY_2
-        "3",             // VD_FW_KEY_3
-        "4",             // VD_FW_KEY_4
-        "5",             // VD_FW_KEY_5
-        "6",             // VD_FW_KEY_6
-        "7",             // VD_FW_KEY_7
-        "8",             // VD_FW_KEY_8
-        "9",             // VD_FW_KEY_9
-        "Enter",         // VD_FW_KEY_ENTER
-        "Semicolon",     // VD_FW_KEY_SEMICOLON
-        "Tab",           // VD_FW_KEY_TAB
-        "Equals",        // VD_FW_KEY_EQUALS
-        "Capital",       // VD_FW_KEY_CAPITAL
-        "Escape",        // VD_FW_KEY_ESCAPE
-        "Reserved1",     // VD_FW_KEY_RESERVED1
-        "A",             // VD_FW_KEY_A
-        "B",             // VD_FW_KEY_B
-        "C",             // VD_FW_KEY_C
-        "D",             // VD_FW_KEY_D
-        "E",             // VD_FW_KEY_E
-        "F",             // VD_FW_KEY_F
-        "G",             // VD_FW_KEY_G
-        "H",             // VD_FW_KEY_H
-        "I",             // VD_FW_KEY_I
-        "J",             // VD_FW_KEY_J
-        "K",             // VD_FW_KEY_K
-        "L",             // VD_FW_KEY_L
-        "M",             // VD_FW_KEY_M
-        "N",             // VD_FW_KEY_N
-        "O",             // VD_FW_KEY_O
-        "P",             // VD_FW_KEY_P
-        "Q",             // VD_FW_KEY_Q
-        "R",             // VD_FW_KEY_R
-        "S",             // VD_FW_KEY_S
-        "T",             // VD_FW_KEY_T
-        "U",             // VD_FW_KEY_U
-        "V",             // VD_FW_KEY_V
-        "W",             // VD_FW_KEY_W
-        "X",             // VD_FW_KEY_X
-        "Y",             // VD_FW_KEY_Y
-        "Z",             // VD_FW_KEY_Z
-        "BracketOpen",   // VD_FW_KEY_BRACKET_OPEN
-        "SlashBack",     // VD_FW_KEY_SLASH_BACK
-        "BracketClose",  // VD_FW_KEY_BRACKET_CLOSE
-        "MediaNext",     // VD_FW_KEY_MEDIA_NEXT
-        "MediaPrev",     // VD_FW_KEY_MEDIA_PREV
-        "Backtick",      // VD_FW_KEY_BACKTICK
-        "MediaPlay",     // VD_FW_KEY_MEDIA_PLAY
-        "Numpad0",       // VD_FW_KEY_NUMPAD_0
-        "Numpad1",       // VD_FW_KEY_NUMPAD_1
-        "Numpad2",       // VD_FW_KEY_NUMPAD_2
-        "Numpad3",       // VD_FW_KEY_NUMPAD_3
-        "Numpad4",       // VD_FW_KEY_NUMPAD_4
-        "Numpad5",       // VD_FW_KEY_NUMPAD_5
-        "Numpad6",       // VD_FW_KEY_NUMPAD_6
-        "Numpad7",       // VD_FW_KEY_NUMPAD_7
-        "Numpad8",       // VD_FW_KEY_NUMPAD_8
-        "Numpad9",       // VD_FW_KEY_NUMPAD_9
-    };
-
-    return translation_table[k];
-}
-
 enum {
     VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN   = 1 << 0,
     VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN  = 1 << 1,
@@ -534,6 +417,13 @@ VD_FW_API int                vd_fw_get_key_pressed(int key);
  * @return     Whether this key is down currently
  */
 VD_FW_API int                vd_fw_get_key_down(int key);
+
+/**
+ * @brief Convert key to string.
+ * @param  k The key
+ * @return   The key's name
+ */
+VD_FW_INL const char*        vd_fw_get_key_name(VdFwKey k);
 
 /**
  * @brief Gets the backing scale factor
@@ -6472,6 +6362,7 @@ static VdFwWindowDelegate *Vd_Fw_Delegate;
 - (BOOL)canDrawConcurrently {
     return YES;
 }
+
 - (BOOL)preservesContentDuringLiveResize {
     return NO;
 }
@@ -6744,6 +6635,25 @@ VD_FW_API int vd_fw_running(void)
                     VD_FW_G.wheel_moved = 1;
                 } break;
 
+                case NSEventTypeFlagsChanged: {
+
+
+                    NSEventModifierFlags flags = [event modifierFlags];
+                    unsigned short keycode = [event keyCode];
+
+                    unsigned char shift_down = (flags & NSEventModifierFlagShift) ? 1 : 0;
+                    unsigned char option_down = (flags & NSEventModifierFlagOption) ? 1 : 0;
+                    unsigned char control_down = (flags & NSEventModifierFlagControl) ? 1 : 0;
+
+                    switch (keycode) {
+                        case 56: VD_FW_G.curr_key_states[VD_FW_KEY_LSHIFT] = shift_down; break;
+                        case 60: VD_FW_G.curr_key_states[VD_FW_KEY_RSHIFT] = shift_down; break;
+                        case 59: VD_FW_G.curr_key_states[VD_FW_KEY_LCONTROL] = control_down; break;
+                        case 61: VD_FW_G.curr_key_states[VD_FW_KEY_RCONTROL] = option_down; break;
+                        default: break;
+                    }
+                } break;
+
                 case NSEventTypeKeyUp:
                 case NSEventTypeKeyDown: {
                     BOOL is_key_down = [event type] == NSEventTypeKeyDown;
@@ -6751,12 +6661,6 @@ VD_FW_API int vd_fw_running(void)
                     unsigned short keycode = [event keyCode];
 
                     VdFwKey key = vd_fw__translate_mac_keycode(keycode);
-
-                    const char *keyname = vd_fw_get_key_name(key);
-                    if (is_key_down) {
-                        printf("%s: %d\n", keyname, keycode);
-                    }
-
 
                     // VD_FW_G.prev_key_states[key] = VD_FW_G.curr_key_states[key];
                     VD_FW_G.curr_key_states[key] = (unsigned char)is_key_down;
@@ -8381,6 +8285,124 @@ VD_FW_API int vd_fw_compile_or_hotload_program(unsigned int *program, unsigned l
 
     return result;
 }
+
+VD_FW_INL const char *vd_fw_get_key_name(VdFwKey k)
+{
+    static const char *translation_table[VD_FW_KEY_MAX] = {
+        "Unknown",       // VD_FW_KEY_UNKNOWN
+        "F1",            // VD_FW_KEY_F1
+        "F2",            // VD_FW_KEY_F2
+        "F3",            // VD_FW_KEY_F3
+        "F4",            // VD_FW_KEY_F4
+        "F5",            // VD_FW_KEY_F5
+        "F6",            // VD_FW_KEY_F6
+        "F7",            // VD_FW_KEY_F7
+        "F8",            // VD_FW_KEY_F8
+        "F9",            // VD_FW_KEY_F9
+        "F10",           // VD_FW_KEY_F10
+        "F11",           // VD_FW_KEY_F11
+        "F12",           // VD_FW_KEY_F12
+        "F13",           // VD_FW_KEY_F13
+        "F14",           // VD_FW_KEY_F14
+        "F15",           // VD_FW_KEY_F15
+        "F16",           // VD_FW_KEY_F16
+        "F17",           // VD_FW_KEY_F17
+        "F18",           // VD_FW_KEY_F18
+        "F19",           // VD_FW_KEY_F19
+        "F20",           // VD_FW_KEY_F20
+        "F21",           // VD_FW_KEY_F21
+        "F22",           // VD_FW_KEY_F22
+        "F23",           // VD_FW_KEY_F23
+        "F24",           // VD_FW_KEY_F24
+        "Backspace",     // VD_FW_KEY_BACKSPACE
+        "Ins",           // VD_FW_KEY_INS
+        "Home",          // VD_FW_KEY_HOME
+        "Pgup",          // VD_FW_KEY_PGUP
+        "Del",           // VD_FW_KEY_DEL
+        "End",           // VD_FW_KEY_END
+        "Pgdn",          // VD_FW_KEY_PGDN
+        "Space",         // VD_FW_KEY_SPACE
+        "Lcontrol",      // VD_FW_KEY_LCONTROL
+        "Rcontrol",      // VD_FW_KEY_RCONTROL
+        "Lalt",          // VD_FW_KEY_LALT
+        "Ralt",          // VD_FW_KEY_RALT
+        "Lshift",        // VD_FW_KEY_LSHIFT
+        "Rshift",        // VD_FW_KEY_RSHIFT
+        "Quote",         // VD_FW_KEY_QUOTE
+        "ArrowUp",       // VD_FW_KEY_ARROW_UP
+        "ArrowLeft",     // VD_FW_KEY_ARROW_LEFT
+        "ArrowDown",     // VD_FW_KEY_ARROW_DOWN
+        "ArrowRight",    // VD_FW_KEY_ARROW_RIGHT
+        "Comma",         // VD_FW_KEY_COMMA
+        "Minus",         // VD_FW_KEY_MINUS
+        "Dot",           // VD_FW_KEY_DOT
+        "SlashForward",  // VD_FW_KEY_SLASH_FORWARD
+        "0",             // VD_FW_KEY_0
+        "1",             // VD_FW_KEY_1
+        "2",             // VD_FW_KEY_2
+        "3",             // VD_FW_KEY_3
+        "4",             // VD_FW_KEY_4
+        "5",             // VD_FW_KEY_5
+        "6",             // VD_FW_KEY_6
+        "7",             // VD_FW_KEY_7
+        "8",             // VD_FW_KEY_8
+        "9",             // VD_FW_KEY_9
+        "Enter",         // VD_FW_KEY_ENTER
+        "Semicolon",     // VD_FW_KEY_SEMICOLON
+        "Tab",           // VD_FW_KEY_TAB
+        "Equals",        // VD_FW_KEY_EQUALS
+        "Capital",       // VD_FW_KEY_CAPITAL
+        "Escape",        // VD_FW_KEY_ESCAPE
+        "Reserved1",     // VD_FW_KEY_RESERVED1
+        "A",             // VD_FW_KEY_A
+        "B",             // VD_FW_KEY_B
+        "C",             // VD_FW_KEY_C
+        "D",             // VD_FW_KEY_D
+        "E",             // VD_FW_KEY_E
+        "F",             // VD_FW_KEY_F
+        "G",             // VD_FW_KEY_G
+        "H",             // VD_FW_KEY_H
+        "I",             // VD_FW_KEY_I
+        "J",             // VD_FW_KEY_J
+        "K",             // VD_FW_KEY_K
+        "L",             // VD_FW_KEY_L
+        "M",             // VD_FW_KEY_M
+        "N",             // VD_FW_KEY_N
+        "O",             // VD_FW_KEY_O
+        "P",             // VD_FW_KEY_P
+        "Q",             // VD_FW_KEY_Q
+        "R",             // VD_FW_KEY_R
+        "S",             // VD_FW_KEY_S
+        "T",             // VD_FW_KEY_T
+        "U",             // VD_FW_KEY_U
+        "V",             // VD_FW_KEY_V
+        "W",             // VD_FW_KEY_W
+        "X",             // VD_FW_KEY_X
+        "Y",             // VD_FW_KEY_Y
+        "Z",             // VD_FW_KEY_Z
+        "BracketOpen",   // VD_FW_KEY_BRACKET_OPEN
+        "SlashBack",     // VD_FW_KEY_SLASH_BACK
+        "BracketClose",  // VD_FW_KEY_BRACKET_CLOSE
+        "MediaNext",     // VD_FW_KEY_MEDIA_NEXT
+        "MediaPrev",     // VD_FW_KEY_MEDIA_PREV
+        "Backtick",      // VD_FW_KEY_BACKTICK
+        "MediaPlay",     // VD_FW_KEY_MEDIA_PLAY
+        "Numpad0",       // VD_FW_KEY_NUMPAD_0
+        "Numpad1",       // VD_FW_KEY_NUMPAD_1
+        "Numpad2",       // VD_FW_KEY_NUMPAD_2
+        "Numpad3",       // VD_FW_KEY_NUMPAD_3
+        "Numpad4",       // VD_FW_KEY_NUMPAD_4
+        "Numpad5",       // VD_FW_KEY_NUMPAD_5
+        "Numpad6",       // VD_FW_KEY_NUMPAD_6
+        "Numpad7",       // VD_FW_KEY_NUMPAD_7
+        "Numpad8",       // VD_FW_KEY_NUMPAD_8
+        "Numpad9",       // VD_FW_KEY_NUMPAD_9
+    };
+
+    return translation_table[k];
+}
+
+
 
 #if defined(__APPLE__)
 #pragma clang diagnostic pop
