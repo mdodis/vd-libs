@@ -148,7 +148,7 @@ int main(int argc, char const *argv[])
             .borderless = 0,
         }
     });
-    vd_fw_set_vsync_on(0);
+    vd_fw_set_vsync_on(1);
     vd_fw_set_title("Gamepad Sample");
 
     int iw, ih;

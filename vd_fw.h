@@ -39,6 +39,9 @@
  * - MacOS: Figure out how to only send event for Quit 
  * - MacOS: vd_fw_set_app_icon
  * - MacOS: vd_fw_set_fullscreen
+ * - When window not focused, or minimize, delay drawing
+ * - Allow to request specific framerate
+ * - MacOS: There's no way to draw while resizing without changing the api?
  * - MacOS APIs can't be used on another thread other than main thread :/
  *   so, just initialize display link and wait on condition variable + mutex when drawing while resizing
  * - On borderless, push mouse event right as we lose focus to a value outside of the window space
@@ -245,6 +248,122 @@ enum {
 };
 
 typedef int VdFwKey;
+
+const char *vd_fw_get_key_name(VdFwKey k)
+{
+    static const char *translation_table[VD_FW_KEY_MAX] = {
+        "Unknown",       // VD_FW_KEY_UNKNOWN
+        "F1",            // VD_FW_KEY_F1
+        "F2",            // VD_FW_KEY_F2
+        "F3",            // VD_FW_KEY_F3
+        "F4",            // VD_FW_KEY_F4
+        "F5",            // VD_FW_KEY_F5
+        "F6",            // VD_FW_KEY_F6
+        "F7",            // VD_FW_KEY_F7
+        "F8",            // VD_FW_KEY_F8
+        "F9",            // VD_FW_KEY_F9
+        "F10",           // VD_FW_KEY_F10
+        "F11",           // VD_FW_KEY_F11
+        "F12",           // VD_FW_KEY_F12
+        "F13",           // VD_FW_KEY_F13
+        "F14",           // VD_FW_KEY_F14
+        "F15",           // VD_FW_KEY_F15
+        "F16",           // VD_FW_KEY_F16
+        "F17",           // VD_FW_KEY_F17
+        "F18",           // VD_FW_KEY_F18
+        "F19",           // VD_FW_KEY_F19
+        "F20",           // VD_FW_KEY_F20
+        "F21",           // VD_FW_KEY_F21
+        "F22",           // VD_FW_KEY_F22
+        "F23",           // VD_FW_KEY_F23
+        "F24",           // VD_FW_KEY_F24
+        "Backspace",     // VD_FW_KEY_BACKSPACE
+        "Ins",           // VD_FW_KEY_INS
+        "Home",          // VD_FW_KEY_HOME
+        "Pgup",          // VD_FW_KEY_PGUP
+        "Del",           // VD_FW_KEY_DEL
+        "End",           // VD_FW_KEY_END
+        "Pgdn",          // VD_FW_KEY_PGDN
+        "Space",         // VD_FW_KEY_SPACE
+        "Lcontrol",      // VD_FW_KEY_LCONTROL
+        "Rcontrol",      // VD_FW_KEY_RCONTROL
+        "Lalt",          // VD_FW_KEY_LALT
+        "Ralt",          // VD_FW_KEY_RALT
+        "Lshift",        // VD_FW_KEY_LSHIFT
+        "Rshift",        // VD_FW_KEY_RSHIFT
+        "Quote",         // VD_FW_KEY_QUOTE
+        "ArrowUp",       // VD_FW_KEY_ARROW_UP
+        "ArrowLeft",     // VD_FW_KEY_ARROW_LEFT
+        "ArrowDown",     // VD_FW_KEY_ARROW_DOWN
+        "ArrowRight",    // VD_FW_KEY_ARROW_RIGHT
+        "Comma",         // VD_FW_KEY_COMMA
+        "Minus",         // VD_FW_KEY_MINUS
+        "Dot",           // VD_FW_KEY_DOT
+        "SlashForward",  // VD_FW_KEY_SLASH_FORWARD
+        "0",             // VD_FW_KEY_0
+        "1",             // VD_FW_KEY_1
+        "2",             // VD_FW_KEY_2
+        "3",             // VD_FW_KEY_3
+        "4",             // VD_FW_KEY_4
+        "5",             // VD_FW_KEY_5
+        "6",             // VD_FW_KEY_6
+        "7",             // VD_FW_KEY_7
+        "8",             // VD_FW_KEY_8
+        "9",             // VD_FW_KEY_9
+        "Enter",         // VD_FW_KEY_ENTER
+        "Semicolon",     // VD_FW_KEY_SEMICOLON
+        "Tab",           // VD_FW_KEY_TAB
+        "Equals",        // VD_FW_KEY_EQUALS
+        "Capital",       // VD_FW_KEY_CAPITAL
+        "Escape",        // VD_FW_KEY_ESCAPE
+        "Reserved1",     // VD_FW_KEY_RESERVED1
+        "A",             // VD_FW_KEY_A
+        "B",             // VD_FW_KEY_B
+        "C",             // VD_FW_KEY_C
+        "D",             // VD_FW_KEY_D
+        "E",             // VD_FW_KEY_E
+        "F",             // VD_FW_KEY_F
+        "G",             // VD_FW_KEY_G
+        "H",             // VD_FW_KEY_H
+        "I",             // VD_FW_KEY_I
+        "J",             // VD_FW_KEY_J
+        "K",             // VD_FW_KEY_K
+        "L",             // VD_FW_KEY_L
+        "M",             // VD_FW_KEY_M
+        "N",             // VD_FW_KEY_N
+        "O",             // VD_FW_KEY_O
+        "P",             // VD_FW_KEY_P
+        "Q",             // VD_FW_KEY_Q
+        "R",             // VD_FW_KEY_R
+        "S",             // VD_FW_KEY_S
+        "T",             // VD_FW_KEY_T
+        "U",             // VD_FW_KEY_U
+        "V",             // VD_FW_KEY_V
+        "W",             // VD_FW_KEY_W
+        "X",             // VD_FW_KEY_X
+        "Y",             // VD_FW_KEY_Y
+        "Z",             // VD_FW_KEY_Z
+        "BracketOpen",   // VD_FW_KEY_BRACKET_OPEN
+        "SlashBack",     // VD_FW_KEY_SLASH_BACK
+        "BracketClose",  // VD_FW_KEY_BRACKET_CLOSE
+        "MediaNext",     // VD_FW_KEY_MEDIA_NEXT
+        "MediaPrev",     // VD_FW_KEY_MEDIA_PREV
+        "Backtick",      // VD_FW_KEY_BACKTICK
+        "MediaPlay",     // VD_FW_KEY_MEDIA_PLAY
+        "Numpad0",       // VD_FW_KEY_NUMPAD_0
+        "Numpad1",       // VD_FW_KEY_NUMPAD_1
+        "Numpad2",       // VD_FW_KEY_NUMPAD_2
+        "Numpad3",       // VD_FW_KEY_NUMPAD_3
+        "Numpad4",       // VD_FW_KEY_NUMPAD_4
+        "Numpad5",       // VD_FW_KEY_NUMPAD_5
+        "Numpad6",       // VD_FW_KEY_NUMPAD_6
+        "Numpad7",       // VD_FW_KEY_NUMPAD_7
+        "Numpad8",       // VD_FW_KEY_NUMPAD_8
+        "Numpad9",       // VD_FW_KEY_NUMPAD_9
+    };
+
+    return translation_table[k];
+}
 
 enum {
     VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN   = 1 << 0,
@@ -6012,6 +6131,7 @@ typedef struct {
     NSOpenGLContext             *gl_context;
     BOOL                        should_close;
     mach_timebase_info_data_t   time_base;
+    VdFwContentView             *content_view;
     uint64_t                    last_time;
     CGFloat                     scale;
     int                         wheel_moved;
@@ -6041,6 +6161,12 @@ static VdFw__MacOsInternalData Vd_Fw_Globals;
 
 static VdFwKey vd_fw__translate_mac_keycode(unsigned short keycode)
 {
+                    // Escape: F17: 53
+                    // Up: 126
+                    // Down: 125
+                    // Right: 124
+                    // Left: 123
+                    // 
     static VdFwKey translation_table[280] = {
         VD_FW_KEY_A,                 // 0,     KEY_A
         VD_FW_KEY_S,                 // 1,     KEY_S
@@ -6094,14 +6220,32 @@ static VdFwKey vd_fw__translate_mac_keycode(unsigned short keycode)
         VD_FW_KEY_SPACE,             // 49,    KEY_SPACEBAR
         VD_FW_KEY_BACKTICK,          // 50,    KEY_TILDE
         VD_FW_KEY_BACKSPACE,         // 51,    KEY_BACKSPACE
+        VD_FW_KEY_UNKNOWN,           // 52,    ----
         VD_FW_KEY_ESCAPE,            // 53,    KEY_ESCAPE
+        VD_FW_KEY_UNKNOWN,           // 54,    ----
+        VD_FW_KEY_UNKNOWN,           // 55,    ----
+        VD_FW_KEY_UNKNOWN,           // 56,    ----
+        VD_FW_KEY_UNKNOWN,           // 57,    ----
+        VD_FW_KEY_UNKNOWN,           // 58,    ----
+        VD_FW_KEY_UNKNOWN,           // 59,    ----
+        VD_FW_KEY_UNKNOWN,           // 60,    ----
+        VD_FW_KEY_UNKNOWN,           // 61,    ----
+        VD_FW_KEY_UNKNOWN,           // 62,    ----
+        VD_FW_KEY_UNKNOWN,           // 63,    ----
         VD_FW_KEY_F17,               // 64,    KEY_F17
         VD_FW_KEY_UNKNOWN,           // 65,    KEY_PAD_DOT
+        VD_FW_KEY_UNKNOWN,           // 66,    ----
         VD_FW_KEY_UNKNOWN,           // 67,    KEY_PAD_MULTIPLY
+        VD_FW_KEY_UNKNOWN,           // 68,    ----
         VD_FW_KEY_UNKNOWN,           // 69,    KEY_PAD_ADD
+        VD_FW_KEY_UNKNOWN,           // 70,    ----
         VD_FW_KEY_UNKNOWN,           // 71,    KEY_CLEAR
+        VD_FW_KEY_UNKNOWN,           // 72,    ----
+        VD_FW_KEY_UNKNOWN,           // 73,    ----
+        VD_FW_KEY_UNKNOWN,           // 74,    ----
         VD_FW_KEY_UNKNOWN,           // 75,    KEY_PAD_DIVIDE
         VD_FW_KEY_UNKNOWN,           // 76,    KEY_PAD_ENTER
+        VD_FW_KEY_UNKNOWN,           // 77,    ----
         VD_FW_KEY_UNKNOWN,           // 78,    KEY_PAD_SUB
         VD_FW_KEY_F18,               // 79,    KEY_F18
         VD_FW_KEY_F19,               // 80,    KEY_F19
@@ -6114,21 +6258,31 @@ static VdFwKey vd_fw__translate_mac_keycode(unsigned short keycode)
         VD_FW_KEY_NUMPAD_5,          // 87,    KEY_PAD_5
         VD_FW_KEY_NUMPAD_6,          // 88,    KEY_PAD_6
         VD_FW_KEY_NUMPAD_7,          // 89,    KEY_PAD_7
+        VD_FW_KEY_UNKNOWN,           // 90,    ----
         VD_FW_KEY_NUMPAD_8,          // 91,    KEY_PAD_8
         VD_FW_KEY_NUMPAD_9,          // 92,    KEY_PAD_9
+        VD_FW_KEY_UNKNOWN,           // 93,    ----
+        VD_FW_KEY_UNKNOWN,           // 94,    ----
+        VD_FW_KEY_UNKNOWN,           // 95,    ----
         VD_FW_KEY_F5,                // 96,    KEY_F5
         VD_FW_KEY_F6,                // 97,    KEY_F6
         VD_FW_KEY_F7,                // 98,    KEY_F7
         VD_FW_KEY_F3,                // 99,    KEY_F3
         VD_FW_KEY_F8,                // 100,   KEY_F8
         VD_FW_KEY_F9,                // 101,   KEY_F9
+        VD_FW_KEY_UNKNOWN,           // 102,    ----
         VD_FW_KEY_F11,               // 103,   KEY_F11
+        VD_FW_KEY_UNKNOWN,           // 104,    ----
         VD_FW_KEY_F13,               // 105,   KEY_F13
         VD_FW_KEY_F16,               // 106,   KEY_F16
         VD_FW_KEY_F14,               // 107,   KEY_F14
+        VD_FW_KEY_UNKNOWN,           // 108,    ----
         VD_FW_KEY_F10,               // 109,   KEY_F10
+        VD_FW_KEY_UNKNOWN,           // 110,    ----
         VD_FW_KEY_F12,               // 111,   KEY_F12
+        VD_FW_KEY_UNKNOWN,           // 112,    ----
         VD_FW_KEY_F15,               // 113,   KEY_F15
+        VD_FW_KEY_UNKNOWN,           // 114,    ----
         VD_FW_KEY_HOME,              // 115,   KEY_HOME
         VD_FW_KEY_PGUP,              // 116,   KEY_PAGE_UP
         VD_FW_KEY_DEL,               // 117,   KEY_DEL
@@ -6141,6 +6295,135 @@ static VdFwKey vd_fw__translate_mac_keycode(unsigned short keycode)
         VD_FW_KEY_ARROW_RIGHT,       // 124,   KEY_RIGHT
         VD_FW_KEY_ARROW_DOWN,        // 125,   KEY_DOWN
         VD_FW_KEY_ARROW_UP,          // 126,   KEY_UP
+        VD_FW_KEY_UNKNOWN,           // 127,    ----
+        VD_FW_KEY_UNKNOWN,           // 128,    ----
+        VD_FW_KEY_UNKNOWN,           // 129,    ----
+        VD_FW_KEY_UNKNOWN,           // 130,    ----
+        VD_FW_KEY_UNKNOWN,           // 131,    ----
+        VD_FW_KEY_UNKNOWN,           // 132,    ----
+        VD_FW_KEY_UNKNOWN,           // 133,    ----
+        VD_FW_KEY_UNKNOWN,           // 134,    ----
+        VD_FW_KEY_UNKNOWN,           // 135,    ----
+        VD_FW_KEY_UNKNOWN,           // 136,    ----
+        VD_FW_KEY_UNKNOWN,           // 137,    ----
+        VD_FW_KEY_UNKNOWN,           // 138,    ----
+        VD_FW_KEY_UNKNOWN,           // 139,    ----
+        VD_FW_KEY_UNKNOWN,           // 140,    ----
+        VD_FW_KEY_UNKNOWN,           // 141,    ----
+        VD_FW_KEY_UNKNOWN,           // 142,    ----
+        VD_FW_KEY_UNKNOWN,           // 143,    ----
+        VD_FW_KEY_UNKNOWN,           // 144,    ----
+        VD_FW_KEY_UNKNOWN,           // 145,    ----
+        VD_FW_KEY_UNKNOWN,           // 146,    ----
+        VD_FW_KEY_UNKNOWN,           // 147,    ----
+        VD_FW_KEY_UNKNOWN,           // 148,    ----
+        VD_FW_KEY_UNKNOWN,           // 149,    ----
+        VD_FW_KEY_UNKNOWN,           // 150,    ----
+        VD_FW_KEY_UNKNOWN,           // 151,    ----
+        VD_FW_KEY_UNKNOWN,           // 152,    ----
+        VD_FW_KEY_UNKNOWN,           // 153,    ----
+        VD_FW_KEY_UNKNOWN,           // 154,    ----
+        VD_FW_KEY_UNKNOWN,           // 155,    ----
+        VD_FW_KEY_UNKNOWN,           // 156,    ----
+        VD_FW_KEY_UNKNOWN,           // 157,    ----
+        VD_FW_KEY_UNKNOWN,           // 158,    ----
+        VD_FW_KEY_UNKNOWN,           // 159,    ----
+        VD_FW_KEY_UNKNOWN,           // 160,    ----
+        VD_FW_KEY_UNKNOWN,           // 161,    ----
+        VD_FW_KEY_UNKNOWN,           // 162,    ----
+        VD_FW_KEY_UNKNOWN,           // 163,    ----
+        VD_FW_KEY_UNKNOWN,           // 164,    ----
+        VD_FW_KEY_UNKNOWN,           // 165,    ----
+        VD_FW_KEY_UNKNOWN,           // 166,    ----
+        VD_FW_KEY_UNKNOWN,           // 167,    ----
+        VD_FW_KEY_UNKNOWN,           // 168,    ----
+        VD_FW_KEY_UNKNOWN,           // 169,    ----
+        VD_FW_KEY_UNKNOWN,           // 170,    ----
+        VD_FW_KEY_UNKNOWN,           // 171,    ----
+        VD_FW_KEY_UNKNOWN,           // 172,    ----
+        VD_FW_KEY_UNKNOWN,           // 173,    ----
+        VD_FW_KEY_UNKNOWN,           // 174,    ----
+        VD_FW_KEY_UNKNOWN,           // 175,    ----
+        VD_FW_KEY_UNKNOWN,           // 176,    ----
+        VD_FW_KEY_UNKNOWN,           // 177,    ----
+        VD_FW_KEY_UNKNOWN,           // 178,    ----
+        VD_FW_KEY_UNKNOWN,           // 179,    ----
+        VD_FW_KEY_UNKNOWN,           // 180,    ----
+        VD_FW_KEY_UNKNOWN,           // 181,    ----
+        VD_FW_KEY_UNKNOWN,           // 182,    ----
+        VD_FW_KEY_UNKNOWN,           // 183,    ----
+        VD_FW_KEY_UNKNOWN,           // 184,    ----
+        VD_FW_KEY_UNKNOWN,           // 185,    ----
+        VD_FW_KEY_UNKNOWN,           // 186,    ----
+        VD_FW_KEY_UNKNOWN,           // 187,    ----
+        VD_FW_KEY_UNKNOWN,           // 188,    ----
+        VD_FW_KEY_UNKNOWN,           // 189,    ----
+        VD_FW_KEY_UNKNOWN,           // 190,    ----
+        VD_FW_KEY_UNKNOWN,           // 191,    ----
+        VD_FW_KEY_UNKNOWN,           // 192,    ----
+        VD_FW_KEY_UNKNOWN,           // 193,    ----
+        VD_FW_KEY_UNKNOWN,           // 194,    ----
+        VD_FW_KEY_UNKNOWN,           // 195,    ----
+        VD_FW_KEY_UNKNOWN,           // 196,    ----
+        VD_FW_KEY_UNKNOWN,           // 197,    ----
+        VD_FW_KEY_UNKNOWN,           // 198,    ----
+        VD_FW_KEY_UNKNOWN,           // 199,    ----
+        VD_FW_KEY_UNKNOWN,           // 200,    ----
+        VD_FW_KEY_UNKNOWN,           // 201,    ----
+        VD_FW_KEY_UNKNOWN,           // 202,    ----
+        VD_FW_KEY_UNKNOWN,           // 203,    ----
+        VD_FW_KEY_UNKNOWN,           // 204,    ----
+        VD_FW_KEY_UNKNOWN,           // 205,    ----
+        VD_FW_KEY_UNKNOWN,           // 206,    ----
+        VD_FW_KEY_UNKNOWN,           // 207,    ----
+        VD_FW_KEY_UNKNOWN,           // 208,    ----
+        VD_FW_KEY_UNKNOWN,           // 209,    ----
+        VD_FW_KEY_UNKNOWN,           // 210,    ----
+        VD_FW_KEY_UNKNOWN,           // 211,    ----
+        VD_FW_KEY_UNKNOWN,           // 212,    ----
+        VD_FW_KEY_UNKNOWN,           // 213,    ----
+        VD_FW_KEY_UNKNOWN,           // 214,    ----
+        VD_FW_KEY_UNKNOWN,           // 215,    ----
+        VD_FW_KEY_UNKNOWN,           // 216,    ----
+        VD_FW_KEY_UNKNOWN,           // 217,    ----
+        VD_FW_KEY_UNKNOWN,           // 218,    ----
+        VD_FW_KEY_UNKNOWN,           // 219,    ----
+        VD_FW_KEY_UNKNOWN,           // 220,    ----
+        VD_FW_KEY_UNKNOWN,           // 221,    ----
+        VD_FW_KEY_UNKNOWN,           // 222,    ----
+        VD_FW_KEY_UNKNOWN,           // 223,    ----
+        VD_FW_KEY_UNKNOWN,           // 224,    ----
+        VD_FW_KEY_UNKNOWN,           // 225,    ----
+        VD_FW_KEY_UNKNOWN,           // 226,    ----
+        VD_FW_KEY_UNKNOWN,           // 227,    ----
+        VD_FW_KEY_UNKNOWN,           // 228,    ----
+        VD_FW_KEY_UNKNOWN,           // 229,    ----
+        VD_FW_KEY_UNKNOWN,           // 230,    ----
+        VD_FW_KEY_UNKNOWN,           // 231,    ----
+        VD_FW_KEY_UNKNOWN,           // 232,    ----
+        VD_FW_KEY_UNKNOWN,           // 233,    ----
+        VD_FW_KEY_UNKNOWN,           // 234,    ----
+        VD_FW_KEY_UNKNOWN,           // 235,    ----
+        VD_FW_KEY_UNKNOWN,           // 236,    ----
+        VD_FW_KEY_UNKNOWN,           // 237,    ----
+        VD_FW_KEY_UNKNOWN,           // 238,    ----
+        VD_FW_KEY_UNKNOWN,           // 239,    ----
+        VD_FW_KEY_UNKNOWN,           // 240,    ----
+        VD_FW_KEY_UNKNOWN,           // 241,    ----
+        VD_FW_KEY_UNKNOWN,           // 242,    ----
+        VD_FW_KEY_UNKNOWN,           // 243,    ----
+        VD_FW_KEY_UNKNOWN,           // 244,    ----
+        VD_FW_KEY_UNKNOWN,           // 245,    ----
+        VD_FW_KEY_UNKNOWN,           // 246,    ----
+        VD_FW_KEY_UNKNOWN,           // 247,    ----
+        VD_FW_KEY_UNKNOWN,           // 248,    ----
+        VD_FW_KEY_UNKNOWN,           // 249,    ----
+        VD_FW_KEY_UNKNOWN,           // 250,    ----
+        VD_FW_KEY_UNKNOWN,           // 251,    ----
+        VD_FW_KEY_UNKNOWN,           // 252,    ----
+        VD_FW_KEY_UNKNOWN,           // 253,    ----
+        VD_FW_KEY_UNKNOWN,           // 254,    ----
+        VD_FW_KEY_UNKNOWN,           // 255,    ----
         VD_FW_KEY_LCONTROL,          // 256,   KEY_CTRL_LEFT
         VD_FW_KEY_LSHIFT,            // 257,   KEY_SHIFT_LEFT
         VD_FW_KEY_RSHIFT,            // 258,   KEY_SHIFT_RIGHT
@@ -6175,6 +6458,7 @@ static VdFwWindowDelegate *Vd_Fw_Delegate;
 }
 
 - (void)windowDidResize:(NSNotification *)notification {
+    [VD_FW_G.content_view setNeedsDisplay: YES];
     [VD_FW_G.gl_context update];
 }
 - (BOOL)acceptsFirstResponder {
@@ -6187,6 +6471,9 @@ static VdFwWindowDelegate *Vd_Fw_Delegate;
 
 - (BOOL)canDrawConcurrently {
     return YES;
+}
+- (BOOL)preservesContentDuringLiveResize {
+    return NO;
 }
 
 - (void)applicationDidBecomeActive:(NSNotification *)notification {
@@ -6299,9 +6586,11 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
                                                                      shareContext: nil];
         NSRect wframe = [[VD_FW_G.window contentView] bounds];
         NSView *fw_view = [[VdFwContentView alloc] initWithFrame:wframe];
+        VD_FW_G.content_view = (VdFwContentView*)fw_view;
         [VD_FW_G.window setContentView: fw_view];
         // NSView *content_view = [VD_FW_G.window contentView];
         [fw_view setWantsLayer: YES];
+        // [[fw_view layer] setDrawsAsynchronously: YES];
         [fw_view setAcceptsTouchEvents:YES]; // optional for touch, but ok
         [fw_view addTrackingArea:[[NSTrackingArea alloc] initWithRect:fw_view.bounds
                                                              options:NSTrackingMouseMoved |
@@ -6463,9 +6752,11 @@ VD_FW_API int vd_fw_running(void)
 
                     VdFwKey key = vd_fw__translate_mac_keycode(keycode);
 
-                    if (key == VD_FW_KEY_F1) {
-                        printf("F1\n");
+                    const char *keyname = vd_fw_get_key_name(key);
+                    if (is_key_down) {
+                        printf("%s: %d\n", keyname, keycode);
                     }
+
 
                     // VD_FW_G.prev_key_states[key] = VD_FW_G.curr_key_states[key];
                     VD_FW_G.curr_key_states[key] = (unsigned char)is_key_down;
