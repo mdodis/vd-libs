@@ -569,6 +569,7 @@ static void parse_api_function(char *buf, size_t buf_len, FILE *f, FILE *out, Ar
         PUT_LINE("\"page\": \"%.*s.html\",", STR_EXPAND(get_workspace()->current_source_file->title));
         PUT_LINE("\"title\": \"%.*s\",", STR_EXPAND(get_workspace()->current_source_file->title));
         PUT_LINE("\"section\": \"%.*s\",", STR_EXPAND(id_str));
+        PUT_LINE("\"subtitle\": \"%.*s\",", STR_EXPAND(id_str));
         PUT("\"contents\": \"");
         PUT("%.*s", STR_EXPAND(id_str));
         PUT("\"");
@@ -830,6 +831,8 @@ int main(int argc, char const *argv[])
             PUT("\"section\": \"");
             output_section_id(indexed_section->section, out);
             PUT("\",\n");
+
+            PUT_LINE("\"subtitle\": \"%.*s\",", STR_EXPAND(make_str_from_tag_value(vd_dspc_section_first_tag(indexed_section->section))));
 
             PUT("\"contents\": \"");
             for (VdDspcSection *child = indexed_section->section->first; child; child = child->next) {

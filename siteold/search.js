@@ -52,7 +52,7 @@ function searchBoxRenderResults(results) {
         subheading.textContent = result.item.title;
         subheadingContainer.appendChild(subheading);
 
-        const sectionText = document.createTextNode(result.item.section);
+        const sectionText = document.createTextNode(result.item.subtitle);
         subheadingContainer.appendChild(sectionText);
 
         li.addEventListener("click", () => {
