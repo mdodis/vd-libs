@@ -6,17 +6,15 @@ fetch("/search-index.json")
     .then(data => {
         const options = {
           keys: ["contents"],
-          includeScore: true,
-          threshold: 0.4,
+          threshold: 0.1,
           minMatchCharLength: 3,
+          shouldSort: true,
           ignoreLocation: true,
+          includeMatches: true,
         };
         searchIndex = data;
 
         fuse = new Fuse(data, options);
-        // // Example search:
-        // const results = fuse.search("for how to use");
-        // console.log(results);
     });
 
 const searchBox = document.getElementById("searchbox");
@@ -41,8 +39,9 @@ function searchBoxRenderResults(results) {
     results.forEach(result => {
         const li = document.createElement("li");
         li.className = "list-group-item d-flex align-items-start list-group-item-action search-result";
-        // li.textContent = result.item.page + " - " + result.item.section;
         li.tabIndex = 0;
+
+        console.log("Search Result: " + JSON.stringify(result));
 
         const subheadingContainer = document.createElement("div");
         subheadingContainer.className="ms-2 me-auto";
@@ -50,7 +49,7 @@ function searchBoxRenderResults(results) {
 
         const subheading = document.createElement("div");
         subheading.className = "fw-bold";
-        subheading.textContent = result.item.page;
+        subheading.textContent = result.item.title;
         subheadingContainer.appendChild(subheading);
 
         const sectionText = document.createTextNode(result.item.section);

@@ -567,6 +567,7 @@ static void parse_api_function(char *buf, size_t buf_len, FILE *f, FILE *out, Ar
 
         PUT_LINE("\"id\": %d,", search_index_curr_id());
         PUT_LINE("\"page\": \"%.*s.html\",", STR_EXPAND(get_workspace()->current_source_file->title));
+        PUT_LINE("\"title\": \"%.*s\",", STR_EXPAND(get_workspace()->current_source_file->title));
         PUT_LINE("\"section\": \"%.*s\",", STR_EXPAND(id_str));
         PUT("\"contents\": \"");
         PUT("%.*s", STR_EXPAND(id_str));
@@ -825,6 +826,7 @@ int main(int argc, char const *argv[])
 
             PUT_LINE("\"id\": %d,", indexed_section->id);
             PUT_LINE("\"page\": \"%.*s.html\",", STR_EXPAND(source_file->title));
+            PUT_LINE("\"title\": \"%.*s\",", STR_EXPAND(source_file->title));
             PUT("\"section\": \"");
             output_section_id(indexed_section->section, out);
             PUT("\",\n");
