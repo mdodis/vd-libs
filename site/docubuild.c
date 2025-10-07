@@ -1,3 +1,6 @@
+// @todo(mdodis): search_index_clear?
+//                search_index_id -- get id
+//                open search_index at start and append to it as we go
 #define VD_USE_CRT 1
 #define VD_MACRO_ABBREVIATIONS 1
 #include <stdio.h>
@@ -35,6 +38,7 @@ typedef struct {
     dynarray SourceFile *source_files;
     VdDspcDocument      document;
     SourceFile          *current_source_file;
+    FILE                *search_index_file;
 } Workspace;
 
 static Str make_str_from_section_id(VdDspcSection *section);
@@ -46,6 +50,7 @@ static SourceFile *get_current_source_file(void);
 static void process_child(VdDspcSection *section, FILE *out, int depth);
 static void process_children(VdDspcSection *section, FILE *out, int depth);
 static void process_verbatim_html(VdDspcSection *section, FILE *out, int depth);
+static void search_index_clear(void);
 
 
 static void process_apigen(VdDspcSection *section, FILE *out, int depth);
@@ -1067,6 +1072,11 @@ static Str make_str_from_str_node(VdDspcStrNode *node)
 {
     Str result = {(char*)node->str, node->len};
     return result;
+}
+
+static void search_index_clear(void)
+{
+
 }
 
 #define VD_DSPC_IMPL
