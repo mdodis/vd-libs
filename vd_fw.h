@@ -34,11 +34,10 @@
  *   - Actually, consider removing it entirely
  * - set min/max window size
  * - set window unresizable
- * - MacOS: vd_fw_get_focused
  * - MacOS: vd_fw_set_app_icon
  * - MacOS: vd_fw_set_fullscreen
- * - When window not focused, or minimize, delay drawing
- * - Allow to request specific framerate
+ * - When window not focused, or minimize, delay drawing?
+ * - Allow to request specific framerate?
  * - MacOS: There's no way to draw while resizing without changing the api?
  * - MacOS APIs can't be used on another thread other than main thread :/
  *   so, just initialize display link and wait on condition variable + mutex when drawing while resizing
@@ -6039,11 +6038,8 @@ typedef struct {
     NSPoint                     mouse_pos_scaled;
     unsigned char               curr_key_states[VD_FW_KEY_MAX];
     unsigned char               prev_key_states[VD_FW_KEY_MAX];
-
-/* ----RENDER THREAD - WINDOW THREAD SYNC---------------------------------------------------------------------------- */
-    pthread_mutex_t             mtx;
-    pthread_cond_t              cond_var;
-    pthread_t                   window_thread;
+    int                         focus_changed;
+    int                         focused;
 } VdFw__MacOsInternalData;
 
 static VdFw__MacOsInternalData Vd_Fw_Globals;
@@ -6338,12 +6334,21 @@ static VdFwWindowDelegate *Vd_Fw_Delegate;
 @implementation VdFwWindowDelegate
     NSPoint initialLocation;
 
+- (void)windowDidBecomeKey:(NSNotification *)notification {
+    VD_FW_G.focus_changed = 1;
+    VD_FW_G.focused = 1;
+}
+
+- (void)windowDidResignKey:(NSNotification *)notification {
+    VD_FW_G.focus_changed = 1;
+    VD_FW_G.focused = 0;
+}
+
 - (void)windowWillClose:(NSNotification*)notification {
     VD_FW_G.should_close = YES;
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
-    printf("applicationDidFinishLaunching\n");
 }
 
 - (void)windowDidResize:(NSNotification *)notification {
@@ -6607,6 +6612,8 @@ VD_FW_API int vd_fw_running(void)
     VD_FW_G.mouse_delta.x = 0.f;
     VD_FW_G.mouse_delta.y = 0.f;
 
+    VD_FW_G.focus_changed = 0;
+
     for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
         VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
     }
@@ -6815,9 +6822,8 @@ VD_FW_API int vd_fw_swap_buffers(void)
 
 VD_FW_API int vd_fw_get_focused(int *focused)
 {
-    // @todo(mdodis): 
-    *focused = 1;
-    return 0;
+    *focused = VD_FW_G.focused;
+    return VD_FW_G.focus_changed;
 }
 
 VD_FW_API int vd_fw_get_size(int *w, int *h)
