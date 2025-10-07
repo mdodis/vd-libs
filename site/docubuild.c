@@ -39,6 +39,7 @@ typedef struct {
     VdDspcDocument      document;
     SourceFile          *current_source_file;
     FILE                *search_index_file;
+    int                 search_index_id;
 } Workspace;
 
 static Str make_str_from_section_id(VdDspcSection *section);
@@ -50,7 +51,10 @@ static SourceFile *get_current_source_file(void);
 static void process_child(VdDspcSection *section, FILE *out, int depth);
 static void process_children(VdDspcSection *section, FILE *out, int depth);
 static void process_verbatim_html(VdDspcSection *section, FILE *out, int depth);
-static void search_index_clear(void);
+static void search_index_begin_entry(FILE *out);
+static void search_index_end_entry(FILE *out);
+static int  search_index_id(void);
+static int  search_index_curr_id(void);
 
 
 static void process_apigen(VdDspcSection *section, FILE *out, int depth);
@@ -555,6 +559,26 @@ static void parse_api_function(char *buf, size_t buf_len, FILE *f, FILE *out, Ar
 
     }
 
+    FILE *prevout = out;
+    {
+        out = get_workspace()->search_index_file;
+        search_index_begin_entry(get_workspace()->search_index_file);
+
+
+        PUT_LINE("\"id\": %d,", search_index_curr_id());
+        PUT_LINE("\"page\": \"%.*s.html\",", STR_EXPAND(get_workspace()->current_source_file->title));
+        PUT_LINE("\"section\": \"%.*s\",", STR_EXPAND(id_str));
+        PUT("\"contents\": \"");
+        PUT("%.*s", STR_EXPAND(id_str));
+        PUT("\"");
+
+
+        search_index_end_entry(get_workspace()->search_index_file);
+    }
+
+    out = prevout;
+
+
 
     PUT_LINE("<div id=\"%.*s\" class=\"L2 apiitem function\">", STR_EXPAND(id_str));
         PUT_LINE("<span class=\"item-decl\">%.*s</span>", STR_EXPAND(func_decl_pretty));
@@ -705,6 +729,22 @@ int main(int argc, char const *argv[])
 
     Global_Workspace = &workspace;
 
+    {
+        Arena *temp_arena = VD_GET_SCRATCH_ARENA();
+        StrBuilder bld;
+        str_builder_init(&bld, temp_arena);
+        str_builder_push_cstr(&bld, directory_to_write_to);
+        str_builder_push_str(&bld, LIT("search-index.json"));
+        str_builder_null_terminate(&bld);
+        const char *output_file = str_builder_compose(&bld, NULL).s;
+
+        workspace.search_index_file = fopen(output_file, "w");
+        fprintf(workspace.search_index_file, "[\n");
+        VD_RETURN_SCRATCH_ARENA(temp_arena);
+
+        workspace.search_index_id = 1;
+    }
+
     dynarray_init_with_cap(workspace.source_files, &workspace.global_arena, 8);
     vd_directory_walk_recursively(directory_to_open, collect_source_file, &workspace);;
 
@@ -765,17 +805,8 @@ int main(int argc, char const *argv[])
     }
 
     Arena *temp_arena = VD_GET_SCRATCH_ARENA();
-    StrBuilder bld;
-    str_builder_init(&bld, temp_arena);
-    str_builder_push_cstr(&bld, directory_to_write_to);
-    str_builder_push_str(&bld, LIT("search-index.json"));
-    str_builder_null_terminate(&bld);
-    const char *output_file = str_builder_compose(&bld, NULL).s;
-    int index_id = 0;
-    // Generate search-index.json
-    FILE *out = fopen(output_file, "w");
-    fprintf(out, "[\n");
     for (VdDspcTree *tree = vd_dspc_document_first_tree(&workspace.document); tree; tree = vd_dspc_document_next_tree(&workspace.document, tree)) {
+        FILE *out = workspace.search_index_file;
         SourceFile *source_file = (SourceFile*)tree->userdata;
 
         if (str_eq(source_file->title, LIT("index"))) {
@@ -785,17 +816,12 @@ int main(int argc, char const *argv[])
         dynarray IndexedSection *indexed_sections = 0;
         dynarray_init(indexed_sections, temp_arena);
 
-        search_and_add_indexed_sections(vd_dspc_tree_first_section(tree), &indexed_sections, &index_id);
+        search_and_add_indexed_sections(vd_dspc_tree_first_section(tree), &indexed_sections, &workspace.search_index_id);
 
         for (usize i = 0; i < dynarray_len(indexed_sections); ++i) {
             IndexedSection *indexed_section = &indexed_sections[i];
 
-            // Print out all text
-            if (indexed_section->id == 0) {
-                PUT_LINE("{");
-            } else {
-                PUT_LINE(",{");
-            }
+            search_index_begin_entry(out);
 
             PUT_LINE("\"id\": %d,", indexed_section->id);
             PUT_LINE("\"page\": \"%.*s.html\",", STR_EXPAND(source_file->title));
@@ -809,12 +835,12 @@ int main(int argc, char const *argv[])
             }
 
             PUT("\"");
-            PUT_LINE("}");
+            search_index_end_entry(out);
         }
 
     }
-    fprintf(out, "]\n");
-    fclose(out);
+    fprintf(workspace.search_index_file, "]\n");
+    fclose(workspace.search_index_file);
 
     VD_RETURN_SCRATCH_ARENA(temp_arena);
     return 0;
@@ -1074,9 +1100,30 @@ static Str make_str_from_str_node(VdDspcStrNode *node)
     return result;
 }
 
-static void search_index_clear(void)
+static int search_index_id(void)
 {
+    return get_workspace()->search_index_id++;
+}
 
+static int search_index_curr_id(void)
+{
+    return get_workspace()->search_index_id - 1;
+}
+
+static void search_index_begin_entry(FILE *out)
+{
+    int id = search_index_id();
+
+    if (id == 1) {
+        PUT_LINE("{");
+    } else {
+        PUT_LINE(",{");
+    }
+}
+
+static void search_index_end_entry(FILE *out)
+{
+    PUT_LINE("}");
 }
 
 #define VD_DSPC_IMPL
