@@ -34,6 +34,9 @@
  *   - Actually, consider removing it entirely
  * - set min/max window size
  * - set window unresizable
+ * - vd_fw_get_executable_dir() <-- statically allocated char * of executable directory
+ * - vd_fw_minimize()
+ * - vd_fw_maximize()
  * - MacOS: vd_fw_set_app_icon
  * - MacOS: vd_fw_set_fullscreen
  * - When window not focused, or minimize, delay drawing?

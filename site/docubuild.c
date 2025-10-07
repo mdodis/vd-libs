@@ -1,6 +1,3 @@
-// @todo(mdodis): search_index_clear?
-//                search_index_id -- get id
-//                open search_index at start and append to it as we go
 #define VD_USE_CRT 1
 #define VD_MACRO_ABBREVIATIONS 1
 #include <stdio.h>
