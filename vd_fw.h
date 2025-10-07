@@ -35,7 +35,6 @@
  * - set min/max window size
  * - set window unresizable
  * - MacOS: vd_fw_get_focused
- * - MacOS: Figure out how to only send event for Quit 
  * - MacOS: vd_fw_set_app_icon
  * - MacOS: vd_fw_set_fullscreen
  * - When window not focused, or minimize, delay drawing
@@ -6621,6 +6620,17 @@ VD_FW_API int vd_fw_running(void)
         {
             NSEventType type = [event type];
 
+            // Handle Cmd+Q manually
+            if (event.type == NSEventTypeKeyDown &&
+                (event.modifierFlags & NSEventModifierFlagCommand) &&
+                [[event charactersIgnoringModifiers].lowercaseString isEqualToString:@"q"])
+            {
+                [NSApp terminate:nil];
+                continue; // skip sending to AppKit
+            }
+
+            int event_handled = 1;
+
             switch (type) {
                 case NSEventTypeScrollWheel: {
 
@@ -6750,10 +6760,15 @@ VD_FW_API int vd_fw_running(void)
                     }
                 } break;
 
-                default: break;
+                default: event_handled = 0; break;
             }
 
             switch (type) {
+                case NSEventTypeLeftMouseDown:
+                case NSEventTypeLeftMouseUp: {
+                    event_handled = 0;
+                } break;
+
                 case NSEventTypeLeftMouseDragged:
                 case NSEventTypeRightMouseDragged:
                 case NSEventTypeOtherMouseDragged:
@@ -6762,6 +6777,7 @@ VD_FW_API int vd_fw_running(void)
                         break;
                     }
 
+                    event_handled = 0;
                     NSRect cvf = [VD_FW_G.window frame];
 
                     NSPoint screen_loc = [NSEvent mouseLocation];
@@ -6778,7 +6794,9 @@ VD_FW_API int vd_fw_running(void)
                 default: break;
             }
 
-            [NSApp sendEvent:event];
+            if (!event_handled) {
+                [NSApp sendEvent: event];
+            }
         }
     }
 
