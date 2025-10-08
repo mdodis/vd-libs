@@ -3226,7 +3226,7 @@ static void vd_directory__iter_recursive(VdDirectory *directory, char *buf, int 
             buf[new_buf_len] = 0;
 
             VdDirectory new_directory;
-            if (directory_open(&new_directory, buf)) {
+            if (vd_directory_open(&new_directory, buf)) {
                 vd_directory__iter_recursive(&new_directory, buf, new_buf_len, length_to_searched_directory,
                                              visit, userdata);
             }
@@ -3271,7 +3271,7 @@ VD_API void vd_directory_walk_recursively(const char *path, void (*visit)(VdFile
             buf[new_buf_len] = 0;
 
             VdDirectory new_directory;
-            if (directory_open(&new_directory, buf)) {
+            if (vd_directory_open(&new_directory, buf)) {
                 vd_directory__iter_recursive(&new_directory, buf, new_buf_len, buf_len, visit, userdata);
             }
             continue;
