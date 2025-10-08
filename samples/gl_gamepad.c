@@ -65,16 +65,16 @@ typedef union {
     float e[4];
     struct {
         float r, g, b, a;
-    };
+    } v;
 } Color;
 
 Color make_color(float r, float g, float b, float a)
 {
     Color result;
-    result.r = r;
-    result.g = g;
-    result.b = b;
-    result.a = a;
+    result.v.r = r;
+    result.v.g = g;
+    result.v.b = b;
+    result.v.a = a;
     return result;
 }
 
@@ -210,10 +210,10 @@ int main(int argc, char const *argv[])
             glUniformMatrix4fv(glGetUniformLocation(rect_shader, "projection"), 1, GL_FALSE, projection);
         }
 
-        draw_info.button_a = 1;
-        draw_info.button_b = 1;
-        draw_info.button_x = 0;
-        draw_info.button_y = 0;
+        draw_info.button_a = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_A);
+        draw_info.button_b = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_B);
+        draw_info.button_x = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_X);
+        draw_info.button_y = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_Y);
         transform_controller_info(&draw_info, 25.f, 25.f, 1000.f);
         draw_controller_info(&draw_info);
 

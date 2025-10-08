@@ -72,7 +72,6 @@
 #ifndef VD_FW_NO_CRT
 #define VD_FW_NO_CRT 0
 #endif
-
 #define VD_FW_FPI  3.14159265359f
 #define VD_FW_FPI2 (2 * VD_FW_FPI)
 #define VD_FW_FPIH (0.5f * VD_FW_FPI)
@@ -112,6 +111,10 @@
 #define VD_FW_SQRT(x) sqrtf(x)
 #endif
 #endif // !VD_FW_SQRT
+
+#ifndef VD_FW_GAMEPAD_COUNT_MAX
+#define VD_FW_GAMEPAD_COUNT_MAX 4
+#endif // !VD_FW_GAMEPAD_COUNT_MAX
 
 typedef enum {
     VD_FW_GL_VERSION_BASIC = 0,
@@ -246,8 +249,17 @@ enum {
     VD_FW_KEY_NUMPAD_9      = 107, // Numpad 9
     VD_FW_KEY_MAX,
 };
-
 typedef int VdFwKey;
+
+enum {
+    VD_FW_GAMEPAD_UNKNOWN = 0,
+    VD_FW_GAMEPAD_A,
+    VD_FW_GAMEPAD_B,
+    VD_FW_GAMEPAD_X,
+    VD_FW_GAMEPAD_Y,
+    VD_FW_GAMEPAD_KEY_MAX,
+};
+typedef int VdFwGamepadButton;
 
 enum {
     VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN   = 1 << 0,
@@ -425,6 +437,8 @@ VD_FW_API int                vd_fw_get_key_down(int key);
  * @return   The key's name
  */
 VD_FW_INL const char*        vd_fw_get_key_name(VdFwKey k);
+
+VD_FW_INL int                vd_fw_get_gamepad_down(int index, VdFwGamepadButton b);
 
 /**
  * @brief Gets the backing scale factor
@@ -3749,6 +3763,17 @@ extern PFNGLPOLYGONOFFSETCLAMPPROC             glPolygonOffsetClamp;
 
 #ifdef VD_FW_IMPL
 
+typedef unsigned char VdFw__GamepadButtonState;
+
+enum {
+    VD_FW__BUTTON_COUNT_MASK = 0x7F,
+    VD_FW__BUTTON_STATE_MASK = 0x80,
+};
+
+typedef struct VdFw__GamepadState {
+    VdFw__GamepadButtonState buttons[VD_FW_GAMEPAD_KEY_MAX];
+} VdFw__GamepadState;
+
 #if defined(__APPLE__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
@@ -3768,6 +3793,7 @@ static void vd_fw__load_opengl(VdFwGlVersion version);
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "kernel32.lib")
 #pragma comment(lib, "winmm.lib")
+#pragma comment(lib, "Hid.lib")
 #if VD_FW_WIN32_SUBSYSTEM == VD_FW_WIN32_SUBSYSTEM_CONSOLE
 #pragma comment(linker, "/subsystem:console")
 #else
@@ -3783,9 +3809,8 @@ static void vd_fw__load_opengl(VdFwGlVersion version);
 #endif // VD_FW_NO_CRT
 #endif // VD_FW_WIN32_LINKER_COMMENTS
 
-// #define WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
 #define NOGDICAPMASKS
-// #define NOSYSMETRICS
 #define NOMENUS
 #define NOICONS
 #define NOSYSCOMMANDS
@@ -3794,17 +3819,15 @@ static void vd_fw__load_opengl(VdFwGlVersion version);
 #define NOATOM
 #define NOCLIPBOARD
 #define NOCOLOR
-// #define NOCTLMGR
 #define NODRAWTEXT
 #define NOKERNEL
-#define NONLS
 #define NOMEMMGR
 #define NOMETAFILE
 #define NOOPENFILE
 #define NOSCROLL
 #define NOSERVICE
 #define NOSOUND
-#define NOTEXTMETRIC
+// #define NOTEXTMETRIC
 #define NOWH
 #define NOCOMM
 #define NOKANJI
@@ -3824,6 +3847,38 @@ static void vd_fw__load_opengl(VdFwGlVersion version);
 #include <shellscalingapi.h>
 #include <versionhelpers.h>
 #include <timeapi.h>
+#include <setupapi.h>
+#include <hidsdi.h>
+#include <hidpi.h>
+#undef NOGDICAPMASKS
+#undef NOMENUS
+#undef NOICONS
+#undef NOSYSCOMMANDS
+#undef NORASTEROPS
+#undef OEMRESOURCE
+#undef NOATOM
+#undef NOCLIPBOARD
+#undef NOCOLOR
+#undef NODRAWTEXT
+#undef NOKERNEL
+#undef NOMEMMGR
+#undef NOMETAFILE
+#undef NOOPENFILE
+#undef NOSCROLL
+#undef NOSERVICE
+#undef NOSOUND
+#undef NOTEXTMETRIC
+#undef NOWH
+#undef NOCOMM
+#undef NOKANJI
+#undef NOHELP
+#undef NOPROFILER
+#undef NODEFERWINDOWPOS
+#undef NOMCX
+#undef NORPC
+#undef NOPROXYSTUB
+#undef NOIMAGE
+#undef NOTAPE
 #ifdef min
 #undef min
 #endif
@@ -3959,6 +4014,15 @@ typedef struct {
     } dat;
 } VdFw__Win32Message;
 
+typedef struct VdFw__Win32GamepadInfo {
+    HANDLE               handle;
+    unsigned char        guid[16];
+    int                  connected;
+    PHIDP_PREPARSED_DATA ppd;
+
+    unsigned short       ui_a, ui_b, ui_x, ui_y;
+} VdFw__Win32GamepadInfo;
+
 typedef struct {
 /* ----WINDOW THREAD ONLY-------------------------------------------------------------------------------------------- */
     HWND                        hwnd;
@@ -3975,6 +4039,10 @@ typedef struct {
     LONG                        last_window_style;
     RECT                        windowed_rect;
     WINDOWPLACEMENT             last_window_placement;
+    DWORD                       num_gamepads_present;
+    VdFw__Win32GamepadInfo      gamepad_infos[VD_FW_GAMEPAD_COUNT_MAX];
+    VdFw__GamepadState          gamepad_curr_states[VD_FW_GAMEPAD_COUNT_MAX];
+    VdFw__GamepadState          gamepad_prev_states[VD_FW_GAMEPAD_COUNT_MAX];
 
 /* ----RENDER THREAD ONLY-------------------------------------------------------------------------------------------- */
     HANDLE                      win_thread;
@@ -4004,7 +4072,7 @@ typedef struct {
     int                         nccaption[4];
     int                         nccaption_set;
     int                         receive_ncmouse_on;
-    volatile LONG               mouse_delta_sink_index;
+    volatile LONG               sink_index;
     float                       mouse_delta_sinks[2][2];
     unsigned char               curr_key_states[VD_FW_KEY_MAX];
     unsigned char               prev_key_states[VD_FW_KEY_MAX];
@@ -4019,7 +4087,6 @@ typedef struct {
     CONDITION_VARIABLE          cond_var;
     VdFw__Win32Frame            next_frame;
     VdFw__Win32Frame            curr_frame;
-
 } VdFw__Win32InternalData;
 
 #define VD_FW_RAW_INPUT_ALIGN(x)        (((x) + sizeof(unsigned __int64) - 1) & ~(sizeof(unsigned __int64) - 1))
@@ -4635,7 +4702,7 @@ VD_FW_API int vd_fw_running(void)
     {
 
         // Get Raw Input mouse delta sink
-        LONG curr_sink_index = VD_FW_G.mouse_delta_sink_index;
+        LONG curr_sink_index = VD_FW_G.sink_index;
         LONG next_sink_index = (curr_sink_index + 1) % 2;
 
         // Clear the next sink
@@ -4645,7 +4712,7 @@ VD_FW_API int vd_fw_running(void)
         MemoryBarrier();
 
         // Exchange write index with next_sink_index
-        InterlockedExchange(&VD_FW_G.mouse_delta_sink_index, next_sink_index);
+        InterlockedExchange(&VD_FW_G.sink_index, next_sink_index);
 
         // Now we can safely read from the curr_sink_index
         VD_FW_G.mouse_delta[0] = VD_FW_G.mouse_delta_sinks[curr_sink_index][0];
@@ -4805,6 +4872,11 @@ VD_FW_API int vd_fw_get_key_down(int key)
     return VD_FW_G.curr_key_states[key];
 }
 
+VD_FW_INL int vd_fw_get_gamepad_down(int index, VdFwGamepadButton b)
+{
+    return VD_FW_G.gamepad_curr_states[index].buttons[b];
+}
+
 VD_FW_API void vd_fw_set_mouse_capture(int on)
 {
     if (on) {
@@ -4886,6 +4958,12 @@ VD_FW_API void vd_fw_set_title(const char *title)
 static inline void *vd_fw_memcpy(void *dst, void *src, size_t count)
 {
     for (size_t i = 0; i < count; ++i) ((unsigned char*)dst)[i] = ((unsigned char*)src)[i];
+    return dst;
+}
+
+static inline void *vd_fw_memset(void *dst, unsigned char val, size_t num)
+{
+    for (size_t i = 0; i < num; ++i) ((unsigned char *)dst)[i] = val;
     return dst;
 }
 
@@ -5012,13 +5090,22 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
 
     // Register raw input mouse
     {
-        RAWINPUTDEVICE rid = {
-            .usUsagePage   = 0x01, // Generic desktop controls
-            .usUsage       = 0x02, // Mouse
-            .dwFlags       = 0, // RIDEV_INPUTSINK,
-            .hwndTarget    = VD_FW_G.hwnd,
+        RAWINPUTDEVICE rids[] = {
+            {
+                .usUsagePage   = 0x01, // Generic desktop controls
+                .usUsage       = 0x02, // Mouse
+                .dwFlags       = 0, // RIDEV_INPUTSINK,
+                .hwndTarget    = VD_FW_G.hwnd,
+            },
+            {
+
+                .usUsagePage   = 0x01, // Generic desktop controls
+                .usUsage       = 0x05, // Gamepad
+                .dwFlags       = RIDEV_DEVNOTIFY,
+                .hwndTarget    = VD_FW_G.hwnd,
+            },
         };
-        VD_FW__CHECK_TRUE(RegisterRawInputDevices(&rid, 1, sizeof(rid)));
+        VD_FW__CHECK_TRUE(RegisterRawInputDevices(rids, 2, sizeof(rids[0])));
     }
 
     VD_FW_G.last_window_style = window_style;
@@ -5612,11 +5699,160 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                 LONG dy = raw->data.mouse.lLastY;
 
                 MemoryBarrier();
-                LONG write_index = VD_FW_G.mouse_delta_sink_index;
+                LONG write_index = VD_FW_G.sink_index;
                 MemoryBarrier();
 
                 VD_FW_G.mouse_delta_sinks[write_index][0] = VD_FW_G.mouse_delta_sinks[write_index][0] * 0.8f + dx * 0.2f;
                 VD_FW_G.mouse_delta_sinks[write_index][1] = VD_FW_G.mouse_delta_sinks[write_index][1] * 0.8f + dy * 0.2f;
+            } else if (raw->header.dwType == RIM_TYPEHID) {
+
+                VdFw__Win32GamepadInfo *gamepad_info = &VD_FW_G.gamepad_infos[0];
+                VdFw__GamepadButtonState button_states[VD_FW_GAMEPAD_KEY_MAX] = {0};
+
+                for (DWORD ri = 0; ri < raw->data.hid.dwCount; ++ri) {
+                    BYTE *bytes = &raw->data.hid.bRawData[0] + ri * (raw->data.hid.dwSizeHid);
+                    static USAGE usages[32];
+                    ULONG usage_count = 32;
+
+                    if (HidP_GetUsages(HidP_Input, 0x09, 0, usages, &usage_count, gamepad_info->ppd, (PCHAR)bytes, raw->data.hid.dwSizeHid) != HIDP_STATUS_SUCCESS) {
+                        break;
+                    }
+
+                    for (ULONG i = 0; i < usage_count; ++i) {
+                        if (0) {
+                        } else if (usages[i] == gamepad_info->ui_a) {
+                            button_states[VD_FW_GAMEPAD_A] = 1;
+                        } else if (usages[i] == gamepad_info->ui_b) {
+                            button_states[VD_FW_GAMEPAD_B] = 1;
+                        } else if (usages[i] == gamepad_info->ui_x) {
+                            button_states[VD_FW_GAMEPAD_X] = 1;
+                        } else if (usages[i] == gamepad_info->ui_y) {
+                            button_states[VD_FW_GAMEPAD_Y] = 1;
+                        }
+                    }
+                }
+
+                vd_fw_memcpy(&VD_FW_G.gamepad_prev_states[0].buttons, &VD_FW_G.gamepad_curr_states[0].buttons, sizeof(VD_FW_G.gamepad_curr_states[0].buttons));
+
+                for (int i = 0; i < VD_FW_GAMEPAD_KEY_MAX; ++i) {
+                    VD_FW_G.gamepad_curr_states[0].buttons[i] = button_states[i];
+                }
+            }
+
+        } break;
+
+        case WM_INPUT_DEVICE_CHANGE: {
+            HANDLE device_handle = (HANDLE)lparam;
+
+            if (wparam == GIDC_ARRIVAL) {
+                RID_DEVICE_INFO device_info;
+                device_info.cbSize = sizeof(device_info);
+                UINT cb_size = sizeof(device_info);
+                UINT device_info_result = GetRawInputDeviceInfoA(
+                    device_handle,
+                    RIDI_DEVICEINFO,
+                    &device_info,
+                    &cb_size);
+
+                if ((device_info_result) == ((UINT)-1)) {
+                    break;
+                }
+
+                if (device_info.dwType != RIM_TYPEHID) {
+                    break;
+                }
+
+                unsigned short vendor_id    = (unsigned short)device_info.hid.dwVendorId;
+                unsigned short product_id   = (unsigned short)device_info.hid.dwProductId;
+                unsigned short version      = (unsigned short)device_info.hid.dwVersionNumber;
+
+                unsigned char guid[16] = {0};
+                guid[0] = 0x03;
+                guid[1] = 0x00;
+                guid[2] = 0x00;
+                guid[3] = 0x00;
+
+                guid[4] = vendor_id & 0xFF;
+                guid[5] = (vendor_id >> 8) & 0xFF;
+
+                guid[8] = product_id & 0xFF;
+                guid[9] = (product_id >> 8) & 0xFF;
+
+                guid[12] = version & 0xFF;
+                guid[13] = (version >> 8) & 0xFF;
+
+                VdFw__Win32GamepadInfo *new_gamepad = NULL;
+                for (int i = 0; i < VD_FW_GAMEPAD_COUNT_MAX; ++i) {
+                    if (!VD_FW_G.gamepad_infos[i].connected) {
+                        new_gamepad = &VD_FW_G.gamepad_infos[i];
+                        break;
+                    }
+                }
+
+                if (new_gamepad == NULL) {
+                    break;
+                }
+
+                UINT ppd_req_size = 0;
+                if (GetRawInputDeviceInfoA(
+                    device_handle,
+                    RIDI_PREPARSEDDATA,
+                    NULL,
+                    &ppd_req_size) == ((UINT)-1))
+                {
+                    break;
+                }
+
+                new_gamepad->ppd = (PHIDP_PREPARSED_DATA)HeapAlloc(GetProcessHeap(), 0, ppd_req_size);
+
+                if (GetRawInputDeviceInfoA(
+                    device_handle,
+                    RIDI_PREPARSEDDATA,
+                    new_gamepad->ppd,
+                    &ppd_req_size) == ((UINT)-1))
+                {
+                    break;
+                }
+
+                HIDP_CAPS caps;
+                if (HidP_GetCaps(new_gamepad->ppd, &caps) != HIDP_STATUS_SUCCESS) {
+                    break;
+                }
+
+                static HIDP_BUTTON_CAPS button_caps[1];
+                USHORT num_button_caps = sizeof(button_caps) / sizeof(button_caps[0]);
+                if (HidP_GetButtonCaps(HidP_Input, button_caps, &num_button_caps, new_gamepad->ppd) != HIDP_STATUS_SUCCESS) {
+                    break;
+                }
+
+                new_gamepad->handle = device_handle;
+                for (int i = 0; i < 16; ++i) new_gamepad->guid[i] = guid[i];
+                new_gamepad->connected = TRUE;
+                VD_FW_G.num_gamepads_present++;
+
+                new_gamepad->ui_a = 0x01;
+                new_gamepad->ui_b = 0x02;
+                new_gamepad->ui_x = 0x03;
+                new_gamepad->ui_y = 0x04;
+
+            } else {
+
+                VdFw__Win32GamepadInfo *disconnected_gamepad = NULL;
+                for (int i = 0; i < VD_FW_GAMEPAD_COUNT_MAX; ++i) {
+                    if (VD_FW_G.gamepad_infos[i].handle == device_handle) {
+                        disconnected_gamepad = &VD_FW_G.gamepad_infos[i];
+                        break;
+                    }
+                }
+
+                if (disconnected_gamepad == NULL) {
+                    break;
+                }
+
+                disconnected_gamepad->connected = FALSE;
+                disconnected_gamepad->handle = INVALID_HANDLE_VALUE;
+
+                VD_FW_G.num_gamepads_present--;
             }
 
         } break;
