@@ -34,7 +34,10 @@
 "                                                                                                                  \n" \
 "void main()                                                                                                       \n" \
 "{                                                                                                                 \n" \
-"    FragColor = rect_color * texture(rect_texture, rect_uv);                                                      \n" \
+"    vec4 tex_color = texture(rect_texture, rect_uv);                                                              \n" \
+"    vec4 color = rect_color * tex_color;                                                                          \n" \
+"    color.rgb *= color.a;                                                                                         \n" \
+"    FragColor = color;                                                                                            \n" \
 "}                                                                                                                 \n" \
 
 static GLuint rect_shader;
@@ -239,7 +242,8 @@ int main(int argc, char const *argv[])
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     ControllerInfo draw_info;
     while (vd_fw_running()) {
@@ -286,12 +290,12 @@ static GLuint load_image(const char *file, int *w, int *h)
     GLuint texture;
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, *w, *h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-    glGenerateMipmap(GL_TEXTURE_2D);
+    // glGenerateMipmap(GL_TEXTURE_2D);
 
     return texture;
 }
@@ -440,7 +444,7 @@ static Color button_x_color(int pressed)
 static Color button_d_color(int pressed)
 {
     return switch_color_digital(
-        make_color(0.2f, 0.2f, 0.2f, 1.f),
+        make_color(0.3f, 0.3f, 0.3f, 1.f),
         make_color(0.7f, 0.7f, 0.7f, 1.f),
         pressed);
 }

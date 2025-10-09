@@ -5745,12 +5745,25 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
                     // Hat Switch
                     {
+                        static const int hat_to_mask[9] = {
+                            0x00, // Centered
+                            0x01, // Up
+                            0x03, // Up+Right
+                            0x02, // Right
+                            0x06, // Down+Right
+                            0x04, // Down
+                            0x0C, // Down+Left
+                            0x08, // Left
+                            0x09, // Up+Left
+                        };
+
                         ULONG hat_value = 0;
                         if (HidP_GetUsageValue(HidP_Input, 0x01, 0, 0x39, &hat_value, gamepad_info->ppd, (PCHAR)bytes, raw->data.hid.dwSizeHid) == HIDP_STATUS_SUCCESS) {
-                            button_states[VD_FW_GAMEPAD_DUP]    = (hat_value & gamepad_info->ui_dup) ? 1 : 0;
-                            button_states[VD_FW_GAMEPAD_DRIGHT] = (hat_value & gamepad_info->ui_dright) ? 1 : 0;
-                            button_states[VD_FW_GAMEPAD_DDOWN]  = (hat_value & gamepad_info->ui_ddown) ? 1 : 0;
-                            button_states[VD_FW_GAMEPAD_DLEFT]  = (hat_value & gamepad_info->ui_dleft) ? 1 : 0;
+                            int mask = (hat_value < 9) ? hat_to_mask[hat_value] : 0;
+                            button_states[VD_FW_GAMEPAD_DUP]    = (mask & gamepad_info->ui_dup) ? 1 : 0;
+                            button_states[VD_FW_GAMEPAD_DRIGHT] = (mask & gamepad_info->ui_dright) ? 1 : 0;
+                            button_states[VD_FW_GAMEPAD_DDOWN]  = (mask & gamepad_info->ui_ddown) ? 1 : 0;
+                            button_states[VD_FW_GAMEPAD_DLEFT]  = (mask & gamepad_info->ui_dleft) ? 1 : 0;
                         }
                     }
                 }
@@ -5845,6 +5858,12 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                 static HIDP_BUTTON_CAPS button_caps[1];
                 USHORT num_button_caps = sizeof(button_caps) / sizeof(button_caps[0]);
                 if (HidP_GetButtonCaps(HidP_Input, button_caps, &num_button_caps, new_gamepad->ppd) != HIDP_STATUS_SUCCESS) {
+                    break;
+                }
+
+                static HIDP_VALUE_CAPS value_caps[16];
+                USHORT num_value_caps = sizeof(value_caps) / sizeof(value_caps[0]);
+                if (HidP_GetValueCaps(HidP_Input, value_caps, &num_value_caps, new_gamepad->ppd) != HIDP_STATUS_SUCCESS) {
                     break;
                 }
 
