@@ -268,8 +268,14 @@ enum {
     VD_FW_GAMEPAD_L1,
     VD_FW_GAMEPAD_R1,
     VD_FW_GAMEPAD_BUTTON_MAX,
-    VD_FW_GAMEPAD_STICK_LEFT,
-    VD_FW_GAMEPAD_STICK_RIGHT,
+    VD_FW_GAMEPAD_H = 0 << 1,
+    VD_FW_GAMEPAD_V = 1 << 1,
+    VD_FW_GAMEPAD_L = 0,
+    VD_FW_GAMEPAD_R = 1,
+    VD_FW_GAMEPAD_LH = VD_FW_GAMEPAD_L | VD_FW_GAMEPAD_H,
+    VD_FW_GAMEPAD_LV = VD_FW_GAMEPAD_L | VD_FW_GAMEPAD_V,
+    VD_FW_GAMEPAD_RH = VD_FW_GAMEPAD_R | VD_FW_GAMEPAD_H,
+    VD_FW_GAMEPAD_RV = VD_FW_GAMEPAD_R | VD_FW_GAMEPAD_V,
 };
 typedef int VdFwGamepadInput;
 
@@ -473,6 +479,7 @@ VD_FW_API int                vd_fw_get_key_down(int key);
 VD_FW_INL const char*        vd_fw_get_key_name(VdFwKey k);
 
 VD_FW_INL int                vd_fw_get_gamepad_down(int index, VdFwGamepadInput b);
+VD_FW_INL int                vd_fw_get_gamepad_axis(int index, VdFwGamepadInput axis, int orient, float *out);
 
 /**
  * @brief Gets the backing scale factor
@@ -3806,6 +3813,7 @@ enum {
 
 typedef struct VdFw__GamepadState {
     VdFw__GamepadButtonState buttons[VD_FW_GAMEPAD_BUTTON_MAX];
+    float                    axes[4];
 } VdFw__GamepadState;
 
 #if defined(__APPLE__)
@@ -5939,6 +5947,18 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                 new_gamepad->config.hat_switch_mappings[3].input = VD_FW_GAMEPAD_DLEFT;
                 new_gamepad->config.num_hat_switch_mappings = 4;
 
+                new_gamepad->config.axial_mappings[0].id         = 0x00,
+                new_gamepad->config.axial_mappings[0].input      = VD_FW_GAMEPAD_LH;
+
+                new_gamepad->config.axial_mappings[1].id         = 0x01,
+                new_gamepad->config.axial_mappings[1].input      = VD_FW_GAMEPAD_LV;
+
+                new_gamepad->config.axial_mappings[2].id         = 0x02,
+                new_gamepad->config.axial_mappings[2].input      = VD_FW_GAMEPAD_RH;
+
+                new_gamepad->config.axial_mappings[3].id         = 0x03,
+                new_gamepad->config.axial_mappings[3].input      = VD_FW_GAMEPAD_RV;
+                new_gamepad->config.num_axial_mappings = 4;
 
                 new_gamepad->ui_a = 0x01;
                 new_gamepad->ui_b = 0x02;

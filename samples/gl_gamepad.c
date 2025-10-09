@@ -94,6 +94,20 @@ typedef struct {
     int button_r1;
     float button_r1_pos[2];
     float button_r1_dim[2];
+
+    float stick_l_base_pos[2];
+    float stick_l_base_dim[2];
+
+    float stick_r_base_pos[2];
+    float stick_r_base_dim[2];
+
+    float stick_l_value[2];
+    float stick_l_pos[2];
+    float stick_l_dim[2];
+
+    float stick_r_value[2];
+    float stick_r_pos[2];
+    float stick_r_dim[2];
 } ControllerInfo;
 
 typedef union {
@@ -203,6 +217,34 @@ ControllerInfo Base_Controller_Info = {
     .button_r1_dim = {
         22.34f, 8.53f 
     },
+
+
+    .stick_l_base_pos = {
+        18.94f, 13.86f,
+    },
+    .stick_l_base_dim = {
+        13.86f, 13.86f,
+    },
+    .stick_r_base_pos = {
+        61.02f, 29.99f,
+    },
+    .stick_r_base_dim = {
+        13.86f, 13.86f,
+    },
+
+    .stick_l_pos = {
+        21.56f, 16.20f,
+    },
+    .stick_l_dim = {
+        8.61f, 8.61f,
+    },
+
+    .stick_r_pos = {
+        63.64f, 32.61f,
+    },
+    .stick_r_dim = {
+        8.61f, 8.61f,
+    },
 };
 
 static struct {
@@ -212,6 +254,8 @@ static struct {
     GLuint tex_button_dup, tex_button_dright, tex_button_ddown, tex_button_dleft;
     GLuint tex_button_select, tex_button_start;
     GLuint tex_button_l1, tex_button_r1;
+    GLuint tex_stick_l_base, tex_stick_r_base;
+    GLuint tex_stick_l, tex_stick_r;
 } all;
 
 typedef struct {
@@ -228,6 +272,7 @@ static Color  button_x_color(int pressed);
 static Color  button_y_color(int pressed);
 static Color  button_d_color(int pressed);
 static Color  button_bumper_color(int pressed);
+static Color  stick_base_color(void);
 static Color  switch_color_digital(Color c1, Color c2, int p);
 
 int main(int argc, char const *argv[])
@@ -261,6 +306,10 @@ int main(int argc, char const *argv[])
     all.tex_button_start  = load_image("assets/controller_start.png", &iw, &ih);
     all.tex_button_l1     = load_image("assets/controller_l1.png", &iw, &ih);
     all.tex_button_r1     = load_image("assets/controller_r1.png", &iw, &ih);
+    all.tex_stick_l_base  = load_image("assets/controller_stick_l_base.png", &iw, &ih);
+    all.tex_stick_r_base  = all.tex_stick_l_base;
+    all.tex_stick_l       = load_image("assets/controller_stick_l.png", &iw, &ih);
+    all.tex_stick_r       = all.tex_stick_l;
 
     GLuint vs = vd_fw_compile_shader(GL_VERTEX_SHADER, VERTEX_SOURCE);
     GLuint fs = vd_fw_compile_shader(GL_FRAGMENT_SHADER, FRAGMENT_SOURCE);
@@ -457,6 +506,30 @@ static void transform_controller_info(ControllerInfo *info, float x, float y, fl
     info->button_r1_dim[1] = Base_Controller_Info.button_r1_dim[1] * ratio;
     info->button_r1_pos[0] = Base_Controller_Info.button_r1_pos[0] * ratio + x;
     info->button_r1_pos[1] = Base_Controller_Info.button_r1_pos[1] * ratio + y;
+
+    // LEFT STICK BASE
+    info->stick_l_base_dim[0] = Base_Controller_Info.stick_l_base_dim[0] * ratio;
+    info->stick_l_base_dim[1] = Base_Controller_Info.stick_l_base_dim[1] * ratio;
+    info->stick_l_base_pos[0] = Base_Controller_Info.stick_l_base_pos[0] * ratio + x;
+    info->stick_l_base_pos[1] = Base_Controller_Info.stick_l_base_pos[1] * ratio + y;
+
+    // RIGHT STICK BASE
+    info->stick_r_base_dim[0] = Base_Controller_Info.stick_r_base_dim[0] * ratio;
+    info->stick_r_base_dim[1] = Base_Controller_Info.stick_r_base_dim[1] * ratio;
+    info->stick_r_base_pos[0] = Base_Controller_Info.stick_r_base_pos[0] * ratio + x;
+    info->stick_r_base_pos[1] = Base_Controller_Info.stick_r_base_pos[1] * ratio + y;
+
+    // LEFT STICK
+    info->stick_l_dim[0] = Base_Controller_Info.stick_l_dim[0] * ratio;
+    info->stick_l_dim[1] = Base_Controller_Info.stick_l_dim[1] * ratio;
+    info->stick_l_pos[0] = Base_Controller_Info.stick_l_pos[0] * ratio + x;
+    info->stick_l_pos[1] = Base_Controller_Info.stick_l_pos[1] * ratio + y;
+
+    // RIGHT STICK
+    info->stick_r_dim[0] = Base_Controller_Info.stick_r_dim[0] * ratio;
+    info->stick_r_dim[1] = Base_Controller_Info.stick_r_dim[1] * ratio;
+    info->stick_r_pos[0] = Base_Controller_Info.stick_r_pos[0] * ratio + x;
+    info->stick_r_pos[1] = Base_Controller_Info.stick_r_pos[1] * ratio + y;
 }
 
 static void draw_controller_info(ControllerInfo *info)
@@ -512,6 +585,22 @@ static void draw_controller_info(ControllerInfo *info)
     put_image(all.tex_button_r1, info->button_r1_pos[0], info->button_r1_pos[1],
                                   info->button_r1_dim[0], info->button_r1_dim[1],
                                   button_bumper_color(info->button_r1).e);
+
+    put_image(all.tex_stick_l_base, info->stick_l_base_pos[0], info->stick_l_base_pos[1],
+                                    info->stick_l_base_dim[0], info->stick_l_base_dim[1],
+                                    stick_base_color().e);
+
+    put_image(all.tex_stick_r_base, info->stick_r_base_pos[0], info->stick_r_base_pos[1],
+                                    info->stick_r_base_dim[0], info->stick_r_base_dim[1],
+                                    stick_base_color().e);
+
+    put_image(all.tex_stick_l, info->stick_l_pos[0], info->stick_l_pos[1],
+                                    info->stick_l_dim[0], info->stick_l_dim[1],
+                                    stick_base_color().e);
+
+    put_image(all.tex_stick_r, info->stick_r_pos[0], info->stick_r_pos[1],
+                                    info->stick_r_dim[0], info->stick_r_dim[1],
+                                    stick_base_color().e);
 }
 
 static Color button_a_color(int pressed)
@@ -560,6 +649,11 @@ static Color button_bumper_color(int pressed)
         make_color(0.3f, 0.3f, 0.3f, 1.f),
         make_color(0.7f, 0.7f, 0.7f, 1.f),
         pressed);
+}
+
+static Color stick_base_color(void)
+{
+    return make_color(0.7f, 0.7f, 0.7f, 1.f);
 }
 
 static Color switch_color_digital(Color c1, Color c2, int p)
