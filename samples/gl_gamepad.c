@@ -373,6 +373,12 @@ int main(int argc, char const *argv[])
         draw_info.button_select = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_SELECT);
         draw_info.button_l1     = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_L1);
         draw_info.button_r1     = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_R1);
+        vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_LH, &draw_info.stick_l_value[0]);
+        vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_LV, &draw_info.stick_l_value[1]);
+        vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RH, &draw_info.stick_r_value[0]);
+        vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RV, &draw_info.stick_r_value[1]);
+        // printf("stick l h: %f\n", draw_info.stick_l_value[0]);
+
 
         float ref_width  = Base_Controller_Info.controller_dim[0];
         float ref_height = Base_Controller_Info.controller_dim[1];
@@ -522,14 +528,14 @@ static void transform_controller_info(ControllerInfo *info, float x, float y, fl
     // LEFT STICK
     info->stick_l_dim[0] = Base_Controller_Info.stick_l_dim[0] * ratio;
     info->stick_l_dim[1] = Base_Controller_Info.stick_l_dim[1] * ratio;
-    info->stick_l_pos[0] = Base_Controller_Info.stick_l_pos[0] * ratio + x;
-    info->stick_l_pos[1] = Base_Controller_Info.stick_l_pos[1] * ratio + y;
+    info->stick_l_pos[0] = Base_Controller_Info.stick_l_pos[0] * ratio + x + (info->stick_l_value[0] - 0.5f) * info->stick_l_dim[0] * 0.5f;
+    info->stick_l_pos[1] = Base_Controller_Info.stick_l_pos[1] * ratio + y + (info->stick_l_value[1] - 0.5f) * info->stick_l_dim[1] * 0.5f;
 
     // RIGHT STICK
     info->stick_r_dim[0] = Base_Controller_Info.stick_r_dim[0] * ratio;
     info->stick_r_dim[1] = Base_Controller_Info.stick_r_dim[1] * ratio;
-    info->stick_r_pos[0] = Base_Controller_Info.stick_r_pos[0] * ratio + x;
-    info->stick_r_pos[1] = Base_Controller_Info.stick_r_pos[1] * ratio + y;
+    info->stick_r_pos[0] = Base_Controller_Info.stick_r_pos[0] * ratio + x + (info->stick_r_value[0] - 0.5f) * info->stick_r_dim[0] * 0.5f;
+    info->stick_r_pos[1] = Base_Controller_Info.stick_r_pos[1] * ratio + y + (info->stick_r_value[1] - 0.5f) * info->stick_r_dim[1] * 0.5f;
 }
 
 static void draw_controller_info(ControllerInfo *info)

@@ -65,8 +65,8 @@
 
         <br> <br>
 
-        One common theme that one will see mentioned in various topics, like building a rendering engine
-        , or even something as simple as a static website, is The Stack&trade;: A collection of
+        One common theme that one will see mentioned in various topics, like building a rendering engine,
+        or even something as simple as a static website, is The Stack&trade;: A collection of
         libraries and frameworks for building solutions to problems <i>the right way</i>.
 
         <br> <br>
@@ -84,9 +84,13 @@
 
         <br> <br>
 
-        The reality though, at least for software, is that in most situations, complicated doesn't mean
-        good. For that matter, small & short doesn't mean good either. And as of late, it has become
-        increasingly hard for developers to understand the cost of sourcing external work.
+        The reality though, at least for software, is that in most situations complicated doesn't mean
+        good. For that matter, small and compact doesn't mean good either. There is few to no material about
+        how to provide solutions to specific problems, taking advantage of each problem's inherent or artificial
+        constraints, and optimizing for the common case. Additionally, the tools that we ourselves have built
+        are becoming increasingly more difficult to use: even a simple web project nowadays has 500 dependencies,
+        and other build tool specific scripts which download libraries off the internet, and end up importing a big
+        complex library that usually introduces more problems than it solves.
 
         <br> <br>
 
@@ -98,7 +102,7 @@
 
         <br> <br>
 
-        I encourage anyone who reads this to take a look at any modern project of say, a calculator,
+        I encourage you to take a look at any modern project of say, a calculator,
         and try to tell me that it doesn't look a <b>tad</b> too complicated. Because, in most cases you
         will see:
 
@@ -108,7 +112,7 @@
             <li>Some kind of math library</li>
             <li>And right after the important ones, a ton of other small libraries that do random things
             </li>
-            <li>Not to mention that each package has dependencies, which all get resolved into at least
+            <li>Not to mention that each package has dependencies which all get resolved into at least
                 a medium size codebase</li>
         </ul>
 
@@ -156,6 +160,14 @@
         most, that will get you 99% of the way there and cover what all of these libraries do for the
         common case. And you will not have to learn another API to use this one, or look out for
         updates, or have to fiddle with those libraries' deprecations and introcacies.
+
+        <br> <br>
+
+        So then, why are those libraries so big? The answer is simple: they do considerably more stuff than what you use
+        them for; in essence, they just provide a layer of abstraction over the underlying one. A heavily limited layer,
+        because it must be defined as the common denominator between the platforms it supports, which means that
+        your problem isn't actually solved; you still have the same problem, but now you have a different language to
+        express its solution.
 
         <br> <br>
 
