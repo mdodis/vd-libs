@@ -227,6 +227,7 @@ static Color  button_b_color(int pressed);
 static Color  button_x_color(int pressed);
 static Color  button_y_color(int pressed);
 static Color  button_d_color(int pressed);
+static Color  button_bumper_color(int pressed);
 static Color  switch_color_digital(Color c1, Color c2, int p);
 
 int main(int argc, char const *argv[])
@@ -321,8 +322,8 @@ int main(int argc, char const *argv[])
         draw_info.button_dleft  = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_DLEFT);
         draw_info.button_start  = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_START);
         draw_info.button_select = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_SELECT);
-        draw_info.button_l1     = 0;
-        draw_info.button_r1     = 0;
+        draw_info.button_l1     = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_L1);
+        draw_info.button_r1     = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_R1);
 
         float ref_width  = Base_Controller_Info.controller_dim[0];
         float ref_height = Base_Controller_Info.controller_dim[1];
@@ -506,11 +507,11 @@ static void draw_controller_info(ControllerInfo *info)
 
     put_image(all.tex_button_l1, info->button_l1_pos[0], info->button_l1_pos[1],
                                   info->button_l1_dim[0], info->button_l1_dim[1],
-                                  button_d_color(info->button_l1).e);
+                                  button_bumper_color(info->button_l1).e);
 
     put_image(all.tex_button_r1, info->button_r1_pos[0], info->button_r1_pos[1],
                                   info->button_r1_dim[0], info->button_r1_dim[1],
-                                  button_d_color(info->button_r1).e);
+                                  button_bumper_color(info->button_r1).e);
 }
 
 static Color button_a_color(int pressed)
@@ -546,6 +547,14 @@ static Color button_x_color(int pressed)
 }
 
 static Color button_d_color(int pressed)
+{
+    return switch_color_digital(
+        make_color(0.3f, 0.3f, 0.3f, 1.f),
+        make_color(0.7f, 0.7f, 0.7f, 1.f),
+        pressed);
+}
+
+static Color button_bumper_color(int pressed)
 {
     return switch_color_digital(
         make_color(0.3f, 0.3f, 0.3f, 1.f),

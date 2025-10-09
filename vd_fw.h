@@ -265,6 +265,8 @@ enum {
     VD_FW_GAMEPAD_DRIGHT,
     VD_FW_GAMEPAD_START,
     VD_FW_GAMEPAD_SELECT,
+    VD_FW_GAMEPAD_L1,
+    VD_FW_GAMEPAD_R1,
     VD_FW_GAMEPAD_BUTTON_MAX,
     VD_FW_GAMEPAD_STICK_LEFT,
     VD_FW_GAMEPAD_STICK_RIGHT,
@@ -5916,7 +5918,13 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
                 new_gamepad->config.digital_mappings[5].id    = 0x08;
                 new_gamepad->config.digital_mappings[5].input = VD_FW_GAMEPAD_START;
-                new_gamepad->config.num_digital_mappings = 6;
+
+                new_gamepad->config.digital_mappings[6].id    = 0x05;
+                new_gamepad->config.digital_mappings[6].input = VD_FW_GAMEPAD_L1;
+
+                new_gamepad->config.digital_mappings[7].id    = 0x06;
+                new_gamepad->config.digital_mappings[7].input = VD_FW_GAMEPAD_R1;
+                new_gamepad->config.num_digital_mappings = 8;
 
                 new_gamepad->config.hat_switch_mappings[0].id    = 0x01;
                 new_gamepad->config.hat_switch_mappings[0].input = VD_FW_GAMEPAD_DUP;
