@@ -86,6 +86,14 @@ typedef struct {
     int button_select;
     float button_select_pos[2];
     float button_select_dim[2];
+
+    int button_l1;
+    float button_l1_pos[2];
+    float button_l1_dim[2];
+
+    int button_r1;
+    float button_r1_pos[2];
+    float button_r1_dim[2];
 } ControllerInfo;
 
 typedef union {
@@ -181,6 +189,20 @@ ControllerInfo Base_Controller_Info = {
     .button_start_dim = {
         4.95f, 4.95f,
     },
+
+    .button_l1_pos = {
+        16.34f, 0.0f,
+    },
+    .button_l1_dim = {
+        22.34f, 8.53f 
+    },
+
+    .button_r1_pos = {
+        68.56f, 0.0f,
+    },
+    .button_r1_dim = {
+        22.34f, 8.53f 
+    },
 };
 
 static struct {
@@ -189,6 +211,7 @@ static struct {
     GLuint tex_button_a, tex_button_b, tex_button_x, tex_button_y;
     GLuint tex_button_dup, tex_button_dright, tex_button_ddown, tex_button_dleft;
     GLuint tex_button_select, tex_button_start;
+    GLuint tex_button_l1, tex_button_r1;
 } all;
 
 typedef struct {
@@ -235,6 +258,8 @@ int main(int argc, char const *argv[])
     all.tex_button_dleft  = load_image("assets/controller_dleft.png", &iw, &ih);
     all.tex_button_select = load_image("assets/controller_select.png", &iw, &ih);
     all.tex_button_start  = load_image("assets/controller_start.png", &iw, &ih);
+    all.tex_button_l1     = load_image("assets/controller_l1.png", &iw, &ih);
+    all.tex_button_r1     = load_image("assets/controller_r1.png", &iw, &ih);
 
     GLuint vs = vd_fw_compile_shader(GL_VERTEX_SHADER, VERTEX_SOURCE);
     GLuint fs = vd_fw_compile_shader(GL_FRAGMENT_SHADER, FRAGMENT_SOURCE);
@@ -296,6 +321,8 @@ int main(int argc, char const *argv[])
         draw_info.button_dleft  = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_DLEFT);
         draw_info.button_start  = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_START);
         draw_info.button_select = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_SELECT);
+        draw_info.button_l1     = 0;
+        draw_info.button_r1     = 0;
 
         float ref_width  = Base_Controller_Info.controller_dim[0];
         float ref_height = Base_Controller_Info.controller_dim[1];
@@ -417,6 +444,18 @@ static void transform_controller_info(ControllerInfo *info, float x, float y, fl
     info->button_select_dim[1] = Base_Controller_Info.button_select_dim[1] * ratio;
     info->button_select_pos[0] = Base_Controller_Info.button_select_pos[0] * ratio + x;
     info->button_select_pos[1] = Base_Controller_Info.button_select_pos[1] * ratio + y;
+
+    // L1
+    info->button_l1_dim[0] = Base_Controller_Info.button_l1_dim[0] * ratio;
+    info->button_l1_dim[1] = Base_Controller_Info.button_l1_dim[1] * ratio;
+    info->button_l1_pos[0] = Base_Controller_Info.button_l1_pos[0] * ratio + x;
+    info->button_l1_pos[1] = Base_Controller_Info.button_l1_pos[1] * ratio + y;
+
+    // R1
+    info->button_r1_dim[0] = Base_Controller_Info.button_r1_dim[0] * ratio;
+    info->button_r1_dim[1] = Base_Controller_Info.button_r1_dim[1] * ratio;
+    info->button_r1_pos[0] = Base_Controller_Info.button_r1_pos[0] * ratio + x;
+    info->button_r1_pos[1] = Base_Controller_Info.button_r1_pos[1] * ratio + y;
 }
 
 static void draw_controller_info(ControllerInfo *info)
@@ -464,6 +503,14 @@ static void draw_controller_info(ControllerInfo *info)
     put_image(all.tex_button_start, info->button_start_pos[0], info->button_start_pos[1],
                                   info->button_start_dim[0], info->button_start_dim[1],
                                   button_d_color(info->button_start).e);
+
+    put_image(all.tex_button_l1, info->button_l1_pos[0], info->button_l1_pos[1],
+                                  info->button_l1_dim[0], info->button_l1_dim[1],
+                                  button_d_color(info->button_l1).e);
+
+    put_image(all.tex_button_r1, info->button_r1_pos[0], info->button_r1_pos[1],
+                                  info->button_r1_dim[0], info->button_r1_dim[1],
+                                  button_d_color(info->button_r1).e);
 }
 
 static Color button_a_color(int pressed)
