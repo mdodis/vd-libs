@@ -37,6 +37,8 @@
  * - vd_fw_get_executable_dir() <-- statically allocated char * of executable directory
  * - vd_fw_minimize()
  * - vd_fw_maximize()
+ * - vd_fw_get_last_key_pressed
+ * - vd_fw_get_last_mouse_button_pressed
  * - MacOS: vd_fw_set_app_icon
  * - MacOS: vd_fw_set_fullscreen
  * - When window not focused, or minimize, delay drawing?
@@ -257,7 +259,13 @@ enum {
     VD_FW_GAMEPAD_B,
     VD_FW_GAMEPAD_X,
     VD_FW_GAMEPAD_Y,
-    VD_FW_GAMEPAD_KEY_MAX,
+    VD_FW_GAMEPAD_DUP,
+    VD_FW_GAMEPAD_DDOWN,
+    VD_FW_GAMEPAD_DLEFT,
+    VD_FW_GAMEPAD_DRIGHT,
+    VD_FW_GAMEPAD_L3,
+    VD_FW_GAMEPAD_R3,
+    VD_FW_GAMEPAD_BUTTON_MAX,
 };
 typedef int VdFwGamepadButton;
 
@@ -3771,7 +3779,7 @@ enum {
 };
 
 typedef struct VdFw__GamepadState {
-    VdFw__GamepadButtonState buttons[VD_FW_GAMEPAD_KEY_MAX];
+    VdFw__GamepadButtonState buttons[VD_FW_GAMEPAD_BUTTON_MAX];
 } VdFw__GamepadState;
 
 #if defined(__APPLE__)
@@ -4021,6 +4029,8 @@ typedef struct VdFw__Win32GamepadInfo {
     PHIDP_PREPARSED_DATA ppd;
 
     unsigned short       ui_a, ui_b, ui_x, ui_y;
+    unsigned short       ui_dup, ui_ddown, ui_dleft, ui_dright;
+    unsigned short       ui_l3, ui_r3;
 } VdFw__Win32GamepadInfo;
 
 typedef struct {
@@ -5707,34 +5717,47 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             } else if (raw->header.dwType == RIM_TYPEHID) {
 
                 VdFw__Win32GamepadInfo *gamepad_info = &VD_FW_G.gamepad_infos[0];
-                VdFw__GamepadButtonState button_states[VD_FW_GAMEPAD_KEY_MAX] = {0};
+                VdFw__GamepadButtonState button_states[VD_FW_GAMEPAD_BUTTON_MAX] = {0};
 
                 for (DWORD ri = 0; ri < raw->data.hid.dwCount; ++ri) {
                     BYTE *bytes = &raw->data.hid.bRawData[0] + ri * (raw->data.hid.dwSizeHid);
-                    static USAGE usages[32];
-                    ULONG usage_count = 32;
 
-                    if (HidP_GetUsages(HidP_Input, 0x09, 0, usages, &usage_count, gamepad_info->ppd, (PCHAR)bytes, raw->data.hid.dwSizeHid) != HIDP_STATUS_SUCCESS) {
-                        break;
+                    // Buttons
+                    {
+                        static USAGE usages[32];
+                        ULONG usage_count = 32;
+
+                        if (HidP_GetUsages(HidP_Input, 0x09, 0, usages, &usage_count, gamepad_info->ppd, (PCHAR)bytes, raw->data.hid.dwSizeHid) == HIDP_STATUS_SUCCESS) {
+                            for (ULONG i = 0; i < usage_count; ++i) {
+                                if (0) {
+                                } else if (usages[i] == gamepad_info->ui_a) {
+                                    button_states[VD_FW_GAMEPAD_A] = 1;
+                                } else if (usages[i] == gamepad_info->ui_b) {
+                                    button_states[VD_FW_GAMEPAD_B] = 1;
+                                } else if (usages[i] == gamepad_info->ui_x) {
+                                    button_states[VD_FW_GAMEPAD_X] = 1;
+                                } else if (usages[i] == gamepad_info->ui_y) {
+                                    button_states[VD_FW_GAMEPAD_Y] = 1;
+                                }
+                            }
+                        }
                     }
 
-                    for (ULONG i = 0; i < usage_count; ++i) {
-                        if (0) {
-                        } else if (usages[i] == gamepad_info->ui_a) {
-                            button_states[VD_FW_GAMEPAD_A] = 1;
-                        } else if (usages[i] == gamepad_info->ui_b) {
-                            button_states[VD_FW_GAMEPAD_B] = 1;
-                        } else if (usages[i] == gamepad_info->ui_x) {
-                            button_states[VD_FW_GAMEPAD_X] = 1;
-                        } else if (usages[i] == gamepad_info->ui_y) {
-                            button_states[VD_FW_GAMEPAD_Y] = 1;
+                    // Hat Switch
+                    {
+                        ULONG hat_value = 0;
+                        if (HidP_GetUsageValue(HidP_Input, 0x01, 0, 0x39, &hat_value, gamepad_info->ppd, (PCHAR)bytes, raw->data.hid.dwSizeHid) == HIDP_STATUS_SUCCESS) {
+                            button_states[VD_FW_GAMEPAD_DUP]    = (hat_value & gamepad_info->ui_dup) ? 1 : 0;
+                            button_states[VD_FW_GAMEPAD_DRIGHT] = (hat_value & gamepad_info->ui_dright) ? 1 : 0;
+                            button_states[VD_FW_GAMEPAD_DDOWN]  = (hat_value & gamepad_info->ui_ddown) ? 1 : 0;
+                            button_states[VD_FW_GAMEPAD_DLEFT]  = (hat_value & gamepad_info->ui_dleft) ? 1 : 0;
                         }
                     }
                 }
 
                 vd_fw_memcpy(&VD_FW_G.gamepad_prev_states[0].buttons, &VD_FW_G.gamepad_curr_states[0].buttons, sizeof(VD_FW_G.gamepad_curr_states[0].buttons));
 
-                for (int i = 0; i < VD_FW_GAMEPAD_KEY_MAX; ++i) {
+                for (int i = 0; i < VD_FW_GAMEPAD_BUTTON_MAX; ++i) {
                     VD_FW_G.gamepad_curr_states[0].buttons[i] = button_states[i];
                 }
             }
@@ -5834,6 +5857,10 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                 new_gamepad->ui_b = 0x02;
                 new_gamepad->ui_x = 0x03;
                 new_gamepad->ui_y = 0x04;
+                new_gamepad->ui_dup    = 0x01;
+                new_gamepad->ui_dright = 0x02;
+                new_gamepad->ui_ddown  = 0x04;
+                new_gamepad->ui_dleft  = 0x08;
 
             } else {
 
