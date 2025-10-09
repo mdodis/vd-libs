@@ -42,7 +42,7 @@
 
 static GLuint rect_shader;
 
-/** Controller of 151.680x85.120 (1200x673) */
+/** Controller of 107.32x74.94 (1201x673) */
 typedef struct {
     float controller_pos[2];
     float controller_dim[2];
@@ -110,75 +110,75 @@ ControllerInfo Base_Controller_Info = {
         0.f, 0.f,
     },
     .controller_dim = {
-        151.680f, 85.120f,
+        107.32f, 74.94f,
     },
+
     .button_a_pos = {
-        100.07f, 29.76f, 
+        77.68f, 24.38f, 
     },
     .button_a_dim = {
-        8.3549576f,  8.3549576f,
+        7.61f,  7.61f,
     },
 
     .button_b_pos = {
-        107.51f, 22.32f, 
+        85.08f, 17.44f, 
     },
     .button_b_dim = {
-        8.3549576f,  8.3549576f,
+        7.61f,  7.61f,
     },
 
     .button_x_pos = {
-        92.48f, 21.99f, 
+        70.35f, 16.89f, 
     },
     .button_x_dim = {
-        8.3549576f,  8.3549576f,
+        7.61f,  7.61f,
     },
 
     .button_y_pos = {
-        99.93f, 15.03f, 
+        77.86f, 9.91f, 
     },
     .button_y_dim = {
-        8.3549576f,  8.3549576f,
+        7.61f,  7.61f,
     },
 
     .button_dup_pos = {
-        58.89f, 35.09f,
+        36.75f, 29.94f,
     },
     .button_dup_dim = {
         5.16f, 8.19f,
     },
 
     .button_dright_pos = {
-        61.46f, 40.65f,
+        39.33f, 35.56f,
     },
     .button_dright_dim = {
         8.19f, 5.16f,
     },
 
     .button_ddown_pos = {
-        58.88f, 43.23f,
+        36.75f, 38.14f,
     },
     .button_ddown_dim = {
         5.16f, 8.19f,
     },
 
     .button_dleft_pos = {
-        53.27f, 40.65f,
+        31.14f, 35.56f,
     },
     .button_dleft_dim = {
         8.19f, 5.16f,
     },
 
-    .button_start_pos = {
-        81.14f, 23.16f,
-    },
-    .button_start_dim = {
-        4.95f, 4.95f,
-    },
-
     .button_select_pos = {
-        65.28f, 23.16f,
+        43.15f, 18.06f,
     },
     .button_select_dim = {
+        4.95f, 4.95f,
+    },
+    .button_start_pos = {
+        59.01f, 18.06f,
+    },
+    .button_start_dim = {
         4.95f, 4.95f,
     },
 };
@@ -224,14 +224,11 @@ int main(int argc, char const *argv[])
     vd_fw_set_title("Gamepad Sample");
 
     int iw, ih;
-    all.tex_controller = load_image("assets/controller.png", &iw, &ih);
-    all.controller_dim[0] = (float)iw;
-    all.controller_dim[1] = (float)ih;
-
-    all.tex_button_a = load_image("assets/controller_a.png", &iw, &ih);
-    all.tex_button_b = load_image("assets/controller_b.png", &iw, &ih);
-    all.tex_button_y = load_image("assets/controller_y.png", &iw, &ih);
-    all.tex_button_x = load_image("assets/controller_x.png", &iw, &ih);
+    all.tex_controller    = load_image("assets/controller.png", &iw, &ih);
+    all.tex_button_a      = load_image("assets/controller_a.png", &iw, &ih);
+    all.tex_button_b      = load_image("assets/controller_b.png", &iw, &ih);
+    all.tex_button_y      = load_image("assets/controller_y.png", &iw, &ih);
+    all.tex_button_x      = load_image("assets/controller_x.png", &iw, &ih);
     all.tex_button_dup    = load_image("assets/controller_dup.png", &iw, &ih);
     all.tex_button_dright = load_image("assets/controller_dright.png", &iw, &ih);
     all.tex_button_ddown  = load_image("assets/controller_ddown.png", &iw, &ih);
@@ -300,6 +297,13 @@ int main(int argc, char const *argv[])
         draw_info.button_start  = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_START);
         draw_info.button_select = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_SELECT);
 
+        float biggest_dimension = 0.f;
+        if (w >= h) {
+            biggest_dimension = (float)w;
+        } else {
+            biggest_dimension = (float)h;
+        }
+
         transform_controller_info(&draw_info, 0.f, 0.f, (float)w);
         draw_controller_info(&draw_info);
 
@@ -341,7 +345,7 @@ static void put_image(GLuint texture, float x, float y, float w, float h, float 
 
 static void transform_controller_info(ControllerInfo *info, float x, float y, float wscale)
 {
-    float ratio = wscale / 151.680f;
+    float ratio = wscale / 107.32f;
 
     info->controller_dim[0] = Base_Controller_Info.controller_dim[0] * ratio;
     info->controller_dim[1] = Base_Controller_Info.controller_dim[1] * ratio;
