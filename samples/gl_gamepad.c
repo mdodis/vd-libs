@@ -297,14 +297,20 @@ int main(int argc, char const *argv[])
         draw_info.button_start  = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_START);
         draw_info.button_select = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_SELECT);
 
-        float biggest_dimension = 0.f;
-        if (w >= h) {
-            biggest_dimension = (float)w;
-        } else {
-            biggest_dimension = (float)h;
-        }
+        float ref_width  = Base_Controller_Info.controller_dim[0];
+        float ref_height = Base_Controller_Info.controller_dim[1];
+        float ratio_width = (float)w / ref_width;
+        float ratio_height = (float)h / ref_height;
 
-        transform_controller_info(&draw_info, 0.f, 0.f, (float)w);
+        float ratio_min = (ratio_width < ratio_height) ? ratio_width : ratio_height;
+
+        float scaled_width = ref_width * ratio_min;
+        float scaled_height = ref_height * ratio_min;
+
+        float x = ((float)w - scaled_width) / 2.0f;
+        float y = ((float)h - scaled_height) / 2.0f;
+
+        transform_controller_info(&draw_info, x, y, scaled_width);
         draw_controller_info(&draw_info);
 
         vd_fw_swap_buffers();
