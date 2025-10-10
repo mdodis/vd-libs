@@ -4136,8 +4136,7 @@ typedef struct {
     int                         nccaption[4];
     int                         nccaption_set;
     int                         receive_ncmouse_on;
-    volatile LONG               sink_index;
-    float                       mouse_delta_sinks[2][2];
+    float                       winthread_mouse_delta[2];
     VdFw__GamepadState          winthread_gamepad_curr_states[VD_FW_GAMEPAD_COUNT_MAX];
     VdFw__GamepadState          winthread_gamepad_prev_states[VD_FW_GAMEPAD_COUNT_MAX];
 
@@ -4499,16 +4498,6 @@ static void *vd_fw__gl_get_proc_address(const char *name)
     return (void*)wglGetProcAddress(name);
 }
 
-static LONG vd_fw__get_read_sink_index()
-{
-    return VD_FW_G.sink_index == 1 ? 0 : 1;
-}
-
-static LONG vd_fw__get_write_sink_index()
-{
-    return VD_FW_G.sink_index;
-}
-
 static inline void *vd_fw_memcpy(void *dst, void *src, size_t count)
 {
     for (size_t i = 0; i < count; ++i) ((unsigned char*)dst)[i] = ((unsigned char*)src)[i];
@@ -4792,25 +4781,29 @@ VD_FW_API int vd_fw_running(void)
     // We use two sinks with an atomic write index.
     {
 
-        // Get Raw Input mouse delta sink
-        LONG curr_sink_index = VD_FW_G.sink_index;
-        LONG next_sink_index = (curr_sink_index + 1) % 2;
+        // // Get Raw Input mouse delta sink
+        // LONG curr_sink_index = VD_FW_G.sink_index;
+        // LONG next_sink_index = (curr_sink_index + 1) % 2;
 
-        // Clear the next sink
-        VD_FW_G.mouse_delta_sinks[next_sink_index][0] = 0.f;
-        VD_FW_G.mouse_delta_sinks[next_sink_index][1] = 0.f;
+        // // Clear the next sink
+        // VD_FW_G.mouse_delta_sinks[next_sink_index][0] = 0.f;
+        // VD_FW_G.mouse_delta_sinks[next_sink_index][1] = 0.f;
 
-        MemoryBarrier();
+        // MemoryBarrier();
 
-        // Exchange write index with next_sink_index
-        InterlockedExchange(&VD_FW_G.sink_index, next_sink_index);
+        // // Exchange write index with next_sink_index
+        // InterlockedExchange(&VD_FW_G.sink_index, next_sink_index);
 
-        // Now we can safely read from the curr_sink_index
-        VD_FW_G.mouse_delta[0] = VD_FW_G.mouse_delta_sinks[curr_sink_index][0];
-        VD_FW_G.mouse_delta[1] = VD_FW_G.mouse_delta_sinks[curr_sink_index][1];
+        // // Now we can safely read from the curr_sink_index
+        // VD_FW_G.mouse_delta[0] = VD_FW_G.mouse_delta_sinks[curr_sink_index][0];
+        // VD_FW_G.mouse_delta[1] = VD_FW_G.mouse_delta_sinks[curr_sink_index][1];
 
 
         VD_FW_WIN32_PROFILE_BEGIN(read_all_input);
+        VD_FW_G.mouse_delta[0] = VD_FW_G.winthread_mouse_delta[0];
+        VD_FW_G.mouse_delta[1] = VD_FW_G.winthread_mouse_delta[1];
+        VD_FW_G.winthread_mouse_delta[0] = 0.f;
+        VD_FW_G.winthread_mouse_delta[1] = 0.f;
         EnterCriticalSection(&VD_FW_G.input_critical_section);
         for (int i = 0; i < VD_FW_GAMEPAD_COUNT_MAX; ++i) {
             VD_FW_G.gamepad_prev_states[i] = VD_FW_G.winthread_gamepad_prev_states[i];
@@ -5886,11 +5879,8 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                 LONG dx = raw->data.mouse.lLastX;
                 LONG dy = raw->data.mouse.lLastY;
 
-                LONG write_index = VD_FW_G.sink_index;
-                MemoryBarrier();
-
-                VD_FW_G.mouse_delta_sinks[write_index][0] = VD_FW_G.mouse_delta_sinks[write_index][0] * 0.8f + dx * 0.2f;
-                VD_FW_G.mouse_delta_sinks[write_index][1] = VD_FW_G.mouse_delta_sinks[write_index][1] * 0.8f + dy * 0.2f;
+                VD_FW_G.winthread_mouse_delta[0] = VD_FW_G.winthread_mouse_delta[0] * 0.8f + dx * 0.2f;
+                VD_FW_G.winthread_mouse_delta[1] = VD_FW_G.winthread_mouse_delta[1] * 0.8f + dy * 0.2f;
             } else if (raw->header.dwType == RIM_TYPEHID) {
 
                 VdFw__Win32GamepadInfo *gamepad_info = &VD_FW_G.gamepad_infos[0];
