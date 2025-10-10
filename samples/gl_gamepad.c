@@ -26,8 +26,16 @@
 
 #define FRAGMENT_SOURCE \
 "#version 330 core                                                                                                 \n" \
+"precision highp float;                                                                                            \n" \
 "in  vec2 rect_uv;                                                                                                 \n" \
 "out vec4 FragColor;                                                                                               \n" \
+"                                                                                                                  \n" \
+"/* Gradient noise from Jorge Jimenez's presentation: */                                                           \n" \
+"/* http://www.iryoku.com/next-generation-post-processing-in-call-of-duty-advanced-warfare */                      \n" \
+"float gradientNoise(in vec2 uv)                                                                                   \n" \
+"{                                                                                                                 \n" \
+"    return fract(52.9829189 * fract(dot(uv, vec2(0.06711056, 0.00583715))));                                      \n" \
+"}                                                                                                                 \n" \
 "                                                                                                                  \n" \
 "uniform vec4 rect_color;                                                                                          \n" \
 "uniform sampler2D rect_texture;                                                                                   \n" \
@@ -37,6 +45,7 @@
 "    vec4 tex_color = texture(rect_texture, rect_uv);                                                              \n" \
 "    vec4 color = rect_color * tex_color;                                                                          \n" \
 "    color.rgb *= color.a;                                                                                         \n" \
+"    color.rgb += (1.0 / 128.0) * gradientNoise(gl_FragCoord.xy) - (0.5 / 128.0);                                  \n" \
 "    FragColor = color;                                                                                            \n" \
 "}                                                                                                                 \n" \
 
@@ -48,18 +57,22 @@ typedef struct {
     float controller_dim[2];
 
     int button_a;
+    float button_a_grad;
     float button_a_pos[2];
     float button_a_dim[2];
 
     int button_b;
+    float button_b_grad;
     float button_b_pos[2];
     float button_b_dim[2];
 
     int button_x;
+    float button_x_grad;
     float button_x_pos[2];
     float button_x_dim[2];
 
     int button_y;
+    float button_y_grad;
     float button_y_pos[2];
     float button_y_dim[2];
 
@@ -108,6 +121,14 @@ typedef struct {
     float stick_r_value[2];
     float stick_r_pos[2];
     float stick_r_dim[2];
+
+    float lt_value;
+    float lt_bar_pos[2];
+    float lt_bar_dim[2];
+
+    float rt_value;
+    float rt_bar_pos[2];
+    float rt_bar_dim[2];
 } ControllerInfo;
 
 typedef union {
@@ -245,6 +266,20 @@ ControllerInfo Base_Controller_Info = {
     .stick_r_dim = {
         8.61f, 8.61f,
     },
+
+    .lt_bar_pos = {
+        38.98f, 57.19f,
+    },
+    .lt_bar_dim = {
+        2.21f, 12.99f,
+    },
+
+    .rt_bar_pos = {
+        67.0f, 57.19f,
+    },
+    .rt_bar_dim = {
+        2.21f, 12.99f,
+    },
 };
 
 static struct {
@@ -256,6 +291,8 @@ static struct {
     GLuint tex_button_l1, tex_button_r1;
     GLuint tex_stick_l_base, tex_stick_r_base;
     GLuint tex_stick_l, tex_stick_r;
+    GLuint tex_lt_bar, tex_rt_bar;
+    GLuint tex_radgrad;
 } all;
 
 typedef struct {
@@ -273,7 +310,11 @@ static Color  button_y_color(int pressed);
 static Color  button_d_color(int pressed);
 static Color  button_bumper_color(int pressed);
 static Color  stick_base_color(void);
+static Color  bar_color(void);
+static Color  fill_color(void);
 static Color  switch_color_digital(Color c1, Color c2, int p);
+static float  move_grad(float t, float a, int pressed);
+static Color  reveal_color(Color color, float reveal_t);
 
 int main(int argc, char const *argv[])
 {
@@ -310,6 +351,9 @@ int main(int argc, char const *argv[])
     all.tex_stick_r_base  = all.tex_stick_l_base;
     all.tex_stick_l       = load_image("assets/controller_stick_l.png", &iw, &ih);
     all.tex_stick_r       = all.tex_stick_l;
+    all.tex_lt_bar        = load_image("assets/controller_lt.png", &iw, &ih);
+    all.tex_rt_bar        = all.tex_lt_bar;
+    all.tex_radgrad       = load_image("assets/radgrad.png", &iw, &ih);
 
     GLuint vs = vd_fw_compile_shader(GL_VERTEX_SHADER, VERTEX_SOURCE);
     GLuint fs = vd_fw_compile_shader(GL_FRAGMENT_SHADER, FRAGMENT_SOURCE);
@@ -342,11 +386,13 @@ int main(int argc, char const *argv[])
     glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    ControllerInfo draw_info;
+    ControllerInfo draw_info = {0};
     while (vd_fw_running()) {
 
         int w, h;
         vd_fw_get_size(&w, &h);
+
+        float t = vd_fw_delta_s();
 
         glViewport(0, 0, w, h);
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
@@ -362,9 +408,13 @@ int main(int argc, char const *argv[])
         }
 
         draw_info.button_a      = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_A);
+        draw_info.button_a_grad = move_grad(t * 7.f, draw_info.button_a_grad, draw_info.button_a);
         draw_info.button_b      = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_B);
+        draw_info.button_b_grad = move_grad(t * 7.f, draw_info.button_b_grad, draw_info.button_b);
         draw_info.button_x      = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_X);
+        draw_info.button_x_grad = move_grad(t * 7.f, draw_info.button_x_grad, draw_info.button_x);
         draw_info.button_y      = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_Y);
+        draw_info.button_y_grad = move_grad(t * 7.f, draw_info.button_y_grad, draw_info.button_y);
         draw_info.button_dup    = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_DUP);
         draw_info.button_dright = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_DRIGHT);
         draw_info.button_ddown  = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_DDOWN);
@@ -377,8 +427,8 @@ int main(int argc, char const *argv[])
         vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_LV, &draw_info.stick_l_value[1]);
         vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RH, &draw_info.stick_r_value[0]);
         vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RV, &draw_info.stick_r_value[1]);
-        // printf("stick l h: %f\n", draw_info.stick_l_value[0]);
-
+        vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_LT, &draw_info.lt_value);
+        vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RT, &draw_info.rt_value);
 
         float ref_width  = Base_Controller_Info.controller_dim[0];
         float ref_height = Base_Controller_Info.controller_dim[1];
@@ -536,6 +586,35 @@ static void transform_controller_info(ControllerInfo *info, float x, float y, fl
     info->stick_r_dim[1] = Base_Controller_Info.stick_r_dim[1] * ratio;
     info->stick_r_pos[0] = Base_Controller_Info.stick_r_pos[0] * ratio + x + (info->stick_r_value[0] - 0.5f) * info->stick_r_dim[0] * 0.5f;
     info->stick_r_pos[1] = Base_Controller_Info.stick_r_pos[1] * ratio + y + (info->stick_r_value[1] - 0.5f) * info->stick_r_dim[1] * 0.5f;
+
+    // LT BAR
+    info->lt_bar_dim[0] = Base_Controller_Info.lt_bar_dim[0] * ratio;
+    info->lt_bar_dim[1] = Base_Controller_Info.lt_bar_dim[1] * ratio;
+    info->lt_bar_pos[0] = Base_Controller_Info.lt_bar_pos[0] * ratio + x;
+    info->lt_bar_pos[1] = Base_Controller_Info.lt_bar_pos[1] * ratio + y;
+
+    // RT BAR
+    info->rt_bar_dim[0] = Base_Controller_Info.rt_bar_dim[0] * ratio;
+    info->rt_bar_dim[1] = Base_Controller_Info.rt_bar_dim[1] * ratio;
+    info->rt_bar_pos[0] = Base_Controller_Info.rt_bar_pos[0] * ratio + x;
+    info->rt_bar_pos[1] = Base_Controller_Info.rt_bar_pos[1] * ratio + y;
+}
+
+static void put_button_grad(float *pos, float *dim, Color color, float grad)
+{
+    float graddim[2] = {
+        dim[0], dim[1],
+    };
+    graddim[0] *= 4;
+    graddim[1] *= 4;
+
+    float gradpos[2] = {
+        (pos[0] + dim[0] * 0.5f) - graddim[0] * 0.5f,
+        (pos[1] + dim[1] * 0.5f) - graddim[1] * 0.5f,
+    };
+    put_image(all.tex_radgrad, gradpos[0], gradpos[1],
+                               graddim[0], graddim[1],
+                               reveal_color(color, grad).e);
 }
 
 static void draw_controller_info(ControllerInfo *info)
@@ -543,6 +622,11 @@ static void draw_controller_info(ControllerInfo *info)
     put_image(all.tex_controller, info->controller_pos[0], info->controller_pos[1],
                                   info->controller_dim[0], info->controller_dim[1],
                                   (float[]){ 0.2f, 0.2f, 0.2f, 1.0f });
+
+    put_button_grad(info->button_a_pos, info->button_a_dim, make_color(0.2f, 0.9f, 0.2f, 0.4f), info->button_a_grad);
+    put_button_grad(info->button_b_pos, info->button_b_dim, make_color(0.9f, 0.2f, 0.2f, 0.4f), info->button_b_grad);
+    put_button_grad(info->button_x_pos, info->button_x_dim, make_color(0.4f, 0.8f, 0.9f, 0.4f), info->button_x_grad);
+    put_button_grad(info->button_y_pos, info->button_y_dim, make_color(0.9f, 0.9f, 0.2f, 0.4f), info->button_y_grad);
 
     put_image(all.tex_button_a,   info->button_a_pos[0], info->button_a_pos[1],
                                   info->button_a_dim[0], info->button_a_dim[1],
@@ -607,6 +691,42 @@ static void draw_controller_info(ControllerInfo *info)
     put_image(all.tex_stick_r, info->stick_r_pos[0], info->stick_r_pos[1],
                                     info->stick_r_dim[0], info->stick_r_dim[1],
                                     stick_base_color().e);
+
+    {
+        put_image(all.tex_lt_bar, info->lt_bar_pos[0], info->lt_bar_pos[1],
+                                  info->lt_bar_dim[0], info->lt_bar_dim[1],
+                                  bar_color().e);
+
+        float fill_dim[2] = {
+            info->lt_bar_dim[0], info->lt_value * info->lt_bar_dim[1],    
+        };
+
+        float fill_pos[2] = {
+            info->lt_bar_pos[0], info->lt_bar_pos[1] - info->lt_value * info->lt_bar_dim[1] + info->lt_bar_dim[1],
+        };
+
+        put_image(all.tex_lt_bar, fill_pos[0], fill_pos[1],
+                                  fill_dim[0], fill_dim[1],
+                                  fill_color().e);
+    }
+
+    {
+        put_image(all.tex_rt_bar, info->rt_bar_pos[0], info->rt_bar_pos[1],
+                                  info->rt_bar_dim[0], info->rt_bar_dim[1],
+                                  bar_color().e);
+
+        float fill_dim[2] = {
+            info->rt_bar_dim[0], info->rt_value * info->rt_bar_dim[1],    
+        };
+
+        float fill_pos[2] = {
+            info->rt_bar_pos[0], info->rt_bar_pos[1] - info->rt_value * info->rt_bar_dim[1] + info->rt_bar_dim[1],
+        };
+
+        put_image(all.tex_rt_bar, fill_pos[0], fill_pos[1],
+                                  fill_dim[0], fill_dim[1],
+                                  fill_color().e);
+    }
 }
 
 static Color button_a_color(int pressed)
@@ -637,7 +757,7 @@ static Color button_x_color(int pressed)
 {
     return switch_color_digital(
         make_color(0.2f, 0.2f, 0.2f, 1.0f),
-        make_color(0.2f, 0.2f, 0.9f, 1.0f),
+        make_color(0.4f, 0.8f, 1.0f, 1.0f),
         pressed);
 }
 
@@ -662,9 +782,34 @@ static Color stick_base_color(void)
     return make_color(0.7f, 0.7f, 0.7f, 1.f);
 }
 
+static Color bar_color(void)
+{
+    return make_color(0.2f, 0.2f, 0.2f, 1.f);
+}
+
+static Color fill_color(void)
+{
+    return make_color(0.7f, 0.7f, 0.7f, 1.f);
+}
+
 static Color switch_color_digital(Color c1, Color c2, int p)
 {
     return p ? c2 : c1;
+}
+
+static float move_grad(float t, float a, int pressed)
+{
+    return (1.0f - t) * a + t * (pressed ? 1.f : 0.f);
+}
+
+static Color reveal_color(Color color, float reveal_t)
+{
+    Color result; 
+    result.v.r = reveal_t * (color.v.r);
+    result.v.g = reveal_t * (color.v.g);
+    result.v.b = reveal_t * (color.v.b);
+    result.v.a = reveal_t * (color.v.a);
+    return result;
 }
 
 #define VD_FW_IMPL
