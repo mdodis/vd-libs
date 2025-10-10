@@ -3921,33 +3921,35 @@ typedef struct VdFwtagRECT
 
 /* ----User32.dll---------------------------------------------------------------------------------------------------- */
 #ifdef UNICODE
-#define VdFwDispatchMessage     VdFwDispatchMessageW
-#define VdFwPostMessage         VdFwPostMessageW
-#define VdFwGetMessage          VdFwGetMessageW
-#define VdFwDefWindowProc       VdFwDefWindowProcW
-#define VdFwRegisterClassEx     VdFwRegisterClassExW
-#define VdFwCreateWindowEx      VdFwCreateWindowExW
-#define VdFwMapVirtualKey       VdFwMapVirtualKeyW
-#define VdFwSetWindowText       VdFwSetWindowTextW
-#define VdFwSetWindowLong       VdFwSetWindowLongW
-#define VdFwGetWindowLongPtr    VdFwGetWindowLongPtrW
-#define VdFwSetWindowLongPtr    VdFwSetWindowLongPtrW
-#define VdFwLoadCursor          VdFwLoadCursorW
-#define VdFwGetMonitorInfo      VdFwGetMonitorInfoW
+#define VdFwDispatchMessage         VdFwDispatchMessageW
+#define VdFwPostMessage             VdFwPostMessageW
+#define VdFwGetMessage              VdFwGetMessageW
+#define VdFwDefWindowProc           VdFwDefWindowProcW
+#define VdFwRegisterClassEx         VdFwRegisterClassExW
+#define VdFwCreateWindowEx          VdFwCreateWindowExW
+#define VdFwMapVirtualKey           VdFwMapVirtualKeyW
+#define VdFwSetWindowText           VdFwSetWindowTextW
+#define VdFwSetWindowLong           VdFwSetWindowLongW
+#define VdFwGetWindowLongPtr        VdFwGetWindowLongPtrW
+#define VdFwSetWindowLongPtr        VdFwSetWindowLongPtrW
+#define VdFwLoadCursor              VdFwLoadCursorW
+#define VdFwGetMonitorInfo          VdFwGetMonitorInfoW
+#define VdFwGetRawInputDeviceInfo   VdFwGetRawInputDeviceInfoW
 #else
-#define VdFwDispatchMessage     VdFwDispatchMessageA
-#define VdFwPostMessage         VdFwPostMessageA
-#define VdFwGetMessage          VdFwGetMessageA
-#define VdFwDefWindowProc       VdFwDefWindowProcA
-#define VdFwRegisterClassEx     VdFwRegisterClassExA
-#define VdFwCreateWindowEx      VdFwCreateWindowExA
-#define VdFwMapVirtualKey       VdFwMapVirtualKeyA
-#define VdFwSetWindowText       VdFwSetWindowTextA
-#define VdFwSetWindowLong       VdFwSetWindowLongA
-#define VdFwGetWindowLongPtr    VdFwGetWindowLongPtrA
-#define VdFwSetWindowLongPtr    VdFwSetWindowLongPtrA
-#define VdFwLoadCursor          VdFwLoadCursorA
-#define VdFwGetMonitorInfo      VdFwGetMonitorInfoA
+#define VdFwDispatchMessage         VdFwDispatchMessageA
+#define VdFwPostMessage             VdFwPostMessageA
+#define VdFwGetMessage              VdFwGetMessageA
+#define VdFwDefWindowProc           VdFwDefWindowProcA
+#define VdFwRegisterClassEx         VdFwRegisterClassExA
+#define VdFwCreateWindowEx          VdFwCreateWindowExA
+#define VdFwMapVirtualKey           VdFwMapVirtualKeyA
+#define VdFwSetWindowText           VdFwSetWindowTextA
+#define VdFwSetWindowLong           VdFwSetWindowLongA
+#define VdFwGetWindowLongPtr        VdFwGetWindowLongPtrA
+#define VdFwSetWindowLongPtr        VdFwSetWindowLongPtrA
+#define VdFwLoadCursor              VdFwLoadCursorA
+#define VdFwGetMonitorInfo          VdFwGetMonitorInfoA
+#define VdFwGetRawInputDeviceInfo   VdFwGetRawInputDeviceInfoA
 #endif // !UNICODE
 
 typedef __int64             VdFwINT_PTR, * VdFwPINT_PTR;
@@ -3970,6 +3972,21 @@ VD_FW_DECLARE_HANDLE(VdFwHMENU);
 VD_FW_DECLARE_HANDLE(VdFwHBITMAP);
 VD_FW_DECLARE_HANDLE(VdFwHRGN);
 VD_FW_DECLARE_HANDLE(VdFwHMONITOR);
+VD_FW_DECLARE_HANDLE(VdFwDPI_AWARENESS_CONTEXT);
+VD_FW_DECLARE_HANDLE(VdFwHRAWINPUT);
+
+typedef enum VdFwDPI_AWARENESS {
+    VD_FW_DPI_AWARENESS_INVALID = -1,
+    VD_FW_DPI_AWARENESS_UNAWARE = 0,
+    VD_FW_DPI_AWARENESS_SYSTEM_AWARE = 1,
+    VD_FW_DPI_AWARENESS_PER_MONITOR_AWARE = 2
+} VdFwDPI_AWARENESS;
+
+#define VD_FW_DPI_AWARENESS_CONTEXT_UNAWARE               ((VdFwDPI_AWARENESS_CONTEXT)-1)
+#define VD_FW_DPI_AWARENESS_CONTEXT_SYSTEM_AWARE          ((VdFwDPI_AWARENESS_CONTEXT)-2)
+#define VD_FW_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE     ((VdFwDPI_AWARENESS_CONTEXT)-3)
+#define VD_FW_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2  ((VdFwDPI_AWARENESS_CONTEXT)-4)
+#define VD_FW_DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED     ((VdFwDPI_AWARENESS_CONTEXT)-5)
 
 typedef struct VdFwtagPOINT
 {
@@ -4067,11 +4084,114 @@ typedef struct VdFwtagWINDOWPOS {
     VdFwUINT    flags;
 } VdFwWINDOWPOS, * VdFwLPWINDOWPOS, * VdFwPWINDOWPOS;
 
-
 typedef struct VdFwtagNCCALCSIZE_PARAMS {
     VdFwRECT       rgrc[3];
     VdFwPWINDOWPOS lppos;
 } VdFwNCCALCSIZE_PARAMS, * VdFwLPNCCALCSIZE_PARAMS;
+
+typedef struct VdFwtagWINDOWINFO
+{
+    VdFwDWORD cbSize;
+    VdFwRECT rcWindow;
+    VdFwRECT rcClient;
+    VdFwDWORD dwStyle;
+    VdFwDWORD dwExStyle;
+    VdFwDWORD dwWindowStatus;
+    VdFwUINT cxWindowBorders;
+    VdFwUINT cyWindowBorders;
+    VdFwATOM atomWindowType;
+    VdFwWORD wCreatorVersion;
+} VdFwWINDOWINFO, * VdFwPWINDOWINFO, * VdFwLPWINDOWINFO;
+
+typedef struct VdFwtagRAWINPUTDEVICE {
+    VdFwUSHORT usUsagePage; // Toplevel collection UsagePage
+    VdFwUSHORT usUsage;     // Toplevel collection Usage
+    VdFwDWORD dwFlags;
+    VdFwHWND hwndTarget;    // Target hwnd. NULL = follows keyboard focus
+} VdFwRAWINPUTDEVICE, * VdFwPRAWINPUTDEVICE, * VdFwLPRAWINPUTDEVICE;
+typedef const VdFwRAWINPUTDEVICE* VdFwPCRAWINPUTDEVICE;
+
+typedef struct VdFwtagRAWINPUTHEADER {
+    VdFwDWORD dwType;
+    VdFwDWORD dwSize;
+    VdFwHANDLE hDevice;
+    VdFwWPARAM wParam;
+} VdFwRAWINPUTHEADER, * VdFwPRAWINPUTHEADER, * VdFwLPRAWINPUTHEADER;
+
+typedef struct VdFwtagRAWMOUSE {
+    VdFwUSHORT usFlags;
+    union {
+        VdFwULONG ulButtons;
+        struct {
+            VdFwUSHORT  usButtonFlags;
+            VdFwUSHORT  usButtonData;
+        };
+    };
+    VdFwULONG ulRawButtons;
+    VdFwLONG lLastX;
+    VdFwLONG lLastY;
+    VdFwULONG ulExtraInformation;
+
+} VdFwRAWMOUSE, * VdFwPRAWMOUSE, * VdFwLPRAWMOUSE;
+
+typedef struct VdFwtagRAWKEYBOARD {
+    VdFwUSHORT MakeCode;
+    VdFwUSHORT Flags;
+    VdFwUSHORT Reserved;
+    VdFwUSHORT VKey;
+    VdFwUINT   Message;
+    VdFwULONG ExtraInformation;
+} VdFwRAWKEYBOARD, * VdFwPRAWKEYBOARD, * VdFwLPRAWKEYBOARD;
+
+typedef struct VdFwtagRAWHID {
+    VdFwDWORD dwSizeHid;
+    VdFwDWORD dwCount;
+    VdFwBYTE bRawData[1];
+} VdFwRAWHID, * VdFwPRAWHID, * VdFwLPRAWHID;
+
+typedef struct VdFwtagRAWINPUT {
+    VdFwRAWINPUTHEADER header;
+    union {
+        VdFwRAWMOUSE    mouse;
+        VdFwRAWKEYBOARD keyboard;
+        VdFwRAWHID      hid;
+    } data;
+} VdFwRAWINPUT, * VdFwPRAWINPUT, * VdFwLPRAWINPUT;
+
+typedef struct VdFwtagRID_DEVICE_INFO_MOUSE {
+    VdFwDWORD dwId;
+    VdFwDWORD dwNumberOfButtons;
+    VdFwDWORD dwSampleRate;
+    VdFwBOOL  fHasHorizontalWheel;
+} VdFwRID_DEVICE_INFO_MOUSE, * VdFwPRID_DEVICE_INFO_MOUSE;
+
+typedef struct VdFwtagRID_DEVICE_INFO_KEYBOARD {
+    VdFwDWORD dwType;
+    VdFwDWORD dwSubType;
+    VdFwDWORD dwKeyboardMode;
+    VdFwDWORD dwNumberOfFunctionKeys;
+    VdFwDWORD dwNumberOfIndicators;
+    VdFwDWORD dwNumberOfKeysTotal;
+} VdFwRID_DEVICE_INFO_KEYBOARD, * VdFwPRID_DEVICE_INFO_KEYBOARD;
+
+typedef struct VdFwtagRID_DEVICE_INFO_HID {
+    VdFwDWORD dwVendorId;
+    VdFwDWORD dwProductId;
+    VdFwDWORD dwVersionNumber;
+    VdFwUSHORT usUsagePage;
+    VdFwUSHORT usUsage;
+} VdFwRID_DEVICE_INFO_HID, * VdFwPRID_DEVICE_INFO_HID;
+
+typedef struct VdFwtagRID_DEVICE_INFO {
+    VdFwDWORD cbSize;
+    VdFwDWORD dwType;
+    union {
+        VdFwRID_DEVICE_INFO_MOUSE mouse;
+        VdFwRID_DEVICE_INFO_KEYBOARD keyboard;
+        VdFwRID_DEVICE_INFO_HID hid;
+    };
+} VdFwRID_DEVICE_INFO, * VdFwPRID_DEVICE_INFO, * VdFwLPRID_DEVICE_INFO;
+
 
 #define VD_FW_PROC_GetMessageA(name) VdFwBOOL name(VdFwLPMSG lpMsg, VdFwHWND hWnd, VdFwUINT wMsgFilterMin, VdFwUINT wMsgFilterMax)
 typedef VD_FW_PROC_GetMessageA(VdFwProcGetMessageA);
@@ -4281,6 +4401,33 @@ static VdFwProcGetMonitorInfoA *VdFwGetMonitorInfoA;
 typedef VD_FW_PROC_GetMonitorInfoW(VdFwProcGetMonitorInfoW);
 static VdFwProcGetMonitorInfoW *VdFwGetMonitorInfoW;
 
+#define VD_FW_PROC_GetDpiForWindow(name) VdFwUINT name(VdFwHWND hwnd)
+typedef VD_FW_PROC_GetDpiForWindow(VdFwProcGetDpiForWindow);
+static VdFwProcGetDpiForWindow *VdFwGetDpiForWindow;
+
+#define VD_FW_PROC_SetProcessDpiAwarenessContext(name) VdFwBOOL name(VdFwDPI_AWARENESS_CONTEXT value)
+typedef VD_FW_PROC_SetProcessDpiAwarenessContext(VdFwProcSetProcessDpiAwarenessContext);
+static VdFwProcSetProcessDpiAwarenessContext *VdFwSetProcessDpiAwarenessContext;
+
+#define VD_FW_PROC_GetWindowInfo(name) VdFwBOOL name(VdFwHWND hwnd, VdFwPWINDOWINFO pwi)
+typedef VD_FW_PROC_GetWindowInfo(VdFwProcGetWindowInfo);
+static VdFwProcGetWindowInfo *VdFwGetWindowInfo;
+
+#define VD_FW_PROC_RegisterRawInputDevices(name) VdFwBOOL name(VdFwPCRAWINPUTDEVICE pRawInputDevices, VdFwUINT uiNumDevices, VdFwUINT cbSize)
+typedef VD_FW_PROC_RegisterRawInputDevices(VdFwProcRegisterRawInputDevices);
+static VdFwProcRegisterRawInputDevices *VdFwRegisterRawInputDevices;
+
+#define VD_FW_PROC_GetRawInputData(name) VdFwUINT name(VdFwHRAWINPUT hRawInput, VdFwUINT uiCommand, VdFwLPVOID pData, VdFwPUINT pcbSize, VdFwUINT cbSizeHeader)
+typedef VD_FW_PROC_GetRawInputData(VdFwProcGetRawInputData);
+static VdFwProcGetRawInputData *VdFwGetRawInputData;
+
+#define VD_FW_PROC_GetRawInputDeviceInfoA(name) VdFwUINT name(VdFwHANDLE hDevice, VdFwUINT uiCommand, VdFwLPVOID pData, VdFwPUINT pcbSize)
+typedef VD_FW_PROC_GetRawInputDeviceInfoA(VdFwProcGetRawInputDeviceInfoA);
+static VdFwProcGetRawInputDeviceInfoA *VdFwGetRawInputDeviceInfoA;
+
+#define VD_FW_PROC_GetRawInputDeviceInfoW(name) VdFwUINT name(VdFwHANDLE hDevice, VdFwUINT uiCommand, VdFwLPVOID pData, VdFwPUINT pcbSize)
+typedef VD_FW_PROC_GetRawInputDeviceInfoW(VdFwProcGetRawInputDeviceInfoW);
+static VdFwProcGetRawInputDeviceInfoW *VdFwGetRawInputDeviceInfoW;
 
 /* ----Winmm.dll----------------------------------------------------------------------------------------------------- */
 typedef VdFwUINT VdFwMMRESULT;
@@ -5263,59 +5410,66 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     {
         // User32.dll
         {
-            VdFwHMODULE m          =   LoadLibraryA("User32.dll");
-            VdFwGetMessageA        =        (VdFwProcGetMessageA*)GetProcAddress(m, "GetMessageA");
-            VdFwGetMessageW        =        (VdFwProcGetMessageW*)GetProcAddress(m, "GetMessageW");
-            VdFwTranslateMessage   =   (VdFwProcTranslateMessage*)GetProcAddress(m, "TranslateMessage");
-            VdFwDispatchMessageA   =   (VdFwProcDispatchMessageA*)GetProcAddress(m, "DispatchMessageA");
-            VdFwDispatchMessageW   =   (VdFwProcDispatchMessageW*)GetProcAddress(m, "DispatchMessageW");
-            VdFwPostMessageA       =       (VdFwProcPostMessageA*)GetProcAddress(m, "PostMessageA");
-            VdFwPostMessageW       =       (VdFwProcPostMessageW*)GetProcAddress(m, "PostMessageW");
-            VdFwDefWindowProcA     =     (VdFwProcDefWindowProcA*)GetProcAddress(m, "DefWindowProcA");
-            VdFwDefWindowProcW     =     (VdFwProcDefWindowProcW*)GetProcAddress(m, "DefWindowProcW");
-            VdFwPostQuitMessage    =    (VdFwProcPostQuitMessage*)GetProcAddress(m, "PostQuitMessage");
-            VdFwRegisterClassExA   =   (VdFwProcRegisterClassExA*)GetProcAddress(m, "RegisterClassExA");
-            VdFwRegisterClassExW   =   (VdFwProcRegisterClassExW*)GetProcAddress(m, "RegisterClassExW");
-            VdFwCreateWindowExA    =    (VdFwProcCreateWindowExA*)GetProcAddress(m, "CreateWindowExA");
-            VdFwCreateWindowExW    =    (VdFwProcCreateWindowExW*)GetProcAddress(m, "CreateWindowExW");
-            VdFwDestroyWindow      =      (VdFwProcDestroyWindow*)GetProcAddress(m, "DestroyWindow");
-            VdFwShowWindow         =         (VdFwProcShowWindow*)GetProcAddress(m, "ShowWindow");
-            VdFwSetWindowPos       =       (VdFwProcSetWindowPos*)GetProcAddress(m, "SetWindowPos");
-            VdFwGetWindowPlacement = (VdFwProcGetWindowPlacement*)GetProcAddress(m, "GetWindowPlacement");
-            VdFwSetWindowPlacement = (VdFwProcSetWindowPlacement*)GetProcAddress(m, "SetWindowPlacement");
-            VdFwIsZoomed           =           (VdFwProcIsZoomed*)GetProcAddress(m, "IsZoomed");
-            VdFwMapVirtualKeyA     =     (VdFwProcMapVirtualKeyA*)GetProcAddress(m, "MapVirtualKeyA");
-            VdFwMapVirtualKeyW     =     (VdFwProcMapVirtualKeyW*)GetProcAddress(m, "MapVirtualKeyW");
-            VdFwSetCapture         =         (VdFwProcSetCapture*)GetProcAddress(m, "SetCapture");
-            VdFwReleaseCapture     =     (VdFwProcReleaseCapture*)GetProcAddress(m, "ReleaseCapture");
-            VdFwGetSystemMetrics   =   (VdFwProcGetSystemMetrics*)GetProcAddress(m, "GetSystemMetrics");
-            VdFwUpdateWindow       =       (VdFwProcUpdateWindow*)GetProcAddress(m, "UpdateWindow");
-            VdFwGetDC              =              (VdFwProcGetDC*)GetProcAddress(m, "GetDC");
-            VdFwReleaseDC          =          (VdFwProcReleaseDC*)GetProcAddress(m, "ReleaseDC");
-            VdFwBeginPaint         =         (VdFwProcBeginPaint*)GetProcAddress(m, "BeginPaint");
-            VdFwEndPaint           =           (VdFwProcEndPaint*)GetProcAddress(m, "EndPaint");
-            VdFwSetWindowRgn       =       (VdFwProcSetWindowRgn*)GetProcAddress(m, "SetWindowRgn");
-            VdFwSetWindowTextA     =     (VdFwProcSetWindowTextA*)GetProcAddress(m, "SetWindowTextA");
-            VdFwSetWindowTextW     =     (VdFwProcSetWindowTextW*)GetProcAddress(m, "SetWindowTextW");
-            VdFwGetClientRect      =      (VdFwProcGetClientRect*)GetProcAddress(m, "GetClientRect");
-            VdFwGetWindowRect      =      (VdFwProcGetWindowRect*)GetProcAddress(m, "GetWindowRect");
-            VdFwShowCursor         =         (VdFwProcShowCursor*)GetProcAddress(m, "ShowCursor");
-            VdFwSetCursorPos       =       (VdFwProcSetCursorPos*)GetProcAddress(m, "SetCursorPos");
-            VdFwScreenToClient     =     (VdFwProcScreenToClient*)GetProcAddress(m, "ScreenToClient");
-            VdFwEqualRect          =          (VdFwProcEqualRect*)GetProcAddress(m, "EqualRect");
-            VdFwPtInRect           =           (VdFwProcPtInRect*)GetProcAddress(m, "PtInRect");
-            VdFwSetWindowLongA     =     (VdFwProcSetWindowLongA*)GetProcAddress(m, "SetWindowLongA");
-            VdFwSetWindowLongW     =     (VdFwProcSetWindowLongW*)GetProcAddress(m, "SetWindowLongW");
-            VdFwGetWindowLongPtrA  =  (VdFwProcGetWindowLongPtrA*)GetProcAddress(m, "GetWindowLongPtrA");
-            VdFwGetWindowLongPtrW  =  (VdFwProcGetWindowLongPtrW*)GetProcAddress(m, "GetWindowLongPtrW");
-            VdFwSetWindowLongPtrA  =  (VdFwProcSetWindowLongPtrA*)GetProcAddress(m, "SetWindowLongPtrA");
-            VdFwSetWindowLongPtrW  =  (VdFwProcSetWindowLongPtrW*)GetProcAddress(m, "SetWindowLongPtrW");
-            VdFwLoadCursorA        =        (VdFwProcLoadCursorA*)GetProcAddress(m, "LoadCursorA");
-            VdFwLoadCursorW        =        (VdFwProcLoadCursorW*)GetProcAddress(m, "LoadCursorW");
-            VdFwCreateIconIndirect = (VdFwProcCreateIconIndirect*)GetProcAddress(m, "CreateIconIndirect");
-            VdFwMonitorFromWindow  =  (VdFwProcMonitorFromWindow*)GetProcAddress(m, "MonitorFromWindow");
-            VdFwGetMonitorInfoA    =    (VdFwProcGetMonitorInfoA*)GetProcAddress(m, "GetMonitorInfoA");
-            VdFwGetMonitorInfoW    =    (VdFwProcGetMonitorInfoW*)GetProcAddress(m, "GetMonitorInfoW");
+            VdFwHMODULE m                     = LoadLibraryA("User32.dll");
+            VdFwGetMessageA                   =                   (VdFwProcGetMessageA*)GetProcAddress(m, "GetMessageA");
+            VdFwGetMessageW                   =                   (VdFwProcGetMessageW*)GetProcAddress(m, "GetMessageW");
+            VdFwTranslateMessage              =              (VdFwProcTranslateMessage*)GetProcAddress(m, "TranslateMessage");
+            VdFwDispatchMessageA              =              (VdFwProcDispatchMessageA*)GetProcAddress(m, "DispatchMessageA");
+            VdFwDispatchMessageW              =              (VdFwProcDispatchMessageW*)GetProcAddress(m, "DispatchMessageW");
+            VdFwPostMessageA                  =                  (VdFwProcPostMessageA*)GetProcAddress(m, "PostMessageA");
+            VdFwPostMessageW                  =                  (VdFwProcPostMessageW*)GetProcAddress(m, "PostMessageW");
+            VdFwDefWindowProcA                =                (VdFwProcDefWindowProcA*)GetProcAddress(m, "DefWindowProcA");
+            VdFwDefWindowProcW                =                (VdFwProcDefWindowProcW*)GetProcAddress(m, "DefWindowProcW");
+            VdFwPostQuitMessage               =               (VdFwProcPostQuitMessage*)GetProcAddress(m, "PostQuitMessage");
+            VdFwRegisterClassExA              =              (VdFwProcRegisterClassExA*)GetProcAddress(m, "RegisterClassExA");
+            VdFwRegisterClassExW              =              (VdFwProcRegisterClassExW*)GetProcAddress(m, "RegisterClassExW");
+            VdFwCreateWindowExA               =               (VdFwProcCreateWindowExA*)GetProcAddress(m, "CreateWindowExA");
+            VdFwCreateWindowExW               =               (VdFwProcCreateWindowExW*)GetProcAddress(m, "CreateWindowExW");
+            VdFwDestroyWindow                 =                 (VdFwProcDestroyWindow*)GetProcAddress(m, "DestroyWindow");
+            VdFwShowWindow                    =                    (VdFwProcShowWindow*)GetProcAddress(m, "ShowWindow");
+            VdFwSetWindowPos                  =                  (VdFwProcSetWindowPos*)GetProcAddress(m, "SetWindowPos");
+            VdFwGetWindowPlacement            =            (VdFwProcGetWindowPlacement*)GetProcAddress(m, "GetWindowPlacement");
+            VdFwSetWindowPlacement            =            (VdFwProcSetWindowPlacement*)GetProcAddress(m, "SetWindowPlacement");
+            VdFwIsZoomed                      =                      (VdFwProcIsZoomed*)GetProcAddress(m, "IsZoomed");
+            VdFwMapVirtualKeyA                =                (VdFwProcMapVirtualKeyA*)GetProcAddress(m, "MapVirtualKeyA");
+            VdFwMapVirtualKeyW                =                (VdFwProcMapVirtualKeyW*)GetProcAddress(m, "MapVirtualKeyW");
+            VdFwSetCapture                    =                    (VdFwProcSetCapture*)GetProcAddress(m, "SetCapture");
+            VdFwReleaseCapture                =                (VdFwProcReleaseCapture*)GetProcAddress(m, "ReleaseCapture");
+            VdFwGetSystemMetrics              =              (VdFwProcGetSystemMetrics*)GetProcAddress(m, "GetSystemMetrics");
+            VdFwUpdateWindow                  =                  (VdFwProcUpdateWindow*)GetProcAddress(m, "UpdateWindow");
+            VdFwGetDC                         =                         (VdFwProcGetDC*)GetProcAddress(m, "GetDC");
+            VdFwReleaseDC                     =                     (VdFwProcReleaseDC*)GetProcAddress(m, "ReleaseDC");
+            VdFwBeginPaint                    =                    (VdFwProcBeginPaint*)GetProcAddress(m, "BeginPaint");
+            VdFwEndPaint                      =                      (VdFwProcEndPaint*)GetProcAddress(m, "EndPaint");
+            VdFwSetWindowRgn                  =                  (VdFwProcSetWindowRgn*)GetProcAddress(m, "SetWindowRgn");
+            VdFwSetWindowTextA                =                (VdFwProcSetWindowTextA*)GetProcAddress(m, "SetWindowTextA");
+            VdFwSetWindowTextW                =                (VdFwProcSetWindowTextW*)GetProcAddress(m, "SetWindowTextW");
+            VdFwGetClientRect                 =                 (VdFwProcGetClientRect*)GetProcAddress(m, "GetClientRect");
+            VdFwGetWindowRect                 =                 (VdFwProcGetWindowRect*)GetProcAddress(m, "GetWindowRect");
+            VdFwShowCursor                    =                    (VdFwProcShowCursor*)GetProcAddress(m, "ShowCursor");
+            VdFwSetCursorPos                  =                  (VdFwProcSetCursorPos*)GetProcAddress(m, "SetCursorPos");
+            VdFwScreenToClient                =                (VdFwProcScreenToClient*)GetProcAddress(m, "ScreenToClient");
+            VdFwEqualRect                     =                     (VdFwProcEqualRect*)GetProcAddress(m, "EqualRect");
+            VdFwPtInRect                      =                      (VdFwProcPtInRect*)GetProcAddress(m, "PtInRect");
+            VdFwSetWindowLongA                =                (VdFwProcSetWindowLongA*)GetProcAddress(m, "SetWindowLongA");
+            VdFwSetWindowLongW                =                (VdFwProcSetWindowLongW*)GetProcAddress(m, "SetWindowLongW");
+            VdFwGetWindowLongPtrA             =             (VdFwProcGetWindowLongPtrA*)GetProcAddress(m, "GetWindowLongPtrA");
+            VdFwGetWindowLongPtrW             =             (VdFwProcGetWindowLongPtrW*)GetProcAddress(m, "GetWindowLongPtrW");
+            VdFwSetWindowLongPtrA             =             (VdFwProcSetWindowLongPtrA*)GetProcAddress(m, "SetWindowLongPtrA");
+            VdFwSetWindowLongPtrW             =             (VdFwProcSetWindowLongPtrW*)GetProcAddress(m, "SetWindowLongPtrW");
+            VdFwLoadCursorA                   =                   (VdFwProcLoadCursorA*)GetProcAddress(m, "LoadCursorA");
+            VdFwLoadCursorW                   =                   (VdFwProcLoadCursorW*)GetProcAddress(m, "LoadCursorW");
+            VdFwCreateIconIndirect            =            (VdFwProcCreateIconIndirect*)GetProcAddress(m, "CreateIconIndirect");
+            VdFwMonitorFromWindow             =             (VdFwProcMonitorFromWindow*)GetProcAddress(m, "MonitorFromWindow");
+            VdFwGetMonitorInfoA               =               (VdFwProcGetMonitorInfoA*)GetProcAddress(m, "GetMonitorInfoA");
+            VdFwGetMonitorInfoW               =               (VdFwProcGetMonitorInfoW*)GetProcAddress(m, "GetMonitorInfoW");
+            VdFwGetDpiForWindow               =               (VdFwProcGetDpiForWindow*)GetProcAddress(m, "GetDpiForWindow");
+            VdFwSetProcessDpiAwarenessContext = (VdFwProcSetProcessDpiAwarenessContext*)GetProcAddress(m, "SetProcessDpiAwarenessContext");
+            VdFwGetWindowInfo                 =                 (VdFwProcGetWindowInfo*)GetProcAddress(m, "GetWindowInfo");
+            VdFwRegisterRawInputDevices       =       (VdFwProcRegisterRawInputDevices*)GetProcAddress(m, "RegisterRawInputDevices");
+            VdFwGetRawInputData               =               (VdFwProcGetRawInputData*)GetProcAddress(m, "GetRawInputData");
+            VdFwGetRawInputDeviceInfoA        =        (VdFwProcGetRawInputDeviceInfoA*)GetProcAddress(m, "GetRawInputDeviceInfoA");
+            VdFwGetRawInputDeviceInfoW        =        (VdFwProcGetRawInputDeviceInfoW*)GetProcAddress(m, "GetRawInputDeviceInfoW");
         }
 
         // Winmm.dll
@@ -5363,7 +5517,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         }
     }
     // SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
-    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    VdFwSetProcessDpiAwarenessContext(VD_FW_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     VdFwtimeBeginPeriod(1);
     QueryPerformanceFrequency(&VD_FW_G.frequency);
 
@@ -5873,7 +6027,7 @@ VD_FW_API int vd_fw_get_mouse_wheel(float *dx, float *dy)
 
 VD_FW_API float vd_fw_get_scale(void)
 {
-    return (float)GetDpiForWindow(VD_FW_G.hwnd) / 90.f;
+    return (float)VdFwGetDpiForWindow(VD_FW_G.hwnd) / 90.f;
 }
 
 VD_FW_API void vd_fw_set_title(const char *title)
@@ -5978,7 +6132,7 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
 {
     (void)param;
     VD_FW_G.t_running = TRUE;
-    VD_FW_SANITY_CHECK();
+    // VD_FW_SANITY_CHECK();
 
     WNDCLASSEX wcx;
     ZeroMemory(&wcx, sizeof(wcx));
@@ -6061,7 +6215,7 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
 
     // Register raw input mouse
     {
-        RAWINPUTDEVICE rids[] = {
+        VdFwRAWINPUTDEVICE rids[] = {
             {
                 .usUsagePage   = 0x01, // Generic desktop controls
                 .usUsage       = 0x02, // Mouse
@@ -6076,7 +6230,7 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
                 .hwndTarget    = VD_FW_G.hwnd,
             },
         };
-        VD_FW__CHECK_TRUE(RegisterRawInputDevices(rids, 2, sizeof(rids[0])));
+        VD_FW__CHECK_TRUE(VdFwRegisterRawInputDevices(rids, 2, sizeof(rids[0])));
     }
 
     VD_FW_G.last_window_style = window_style;
@@ -6319,9 +6473,9 @@ static void vd_fw__update_region(void)
     if (VdFwIsZoomed(VD_FW_G.hwnd)) {
         // @note(mdodis): If the window is maximized when get the client and window rects and set the region subtracted
         // by the overall window's top left coordinates
-        WINDOWINFO window_info = {};
+        VdFwWINDOWINFO window_info = {};
         window_info.cbSize = sizeof(window_info);
-        GetWindowInfo(VD_FW_G.hwnd, &window_info);
+        VdFwGetWindowInfo(VD_FW_G.hwnd, &window_info);
         VD_FW_G.rgn = (RECT) {
             .left   = window_info.rcClient.left   - window_info.rcWindow.left,
             .top    = window_info.rcClient.top    - window_info.rcWindow.top,
@@ -6684,19 +6838,19 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         } break;
 
         case WM_INPUT: {
-            UINT data_size = sizeof(RAWINPUT) * VD_FW_WIN32_RAW_INPUT_BUFFER_COUNT;
-            UINT num_bytes_copied = GetRawInputData(
-                (HRAWINPUT)lparam,
+            VdFwUINT data_size = sizeof(VdFwRAWINPUT) * VD_FW_WIN32_RAW_INPUT_BUFFER_COUNT;
+            VdFwUINT num_bytes_copied = VdFwGetRawInputData(
+                (VdFwHRAWINPUT)lparam,
                 RID_INPUT,
                 VD_FW_G.raw_input_buffer,
                 &data_size,
-                sizeof(RAWINPUTHEADER));
+                sizeof(VdFwRAWINPUTHEADER));
 
-            if (num_bytes_copied == ((UINT)-1)) {
+            if (num_bytes_copied == ((VdFwUINT)-1)) {
                 break;
             }
 
-            RAWINPUT *raw = VD_FW_G.raw_input_buffer;
+            VdFwRAWINPUT *raw = VD_FW_G.raw_input_buffer;
             if (raw->header.dwType == RIM_TYPEMOUSE) {
                 VdFwLONG dx = raw->data.mouse.lLastX;
                 VdFwLONG dy = raw->data.mouse.lLastY;
@@ -6836,7 +6990,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                 RID_DEVICE_INFO device_info;
                 device_info.cbSize = sizeof(device_info);
                 UINT cb_size = sizeof(device_info);
-                UINT device_info_result = GetRawInputDeviceInfoA(
+                UINT device_info_result = VdFwGetRawInputDeviceInfoA(
                     device_handle,
                     RIDI_DEVICEINFO,
                     &device_info,
@@ -6882,7 +7036,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                 }
 
                 UINT ppd_req_size = 0;
-                if (GetRawInputDeviceInfoA(
+                if (VdFwGetRawInputDeviceInfoA(
                     device_handle,
                     RIDI_PREPARSEDDATA,
                     NULL,
@@ -6893,7 +7047,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
                 new_gamepad->ppd = (VdFwPHIDP_PREPARSED_DATA)HeapAlloc(GetProcessHeap(), 0, ppd_req_size);
 
-                if (GetRawInputDeviceInfoA(
+                if (VdFwGetRawInputDeviceInfoA(
                     device_handle,
                     RIDI_PREPARSEDDATA,
                     new_gamepad->ppd,
@@ -7268,10 +7422,10 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                 VdFwGetWindowRect(VD_FW_G.hwnd, &VD_FW_G.windowed_rect);
                 VdFwGetWindowPlacement(VD_FW_G.hwnd, &VD_FW_G.last_window_placement);
 
-                HMONITOR monitor = VdFwMonitorFromWindow(VD_FW_G.hwnd, MONITOR_DEFAULTTOPRIMARY);
-                MONITORINFO monitor_info = {0};
+                VdFwHMONITOR monitor = VdFwMonitorFromWindow(VD_FW_G.hwnd, MONITOR_DEFAULTTOPRIMARY);
+                VdFwMONITORINFO monitor_info = {0};
                 monitor_info.cbSize = sizeof(monitor_info);
-                VD_FW__CHECK_NONZERO(GetMonitorInfo(monitor, &monitor_info));
+                VD_FW__CHECK_NONZERO(VdFwGetMonitorInfo(monitor, &monitor_info));
 
                 LONG style = VD_FW_G.last_window_style & ~(WS_OVERLAPPEDWINDOW);
                 style |= WS_VISIBLE;
