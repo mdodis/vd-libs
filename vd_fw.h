@@ -27,6 +27,7 @@
  *   on the big threes is OpenGL Core Profile 4.1 (MacOS limitation)
  *
  * TODO
+ * - Game Controller DB
  * - Use or don't use stdlib memcpy
  * - Properly handle vd_fw_set_receive_ncmouse for clicks and scrolls
  * - Set mouse cursor to constants (resize, I, etc...)
@@ -494,8 +495,8 @@ VD_FW_API int                vd_fw_get_key_down(int key);
  */
 VD_FW_INL const char*        vd_fw_get_key_name(VdFwKey k);
 
-VD_FW_INL int                vd_fw_get_gamepad_down(int index, VdFwGamepadInput b);
-VD_FW_INL int                vd_fw_get_gamepad_axis(int index, VdFwGamepadInput axis, float *out);
+VD_FW_API int                vd_fw_get_gamepad_down(int index, int button);
+VD_FW_API int                vd_fw_get_gamepad_axis(int index, int axis, float *out);
 
 /**
  * @brief Gets the backing scale factor
@@ -4935,12 +4936,12 @@ VD_FW_API int vd_fw_get_key_down(int key)
     return VD_FW_G.curr_key_states[key];
 }
 
-VD_FW_INL int vd_fw_get_gamepad_down(int index, VdFwGamepadInput b)
+VD_FW_API int vd_fw_get_gamepad_down(int index, int button)
 {
-    return VD_FW_G.gamepad_curr_states[index].buttons[b];
+    return VD_FW_G.gamepad_curr_states[index].buttons[button];
 }
 
-VD_FW_INL int vd_fw_get_gamepad_axis(int index, VdFwGamepadInput axis, float *out)
+VD_FW_API int vd_fw_get_gamepad_axis(int index, int axis, float *out)
 {
     *out = VD_FW_G.gamepad_curr_states[index].axes[axis];
     return 1;
@@ -5860,7 +5861,6 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                 LONG dx = raw->data.mouse.lLastX;
                 LONG dy = raw->data.mouse.lLastY;
 
-                MemoryBarrier();
                 LONG write_index = VD_FW_G.sink_index;
                 MemoryBarrier();
 
