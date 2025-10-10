@@ -27,6 +27,7 @@
  *   on the big threes is OpenGL Core Profile 4.1 (MacOS limitation)
  *
  * TODO
+ * - Use XInput in tandem with RAWINPUT
  * - Game Controller DB
  * - Use or don't use stdlib memcpy
  * - Properly handle vd_fw_set_receive_ncmouse for clicks and scrolls
@@ -3852,7 +3853,6 @@ static void vd_fw__load_opengl(VdFwGlVersion version);
 #pragma comment(lib, "Dwmapi.lib")
 #pragma comment(lib, "Shcore.lib")
 #pragma comment(lib, "Gdi32.lib")
-#pragma comment(lib, "uxtheme.lib")
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "kernel32.lib")
 #pragma comment(lib, "winmm.lib")
@@ -3916,7 +3916,12 @@ VD_FW_DECLARE_HANDLE(VdFwHDC);
 VD_FW_DECLARE_HANDLE(VdFwHINSTANCE);
 typedef VdFwHINSTANCE VdFwHMODULE;
 
-/* ----WIN32 HIDP---------------------------------------------------------------------------------------------------- */
+/* ----UxTheme.dll--------------------------------------------------------------------------------------------------- */
+#define VD_FW_PROC_IsThemeActive(name) VdFwBOOL name();
+typedef VD_FW_PROC_IsThemeActive(VdFwProcIsThemeActive);
+static VdFwProcIsThemeActive *VdFwIsThemeActive;
+
+/* ----Hid.dll------------------------------------------------------------------------------------------------------- */
 typedef VdFwLONG                         VdFwNTSTATUS;
 typedef struct VdFw_HIDP_PREPARSED_DATA* VdFwPHIDP_PREPARSED_DATA;
 typedef VdFwUSHORT                       VdFwUSAGE, * VdFwPUSAGE;
@@ -4110,14 +4115,11 @@ static VdFwProcHidP_GetUsageValue *VdFwHidP_GetUsageValue;
 #include <windows.h>
 #include <windowsx.h>
 #include <shellapi.h>
-#include <uxtheme.h>
 #include <dwmapi.h>
 #include <shellscalingapi.h>
 #include <versionhelpers.h>
 #include <timeapi.h>
 #include <setupapi.h>
-#include <hidsdi.h>
-#include <hidpi.h>
 #undef NOGDICAPMASKS
 #undef NOMENUS
 #undef NOICONS
@@ -4288,12 +4290,12 @@ typedef struct {
 } VdFw__Win32GamepadMapping;
 
 typedef struct VdFw__Win32GamepadInfo {
-    VdFwHANDLE           handle;
-    unsigned char        guid[16];
-    int                  connected;
-    PHIDP_PREPARSED_DATA ppd;
-    VdFwGamepadConfig    config;
-    int                  splitz;
+    VdFwHANDLE               handle;
+    unsigned char            guid[16];
+    int                      connected;
+    VdFwPHIDP_PREPARSED_DATA ppd;
+    VdFwGamepadConfig        config;
+    int                      splitz;
 } VdFw__Win32GamepadInfo;
 
 typedef struct {
@@ -4728,7 +4730,13 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
     // Load Win32 Libraries
     {
-        // HID
+        // UxTheme.dll
+        {
+            VdFwHMODULE m     = LoadLibraryA("UxTheme.dll");
+            VdFwIsThemeActive = (VdFwProcIsThemeActive*)GetProcAddress(m, "IsThemeActive");
+        }
+
+        // Hid.dll
         {
             VdFwHMODULE m          = LoadLibraryA("Hid.dll");
             VdFwHidP_GetCaps       =       (VdFwProcHidP_GetCaps*)GetProcAddress(m, "HidP_GetCaps");
@@ -5737,7 +5745,7 @@ static void vd_fw__update_region(void)
 
 static void vd_fw__theme_changed(void)
 {
-    VD_FW_G.theme_enabled = IsThemeActive();
+    VD_FW_G.theme_enabled = VdFwIsThemeActive();
 }
 
 static LRESULT vd_fw__nccalcsize(WPARAM wparam, LPARAM lparam)
@@ -5838,29 +5846,6 @@ static LRESULT vd_fw__handle_invisible(HWND hwnd, UINT msg, WPARAM wparam, LPARA
     VD_FW_WIN32_PROFILE_END(handle_invisible);
 
     return result;
-}
-
-static int vd_fw__get_min_max_axial_value(PHIDP_PREPARSED_DATA ppd, USAGE usage_page, USAGE usage,
-                                          int *min_value, int *max_value)
-{
-    static HIDP_VALUE_CAPS value_caps[4];
-    USHORT num_value_caps = 4;
-    NTSTATUS status = HidP_GetSpecificValueCaps(HidP_Input, usage_page, 0, usage,
-                                     value_caps, &num_value_caps,
-                                     ppd);
-
-    if (status != VD_FW_HIDP_STATUS_SUCCESS) {
-        return 0;
-    }
-
-    *min_value = value_caps[0].LogicalMin;
-    *max_value = value_caps[0].LogicalMax;
-
-    if (value_caps[0].LogicalMax == -1) {
-        *max_value = 0xFFFF;
-    }
-
-    return 1;
 }
 
 static unsigned char vd_fw__map_usb_id_to_input(int usage)
@@ -6132,7 +6117,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                     {
                         if (gamepad_info->config.num_hat_switch_mappings > 0) {
                             VdFwULONG directional_value;
-                            if (VdFwHidP_GetUsageValue(HidP_Input,
+                            if (VdFwHidP_GetUsageValue(VdFwHidP_Input,
                                                    0x01, 0, 0x39, &directional_value,
                                                    gamepad_info->ppd,
                                                    (VdFwPCHAR)bytes, raw->data.hid.dwSizeHid) == VD_FW_HIDP_STATUS_SUCCESS)
@@ -6170,7 +6155,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                             VdFwULONG value;
 
                             VdFwUSAGE usage = gamepad_info->config.axial_mappings[i].id;
-                            if (VdFwHidP_GetUsageValue(HidP_Input, 0x01, 0, usage, &value, gamepad_info->ppd, (VdFwPCHAR)bytes, raw->data.hid.dwSizeHid) == VD_FW_HIDP_STATUS_SUCCESS) {
+                            if (VdFwHidP_GetUsageValue(VdFwHidP_Input, 0x01, 0, usage, &value, gamepad_info->ppd, (VdFwPCHAR)bytes, raw->data.hid.dwSizeHid) == VD_FW_HIDP_STATUS_SUCCESS) {
 
                                 VdFwLONG min_value = gamepad_info->config.axial_mappings[i].min_value;
                                 VdFwLONG max_value = gamepad_info->config.axial_mappings[i].max_value;
@@ -6290,7 +6275,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                     break;
                 }
 
-                new_gamepad->ppd = (PHIDP_PREPARSED_DATA)HeapAlloc(GetProcessHeap(), 0, ppd_req_size);
+                new_gamepad->ppd = (VdFwPHIDP_PREPARSED_DATA)HeapAlloc(GetProcessHeap(), 0, ppd_req_size);
 
                 if (GetRawInputDeviceInfoA(
                     device_handle,
@@ -6359,7 +6344,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                 // - Are only useful afaik when they're not ranges
                 static VdFwHIDP_VALUE_CAPS value_caps[32];
                 VdFwUSHORT num_value_caps = caps.NumberInputValueCaps;
-                if (VdFwHidP_GetValueCaps(HidP_Input, value_caps, &num_value_caps, new_gamepad->ppd) == VD_FW_HIDP_STATUS_SUCCESS) {
+                if (VdFwHidP_GetValueCaps(VdFwHidP_Input, value_caps, &num_value_caps, new_gamepad->ppd) == VD_FW_HIDP_STATUS_SUCCESS) {
                     for (int i = 0; i < num_value_caps; ++i) {
                         if (value_caps[i].IsRange)
                             continue;
