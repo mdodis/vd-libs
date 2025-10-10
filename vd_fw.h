@@ -4105,8 +4105,6 @@ typedef struct {
     WINDOWPLACEMENT             last_window_placement;
     DWORD                       num_gamepads_present;
     VdFw__Win32GamepadInfo      gamepad_infos[VD_FW_GAMEPAD_COUNT_MAX];
-    VdFw__GamepadState          gamepad_curr_states[VD_FW_GAMEPAD_COUNT_MAX];
-    VdFw__GamepadState          gamepad_prev_states[VD_FW_GAMEPAD_COUNT_MAX];
 
 /* ----RENDER THREAD ONLY-------------------------------------------------------------------------------------------- */
     HANDLE                      win_thread;
@@ -4126,6 +4124,8 @@ typedef struct {
     float                       mouse_delta[2];
     BOOL                        mouse_is_locked;
     BOOL                        is_fullscreen;
+    VdFw__GamepadState          gamepad_curr_states[VD_FW_GAMEPAD_COUNT_MAX];
+    VdFw__GamepadState          gamepad_prev_states[VD_FW_GAMEPAD_COUNT_MAX];
 
 /* ----RENDER THREAD - WINDOW THREAD DATA---------------------------------------------------------------------------- */
     VdFw__Win32Message          msgbuf[VD_FW_WIN32_MESSAGE_BUFFER_SIZE];
@@ -4138,6 +4138,9 @@ typedef struct {
     int                         receive_ncmouse_on;
     volatile LONG               sink_index;
     float                       mouse_delta_sinks[2][2];
+    VdFw__GamepadState          winthread_gamepad_curr_states[VD_FW_GAMEPAD_COUNT_MAX];
+    VdFw__GamepadState          winthread_gamepad_prev_states[VD_FW_GAMEPAD_COUNT_MAX];
+
     unsigned char               curr_key_states[VD_FW_KEY_MAX];
     unsigned char               prev_key_states[VD_FW_KEY_MAX];
     char                        title[128];
@@ -4148,6 +4151,7 @@ typedef struct {
     HANDLE                      sem_closed;
     volatile BOOL               t_running;
     CRITICAL_SECTION            critical_section;
+    CRITICAL_SECTION            input_critical_section;
     CONDITION_VARIABLE          cond_var;
     VdFw__Win32Frame            next_frame;
     VdFw__Win32Frame            curr_frame;
@@ -4495,6 +4499,28 @@ static void *vd_fw__gl_get_proc_address(const char *name)
     return (void*)wglGetProcAddress(name);
 }
 
+static LONG vd_fw__get_read_sink_index()
+{
+    return VD_FW_G.sink_index == 1 ? 0 : 1;
+}
+
+static LONG vd_fw__get_write_sink_index()
+{
+    return VD_FW_G.sink_index;
+}
+
+static inline void *vd_fw_memcpy(void *dst, void *src, size_t count)
+{
+    for (size_t i = 0; i < count; ++i) ((unsigned char*)dst)[i] = ((unsigned char*)src)[i];
+    return dst;
+}
+
+static inline void *vd_fw_memset(void *dst, unsigned char val, size_t num)
+{
+    for (size_t i = 0; i < num; ++i) ((unsigned char *)dst)[i] = val;
+    return dst;
+}
+
 #if !VD_FW_NO_CRT
 #include <io.h>
 #include <fcntl.h>
@@ -4540,6 +4566,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     VD_FW_G.main_thread_id = GetCurrentThreadId();
 
     InitializeCriticalSection(&VD_FW_G.critical_section);
+    InitializeCriticalSectionAndSpinCount(&VD_FW_G.input_critical_section, 3000);
     InitializeConditionVariable(&VD_FW_G.cond_var);
 
     VD_FW_G.sem_window_ready = CreateSemaphoreA(
@@ -4781,6 +4808,16 @@ VD_FW_API int vd_fw_running(void)
         // Now we can safely read from the curr_sink_index
         VD_FW_G.mouse_delta[0] = VD_FW_G.mouse_delta_sinks[curr_sink_index][0];
         VD_FW_G.mouse_delta[1] = VD_FW_G.mouse_delta_sinks[curr_sink_index][1];
+
+
+        VD_FW_WIN32_PROFILE_BEGIN(read_all_input);
+        EnterCriticalSection(&VD_FW_G.input_critical_section);
+        for (int i = 0; i < VD_FW_GAMEPAD_COUNT_MAX; ++i) {
+            VD_FW_G.gamepad_prev_states[i] = VD_FW_G.winthread_gamepad_prev_states[i];
+            VD_FW_G.gamepad_curr_states[i] = VD_FW_G.winthread_gamepad_curr_states[i];
+        }
+        LeaveCriticalSection(&VD_FW_G.input_critical_section);
+        VD_FW_WIN32_PROFILE_END(read_all_input);
     }
 
     EnterCriticalSection(&VD_FW_G.critical_section);
@@ -5023,18 +5060,6 @@ VD_FW_API void vd_fw_set_title(const char *title)
         VD_FW_WIN32_UPDATE_TITLE,
         0, /* WPARAM */
         0  /* LPARAM */));
-}
-
-static inline void *vd_fw_memcpy(void *dst, void *src, size_t count)
-{
-    for (size_t i = 0; i < count; ++i) ((unsigned char*)dst)[i] = ((unsigned char*)src)[i];
-    return dst;
-}
-
-static inline void *vd_fw_memset(void *dst, unsigned char val, size_t num)
-{
-    for (size_t i = 0; i < num; ++i) ((unsigned char *)dst)[i] = val;
-    return dst;
 }
 
 VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
@@ -5870,6 +5895,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
                 VdFw__Win32GamepadInfo *gamepad_info = &VD_FW_G.gamepad_infos[0];
                 VdFw__GamepadButtonState button_states[VD_FW_GAMEPAD_BUTTON_MAX] = {0};
+                float axes[6] = {0.f};
 
                 for (DWORD ri = 0; ri < raw->data.hid.dwCount; ++ri) {
                     BYTE *bytes = &raw->data.hid.bRawData[0] + ri * (raw->data.hid.dwSizeHid);
@@ -5967,18 +5993,27 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                                     }
                                 }
 
-                                VD_FW_G.gamepad_curr_states[0].axes[gamepad_info->config.axial_mappings[i].input] = value01;
+                                axes[gamepad_info->config.axial_mappings[i].input] = value01;
+                                // VD_FW_G.winthread_gamepad_curr_states[vd_fw__get_write_sink_index()][0].axes[gamepad_info->config.axial_mappings[i].input] = value01;
 
                             }
                         }
                     }
                 }
 
-                vd_fw_memcpy(&VD_FW_G.gamepad_prev_states[0].buttons, &VD_FW_G.gamepad_curr_states[0].buttons, sizeof(VD_FW_G.gamepad_curr_states[0].buttons));
+                EnterCriticalSection(&VD_FW_G.input_critical_section);
+                vd_fw_memcpy(&VD_FW_G.winthread_gamepad_prev_states[0].buttons,
+                             &VD_FW_G.winthread_gamepad_curr_states[0].buttons,
+                             sizeof(VD_FW_G.winthread_gamepad_curr_states[0].buttons));
 
                 for (int i = 0; i < VD_FW_GAMEPAD_BUTTON_MAX; ++i) {
-                    VD_FW_G.gamepad_curr_states[0].buttons[i] = button_states[i];
+                    VD_FW_G.winthread_gamepad_curr_states[0].buttons[i] = button_states[i];
                 }
+
+                for (int i = 0; i < 6; ++i) {
+                    VD_FW_G.winthread_gamepad_curr_states[0].axes[i] = axes[i];
+                }
+                LeaveCriticalSection(&VD_FW_G.input_critical_section);
             }
 
         } break;

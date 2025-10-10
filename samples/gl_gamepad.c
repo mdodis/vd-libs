@@ -1,3 +1,4 @@
+#define VD_FW_WIN32_PROFILE 1
 #include "disable_clang_deprecations.h"
 #define VD_FW_NO_CRT 0
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS
