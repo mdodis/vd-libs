@@ -3819,6 +3819,10 @@ extern PFNGLPOLYGONOFFSETCLAMPPROC             glPolygonOffsetClamp;
 #endif
 #endif // !VD_FW_H
 
+#if defined(__INTELLISENSE__) && !defined(MYLIB_IMPL)
+#define VD_FW_IMPL
+#endif
+
 #ifdef VD_FW_IMPL
 
 typedef unsigned char VdFw__GamepadButtonState;
@@ -3852,7 +3856,6 @@ static void vd_fw__load_opengl(VdFwGlVersion version);
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "kernel32.lib")
 #pragma comment(lib, "winmm.lib")
-#pragma comment(lib, "Hid.lib")
 #if VD_FW_WIN32_SUBSYSTEM == VD_FW_WIN32_SUBSYSTEM_CONSOLE
 #pragma comment(linker, "/subsystem:console")
 #else
@@ -3867,6 +3870,212 @@ static void vd_fw__load_opengl(VdFwGlVersion version);
 #pragma execution_character_set("utf-8")
 #endif // VD_FW_NO_CRT
 #endif // VD_FW_WIN32_LINKER_COMMENTS
+
+#pragma pack(push, 1)
+/* ----WIN32 BASE---------------------------------------------------------------------------------------------------- */
+#define VD_FW_DECLARE_HANDLE(name) struct name##__{int unused;}; typedef struct name##__ *name
+
+typedef unsigned long       VdFwDWORD;
+typedef int                 VdFwBOOL;
+typedef unsigned char       VdFwBYTE;
+typedef unsigned short      VdFwWORD;
+typedef float               VdFwFLOAT;
+typedef VdFwFLOAT*          VdFwPFLOAT;
+typedef VdFwBOOL*           VdFwPBOOL;
+typedef VdFwBOOL*           VdFwLPBOOL;
+typedef VdFwBYTE*           VdFwPBYTE;
+typedef VdFwBYTE*           VdFwLPBYTE;
+typedef int*                VdFwPINT;
+typedef int*                VdFwLPINT;
+typedef VdFwWORD*           VdFwPWORD;
+typedef VdFwWORD*           VdFwLPWORD;
+typedef long*               VdFwLPLONG;
+typedef VdFwDWORD*          VdFwPDWORD;
+typedef VdFwDWORD*          VdFwLPDWORD;
+typedef void*               VdFwLPVOID;
+typedef const void*         VdFwLPCVOID;
+typedef int                 VdFwINT;
+typedef unsigned int        VdFwUINT;
+typedef unsigned int*       VdFwPUINT;
+typedef void*               VdFwHANDLE;
+typedef VdFwHANDLE*         VdFwPHANDLE;
+typedef char                VdFwCHAR;
+typedef const VdFwCHAR*     VdFwLPCSTR, *VdFwPCSTR;
+typedef long                VdFwLONG;
+typedef unsigned long       VdFwULONG;
+typedef VdFwULONG*          VdFwPULONG;
+typedef unsigned short      VdFwUSHORT;
+typedef VdFwUSHORT*         VdFwPUSHORT;
+typedef unsigned char       VdFwUCHAR;
+typedef VdFwUCHAR*          VdFwPUCHAR;
+typedef VdFwBYTE            VdFwBOOLEAN;
+typedef VdFwCHAR*           VdFwPCHAR, * VdFwLPCH, * VdFwPCH;
+
+VD_FW_DECLARE_HANDLE(VdFwHWND);
+VD_FW_DECLARE_HANDLE(VdFwHDC);
+VD_FW_DECLARE_HANDLE(VdFwHINSTANCE);
+typedef VdFwHINSTANCE VdFwHMODULE;
+
+/* ----WIN32 HIDP---------------------------------------------------------------------------------------------------- */
+typedef VdFwLONG                         VdFwNTSTATUS;
+typedef struct VdFw_HIDP_PREPARSED_DATA* VdFwPHIDP_PREPARSED_DATA;
+typedef VdFwUSHORT                       VdFwUSAGE, * VdFwPUSAGE;
+
+#define VD_FW_FACILITY_HID_ERROR_CODE 0x11
+#define VD_FW_HIDP_ERROR_CODES(SEV, CODE) \
+        ((VdFwNTSTATUS) (((SEV) << 28) | (VD_FW_FACILITY_HID_ERROR_CODE << 16) | (CODE)))
+
+#define VD_FW_HIDP_STATUS_SUCCESS                  (VD_FW_HIDP_ERROR_CODES(0x0,0))
+#define VD_FW_HIDP_STATUS_NULL                     (VD_FW_HIDP_ERROR_CODES(0x8,1))
+#define VD_FW_HIDP_STATUS_INVALID_PREPARSED_DATA   (VD_FW_HIDP_ERROR_CODES(0xC,1))
+#define VD_FW_HIDP_STATUS_INVALID_REPORT_TYPE      (VD_FW_HIDP_ERROR_CODES(0xC,2))
+#define VD_FW_HIDP_STATUS_INVALID_REPORT_LENGTH    (VD_FW_HIDP_ERROR_CODES(0xC,3))
+#define VD_FW_HIDP_STATUS_USAGE_NOT_FOUND          (VD_FW_HIDP_ERROR_CODES(0xC,4))
+#define VD_FW_HIDP_STATUS_VALUE_OUT_OF_RANGE       (VD_FW_HIDP_ERROR_CODES(0xC,5))
+#define VD_FW_HIDP_STATUS_BAD_LOG_PHY_VALUES       (VD_FW_HIDP_ERROR_CODES(0xC,6))
+#define VD_FW_HIDP_STATUS_BUFFER_TOO_SMALL         (VD_FW_HIDP_ERROR_CODES(0xC,7))
+#define VD_FW_HIDP_STATUS_INTERNAL_ERROR           (VD_FW_HIDP_ERROR_CODES(0xC,8))
+#define VD_FW_HIDP_STATUS_I8042_TRANS_UNKNOWN      (VD_FW_HIDP_ERROR_CODES(0xC,9))
+#define VD_FW_HIDP_STATUS_INCOMPATIBLE_REPORT_ID   (VD_FW_HIDP_ERROR_CODES(0xC,0xA))
+#define VD_FW_HIDP_STATUS_NOT_VALUE_ARRAY          (VD_FW_HIDP_ERROR_CODES(0xC,0xB))
+#define VD_FW_HIDP_STATUS_IS_VALUE_ARRAY           (VD_FW_HIDP_ERROR_CODES(0xC,0xC))
+#define VD_FW_HIDP_STATUS_DATA_INDEX_NOT_FOUND     (VD_FW_HIDP_ERROR_CODES(0xC,0xD))
+#define VD_FW_HIDP_STATUS_DATA_INDEX_OUT_OF_RANGE  (VD_FW_HIDP_ERROR_CODES(0xC,0xE))
+#define VD_FW_HIDP_STATUS_BUTTON_NOT_PRESSED       (VD_FW_HIDP_ERROR_CODES(0xC,0xF))
+#define VD_FW_HIDP_STATUS_REPORT_DOES_NOT_EXIST    (VD_FW_HIDP_ERROR_CODES(0xC,0x10))
+#define VD_FW_HIDP_STATUS_NOT_IMPLEMENTED          (VD_FW_HIDP_ERROR_CODES(0xC,0x20))
+#define VD_FW_HIDP_STATUS_NOT_BUTTON_ARRAY         (VD_FW_HIDP_ERROR_CODES(0xC,0x21))
+
+typedef enum VdFw_HIDP_REPORT_TYPE
+{
+    VdFwHidP_Input,
+    VdFwHidP_Output,
+    VdFwHidP_Feature
+} VdFwHIDP_REPORT_TYPE;
+
+typedef struct VdFw_HIDP_CAPS
+{
+    VdFwUSAGE    Usage;
+    VdFwUSAGE    UsagePage;
+    VdFwUSHORT   InputReportByteLength;
+    VdFwUSHORT   OutputReportByteLength;
+    VdFwUSHORT   FeatureReportByteLength;
+    VdFwUSHORT   Reserved[17];
+    VdFwUSHORT   NumberLinkCollectionNodes;
+    VdFwUSHORT   NumberInputButtonCaps;
+    VdFwUSHORT   NumberInputValueCaps;
+    VdFwUSHORT   NumberInputDataIndices;
+    VdFwUSHORT   NumberOutputButtonCaps;
+    VdFwUSHORT   NumberOutputValueCaps;
+    VdFwUSHORT   NumberOutputDataIndices;
+    VdFwUSHORT   NumberFeatureButtonCaps;
+    VdFwUSHORT   NumberFeatureValueCaps;
+    VdFwUSHORT   NumberFeatureDataIndices;
+} VdFwHIDP_CAPS, * VdFwPHIDP_CAPS;
+
+typedef struct VdFw_HIDP_BUTTON_CAPS
+{
+    VdFwUSAGE    UsagePage;
+    VdFwUCHAR    ReportID;
+    VdFwBOOLEAN  IsAlias;
+    VdFwUSHORT   BitField;
+    VdFwUSHORT   LinkCollection;
+    VdFwUSAGE    LinkUsage;
+    VdFwUSAGE    LinkUsagePage;
+    VdFwBOOLEAN  IsRange;
+    VdFwBOOLEAN  IsStringRange;
+    VdFwBOOLEAN  IsDesignatorRange;
+    VdFwBOOLEAN  IsAbsolute;
+    VdFwUSHORT   ReportCount;
+    VdFwUSHORT   Reserved2;
+    VdFwULONG    Reserved[9];
+    union {
+        struct {
+            VdFwUSAGE    UsageMin, UsageMax;
+            VdFwUSHORT   StringMin, StringMax;
+            VdFwUSHORT   DesignatorMin, DesignatorMax;
+            VdFwUSHORT   DataIndexMin, DataIndexMax;
+        } Range;
+        struct {
+            VdFwUSAGE    Usage, Reserved1;
+            VdFwUSHORT   StringIndex, Reserved2;
+            VdFwUSHORT   DesignatorIndex, Reserved3;
+            VdFwUSHORT   DataIndex, Reserved4;
+        } NotRange;
+    };
+} VdFwHIDP_BUTTON_CAPS, * VdFwPHIDP_BUTTON_CAPS;
+
+typedef struct VdFw_HIDP_VALUE_CAPS
+{
+    VdFwUSAGE    UsagePage;
+    VdFwUCHAR    ReportID;
+    VdFwBOOLEAN  IsAlias;
+    VdFwUSHORT   BitField;
+    VdFwUSHORT   LinkCollection;
+    VdFwUSAGE    LinkUsage;
+    VdFwUSAGE    LinkUsagePage;
+    VdFwBOOLEAN  IsRange;
+    VdFwBOOLEAN  IsStringRange;
+    VdFwBOOLEAN  IsDesignatorRange;
+    VdFwBOOLEAN  IsAbsolute;
+    VdFwBOOLEAN  HasNull;
+    VdFwUCHAR    Reserved;
+    VdFwUSHORT   BitSize;
+    VdFwUSHORT   ReportCount;
+    VdFwUSHORT   Reserved2[5];
+    VdFwULONG    UnitsExp;
+    VdFwULONG    Units;
+    VdFwLONG     LogicalMin, LogicalMax;
+    VdFwLONG     PhysicalMin, PhysicalMax;
+
+    union {
+        struct {
+            VdFwUSAGE    UsageMin, UsageMax;
+            VdFwUSHORT   StringMin, StringMax;
+            VdFwUSHORT   DesignatorMin, DesignatorMax;
+            VdFwUSHORT   DataIndexMin, DataIndexMax;
+        } Range;
+
+        struct {
+            VdFwUSAGE    Usage, Reserved1;
+            VdFwUSHORT   StringIndex, Reserved2;
+            VdFwUSHORT   DesignatorIndex, Reserved3;
+            VdFwUSHORT   DataIndex, Reserved4;
+        } NotRange;
+    };
+} VdFwHIDP_VALUE_CAPS, * VdFwPHIDP_VALUE_CAPS;
+
+
+#define VD_FW_PROC_HidP_GetCaps(name) VdFwNTSTATUS name(VdFwPHIDP_PREPARSED_DATA PreparsedData, VdFwPHIDP_CAPS Capabilities)
+typedef VD_FW_PROC_HidP_GetCaps(VdFwProcHidP_GetCaps);
+static VdFwProcHidP_GetCaps *VdFwHidP_GetCaps;
+
+#define VD_FW_PROC_HidP_GetButtonCaps(name) VdFwNTSTATUS name(VdFwHIDP_REPORT_TYPE ReportType, VdFwPHIDP_BUTTON_CAPS ButtonCaps, VdFwPUSHORT ButtonCapsLength, VdFwPHIDP_PREPARSED_DATA PreparsedData)
+typedef VD_FW_PROC_HidP_GetButtonCaps(VdFwProcHidP_GetButtonCaps);
+static VdFwProcHidP_GetButtonCaps *VdFwHidP_GetButtonCaps;
+
+#define VD_FW_PROC_HidP_GetValueCaps(name) VdFwNTSTATUS name(VdFwHIDP_REPORT_TYPE ReportType, VdFwPHIDP_VALUE_CAPS ValueCaps, VdFwPUSHORT ValueCapsLength, VdFwPHIDP_PREPARSED_DATA PreparsedData)
+typedef VD_FW_PROC_HidP_GetValueCaps(VdFwProcHidP_GetValueCaps);
+static VdFwProcHidP_GetValueCaps *VdFwHidP_GetValueCaps;
+
+#define VD_FW_PROC_HidP_GetUsages(name) VdFwNTSTATUS name(VdFwHIDP_REPORT_TYPE ReportType, VdFwUSAGE UsagePage, VdFwUSHORT LinkCollection, VdFwPUSAGE UsageList, VdFwPULONG UsageLength, VdFwPHIDP_PREPARSED_DATA PreparsedData, VdFwPCHAR Report, VdFwULONG ReportLength)
+typedef VD_FW_PROC_HidP_GetUsages(VdFwProcHidP_GetUsages);
+static VdFwProcHidP_GetUsages *VdFwHidP_GetUsages;
+
+#define VD_FW_PROC_HidP_GetUsageValue(name) VdFwNTSTATUS name(VdFwHIDP_REPORT_TYPE ReportType, VdFwUSAGE UsagePage, VdFwUSHORT LinkCollection, VdFwUSAGE Usage, VdFwPULONG UsageValue, VdFwPHIDP_PREPARSED_DATA PreparsedData, VdFwPCHAR Report, VdFwULONG ReportLength)
+typedef VD_FW_PROC_HidP_GetUsageValue(VdFwProcHidP_GetUsageValue);
+static VdFwProcHidP_GetUsageValue *VdFwHidP_GetUsageValue;
+
+#if defined(__cplusplus)
+#define VD_FW__EXTERNC_PROC extern "C"
+#else
+#define VD_FW__EXTERNC_PROC
+#endif // defined(__cplusplus), else
+
+// VD_FW__EXTERNC_PROC __declspec(dllimport) VdFwHMODULE __stdcall LoadLibraryA(VdFwLPCSTR lpLibFileName);
+
+#pragma pack(pop)
+
 
 #define WIN32_LEAN_AND_MEAN
 #define NOGDICAPMASKS
@@ -4079,7 +4288,7 @@ typedef struct {
 } VdFw__Win32GamepadMapping;
 
 typedef struct VdFw__Win32GamepadInfo {
-    HANDLE               handle;
+    VdFwHANDLE           handle;
     unsigned char        guid[16];
     int                  connected;
     PHIDP_PREPARSED_DATA ppd;
@@ -4089,7 +4298,7 @@ typedef struct VdFw__Win32GamepadInfo {
 
 typedef struct {
 /* ----WINDOW THREAD ONLY-------------------------------------------------------------------------------------------- */
-    HWND                        hwnd;
+    VdFwHWND                    hwnd;
     int                         w, h;
     volatile BOOL               t_paint_ready;
     BOOL                        draw_decorations;
@@ -4517,6 +4726,18 @@ static inline void *vd_fw_memset(void *dst, unsigned char val, size_t num)
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
+    // Load Win32 Libraries
+    {
+        // HID
+        {
+            VdFwHMODULE m          = LoadLibraryA("Hid.dll");
+            VdFwHidP_GetCaps       =       (VdFwProcHidP_GetCaps*)GetProcAddress(m, "HidP_GetCaps");
+            VdFwHidP_GetButtonCaps = (VdFwProcHidP_GetButtonCaps*)GetProcAddress(m, "HidP_GetButtonCaps");
+            VdFwHidP_GetValueCaps  =  (VdFwProcHidP_GetValueCaps*)GetProcAddress(m, "HidP_GetValueCaps");
+            VdFwHidP_GetUsages     =     (VdFwProcHidP_GetUsages*)GetProcAddress(m, "HidP_GetUsages");
+            VdFwHidP_GetUsageValue = (VdFwProcHidP_GetUsageValue*)GetProcAddress(m, "HidP_GetUsageValue");
+        }
+    }
     // SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     timeBeginPeriod(1);
@@ -5628,7 +5849,7 @@ static int vd_fw__get_min_max_axial_value(PHIDP_PREPARSED_DATA ppd, USAGE usage_
                                      value_caps, &num_value_caps,
                                      ppd);
 
-    if (status != HIDP_STATUS_SUCCESS) {
+    if (status != VD_FW_HIDP_STATUS_SUCCESS) {
         return 0;
     }
 
@@ -5876,8 +6097,8 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
             RAWINPUT *raw = VD_FW_G.raw_input_buffer;
             if (raw->header.dwType == RIM_TYPEMOUSE) {
-                LONG dx = raw->data.mouse.lLastX;
-                LONG dy = raw->data.mouse.lLastY;
+                VdFwLONG dx = raw->data.mouse.lLastX;
+                VdFwLONG dy = raw->data.mouse.lLastY;
 
                 VD_FW_G.winthread_mouse_delta[0] = VD_FW_G.winthread_mouse_delta[0] * 0.8f + dx * 0.2f;
                 VD_FW_G.winthread_mouse_delta[1] = VD_FW_G.winthread_mouse_delta[1] * 0.8f + dy * 0.2f;
@@ -5887,15 +6108,15 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                 VdFw__GamepadButtonState button_states[VD_FW_GAMEPAD_BUTTON_MAX] = {0};
                 float axes[6] = {0.f};
 
-                for (DWORD ri = 0; ri < raw->data.hid.dwCount; ++ri) {
-                    BYTE *bytes = &raw->data.hid.bRawData[0] + ri * (raw->data.hid.dwSizeHid);
+                for (VdFwDWORD ri = 0; ri < raw->data.hid.dwCount; ++ri) {
+                    VdFwBYTE *bytes = &raw->data.hid.bRawData[0] + ri * (raw->data.hid.dwSizeHid);
 
                     // Buttons
                     {
-                        static USAGE usages[32];
-                        ULONG usage_count = 32;
+                        static VdFwUSAGE usages[32];
+                        VdFwULONG usage_count = 32;
 
-                        if (HidP_GetUsages(HidP_Input, 0x09, 0, usages, &usage_count, gamepad_info->ppd, (PCHAR)bytes, raw->data.hid.dwSizeHid) == HIDP_STATUS_SUCCESS) {
+                        if (VdFwHidP_GetUsages(VdFwHidP_Input, 0x09, 0, usages, &usage_count, gamepad_info->ppd, (VdFwPCHAR)bytes, raw->data.hid.dwSizeHid) == VD_FW_HIDP_STATUS_SUCCESS) {
                             for (ULONG i = 0; i < usage_count; ++i) {
 
                                 for (int j = 0; j < gamepad_info->config.num_digital_mappings; ++j) {
@@ -5910,11 +6131,11 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                     // Hat Switch
                     {
                         if (gamepad_info->config.num_hat_switch_mappings > 0) {
-                            ULONG directional_value;
-                            if (HidP_GetUsageValue(HidP_Input,
+                            VdFwULONG directional_value;
+                            if (VdFwHidP_GetUsageValue(HidP_Input,
                                                    0x01, 0, 0x39, &directional_value,
                                                    gamepad_info->ppd,
-                                                   (PCHAR)bytes, raw->data.hid.dwSizeHid) == HIDP_STATUS_SUCCESS)
+                                                   (VdFwPCHAR)bytes, raw->data.hid.dwSizeHid) == VD_FW_HIDP_STATUS_SUCCESS)
                             {
                                 if (gamepad_info->config.hat_switch_mappings[0].logical_range == 8) {
                                     static const int hat_to_mask[9] = {
@@ -5946,16 +6167,15 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                     // Axes
                     {
                         for (int i = 0; i < gamepad_info->config.num_axial_mappings; ++i) {
-                            ULONG value;
+                            VdFwULONG value;
 
-                            USAGE usage = gamepad_info->config.axial_mappings[i].id;
-                            if (HidP_GetUsageValue(HidP_Input, 0x01, 0, usage, &value, gamepad_info->ppd, (PCHAR)bytes, raw->data.hid.dwSizeHid) == HIDP_STATUS_SUCCESS) {
+                            VdFwUSAGE usage = gamepad_info->config.axial_mappings[i].id;
+                            if (VdFwHidP_GetUsageValue(HidP_Input, 0x01, 0, usage, &value, gamepad_info->ppd, (VdFwPCHAR)bytes, raw->data.hid.dwSizeHid) == VD_FW_HIDP_STATUS_SUCCESS) {
 
-                                LONG min_value = gamepad_info->config.axial_mappings[i].min_value;
-                                LONG max_value = gamepad_info->config.axial_mappings[i].max_value;
+                                VdFwLONG min_value = gamepad_info->config.axial_mappings[i].min_value;
+                                VdFwLONG max_value = gamepad_info->config.axial_mappings[i].max_value;
 
                                 // Clamp known value
-
                                 float value01 = 0.f;
                                 if (gamepad_info->config.axial_mappings[i].input <= VD_FW_GAMEPAD_RV) {
                                     value01 = (float)(value - min_value) / (float)(max_value - min_value);
@@ -5963,18 +6183,18 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                                     value01 -= 1.f;
                                 } else {
                                     if (max_value > min_value) {
-                                        if ((LONG)value < min_value) {
+                                        if ((VdFwLONG)value < min_value) {
                                             value = min_value;
-                                        } else if ((LONG)value > max_value) {
+                                        } else if ((VdFwLONG)value > max_value) {
                                             value = max_value;
                                         }
 
                                         value01 = (float)(value - min_value) / (float)(max_value - min_value);
                                     } else {
 
-                                        if ((LONG)value < max_value) {
+                                        if ((VdFwLONG)value < max_value) {
                                             value = max_value;
-                                        } else if ((LONG)value > min_value) {
+                                        } else if ((VdFwLONG)value > min_value) {
                                             value = min_value;
                                         }
 
@@ -6009,7 +6229,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         } break;
 
         case WM_INPUT_DEVICE_CHANGE: {
-            HANDLE device_handle = (HANDLE)lparam;
+            VdFwHANDLE device_handle = (VdFwHANDLE)lparam;
 
             if (wparam == GIDC_ARRIVAL) {
                 RID_DEVICE_INFO device_info;
@@ -6090,8 +6310,8 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                 new_gamepad->connected = TRUE;
                 VD_FW_G.num_gamepads_present++;
 
-                HIDP_CAPS caps;
-                if (HidP_GetCaps(new_gamepad->ppd, &caps) != HIDP_STATUS_SUCCESS) {
+                VdFwHIDP_CAPS caps;
+                if (VdFwHidP_GetCaps(new_gamepad->ppd, &caps) != VD_FW_HIDP_STATUS_SUCCESS) {
                     break;
                 }
 
@@ -6100,9 +6320,9 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                 // - Or, they are specified in a range (10 buttons on controller -> 1 button cap with range 10..1)
                 // So, to handle this, we iterate on the button caps, and then iterate on the range, if that caps
                 // entry happens to be a range
-                static HIDP_BUTTON_CAPS button_caps[32];
-                USHORT num_button_caps = caps.NumberInputButtonCaps;
-                if (HidP_GetButtonCaps(HidP_Input, button_caps, &num_button_caps, new_gamepad->ppd) == HIDP_STATUS_SUCCESS) {
+                static VdFwHIDP_BUTTON_CAPS button_caps[32];
+                VdFwUSHORT num_button_caps = caps.NumberInputButtonCaps;
+                if (VdFwHidP_GetButtonCaps(VdFwHidP_Input, button_caps, &num_button_caps, new_gamepad->ppd) == VD_FW_HIDP_STATUS_SUCCESS) {
                     for (int i = 0; i < num_button_caps; ++i) {
                         if (button_caps[i].IsRange) {
                             int count = 1 + (button_caps[i].Range.DataIndexMax - button_caps[i].Range.DataIndexMin);
@@ -6137,9 +6357,9 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
                 // HID Value Caps:
                 // - Are only useful afaik when they're not ranges
-                static HIDP_VALUE_CAPS value_caps[32];
-                USHORT num_value_caps = caps.NumberInputValueCaps;
-                if (HidP_GetValueCaps(HidP_Input, value_caps, &num_value_caps, new_gamepad->ppd) == HIDP_STATUS_SUCCESS) {
+                static VdFwHIDP_VALUE_CAPS value_caps[32];
+                VdFwUSHORT num_value_caps = caps.NumberInputValueCaps;
+                if (VdFwHidP_GetValueCaps(HidP_Input, value_caps, &num_value_caps, new_gamepad->ppd) == VD_FW_HIDP_STATUS_SUCCESS) {
                     for (int i = 0; i < num_value_caps; ++i) {
                         if (value_caps[i].IsRange)
                             continue;
