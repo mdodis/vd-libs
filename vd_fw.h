@@ -3850,7 +3850,6 @@ static void vd_fw__load_opengl(VdFwGlVersion version);
 #if VD_FW_WIN32_LINKER_COMMENTS
 #pragma comment(lib, "User32.lib")
 #pragma comment(lib, "OpenGL32.lib")
-#pragma comment(lib, "Dwmapi.lib")
 #pragma comment(lib, "Shcore.lib")
 #pragma comment(lib, "Gdi32.lib")
 #pragma comment(lib, "shell32.lib")
@@ -3910,6 +3909,7 @@ typedef unsigned char       VdFwUCHAR;
 typedef VdFwUCHAR*          VdFwPUCHAR;
 typedef VdFwBYTE            VdFwBOOLEAN;
 typedef VdFwCHAR*           VdFwPCHAR, * VdFwLPCH, * VdFwPCH;
+typedef long                VdFwHRESULT;
 
 VD_FW_DECLARE_HANDLE(VdFwHWND);
 VD_FW_DECLARE_HANDLE(VdFwHDC);
@@ -3917,9 +3917,79 @@ VD_FW_DECLARE_HANDLE(VdFwHINSTANCE);
 typedef VdFwHINSTANCE VdFwHMODULE;
 
 /* ----UxTheme.dll--------------------------------------------------------------------------------------------------- */
+typedef struct VdFw_MARGINS
+{
+    int cxLeftWidth;
+    int cxRightWidth;
+    int cyTopHeight;
+    int cyBottomHeight;
+} VdFwMARGINS, * VdFwPMARGINS;
+
 #define VD_FW_PROC_IsThemeActive(name) VdFwBOOL name();
 typedef VD_FW_PROC_IsThemeActive(VdFwProcIsThemeActive);
 static VdFwProcIsThemeActive *VdFwIsThemeActive;
+
+/* ----Dwmapi.dll---------------------------------------------------------------------------------------------------- */
+enum VdFwDWMWINDOWATTRIBUTE {
+    VD_FW_DWMWA_NCRENDERING_ENABLED = 1,
+    VD_FW_DWMWA_NCRENDERING_POLICY,
+    VD_FW_DWMWA_TRANSITIONS_FORCEDISABLED,
+    VD_FW_DWMWA_ALLOW_NCPAINT,
+    VD_FW_DWMWA_CAPTION_BUTTON_BOUNDS,
+    VD_FW_DWMWA_NONCLIENT_RTL_LAYOUT,
+    VD_FW_DWMWA_FORCE_ICONIC_REPRESENTATION,
+    VD_FW_DWMWA_FLIP3D_POLICY,
+    VD_FW_DWMWA_EXTENDED_FRAME_BOUNDS,
+    VD_FW_DWMWA_HAS_ICONIC_BITMAP,
+    VD_FW_DWMWA_DISALLOW_PEEK,
+    VD_FW_DWMWA_EXCLUDED_FROM_PEEK,
+    VD_FW_DWMWA_CLOAK,
+    VD_FW_DWMWA_CLOAKED,
+    VD_FW_DWMWA_FREEZE_REPRESENTATION,
+    VD_FW_DWMWA_PASSIVE_UPDATE_MODE,
+    VD_FW_DWMWA_USE_HOSTBACKDROPBRUSH,
+    VD_FW_DWMWA_USE_IMMERSIVE_DARK_MODE = 20,
+    VD_FW_DWMWA_WINDOW_CORNER_PREFERENCE = 33,
+    VD_FW_DWMWA_BORDER_COLOR,
+    VD_FW_DWMWA_CAPTION_COLOR,
+    VD_FW_DWMWA_TEXT_COLOR,
+    VD_FW_DWMWA_VISIBLE_FRAME_BORDER_THICKNESS,
+    VD_FW_DWMWA_SYSTEMBACKDROP_TYPE,
+    VD_FW_DWMWA_REDIRECTIONBITMAP_ALPHA,
+    VD_FW_DWMWA_BORDER_MARGINS,
+    VD_FW_DWMWA_LAST
+};
+
+enum VdFwDWM_SYSTEMBACKDROP_TYPE {
+    VD_FW_DWMSBT_AUTO,
+    VD_FW_DWMSBT_NONE,
+    VD_FW_DWMSBT_MAINWINDOW,
+    VD_FW_DWMSBT_TRANSIENTWINDOW,
+    VD_FW_DWMSBT_TABBEDWINDOW,
+};
+
+enum VdFwDWMNCRENDERINGPOLICY {
+    VD_FW_DWMNCRP_USEWINDOWSTYLE,
+    VD_FW_DWMNCRP_DISABLED,
+    VD_FW_DWMNCRP_ENABLED,
+    VD_FW_DWMNCRP_LAST
+};
+
+#define VD_FW_PROC_DwmExtendFrameIntoClientArea(name) VdFwHRESULT name(VdFwHWND hWnd, const VdFwMARGINS* pMarInset)
+typedef VD_FW_PROC_DwmExtendFrameIntoClientArea(VdFwProcDwmExtendFrameIntoClientArea);
+static VdFwProcDwmExtendFrameIntoClientArea *VdFwDwmExtendFrameIntoClientArea;
+
+#define VD_FW_PROC_DwmIsCompositionEnabled(name) VdFwHRESULT name(VdFwBOOL *pfEnabled)
+typedef VD_FW_PROC_DwmIsCompositionEnabled(VdFwProcDwmIsCompositionEnabled);
+static VdFwProcDwmIsCompositionEnabled *VdFwDwmIsCompositionEnabled;
+
+#define VD_FW_PROC_DwmSetWindowAttribute(name) VdFwHRESULT name(VdFwHWND hwnd, VdFwDWORD dwAttribute, VdFwLPCVOID pvAttribute, VdFwDWORD cbAttribute)
+typedef VD_FW_PROC_DwmSetWindowAttribute(VdFwProcDwmSetWindowAttribute);
+static VdFwProcDwmSetWindowAttribute *VdFwDwmSetWindowAttribute;
+
+#define VD_FW_PROC_DwmFlush(name) VdFwHRESULT name()
+typedef VD_FW_PROC_DwmFlush(VdFwProcDwmFlush);
+static VdFwProcDwmFlush *VdFwDwmFlush;
 
 /* ----Hid.dll------------------------------------------------------------------------------------------------------- */
 typedef VdFwLONG                         VdFwNTSTATUS;
@@ -4115,7 +4185,6 @@ static VdFwProcHidP_GetUsageValue *VdFwHidP_GetUsageValue;
 #include <windows.h>
 #include <windowsx.h>
 #include <shellapi.h>
-#include <dwmapi.h>
 #include <shellscalingapi.h>
 #include <versionhelpers.h>
 #include <timeapi.h>
@@ -4736,6 +4805,15 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
             VdFwIsThemeActive = (VdFwProcIsThemeActive*)GetProcAddress(m, "IsThemeActive");
         }
 
+        // Dwmapi.dll
+        {
+            VdFwHMODULE m                    = LoadLibraryA("Dwmapi.dll");
+            VdFwDwmExtendFrameIntoClientArea = (VdFwProcDwmExtendFrameIntoClientArea*)GetProcAddress(m, "DwmExtendFrameIntoClientArea");
+            VdFwDwmIsCompositionEnabled      =      (VdFwProcDwmIsCompositionEnabled*)GetProcAddress(m, "DwmIsCompositionEnabled");
+            VdFwDwmSetWindowAttribute        =        (VdFwProcDwmSetWindowAttribute*)GetProcAddress(m, "DwmSetWindowAttribute");
+            VdFwDwmFlush                     =                     (VdFwProcDwmFlush*)GetProcAddress(m, "DwmFlush");
+        }
+
         // Hid.dll
         {
             VdFwHMODULE m          = LoadLibraryA("Hid.dll");
@@ -5077,7 +5155,7 @@ VD_FW_API int vd_fw_swap_buffers(void)
     SwapBuffers(VD_FW_G.hdc);
     // @note(mdodis): This needs to happen, otherwise the window animations and taskbar don't get redrawn if the window
     // is maximized to either section of the screen or the whole screen
-    DwmFlush();
+    VdFwDwmFlush();
 
     if (glFenceSync && glClientWaitSync && glDeleteSync) {
         GLsync fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
@@ -5422,7 +5500,7 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     // Windows 11 -- mica
     if (VD_FW_G.draw_decorations) {
         DWORD t = TRUE;
-        DwmSetWindowAttribute(VD_FW_G.hwnd, 20, &t, sizeof(t));
+        VdFwDwmSetWindowAttribute(VD_FW_G.hwnd, 20, &t, sizeof(t));
     }
     vd_fw__composition_changed();
     VD_FW_SANITY_CHECK();
@@ -5671,19 +5749,19 @@ static void vd_fw__composition_changed(void)
     VD_FW_WIN32_PROFILE_BEGIN(composition_changed);
 
     BOOL enabled = FALSE;
-    VD_FW__CHECK_HRESULT(DwmIsCompositionEnabled(&enabled));
+    VD_FW__CHECK_HRESULT(VdFwDwmIsCompositionEnabled(&enabled));
     VD_FW_G.composition_enabled = enabled;
 
     if (enabled) {
-        MARGINS m = {-1};
-        VD_FW__CHECK_HRESULT(DwmExtendFrameIntoClientArea(VD_FW_G.hwnd, &m));
+        VdFwMARGINS m = {-1};
+        VD_FW__CHECK_HRESULT(VdFwDwmExtendFrameIntoClientArea(VD_FW_G.hwnd, &m));
 
         // @note(mdodis): If we set this to disabled, then every time we resize the Windows 7 frame gets drawn behind
         // Additionally alpha compositing is done on fragments that haven't received a full alpha.
         // Also see vd_fw__wndproc, WM_NCPAINT
         {
-            DWORD value = DWMNCRP_USEWINDOWSTYLE;
-            VD_FW__CHECK_HRESULT(DwmSetWindowAttribute(VD_FW_G.hwnd, DWMWA_NCRENDERING_POLICY, &value, sizeof(value)));
+            VdFwDWORD value = VD_FW_DWMNCRP_USEWINDOWSTYLE;
+            VD_FW__CHECK_HRESULT(VdFwDwmSetWindowAttribute(VD_FW_G.hwnd, VD_FW_DWMWA_NCRENDERING_POLICY, &value, sizeof(value)));
         }
         // {
         //     BOOL value = TRUE;
@@ -5896,7 +5974,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                 result = DefWindowProc(hwnd, msg, wparam, lparam);
 
                 BOOL enabled = FALSE;
-                VD_FW__CHECK_HRESULT(DwmIsCompositionEnabled(&enabled));
+                VD_FW__CHECK_HRESULT(VdFwDwmIsCompositionEnabled(&enabled));
                 VD_FW_G.composition_enabled = enabled;
             } else {
                 vd_fw__composition_changed();
