@@ -3848,7 +3848,6 @@ static void vd_fw__load_opengl(VdFwGlVersion version);
 #ifdef _WIN32
 
 #if VD_FW_WIN32_LINKER_COMMENTS
-#pragma comment(lib, "User32.lib")
 #pragma comment(lib, "OpenGL32.lib")
 #pragma comment(lib, "kernel32.lib")
 #if VD_FW_WIN32_SUBSYSTEM == VD_FW_WIN32_SUBSYSTEM_CONSOLE
@@ -3919,6 +3918,369 @@ typedef struct VdFwtagRECT
     VdFwLONG    right;
     VdFwLONG    bottom;
 } VdFwRECT, * VdFwPRECT, * VdFwNPRECT, *VdFwLPRECT;
+
+/* ----User32.dll---------------------------------------------------------------------------------------------------- */
+#ifdef UNICODE
+#define VdFwDispatchMessage     VdFwDispatchMessageW
+#define VdFwPostMessage         VdFwPostMessageW
+#define VdFwGetMessage          VdFwGetMessageW
+#define VdFwDefWindowProc       VdFwDefWindowProcW
+#define VdFwRegisterClassEx     VdFwRegisterClassExW
+#define VdFwCreateWindowEx      VdFwCreateWindowExW
+#define VdFwMapVirtualKey       VdFwMapVirtualKeyW
+#define VdFwSetWindowText       VdFwSetWindowTextW
+#define VdFwSetWindowLong       VdFwSetWindowLongW
+#define VdFwGetWindowLongPtr    VdFwGetWindowLongPtrW
+#define VdFwSetWindowLongPtr    VdFwSetWindowLongPtrW
+#define VdFwLoadCursor          VdFwLoadCursorW
+#define VdFwGetMonitorInfo      VdFwGetMonitorInfoW
+#else
+#define VdFwDispatchMessage     VdFwDispatchMessageA
+#define VdFwPostMessage         VdFwPostMessageA
+#define VdFwGetMessage          VdFwGetMessageA
+#define VdFwDefWindowProc       VdFwDefWindowProcA
+#define VdFwRegisterClassEx     VdFwRegisterClassExA
+#define VdFwCreateWindowEx      VdFwCreateWindowExA
+#define VdFwMapVirtualKey       VdFwMapVirtualKeyA
+#define VdFwSetWindowText       VdFwSetWindowTextA
+#define VdFwSetWindowLong       VdFwSetWindowLongA
+#define VdFwGetWindowLongPtr    VdFwGetWindowLongPtrA
+#define VdFwSetWindowLongPtr    VdFwSetWindowLongPtrA
+#define VdFwLoadCursor          VdFwLoadCursorA
+#define VdFwGetMonitorInfo      VdFwGetMonitorInfoA
+#endif // !UNICODE
+
+typedef __int64             VdFwINT_PTR, * VdFwPINT_PTR;
+typedef unsigned __int64    VdFwUINT_PTR, * VdFwPUINT_PTR;
+typedef __int64             VdFwLONG_PTR, * VdFwPLONG_PTR;
+typedef unsigned __int64    VdFwULONG_PTR, * VdFwPULONG_PTR;
+typedef VdFwUINT_PTR        VdFwWPARAM;
+typedef VdFwLONG_PTR        VdFwLPARAM;
+typedef VdFwLONG_PTR        VdFwLRESULT;
+typedef wchar_t             VdFwWCHAR;
+typedef const VdFwWCHAR*    VdFwLPCWSTR, * VdFwPCWSTR;
+typedef VdFwWORD            VdFwATOM;
+
+typedef VdFwLRESULT(*VdFwWNDPROC)(VdFwHWND, VdFwUINT, VdFwWPARAM, VdFwLPARAM);
+
+VD_FW_DECLARE_HANDLE(VdFwHICON);
+VD_FW_DECLARE_HANDLE(VdFwHBRUSH);
+VD_FW_DECLARE_HANDLE(VdFwHCURSOR);
+VD_FW_DECLARE_HANDLE(VdFwHMENU);
+VD_FW_DECLARE_HANDLE(VdFwHBITMAP);
+VD_FW_DECLARE_HANDLE(VdFwHRGN);
+VD_FW_DECLARE_HANDLE(VdFwHMONITOR);
+
+typedef struct VdFwtagPOINT
+{
+    VdFwLONG  x;
+    VdFwLONG  y;
+} VdFwPOINT, * VdFwPPOINT, * VdFwNPPOINT, * VdFwLPPOINT;
+
+typedef struct VdFwtagMSG {
+    VdFwHWND        hwnd;
+    VdFwUINT        message;
+    VdFwWPARAM      wParam;
+    VdFwLPARAM      lParam;
+    VdFwDWORD       time;
+    VdFwPOINT       pt;
+#ifdef _MAC
+    DWORD       lPrivate;
+#endif
+} VdFwMSG, * VdFwPMSG, * VdFwNPMSG, * VdFwLPMSG;
+
+typedef struct VdFwtagWNDCLASSEXA {
+    VdFwUINT        cbSize;
+    VdFwUINT        style;
+    VdFwWNDPROC     lpfnWndProc;
+    int             cbClsExtra;
+    int             cbWndExtra;
+    VdFwHINSTANCE   hInstance;
+    VdFwHICON       hIcon;
+    VdFwHCURSOR     hCursor;
+    VdFwHBRUSH      hbrBackground;
+    VdFwLPCSTR      lpszMenuName;
+    VdFwLPCSTR      lpszClassName;
+    VdFwHICON       hIconSm;
+} VdFwWNDCLASSEXA, * VdFwPWNDCLASSEXA, * VdFwNPWNDCLASSEXA, * VdFwLPWNDCLASSEXA;
+typedef struct VdFwtagWNDCLASSEXW {
+    VdFwUINT        cbSize;
+    VdFwUINT        style;
+    VdFwWNDPROC     lpfnWndProc;
+    int             cbClsExtra;
+    int             cbWndExtra;
+    VdFwHINSTANCE   hInstance;
+    VdFwHICON       hIcon;
+    VdFwHCURSOR     hCursor;
+    VdFwHBRUSH      hbrBackground;
+    VdFwLPCWSTR     lpszMenuName;
+    VdFwLPCWSTR     lpszClassName;
+    VdFwHICON       hIconSm;
+} VdFwWNDCLASSEXW, * VdFwPWNDCLASSEXW, * VdFwNPWNDCLASSEXW, * VdFwLPWNDCLASSEXW;
+
+typedef struct VdFwtagWINDOWPLACEMENT {
+    VdFwUINT  length;
+    VdFwUINT  flags;
+    VdFwUINT  showCmd;
+    VdFwPOINT ptMinPosition;
+    VdFwPOINT ptMaxPosition;
+    VdFwRECT  rcNormalPosition;
+#ifdef _MAC
+    VdFwRECT  rcDevice;
+#endif
+} VdFwWINDOWPLACEMENT;
+typedef VdFwWINDOWPLACEMENT* VdFwPWINDOWPLACEMENT, * VdFwLPWINDOWPLACEMENT;
+
+typedef struct VdFwtagPAINTSTRUCT {
+    VdFwHDC         hdc;
+    VdFwBOOL        fErase;
+    VdFwRECT        rcPaint;
+    VdFwBOOL        fRestore;
+    VdFwBOOL        fIncUpdate;
+    VdFwBYTE        rgbReserved[32];
+} VdFwPAINTSTRUCT, * VdFwPPAINTSTRUCT, * VdFwNPPAINTSTRUCT, * VdFwLPPAINTSTRUCT;
+
+typedef struct VdFw_ICONINFO {
+    VdFwBOOL    fIcon;
+    VdFwDWORD   xHotspot;
+    VdFwDWORD   yHotspot;
+    VdFwHBITMAP hbmMask;
+    VdFwHBITMAP hbmColor;
+} VdFwICONINFO;
+typedef VdFwICONINFO* VdFwPICONINFO;
+
+typedef struct VdFwtagMONITORINFO
+{
+    VdFwDWORD   cbSize;
+    VdFwRECT    rcMonitor;
+    VdFwRECT    rcWork;
+    VdFwDWORD   dwFlags;
+} VdFwMONITORINFO, * VdFwLPMONITORINFO;
+
+typedef struct VdFwtagWINDOWPOS {
+    VdFwHWND    hwnd;
+    VdFwHWND    hwndInsertAfter;
+    int         x;
+    int         y;
+    int         cx;
+    int         cy;
+    VdFwUINT    flags;
+} VdFwWINDOWPOS, * VdFwLPWINDOWPOS, * VdFwPWINDOWPOS;
+
+
+typedef struct VdFwtagNCCALCSIZE_PARAMS {
+    VdFwRECT       rgrc[3];
+    VdFwPWINDOWPOS lppos;
+} VdFwNCCALCSIZE_PARAMS, * VdFwLPNCCALCSIZE_PARAMS;
+
+#define VD_FW_PROC_GetMessageA(name) VdFwBOOL name(VdFwLPMSG lpMsg, VdFwHWND hWnd, VdFwUINT wMsgFilterMin, VdFwUINT wMsgFilterMax)
+typedef VD_FW_PROC_GetMessageA(VdFwProcGetMessageA);
+static VdFwProcGetMessageA *VdFwGetMessageA;
+
+#define VD_FW_PROC_GetMessageW(name) VdFwBOOL name(VdFwLPMSG lpMsg, VdFwHWND hWnd, VdFwUINT wMsgFilterMin, VdFwUINT wMsgFilterMax)
+typedef VD_FW_PROC_GetMessageW(VdFwProcGetMessageW);
+static VdFwProcGetMessageW *VdFwGetMessageW;
+
+#define VD_FW_PROC_TranslateMessage(name) VdFwBOOL name(const VdFwMSG* lpMsg)
+typedef VD_FW_PROC_TranslateMessage(VdFwProcTranslateMessage);
+static VdFwProcTranslateMessage *VdFwTranslateMessage;
+
+#define VD_FW_PROC_DispatchMessageA(name) VdFwLRESULT name(const VdFwMSG* lpMsg)
+typedef VD_FW_PROC_DispatchMessageA(VdFwProcDispatchMessageA);
+static VdFwProcDispatchMessageA *VdFwDispatchMessageA;
+
+#define VD_FW_PROC_DispatchMessageW(name) VdFwLRESULT name(const VdFwMSG* lpMsg)
+typedef VD_FW_PROC_DispatchMessageW(VdFwProcDispatchMessageW);
+static VdFwProcDispatchMessageW *VdFwDispatchMessageW;
+
+#define VD_FW_PROC_PostMessageA(name) VdFwBOOL name(VdFwHWND hWnd, VdFwUINT Msg, VdFwWPARAM wParam, VdFwLPARAM lParam)
+typedef VD_FW_PROC_PostMessageA(VdFwProcPostMessageA);
+static VdFwProcPostMessageA *VdFwPostMessageA;
+
+#define VD_FW_PROC_PostMessageW(name) VdFwBOOL name(VdFwHWND hWnd, VdFwUINT Msg, VdFwWPARAM wParam, VdFwLPARAM lParam)
+typedef VD_FW_PROC_PostMessageW(VdFwProcPostMessageW);
+static VdFwProcPostMessageW *VdFwPostMessageW;
+
+#define VD_FW_PROC_DefWindowProcA(name) VdFwLRESULT name(VdFwHWND hWnd, VdFwUINT Msg, VdFwWPARAM wParam, VdFwLPARAM lParam)
+typedef VD_FW_PROC_DefWindowProcA(VdFwProcDefWindowProcA);
+static VdFwProcDefWindowProcA *VdFwDefWindowProcA;
+
+#define VD_FW_PROC_DefWindowProcW(name) VdFwLRESULT name(VdFwHWND hWnd, VdFwUINT Msg, VdFwWPARAM wParam, VdFwLPARAM lParam)
+typedef VD_FW_PROC_DefWindowProcW(VdFwProcDefWindowProcW);
+static VdFwProcDefWindowProcW *VdFwDefWindowProcW;
+
+#define VD_FW_PROC_PostQuitMessage(name) void name(int nExitCode)
+typedef VD_FW_PROC_PostQuitMessage(VdFwProcPostQuitMessage);
+static VdFwProcPostQuitMessage *VdFwPostQuitMessage;
+
+#define VD_FW_PROC_RegisterClassExA(name) VdFwATOM name(const VdFwWNDCLASSEXA* unnamedParam1)
+typedef VD_FW_PROC_RegisterClassExA(VdFwProcRegisterClassExA);
+static VdFwProcRegisterClassExA *VdFwRegisterClassExA;
+
+#define VD_FW_PROC_RegisterClassExW(name) VdFwATOM name(const VdFwWNDCLASSEXW* unnamedParam1)
+typedef VD_FW_PROC_RegisterClassExW(VdFwProcRegisterClassExW);
+static VdFwProcRegisterClassExW *VdFwRegisterClassExW;
+
+#define VD_FW_PROC_CreateWindowExA(name) VdFwHWND name(VdFwDWORD dwExStyle, VdFwLPCSTR lpClassName, VdFwLPCSTR lpWindowName, VdFwDWORD dwStyle, int X, int Y, int nWidth, int nHeight, VdFwHWND hWndParent, VdFwHMENU hMenu, VdFwHINSTANCE hInstance, VdFwLPVOID lpParam)
+typedef VD_FW_PROC_CreateWindowExA(VdFwProcCreateWindowExA);
+static VdFwProcCreateWindowExA *VdFwCreateWindowExA;
+
+#define VD_FW_PROC_CreateWindowExW(name) VdFwHWND name(VdFwDWORD dwExStyle, VdFwLPCWSTR lpClassName, VdFwLPCWSTR lpWindowName, VdFwDWORD dwStyle, int X, int Y, int nWidth, int nHeight, VdFwHWND hWndParent, VdFwHMENU hMenu, VdFwHINSTANCE hInstance, VdFwLPVOID lpParam)
+typedef VD_FW_PROC_CreateWindowExW(VdFwProcCreateWindowExW);
+static VdFwProcCreateWindowExW *VdFwCreateWindowExW;
+
+#define VD_FW_PROC_DestroyWindow(name) VdFwBOOL name(VdFwHWND hWnd)
+typedef VD_FW_PROC_DestroyWindow(VdFwProcDestroyWindow);
+static VdFwProcDestroyWindow *VdFwDestroyWindow;
+
+#define VD_FW_PROC_ShowWindow(name) VdFwBOOL name(VdFwHWND hWnd, int nCmdShow)
+typedef VD_FW_PROC_ShowWindow(VdFwProcShowWindow);
+static VdFwProcShowWindow *VdFwShowWindow;
+
+#define VD_FW_PROC_SetWindowPos(name) VdFwBOOL name(VdFwHWND hWnd, VdFwHWND hWndInsertAfter, int X, int Y, int cx, int cy, VdFwUINT uFlags)
+typedef VD_FW_PROC_SetWindowPos(VdFwProcSetWindowPos);
+static VdFwProcSetWindowPos *VdFwSetWindowPos;
+
+#define VD_FW_PROC_GetWindowPlacement(name) VdFwBOOL name(VdFwHWND hWnd, VdFwWINDOWPLACEMENT* lpwndpl)
+typedef VD_FW_PROC_GetWindowPlacement(VdFwProcGetWindowPlacement);
+static VdFwProcGetWindowPlacement *VdFwGetWindowPlacement;
+
+#define VD_FW_PROC_SetWindowPlacement(name) VdFwBOOL name(VdFwHWND hWnd, const VdFwWINDOWPLACEMENT* lpwndpl)
+typedef VD_FW_PROC_SetWindowPlacement(VdFwProcSetWindowPlacement);
+static VdFwProcSetWindowPlacement *VdFwSetWindowPlacement;
+
+#define VD_FW_PROC_IsZoomed(name) VdFwBOOL name(VdFwHWND hWnd)
+typedef VD_FW_PROC_IsZoomed(VdFwProcIsZoomed);
+static VdFwProcIsZoomed *VdFwIsZoomed;
+
+#define VD_FW_PROC_MapVirtualKeyA(name) VdFwUINT name(VdFwUINT uCode, VdFwUINT uMapType)
+typedef VD_FW_PROC_MapVirtualKeyA(VdFwProcMapVirtualKeyA);
+static VdFwProcMapVirtualKeyA *VdFwMapVirtualKeyA;
+
+#define VD_FW_PROC_MapVirtualKeyW(name) VdFwUINT name(VdFwUINT uCode, VdFwUINT uMapType)
+typedef VD_FW_PROC_MapVirtualKeyW(VdFwProcMapVirtualKeyW);
+static VdFwProcMapVirtualKeyW *VdFwMapVirtualKeyW;
+
+#define VD_FW_PROC_SetCapture(name) VdFwHWND name(VdFwHWND hWnd)
+typedef VD_FW_PROC_SetCapture(VdFwProcSetCapture);
+static VdFwProcSetCapture* VdFwSetCapture;
+
+#define VD_FW_PROC_ReleaseCapture(name) VdFwBOOL name(void)
+typedef VD_FW_PROC_ReleaseCapture(VdFwProcReleaseCapture);
+static VdFwProcReleaseCapture *VdFwReleaseCapture;
+
+#define VD_FW_PROC_GetSystemMetrics(name) int name(int nIndex)
+typedef VD_FW_PROC_GetSystemMetrics(VdFwProcGetSystemMetrics);
+static VdFwProcGetSystemMetrics *VdFwGetSystemMetrics;
+
+#define VD_FW_PROC_UpdateWindow(name) VdFwBOOL name(VdFwHWND hWnd)
+typedef VD_FW_PROC_UpdateWindow(VdFwProcUpdateWindow);
+static VdFwProcUpdateWindow *VdFwUpdateWindow;
+
+#define VD_FW_PROC_GetDC(name) VdFwHDC name(VdFwHWND hWnd)
+typedef VD_FW_PROC_GetDC(VdFwProcGetDC);
+static VdFwProcGetDC *VdFwGetDC;
+
+#define VD_FW_PROC_ReleaseDC(name) int name(VdFwHWND hWnd, VdFwHDC hDC)
+typedef VD_FW_PROC_ReleaseDC(VdFwProcReleaseDC);
+static VdFwProcReleaseDC *VdFwReleaseDC;
+
+#define VD_FW_PROC_BeginPaint(name) VdFwHDC name(VdFwHWND hWnd, VdFwLPPAINTSTRUCT lpPaint)
+typedef VD_FW_PROC_BeginPaint(VdFwProcBeginPaint);
+static VdFwProcBeginPaint *VdFwBeginPaint;
+
+#define VD_FW_PROC_EndPaint(name) VdFwBOOL name(VdFwHWND hWnd, const VdFwPAINTSTRUCT* lpPaint)
+typedef VD_FW_PROC_EndPaint(VdFwProcEndPaint);
+static VdFwProcEndPaint *VdFwEndPaint;
+
+#define VD_FW_PROC_SetWindowRgn(name) int name(VdFwHWND hWnd, VdFwHRGN hRgn, VdFwBOOL bRedraw)
+typedef VD_FW_PROC_SetWindowRgn(VdFwProcSetWindowRgn);
+static VdFwProcSetWindowRgn *VdFwSetWindowRgn;
+
+#define VD_FW_PROC_SetWindowTextA(name) VdFwBOOL name(VdFwHWND hWnd, VdFwLPCSTR lpString)
+typedef VD_FW_PROC_SetWindowTextA(VdFwProcSetWindowTextA);
+static VdFwProcSetWindowTextA *VdFwSetWindowTextA;
+
+#define VD_FW_PROC_SetWindowTextW(name) VdFwBOOL name(VdFwHWND hWnd, VdFwLPCWSTR lpString)
+typedef VD_FW_PROC_SetWindowTextW(VdFwProcSetWindowTextW);
+static VdFwProcSetWindowTextW *VdFwSetWindowTextW;
+
+#define VD_FW_PROC_GetClientRect(name) VdFwBOOL name(VdFwHWND hWnd, VdFwLPRECT lpRect)
+typedef VD_FW_PROC_GetClientRect(VdFwProcGetClientRect);
+static VdFwProcGetClientRect *VdFwGetClientRect;
+
+#define VD_FW_PROC_GetWindowRect(name) VdFwBOOL name(VdFwHWND hWnd, VdFwLPRECT lpRect)
+typedef VD_FW_PROC_GetWindowRect(VdFwProcGetWindowRect);
+static VdFwProcGetWindowRect* VdFwGetWindowRect;
+
+#define VD_FW_PROC_ShowCursor(name) int name(VdFwBOOL bShow)
+typedef VD_FW_PROC_ShowCursor(VdFwProcShowCursor);
+static VdFwProcShowCursor *VdFwShowCursor;
+
+#define VD_FW_PROC_SetCursorPos(name) VdFwBOOL name(int X, int Y)
+typedef VD_FW_PROC_SetCursorPos(VdFwProcSetCursorPos);
+static VdFwProcSetCursorPos *VdFwSetCursorPos;
+
+#define VD_FW_PROC_ScreenToClient(name) VdFwBOOL name(VdFwHWND hWnd, VdFwLPPOINT lpPoint)
+typedef VD_FW_PROC_ScreenToClient(VdFwProcScreenToClient);
+static VdFwProcScreenToClient *VdFwScreenToClient;
+
+#define VD_FW_PROC_EqualRect(name) VdFwBOOL name(const VdFwRECT* lprc1, const VdFwRECT* lprc2)
+typedef VD_FW_PROC_EqualRect(VdFwProcEqualRect);
+static VdFwProcEqualRect *VdFwEqualRect;
+
+#define VD_FW_PROC_PtInRect(name) VdFwBOOL name(const VdFwRECT* lprc, VdFwPOINT pt)
+typedef VD_FW_PROC_PtInRect(VdFwProcPtInRect);
+static VdFwProcPtInRect *VdFwPtInRect;
+
+#define VD_FW_PROC_SetWindowLongA(name) VdFwLONG name(VdFwHWND hWnd, int nIndex, VdFwLONG dwNewLong)
+typedef VD_FW_PROC_SetWindowLongA(VdFwProcSetWindowLongA);
+static VdFwProcSetWindowLongA *VdFwSetWindowLongA;
+
+#define VD_FW_PROC_SetWindowLongW(name) VdFwLONG name(VdFwHWND hWnd, int nIndex, VdFwLONG dwNewLong)
+typedef VD_FW_PROC_SetWindowLongW(VdFwProcSetWindowLongW);
+static VdFwProcSetWindowLongW *VdFwSetWindowLongW;
+
+#define VD_FW_PROC_GetWindowLongPtrA(name) VdFwLONG_PTR name(VdFwHWND hWnd, int nIndex)
+typedef VD_FW_PROC_GetWindowLongPtrA(VdFwProcGetWindowLongPtrA);
+static VdFwProcGetWindowLongPtrA *VdFwGetWindowLongPtrA;
+
+#define VD_FW_PROC_GetWindowLongPtrW(name) VdFwLONG_PTR name(VdFwHWND hWnd, int nIndex)
+typedef VD_FW_PROC_GetWindowLongPtrW(VdFwProcGetWindowLongPtrW);
+static VdFwProcGetWindowLongPtrW *VdFwGetWindowLongPtrW;
+
+#define VD_FW_PROC_SetWindowLongPtrA(name) VdFwLONG_PTR name(VdFwHWND hWnd, int nIndex, VdFwLONG_PTR dwNewLong)
+typedef VD_FW_PROC_SetWindowLongPtrA(VdFwProcSetWindowLongPtrA);
+static VdFwProcSetWindowLongPtrA *VdFwSetWindowLongPtrA;
+
+#define VD_FW_PROC_SetWindowLongPtrW(name) VdFwLONG_PTR name(VdFwHWND hWnd, int nIndex, VdFwLONG_PTR dwNewLong)
+typedef VD_FW_PROC_SetWindowLongPtrW(VdFwProcSetWindowLongPtrW);
+static VdFwProcSetWindowLongPtrW *VdFwSetWindowLongPtrW;
+
+#define VD_FW_PROC_LoadCursorA(name) VdFwHCURSOR name(VdFwHINSTANCE hInstance, VdFwLPCSTR lpCursorName)
+typedef VD_FW_PROC_LoadCursorA(VdFwProcLoadCursorA);
+static VdFwProcLoadCursorA *VdFwLoadCursorA;
+
+#define VD_FW_PROC_LoadCursorW(name) VdFwHCURSOR name(VdFwHINSTANCE hInstance, VdFwLPCWSTR lpCursorName)
+typedef VD_FW_PROC_LoadCursorW(VdFwProcLoadCursorW);
+static VdFwProcLoadCursorW *VdFwLoadCursorW;
+
+#define VD_FW_PROC_CreateIconIndirect(name) VdFwHICON name(VdFwPICONINFO piconinfo)
+typedef VD_FW_PROC_CreateIconIndirect(VdFwProcCreateIconIndirect);
+static VdFwProcCreateIconIndirect *VdFwCreateIconIndirect;
+
+#define VD_FW_PROC_MonitorFromWindow(name) VdFwHMONITOR name(VdFwHWND hwnd, VdFwDWORD dwFlags)
+typedef VD_FW_PROC_MonitorFromWindow(VdFwProcMonitorFromWindow);
+static VdFwProcMonitorFromWindow *VdFwMonitorFromWindow;
+
+#define VD_FW_PROC_GetMonitorInfoA(name) VdFwBOOL name(VdFwHMONITOR hMonitor, VdFwLPMONITORINFO lpmi)
+typedef VD_FW_PROC_GetMonitorInfoA(VdFwProcGetMonitorInfoA);
+static VdFwProcGetMonitorInfoA *VdFwGetMonitorInfoA;
+
+#define VD_FW_PROC_GetMonitorInfoW(name) VdFwBOOL name(VdFwHMONITOR hMonitor, VdFwLPMONITORINFO lpmi)
+typedef VD_FW_PROC_GetMonitorInfoW(VdFwProcGetMonitorInfoW);
+static VdFwProcGetMonitorInfoW *VdFwGetMonitorInfoW;
+
 
 /* ----Winmm.dll----------------------------------------------------------------------------------------------------- */
 typedef VdFwUINT VdFwMMRESULT;
@@ -4003,8 +4365,6 @@ typedef VD_FW_PROC_DwmFlush(VdFwProcDwmFlush);
 static VdFwProcDwmFlush *VdFwDwmFlush;
 
 /* ----Gdi32.dll----------------------------------------------------------------------------------------------------- */
-VD_FW_DECLARE_HANDLE(VdFwHBITMAP);
-VD_FW_DECLARE_HANDLE(VdFwHRGN);
 
 typedef void* VdFwHGDIOBJ;
 
@@ -4901,6 +5261,63 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
     // Load Win32 Libraries
     {
+        // User32.dll
+        {
+            VdFwHMODULE m          =   LoadLibraryA("User32.dll");
+            VdFwGetMessageA        =        (VdFwProcGetMessageA*)GetProcAddress(m, "GetMessageA");
+            VdFwGetMessageW        =        (VdFwProcGetMessageW*)GetProcAddress(m, "GetMessageW");
+            VdFwTranslateMessage   =   (VdFwProcTranslateMessage*)GetProcAddress(m, "TranslateMessage");
+            VdFwDispatchMessageA   =   (VdFwProcDispatchMessageA*)GetProcAddress(m, "DispatchMessageA");
+            VdFwDispatchMessageW   =   (VdFwProcDispatchMessageW*)GetProcAddress(m, "DispatchMessageW");
+            VdFwPostMessageA       =       (VdFwProcPostMessageA*)GetProcAddress(m, "PostMessageA");
+            VdFwPostMessageW       =       (VdFwProcPostMessageW*)GetProcAddress(m, "PostMessageW");
+            VdFwDefWindowProcA     =     (VdFwProcDefWindowProcA*)GetProcAddress(m, "DefWindowProcA");
+            VdFwDefWindowProcW     =     (VdFwProcDefWindowProcW*)GetProcAddress(m, "DefWindowProcW");
+            VdFwPostQuitMessage    =    (VdFwProcPostQuitMessage*)GetProcAddress(m, "PostQuitMessage");
+            VdFwRegisterClassExA   =   (VdFwProcRegisterClassExA*)GetProcAddress(m, "RegisterClassExA");
+            VdFwRegisterClassExW   =   (VdFwProcRegisterClassExW*)GetProcAddress(m, "RegisterClassExW");
+            VdFwCreateWindowExA    =    (VdFwProcCreateWindowExA*)GetProcAddress(m, "CreateWindowExA");
+            VdFwCreateWindowExW    =    (VdFwProcCreateWindowExW*)GetProcAddress(m, "CreateWindowExW");
+            VdFwDestroyWindow      =      (VdFwProcDestroyWindow*)GetProcAddress(m, "DestroyWindow");
+            VdFwShowWindow         =         (VdFwProcShowWindow*)GetProcAddress(m, "ShowWindow");
+            VdFwSetWindowPos       =       (VdFwProcSetWindowPos*)GetProcAddress(m, "SetWindowPos");
+            VdFwGetWindowPlacement = (VdFwProcGetWindowPlacement*)GetProcAddress(m, "GetWindowPlacement");
+            VdFwSetWindowPlacement = (VdFwProcSetWindowPlacement*)GetProcAddress(m, "SetWindowPlacement");
+            VdFwIsZoomed           =           (VdFwProcIsZoomed*)GetProcAddress(m, "IsZoomed");
+            VdFwMapVirtualKeyA     =     (VdFwProcMapVirtualKeyA*)GetProcAddress(m, "MapVirtualKeyA");
+            VdFwMapVirtualKeyW     =     (VdFwProcMapVirtualKeyW*)GetProcAddress(m, "MapVirtualKeyW");
+            VdFwSetCapture         =         (VdFwProcSetCapture*)GetProcAddress(m, "SetCapture");
+            VdFwReleaseCapture     =     (VdFwProcReleaseCapture*)GetProcAddress(m, "ReleaseCapture");
+            VdFwGetSystemMetrics   =   (VdFwProcGetSystemMetrics*)GetProcAddress(m, "GetSystemMetrics");
+            VdFwUpdateWindow       =       (VdFwProcUpdateWindow*)GetProcAddress(m, "UpdateWindow");
+            VdFwGetDC              =              (VdFwProcGetDC*)GetProcAddress(m, "GetDC");
+            VdFwReleaseDC          =          (VdFwProcReleaseDC*)GetProcAddress(m, "ReleaseDC");
+            VdFwBeginPaint         =         (VdFwProcBeginPaint*)GetProcAddress(m, "BeginPaint");
+            VdFwEndPaint           =           (VdFwProcEndPaint*)GetProcAddress(m, "EndPaint");
+            VdFwSetWindowRgn       =       (VdFwProcSetWindowRgn*)GetProcAddress(m, "SetWindowRgn");
+            VdFwSetWindowTextA     =     (VdFwProcSetWindowTextA*)GetProcAddress(m, "SetWindowTextA");
+            VdFwSetWindowTextW     =     (VdFwProcSetWindowTextW*)GetProcAddress(m, "SetWindowTextW");
+            VdFwGetClientRect      =      (VdFwProcGetClientRect*)GetProcAddress(m, "GetClientRect");
+            VdFwGetWindowRect      =      (VdFwProcGetWindowRect*)GetProcAddress(m, "GetWindowRect");
+            VdFwShowCursor         =         (VdFwProcShowCursor*)GetProcAddress(m, "ShowCursor");
+            VdFwSetCursorPos       =       (VdFwProcSetCursorPos*)GetProcAddress(m, "SetCursorPos");
+            VdFwScreenToClient     =     (VdFwProcScreenToClient*)GetProcAddress(m, "ScreenToClient");
+            VdFwEqualRect          =          (VdFwProcEqualRect*)GetProcAddress(m, "EqualRect");
+            VdFwPtInRect           =           (VdFwProcPtInRect*)GetProcAddress(m, "PtInRect");
+            VdFwSetWindowLongA     =     (VdFwProcSetWindowLongA*)GetProcAddress(m, "SetWindowLongA");
+            VdFwSetWindowLongW     =     (VdFwProcSetWindowLongW*)GetProcAddress(m, "SetWindowLongW");
+            VdFwGetWindowLongPtrA  =  (VdFwProcGetWindowLongPtrA*)GetProcAddress(m, "GetWindowLongPtrA");
+            VdFwGetWindowLongPtrW  =  (VdFwProcGetWindowLongPtrW*)GetProcAddress(m, "GetWindowLongPtrW");
+            VdFwSetWindowLongPtrA  =  (VdFwProcSetWindowLongPtrA*)GetProcAddress(m, "SetWindowLongPtrA");
+            VdFwSetWindowLongPtrW  =  (VdFwProcSetWindowLongPtrW*)GetProcAddress(m, "SetWindowLongPtrW");
+            VdFwLoadCursorA        =        (VdFwProcLoadCursorA*)GetProcAddress(m, "LoadCursorA");
+            VdFwLoadCursorW        =        (VdFwProcLoadCursorW*)GetProcAddress(m, "LoadCursorW");
+            VdFwCreateIconIndirect = (VdFwProcCreateIconIndirect*)GetProcAddress(m, "CreateIconIndirect");
+            VdFwMonitorFromWindow  =  (VdFwProcMonitorFromWindow*)GetProcAddress(m, "MonitorFromWindow");
+            VdFwGetMonitorInfoA    =    (VdFwProcGetMonitorInfoA*)GetProcAddress(m, "GetMonitorInfoA");
+            VdFwGetMonitorInfoW    =    (VdFwProcGetMonitorInfoW*)GetProcAddress(m, "GetMonitorInfoW");
+        }
+
         // Winmm.dll
         {
             VdFwHMODULE m       = LoadLibraryA("Winmm.dll");
@@ -5010,7 +5427,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     WaitForSingleObject(VD_FW_G.sem_window_ready, INFINITE);
 
 
-    VD_FW_G.hdc = GetDC(VD_FW_G.hwnd);
+    VD_FW_G.hdc = VdFwGetDC(VD_FW_G.hwnd);
 
     // Create context
     {
@@ -5260,12 +5677,12 @@ VD_FW_API int vd_fw_running(void)
 
     if (VD_FW_G.mouse_is_locked && VD_FW_G.focused) {
         RECT rect;
-        GetWindowRect(VD_FW_G.hwnd, &rect);
+        VdFwGetWindowRect(VD_FW_G.hwnd, &rect);
 
         INT center_x = (rect.left + rect.right)  / 2;
         INT center_y = (rect.top  + rect.bottom) / 2;
 
-        SetCursorPos(center_x, center_y);
+        VdFwSetCursorPos(center_x, center_y);
     }
 
     return 1;
@@ -5305,7 +5722,7 @@ VD_FW_API void vd_fw_set_size(int w, int h)
     WORD wh = (WORD)h;
     LPARAM lparam = MAKELPARAM(ww, wh);
 
-    VD_FW__CHECK_TRUE(PostMessageA(
+    VD_FW__CHECK_TRUE(VdFwPostMessage(
         VD_FW_G.hwnd,
         VD_FW_WIN32_SIZE,
         0, /* WPARAM */
@@ -5320,7 +5737,7 @@ VD_FW_API void vd_fw_set_fullscreen(int on)
 
     VD_FW_G.is_fullscreen = on;
 
-    VD_FW__CHECK_TRUE(PostMessageA(
+    VD_FW__CHECK_TRUE(VdFwPostMessage(
         VD_FW_G.hwnd,
         VD_FW_WIN32_FULLSCREEN,
         0, /* WPARAM */
@@ -5408,9 +5825,9 @@ VD_FW_API int vd_fw_get_gamepad_axis(int index, int axis, float *out)
 VD_FW_API void vd_fw_set_mouse_capture(int on)
 {
     if (on) {
-        SetCapture(VD_FW_G.hwnd);
+        VdFwSetCapture(VD_FW_G.hwnd);
     } else {
-        ReleaseCapture();
+        VdFwReleaseCapture();
     }
 }
 
@@ -5428,13 +5845,13 @@ VD_FW_API void vd_fw_set_mouse_locked(int locked)
 
     VD_FW_G.mouse_is_locked = locked;
     if (locked) {
-        VD_FW__CHECK_TRUE(PostMessageA(
+        VD_FW__CHECK_TRUE(VdFwPostMessage(
             VD_FW_G.hwnd,
             VD_FW_WIN32_SHOW_CURSOR,
             0, /* WPARAM */
             0  /* LPARAM */));
     } else {
-        VD_FW__CHECK_TRUE(PostMessageA(
+        VD_FW__CHECK_TRUE(VdFwPostMessage(
             VD_FW_G.hwnd,
             VD_FW_WIN32_SHOW_CURSOR,
             1, /* WPARAM */
@@ -5476,7 +5893,7 @@ VD_FW_API void vd_fw_set_title(const char *title)
 
     VD_FW_G.title[len] = 0;
 
-    VD_FW__CHECK_TRUE(PostMessageA(
+    VD_FW__CHECK_TRUE(VdFwPostMessage(
         VD_FW_G.hwnd,
         VD_FW_WIN32_UPDATE_TITLE,
         0, /* WPARAM */
@@ -5494,30 +5911,30 @@ VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
     bmi.bmiHeader.biCompression = BI_RGB; 
 
     void *bits = 0;
-    HDC hdc = GetDC(NULL);
+    HDC hdc = VdFwGetDC(NULL);
     VdFwHBITMAP hbitmap = VdFwCreateDIBSection(hdc, &bmi, DIB_RGB_COLORS, &bits, NULL, 0);
     VD_FW__CHECK_NULL(hbitmap);
     VdFwHBITMAP hmaskbitmap = VdFwCreateBitmap(width, height, 1, 1, NULL);
     VD_FW__CHECK_NULL(hmaskbitmap);
-    ReleaseDC(NULL, hdc);
+    VdFwReleaseDC(NULL, hdc);
 
     VD_FW__CHECK_NULL(hbitmap);
 
     vd_fw_memcpy(bits, pixels, width * height * 4);
 
-    ICONINFO ii = {0};
+    VdFwICONINFO ii = {0};
     ii.fIcon    = TRUE;
     ii.hbmColor = hbitmap;
     ii.hbmMask  = hmaskbitmap;
-    HICON icon = CreateIconIndirect(&ii);
+    VdFwHICON icon = VdFwCreateIconIndirect(&ii);
     VD_FW__CHECK_NULL(icon);
 
-    VD_FW__CHECK_TRUE(PostMessageA(
+    VD_FW__CHECK_TRUE(VdFwPostMessage(
         VD_FW_G.hwnd,
         WM_SETICON,
         ICON_SMALL, /* WPARAM */
         (LPARAM)icon));
-    VD_FW__CHECK_TRUE(PostMessageA(
+    VD_FW__CHECK_TRUE(VdFwPostMessage(
         VD_FW_G.hwnd,
         WM_SETICON,
         ICON_BIG, /* WPARAM */
@@ -5570,9 +5987,9 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     wcx.hInstance      = NULL;
     wcx.lpfnWndProc    = vd_fw__wndproc;
     wcx.lpszClassName  = TEXT("FWCLASS");
-    wcx.hbrBackground  = (HBRUSH)VdFwGetStockObject(BLACK_BRUSH);
-    wcx.hCursor        = LoadCursor(NULL, IDC_ARROW);
-    if (!RegisterClassEx(&wcx)) {
+    wcx.hbrBackground  = (VdFwHBRUSH)VdFwGetStockObject(BLACK_BRUSH);
+    wcx.hCursor        = VdFwLoadCursor(NULL, IDC_ARROW);
+    if (!VdFwRegisterClassEx(&wcx)) {
         return 0;
     }
 
@@ -5596,7 +6013,7 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     // - WS_OVERLAPPED | WS_SIZEBOX | WS_MAXIMIZEBOX: Works perfectly.
     // 
 
-    VD_FW_G.hwnd = CreateWindowEx(
+    VD_FW_G.hwnd = VdFwCreateWindowEx(
         0,
         TEXT("FWCLASS"),
         TEXT("FW Window"),
@@ -5629,7 +6046,7 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     VD_FW_SANITY_CHECK();
 
     RECT rect;
-    GetClientRect(VD_FW_G.hwnd, &rect);
+    VdFwGetClientRect(VD_FW_G.hwnd, &rect);
     VD_FW_G.w = rect.right - rect.left;
     VD_FW_G.h = rect.bottom - rect.top;
     VD_FW_G.next_frame.w = VD_FW_G.w;
@@ -5637,8 +6054,8 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
 
 
     // SetWindowPos(VD_FW_G.hwnd, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_SHOWWINDOW);
-    ShowWindow(VD_FW_G.hwnd, SW_SHOW);
-    VD_FW__CHECK_NONZERO(UpdateWindow(VD_FW_G.hwnd));
+    VdFwShowWindow(VD_FW_G.hwnd, SW_SHOW);
+    VD_FW__CHECK_NONZERO(VdFwUpdateWindow(VD_FW_G.hwnd));
 
     VD_FW__CHECK_TRUE(ReleaseSemaphore(VD_FW_G.sem_window_ready, 1, NULL));
 
@@ -5666,10 +6083,10 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     VD_FW_G.t_paint_ready = 1;
 
     while (VD_FW_G.t_running) {
-        MSG message;
-        while (GetMessage(&message, VD_FW_G.hwnd, 0, 0)) {
-            TranslateMessage(&message);
-            DispatchMessageA(&message);
+        VdFwMSG message;
+        while (VdFwGetMessage(&message, VD_FW_G.hwnd, 0, 0)) {
+            VdFwTranslateMessage(&message);
+            VdFwDispatchMessage(&message);
         }
     }
 
@@ -5774,28 +6191,28 @@ static void vd_fw__gl_debug_message_callback(GLenum source, GLenum type, GLuint 
 
 static int vd_fw__hit_test(int x, int y)
 {
-    POINT mouse;
+    VdFwPOINT mouse;
     mouse.x = x;
     mouse.y = y;
-    ScreenToClient(VD_FW_G.hwnd, &mouse);
+    VdFwScreenToClient(VD_FW_G.hwnd, &mouse);
 
-    RECT client;
-    GetClientRect(VD_FW_G.hwnd, &client);
+    VdFwRECT client;
+    VdFwGetClientRect(VD_FW_G.hwnd, &client);
     int width  = client.right - client.left;
     int height = client.bottom - client.top;
 
     /* The horizontal frame should be the same size as the vertical frame,
        since the NONCLIENTMETRICS structure does not distinguish between them */
-    int frame_size = GetSystemMetrics(SM_CXFRAME) +
-                     GetSystemMetrics(SM_CXPADDEDBORDER);
+    int frame_size = VdFwGetSystemMetrics(SM_CXFRAME) +
+                     VdFwGetSystemMetrics(SM_CXPADDEDBORDER);
     /* The diagonal size handles are wider than the frame */
-    int diagonal_width = frame_size * 2 + GetSystemMetrics(SM_CXBORDER);
+    int diagonal_width = frame_size * 2 + VdFwGetSystemMetrics(SM_CXBORDER);
 
-    if (!VD_FW_G.draw_decorations && IsMaximized(VD_FW_G.hwnd)) {
+    if (!VD_FW_G.draw_decorations && VdFwIsZoomed(VD_FW_G.hwnd)) {
         mouse.y += frame_size;
     }
 
-    if (!PtInRect(&client, mouse)) {
+    if (!VdFwPtInRect(&client, mouse)) {
         return HTNOWHERE;
     }
 
@@ -5899,7 +6316,7 @@ static void vd_fw__update_region(void)
 {
     RECT old_rgn = VD_FW_G.rgn;
 
-    if (IsMaximized(VD_FW_G.hwnd)) {
+    if (VdFwIsZoomed(VD_FW_G.hwnd)) {
         // @note(mdodis): If the window is maximized when get the client and window rects and set the region subtracted
         // by the overall window's top left coordinates
         WINDOWINFO window_info = {};
@@ -5930,15 +6347,15 @@ static void vd_fw__update_region(void)
         };
     }
 
-    if (EqualRect(&VD_FW_G.rgn, &old_rgn)) {
+    if (VdFwEqualRect(&VD_FW_G.rgn, &old_rgn)) {
         return;
     }
 
     RECT zero_rect = {0};
-    if (EqualRect(&VD_FW_G.rgn, &zero_rect)) {
-        SetWindowRgn(VD_FW_G.hwnd, NULL, TRUE);
+    if (VdFwEqualRect(&VD_FW_G.rgn, &zero_rect)) {
+        VdFwSetWindowRgn(VD_FW_G.hwnd, NULL, TRUE);
     } else {
-        SetWindowRgn(VD_FW_G.hwnd, VdFwCreateRectRgnIndirect(&VD_FW_G.rgn), TRUE);
+        VdFwSetWindowRgn(VD_FW_G.hwnd, VdFwCreateRectRgnIndirect(&VD_FW_G.rgn), TRUE);
     }
 }
 
@@ -5952,16 +6369,16 @@ static LRESULT vd_fw__nccalcsize(WPARAM wparam, LPARAM lparam)
     int borderless = !VD_FW_G.draw_decorations;
     if (wparam && borderless) {
 
-        NCCALCSIZE_PARAMS *params = (NCCALCSIZE_PARAMS*)lparam;
-        if (IsMaximized(VD_FW_G.hwnd)) {
-            HMONITOR monitor = MonitorFromWindow(VD_FW_G.hwnd, MONITOR_DEFAULTTONULL);
+        VdFwNCCALCSIZE_PARAMS *params = (VdFwNCCALCSIZE_PARAMS*)lparam;
+        if (VdFwIsZoomed(VD_FW_G.hwnd)) {
+            VdFwHMONITOR monitor = VdFwMonitorFromWindow(VD_FW_G.hwnd, MONITOR_DEFAULTTONULL);
             if (!monitor) {
                 return 0;
             }
 
-            MONITORINFO monitor_info = {0};
+            VdFwMONITORINFO monitor_info = {0};
             monitor_info.cbSize = sizeof(monitor_info);
-            if (!GetMonitorInfoW(monitor, &monitor_info)) {
+            if (!VdFwGetMonitorInfo(monitor, &monitor_info)) {
                 return 0;
             }
 
@@ -5973,7 +6390,7 @@ static LRESULT vd_fw__nccalcsize(WPARAM wparam, LPARAM lparam)
         }
 
     } else {
-        return DefWindowProcW(VD_FW_G.hwnd, WM_NCCALCSIZE, wparam, lparam);
+        return VdFwDefWindowProc(VD_FW_G.hwnd, WM_NCCALCSIZE, wparam, lparam);
     }
 }
 
@@ -6005,7 +6422,7 @@ static void vd_fw__window_pos_changed(WINDOWPOS *pos)
 
     if (VD_FW_G.draw_decorations) {
         RECT client;
-        GetClientRect(VD_FW_G.hwnd, &client);
+        VdFwGetClientRect(VD_FW_G.hwnd, &client);
         VD_FW_G.w = client.right - client.left;
         VD_FW_G.h = client.bottom - client.top;
 
@@ -6036,11 +6453,11 @@ static LRESULT vd_fw__handle_invisible(HWND hwnd, UINT msg, WPARAM wparam, LPARA
     // @note(mdodis): Prevent windows from drawing the default (Windows 7) titlebar and frames by toggling it temporarily
     VD_FW_WIN32_PROFILE_BEGIN(handle_invisible);
 
-    LONG_PTR old_style = GetWindowLongPtr(hwnd, GWL_STYLE);
+    VdFwLONG_PTR old_style = VdFwGetWindowLongPtr(hwnd, GWL_STYLE);
 
-    SetWindowLongPtrW(hwnd, GWL_STYLE, old_style & ~WS_VISIBLE);    
-    LRESULT result = DefWindowProcW(hwnd, msg, wparam, lparam);
-    SetWindowLongPtrW(hwnd, GWL_STYLE, old_style);
+    VdFwSetWindowLongPtr(hwnd, GWL_STYLE, old_style & ~WS_VISIBLE);    
+    VdFwLRESULT result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
+    VdFwSetWindowLongPtr(hwnd, GWL_STYLE, old_style);
 
     VD_FW_WIN32_PROFILE_END(handle_invisible);
 
@@ -6081,18 +6498,18 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
     switch (msg) {
 
         case WM_CLOSE: {
-            DestroyWindow(hwnd);
+            VdFwDestroyWindow(hwnd);
         } break;
 
         case WM_DESTROY: {
             ReleaseSemaphore(VD_FW_G.sem_closed, 1, NULL);
-            PostQuitMessage(0);
+            VdFwPostQuitMessage(0);
             VD_FW_G.t_running = FALSE;
         } break;
 
         case WM_DWMCOMPOSITIONCHANGED: {
             if (VD_FW_G.draw_decorations) {
-                result = DefWindowProc(hwnd, msg, wparam, lparam);
+                result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
 
                 BOOL enabled = FALSE;
                 VD_FW__CHECK_HRESULT(VdFwDwmIsCompositionEnabled(&enabled));
@@ -6107,8 +6524,8 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
             VD_FW_WIN32_PROFILE_BEGIN(wm_paint);
 
-            PAINTSTRUCT ps;
-            BeginPaint(hwnd, &ps);
+            VdFwPAINTSTRUCT ps;
+            VdFwBeginPaint(hwnd, &ps);
             EnterCriticalSection(&VD_FW_G.critical_section);
 
             if (VD_FW_G.w != VD_FW_G.next_frame.w || VD_FW_G.h != VD_FW_G.next_frame.h) {
@@ -6122,14 +6539,14 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             WakeConditionVariable(&VD_FW_G.cond_var);
             SleepConditionVariableCS(&VD_FW_G.cond_var, &VD_FW_G.critical_section, INFINITE);
             LeaveCriticalSection(&VD_FW_G.critical_section);
-            EndPaint(hwnd, &ps);
+            VdFwEndPaint(hwnd, &ps);
 
             VD_FW_WIN32_PROFILE_END(wm_paint);
         } break;
 
         case WM_NCPAINT: {
             if (VD_FW_G.draw_decorations) {
-                result = DefWindowProc(hwnd, msg, wparam, lparam);
+                result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
                 break;
             }
             // @note(mdodis): Theoretically, you should be able to DwmSetWindowAttribute(hwnd,
@@ -6176,7 +6593,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                 // PAINTSTRUCT ps;
                 // HDC hdc = BeginPaint(hwnd, &ps);
                 // FillRect(hdc, &ps.rcPaint, (HBRUSH)GetStockObject(BLACK_BRUSH));
-                result = DefWindowProc(hwnd, msg, wparam, lparam);
+                result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
 
                 // EndPaint(hwnd, &ps);
             }
@@ -6185,7 +6602,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
         case WM_DPICHANGED: {
             RECT *rect = (RECT*)lparam;
-            SetWindowPos(hwnd, 0, rect->left, rect->top, rect->right - rect->left, rect->bottom - rect->top, SWP_NOZORDER | SWP_NOACTIVATE);
+            VdFwSetWindowPos(hwnd, 0, rect->left, rect->top, rect->right - rect->left, rect->bottom - rect->top, SWP_NOZORDER | SWP_NOACTIVATE);
         } break;
 
         case WM_ERASEBKGND: {
@@ -6196,9 +6613,9 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             if (!VD_FW_G.draw_decorations) {
                 // @note(mdodis): DefWindowProc doesn't repaint border if lparam == -1
                 // See: https://blogs.msdn.microsoft.com/wpfsdk/2008/09/08/custom-window-chrome-in-wpf/
-                result = DefWindowProc(hwnd, msg, wparam, -1);
+                result = VdFwDefWindowProc(hwnd, msg, wparam, -1);
             } else {
-                result = DefWindowProc(hwnd, msg, wparam, lparam);
+                result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
             }
         } break;
 
@@ -6206,7 +6623,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             if (!VD_FW_G.draw_decorations) {
                 vd_fw__nccalcsize(wparam, lparam);
             } else {
-                result = DefWindowProc(hwnd, msg, wparam, lparam);
+                result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
             }
         } break;
 
@@ -6215,7 +6632,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             if (!VD_FW_G.draw_decorations) {
                 result = vd_fw__hit_test(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam));
             } else {
-                result = DefWindowProc(hwnd, msg, wparam, lparam);
+                result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
             }
         } break;
 
@@ -6224,7 +6641,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             if (!VD_FW_G.draw_decorations) {
                 result = 0;
             } else {
-                result = DefWindowProc(hwnd, msg, wparam, lparam);
+                result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
             }
         } break;
 
@@ -6234,10 +6651,10 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                 if (!VD_FW_G.composition_enabled && !VD_FW_G.theme_enabled) {
                     result = vd_fw__handle_invisible(hwnd, msg, wparam, lparam);
                 } else {
-                    result = DefWindowProc(hwnd, msg, wparam, lparam);
+                    result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
                 }
             } else {
-                result = DefWindowProc(hwnd, msg, wparam, lparam);
+                result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
             }
         } break;
 
@@ -6246,7 +6663,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                 vd_fw__theme_changed();
             }
 
-            result = DefWindowProc(hwnd, msg, wparam, lparam);
+            result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
         } break;
 
         // @note(mdodis): Theoretically, we _should_ handle WM_WINDOWPOSCHANGED, but we don't really need to since
@@ -6712,7 +7129,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                 case VK_SHIFT:   // converts to VK_LSHIFT or VK_RSHIFT
                 case VK_CONTROL: // converts to VK_LCONTROL or VK_RCONTROL
                 case VK_MENU:    // converts to VK_LMENU or VK_RMENU
-                    vkcode = LOWORD(MapVirtualKeyW(scancode, MAPVK_VSC_TO_VK_EX));
+                    vkcode = LOWORD(VdFwMapVirtualKey(scancode, MAPVK_VSC_TO_VK_EX));
                     break;
             }
 
@@ -6824,7 +7241,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                 }
 
                 RECT rect;
-                GetWindowRect(hwnd, &rect);
+                VdFwGetWindowRect(hwnd, &rect);
 
                 x -= rect.left;
                 y -= rect.top;
@@ -6839,7 +7256,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
         case VD_FW_WIN32_SHOW_CURSOR: {
             BOOL should_show = (BOOL)wparam;
-            ShowCursor(should_show);
+            VdFwShowCursor(should_show);
         } break;
 
         case VD_FW_WIN32_FULLSCREEN: {
@@ -6848,10 +7265,10 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
             if (should_be_fullscreen) {
 
-                GetWindowRect(VD_FW_G.hwnd, &VD_FW_G.windowed_rect);
-                GetWindowPlacement(VD_FW_G.hwnd, &VD_FW_G.last_window_placement);
+                VdFwGetWindowRect(VD_FW_G.hwnd, &VD_FW_G.windowed_rect);
+                VdFwGetWindowPlacement(VD_FW_G.hwnd, &VD_FW_G.last_window_placement);
 
-                HMONITOR monitor = MonitorFromWindow(VD_FW_G.hwnd, MONITOR_DEFAULTTOPRIMARY);
+                HMONITOR monitor = VdFwMonitorFromWindow(VD_FW_G.hwnd, MONITOR_DEFAULTTOPRIMARY);
                 MONITORINFO monitor_info = {0};
                 monitor_info.cbSize = sizeof(monitor_info);
                 VD_FW__CHECK_NONZERO(GetMonitorInfo(monitor, &monitor_info));
@@ -6859,16 +7276,16 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                 LONG style = VD_FW_G.last_window_style & ~(WS_OVERLAPPEDWINDOW);
                 style |= WS_VISIBLE;
 
-                SetWindowLong(VD_FW_G.hwnd, GWL_STYLE, style);
-                SetWindowPos(VD_FW_G.hwnd, HWND_TOP,
+                VdFwSetWindowLong(VD_FW_G.hwnd, GWL_STYLE, style);
+                VdFwSetWindowPos(VD_FW_G.hwnd, HWND_TOP,
                              monitor_info.rcMonitor.left, monitor_info.rcMonitor.top,
                              monitor_info.rcMonitor.right - monitor_info.rcMonitor.left,
                              monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top,
                              SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
             } else {
-                SetWindowLong(VD_FW_G.hwnd, GWL_STYLE, VD_FW_G.last_window_style);
-                SetWindowPlacement(VD_FW_G.hwnd, &VD_FW_G.last_window_placement);
-                SetWindowPos(VD_FW_G.hwnd, NULL,
+                VdFwSetWindowLong(VD_FW_G.hwnd, GWL_STYLE, VD_FW_G.last_window_style);
+                VdFwSetWindowPlacement(VD_FW_G.hwnd, &VD_FW_G.last_window_placement);
+                VdFwSetWindowPos(VD_FW_G.hwnd, NULL,
                              0,
                              0,
                              0,
@@ -6885,7 +7302,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             WORD height = HIWORD(lparam);
 
             RECT rect;
-            GetWindowRect(VD_FW_G.hwnd, &rect);
+            VdFwGetWindowRect(VD_FW_G.hwnd, &rect);
 
             RECT newrect;
             newrect.left = rect.left;
@@ -6893,7 +7310,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
             newrect.top = rect.top;
             newrect.bottom = rect.top + height;
 
-            SetWindowPos(VD_FW_G.hwnd, HWND_TOP,
+            VdFwSetWindowPos(VD_FW_G.hwnd, HWND_TOP,
                          newrect.left, newrect.top,
                          newrect.right - newrect.left,
                          newrect.bottom - newrect.top,
@@ -6902,11 +7319,11 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         } break;
 
         case VD_FW_WIN32_UPDATE_TITLE: {
-            SetWindowTextA(VD_FW_G.hwnd, VD_FW_G.title);
+            VdFwSetWindowTextA(VD_FW_G.hwnd, VD_FW_G.title);
         } break;
 
         case WM_MOUSEHWHEEL: {
-            if (!VD_FW_G.t_paint_ready) { result = DefWindowProc(hwnd, msg, wparam, lparam); break; }
+            if (!VD_FW_G.t_paint_ready) { result = VdFwDefWindowProc(hwnd, msg, wparam, lparam); break; }
             int delta = GET_WHEEL_DELTA_WPARAM(wparam);
             float dx = (float)delta / (float)WHEEL_DELTA;
             VdFw__Win32Message m;
@@ -6917,7 +7334,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         } break;
 
         case WM_MOUSEWHEEL: {
-            if (!VD_FW_G.t_paint_ready) { result = DefWindowProc(hwnd, msg, wparam, lparam); break; }
+            if (!VD_FW_G.t_paint_ready) { result = VdFwDefWindowProc(hwnd, msg, wparam, lparam); break; }
             int delta = GET_WHEEL_DELTA_WPARAM(wparam);
             float dy = (float)delta / (float)WHEEL_DELTA;
             VdFw__Win32Message m;
@@ -6928,7 +7345,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         } break;
 
         default: {
-            result = DefWindowProc(hwnd, msg, wparam, lparam);
+            result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
         } break;
     }    
     return result;
