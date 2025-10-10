@@ -3850,11 +3850,7 @@ static void vd_fw__load_opengl(VdFwGlVersion version);
 #if VD_FW_WIN32_LINKER_COMMENTS
 #pragma comment(lib, "User32.lib")
 #pragma comment(lib, "OpenGL32.lib")
-#pragma comment(lib, "Shcore.lib")
-#pragma comment(lib, "Gdi32.lib")
-#pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "kernel32.lib")
-#pragma comment(lib, "winmm.lib")
 #if VD_FW_WIN32_SUBSYSTEM == VD_FW_WIN32_SUBSYSTEM_CONSOLE
 #pragma comment(linker, "/subsystem:console")
 #else
@@ -3915,6 +3911,21 @@ VD_FW_DECLARE_HANDLE(VdFwHWND);
 VD_FW_DECLARE_HANDLE(VdFwHDC);
 VD_FW_DECLARE_HANDLE(VdFwHINSTANCE);
 typedef VdFwHINSTANCE VdFwHMODULE;
+
+typedef struct VdFwtagRECT
+{
+    VdFwLONG    left;
+    VdFwLONG    top;
+    VdFwLONG    right;
+    VdFwLONG    bottom;
+} VdFwRECT, * VdFwPRECT, * VdFwNPRECT, *VdFwLPRECT;
+
+/* ----Winmm.dll----------------------------------------------------------------------------------------------------- */
+typedef VdFwUINT VdFwMMRESULT;
+
+#define VD_FW_PROC_timeBeginPeriod(name) VdFwMMRESULT name(VdFwUINT uPeriod)
+typedef VD_FW_PROC_timeBeginPeriod(VdFwProctimeBeginPeriod);
+static VdFwProctimeBeginPeriod* VdFwtimeBeginPeriod;
 
 /* ----UxTheme.dll--------------------------------------------------------------------------------------------------- */
 typedef struct VdFw_MARGINS
@@ -3990,6 +4001,100 @@ static VdFwProcDwmSetWindowAttribute *VdFwDwmSetWindowAttribute;
 #define VD_FW_PROC_DwmFlush(name) VdFwHRESULT name()
 typedef VD_FW_PROC_DwmFlush(VdFwProcDwmFlush);
 static VdFwProcDwmFlush *VdFwDwmFlush;
+
+/* ----Gdi32.dll----------------------------------------------------------------------------------------------------- */
+VD_FW_DECLARE_HANDLE(VdFwHBITMAP);
+VD_FW_DECLARE_HANDLE(VdFwHRGN);
+
+typedef void* VdFwHGDIOBJ;
+
+typedef struct VdFwtagPIXELFORMATDESCRIPTOR
+{
+    VdFwWORD  nSize;
+    VdFwWORD  nVersion;
+    VdFwDWORD dwFlags;
+    VdFwBYTE  iPixelType;
+    VdFwBYTE  cColorBits;
+    VdFwBYTE  cRedBits;
+    VdFwBYTE  cRedShift;
+    VdFwBYTE  cGreenBits;
+    VdFwBYTE  cGreenShift;
+    VdFwBYTE  cBlueBits;
+    VdFwBYTE  cBlueShift;
+    VdFwBYTE  cAlphaBits;
+    VdFwBYTE  cAlphaShift;
+    VdFwBYTE  cAccumBits;
+    VdFwBYTE  cAccumRedBits;
+    VdFwBYTE  cAccumGreenBits;
+    VdFwBYTE  cAccumBlueBits;
+    VdFwBYTE  cAccumAlphaBits;
+    VdFwBYTE  cDepthBits;
+    VdFwBYTE  cStencilBits;
+    VdFwBYTE  cAuxBuffers;
+    VdFwBYTE  iLayerType;
+    VdFwBYTE  bReserved;
+    VdFwDWORD dwLayerMask;
+    VdFwDWORD dwVisibleMask;
+    VdFwDWORD dwDamageMask;
+} VdFwPIXELFORMATDESCRIPTOR, * VdFwPPIXELFORMATDESCRIPTOR, * VdFwLPPIXELFORMATDESCRIPTOR;
+
+typedef struct VdFwtagBITMAPINFOHEADER {
+    VdFwDWORD      biSize;
+    VdFwLONG       biWidth;
+    VdFwLONG       biHeight;
+    VdFwWORD       biPlanes;
+    VdFwWORD       biBitCount;
+    VdFwDWORD      biCompression;
+    VdFwDWORD      biSizeImage;
+    VdFwLONG       biXPelsPerMeter;
+    VdFwLONG       biYPelsPerMeter;
+    VdFwDWORD      biClrUsed;
+    VdFwDWORD      biClrImportant;
+} VdFwBITMAPINFOHEADER, * VdFwLPBITMAPINFOHEADER, * VdFwPBITMAPINFOHEADER;
+
+typedef struct VdFwtagRGBQUAD {
+    VdFwBYTE    rgbBlue;
+    VdFwBYTE    rgbGreen;
+    VdFwBYTE    rgbRed;
+    VdFwBYTE    rgbReserved;
+} VdFwRGBQUAD;
+
+typedef struct VdFwtagBITMAPINFO {
+    VdFwBITMAPINFOHEADER    bmiHeader;
+    VdFwRGBQUAD             bmiColors[1];
+} VdFwBITMAPINFO, * VdFwLPBITMAPINFO, * VdFwPBITMAPINFO;
+
+#define VD_FW_PROC_ChoosePixelFormat(name) int name(VdFwHDC hdc, const VdFwPIXELFORMATDESCRIPTOR *ppfd)
+typedef VD_FW_PROC_ChoosePixelFormat(VdFwProcChoosePixelFormat);
+static VdFwProcChoosePixelFormat *VdFwChoosePixelFormat;
+
+#define VD_FW_PROC_CreateBitmap(name) VdFwHBITMAP name(int nWidth, int nHeight, VdFwUINT nPlanes, VdFwUINT nBitCount, const void* lpBits)
+typedef VD_FW_PROC_CreateBitmap(VdFwProcCreateBitmap);
+static VdFwProcCreateBitmap *VdFwCreateBitmap;
+
+#define VD_FW_PROC_CreateRectRgnIndirect(name) VdFwHRGN name(const VdFwRECT *lprect)
+typedef VD_FW_PROC_CreateRectRgnIndirect(VdFwProcCreateRectRgnIndirect);
+static VdFwProcCreateRectRgnIndirect *VdFwCreateRectRgnIndirect;
+
+#define VD_FW_PROC_DescribePixelFormat(name) int name(VdFwHDC hdc, int iPixelFormat, VdFwUINT nBytes, VdFwLPPIXELFORMATDESCRIPTOR ppfd)
+typedef VD_FW_PROC_DescribePixelFormat(VdFwProcDescribePixelFormat);
+static VdFwProcDescribePixelFormat *VdFwDescribePixelFormat;
+
+#define VD_FW_PROC_GetStockObject(name) VdFwHGDIOBJ name(int i)
+typedef VD_FW_PROC_GetStockObject(VdFwProcGetStockObject);
+static VdFwProcGetStockObject *VdFwGetStockObject;
+
+#define VD_FW_PROC_SetPixelFormat(name) VdFwBOOL name(VdFwHDC hdc, int format, const VdFwPIXELFORMATDESCRIPTOR* ppfd)
+typedef VD_FW_PROC_SetPixelFormat(VdFwProcSetPixelFormat);
+static VdFwProcSetPixelFormat *VdFwSetPixelFormat;
+
+#define VD_FW_PROC_CreateDIBSection(name) VdFwHBITMAP name(VdFwHDC hdc, const VdFwBITMAPINFO* pbmi, VdFwUINT usage, void** ppvBits, VdFwHANDLE hSection, VdFwDWORD offset)
+typedef VD_FW_PROC_CreateDIBSection(VdFwProcCreateDIBSection);
+static VdFwProcCreateDIBSection *VdFwCreateDIBSection;
+
+#define VD_FW_PROC_SwapBuffers(name) VdFwBOOL name(VdFwHDC unnamedParam1)
+typedef VD_FW_PROC_SwapBuffers(VdFwProcSwapBuffers);
+static VdFwProcSwapBuffers *VdFwSwapBuffers;
 
 /* ----Hid.dll------------------------------------------------------------------------------------------------------- */
 typedef VdFwLONG                         VdFwNTSTATUS;
@@ -4185,10 +4290,7 @@ static VdFwProcHidP_GetUsageValue *VdFwHidP_GetUsageValue;
 #include <windows.h>
 #include <windowsx.h>
 #include <shellapi.h>
-#include <shellscalingapi.h>
 #include <versionhelpers.h>
-#include <timeapi.h>
-#include <setupapi.h>
 #undef NOGDICAPMASKS
 #undef NOMENUS
 #undef NOICONS
@@ -4799,6 +4901,12 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
     // Load Win32 Libraries
     {
+        // Winmm.dll
+        {
+            VdFwHMODULE m       = LoadLibraryA("Winmm.dll");
+            VdFwtimeBeginPeriod = (VdFwProctimeBeginPeriod*)GetProcAddress(m, "timeBeginPeriod");
+        }
+
         // UxTheme.dll
         {
             VdFwHMODULE m     = LoadLibraryA("UxTheme.dll");
@@ -4814,6 +4922,19 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
             VdFwDwmFlush                     =                     (VdFwProcDwmFlush*)GetProcAddress(m, "DwmFlush");
         }
 
+        // Gdi32.dll
+        {
+            VdFwHMODULE m             = LoadLibraryA("Gdi32.dll");
+            VdFwChoosePixelFormat     =     (VdFwProcChoosePixelFormat*)GetProcAddress(m, "ChoosePixelFormat");
+            VdFwCreateBitmap          =          (VdFwProcCreateBitmap*)GetProcAddress(m, "CreateBitmap");
+            VdFwCreateRectRgnIndirect = (VdFwProcCreateRectRgnIndirect*)GetProcAddress(m, "CreateRectRgnIndirect");
+            VdFwDescribePixelFormat   =   (VdFwProcDescribePixelFormat*)GetProcAddress(m, "DescribePixelFormat");
+            VdFwGetStockObject        =        (VdFwProcGetStockObject*)GetProcAddress(m, "GetStockObject");
+            VdFwSetPixelFormat        =        (VdFwProcSetPixelFormat*)GetProcAddress(m, "SetPixelFormat");
+            VdFwCreateDIBSection      =      (VdFwProcCreateDIBSection*)GetProcAddress(m, "CreateDIBSection");
+            VdFwSwapBuffers           =           (VdFwProcSwapBuffers*)GetProcAddress(m, "SwapBuffers");
+        }
+
         // Hid.dll
         {
             VdFwHMODULE m          = LoadLibraryA("Hid.dll");
@@ -4826,7 +4947,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     }
     // SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-    timeBeginPeriod(1);
+    VdFwtimeBeginPeriod(1);
     QueryPerformanceFrequency(&VD_FW_G.frequency);
 
     VD_FW_G.focused = 1;
@@ -4914,8 +5035,8 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
           0,                                // Reserved
           0, 0, 0                           // Layer Masks Ignored
         };
-        int pf = ChoosePixelFormat(VD_FW_G.hdc, &pfd);
-        SetPixelFormat(VD_FW_G.hdc, pf, &pfd);
+        int pf = VdFwChoosePixelFormat(VD_FW_G.hdc, &pfd);
+        VdFwSetPixelFormat(VD_FW_G.hdc, pf, &pfd);
 
         HGLRC temp_context = wglCreateContext(VD_FW_G.hdc);
         VD_FW__CHECK_NULL(temp_context);
@@ -4985,8 +5106,8 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         VD_FW__CHECK_TRUE(wglChoosePixelFormatARB(VD_FW_G.hdc, pixel_attribs, NULL, 1, &pixel_format, &num_formats));
 
         PIXELFORMATDESCRIPTOR pfdchosen;
-        DescribePixelFormat(VD_FW_G.hdc, pixel_format, sizeof(pfdchosen), &pfdchosen);
-        SetPixelFormat(VD_FW_G.hdc, pf, &pfdchosen);
+        VdFwDescribePixelFormat(VD_FW_G.hdc, pixel_format, sizeof(pfdchosen), &pfdchosen);
+        VdFwSetPixelFormat(VD_FW_G.hdc, pf, &pfdchosen);
 
         VD_FW_G.hglrc = wglCreateContextAttribsARB(VD_FW_G.hdc, 0, attribs);
 
@@ -5152,7 +5273,7 @@ VD_FW_API int vd_fw_running(void)
 
 VD_FW_API int vd_fw_swap_buffers(void)
 {
-    SwapBuffers(VD_FW_G.hdc);
+    VdFwSwapBuffers(VD_FW_G.hdc);
     // @note(mdodis): This needs to happen, otherwise the window animations and taskbar don't get redrawn if the window
     // is maximized to either section of the screen or the whole screen
     VdFwDwmFlush();
@@ -5364,8 +5485,8 @@ VD_FW_API void vd_fw_set_title(const char *title)
 
 VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
 {
-    BITMAPINFO bmi = {0};
-    bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
+    VdFwBITMAPINFO bmi = {0};
+    bmi.bmiHeader.biSize        = sizeof(VdFwBITMAPINFOHEADER);
     bmi.bmiHeader.biWidth       = width;
     bmi.bmiHeader.biHeight      = height;
     bmi.bmiHeader.biPlanes      = 1;
@@ -5374,9 +5495,9 @@ VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
 
     void *bits = 0;
     HDC hdc = GetDC(NULL);
-    HBITMAP hbitmap = CreateDIBSection(hdc, &bmi, DIB_RGB_COLORS, &bits, NULL, 0);
+    VdFwHBITMAP hbitmap = VdFwCreateDIBSection(hdc, &bmi, DIB_RGB_COLORS, &bits, NULL, 0);
     VD_FW__CHECK_NULL(hbitmap);
-    HBITMAP hmaskbitmap = CreateBitmap(width, height, 1, 1, NULL);
+    VdFwHBITMAP hmaskbitmap = VdFwCreateBitmap(width, height, 1, 1, NULL);
     VD_FW__CHECK_NULL(hmaskbitmap);
     ReleaseDC(NULL, hdc);
 
@@ -5449,7 +5570,7 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     wcx.hInstance      = NULL;
     wcx.lpfnWndProc    = vd_fw__wndproc;
     wcx.lpszClassName  = TEXT("FWCLASS");
-    wcx.hbrBackground  = (HBRUSH)GetStockObject(BLACK_BRUSH);
+    wcx.hbrBackground  = (HBRUSH)VdFwGetStockObject(BLACK_BRUSH);
     wcx.hCursor        = LoadCursor(NULL, IDC_ARROW);
     if (!RegisterClassEx(&wcx)) {
         return 0;
@@ -5817,7 +5938,7 @@ static void vd_fw__update_region(void)
     if (EqualRect(&VD_FW_G.rgn, &zero_rect)) {
         SetWindowRgn(VD_FW_G.hwnd, NULL, TRUE);
     } else {
-        SetWindowRgn(VD_FW_G.hwnd, CreateRectRgnIndirect(&VD_FW_G.rgn), TRUE);
+        SetWindowRgn(VD_FW_G.hwnd, VdFwCreateRectRgnIndirect(&VD_FW_G.rgn), TRUE);
     }
 }
 
