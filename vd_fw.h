@@ -4083,7 +4083,7 @@ typedef struct VdFw__Win32GamepadInfo {
     int                  connected;
     PHIDP_PREPARSED_DATA ppd;
     VdFwGamepadConfig    config;
-    int                  rz_exists;
+    int                  splitz;
 } VdFw__Win32GamepadInfo;
 
 typedef struct {
@@ -5638,6 +5638,19 @@ static unsigned char vd_fw__map_usb_id_to_input(int usage)
     }
 }
 
+static unsigned char vd_fw__map_axial_usage_to_axis(int usage)
+{
+    switch (usage) {
+        case 0x30: return VD_FW_GAMEPAD_LH;
+        case 0x31: return VD_FW_GAMEPAD_LV;
+        case 0x32: return VD_FW_GAMEPAD_LT;
+        case 0x33: return VD_FW_GAMEPAD_RH;
+        case 0x34: return VD_FW_GAMEPAD_RV;
+        case 0x35: return VD_FW_GAMEPAD_RT;
+        default: return 0xFF;
+    }
+}
+
 static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
     LRESULT result = 0;
@@ -5925,9 +5938,33 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                                 LONG min_value = gamepad_info->config.axial_mappings[i].min_value;
                                 LONG max_value = gamepad_info->config.axial_mappings[i].max_value;
 
+                                // Clamp known value
+
                                 float value01 = 0.f;
-                                if (max_value > min_value) {
+                                if (gamepad_info->config.axial_mappings[i].input <= VD_FW_GAMEPAD_RV) {
                                     value01 = (float)(value - min_value) / (float)(max_value - min_value);
+                                    value01 *= 2.f;
+                                    value01 -= 1.f;
+                                } else {
+                                    if (max_value > min_value) {
+                                        if ((LONG)value < min_value) {
+                                            value = min_value;
+                                        } else if ((LONG)value > max_value) {
+                                            value = max_value;
+                                        }
+
+                                        value01 = (float)(value - min_value) / (float)(max_value - min_value);
+                                    } else {
+
+                                        if ((LONG)value < max_value) {
+                                            value = max_value;
+                                        } else if ((LONG)value > min_value) {
+                                            value = min_value;
+                                        }
+
+                                        value01 = (float)(value - max_value) / (float)(min_value - max_value);
+                                        value01 = 1.0f - value01;
+                                    }
                                 }
 
                                 VD_FW_G.gamepad_curr_states[0].axes[gamepad_info->config.axial_mappings[i].input] = value01;
@@ -6022,6 +6059,7 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                 new_gamepad->config.num_digital_mappings = 0;
                 new_gamepad->config.num_axial_mappings = 0;
                 new_gamepad->config.num_hat_switch_mappings = 0;
+                new_gamepad->splitz = 1;
                 new_gamepad->handle = device_handle;
                 for (int i = 0; i < 16; ++i) new_gamepad->guid[i] = guid[i];
                 new_gamepad->connected = TRUE;
@@ -6047,7 +6085,10 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                             for (unsigned short j = 0; j < count; ++j) {
                                 unsigned short usage = button_caps[i].Range.UsageMin + j;
                                 unsigned char input_value = vd_fw__map_usb_id_to_input(usage);
-                                if (input_value == VD_FW_GAMEPAD_UNKNOWN) continue;
+
+                                if (input_value == VD_FW_GAMEPAD_UNKNOWN) {
+                                    continue;
+                                }
 
                                 int idx = new_gamepad->config.num_digital_mappings++;
                                 new_gamepad->config.digital_mappings[idx].input = input_value;
@@ -6057,7 +6098,10 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
                             unsigned short usage = button_caps[i].NotRange.Usage;
                             unsigned char input_value = vd_fw__map_usb_id_to_input(usage);
-                            if (input_value == VD_FW_GAMEPAD_UNKNOWN) continue;
+
+                            if (input_value == VD_FW_GAMEPAD_UNKNOWN) {
+                                continue;
+                            }
 
                             int idx = new_gamepad->config.num_digital_mappings++;
                             new_gamepad->config.digital_mappings[idx].input = input_value;
@@ -6075,8 +6119,8 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                         if (value_caps[i].IsRange)
                             continue;
 
-                        // Usage 0x0039: GENERIC HAT
                         if (value_caps[i].NotRange.Usage == 0x0039) {
+                            // Usage 0x0039: GENERIC HAT
                             // We compute logical range reported by the hat switch
                             // - For LogicalMin: 1, LogicalMax: 4:
                             //   > We know that the hat switch can only encode 4 different directions at a time:
@@ -6091,55 +6135,113 @@ static LRESULT vd_fw__wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                             new_gamepad->config.hat_switch_mappings[0].ids[2] = 0x04;
                             new_gamepad->config.hat_switch_mappings[0].ids[3] = 0x08;
                             new_gamepad->config.num_hat_switch_mappings = 1;
+                        } else if ((value_caps[i].NotRange.Usage >= 0x30) && (value_caps[i].NotRange.Usage <= 0x35)) {
+                            // Usages 0x0030 - 0x0035: X,Y,Z,Rx,Ry,Rz
+                            unsigned char axis_input = vd_fw__map_axial_usage_to_axis(value_caps[i].NotRange.Usage);
+
+                            printf("Axis: %02x (%2d)\n", value_caps[i].NotRange.Usage, value_caps[i].NotRange.Usage);
+                            printf("--------------------\n");
+                            printf("DataIndex: %d\n", value_caps[i].NotRange.DataIndex);
+                            printf("ReportCount: %d\n", value_caps[i].ReportCount);
+                            printf("--------------------\n");
+                            if (axis_input == 0xFF) {
+                                continue;
+                            }
+
+                            if (value_caps[i].NotRange.Usage == 0x35) {
+                                new_gamepad->splitz = 0;
+                            }
+
+                            int min_value = value_caps[i].LogicalMin;
+                            int max_value = value_caps[i].LogicalMax;
+
+                            if (max_value == -1) {
+                                max_value = (1u << value_caps[i].BitSize) - 1;
+                            }
+
+                            int idx = new_gamepad->config.num_axial_mappings++;
+                            new_gamepad->config.axial_mappings[idx].id = value_caps[i].NotRange.Usage;
+                            new_gamepad->config.axial_mappings[idx].input = axis_input;
+                            new_gamepad->config.axial_mappings[idx].min_value = min_value;
+                            new_gamepad->config.axial_mappings[idx].max_value = max_value;
+
+                        }
+                    }
+
+                    if (new_gamepad->splitz) {
+
+                        // Find LT
+                        int lt_idx = -1;
+                        for (int i = 0; i < new_gamepad->config.num_axial_mappings; ++i) {
+                            if (new_gamepad->config.axial_mappings[i].input == VD_FW_GAMEPAD_LT) {
+                                lt_idx = i;
+                                break;
+                            }
+                        }
+
+                        if (lt_idx != -1) {
+                            int lt_min = new_gamepad->config.axial_mappings[lt_idx].min_value;
+                            int lt_max = new_gamepad->config.axial_mappings[lt_idx].max_value;
+                            int lt_range = lt_max - lt_min;
+                            int lt_middle = lt_min + (lt_range / 2);
+
+                            int idx = new_gamepad->config.num_axial_mappings++;
+                            new_gamepad->config.axial_mappings[idx].id = new_gamepad->config.axial_mappings[lt_idx].id;
+                            new_gamepad->config.axial_mappings[idx].input = VD_FW_GAMEPAD_RT;
+                            new_gamepad->config.axial_mappings[idx].min_value = lt_middle;
+                            new_gamepad->config.axial_mappings[idx].max_value = lt_min;
+
+                            new_gamepad->config.axial_mappings[lt_idx].min_value = lt_middle;
+                            new_gamepad->config.axial_mappings[lt_idx].max_value = lt_max;
                         }
 
                     }
                 }
 
-                unsigned short a0 = 0x30;
-                unsigned short a1 = 0x31;
-                unsigned short a2 = 0x32;
-                unsigned short a3 = 0x33;
-                unsigned short a4 = 0x34;
-                unsigned short a5 = 0x35;
+                // unsigned short a0 = 0x30;
+                // unsigned short a1 = 0x31;
+                // unsigned short a2 = 0x32;
+                // unsigned short a3 = 0x33;
+                // unsigned short a4 = 0x34;
+                // unsigned short a5 = 0x35;
 
-                new_gamepad->config.axial_mappings[0].id         = a0;
-                new_gamepad->config.axial_mappings[0].input      = VD_FW_GAMEPAD_LH;
-                (vd_fw__get_min_max_axial_value(new_gamepad->ppd, 0x01, a0,
-                                               &new_gamepad->config.axial_mappings[0].min_value,
-                                               &new_gamepad->config.axial_mappings[0].max_value));
+                // new_gamepad->config.axial_mappings[0].id         = a0;
+                // new_gamepad->config.axial_mappings[0].input      = VD_FW_GAMEPAD_LH;
+                // (vd_fw__get_min_max_axial_value(new_gamepad->ppd, 0x01, a0,
+                //                                &new_gamepad->config.axial_mappings[0].min_value,
+                //                                &new_gamepad->config.axial_mappings[0].max_value));
 
-                new_gamepad->config.axial_mappings[1].id         = a1;
-                new_gamepad->config.axial_mappings[1].input      = VD_FW_GAMEPAD_LV;
-                (vd_fw__get_min_max_axial_value(new_gamepad->ppd, 0x01, a1,
-                                               &new_gamepad->config.axial_mappings[1].min_value,
-                                               &new_gamepad->config.axial_mappings[1].max_value));
+                // new_gamepad->config.axial_mappings[1].id         = a1;
+                // new_gamepad->config.axial_mappings[1].input      = VD_FW_GAMEPAD_LV;
+                // (vd_fw__get_min_max_axial_value(new_gamepad->ppd, 0x01, a1,
+                //                                &new_gamepad->config.axial_mappings[1].min_value,
+                //                                &new_gamepad->config.axial_mappings[1].max_value));
 
-                new_gamepad->config.axial_mappings[2].id         = a3;
-                new_gamepad->config.axial_mappings[2].input      = VD_FW_GAMEPAD_RH;
-                (vd_fw__get_min_max_axial_value(new_gamepad->ppd, 0x01, a3,
-                                               &new_gamepad->config.axial_mappings[2].min_value,
-                                               &new_gamepad->config.axial_mappings[2].max_value));
+                // new_gamepad->config.axial_mappings[2].id         = a3;
+                // new_gamepad->config.axial_mappings[2].input      = VD_FW_GAMEPAD_RH;
+                // (vd_fw__get_min_max_axial_value(new_gamepad->ppd, 0x01, a3,
+                //                                &new_gamepad->config.axial_mappings[2].min_value,
+                //                                &new_gamepad->config.axial_mappings[2].max_value));
 
-                new_gamepad->config.axial_mappings[3].id         = a4;
-                new_gamepad->config.axial_mappings[3].input      = VD_FW_GAMEPAD_RV;
-                (vd_fw__get_min_max_axial_value(new_gamepad->ppd, 0x01, a4,
-                                               &new_gamepad->config.axial_mappings[3].min_value,
-                                               &new_gamepad->config.axial_mappings[3].max_value));
+                // new_gamepad->config.axial_mappings[3].id         = a4;
+                // new_gamepad->config.axial_mappings[3].input      = VD_FW_GAMEPAD_RV;
+                // (vd_fw__get_min_max_axial_value(new_gamepad->ppd, 0x01, a4,
+                //                                &new_gamepad->config.axial_mappings[3].min_value,
+                //                                &new_gamepad->config.axial_mappings[3].max_value));
 
-                new_gamepad->config.axial_mappings[4].id         = a2;
-                new_gamepad->config.axial_mappings[4].input      = VD_FW_GAMEPAD_LT;
-                (vd_fw__get_min_max_axial_value(new_gamepad->ppd, 0x01, a2,
-                                               &new_gamepad->config.axial_mappings[4].min_value,
-                                               &new_gamepad->config.axial_mappings[4].max_value));
+                // new_gamepad->config.axial_mappings[4].id         = a2;
+                // new_gamepad->config.axial_mappings[4].input      = VD_FW_GAMEPAD_LT;
+                // (vd_fw__get_min_max_axial_value(new_gamepad->ppd, 0x01, a2,
+                //                                &new_gamepad->config.axial_mappings[4].min_value,
+                //                                &new_gamepad->config.axial_mappings[4].max_value));
 
-                new_gamepad->config.axial_mappings[5].id         = a5;
-                new_gamepad->config.axial_mappings[5].input      = VD_FW_GAMEPAD_RT;
-                (vd_fw__get_min_max_axial_value(new_gamepad->ppd, 0x01, a5,
-                                               &new_gamepad->config.axial_mappings[5].min_value,
-                                               &new_gamepad->config.axial_mappings[5].max_value));
-                new_gamepad->config.num_axial_mappings = 6;
-                // @todo(mdodis): first figure out what is a1..a5 then map the behavior
+                // new_gamepad->config.axial_mappings[5].id         = a5;
+                // new_gamepad->config.axial_mappings[5].input      = VD_FW_GAMEPAD_RT;
+                // (vd_fw__get_min_max_axial_value(new_gamepad->ppd, 0x01, a5,
+                //                                &new_gamepad->config.axial_mappings[5].min_value,
+                //                                &new_gamepad->config.axial_mappings[5].max_value));
+                // new_gamepad->config.num_axial_mappings = 6;
+                // // @todo(mdodis): first figure out what is a1..a5 then map the behavior
 
             } else {
 

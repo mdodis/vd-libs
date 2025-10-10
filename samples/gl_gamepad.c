@@ -578,14 +578,14 @@ static void transform_controller_info(ControllerInfo *info, float x, float y, fl
     // LEFT STICK
     info->stick_l_dim[0] = Base_Controller_Info.stick_l_dim[0] * ratio;
     info->stick_l_dim[1] = Base_Controller_Info.stick_l_dim[1] * ratio;
-    info->stick_l_pos[0] = Base_Controller_Info.stick_l_pos[0] * ratio + x + (info->stick_l_value[0] - 0.5f) * info->stick_l_dim[0] * 0.5f;
-    info->stick_l_pos[1] = Base_Controller_Info.stick_l_pos[1] * ratio + y + (info->stick_l_value[1] - 0.5f) * info->stick_l_dim[1] * 0.5f;
+    info->stick_l_pos[0] = Base_Controller_Info.stick_l_pos[0] * ratio + x + (info->stick_l_value[0] * 0.5f) * info->stick_l_dim[0] * 0.5f;
+    info->stick_l_pos[1] = Base_Controller_Info.stick_l_pos[1] * ratio + y + (info->stick_l_value[1] * 0.5f) * info->stick_l_dim[1] * 0.5f;
 
     // RIGHT STICK
     info->stick_r_dim[0] = Base_Controller_Info.stick_r_dim[0] * ratio;
     info->stick_r_dim[1] = Base_Controller_Info.stick_r_dim[1] * ratio;
-    info->stick_r_pos[0] = Base_Controller_Info.stick_r_pos[0] * ratio + x + (info->stick_r_value[0] - 0.5f) * info->stick_r_dim[0] * 0.5f;
-    info->stick_r_pos[1] = Base_Controller_Info.stick_r_pos[1] * ratio + y + (info->stick_r_value[1] - 0.5f) * info->stick_r_dim[1] * 0.5f;
+    info->stick_r_pos[0] = Base_Controller_Info.stick_r_pos[0] * ratio + x + (info->stick_r_value[0] * 0.5f) * info->stick_r_dim[0] * 0.5f;
+    info->stick_r_pos[1] = Base_Controller_Info.stick_r_pos[1] * ratio + y + (info->stick_r_value[1] * 0.5f) * info->stick_r_dim[1] * 0.5f;
 
     // LT BAR
     info->lt_bar_dim[0] = Base_Controller_Info.lt_bar_dim[0] * ratio;
