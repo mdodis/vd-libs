@@ -227,6 +227,34 @@ int main() {
             }
 
             @tr() {
+                @td() { text{<code>#define VD_FW_MEMCPY</code>}}
+                @td() {
+                    text {
+                        Can be predefined to your implementation of memcpy.
+                        Options:
+                        <ul>
+                            <li>If <code>VD_FW_NO_CRT == 1</code> it's resolved to libc <code>memcpy</code></li>
+                            <li>If <code>VD_FW_NO_CRT == 0</code> it's resolved to vd_fw_memcpy (custom implementation).</li>
+                        </ul>
+                    }
+                }
+            }
+
+            @tr() {
+                @td() { text{<code>#define VD_FW_MEMSET</code>}}
+                @td() {
+                    text {
+                        Can be predefined to your implementation of memset.
+                        Options:
+                        <ul>
+                            <li>If <code>VD_FW_NO_CRT == 1</code> it's resolved to libc <code>memset</code></li>
+                            <li>If <code>VD_FW_NO_CRT == 0</code> it's resolved to vd_fw_memset (custom implementation).</li>
+                        </ul>
+                    }
+                }
+            }
+
+            @tr() {
                 @td() {
                     text {
                         <code>#define VD_FW_PREFER_DISCRETE_GPU</code><br>
@@ -276,22 +304,64 @@ int main() {
 
     @section("Windows") {
         para {
-            With MSVC you don't really need to link anything, since linker directives in the
+            With MSVC you don't really need to link anything since linker directives in the
             translation unit that includes vd_fw.h are defined, so that the appropriate libraries
-            and subsystem are used. But for reference, here they are:
+            and subsystem are used. Additionally, several core libraries are <b>dynamically</b> loaded in vd_fw_init.
+            The only library required during compilation is <code>kernel32.lib</code>.
 
             <ol class="list-group">
                 <li class="list-group-item">User32</li>
                 <li class="list-group-item">OpenGL32</li>
                 <li class="list-group-item">Dwmapi</li>
-                <li class="list-group-item">Shcore</li>
                 <li class="list-group-item">Gdi32</li>
                 <li class="list-group-item">uxtheme</li>
                 <li class="list-group-item">shell32</li>
-                <li class="list-group-item">kernel32</li>
                 <li class="list-group-item">winmm</li>
             </ol>
             <br>
+        }
+
+        para {
+            This library tries as much as possible to reduce the amount of code brought in with the (notoriously large)
+            Windows includes. This is done by manually declaring enumerations, preprocessor macros, function signatures,
+            and structures right inside the implementation part of the library. This looks like this:
+        }
+
+        verb```
+typedef struct VdFwtagRGBQUAD {
+    VdFwBYTE    rgbBlue;
+    VdFwBYTE    rgbGreen;
+    VdFwBYTE    rgbRed;
+    VdFwBYTE    rgbReserved;
+} VdFwRGBQUAD;
+
+typedef struct VdFwtagBITMAPINFO {
+    VdFwBITMAPINFOHEADER    bmiHeader;
+    VdFwRGBQUAD             bmiColors[1];
+} VdFwBITMAPINFO, * VdFwLPBITMAPINFO, * VdFwPBITMAPINFO;
+
+#define VD_FW_PROC_ChoosePixelFormat(name) int name(VdFwHDC hdc, const VdFwPIXELFORMATDESCRIPTOR *ppfd)
+typedef VD_FW_PROC_ChoosePixelFormat(VdFwProcChoosePixelFormat);
+static VdFwProcChoosePixelFormat *VdFwChoosePixelFormat;
+
+#define VD_FW_PROC_CreateBitmap(name) VdFwHBITMAP name(int nWidth, int nHeight, VdFwUINT nPlanes, VdFwUINT nBitCount, const void* lpBits)
+typedef VD_FW_PROC_CreateBitmap(VdFwProcCreateBitmap);
+static VdFwProcCreateBitmap *VdFwCreateBitmap;
+        ```
+
+        para {
+            The relevant functions are then loaded when you call vd_fw_init:
+        }
+
+        verb```
+HMODULE m             = LoadLibraryA("Gdi32.dll");
+VdFwChoosePixelFormat     =     (VdFwProcChoosePixelFormat*)GetProcAddress(m, "ChoosePixelFormat");
+VdFwCreateBitmap          =          (VdFwProcCreateBitmap*)GetProcAddress(m, "CreateBitmap");
+        ```
+
+        para {
+            Note that all platform specific functions/typedefs/structs are prefixed with 'VdFw' or 'VD_FW_' so as not to
+            induce collisions in cases where you need to include Windows functionality yourself.
         }
 
         para {

@@ -4556,7 +4556,6 @@ typedef struct VdFw_AppBarData
     VdFwLPARAM lParam;
 } VdFwAPPBARDATA, * VdFwPAPPBARDATA;
 
-
 #define VD_FW_PROC_GetMessageA(name) VdFwBOOL name(VdFwLPMSG lpMsg, VdFwHWND hWnd, VdFwUINT wMsgFilterMin, VdFwUINT wMsgFilterMax)
 typedef VD_FW_PROC_GetMessageA(VdFwProcGetMessageA);
 static VdFwProcGetMessageA *VdFwGetMessageA;
