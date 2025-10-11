@@ -43,7 +43,7 @@
                         }
                         @p(class="card-text") {
                             text {
-                                Windowing & OpenGL library
+                                Windowing Library
                             }
                         }
                     }
