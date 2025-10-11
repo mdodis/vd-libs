@@ -27,10 +27,11 @@
  *
  * TODO
  * - Expose customizable function pointer if the user needs to do something platform-specific before/after winthread has initialized or before vd_fw_init returns anyways.
+ * - Have a way for a user to request OpenGL extensions/versions via a precedence array, and initialize the maximum possible version
+ * - Use bit flags for buttons, an array is a bit overkill
  * - L3/R3
  * - L4/R4, L5/R5, and maybe a secondary steam controller axis?
  * - Game Controller DB
- * - Use or don't use stdlib memcpy
  * - Properly handle vd_fw_set_receive_ncmouse for clicks and scrolls
  * - Set mouse cursor to constants (resize, I, etc...)
  * - Should vd_fw_set_receive_ncmouse be default 0 or 1?
