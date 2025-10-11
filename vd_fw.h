@@ -28,8 +28,6 @@
  *
  * TODO
  * - Expose customizable function pointer if the user needs to do something platform-specific before/after winthread has initialized or before vd_fw_init returns anyways.
- * - Don't include windows.h, instead defining our own stuff.
- * - Fix all warnings on windows
  * - Use XInput in tandem with RAWINPUT
  * - Game Controller DB
  * - Use or don't use stdlib memcpy
@@ -4279,6 +4277,8 @@ typedef struct VdFwtagRECT
 #define VD_FW_GET_X_LPARAM(lp)  ((int)(short)LOWORD(lp))
 #define VD_FW_GET_Y_LPARAM(lp)  ((int)(short)HIWORD(lp))
 
+#define VD_FW_WM_USER 0x0400
+
 typedef VdFwLRESULT(*VdFwWNDPROC)(VdFwHWND, VdFwUINT, VdFwWPARAM, VdFwLPARAM);
 
 VD_FW_DECLARE_HANDLE(VdFwHICON);
@@ -5126,113 +5126,11 @@ typedef VD_FW_PROC_HidP_GetUsageValue(VdFwProcHidP_GetUsageValue);
 static VdFwProcHidP_GetUsageValue *VdFwHidP_GetUsageValue;
 
 /* ----Winnt.h------------------------------------------------------------------------------------------------------- */
-typedef struct VdFw_OSVERSIONINFOEXA {
-    VdFwDWORD dwOSVersionInfoSize;
-    VdFwDWORD dwMajorVersion;
-    VdFwDWORD dwMinorVersion;
-    VdFwDWORD dwBuildNumber;
-    VdFwDWORD dwPlatformId;
-    VdFwCHAR   szCSDVersion[128];
-    VdFwWORD   wServicePackMajor;
-    VdFwWORD   wServicePackMinor;
-    VdFwWORD   wSuiteMask;
-    VdFwBYTE  wProductType;
-    VdFwBYTE  wReserved;
-} VdFwOSVERSIONINFOEXA, * VdFwPOSVERSIONINFOEXA, * VdFwLPOSVERSIONINFOEXA;
-typedef struct VdFw_OSVERSIONINFOEXW {
-    VdFwDWORD dwOSVersionInfoSize;
-    VdFwDWORD dwMajorVersion;
-    VdFwDWORD dwMinorVersion;
-    VdFwDWORD dwBuildNumber;
-    VdFwDWORD dwPlatformId;
-    VdFwWCHAR  szCSDVersion[128];
-    VdFwWORD   wServicePackMajor;
-    VdFwWORD   wServicePackMinor;
-    VdFwWORD   wSuiteMask;
-    VdFwBYTE  wProductType;
-    VdFwBYTE  wReserved;
-} VdFwOSVERSIONINFOEXW, * VdFwPOSVERSIONINFOEXW, * VdFwLPOSVERSIONINFOEXW, VdFwRTL_OSVERSIONINFOEXW, * VdFwPRTL_OSVERSIONINFOEXW;
-#ifdef UNICODE
-#define VdFwOSVERSIONINFOEX     VdFwOSVERSIONINFOEXW
-#define VdFwPOSVERSIONINFOEX    VdFwPOSVERSIONINFOEXW
-#define VdFwLPOSVERSIONINFOEX   VdFwLPOSVERSIONINFOEXW
-#else
-#define VdFwOSVERSIONINFOEX     VdFwOSVERSIONINFOEXA
-#define VdFwPOSVERSIONINFOEX    VdFwPOSVERSIONINFOEXA
-#define VdFwLPOSVERSIONINFOEX   VdFwLPOSVERSIONINFOEXA
-#endif // UNICODE
-
-#define VD_FW_VER_MINORVERSION                0x0000001
-#define VD_FW_VER_MAJORVERSION                0x0000002
-#define VD_FW_VER_BUILDNUMBER                 0x0000004
-#define VD_FW_VER_SERVICEPACKMINOR            0x0000010
-#define VD_FW_VER_SERVICEPACKMAJOR            0x0000020
-#define VD_FW_VER_EQUAL                       1
-#define VD_FW_VER_GREATER                     2
-#define VD_FW_VER_GREATER_EQUAL               3
-#define VD_FW_VER_LESS                        4
-#define VD_FW_VER_LESS_EQUAL                  5
-#define VD_FW_VER_AND                         6
-#define VD_FW_VER_OR                          7
-#define VD_FW_VER_CONDITION_MASK              7
-#define VD_FW_VER_NUM_BITS_PER_CONDITION_MASK 3
-
 #define VD_FW_LOWORD(l)           ((VdFwWORD)(((VdFwDWORD_PTR)(l)) & 0xffff))
 #define VD_FW_HIWORD(l)           ((VdFwWORD)((((VdFwDWORD_PTR)(l)) >> 16) & 0xffff))
 #define VD_FW_LOBYTE(w)           ((VdFwBYTE)(((VdFwDWORD_PTR)(w)) & 0xff))
 #define VD_FW_HIBYTE(w)           ((VdFwBYTE)((((VdFwDWORD_PTR)(w)) >> 8) & 0xff))
-
-#ifdef UNICODE
-#define VerifyVersionInfo  VerifyVersionInfoW
-#else
-#define VerifyVersionInfo  VerifyVersionInfoA
-#endif // !UNICODE
-
-#if defined(__cplusplus)
-extern "C" {
-#endif
-
-__declspec(dllimport) VdFwBOOL __stdcall VerifyVersionInfoA(VdFwLPOSVERSIONINFOEXA osvi, VdFwDWORD dwTypeMask, VdFwDWORDLONG dwlConditionMask);
-__declspec(dllimport) VdFwBOOL __stdcall VerifyVersionInfoW(VdFwLPOSVERSIONINFOEXW osvi, VdFwDWORD dwTypeMask, VdFwDWORDLONG dwlConditionMask);
-__declspec(dllimport) VdFwULONGLONG __stdcall VerSetConditionMask(VdFwULONGLONG ConditionMask, VdFwDWORD TypeMask, VdFwBYTE Condition);
-
-#if defined(__cplusplus)
-}
-#endif
-
-VD_FW_INL VdFwBOOL VdFwIsWindowsVersionOrGreater(VdFwWORD wMajorVersion, VdFwWORD wMinorVersion, VdFwWORD wServicePackMajor)
-{
-    VdFwOSVERSIONINFOEXW osvi = { sizeof(osvi), 0, 0, 0, 0, {0}, 0, 0 };
-    VdFwDWORDLONG        const dwlConditionMask = VerSetConditionMask(
-        VerSetConditionMask(
-            VerSetConditionMask(
-                0, VD_FW_VER_MAJORVERSION, VD_FW_VER_GREATER_EQUAL),
-            VD_FW_VER_MINORVERSION, VD_FW_VER_GREATER_EQUAL),
-        VD_FW_VER_SERVICEPACKMAJOR, VD_FW_VER_GREATER_EQUAL);
-
-    osvi.dwMajorVersion = wMajorVersion;
-    osvi.dwMinorVersion = wMinorVersion;
-    osvi.wServicePackMajor = wServicePackMajor;
-
-    return VerifyVersionInfoW(&osvi, VD_FW_VER_MAJORVERSION | VD_FW_VER_MINORVERSION | VD_FW_VER_SERVICEPACKMAJOR, dwlConditionMask) != 0;
-}
-
-VD_FW_INL VdFwBOOL VdFwIsWindows8Point1OrGreater()
-{
-    // _WIN32_WINNT_WINBLUE 0x0603
-    return VdFwIsWindowsVersionOrGreater(VD_FW_HIBYTE(0x0603), VD_FW_LOBYTE(0x0603), 0);
-}
-
-#if defined(__cplusplus)
-#define VD_FW__EXTERNC_PROC extern "C"
-#else
-#define VD_FW__EXTERNC_PROC
-#endif // defined(__cplusplus), else
-
-// VD_FW__EXTERNC_PROC __declspec(dllimport) VdFwHMODULE __stdcall LoadLibraryA(VdFwLPCSTR lpLibFileName);
-
 #pragma pack(pop)
-
 
 #define WIN32_LEAN_AND_MEAN
 #define NOGDICAPMASKS
@@ -5252,7 +5150,7 @@ VD_FW_INL VdFwBOOL VdFwIsWindows8Point1OrGreater()
 #define NOSCROLL
 #define NOSERVICE
 #define NOSOUND
-// #define NOTEXTMETRIC
+#define NOTEXTMETRIC
 #define NOWH
 #define NOCOMM
 #define NOKANJI
@@ -5265,6 +5163,7 @@ VD_FW_INL VdFwBOOL VdFwIsWindows8Point1OrGreater()
 #define NOIMAGE
 #define NOTAPE
 #include <windows.h>
+#include <versionhelpers.h>
 #undef NOGDICAPMASKS
 #undef NOMENUS
 #undef NOICONS
@@ -5334,9 +5233,6 @@ VD_FW_INL VdFwBOOL VdFwIsWindows8Point1OrGreater()
 #define WGL_STENCIL_BITS_ARB                        0x2023
 #define WGL_CONTEXT_FLAGS_ARB                       0x2094
 #define WGL_CONTEXT_DEBUG_BIT_ARB                   0x00000001
-typedef BOOL (WINAPI * PFNWGLSWAPINTERVALEXTPROC) (int interval);
-typedef HGLRC (WINAPI * PFNWGLCREATECONTEXTATTRIBSARBPROC) (HDC hDC, HGLRC hShareContext, const int *attribList);
-typedef BOOL (WINAPI * PFNWGLCHOOSEPIXELFORMATARBPROC) (HDC hdc, const int *piAttribIList, const FLOAT *pfAttribFList, UINT nMaxFormats, int *piFormats, UINT *nNumFormats);
 
 #define VD_FW_DISPLAY_PREFERENCE_DGPU 1
 #define VD_FW_DISPLAY_PREFERENCE_IGPU 2
@@ -5384,10 +5280,10 @@ enum {
     VD_FW_WIN32_MESSAGE_TYPE_CHANGEFOCUS = 13,
     VD_FW_WIN32_MESSAGE_TYPE_KEYSTATE    = 14,
 
-    VD_FW_WIN32_SHOW_CURSOR  = WM_USER + 1,
-    VD_FW_WIN32_UPDATE_TITLE = WM_USER + 2, 
-    VD_FW_WIN32_FULLSCREEN   = WM_USER + 3, 
-    VD_FW_WIN32_SIZE         = WM_USER + 4, 
+    VD_FW_WIN32_SHOW_CURSOR  = VD_FW_WM_USER + 1,
+    VD_FW_WIN32_UPDATE_TITLE = VD_FW_WM_USER + 2, 
+    VD_FW_WIN32_FULLSCREEN   = VD_FW_WM_USER + 3, 
+    VD_FW_WIN32_SIZE         = VD_FW_WM_USER + 4, 
 };
 
 typedef struct {
@@ -5396,7 +5292,7 @@ typedef struct {
 } VdFw__Win32Frame;
 
 typedef struct {
-    UINT msg;
+    VdFwUINT msg;
     union {
         struct {
             float dx, dy;
@@ -5407,8 +5303,8 @@ typedef struct {
         } mousemove;
 
         struct {
-            DWORD vkbutton;
-            int   down;
+            VdFwDWORD vkbutton;
+            int       down;
         } mousebtn;
 
         struct {
@@ -5416,8 +5312,8 @@ typedef struct {
         } changefocus;
 
         struct {
-            WORD  vkcode;
-            int   down;
+            VdFwWORD  vkcode;
+            int       down;
         } keystate;
     } dat;
 } VdFw__Win32Message;
@@ -6582,7 +6478,7 @@ VD_FW_API unsigned long long vd_fw_delta_ns(void)
 
 static VdFwBOOL IsWindows11OrGreater()
 {
-    VdFwOSVERSIONINFOEX vi;
+    OSVERSIONINFOEX vi;
     VdFwULONGLONG conditions;
 
     vd_fw_memset(&vi, 0, sizeof(vi));
@@ -6591,11 +6487,11 @@ static VdFwBOOL IsWindows11OrGreater()
     vi.dwMinorVersion = 0;
     vi.dwBuildNumber = 21996;
     conditions = VerSetConditionMask (0,
-            VD_FW_VER_MAJORVERSION, VD_FW_VER_GREATER_EQUAL);
+            VER_MAJORVERSION, VER_GREATER_EQUAL);
     conditions = VerSetConditionMask (conditions,
-        VD_FW_VER_MINORVERSION, VD_FW_VER_GREATER_EQUAL);
+        VER_MINORVERSION, VER_GREATER_EQUAL);
     conditions = VerSetConditionMask (conditions,
-        VD_FW_VER_BUILDNUMBER, VD_FW_VER_GREATER_EQUAL);
+        VER_BUILDNUMBER, VER_GREATER_EQUAL);
 
     return VerifyVersionInfo (&vi,
             VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER,
@@ -7030,7 +6926,7 @@ static LRESULT vd_fw__nccalcsize(WPARAM wparam, LPARAM lparam)
 
 static BOOL vd_fw__has_autohide_taskbar(VdFwUINT edge, VdFwRECT monitor)
 {
-    if (VdFwIsWindows8Point1OrGreater()) {
+    if (IsWindows8Point1OrGreater()) {
         VdFwAPPBARDATA appbar_data = {0};
         appbar_data.cbSize = sizeof(appbar_data);
         appbar_data.uEdge  = edge;
