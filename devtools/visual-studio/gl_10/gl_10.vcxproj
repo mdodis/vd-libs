@@ -20,7 +20,7 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
-    <ProjectGuid>{A1401986-EBFC-13AE-44C6-B206C73CE66E}</ProjectGuid>
+    <ProjectGuid>{C34A9CC1-DCD6-69AF-E3E7-644AD93A843E}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -63,37 +63,28 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <NMakeBuildCommandLine>$(SolutionDir)..\..\..\scripts\windows\build.bat</NMakeBuildCommandLine>
-    <NMakeOutput>vd-libs.exe</NMakeOutput>
+    <NMakeBuildCommandLine>..\..\..\scripts\windows\build.bat -m debug -s gl_10</NMakeBuildCommandLine>
+    <NMakeOutput>..\..\..\build\gl_10.exe</NMakeOutput>
     <NMakePreprocessorDefinitions>_DEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
-    <IncludePath>$(SolutionDir)..\..\..\;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <NMakeBuildCommandLine>$(SolutionDir)..\..\..\scripts\windows\build.bat</NMakeBuildCommandLine>
-    <NMakeOutput>vd-libs.exe</NMakeOutput>
+    <NMakeBuildCommandLine>..\..\..\scripts\windows\build.bat -m debug -s gl_10</NMakeBuildCommandLine>
+    <NMakeOutput>..\..\..\build\gl_10.exe</NMakeOutput>
     <NMakePreprocessorDefinitions>WIN32;_DEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
-    <IncludePath>$(SolutionDir)..\..\..\;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <NMakeBuildCommandLine>$(SolutionDir)..\..\..\scripts\windows\build.bat</NMakeBuildCommandLine>
-    <NMakeOutput>vd-libs.exe</NMakeOutput>
+    <NMakeBuildCommandLine>..\..\..\scripts\windows\build.bat -m debug -s gl_10</NMakeBuildCommandLine>
+    <NMakeOutput>..\..\..\build\gl_10.exe</NMakeOutput>
     <NMakePreprocessorDefinitions>WIN32;NDEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
-    <IncludePath>$(SolutionDir)..\..\..\;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <NMakeBuildCommandLine>$(SolutionDir)..\..\..\scripts\windows\build.bat</NMakeBuildCommandLine>
-    <NMakeOutput>vd-libs.exe</NMakeOutput>
+    <NMakeBuildCommandLine>..\..\..\scripts\windows\build.bat -m debug -s gl_10</NMakeBuildCommandLine>
+    <NMakeOutput>..\..\..\build\gl_10.exe</NMakeOutput>
     <NMakePreprocessorDefinitions>NDEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
-    <IncludePath>$(SolutionDir)..\..\..\;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\..\vd_fw.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="..\..\..\samples\gl_10.c" />
-    <ClCompile Include="..\..\..\samples\gl_gamepad.c" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

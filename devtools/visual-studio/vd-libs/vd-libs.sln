@@ -1,11 +1,13 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.14.36408.4 d17.14
+VisualStudioVersion = 17.14.36408.4
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "vd-libs", "vd-libs.vcxproj", "{A1401986-EBFC-13AE-44C6-B206C73CE66E}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "gl_gamepad", "..\gl_gamepad\gl_gamepad.vcxproj", "{231D6C55-5195-8827-00C6-CF80DC099519}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "gl_10", "..\gl_10\gl_10.vcxproj", "{C34A9CC1-DCD6-69AF-E3E7-644AD93A843E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -31,6 +33,14 @@ Global
 		{231D6C55-5195-8827-00C6-CF80DC099519}.Release|x64.Build.0 = Release|x64
 		{231D6C55-5195-8827-00C6-CF80DC099519}.Release|x86.ActiveCfg = Release|Win32
 		{231D6C55-5195-8827-00C6-CF80DC099519}.Release|x86.Build.0 = Release|Win32
+		{C34A9CC1-DCD6-69AF-E3E7-644AD93A843E}.Debug|x64.ActiveCfg = Debug|x64
+		{C34A9CC1-DCD6-69AF-E3E7-644AD93A843E}.Debug|x64.Build.0 = Debug|x64
+		{C34A9CC1-DCD6-69AF-E3E7-644AD93A843E}.Debug|x86.ActiveCfg = Debug|Win32
+		{C34A9CC1-DCD6-69AF-E3E7-644AD93A843E}.Debug|x86.Build.0 = Debug|Win32
+		{C34A9CC1-DCD6-69AF-E3E7-644AD93A843E}.Release|x64.ActiveCfg = Release|x64
+		{C34A9CC1-DCD6-69AF-E3E7-644AD93A843E}.Release|x64.Build.0 = Release|x64
+		{C34A9CC1-DCD6-69AF-E3E7-644AD93A843E}.Release|x86.ActiveCfg = Release|Win32
+		{C34A9CC1-DCD6-69AF-E3E7-644AD93A843E}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
