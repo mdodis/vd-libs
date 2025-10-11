@@ -27,6 +27,7 @@
  *   on the big threes is OpenGL Core Profile 4.1 (MacOS limitation)
  *
  * TODO
+ * - Expose customizable function pointer if the user needs to do something platform-specific before/after winthread has initialized or before vd_fw_init returns anyways.
  * - Don't include windows.h, instead defining our own stuff.
  * - Fix all warnings on windows
  * - Use XInput in tandem with RAWINPUT
@@ -4155,7 +4156,6 @@ static void vd_fw__load_opengl(VdFwGlVersion version);
 #ifdef _WIN32
 
 #if VD_FW_WIN32_LINKER_COMMENTS
-#pragma comment(lib, "OpenGL32.lib")
 #pragma comment(lib, "kernel32.lib")
 #if VD_FW_WIN32_SUBSYSTEM == VD_FW_WIN32_SUBSYSTEM_CONSOLE
 #pragma comment(linker, "/subsystem:console")
@@ -4216,6 +4216,17 @@ typedef __int64             VdFwLONGLONG;
 typedef unsigned __int64    VdFwULONGLONG;
 typedef VdFwULONGLONG       VdFwDWORDLONG;
 typedef VdFwDWORDLONG*      VdFwPDWORDLONG;
+typedef __int64             VdFwINT_PTR, * VdFwPINT_PTR;
+typedef unsigned __int64    VdFwUINT_PTR, * VdFwPUINT_PTR;
+typedef __int64             VdFwLONG_PTR, * VdFwPLONG_PTR;
+typedef unsigned __int64    VdFwULONG_PTR, * VdFwPULONG_PTR;
+typedef VdFwUINT_PTR        VdFwWPARAM;
+typedef VdFwLONG_PTR        VdFwLPARAM;
+typedef VdFwLONG_PTR        VdFwLRESULT;
+typedef wchar_t             VdFwWCHAR;
+typedef const VdFwWCHAR* VdFwLPCWSTR, * VdFwPCWSTR;
+typedef VdFwWORD            VdFwATOM;
+typedef VdFwULONG_PTR       VdFwDWORD_PTR, * VdFwPDWORD_PTR;
 
 VD_FW_DECLARE_HANDLE(VdFwHWND);
 VD_FW_DECLARE_HANDLE(VdFwHDC);
@@ -4268,17 +4279,6 @@ typedef struct VdFwtagRECT
 #define VD_FW_GET_X_LPARAM(lp)  ((int)(short)LOWORD(lp))
 #define VD_FW_GET_Y_LPARAM(lp)  ((int)(short)HIWORD(lp))
 
-typedef __int64             VdFwINT_PTR, * VdFwPINT_PTR;
-typedef unsigned __int64    VdFwUINT_PTR, * VdFwPUINT_PTR;
-typedef __int64             VdFwLONG_PTR, * VdFwPLONG_PTR;
-typedef unsigned __int64    VdFwULONG_PTR, * VdFwPULONG_PTR;
-typedef VdFwUINT_PTR        VdFwWPARAM;
-typedef VdFwLONG_PTR        VdFwLPARAM;
-typedef VdFwLONG_PTR        VdFwLRESULT;
-typedef wchar_t             VdFwWCHAR;
-typedef const VdFwWCHAR*    VdFwLPCWSTR, * VdFwPCWSTR;
-typedef VdFwWORD            VdFwATOM;
-
 typedef VdFwLRESULT(*VdFwWNDPROC)(VdFwHWND, VdFwUINT, VdFwWPARAM, VdFwLPARAM);
 
 VD_FW_DECLARE_HANDLE(VdFwHICON);
@@ -4306,6 +4306,11 @@ typedef enum VdFwDPI_AWARENESS {
 
 #define VD_FW_WM_NCUAHDRAWCAPTION 0x00AE
 #define VD_FW_WM_NCUAHDRAWFRAME   0x00AF
+
+#define VD_FW_HWND_TOP        ((VdFwHWND)0)
+#define VD_FW_HWND_BOTTOM     ((VdFwHWND)1)
+#define VD_FW_HWND_TOPMOST    ((VdFwHWND)-1)
+#define VD_FW_HWND_NOTOPMOST  ((VdFwHWND)-2)
 
 typedef struct VdFwtagPOINT
 {
@@ -4943,6 +4948,33 @@ static VdFwProcSwapBuffers *VdFwSwapBuffers;
 /* ----OpenGL32.dll-------------------------------------------------------------------------------------------------- */
 VD_FW_DECLARE_HANDLE(VdFwHGLRC);
 
+typedef VdFwINT_PTR(* VdFwPROC)();
+
+#define VD_FW_PROC_wglCreateContext(name) VdFwHGLRC name(VdFwHDC hDC)
+typedef VD_FW_PROC_wglCreateContext(VdFwProcwglCreateContext);
+static VdFwProcwglCreateContext *VdFwwglCreateContext;
+
+#define VD_FW_PROC_wglMakeCurrent(name) VdFwBOOL name(VdFwHDC hDC, VdFwHGLRC hGLRC)
+typedef VD_FW_PROC_wglMakeCurrent(VdFwProcwglMakeCurrent);
+static VdFwProcwglMakeCurrent *VdFwwglMakeCurrent;
+
+#define VD_FW_PROC_wglDeleteContext(name) VdFwBOOL name(VdFwHGLRC hGLRC)
+typedef VD_FW_PROC_wglDeleteContext(VdFwProcwglDeleteContext);
+static VdFwProcwglDeleteContext *VdFwwglDeleteContext;
+
+#define VD_FW_PROC_wglGetProcAddress(name) VdFwPROC name(VdFwLPCSTR pName)
+typedef VD_FW_PROC_wglGetProcAddress(VdFwProcwglGetProcAddress);
+static VdFwProcwglGetProcAddress *VdFwwglGetProcAddress;
+
+#define VD_FW_PROC_wglSwapIntervalExt(name) VdFwBOOL name(int interval)
+typedef VD_FW_PROC_wglSwapIntervalExt(VdFwProcwglSwapIntervalExt);
+
+#define VD_FW_PROC_wglCreateContextAttribsARB(name) VdFwHGLRC name(VdFwHDC hDC, VdFwHGLRC hShareContext, const int* attribList)
+typedef VD_FW_PROC_wglCreateContextAttribsARB(VdFwProcwglCreateContextAttribsARB);
+
+#define VD_FW_PROC_wglChoosePixelFormatARB(name) VdFwBOOL name(VdFwHDC hdc, const int* piAttribIList, const float* pfAttribFList, VdFwUINT nMaxFormats, int* piFormats, VdFwUINT* nNumFormats)
+typedef VD_FW_PROC_wglChoosePixelFormatARB(VdFwProcwglChoosePixelFormatARB);
+
 /* ----Hid.dll------------------------------------------------------------------------------------------------------- */
 typedef VdFwLONG                         VdFwNTSTATUS;
 typedef struct VdFw_HIDP_PREPARSED_DATA* VdFwPHIDP_PREPARSED_DATA;
@@ -5121,13 +5153,13 @@ typedef struct VdFw_OSVERSIONINFOEXW {
     VdFwBYTE  wReserved;
 } VdFwOSVERSIONINFOEXW, * VdFwPOSVERSIONINFOEXW, * VdFwLPOSVERSIONINFOEXW, VdFwRTL_OSVERSIONINFOEXW, * VdFwPRTL_OSVERSIONINFOEXW;
 #ifdef UNICODE
-typedef VdFwOSVERSIONINFOEXW    VdFwOSVERSIONINFOEX;
-typedef VdFwPOSVERSIONINFOEXW   VdFwPOSVERSIONINFOEX;
-typedef VdFwLPOSVERSIONINFOEXW  VdFwLPOSVERSIONINFOEX;
+#define VdFwOSVERSIONINFOEX     VdFwOSVERSIONINFOEXW
+#define VdFwPOSVERSIONINFOEX    VdFwPOSVERSIONINFOEXW
+#define VdFwLPOSVERSIONINFOEX   VdFwLPOSVERSIONINFOEXW
 #else
-typedef VdFwOSVERSIONINFOEXA    VdFwOSVERSIONINFOEX;
-typedef VdFwPOSVERSIONINFOEXA   VdFwPOSVERSIONINFOEX;
-typedef VdFwLPOSVERSIONINFOEXA  VdFwLPOSVERSIONINFOEX;
+#define VdFwOSVERSIONINFOEX     VdFwOSVERSIONINFOEXA
+#define VdFwPOSVERSIONINFOEX    VdFwPOSVERSIONINFOEXA
+#define VdFwLPOSVERSIONINFOEX   VdFwLPOSVERSIONINFOEXA
 #endif // UNICODE
 
 #define VD_FW_VER_MINORVERSION                0x0000001
@@ -5145,10 +5177,22 @@ typedef VdFwLPOSVERSIONINFOEXA  VdFwLPOSVERSIONINFOEX;
 #define VD_FW_VER_CONDITION_MASK              7
 #define VD_FW_VER_NUM_BITS_PER_CONDITION_MASK 3
 
+#define VD_FW_LOWORD(l)           ((VdFwWORD)(((VdFwDWORD_PTR)(l)) & 0xffff))
+#define VD_FW_HIWORD(l)           ((VdFwWORD)((((VdFwDWORD_PTR)(l)) >> 16) & 0xffff))
+#define VD_FW_LOBYTE(w)           ((VdFwBYTE)(((VdFwDWORD_PTR)(w)) & 0xff))
+#define VD_FW_HIBYTE(w)           ((VdFwBYTE)((((VdFwDWORD_PTR)(w)) >> 8) & 0xff))
+
+#ifdef UNICODE
+#define VerifyVersionInfo  VerifyVersionInfoW
+#else
+#define VerifyVersionInfo  VerifyVersionInfoA
+#endif // !UNICODE
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
 
+__declspec(dllimport) VdFwBOOL __stdcall VerifyVersionInfoA(VdFwLPOSVERSIONINFOEXA osvi, VdFwDWORD dwTypeMask, VdFwDWORDLONG dwlConditionMask);
 __declspec(dllimport) VdFwBOOL __stdcall VerifyVersionInfoW(VdFwLPOSVERSIONINFOEXW osvi, VdFwDWORD dwTypeMask, VdFwDWORDLONG dwlConditionMask);
 __declspec(dllimport) VdFwULONGLONG __stdcall VerSetConditionMask(VdFwULONGLONG ConditionMask, VdFwDWORD TypeMask, VdFwBYTE Condition);
 
@@ -5156,7 +5200,7 @@ __declspec(dllimport) VdFwULONGLONG __stdcall VerSetConditionMask(VdFwULONGLONG 
 }
 #endif
 
-VD_FW_INL VdFwBOOL IsWindowsVersionOrGreater(VdFwWORD wMajorVersion, VdFwWORD wMinorVersion, VdFwWORD wServicePackMajor)
+VD_FW_INL VdFwBOOL VdFwIsWindowsVersionOrGreater(VdFwWORD wMajorVersion, VdFwWORD wMinorVersion, VdFwWORD wServicePackMajor)
 {
     VdFwOSVERSIONINFOEXW osvi = { sizeof(osvi), 0, 0, 0, 0, {0}, 0, 0 };
     VdFwDWORDLONG        const dwlConditionMask = VerSetConditionMask(
@@ -5171,6 +5215,12 @@ VD_FW_INL VdFwBOOL IsWindowsVersionOrGreater(VdFwWORD wMajorVersion, VdFwWORD wM
     osvi.wServicePackMajor = wServicePackMajor;
 
     return VerifyVersionInfoW(&osvi, VD_FW_VER_MAJORVERSION | VD_FW_VER_MINORVERSION | VD_FW_VER_SERVICEPACKMAJOR, dwlConditionMask) != 0;
+}
+
+VD_FW_INL VdFwBOOL VdFwIsWindows8Point1OrGreater()
+{
+    // _WIN32_WINNT_WINBLUE 0x0603
+    return VdFwIsWindowsVersionOrGreater(VD_FW_HIBYTE(0x0603), VD_FW_LOBYTE(0x0603), 0);
 }
 
 #if defined(__cplusplus)
@@ -5410,10 +5460,10 @@ typedef struct {
     VdFwHANDLE                  win_thread;
     VdFwDWORD                   win_thread_id;
     VdFwHDC                     hdc;
-    HGLRC                       hglrc;
+    VdFwHGLRC                   hglrc;
     LARGE_INTEGER               frequency;
     LARGE_INTEGER               performance_counter;
-    PFNWGLSWAPINTERVALEXTPROC   proc_swapInterval;
+    VdFwProcwglSwapIntervalExt  *proc_swapInterval;
     int                         wheel_moved;
     float                       wheel[2];
     unsigned long long          last_ns;
@@ -5723,15 +5773,15 @@ VdFwKey vd_fw___vkcode_to_key(WORD vkcode)
 }
 
 static VdFw__Win32InternalData Vd_Fw_Globals = {0};
-static LRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam, VdFwLPARAM lparam);
+static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam, VdFwLPARAM lparam);
 static void    vd_fw__composition_changed(void);
 static void    vd_fw__update_region(void);
 static void    vd_fw__theme_changed(void);
-static LRESULT vd_fw__nccalcsize(WPARAM wparam, LPARAM lparam);
-static BOOL    vd_fw__has_autohide_taskbar(VdFwUINT edge, VdFwRECT monitor);
-static void    vd_fw__window_pos_changed(WINDOWPOS *pos);
-static LRESULT vd_fw__handle_invisible(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
-static DWORD   vd_fw__win_thread_proc(LPVOID param);
+static VdFwLRESULT vd_fw__nccalcsize(VdFwWPARAM wparam, VdFwLPARAM lparam);
+static VdFwBOOL    vd_fw__has_autohide_taskbar(VdFwUINT edge, VdFwRECT monitor);
+static void    vd_fw__window_pos_changed(VdFwWINDOWPOS *pos);
+static VdFwLRESULT vd_fw__handle_invisible(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam, VdFwLPARAM lparam);
+static VdFwDWORD   vd_fw__win_thread_proc(LPVOID param);
 static void    vd_fw__gl_debug_message_callback(GLenum source,GLenum type,GLuint id,GLenum severity,GLsizei length,const GLchar *message,const void *userParam);
 static int     vd_fw__msgbuf_r(VdFw__Win32Message *message);
 static int     vd_fw__msgbuf_w(VdFw__Win32Message *message);
@@ -5795,7 +5845,7 @@ static int     vd_fw__msgbuf_w(VdFw__Win32Message *message);
 
 static void *vd_fw__gl_get_proc_address(const char *name)
 {
-    void *result = (void*)wglGetProcAddress(name);
+    void *result = (void*)VdFwwglGetProcAddress(name);
     if (result == 0) {
         result = (void*)GetProcAddress(VD_FW_G.opengl32, name);
     }
@@ -5940,6 +5990,10 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         // OpenGL32.dll
         {
             VD_FW_G.opengl32 = LoadLibraryA("OpenGL32.dll");
+            VdFwwglCreateContext  =  (VdFwProcwglCreateContext*)GetProcAddress(VD_FW_G.opengl32, "wglCreateContext");
+            VdFwwglMakeCurrent    =    (VdFwProcwglMakeCurrent*)GetProcAddress(VD_FW_G.opengl32, "wglMakeCurrent");
+            VdFwwglDeleteContext  =  (VdFwProcwglDeleteContext*)GetProcAddress(VD_FW_G.opengl32,"wglDeleteContext");
+            VdFwwglGetProcAddress = (VdFwProcwglGetProcAddress*)GetProcAddress(VD_FW_G.opengl32, "wglGetProcAddress");
         }
     }
     // SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
@@ -6035,9 +6089,9 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         int pf = VdFwChoosePixelFormat(VD_FW_G.hdc, &pfd);
         VdFwSetPixelFormat(VD_FW_G.hdc, pf, &pfd);
 
-        HGLRC temp_context = wglCreateContext(VD_FW_G.hdc);
+        VdFwHGLRC temp_context = VdFwwglCreateContext(VD_FW_G.hdc);
         VD_FW__CHECK_NULL(temp_context);
-        VD_FW__CHECK_TRUE(wglMakeCurrent(VD_FW_G.hdc, temp_context));
+        VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(VD_FW_G.hdc, temp_context));
 
         int major = 3;
         int minor = 3;
@@ -6074,11 +6128,11 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
             0
         };
 
-        PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = 
-            (PFNWGLCREATECONTEXTATTRIBSARBPROC) wglGetProcAddress("wglCreateContextAttribsARB");
+        VdFwProcwglCreateContextAttribsARB *wglCreateContextAttribsARB =
+            (VdFwProcwglCreateContextAttribsARB*) VdFwwglGetProcAddress("wglCreateContextAttribsARB");
 
-        PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB = 
-            (PFNWGLCHOOSEPIXELFORMATARBPROC) wglGetProcAddress("wglChoosePixelFormatARB");
+        VdFwProcwglChoosePixelFormatARB *wglChoosePixelFormatARB =
+            (VdFwProcwglChoosePixelFormatARB*)VdFwwglGetProcAddress("wglChoosePixelFormatARB");
 
         int pixel_attribs[] = {
             WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
@@ -6098,24 +6152,24 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         };
 
         int pixel_format;
-        UINT num_formats;
+        VdFwUINT num_formats;
 
         VD_FW__CHECK_TRUE(wglChoosePixelFormatARB(VD_FW_G.hdc, pixel_attribs, NULL, 1, &pixel_format, &num_formats));
 
-        PIXELFORMATDESCRIPTOR pfdchosen;
+        VdFwPIXELFORMATDESCRIPTOR pfdchosen;
         VdFwDescribePixelFormat(VD_FW_G.hdc, pixel_format, sizeof(pfdchosen), &pfdchosen);
         VdFwSetPixelFormat(VD_FW_G.hdc, pf, &pfdchosen);
 
         VD_FW_G.hglrc = wglCreateContextAttribsARB(VD_FW_G.hdc, 0, attribs);
 
-        wglMakeCurrent(NULL, NULL);
-        wglDeleteContext(temp_context);
+        VdFwwglMakeCurrent(NULL, NULL);
+        VdFwwglDeleteContext(temp_context);
 
         VD_FW__CHECK_NULL(VD_FW_G.hglrc);
-        VD_FW__CHECK_TRUE(wglMakeCurrent(VD_FW_G.hdc, VD_FW_G.hglrc));
+        VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(VD_FW_G.hdc, VD_FW_G.hglrc));
     }
 
-    VD_FW_G.proc_swapInterval = (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
+    VD_FW_G.proc_swapInterval = (VdFwProcwglSwapIntervalExt*)VdFwwglGetProcAddress("wglSwapIntervalEXT");
 
     VdFwGlVersion version = VD_FW_GL_VERSION_3_3;
     if (info && info->gl.version != VD_FW_GL_VERSION_BASIC) {
@@ -6124,7 +6178,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     vd_fw__load_opengl(version);
 
     if (info != 0 && info->gl.debug_on && version > VD_FW_GL_VERSION_3_0) {
-        PFNGLDEBUGMESSAGECALLBACKPROC glDebugMessageCallback_proc = (PFNGLDEBUGMESSAGECALLBACKPROC)wglGetProcAddress("glDebugMessageCallback");
+        PFNGLDEBUGMESSAGECALLBACKPROC glDebugMessageCallback_proc = (PFNGLDEBUGMESSAGECALLBACKPROC)VdFwwglGetProcAddress("glDebugMessageCallback");
 
         if (glDebugMessageCallback_proc == 0) {
             DWORD written;
@@ -6526,22 +6580,22 @@ VD_FW_API unsigned long long vd_fw_delta_ns(void)
     return VD_FW_G.last_ns;
 }
 
-static BOOL IsWindows11OrGreater()
+static VdFwBOOL IsWindows11OrGreater()
 {
-    OSVERSIONINFOEX vi;
-    ULONGLONG conditions;
+    VdFwOSVERSIONINFOEX vi;
+    VdFwULONGLONG conditions;
 
-    memset (&vi, 0, sizeof(vi));
+    vd_fw_memset(&vi, 0, sizeof(vi));
     vi.dwOSVersionInfoSize = sizeof(vi);
     vi.dwMajorVersion = 10;
     vi.dwMinorVersion = 0;
     vi.dwBuildNumber = 21996;
     conditions = VerSetConditionMask (0,
-            VER_MAJORVERSION, VER_GREATER_EQUAL);
+            VD_FW_VER_MAJORVERSION, VD_FW_VER_GREATER_EQUAL);
     conditions = VerSetConditionMask (conditions,
-            VER_MINORVERSION, VER_GREATER_EQUAL);
+        VD_FW_VER_MINORVERSION, VD_FW_VER_GREATER_EQUAL);
     conditions = VerSetConditionMask (conditions,
-            VER_BUILDNUMBER, VER_GREATER_EQUAL);
+        VD_FW_VER_BUILDNUMBER, VD_FW_VER_GREATER_EQUAL);
 
     return VerifyVersionInfo (&vi,
             VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER,
@@ -6976,7 +7030,7 @@ static LRESULT vd_fw__nccalcsize(WPARAM wparam, LPARAM lparam)
 
 static BOOL vd_fw__has_autohide_taskbar(VdFwUINT edge, VdFwRECT monitor)
 {
-    if (IsWindows8Point1OrGreater()) {
+    if (VdFwIsWindows8Point1OrGreater()) {
         VdFwAPPBARDATA appbar_data = {0};
         appbar_data.cbSize = sizeof(appbar_data);
         appbar_data.uEdge  = edge;
@@ -6994,14 +7048,14 @@ static BOOL vd_fw__has_autohide_taskbar(VdFwUINT edge, VdFwRECT monitor)
     return VdFwSHAppBarMessage(VD_FW_ABM_GETAUTOHIDEBAR, &appbar_data) != 0;
 }
 
-static void vd_fw__window_pos_changed(WINDOWPOS *pos)
+static void vd_fw__window_pos_changed(VdFwWINDOWPOS *pos)
 {
 #if 0
     VD_FW_WIN32_PROFILE_BEGIN(window_pos_changed);
 #endif
 
     if (VD_FW_G.draw_decorations) {
-        RECT client;
+        VdFwRECT client;
         VdFwGetClientRect(VD_FW_G.hwnd, &client);
         VD_FW_G.w = client.right - client.left;
         VD_FW_G.h = client.bottom - client.top;
@@ -7028,7 +7082,7 @@ static void vd_fw__window_pos_changed(WINDOWPOS *pos)
 #endif
 }
 
-static LRESULT vd_fw__handle_invisible(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
+static VdFwLRESULT vd_fw__handle_invisible(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam, VdFwLPARAM lparam)
 {
     // @note(mdodis): Prevent windows from drawing the default (Windows 7) titlebar and frames by toggling it temporarily
     VD_FW_WIN32_PROFILE_BEGIN(handle_invisible);
@@ -7857,7 +7911,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 style |= WS_VISIBLE;
 
                 VdFwSetWindowLong(VD_FW_G.hwnd, GWL_STYLE, style);
-                VdFwSetWindowPos(VD_FW_G.hwnd, HWND_TOP,
+                VdFwSetWindowPos(VD_FW_G.hwnd, VD_FW_HWND_TOP,
                              monitor_info.rcMonitor.left, monitor_info.rcMonitor.top,
                              monitor_info.rcMonitor.right - monitor_info.rcMonitor.left,
                              monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top,
@@ -7890,7 +7944,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             newrect.top = rect.top;
             newrect.bottom = rect.top + height;
 
-            VdFwSetWindowPos(VD_FW_G.hwnd, HWND_TOP,
+            VdFwSetWindowPos(VD_FW_G.hwnd, VD_FW_HWND_TOP,
                          newrect.left, newrect.top,
                          newrect.right - newrect.left,
                          newrect.bottom - newrect.top,
