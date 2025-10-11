@@ -3907,6 +3907,10 @@ typedef VdFwUCHAR*          VdFwPUCHAR;
 typedef VdFwBYTE            VdFwBOOLEAN;
 typedef VdFwCHAR*           VdFwPCHAR, * VdFwLPCH, * VdFwPCH;
 typedef long                VdFwHRESULT;
+typedef __int64             VdFwLONGLONG;
+typedef unsigned __int64    VdFwULONGLONG;
+typedef VdFwULONGLONG       VdFwDWORDLONG;
+typedef VdFwDWORDLONG*      VdFwPDWORDLONG;
 
 VD_FW_DECLARE_HANDLE(VdFwHWND);
 VD_FW_DECLARE_HANDLE(VdFwHDC);
@@ -4781,6 +4785,86 @@ static VdFwProcHidP_GetUsages *VdFwHidP_GetUsages;
 typedef VD_FW_PROC_HidP_GetUsageValue(VdFwProcHidP_GetUsageValue);
 static VdFwProcHidP_GetUsageValue *VdFwHidP_GetUsageValue;
 
+/* ----Winnt.h------------------------------------------------------------------------------------------------------- */
+typedef struct VdFw_OSVERSIONINFOEXA {
+    VdFwDWORD dwOSVersionInfoSize;
+    VdFwDWORD dwMajorVersion;
+    VdFwDWORD dwMinorVersion;
+    VdFwDWORD dwBuildNumber;
+    VdFwDWORD dwPlatformId;
+    VdFwCHAR   szCSDVersion[128];
+    VdFwWORD   wServicePackMajor;
+    VdFwWORD   wServicePackMinor;
+    VdFwWORD   wSuiteMask;
+    VdFwBYTE  wProductType;
+    VdFwBYTE  wReserved;
+} VdFwOSVERSIONINFOEXA, * VdFwPOSVERSIONINFOEXA, * VdFwLPOSVERSIONINFOEXA;
+typedef struct VdFw_OSVERSIONINFOEXW {
+    VdFwDWORD dwOSVersionInfoSize;
+    VdFwDWORD dwMajorVersion;
+    VdFwDWORD dwMinorVersion;
+    VdFwDWORD dwBuildNumber;
+    VdFwDWORD dwPlatformId;
+    VdFwWCHAR  szCSDVersion[128];
+    VdFwWORD   wServicePackMajor;
+    VdFwWORD   wServicePackMinor;
+    VdFwWORD   wSuiteMask;
+    VdFwBYTE  wProductType;
+    VdFwBYTE  wReserved;
+} VdFwOSVERSIONINFOEXW, * VdFwPOSVERSIONINFOEXW, * VdFwLPOSVERSIONINFOEXW, VdFwRTL_OSVERSIONINFOEXW, * VdFwPRTL_OSVERSIONINFOEXW;
+#ifdef UNICODE
+typedef VdFwOSVERSIONINFOEXW    VdFwOSVERSIONINFOEX;
+typedef VdFwPOSVERSIONINFOEXW   VdFwPOSVERSIONINFOEX;
+typedef VdFwLPOSVERSIONINFOEXW  VdFwLPOSVERSIONINFOEX;
+#else
+typedef VdFwOSVERSIONINFOEXA    VdFwOSVERSIONINFOEX;
+typedef VdFwPOSVERSIONINFOEXA   VdFwPOSVERSIONINFOEX;
+typedef VdFwLPOSVERSIONINFOEXA  VdFwLPOSVERSIONINFOEX;
+#endif // UNICODE
+
+#define VD_FW_VER_MINORVERSION                0x0000001
+#define VD_FW_VER_MAJORVERSION                0x0000002
+#define VD_FW_VER_BUILDNUMBER                 0x0000004
+#define VD_FW_VER_SERVICEPACKMINOR            0x0000010
+#define VD_FW_VER_SERVICEPACKMAJOR            0x0000020
+#define VD_FW_VER_EQUAL                       1
+#define VD_FW_VER_GREATER                     2
+#define VD_FW_VER_GREATER_EQUAL               3
+#define VD_FW_VER_LESS                        4
+#define VD_FW_VER_LESS_EQUAL                  5
+#define VD_FW_VER_AND                         6
+#define VD_FW_VER_OR                          7
+#define VD_FW_VER_CONDITION_MASK              7
+#define VD_FW_VER_NUM_BITS_PER_CONDITION_MASK 3
+
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
+__declspec(dllimport) VdFwBOOL __stdcall VerifyVersionInfoW(VdFwLPOSVERSIONINFOEXW osvi, VdFwDWORD dwTypeMask, VdFwDWORDLONG dwlConditionMask);
+__declspec(dllimport) VdFwULONGLONG __stdcall VerSetConditionMask(VdFwULONGLONG ConditionMask, VdFwDWORD TypeMask, VdFwBYTE Condition);
+
+#if defined(__cplusplus)
+}
+#endif
+
+VD_FW_INL VdFwBOOL IsWindowsVersionOrGreater(VdFwWORD wMajorVersion, VdFwWORD wMinorVersion, VdFwWORD wServicePackMajor)
+{
+    VdFwOSVERSIONINFOEXW osvi = { sizeof(osvi), 0, 0, 0, 0, {0}, 0, 0 };
+    VdFwDWORDLONG        const dwlConditionMask = VerSetConditionMask(
+        VerSetConditionMask(
+            VerSetConditionMask(
+                0, VD_FW_VER_MAJORVERSION, VD_FW_VER_GREATER_EQUAL),
+            VD_FW_VER_MINORVERSION, VD_FW_VER_GREATER_EQUAL),
+        VD_FW_VER_SERVICEPACKMAJOR, VD_FW_VER_GREATER_EQUAL);
+
+    osvi.dwMajorVersion = wMajorVersion;
+    osvi.dwMinorVersion = wMinorVersion;
+    osvi.wServicePackMajor = wServicePackMajor;
+
+    return VerifyVersionInfoW(&osvi, VD_FW_VER_MAJORVERSION | VD_FW_VER_MINORVERSION | VD_FW_VER_SERVICEPACKMAJOR, dwlConditionMask) != 0;
+}
+
 #if defined(__cplusplus)
 #define VD_FW__EXTERNC_PROC extern "C"
 #else
@@ -4823,7 +4907,6 @@ static VdFwProcHidP_GetUsageValue *VdFwHidP_GetUsageValue;
 #define NOIMAGE
 #define NOTAPE
 #include <windows.h>
-#include <versionhelpers.h>
 #undef NOGDICAPMASKS
 #undef NOMENUS
 #undef NOICONS
@@ -6619,7 +6702,7 @@ static void vd_fw__window_pos_changed(WINDOWPOS *pos)
         // @note(mdodis): When window is maximized, pos->x and pos->y become -8, -8
         // So, subtract them from the overall width and height 2 times each so that
         // the maximized viewport is fully shown instead of clipped at the top and right
-        if (IsMaximized(VD_FW_G.hwnd)) {
+        if (VdFwIsZoomed(VD_FW_G.hwnd)) {
             VD_FW_G.w += 2 * pos->x;
             VD_FW_G.h += 2 * pos->y;
         }
