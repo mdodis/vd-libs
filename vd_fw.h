@@ -117,6 +117,24 @@
 #endif
 #endif // !VD_FW_SQRT
 
+#ifndef VD_FW_MEMCPY
+#if VD_FW_NO_CRT
+#define VD_FW_MEMCPY(dst, src, count) vd_fw_memcpy(dst, src, count)
+#else
+#include <string.h>
+#define VD_FW_MEMCPY(dst, src, count) memcpy(dst, src, count)
+#endif
+#endif // !VD_FW_MEMCPY
+
+#ifndef VD_FW_MEMSET
+#if VD_FW_NO_CRT
+#define VD_FW_MEMSET(dst, val, num) vd_fw_memset(dst, val, num)
+#else
+#include <string.h>
+#define VD_FW_MEMSET(dst, val, num) memset(dst, val, num)
+#endif
+#endif // !VD_FW_MEMSET
+
 #ifndef VD_FW_GAMEPAD_COUNT_MAX
 #define VD_FW_GAMEPAD_COUNT_MAX 4
 #endif // !VD_FW_GAMEPAD_COUNT_MAX
@@ -722,6 +740,18 @@ VD_FW_INL void vd_fw_u_lookat(float eye[3], float target[3], float updir[3], flo
     out[1] = up[0];        out[5] = up[1];       out[9]  = up[2];       out[13] = - (up[0]      * eye[0] + up[1]      * eye[1] + up[2]      * eye[2]);
     out[2] = -forward[0];  out[6] = -forward[1]; out[10] = -forward[2]; out[14] =    forward[0] * eye[0] + forward[1] * eye[1] + forward[2] * eye[2];
     out[3] = 0.0f;         out[7] = 0.0f;        out[11] = 0.0f;        out[15] = 1.0f;
+}
+
+VD_FW_INL void *vd_fw_memcpy(void *dst, void *src, size_t count)
+{
+    for (size_t i = 0; i < count; ++i) ((unsigned char*)dst)[i] = ((unsigned char*)src)[i];
+    return dst;
+}
+
+VD_FW_INL void *vd_fw_memset(void *dst, unsigned char val, size_t num)
+{
+    for (size_t i = 0; i < num; ++i) ((unsigned char *)dst)[i] = val;
+    return dst;
 }
 
 /* ----INTERNAL API-------------------------------------------------------------------------------------------------- */
@@ -5748,18 +5778,6 @@ static void *vd_fw__gl_get_proc_address(const char *name)
     return result;
 }
 
-static inline void *vd_fw_memcpy(void *dst, void *src, size_t count)
-{
-    for (size_t i = 0; i < count; ++i) ((unsigned char*)dst)[i] = ((unsigned char*)src)[i];
-    return dst;
-}
-
-static inline void *vd_fw_memset(void *dst, unsigned char val, size_t num)
-{
-    for (size_t i = 0; i < num; ++i) ((unsigned char *)dst)[i] = val;
-    return dst;
-}
-
 #if !VD_FW_NO_CRT
 #include <io.h>
 #include <fcntl.h>
@@ -6450,7 +6468,7 @@ VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
 
     VD_FW__CHECK_NULL(hbitmap);
 
-    vd_fw_memcpy(bits, pixels, width * height * 4);
+    VD_FW_MEMCPY(bits, pixels, width * height * 4);
 
     VdFwICONINFO ii = {0};
     ii.fIcon    = TRUE;
@@ -6481,7 +6499,7 @@ static VdFwBOOL IsWindows11OrGreater()
     OSVERSIONINFOEX vi;
     VdFwULONGLONG conditions;
 
-    vd_fw_memset(&vi, 0, sizeof(vi));
+    VD_FW_MEMSET(&vi, 0, sizeof(vi));
     vi.dwOSVersionInfoSize = sizeof(vi);
     vi.dwMajorVersion = 10;
     vi.dwMinorVersion = 0;
@@ -7343,7 +7361,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 }
 
                 EnterCriticalSection(&VD_FW_G.input_critical_section);
-                vd_fw_memcpy(&VD_FW_G.winthread_gamepad_prev_states[0].buttons,
+                VD_FW_MEMCPY(&VD_FW_G.winthread_gamepad_prev_states[0].buttons,
                              &VD_FW_G.winthread_gamepad_curr_states[0].buttons,
                              sizeof(VD_FW_G.winthread_gamepad_curr_states[0].buttons));
 
