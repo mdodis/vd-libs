@@ -4423,6 +4423,7 @@ typedef struct VdFwtagPAINTSTRUCT {
     VdFwBYTE        rgbReserved[32];
 } VdFwPAINTSTRUCT, * VdFwPPAINTSTRUCT, * VdFwNPPAINTSTRUCT, * VdFwLPPAINTSTRUCT;
 
+#pragma pack(push, 8)
 typedef struct VdFw_ICONINFO {
     VdFwBOOL    fIcon;
     VdFwDWORD   xHotspot;
@@ -4431,6 +4432,7 @@ typedef struct VdFw_ICONINFO {
     VdFwHBITMAP hbmColor;
 } VdFwICONINFO;
 typedef VdFwICONINFO* VdFwPICONINFO;
+#pragma pack(pop)
 
 typedef struct VdFwtagMONITORINFO
 {
@@ -4484,6 +4486,7 @@ typedef struct VdFwtagRAWINPUTHEADER {
     VdFwWPARAM wParam;
 } VdFwRAWINPUTHEADER, * VdFwPRAWINPUTHEADER, * VdFwLPRAWINPUTHEADER;
 
+#pragma pack(push, 8)
 typedef struct VdFwtagRAWMOUSE {
     VdFwUSHORT usFlags;
     union {
@@ -4499,6 +4502,7 @@ typedef struct VdFwtagRAWMOUSE {
     VdFwULONG ulExtraInformation;
 
 } VdFwRAWMOUSE, * VdFwPRAWMOUSE, * VdFwLPRAWMOUSE;
+#pragma pack(pop)
 
 typedef struct VdFwtagRAWKEYBOARD {
     VdFwUSHORT MakeCode;
@@ -7325,8 +7329,10 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 VdFwLONG dx = raw->data.mouse.lLastX;
                 VdFwLONG dy = raw->data.mouse.lLastY;
 
+                EnterCriticalSection(&VD_FW_G.input_critical_section);
                 VD_FW_G.winthread_mouse_delta[0] = VD_FW_G.winthread_mouse_delta[0] * 0.8f + dx * 0.2f;
                 VD_FW_G.winthread_mouse_delta[1] = VD_FW_G.winthread_mouse_delta[1] * 0.8f + dy * 0.2f;
+                LeaveCriticalSection(&VD_FW_G.input_critical_section);
             } else if (raw->header.dwType == RIM_TYPEHID) {
 
                 VdFw__Win32GamepadInfo *gamepad_info = &VD_FW_G.gamepad_infos[0];
