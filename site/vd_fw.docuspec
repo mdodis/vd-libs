@@ -568,12 +568,21 @@ freely, subject to the following restrictions:
                 } 
             } 
 
-            @rev-item(version="1.0.0" date="xx/xx/xxxx" available="yes") {
+            @rev-item(version="1.0.0" date="xx/xx/xxxx" available="no") {
                 text {
                     Initial Release:
                     <ul>
                         <li>Win32 support</li>
                         <li>MacOS support</li>
+                    </ul>
+                }
+            }
+
+            @rev-item(version="0.0.1" date="12/10/2025" available="yes") {
+                text {
+                    In Development version
+                    <ul>
+                        <li>Win32 support</li>
                     </ul>
                 }
             }
