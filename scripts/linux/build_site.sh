@@ -10,5 +10,5 @@ pushd build-site-temp
 gcc -g -O0 -o docubuild -I ../ ../site/docubuild.c
 popd
 
-./build-site-temp/docubuild ./site/ -o ./site-base/
+./build-site-temp/docubuild ./site/ -o ./site-base/ -p
 popd

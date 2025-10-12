@@ -37,6 +37,7 @@ typedef struct {
     SourceFile          *current_source_file;
     FILE                *search_index_file;
     int                 search_index_id;
+    int                 is_prod;
 } Workspace;
 
 static Str make_str_from_section_id(VdDspcSection *section);
@@ -696,6 +697,7 @@ int main(int argc, char const *argv[])
     Arg arg = arg_new(argc, (char**)argv);
     arg_skip_program_name(&arg);
 
+    int is_prod = 0;
     while (!arg_at_end(&arg)) {
 
         Str argname;
@@ -714,6 +716,8 @@ int main(int argc, char const *argv[])
                 ERR_EXIT("Expected argument after -o!");
             }
             directory_to_write_to = argvalue_str.s;
+        } else if (str_eq(argname, LIT("p"))) {
+            is_prod = 1;
         }
     }
 
@@ -724,6 +728,7 @@ int main(int argc, char const *argv[])
     Workspace workspace = {
         .source_dir = vd_str_from_cstr((char*)directory_to_open),
         .global_arena = vd_arena_from_malloc(MEGABYTES(64)),
+        .is_prod = is_prod,
     };
 
     Global_Workspace = &workspace;
@@ -962,6 +967,9 @@ static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
             Str value_str = make_str_from_tag_value(tag_title);
 
             PUT_LINE("<head>");
+            if (get_workspace()->is_prod) {
+                PUT_LINE("<base href=\"/vd-libs/\">");
+            }
             PUT_LINE("<meta charset=\"utf-8\">");
             PUT_LINE("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
             PUT_LINE("<link rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"/apple-touch-icon.png\">");
