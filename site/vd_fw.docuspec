@@ -1,8 +1,8 @@
 @title("vd_fw.h")
 
 @section("Brief") {
-    @img(src="/assets/fw/vd-fw-logo@1x.png"
-         srcset="/assets/fw/vd-fw-logo@1x.png 1x, /assets/fw/vd-fw-logo@2x.png 2x"
+    @img(src="./assets/fw/vd-fw-logo@1x.png"
+         srcset="./assets/fw/vd-fw-logo@1x.png 1x, ./assets/fw/vd-fw-logo@2x.png 2x"
          width="128"
          height="106.5"
          class="span-image")
@@ -679,7 +679,7 @@ int main(int argc, char const *argv[])
         }
 
         @img(class="rounded img-fluid rmprint"
-             src="/assets/fw/tutorials-main-loop.gif")
+             src="./assets/fw/tutorials-main-loop.gif")
     }
 
     @section("Choose OpenGL Version") {
@@ -740,7 +740,7 @@ vd_fw_init(&init_info);
         }
 
         @img(class="rounded img-fluid rmprint"
-             src="/assets/fw/tutorials-borderless.gif")
+             src="./assets/fw/tutorials-borderless.gif")
     }
 
     @section("Create a Shader Program") {
@@ -898,7 +898,7 @@ glBindVertexArray(0);
         ```
 
         @img(class="rounded img-fluid rmprint"
-             src="/assets/fw/tutorials-drawing-a-rectangle.gif")
+             src="./assets/fw/tutorials-drawing-a-rectangle.gif")
     }
 
     @section("Set the Drag Area") {
@@ -914,7 +914,7 @@ glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
         ```
 
         @img(class="rounded img-fluid rmprint"
-             src="/assets/fw/tutorials-ncrects-frame.gif")
+             src="./assets/fw/tutorials-ncrects-frame.gif")
 
         para {
             In a borderless window, there is no specified non-client area. So to allow the user to drag the window
@@ -936,7 +936,7 @@ vd_fw_set_ncrects(draggable_rect, 0, 0);
         }
 
         @img(class="rounded img-fluid rmprint"
-             src="/assets/fw/tutorials-ncrects-drag-frame.gif")
+             src="./assets/fw/tutorials-ncrects-drag-frame.gif")
         
         para {
             Now, for the 2 last parameters to <code>vd_fw_set_ncrects</code>:
@@ -975,7 +975,7 @@ glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
         ```
 
         @img(class="rounded img-fluid rmprint"
-             src="/assets/fw/tutorials-ncrects-button.gif")
+             src="./assets/fw/tutorials-ncrects-button.gif")
 
         para {
             As you can see, we can still drag the window even if the mouse is on the button. <br>
@@ -1005,7 +1005,7 @@ vd_fw_set_ncrects(draggable_rect, 1, exclude_rects);
         ```
 
         @img(class="rounded img-fluid rmprint"
-             src="/assets/fw/tutorials-ncrects-button-no-drag.gif")
+             src="./assets/fw/tutorials-ncrects-button-no-drag.gif")
         
         para {
             The code is straightforward; we exclude the exact position of our red button.
@@ -1232,7 +1232,7 @@ glDrawArrays(GL_TRIANGLES, 0, 36);
         ```
 
         @img(class="rounded img-fluid rmprint"
-             src="/assets/fw/tutorials-rendering-cube.gif")
+             src="./assets/fw/tutorials-rendering-cube.gif")
 
         para {
             And here we have a 3d cube! As you can see, I've already added the movement of the camera
@@ -1333,7 +1333,7 @@ float camera_forward[3] = {
         ```
 
         @img(class="rounded img-fluid rmprint"
-             src="/assets/fw/tutorials-rendering-camera.gif")
+             src="./assets/fw/tutorials-rendering-camera.gif")
 
         para {
             Okay, we can move the cube, but we can't really exit the application easily, since the mouse
@@ -1347,7 +1347,7 @@ if (vd_fw_get_key_pressed(VD_FW_KEY_F1) && vd_fw_get_key_down(VD_FW_KEY_LSHIFT))
         ```
 
         @img(class="rounded img-fluid rmprint"
-             src="/assets/fw/tutorials-rendering-cubeapp.gif")
+             src="./assets/fw/tutorials-rendering-cubeapp.gif")
 
         para {
             And we finally have a resizable, draggable window with our own custom button and cube.
@@ -1408,7 +1408,7 @@ vd_fw_set_app_icon(icon_pixels, 32, 32);
         ```
 
         @img(class="rounded img-fluid rmprint"
-             src="/assets/fw/tutorials-appicon.gif")
+             src="./assets/fw/tutorials-appicon.gif")
 
         para {
             On Windows, the icon will also be shown in:

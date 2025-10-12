@@ -980,8 +980,8 @@ static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
             PUT_LINE("<nav id=\"mainnav\" class=\"navbar sticky-top navbar-expand-md bg-body-tertiary\">");
                 PUT_LINE("<div class=\"container-fluid bg-body-tertiary\">");
                     PUT_LINE("<a class=\"navbar-brand\" href=\"#\">");
-                        PUT_LINE("<img    src=\"/assets/vd-logo-p@1x.png\"");
-                            PUT_LINE("srcset=\"/assets/vd-logo-p@1x.png 1x, /assets/vd-logo-p@2x.png 2x\"");
+                        PUT_LINE("<img    src=\"./assets/vd-logo-p@1x.png\"");
+                            PUT_LINE("srcset=\"./assets/vd-logo-p@1x.png 1x, /assets/vd-logo-p@2x.png 2x\"");
                                 PUT_LINE("alt=\"Brand\"");
                             PUT_LINE("width=\"64\"");
                             PUT_LINE("height=\"38.5\">");
@@ -1052,10 +1052,10 @@ static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
     PUT_LINE("        crossorigin=\"anonymous\"></script>");
     PUT_LINE("<script src=\"https://cdn.jsdelivr.net/npm/fuse.js@6.6.2/dist/fuse.min.js\"></script>");
     if (!get_current_source_file()->notoc) {
-        PUT_LINE("<script src=\"/auto-toc.js\"></script>");
+        PUT_LINE("<script src=\"./auto-toc.js\"></script>");
     }
-    PUT_LINE("<script src=\"/search.js\"></script>");
-    PUT_LINE("<script src=\"/index.js\"></script>");
+    PUT_LINE("<script src=\"./search.js\"></script>");
+    PUT_LINE("<script src=\"./index.js\"></script>");
 
     PUT_LINE("</body>");
     PUT_LINE("</html>");

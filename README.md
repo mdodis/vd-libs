@@ -1,6 +1,9 @@
 ![vd-libs logo](./site-base/assets/vd-logo-p@1x.png)
 
 A collection of header-only libraries and utility programs
+
+![Documentation](https://mdodis.github.io/vd-libs/)
+
 ## Libraries
 
 | Library                                                   | Description                                                                                                                          | Logo                                                           |
