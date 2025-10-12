@@ -1,7 +1,7 @@
 let searchIndex = null;
 let fuse = null;
 
-fetch("/search-index.json")
+fetch("./search-index.json")
     .then(response => response.json())
     .then(data => {
         const options = {
