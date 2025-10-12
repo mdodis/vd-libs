@@ -2,7 +2,7 @@
 
 A collection of header-only libraries and utility programs
 
-![Documentation](https://mdodis.github.io/vd-libs/)
+[Documentation](https://mdodis.github.io/vd-libs/)
 
 ## Libraries
 
