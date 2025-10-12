@@ -39,10 +39,10 @@
  * - set min/max window size
  * - set window unresizable
  * - vd_fw_get_executable_dir() <-- statically allocated char * of executable directory
- * - vd_fw_minimize()
- * - vd_fw_maximize()
  * - vd_fw_get_last_key_pressed
  * - vd_fw_get_last_mouse_button_pressed
+ * - MacOS:vd_fw_minimize()
+ * - MacOS:vd_fw_maximize()
  * - MacOS: vd_fw_set_app_icon
  * - MacOS: vd_fw_set_fullscreen
  * - When window not focused, or minimize, delay drawing?
@@ -399,6 +399,30 @@ VD_FW_API int                vd_fw_get_size(int *w, int *h);
  * @param  h The height of the window, in pixels
  */
 VD_FW_API void               vd_fw_set_size(int w, int h);
+
+/**
+ * @brief Get if the window is minimized
+ * @param  minimized Whether the window is minimized
+ * @return 1 if the minimization state of the window was changed
+ */
+VD_FW_API int                vd_fw_get_minimized(int *minimized);
+
+/**
+ * @brief Minimize the window
+ */
+VD_FW_API void               vd_fw_minimize(void);
+
+/**
+ * @brief Get if the window is maximized
+ * @param  maximized Whether the window is maximized
+ * @return 1 if the maximization state of the window was changed
+ */
+VD_FW_API int                vd_fw_get_maximized(int *maximized);
+
+/**
+ * @brief Maximize the window
+ */
+VD_FW_API void               vd_fw_maximize(void);
 
 /**
  * @brief Enter/exit fullscreen.
@@ -5363,11 +5387,16 @@ enum {
     VD_FW_WIN32_MESSAGE_TYPE_MOUSEBTN    = 12,
     VD_FW_WIN32_MESSAGE_TYPE_CHANGEFOCUS = 13,
     VD_FW_WIN32_MESSAGE_TYPE_KEYSTATE    = 14,
+    VD_FW_WIN32_MESSAGE_TYPE_STATECHANGE = 15,
 
     VD_FW_WIN32_SHOW_CURSOR  = VD_FW_WM_USER + 1,
     VD_FW_WIN32_UPDATE_TITLE = VD_FW_WM_USER + 2, 
     VD_FW_WIN32_FULLSCREEN   = VD_FW_WM_USER + 3, 
     VD_FW_WIN32_SIZE         = VD_FW_WM_USER + 4, 
+
+    VD_FW_WIN32_WINDOW_STATE_MINIMIZED = 1 << 0,
+    VD_FW_WIN32_WINDOW_STATE_MAXIMIZED = 1 << 1,
+
 };
 
 typedef struct {
@@ -5399,6 +5428,11 @@ typedef struct {
             VdFwWORD  vkcode;
             int       down;
         } keystate;
+
+        struct {
+            int window_state_flag_that_changed;
+            int window_state_flag_value;
+        } statechange;
     } dat;
 } VdFw__Win32Message;
 
@@ -5458,6 +5492,8 @@ typedef struct {
     VdFwBOOL                    is_fullscreen;
     VdFw__GamepadState          gamepad_curr_states[VD_FW_GAMEPAD_COUNT_MAX];
     VdFw__GamepadState          gamepad_prev_states[VD_FW_GAMEPAD_COUNT_MAX];
+    int                         window_state;
+    int                         window_state_changed;
 
 /* ----RENDER THREAD - WINDOW THREAD DATA---------------------------------------------------------------------------- */
     VdFw__Win32Message          msgbuf[VD_FW_WIN32_MESSAGE_BUFFER_SIZE];
@@ -6204,6 +6240,7 @@ VD_FW_API int vd_fw_running(void)
     VD_FW_G.wheel[0] = 0.f;
     VD_FW_G.wheel[1] = 0.f;
     VD_FW_G.focus_changed = 0;
+    VD_FW_G.window_state_changed = 0;
 
     for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
         VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
@@ -6244,6 +6281,34 @@ VD_FW_API int vd_fw_running(void)
 
                 // VD_FW_G.prev_key_states[key] = VD_FW_G.curr_key_states[key];
                 VD_FW_G.curr_key_states[key] = (unsigned char)is_down;
+
+            } break;
+
+            case VD_FW_WIN32_MESSAGE_TYPE_STATECHANGE: {
+                int prev_state = VD_FW_G.window_state;
+                int change_flag = 0;
+
+                if (mm.dat.statechange.window_state_flag_that_changed & VD_FW_WIN32_WINDOW_STATE_MINIMIZED) {
+                    change_flag = VD_FW_WIN32_WINDOW_STATE_MINIMIZED;
+
+                    if (mm.dat.statechange.window_state_flag_value) {
+                        VD_FW_G.window_state |= VD_FW_WIN32_WINDOW_STATE_MINIMIZED;
+                    } else {
+                        VD_FW_G.window_state &= ~VD_FW_WIN32_WINDOW_STATE_MINIMIZED;
+                    }
+                } else if (mm.dat.statechange.window_state_flag_that_changed & VD_FW_WIN32_WINDOW_STATE_MAXIMIZED) {
+                    change_flag = VD_FW_WIN32_WINDOW_STATE_MAXIMIZED;
+
+                    if (mm.dat.statechange.window_state_flag_value) {
+                        VD_FW_G.window_state |= VD_FW_WIN32_WINDOW_STATE_MAXIMIZED;
+                    } else {
+                        VD_FW_G.window_state &= ~VD_FW_WIN32_WINDOW_STATE_MAXIMIZED;
+                    }
+                }
+
+                if (prev_state != VD_FW_G.window_state) {
+                    VD_FW_G.window_state_changed |= change_flag;
+                }
 
             } break;
 
@@ -6356,6 +6421,28 @@ VD_FW_API void vd_fw_set_size(int w, int h)
         VD_FW_WIN32_SIZE,
         0, /* WPARAM */
         lparam));
+}
+
+VD_FW_API int vd_fw_get_minimized(int *minimized)
+{
+    *minimized = VD_FW_G.window_state & VD_FW_WIN32_WINDOW_STATE_MINIMIZED;
+    return VD_FW_G.window_state_changed & VD_FW_WIN32_WINDOW_STATE_MINIMIZED;
+}
+
+VD_FW_API void vd_fw_minimize(void)
+{
+    VdFwShowWindow(VD_FW_G.hwnd, SW_MINIMIZE);
+}
+
+VD_FW_API int vd_fw_get_maximized(int *maximized)
+{
+    *maximized = VD_FW_G.window_state & VD_FW_WIN32_WINDOW_STATE_MAXIMIZED;
+    return VD_FW_G.window_state_changed & VD_FW_WIN32_WINDOW_STATE_MAXIMIZED;
+}
+
+VD_FW_API void vd_fw_maximize(void)
+{
+    VdFwShowWindow(VD_FW_G.hwnd, SW_MAXIMIZE);
 }
 
 VD_FW_API void vd_fw_set_fullscreen(int on)
@@ -7309,6 +7396,39 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             // In this case and in this case only, we already know that we're drawing default borders
             VD_FW_G.w = LOWORD(lparam);
             VD_FW_G.h = HIWORD(lparam);
+
+            switch (wparam) {
+                case SIZE_MINIMIZED: {
+                    VdFw__Win32Message mm;
+                    mm.msg = VD_FW_WIN32_MESSAGE_TYPE_STATECHANGE;
+                    mm.dat.statechange.window_state_flag_that_changed = VD_FW_WIN32_WINDOW_STATE_MINIMIZED;
+                    mm.dat.statechange.window_state_flag_value = 1;
+                    vd_fw__msgbuf_w(&mm);
+                } break;
+
+                case SIZE_RESTORED: {
+                    VdFw__Win32Message mm;
+                    mm.msg = VD_FW_WIN32_MESSAGE_TYPE_STATECHANGE;
+                    mm.dat.statechange.window_state_flag_that_changed = VD_FW_WIN32_WINDOW_STATE_MINIMIZED;
+                    mm.dat.statechange.window_state_flag_value = 0;
+                    vd_fw__msgbuf_w(&mm);
+
+                    mm.msg = VD_FW_WIN32_MESSAGE_TYPE_STATECHANGE;
+                    mm.dat.statechange.window_state_flag_that_changed = VD_FW_WIN32_WINDOW_STATE_MAXIMIZED;
+                    mm.dat.statechange.window_state_flag_value = 0;
+                    vd_fw__msgbuf_w(&mm);
+                } break;
+
+                case SIZE_MAXIMIZED: {
+                    VdFw__Win32Message mm;
+                    mm.msg = VD_FW_WIN32_MESSAGE_TYPE_STATECHANGE;
+                    mm.dat.statechange.window_state_flag_that_changed = VD_FW_WIN32_WINDOW_STATE_MAXIMIZED;
+                    mm.dat.statechange.window_state_flag_value = 1;
+                    vd_fw__msgbuf_w(&mm);
+                } break;
+
+                default: break;
+            }
         } break;
 
         case WM_INPUT: {
