@@ -972,15 +972,15 @@ static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
             }
             PUT_LINE("<meta charset=\"utf-8\">");
             PUT_LINE("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
-            PUT_LINE("<link rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"/apple-touch-icon.png\">");
-            PUT_LINE("<link rel=\"icon\" type=\"image/png\" sizes=\"32x32\" href=\"/favicon-32x32.png\">");
-            PUT_LINE("<link rel=\"icon\" type=\"image/png\" sizes=\"16x16\" href=\"/favicon-16x16.png\">");
-            PUT_LINE("<link rel=\"manifest\" href=\"/site.webmanifest\">");
+            PUT_LINE("<link rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"./apple-touch-icon.png\">");
+            PUT_LINE("<link rel=\"icon\" type=\"image/png\" sizes=\"32x32\" href=\"./favicon-32x32.png\">");
+            PUT_LINE("<link rel=\"icon\" type=\"image/png\" sizes=\"16x16\" href=\"./favicon-16x16.png\">");
+            PUT_LINE("<link rel=\"manifest\" href=\"./site.webmanifest\">");
             PUT_LINE("<meta charset=\"utf-8\">");
             PUT_LINE("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
             PUT_LINE("<title>%.*s</title>", STR_EXPAND(value_str));
             PUT_LINE("<link href=\"https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css\" rel=\"stylesheet\" integrity=\"sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB\" crossorigin=\"anonymous\">");
-            PUT_LINE("<link rel=\"stylesheet\" href=\"/style.css\">");;
+            PUT_LINE("<link rel=\"stylesheet\" href=\"./style.css\">");;
             PUT_LINE("</head>");
 
             PUT_LINE("<body class=\"d-flex flex-column min-vh-100\" data-bs-spy=\"scroll\" data-bs-target=\"#toc\" data-bs-offset=\"50\" tabindex=\"0\">");
@@ -1001,7 +1001,7 @@ static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
                     PUT_LINE("<div class=\"collapse navbar-collapse\" id=\"navbarNav\">");
                         PUT_LINE("<ul class=\"navbar-nav\">");
                             PUT_LINE("<li class=\"nav-item\">");
-                                PUT_LINE("<a class=\"nav-link\" aria-current=\"page\" href=\"/index.html\">Home</a>");
+                                PUT_LINE("<a class=\"nav-link\" aria-current=\"page\" href=\"./index.html\">Home</a>");
                             PUT_LINE("</li>");
                             PUT_LINE("<!-- Begin Files -->");
                             PUT_LINE("<li class=\"nav-item dropdown\">");
@@ -1016,7 +1016,7 @@ static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
                                             continue;
                                         }
 
-                                        PUT_LINE("<li><a class=\"dropdown-item\" href=\"/%.*s.html\">%.*s.h</a></li>",
+                                        PUT_LINE("<li><a class=\"dropdown-item\" href=\"./%.*s.html\">%.*s.h</a></li>",
                                             STR_EXPAND(source_file->title),
                                             STR_EXPAND(source_file->title));
                                     }

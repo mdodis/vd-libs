@@ -24,7 +24,7 @@
 
 @section("Released Libraries") {
     @div(class="d-flex flex-row flex-wrap") {
-        @a(class="libcard card text-decoration-none d-flex justify-content-center mt-2 mx-1 flex-grow-1" href="/vd_fw.html") {
+        @a(class="libcard card text-decoration-none d-flex justify-content-center mt-2 mx-1 flex-grow-1" href="./vd_fw.html") {
             @div(class="row g-0") {
                 @div(class="col-md-4 d-flex justify-content-center p-2") {
                     @img(src="./assets/fw/vd-fw-logo@1x.png"
