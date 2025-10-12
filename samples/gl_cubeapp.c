@@ -260,7 +260,7 @@ int main(int argc, char const *argv[])
 
         int exclude_rects[1][4] = {
             {
-                w - 30, // left
+                w - 30 * 3, // left
                 0,      // top
                 w,      // right
                 30,     // bottom
@@ -282,15 +282,57 @@ int main(int argc, char const *argv[])
                 (my > (0.f) && my < (30.f));
 
             if (mouse_inside_close_button) {
-                button_color[0] = 0.7f;    
-                button_color[1] = 0.0f;    
-                button_color[2] = 0.0f;    
-                button_color[3] = 1.0f;    
+                button_color[0] = 0.7f;
+                button_color[1] = 0.0f;
+                button_color[2] = 0.0f;
+                button_color[3] = 1.0f;
             }
 
             glUniform4f(glGetUniformLocation(program, "rect_color"), button_color[0], button_color[1], button_color[2], button_color[3]);
             glUniform2f(glGetUniformLocation(program, "rect_size"), 30.f, 30.f);
             glUniform2f(glGetUniformLocation(program, "rect_off"), (float)w - 30.f, 0.f);
+            glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+        }
+
+        {
+            float button_color[4] = {0.7f, 0.7f, 0.7f, 1.0f};
+            int mouse_inside_maximize_button =
+                (mx > ((float)w - 30.f * 2.f)) && (mx < ((float)w - 30.f)) &&
+                (my > (0.f) && my < (30.f));
+
+            if (mouse_inside_maximize_button) {
+                button_color[0] = 0.9f;
+                button_color[1] = 0.9f;
+                button_color[2] = 0.9f;
+                button_color[3] = 1.0f;
+            }
+
+            glUniform4f(glGetUniformLocation(program, "rect_color"), button_color[0], button_color[1], button_color[2], button_color[3]);
+            glUniform2f(glGetUniformLocation(program, "rect_size"), 20.f, 20.f);
+            glUniform2f(glGetUniformLocation(program, "rect_off"), (float)w - 30.f * 2.f, 5.f);
+            glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+        }
+
+        {
+            float button_color[4] = {0.7f, 0.7f, 0.7f, 1.0f};
+            int mouse_inside_minimize_button =
+                (mx > ((float)w - 30.f * 3.f)) && (mx < ((float)w - 30.f * 2.f)) &&
+                (my > (0.f) && my < (30.f));
+
+            if (mouse_inside_minimize_button) {
+                button_color[0] = 0.9f;
+                button_color[1] = 0.9f;
+                button_color[2] = 0.9f;
+                button_color[3] = 1.0f;
+            }
+
+            if (mouse_inside_minimize_button && vd_fw_get_mouse_clicked(VD_FW_MOUSE_BUTTON_LEFT)) {
+                vd_fw_minimize();
+            }
+
+            glUniform4f(glGetUniformLocation(program, "rect_color"), button_color[0], button_color[1], button_color[2], button_color[3]);
+            glUniform2f(glGetUniformLocation(program, "rect_size"), 20.f, 5.f);
+            glUniform2f(glGetUniformLocation(program, "rect_off"), (float)w - 30.f * 3.f, 20.f);
             glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
         }
 

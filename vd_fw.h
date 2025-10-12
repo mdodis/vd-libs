@@ -349,6 +349,10 @@ enum {
     VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN   = 1 << 0,
     VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN  = 1 << 1,
     VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN = 1 << 2,
+
+    VD_FW_MOUSE_BUTTON_LEFT   = VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN,
+    VD_FW_MOUSE_BUTTON_RIGHT  = VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN,
+    VD_FW_MOUSE_BUTTON_MIDDLE = VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN,
 };
 
 typedef struct {
@@ -491,6 +495,21 @@ VD_FW_API int                vd_fw_get_mouse_state(int *x, int *y);
  * @return   The mouse button state
  */
 VD_FW_INL int                vd_fw_get_mouse_statef(float *x, float *y);
+
+/**
+ * @brief Get if the supplied button was just clicked
+ * @param  button The button to check
+ * @return        Whether the button was clicked last frame
+ */
+VD_FW_API int                vd_fw_get_mouse_clicked(int button);
+
+
+/**
+ * @brief Get if the supplied button was just released
+ * @param  button The button check
+ * @return        Whether the button was released last frame
+ */
+VD_FW_API int                vd_fw_get_mouse_released(int button);
 
 /**
  * @brief Capture mouse and receive events outside of the window region.
@@ -5484,6 +5503,8 @@ typedef struct {
     float                       wheel[2];
     unsigned long long          last_ns;
     int                         mouse[2];
+    int                         prev_mouse_state;
+    int                         mouse_state;
     VdFwDWORD                   lmousedown;
     VdFwDWORD                   rmousedown;
     VdFwDWORD                   mmousedown;
@@ -6241,6 +6262,7 @@ VD_FW_API int vd_fw_running(void)
     VD_FW_G.wheel[1] = 0.f;
     VD_FW_G.focus_changed = 0;
     VD_FW_G.window_state_changed = 0;
+    VD_FW_G.prev_mouse_state = VD_FW_G.mouse_state;
 
     for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
         VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
@@ -6260,12 +6282,21 @@ VD_FW_API int vd_fw_running(void)
             } break;
 
             case VD_FW_WIN32_MESSAGE_TYPE_MOUSEBTN: {
-                if (mm.dat.mousebtn.vkbutton == VK_LBUTTON) {
-                    VD_FW_G.lmousedown = mm.dat.mousebtn.down;
-                } else if (mm.dat.mousebtn.vkbutton == VK_RBUTTON) {
-                    VD_FW_G.rmousedown = mm.dat.mousebtn.down;
-                } else if (mm.dat.mousebtn.vkbutton == VK_MBUTTON) {
-                    VD_FW_G.mmousedown = mm.dat.mousebtn.down;
+                int state_mask = 0;
+
+                switch (mm.dat.mousebtn.vkbutton) {
+                    case VK_LBUTTON: state_mask = VD_FW_MOUSE_BUTTON_LEFT; break;
+                    case VK_RBUTTON: state_mask = VD_FW_MOUSE_BUTTON_RIGHT; break;
+                    case VK_MBUTTON: state_mask = VD_FW_MOUSE_BUTTON_MIDDLE; break;
+                    default: break;
+                }
+
+                if (state_mask) {
+                    if (mm.dat.mousebtn.down) {
+                        VD_FW_G.mouse_state |= state_mask;
+                    } else {
+                        VD_FW_G.mouse_state &= ~state_mask;
+                    }
                 }
             } break;
 
@@ -6509,12 +6540,17 @@ VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
     if (x) *x = VD_FW_G.mouse[0];
     if (y) *y = VD_FW_G.mouse[1];
 
-    int result = 0;
+    return VD_FW_G.mouse_state;
+}
 
-    result |= VD_FW_G.lmousedown ? VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN   : 0;
-    result |= VD_FW_G.rmousedown ? VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN  : 0;
-    result |= VD_FW_G.mmousedown ? VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN : 0;
-    return result;
+VD_FW_API int vd_fw_get_mouse_clicked(int button)
+{
+    return !(VD_FW_G.prev_mouse_state & button) && (VD_FW_G.mouse_state & button);
+}
+
+VD_FW_API int vd_fw_get_mouse_released(int button)
+{
+    return (VD_FW_G.prev_mouse_state & button) && !(VD_FW_G.mouse_state & button);
 }
 
 VD_FW_API int vd_fw_get_key_pressed(int key)
@@ -7316,6 +7352,44 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             VD_FW_WIN32_PROFILE_END(wm_ncpaint);
         } break;
 
+
+        // @note(mdodis): The two message below are handled just to send a left mouse button up message
+        // When a custom chrome window is defined, DefWindowProc will consume several non client area messages regarding
+        // the mouse.
+        // 
+        // This results in WM_NCLBUTTONUP not being sent when the left mouse button is left on a window sub-rectangle
+        // for which WM_NCHITTEST returns HTCAPTION. 
+        // 
+        // The only two reliable ways I've found to handle this is by emitting left mouse button up during the following
+        // messages:
+        // - WM_EXITSIZEMOVE 
+        // - WM_SYSCOMMAND, with wParam == 0x0000F012.
+        //
+        // Obviously the second message is technically part of the internal Windows API that's used to handle some part
+        // of the SIZEMOVE op... but I'm not really sure if there's a better way to do it and keep the mouse interface
+        // relatively simple.
+        case WM_EXITSIZEMOVE: {
+            if (!VD_FW_G.draw_decorations) {
+                VdFw__Win32Message m;
+                m.msg = VD_FW_WIN32_MESSAGE_TYPE_MOUSEBTN;
+                m.dat.mousebtn.down = 0;
+                m.dat.mousebtn.vkbutton = VK_LBUTTON;
+                vd_fw__msgbuf_w(&m);
+            }
+        } break;
+        case WM_SYSCOMMAND: {
+            if (!VD_FW_G.draw_decorations) {
+                if (wparam == 0x0000F012) {
+                    VdFw__Win32Message m;
+                    m.msg = VD_FW_WIN32_MESSAGE_TYPE_MOUSEBTN;
+                    m.dat.mousebtn.down = 0;
+                    m.dat.mousebtn.vkbutton = VK_LBUTTON;
+                    vd_fw__msgbuf_w(&m);
+                }
+            }
+            result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
+        } break;
+
         case WM_DPICHANGED: {
             VdFwRECT *rect = (VdFwRECT*)lparam;
             VdFwSetWindowPos(hwnd, 0, rect->left, rect->top, rect->right - rect->left, rect->bottom - rect->top, SWP_NOZORDER | SWP_NOACTIVATE);
@@ -7809,11 +7883,11 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                             // Usages 0x0030 - 0x0035: X,Y,Z,Rx,Ry,Rz
                             unsigned char axis_input = vd_fw__map_axial_usage_to_axis(value_caps[i].v.NotRange.Usage);
 
-                            printf("Axis: %02x (%2d)\n", value_caps[i].v.NotRange.Usage, value_caps[i].v.NotRange.Usage);
-                            printf("--------------------\n");
-                            printf("DataIndex: %d\n", value_caps[i].v.NotRange.DataIndex);
-                            printf("ReportCount: %d\n", value_caps[i].ReportCount);
-                            printf("--------------------\n");
+                            // printf("Axis: %02x (%2d)\n", value_caps[i].v.NotRange.Usage, value_caps[i].v.NotRange.Usage);
+                            // printf("--------------------\n");
+                            // printf("DataIndex: %d\n", value_caps[i].v.NotRange.DataIndex);
+                            // printf("ReportCount: %d\n", value_caps[i].ReportCount);
+                            // printf("--------------------\n");
                             if (axis_input == 0xFF) {
                                 continue;
                             }
@@ -7993,37 +8067,37 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             vd_fw__msgbuf_w(&m);
         } break;
 
-        // case WM_NCMBUTTONUP:
-        // case WM_NCMBUTTONDOWN:
-        // case WM_NCRBUTTONUP:
-        // case WM_NCRBUTTONDOWN:
-        // case WM_NCLBUTTONUP:
-        // case WM_NCLBUTTONDOWN: {
+        case WM_NCMBUTTONUP:
+        case WM_NCMBUTTONDOWN:
+        case WM_NCRBUTTONUP:
+        case WM_NCRBUTTONDOWN:
+        case WM_NCLBUTTONUP:
+        case WM_NCLBUTTONDOWN: {
 
-        //     if (!VD_FW_G.draw_decorations) {
-        //         int down = 0;
-        //         DWORD code = 0;
+            if (!VD_FW_G.draw_decorations) {
+                int down = 0;
+                VdFwDWORD code = 0;
 
-        //         switch (msg) {
+                switch (msg) {
 
-        //             case WM_NCMBUTTONUP:    down = 0; code = VK_MBUTTON; break;
-        //             case WM_NCMBUTTONDOWN:  down = 1; code = VK_MBUTTON; break;
-        //             case WM_NCRBUTTONUP:    down = 0; code = VK_RBUTTON; break;
-        //             case WM_NCRBUTTONDOWN:  down = 1; code = VK_RBUTTON; break;
-        //             case WM_NCLBUTTONUP:    down = 0; code = VK_LBUTTON; break;
-        //             case WM_NCLBUTTONDOWN:  down = 1; code = VK_LBUTTON; break;
-        //             default: break;
-        //         }
+                    case WM_NCMBUTTONUP:    down = 0; code = VK_MBUTTON; break;
+                    case WM_NCMBUTTONDOWN:  down = 1; code = VK_MBUTTON; break;
+                    case WM_NCRBUTTONUP:    down = 0; code = VK_RBUTTON; break;
+                    case WM_NCRBUTTONDOWN:  down = 1; code = VK_RBUTTON; break;
+                    case WM_NCLBUTTONUP:    down = 0; code = VK_LBUTTON; break;
+                    case WM_NCLBUTTONDOWN:  down = 1; code = VK_LBUTTON; break;
+                    default: break;
+                }
 
-        //         VdFw__Win32Message m;
-        //         m.msg = VD_FW_WIN32_MESSAGE_TYPE_MOUSEBTN;
-        //         m.dat.mousebtn.down = down;
-        //         m.dat.mousebtn.vkbutton = code;
-        //         vd_fw__msgbuf_w(&m);
-        //     }
+                VdFw__Win32Message m;
+                m.msg = VD_FW_WIN32_MESSAGE_TYPE_MOUSEBTN;
+                m.dat.mousebtn.down = down;
+                m.dat.mousebtn.vkbutton = code;
+                vd_fw__msgbuf_w(&m);
+            }
 
-        //     result = DefWindowProc(hwnd, msg, wparam, lparam);
-        // } break;
+            result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
+        } break;
 
         // @todo(mdodis):
         case WM_SETFOCUS:
