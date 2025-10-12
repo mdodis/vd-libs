@@ -113,8 +113,8 @@ int main() {
     ```
 
     @carousel("fw-window-simple") {
-        @carousel-item("/assets/fw/window-simple-win32.png")
-        @carousel-item("/assets/fw/window-simple-macos.png")
+        @carousel-item("./assets/fw/window-simple-win32.png")
+        @carousel-item("./assets/fw/window-simple-macos.png")
     }
 
     @div(class="d-flex justify-content-end") {
