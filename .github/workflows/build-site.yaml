@@ -24,6 +24,9 @@ jobs:
       - name: Install GCC
         run: sudo apt-get update && sudo apt-get install -y build-essential
 
+      - name: Build the Site
+        run: ./scripts/linux/build_site.sh
+
       - name: Upload Artifact
         uses: actions/upload-pages-artifact@v3
         with:
