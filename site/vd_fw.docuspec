@@ -9,8 +9,8 @@
 
 
     para {
-        A library that gets you a semi-customizable window and an OpenGL context, minimizing dependencies and hiding the
-        complexities of doing proper windowing on each platform.
+        A <b>header-only</b> library that gets you a semi-customizable window and an OpenGL context, minimizing
+        dependencies and hiding the complexities of doing proper windowing on each platform.
     }
 
     para {
@@ -20,13 +20,43 @@
     }
 
     para {
+        This library can:
+
+        <ul>
+            <li>Open a window, handle input from keyboard/mouse/controller</li>
+            <li>Draw while resizing the window</li>
+            <li>Disable window decorations, but still be able to tile the window, customize the drag area, etc...</li>
+            <li>Load OpenGL (without using a loader library)</li>
+            <li>Set the window icon</li>
+            <li>All of that, with as minimal dependencies as possible (for example, you don't even need to link to or
+                have the development headers/libraries of X11/OpenGL, etc. on linux)</li>
+        </ul>
+    }
+
+    para {
+        The main idea of this library is that you shouldn't need to think about installing CMake, or messing with your
+        build tool's link paths, <i>just</i> to be able to draw some stuff using the GPU.
+        It should be easy to just drop in
+        right inside of your project, and start developing, with full access to a relatively small source code size.
+    }
+
+    para {
+        Additionally, this library:
+        <ul>
+            <li>Provides custom implementations of several math functions, like sinf</li>
+            <li>Doesn't use the standard C library (where possible)</li>
+            <li>Prodives convenience functions that can, for example, construct a perpsective projection matrix for OpenGL</li>
+            <li>Automatically sets up OpenGL debugging infrastructure</li>
+        </ul>
+    }
+
+    para {
         <b>Why should you use this library over, GLFW, SDL, SFML, ...?</b>
         <br>
 
         Those libraries solve a <b>much more</b> general problem than the one most developers have:
         <ul>
             <li>Create one or more windows</li>
-            <li>Enable/disable window styling</li>
             <li>Handle child/parent window relationships</li>
             <li>Provide aliases for common usermode operations (show file dialog, message box)</li>
             <li>Support many more platforms, even ones that don't include a windowing system.</li>
@@ -307,7 +337,8 @@ int main() {
             With MSVC you don't really need to link anything since linker directives in the
             translation unit that includes vd_fw.h are defined, so that the appropriate libraries
             and subsystem are used. Additionally, several core libraries are <b>dynamically</b> loaded in vd_fw_init.
-            The only library required during compilation is <code>kernel32.lib</code>.
+            The only library required during compilation is <code>kernel32.lib</code>. For reference, here are the
+            libraries this library tries to load during vd_fw_init:
 
             <ol class="list-group">
                 <li class="list-group-item">User32</li>
@@ -396,7 +427,7 @@ VdFwCreateBitmap          =          (VdFwProcCreateBitmap*)GetProcAddress(m, "C
     @section("MacOS") {
         para {
             For MacOS, it's a bit different. with clang, you must link several frameworks (via 
-            <code>-framework framework_name</code>). itionally, <code>-x objective-c</code> must be used since the
+            <code>-framework framework_name</code>). Additionally, <code>-x objective-c</code> must be used since the
             Mac APIs use Objective-C.
 
             <ol class="list-group">

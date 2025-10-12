@@ -809,6 +809,10 @@ typedef struct __GLsync *  GLsync;
 #ifdef _WIN32
 typedef unsigned __int64   GLuint64;
 typedef __int64            GLint64;
+#else
+#include <stdint.h>
+typedef uint64_t GLuint64;
+typedef int64_t  GLint64;
 #endif // _WIN32
 typedef void (*GLDEBUGPROC)(GLenum source,GLenum type,GLuint id,GLenum severity,GLsizei length,const GLchar *message,const void *userParam);
 
@@ -9126,7 +9130,112 @@ VD_FW_API void vd_fw__free_mem(void *memory)
 }
 
 #undef VD_FW_G
-#endif // _WIN32, __APPLE__
+
+#elif defined(__linux__)
+
+typedef void* VdFwPDisplay;
+
+#define VD_FW_X11_FUNCTIONS \
+    XBEGIN_MODULE(xlib) \
+    XSYM(xlib, VdFwPDisplay, XOpenDisplay, (const char *name)) \
+    XEND_MODULE()
+
+#define XBEGIN_MODULE(name)
+#define XSYM(module, retval, name, args) typedef retval (*VdFw__Proc##name)args; static VdFw__Proc##name VdFw__##name;
+#define XEND_MODULE()
+
+VD_FW_X11_FUNCTIONS
+
+#undef XBEGIN_MODULE
+#undef XSYM
+#undef XEND_MODULE
+
+#define VD_FW_LOG(fmt, ...) printf("fw: " fmt "\n", ##__VA_ARGS__)
+
+#include <dlfcn.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <X11/Xlib.h>
+#include <X11/Xutil.h>
+#include <X11/Xatom.h>
+
+typedef struct {
+    void         *handle_xlib;
+    int          has_xlib;
+    VdFwPDisplay display;
+    // Display *display;
+    // Window  root_window;
+} VdFw__LinuxInternalData;
+
+VdFw__LinuxInternalData VdFw__Globals = {0};
+
+#define VD_FW_G VdFw__Globals
+
+void *vd_fw__gl_get_proc_address(const char *name)
+{
+    return NULL;
+}
+
+VD_FW_API int vd_fw_init(VdFwInitInfo *info)
+{
+    {
+        VD_FW_G.handle_xlib = dlopen("libX11.so.6", RTLD_NOW | RTLD_GLOBAL);
+        VD_FW_G.has_xlib    = VD_FW_G.handle_xlib != NULL;
+
+#define XBEGIN_MODULE(name) if (VD_FW_G.has_##name) {
+#define XSYM(module, retval, name, args) VdFw__##name = (VdFw__Proc##name)dlsym(VD_FW_G.handle_##module, #name);
+#define XEND_MODULE() }
+        VD_FW_X11_FUNCTIONS
+#undef XBEGIN_MODULE
+#undef XSYM
+#undef XEND_MODULE
+    }
+
+    VD_FW_G.display = VdFw__XOpenDisplay(NULL);
+
+    if (VD_FW_G.display) {
+        VD_FW_LOG("Opened default display");
+    }
+
+    return 0;
+}
+
+VD_FW_API int vd_fw_running(void)
+{
+    return 0;
+}
+
+VD_FW_API int vd_fw_swap_buffers(void)
+{
+    return 0;
+}
+
+VD_FW_API int vd_fw_set_vsync_on(int on)
+{
+    return 0;
+}
+
+VD_FW_API int vd_fw_get_size(int *w, int *h)
+{
+    return 0;
+}
+
+VD_FW_API int vd_fw__any_time_higher(int num_files, const char **files, unsigned long long *check_against)
+{
+    return 0;
+}
+
+VD_FW_API char *vd_fw__debug_dump_file_text(const char *path)
+{
+    return NULL;
+}
+
+VD_FW_API void vd_fw__free_mem(void *memory)
+{
+    free(memory);
+}
+
+#endif // _WIN32, __APPLE__, __linux__
 
 #if !defined(__APPLE__)
 /* ----GL VERSION 1.0------------------------------------------------------------------------------------------------ */
