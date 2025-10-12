@@ -429,6 +429,11 @@ VD_FW_API int                vd_fw_get_maximized(int *maximized);
 VD_FW_API void               vd_fw_maximize(void);
 
 /**
+ * @brief Restores the window state, if it's minimized or maximized
+ */
+VD_FW_API void               vd_fw_normalize(void);
+
+/**
  * @brief Enter/exit fullscreen.
  * @param  on Whether to enter or exit fullscreen.
  */
@@ -6474,6 +6479,11 @@ VD_FW_API int vd_fw_get_maximized(int *maximized)
 VD_FW_API void vd_fw_maximize(void)
 {
     VdFwShowWindow(VD_FW_G.hwnd, SW_MAXIMIZE);
+}
+
+VD_FW_API void vd_fw_normalize(void)
+{
+    VdFwShowWindow(VD_FW_G.hwnd, SW_NORMAL);
 }
 
 VD_FW_API void vd_fw_set_fullscreen(int on)

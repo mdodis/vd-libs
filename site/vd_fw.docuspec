@@ -1477,7 +1477,30 @@ vd_fw_set_app_icon(icon_pixels, 32, 32);
              src="./assets/fw/tutorials-minimize-maximize.gif")
 
         para {
-            And now, let's make these buttons clickable. We'll use <code>vd_fw_get_mouse_clicked</code>:
+            And to implement the buttons:
+        }
+
+        verb```
+if (mouse_inside_maximize_button && vd_fw_get_mouse_clicked(VD_FW_MOUSE_BUTTON_LEFT)) {
+    int is_maximized;
+    vd_fw_get_maximized(&is_maximized);
+    if (is_maximized) {
+        vd_fw_normalize();
+    } else {
+        vd_fw_maximize();
+    }
+}
+
+if (mouse_inside_minimize_button && vd_fw_get_mouse_clicked(VD_FW_MOUSE_BUTTON_LEFT)) {
+    vd_fw_minimize();
+}
+        ```
+
+        @img(class="rounded img-fluid rmprint"
+             src="./assets/fw/tutorials-minimize-maximize-click.gif")
+
+        para {
+            Finally, we have a window that can be maximized and minized with customizable buttons.
         }
     }
 

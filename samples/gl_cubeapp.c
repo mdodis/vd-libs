@@ -307,6 +307,16 @@ int main(int argc, char const *argv[])
                 button_color[3] = 1.0f;
             }
 
+            if (mouse_inside_maximize_button && vd_fw_get_mouse_clicked(VD_FW_MOUSE_BUTTON_LEFT)) {
+                int is_maximized;
+                vd_fw_get_maximized(&is_maximized);
+                if (is_maximized) {
+                    vd_fw_normalize();
+                } else {
+                    vd_fw_maximize();
+                }
+            }
+
             glUniform4f(glGetUniformLocation(program, "rect_color"), button_color[0], button_color[1], button_color[2], button_color[3]);
             glUniform2f(glGetUniformLocation(program, "rect_size"), 20.f, 20.f);
             glUniform2f(glGetUniformLocation(program, "rect_off"), (float)w - 30.f * 2.f, 5.f);
