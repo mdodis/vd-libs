@@ -1,4 +1,3 @@
-#define VD_FW_WIN32_PROFILE 1
 #include "disable_clang_deprecations.h"
 #define VD_FW_NO_CRT 0
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS
@@ -430,6 +429,8 @@ int main(int argc, char const *argv[])
         vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RV, &draw_info.stick_r_value[1]);
         vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_LT, &draw_info.lt_value);
         vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RT, &draw_info.rt_value);
+
+        // printf("LT: %f RT: %f\n", draw_info.lt_value, draw_info.rt_value);
 
         float ref_width  = Base_Controller_Info.controller_dim[0];
         float ref_height = Base_Controller_Info.controller_dim[1];

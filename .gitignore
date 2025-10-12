@@ -11,3 +11,6 @@ build-*/
 site/api
 **/*.DS_Store
 **/x64
+siteold/index.html
+siteold/vd_fw.html
+siteold/search-index.json
