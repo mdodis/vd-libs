@@ -533,7 +533,7 @@ freely, subject to the following restrictions:
                 }
                 @tr() {
                     @td(){text{Linux (X11)}}
-                    @td(){text{Planned}}
+                    @td(class="table-warning"){text{In Progress}}
                 }
                 @tr() {
                     @td(){text{Linux (Wayland)}}

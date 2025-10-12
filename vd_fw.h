@@ -9132,12 +9132,28 @@ VD_FW_API void vd_fw__free_mem(void *memory)
 #undef VD_FW_G
 
 #elif defined(__linux__)
+#include <X11/Xlib.h>
+#include <X11/Xutil.h>
+#include <X11/Xatom.h>
 
-typedef void* VdFwPDisplay;
+extern Window XCreateWindow(
+    Display*            /* display */,
+    Window              /* parent */,
+    int                 /* x */,
+    int                 /* y */,
+    unsigned int        /* width */,
+    unsigned int        /* height */,
+    unsigned int        /* border_width */,
+    int                 /* depth */,
+    unsigned int        /* class */,
+    Visual*             /* visual */,
+    unsigned long       /* valuemask */,
+    XSetWindowAttributes*       /* attributes */
+);
 
 #define VD_FW_X11_FUNCTIONS \
     XBEGIN_MODULE(xlib) \
-    XSYM(xlib, VdFwPDisplay, XOpenDisplay, (const char *name)) \
+    XSYM(xlib, Display*, XOpenDisplay, (const char *name)) \
     XEND_MODULE()
 
 #define XBEGIN_MODULE(name)
@@ -9155,16 +9171,11 @@ VD_FW_X11_FUNCTIONS
 #include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
-#include <X11/Xatom.h>
 
 typedef struct {
     void         *handle_xlib;
     int          has_xlib;
-    VdFwPDisplay display;
-    // Display *display;
-    // Window  root_window;
+    Display      *display;
 } VdFw__LinuxInternalData;
 
 VdFw__LinuxInternalData VdFw__Globals = {0};
@@ -9197,7 +9208,21 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         VD_FW_LOG("Opened default display");
     }
 
-    return 0;
+    Window root = DefaultRootWindow(VD_FW_G.display);
+    int default_screen = DefaultScreen(VD_FW_G.display);
+
+    int screen_bits = 24;
+    XVisualInfo visual_info = {};
+    if (!XMatchVisualInfo(VD_FW_G.display, default_screen, screen_bits, TrueColor, &visual_info)) {
+        return 0;
+    }
+
+    XSetWindowAttributes window_attributes = {0};
+    window_attributes.background_pixel = 0;
+    window_attributes.colormap = XCreateColormap(VD_FW_G.display, root, visual_info.visual, AllocNone);
+    unsigned long attribute_mask = CWBackPixel | CWColormap;
+
+    return 1;
 }
 
 VD_FW_API int vd_fw_running(void)
