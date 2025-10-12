@@ -2179,6 +2179,51 @@ void vd_vm_release(void *addr, Vdusize len)
     munmap(addr, len);
 }
 
+#elif VD_PLATFORM_LINUX
+#include <sys/mman.h>
+#include <errno.h>
+#include <unistd.h>
+
+Vdusize vd_vm_get_page_size(void)
+{
+    return _SC_PAGE_SIZE;
+}
+
+void *vd_vm_reserve(Vdusize len)
+{
+    void *result = mmap(0, len, PROT_NONE, MAP_ANON | MAP_PRIVATE, -1, 0);
+    if (result == MAP_FAILED) {
+        fprintf(stderr, "vm_decommit failed: %d\n", errno);
+        VD_ASSERT(VD_FALSE);
+    }
+    return result;
+}
+
+void *vd_vm_commit(void *addr, Vdusize len)
+{
+    void *result = mmap(addr, len, PROT_READ | PROT_WRITE, MAP_FIXED | MAP_PRIVATE | MAP_ANON, -1, 0);
+    if (result == MAP_FAILED) {
+        fprintf(stderr, "vm_decommit failed: %d\n", errno);
+        VD_ASSERT(VD_FALSE);
+    }
+    return result;
+}
+
+void *vd_vm_decommit(void *addr, Vdusize len)
+{
+    void *result = mmap(addr, len, PROT_NONE, MAP_FIXED | MAP_PRIVATE | MAP_ANON, -1, 0);
+    if (result == MAP_FAILED) {
+        fprintf(stderr, "vm_decommit failed: %d\n", errno);
+        VD_ASSERT(VD_FALSE);
+    }
+    return result;
+}
+
+void vd_vm_release(void *addr, Vdusize len)
+{
+    munmap(addr, len);
+}
+
 #elif VD_PLATFORM_WINDOWS
 #include <windows.h>
 
@@ -3191,7 +3236,7 @@ query_file:
     stat(read_result->d_name, &stat_struct);    
 
     file->flags = 0;
-    if (stat_struct.st_mode & S_IFDIR) {
+    if (S_ISDIR(stat_struct.st_mode)) {
         file->flags |= VD_FILE_FLAG_DIRECTORY;
     }
 

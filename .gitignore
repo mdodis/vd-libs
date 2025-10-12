@@ -14,3 +14,6 @@ site/api
 siteold/index.html
 siteold/vd_fw.html
 siteold/search-index.json
+site-base/index.html
+site-base/vd_fw.html
+site-base/search-index.json
