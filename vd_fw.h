@@ -6783,34 +6783,6 @@ VD_FW_API unsigned long long vd_fw_delta_ns(void)
     return VD_FW_G.last_ns;
 }
 
-static VdFwBOOL IsWindows11OrGreater()
-{
-    OSVERSIONINFOEX vi;
-    VdFwULONGLONG conditions;
-
-    VD_FW_MEMSET(&vi, 0, sizeof(vi));
-    vi.dwOSVersionInfoSize = sizeof(vi);
-    vi.dwMajorVersion = 10;
-    vi.dwMinorVersion = 0;
-    vi.dwBuildNumber = 21996;
-    conditions = VerSetConditionMask (0,
-            VER_MAJORVERSION, VER_GREATER_EQUAL);
-    conditions = VerSetConditionMask (conditions,
-        VER_MINORVERSION, VER_GREATER_EQUAL);
-    conditions = VerSetConditionMask (conditions,
-        VER_BUILDNUMBER, VER_GREATER_EQUAL);
-
-    return VerifyVersionInfo (&vi,
-            VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER,
-            conditions) != FALSE;
-}
-
-
-static int is_windows_11_or_greater()
-{
-    return IsWindows11OrGreater();
-}
-
 static DWORD vd_fw__win_thread_proc(LPVOID param)
 {
     (void)param;
@@ -6901,21 +6873,16 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
 
     // Register raw input mouse
     {
-        VdFwRAWINPUTDEVICE rids[] = {
-            {
-                .usUsagePage   = 0x01, // Generic desktop controls
-                .usUsage       = 0x02, // Mouse
-                .dwFlags       = 0, // RIDEV_INPUTSINK,
-                .hwndTarget    = VD_FW_G.hwnd,
-            },
-            {
+        VdFwRAWINPUTDEVICE rids[2];
+        rids[0].usUsagePage = 0x01; // Generic desktop controls
+        rids[0].usUsage     = 0x02; // Mouse
+        rids[0].dwFlags     = 0x00; // None (NO RIDEV_INPUTSINK)
+        rids[0].hwndTarget  = VD_FW_G.hwnd;
 
-                .usUsagePage   = 0x01, // Generic desktop controls
-                .usUsage       = 0x05, // Gamepad
-                .dwFlags       = RIDEV_DEVNOTIFY,
-                .hwndTarget    = VD_FW_G.hwnd,
-            },
-        };
+        rids[1].usUsagePage = 0x01; // Generic desktop controls
+        rids[1].usUsage     = 0x05; // Gamepad
+        rids[1].dwFlags     = RIDEV_DEVNOTIFY;
+        rids[1].hwndTarget  = VD_FW_G.hwnd;
         VD_FW__CHECK_TRUE(VdFwRegisterRawInputDevices(rids, 2, sizeof(rids[0])));
     }
 
@@ -7163,36 +7130,30 @@ static void vd_fw__update_region(void)
         VdFwWINDOWINFO window_info = {};
         window_info.cbSize = sizeof(window_info);
         VdFwGetWindowInfo(VD_FW_G.hwnd, &window_info);
-        VD_FW_G.rgn = (VdFwRECT) {
-            .left   = window_info.rcClient.left   - window_info.rcWindow.left,
-            .top    = window_info.rcClient.top    - window_info.rcWindow.top,
-            .right  = window_info.rcClient.right  - window_info.rcWindow.left,
-            .bottom = window_info.rcClient.bottom - window_info.rcWindow.top,
-        };
+        VD_FW_G.rgn.left   = window_info.rcClient.left   - window_info.rcWindow.left;
+        VD_FW_G.rgn.top    = window_info.rcClient.top    - window_info.rcWindow.top;
+        VD_FW_G.rgn.right  = window_info.rcClient.right  - window_info.rcWindow.left;
+        VD_FW_G.rgn.bottom = window_info.rcClient.bottom - window_info.rcWindow.top;
     } else if (!VD_FW_G.composition_enabled) {
         // @note(mdodis): If composition is enabled, set the window's region to something really high so that shadows of
         // the window are still drawn
-        VD_FW_G.rgn = (VdFwRECT) {
-            .left   = 0,
-            .top    = 0,
-            .right  = 32767,
-            .bottom = 32767,
-        };
+        VD_FW_G.rgn.left   = 0;
+        VD_FW_G.rgn.top    = 0;
+        VD_FW_G.rgn.right  = 32767;
+        VD_FW_G.rgn.bottom = 32767;
     } else {
         // @note(mdodis): Otherwise, the window's region is left unchanged
-        VD_FW_G.rgn = (VdFwRECT) {
-            .left   = 0,
-            .top    = 0,
-            .right  = 0,
-            .bottom = 0,
-        };
+        VD_FW_G.rgn.left   = 0;
+        VD_FW_G.rgn.top    = 0;
+        VD_FW_G.rgn.right  = 0;
+        VD_FW_G.rgn.bottom = 0;
     }
 
     if (VdFwEqualRect(&VD_FW_G.rgn, &old_rgn)) {
         return;
     }
 
-    VdFwRECT zero_rect = {0};
+    VdFwRECT zero_rect = {};
     if (VdFwEqualRect(&VD_FW_G.rgn, &zero_rect)) {
         VdFwSetWindowRgn(VD_FW_G.hwnd, NULL, TRUE);
     } else {
@@ -9584,7 +9545,6 @@ VD_FW_API void vd_fw__free_mem(void *memory)
 
 #if !defined(__APPLE__)
 /* ----GL VERSION 1.0------------------------------------------------------------------------------------------------ */
-PFNGLCULLFACEPROC               glCullFace;
 PFNGLFRONTFACEPROC              glFrontFace;
 PFNGLHINTPROC                   glHint;
 PFNGLLINEWIDTHPROC              glLineWidth;
@@ -9598,21 +9558,13 @@ PFNGLTEXPARAMETERIVPROC         glTexParameteriv;
 PFNGLTEXIMAGE1DPROC             glTexImage1D;
 PFNGLTEXIMAGE2DPROC             glTexImage2D;
 PFNGLDRAWBUFFERPROC             glDrawBuffer;
-PFNGLCLEARPROC                  glClear;
-PFNGLCLEARCOLORPROC             glClearColor;
-PFNGLCLEARSTENCILPROC           glClearStencil;
 PFNGLSTENCILMASKPROC            glStencilMask;
-PFNGLCOLORMASKPROC              glColorMask;
-PFNGLDEPTHMASKPROC              glDepthMask;
-PFNGLDISABLEPROC                glDisable;
 PFNGLENABLEPROC                 glEnable;
 PFNGLFINISHPROC                 glFinish;
 PFNGLFLUSHPROC                  glFlush;
-PFNGLBLENDFUNCPROC              glBlendFunc;
 PFNGLLOGICOPPROC                glLogicOp;
 PFNGLSTENCILFUNCPROC            glStencilFunc;
 PFNGLSTENCILOPPROC              glStencilOp;
-PFNGLDEPTHFUNCPROC              glDepthFunc;
 PFNGLPIXELSTOREFPROC            glPixelStoref;
 PFNGLPIXELSTOREIPROC            glPixelStorei;
 PFNGLREADBUFFERPROC             glReadBuffer;
@@ -9629,7 +9581,6 @@ PFNGLGETTEXPARAMETERIVPROC      glGetTexParameteriv;
 PFNGLGETTEXLEVELPARAMETERFVPROC glGetTexLevelParameterfv;
 PFNGLGETTEXLEVELPARAMETERIVPROC glGetTexLevelParameteriv;
 PFNGLISENABLEDPROC              glIsEnabled;
-PFNGLDEPTHRANGEPROC             glDepthRange;
 PFNGLVIEWPORTPROC               glViewport;
 PFNGLACCUMPROC                  glAccum;
 PFNGLALPHAFUNCPROC              glAlphaFunc;
@@ -9697,13 +9648,11 @@ PFNGLDEPTHRANGEPROC             glDepthRange;
 PFNGLDISABLEPROC                glDisable;
 PFNGLDISABLECLIENTSTATEPROC     glDisableClientState;
 PFNGLDRAWARRAYSPROC             glDrawArrays;
-PFNGLDRAWBUFFERPROC             glDrawBuffer;
 PFNGLDRAWELEMENTSPROC           glDrawElements;
 PFNGLDRAWPIXELSPROC             glDrawPixels;
 PFNGLEDGEFLAGPROC               glEdgeFlag;
 PFNGLEDGEFLAGPOINTERPROC        glEdgeFlagPointer;
 PFNGLEDGEFLAGVPROC              glEdgeFlagv;
-PFNGLENABLEPROC                 glEnable;
 PFNGLENABLECLIENTSTATEPROC      glEnableClientState;
 PFNGLENDPROC                    glEnd;
 PFNGLENDLISTPROC                glEndList;
@@ -9720,22 +9669,14 @@ PFNGLEVALMESH2PROC              glEvalMesh2;
 PFNGLEVALPOINT1PROC             glEvalPoint1;
 PFNGLEVALPOINT2PROC             glEvalPoint2;
 PFNGLFEEDBACKBUFFERPROC         glFeedbackBuffer;
-PFNGLFINISHPROC                 glFinish;
-PFNGLFLUSHPROC                  glFlush;
 PFNGLFOGFPROC                   glFogf;
 PFNGLFOGFVPROC                  glFogfv;
 PFNGLFOGIPROC                   glFogi;
 PFNGLFOGIVPROC                  glFogiv;
-PFNGLFRONTFACEPROC              glFrontFace;
 PFNGLFRUSTUMPROC                glFrustum;
 PFNGLGENLISTSPROC               glGenLists;
 PFNGLGENTEXTURESPROC            glGenTextures;
-PFNGLGETBOOLEANVPROC            glGetBooleanv;
 PFNGLGETCLIPPLANEPROC           glGetClipPlane;
-PFNGLGETDOUBLEVPROC             glGetDoublev;
-PFNGLGETERRORPROC               glGetError;
-PFNGLGETFLOATVPROC              glGetFloatv;
-PFNGLGETINTEGERVPROC            glGetIntegerv;
 PFNGLGETLIGHTFVPROC             glGetLightfv;
 PFNGLGETLIGHTIVPROC             glGetLightiv;
 PFNGLGETMAPDVPROC               glGetMapdv;
@@ -9748,18 +9689,11 @@ PFNGLGETPIXELMAPUIVPROC         glGetPixelMapuiv;
 PFNGLGETPIXELMAPUSVPROC         glGetPixelMapusv;
 PFNGLGETPOINTERVPROC            glGetPointerv;
 PFNGLGETPOLYGONSTIPPLEPROC      glGetPolygonStipple;
-PFNGLGETSTRINGPROC              glGetString;
 PFNGLGETTEXENVFVPROC            glGetTexEnvfv;
 PFNGLGETTEXENVIVPROC            glGetTexEnviv;
 PFNGLGETTEXGENDVPROC            glGetTexGendv;
 PFNGLGETTEXGENFVPROC            glGetTexGenfv;
 PFNGLGETTEXGENIVPROC            glGetTexGeniv;
-PFNGLGETTEXIMAGEPROC            glGetTexImage;
-PFNGLGETTEXLEVELPARAMETERFVPROC glGetTexLevelParameterfv;
-PFNGLGETTEXLEVELPARAMETERIVPROC glGetTexLevelParameteriv;
-PFNGLGETTEXPARAMETERFVPROC      glGetTexParameterfv;
-PFNGLGETTEXPARAMETERIVPROC      glGetTexParameteriv;
-PFNGLHINTPROC                   glHint;
 PFNGLINDEXMASKPROC              glIndexMask;
 PFNGLINDEXPOINTERPROC           glIndexPointer;
 PFNGLINDEXDPROC                 glIndexd;
@@ -9774,7 +9708,6 @@ PFNGLINDEXUBPROC                glIndexub;
 PFNGLINDEXUBVPROC               glIndexubv;
 PFNGLINITNAMESPROC              glInitNames;
 PFNGLINTERLEAVEDARRAYSPROC      glInterleavedArrays;
-PFNGLISENABLEDPROC              glIsEnabled;
 PFNGLISLISTPROC                 glIsList;
 PFNGLISTEXTUREPROC              glIsTexture;
 PFNGLLIGHTMODELFPROC            glLightModelf;
@@ -9791,7 +9724,6 @@ PFNGLLOADIDENTITYPROC           glLoadIdentity;
 PFNGLLOADMATRIXDPROC            glLoadMatrixd;
 PFNGLLOADMATRIXFPROC            glLoadMatrixf;
 PFNGLLOADNAMEPROC               glLoadName;
-PFNGLLOGICOPPROC                glLogicOp;
 PFNGLMAP1DPROC                  glMap1d;
 PFNGLMAP1FPROC                  glMap1f;
 PFNGLMAP2DPROC                  glMap2d;
@@ -9824,13 +9756,9 @@ PFNGLPASSTHROUGHPROC            glPassThrough;
 PFNGLPIXELMAPFVPROC             glPixelMapfv;
 PFNGLPIXELMAPUIVPROC            glPixelMapuiv;
 PFNGLPIXELMAPUSVPROC            glPixelMapusv;
-PFNGLPIXELSTOREFPROC            glPixelStoref;
-PFNGLPIXELSTOREIPROC            glPixelStorei;
 PFNGLPIXELTRANSFERFPROC         glPixelTransferf;
 PFNGLPIXELTRANSFERIPROC         glPixelTransferi;
 PFNGLPIXELZOOMPROC              glPixelZoom;
-PFNGLPOINTSIZEPROC              glPointSize;
-PFNGLPOLYGONMODEPROC            glPolygonMode;
 PFNGLPOLYGONOFFSETPROC          glPolygonOffset;
 PFNGLPOLYGONSTIPPLEPROC         glPolygonStipple;
 PFNGLPOPATTRIBPROC              glPopAttrib;
@@ -9866,8 +9794,6 @@ PFNGLRASTERPOS4IPROC            glRasterPos4i;
 PFNGLRASTERPOS4IVPROC           glRasterPos4iv;
 PFNGLRASTERPOS4SPROC            glRasterPos4s;
 PFNGLRASTERPOS4SVPROC           glRasterPos4sv;
-PFNGLREADBUFFERPROC             glReadBuffer;
-PFNGLREADPIXELSPROC             glReadPixels;
 PFNGLRECTDPROC                  glRectd;
 PFNGLRECTDVPROC                 glRectdv;
 PFNGLRECTFPROC                  glRectf;
@@ -9881,12 +9807,8 @@ PFNGLROTATEDPROC                glRotated;
 PFNGLROTATEFPROC                glRotatef;
 PFNGLSCALEDPROC                 glScaled;
 PFNGLSCALEFPROC                 glScalef;
-PFNGLSCISSORPROC                glScissor;
 PFNGLSELECTBUFFERPROC           glSelectBuffer;
 PFNGLSHADEMODELPROC             glShadeModel;
-PFNGLSTENCILFUNCPROC            glStencilFunc;
-PFNGLSTENCILMASKPROC            glStencilMask;
-PFNGLSTENCILOPPROC              glStencilOp;
 PFNGLTEXCOORD1DPROC             glTexCoord1d;
 PFNGLTEXCOORD1DVPROC            glTexCoord1dv;
 PFNGLTEXCOORD1FPROC             glTexCoord1f;
@@ -9930,12 +9852,6 @@ PFNGLTEXGENFPROC                glTexGenf;
 PFNGLTEXGENFVPROC               glTexGenfv;
 PFNGLTEXGENIPROC                glTexGeni;
 PFNGLTEXGENIVPROC               glTexGeniv;
-PFNGLTEXIMAGE1DPROC             glTexImage1D;
-PFNGLTEXIMAGE2DPROC             glTexImage2D;
-PFNGLTEXPARAMETERFPROC          glTexParameterf;
-PFNGLTEXPARAMETERFVPROC         glTexParameterfv;
-PFNGLTEXPARAMETERIPROC          glTexParameteri;
-PFNGLTEXPARAMETERIVPROC         glTexParameteriv;
 PFNGLTEXSUBIMAGE1DPROC          glTexSubImage1D;
 PFNGLTEXSUBIMAGE2DPROC          glTexSubImage2D;
 PFNGLTRANSLATEDPROC             glTranslated;
@@ -9965,7 +9881,6 @@ PFNGLVERTEX4IVPROC              glVertex4iv;
 PFNGLVERTEX4SPROC               glVertex4s;
 PFNGLVERTEX4SVPROC              glVertex4sv;
 PFNGLVERTEXPOINTERPROC          glVertexPointer;
-PFNGLVIEWPORTPROC               glViewport;
 /* ----GL VERSION 1.2------------------------------------------------------------------------------------------------ */
 PFNGLDRAWRANGEELEMENTSPROC       glDrawRangeElements;
 PFNGLTEXIMAGE3DPROC              glTexImage3D;
@@ -10259,7 +10174,6 @@ PFNGLVERTEXATTRIBP3UIPROC            glVertexAttribP3ui;
 PFNGLVERTEXATTRIBP3UIVPROC           glVertexAttribP3uiv;
 PFNGLVERTEXATTRIBP4UIPROC            glVertexAttribP4ui;
 PFNGLVERTEXATTRIBP4UIVPROC           glVertexAttribP4uiv;
-PFNGLDEBUGMESSAGECALLBACKPROC glDebugMessageCallback;
 /* ----GL VERSION 4.0------------------------------------------------------------------------------------------------ */
 PFNGLMINSAMPLESHADINGPROC               glMinSampleShading;
 PFNGLBLENDEQUATIONIPROC                 glBlendEquationi;

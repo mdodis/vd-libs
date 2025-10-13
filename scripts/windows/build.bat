@@ -7,6 +7,7 @@ set BUILD_MODE="debug"
 set SAMPLE_TO_COMPILE=""
 set COMPILE_PROGRAMS=0
 set PROGRAM_TO_COMPILE=""
+set CSEXT=".c"
 
 :parse_args
 if "%~1"=="" goto after_parse
@@ -22,6 +23,8 @@ if "%~1"=="-m" (
         echo Invalid build mode
         exit /b 1
     )
+) else if "%~1"=="-cpp" (
+    set CSEXT=".cpp"
 ) else if "%~1"=="-p" (
     set COMPILE_PROGRAMS=1
     set PROGRAM_TO_COMPILE=%~2
@@ -47,7 +50,7 @@ set EXT_DIR=%PRJ_DIR%\ext
 set SRC_DIR=%PRJ_DIR%\samples
 
 if not %SAMPLE_TO_COMPILE%=="" (
-    cl /utf-8 /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %SRC_DIR%\%SAMPLE_TO_COMPILE%.c /Fe:%SAMPLE_TO_COMPILE%.exe 
+    cl /utf-8 /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %SRC_DIR%\%SAMPLE_TO_COMPILE%%CSEXT% /Fe:%SAMPLE_TO_COMPILE%.exe 
 )
 
 if %COMPILE_PROGRAMS%==1 (
