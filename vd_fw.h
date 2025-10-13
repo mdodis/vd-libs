@@ -4865,6 +4865,20 @@ static VdFwProcGetRawInputDeviceInfoW *VdFwGetRawInputDeviceInfoW;
 typedef VD_FW_PROC_SHAppBarMessage(VdFwProcSHAppBarMessage);
 static VdFwProcSHAppBarMessage *VdFwSHAppBarMessage;
 
+/* ----ntdll.dll----------------------------------------------------------------------------------------------------- */
+typedef struct VdFw_OSVERSIONINFOW {
+  VdFwULONG dwOSVersionInfoSize;
+  VdFwULONG dwMajorVersion;
+  VdFwULONG dwMinorVersion;
+  VdFwULONG dwBuildNumber;
+  VdFwULONG dwPlatformId;
+  VdFwWCHAR szCSDVersion[128];
+} VdFwOSVERSIONINFOW, *VdFwPOSVERSIONINFOW, *VdFwLPOSVERSIONINFOW, VdFwRTL_OSVERSIONINFOW, *VdFwPRTL_OSVERSIONINFOW;
+
+#define VD_FW_PROC_RtlGetVersion(name) void name(VdFwPRTL_OSVERSIONINFOW info)
+typedef VD_FW_PROC_RtlGetVersion(VdFwProcRtlGetVersion);
+static VdFwProcRtlGetVersion *VdFwRtlGetVersion;
+
 /* ----Winmm.dll----------------------------------------------------------------------------------------------------- */
 typedef VdFwUINT VdFwMMRESULT;
 
@@ -5538,6 +5552,7 @@ typedef struct {
     unsigned char               prev_key_states[VD_FW_KEY_MAX];
     char                        title[128];
     int                         title_len;
+    VdFwRTL_OSVERSIONINFOW      os_version;
 
 /* ----RENDER THREAD - WINDOW THREAD SYNC---------------------------------------------------------------------------- */
     VdFwHANDLE                  sem_window_ready;
@@ -5981,6 +5996,18 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         {
             HMODULE m       = LoadLibraryA("Winmm.dll");
             VdFwtimeBeginPeriod = (VdFwProctimeBeginPeriod*)GetProcAddress(m, "timeBeginPeriod");
+        }
+
+        // ntdll.dll
+        {
+            HMODULE m = LoadLibraryA("ntdll.dll");
+            VdFwRtlGetVersion = (VdFwProcRtlGetVersion*)GetProcAddress(m, "RtlGetVersion");
+
+            if (VdFwRtlGetVersion) {
+                VdFwRtlGetVersion((VdFwPRTL_OSVERSIONINFOW)&VD_FW_G.os_version);
+            }
+
+            FreeLibrary(m);
         }
 
         // UxTheme.dll
@@ -6793,14 +6820,18 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     // @note(mdodis): This is an old thing from Windows 7 (I think... era). W
     // SetLayeredWindowAttributes(VD_FW_G.hwnd, RGB(255, 0, 255), 255, LWA_COLORKEY);
 
-    // @todo(mdodis): Consider using RtlGetVersion, since the IsWindows*OrGreater functions only work with app manifest
-    // now.
-    // Windows 8 or less -- nothing
-    // Windows 10 -- dark/acrylic
-    // Windows 11 -- mica
     if (VD_FW_G.draw_decorations) {
-        VdFwDWORD t = TRUE;
-        VdFwDwmSetWindowAttribute(VD_FW_G.hwnd, 20, &t, sizeof(t));
+        if (VD_FW_G.os_version.dwBuildNumber >= 22000) {
+            // @note(mdodis): Undocumented mica values: 0x02: 0x04
+            VdFwDWORD t = TRUE;
+            VdFwDwmSetWindowAttribute(VD_FW_G.hwnd, 20, &t, sizeof(t));
+            int mica_value = 0x04;
+            VdFwDwmSetWindowAttribute(VD_FW_G.hwnd, 38, &mica_value, sizeof(mica_value));
+        } else if (VD_FW_G.os_version.dwMajorVersion >= 10) {
+            // @note(mdodis): Dark mode
+            VdFwDWORD t = TRUE;
+            VdFwDwmSetWindowAttribute(VD_FW_G.hwnd, 20, &t, sizeof(t));
+        }
     }
     vd_fw__composition_changed();
     VD_FW_SANITY_CHECK();
