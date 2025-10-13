@@ -26,6 +26,7 @@
  *   on the big threes is OpenGL Core Profile 4.1 (MacOS limitation)
  *
  * TODO
+ * - Make sure we can build library with C++ and export functions properly
  * - Expose customizable function pointer if the user needs to do something platform-specific before/after winthread has initialized or before vd_fw_init returns anyways.
  * - Have a way for a user to request OpenGL extensions/versions via a precedence array, and initialize the maximum possible version
  * - Use bit flags for buttons, an array is a bit overkill
@@ -403,6 +404,20 @@ VD_FW_API int                vd_fw_get_size(int *w, int *h);
  * @param  h The height of the window, in pixels
  */
 VD_FW_API void               vd_fw_set_size(int w, int h);
+
+/**
+ * @brief Set minimum window size, in pixels.
+ * @param  w The minimum width of the window, set to 0 to use default.
+ * @param  h The minium height of the window, set to 0 to use default.
+ */
+VD_FW_API void               vd_fw_set_size_min(int w, int h);
+
+/**
+ * @brief Set maximum window size, in pixels.
+ * @param  w The maximum width of the window, set to 0 to use default.
+ * @param  h The maxium height of the window, set to 0 to use default.
+ */
+VD_FW_API void               vd_fw_set_size_max(int w, int h);
 
 /**
  * @brief Get if the window is minimized
@@ -5428,13 +5443,14 @@ enum {
     VD_FW_WIN32_MESSAGE_TYPE_STATECHANGE = 15,
 
     VD_FW_WIN32_SHOW_CURSOR  = VD_FW_WM_USER + 1,
-    VD_FW_WIN32_UPDATE_TITLE = VD_FW_WM_USER + 2, 
-    VD_FW_WIN32_FULLSCREEN   = VD_FW_WM_USER + 3, 
-    VD_FW_WIN32_SIZE         = VD_FW_WM_USER + 4, 
+    VD_FW_WIN32_UPDATE_TITLE = VD_FW_WM_USER + 2,
+    VD_FW_WIN32_FULLSCREEN   = VD_FW_WM_USER + 3,
+    VD_FW_WIN32_SIZE         = VD_FW_WM_USER + 4,
+    VD_FW_WIN32_SIZEMIN      = VD_FW_WM_USER + 5,
+    VD_FW_WIN32_SIZEMAX      = VD_FW_WM_USER + 6,
 
     VD_FW_WIN32_WINDOW_STATE_MINIMIZED = 1 << 0,
     VD_FW_WIN32_WINDOW_STATE_MAXIMIZED = 1 << 1,
-
 };
 
 typedef struct {
@@ -5508,6 +5524,8 @@ typedef struct {
     VdFwDWORD                   num_gamepads_present;
     VdFw__Win32GamepadInfo      gamepad_infos[VD_FW_GAMEPAD_COUNT_MAX];
     int                         xinput;
+    int                         window_min[2], window_max[2];
+    int                         def_window_min[2];
 
 /* ----RENDER THREAD ONLY-------------------------------------------------------------------------------------------- */
     HMODULE                     opengl32;
@@ -6088,6 +6106,9 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     VD_FW_G.focused = 1;
     VD_FW_G.draw_decorations = 1;
 
+    VD_FW_G.def_window_min[0] = VdFwGetSystemMetrics(SM_CXMINTRACK);
+    VD_FW_G.def_window_min[1] = VdFwGetSystemMetrics(SM_CYMINTRACK);
+
     if (info != NULL) {
         VD_FW_G.draw_decorations = !info->window_options.borderless;
     }
@@ -6482,6 +6503,32 @@ VD_FW_API void vd_fw_set_size(int w, int h)
     VD_FW__CHECK_TRUE(VdFwPostMessage(
         VD_FW_G.hwnd,
         VD_FW_WIN32_SIZE,
+        0, /* WPARAM */
+        lparam));
+}
+
+VD_FW_API void vd_fw_set_size_min(int w, int h)
+{
+    WORD ww = (WORD)w;
+    WORD wh = (WORD)h;
+    LPARAM lparam = MAKELPARAM(ww, wh);
+
+    VD_FW__CHECK_TRUE(VdFwPostMessage(
+        VD_FW_G.hwnd,
+        VD_FW_WIN32_SIZEMIN,
+        0, /* WPARAM */
+        lparam));
+}
+
+VD_FW_API void vd_fw_set_size_max(int w, int h)
+{
+    WORD ww = (WORD)w;
+    WORD wh = (WORD)h;
+    LPARAM lparam = MAKELPARAM(ww, wh);
+
+    VD_FW__CHECK_TRUE(VdFwPostMessage(
+        VD_FW_G.hwnd,
+        VD_FW_WIN32_SIZEMAX,
         0, /* WPARAM */
         lparam));
 }
@@ -7077,6 +7124,7 @@ static int vd_fw__hit_test(int x, int y)
 
 static void vd_fw__composition_changed(void)
 {
+    if (VD_FW_G.draw_decorations) return;
     VD_FW_WIN32_PROFILE_BEGIN(composition_changed);
 
     BOOL enabled = FALSE;
@@ -8265,6 +8313,27 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                          newrect.bottom - newrect.top,
                          SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
 
+        } break;
+
+        case VD_FW_WIN32_SIZEMIN:
+        case VD_FW_WIN32_SIZEMAX: {
+            VdFwDWORD width  = LOWORD(lparam);
+            VdFwDWORD height = HIWORD(lparam);
+            if (msg == VD_FW_WIN32_SIZEMIN) {
+                VD_FW_G.window_min[0] = width;
+                VD_FW_G.window_min[1] = height;
+            } else {
+                VD_FW_G.window_max[0] = width;
+                VD_FW_G.window_max[1] = height;
+            }
+        } break;
+
+        case WM_GETMINMAXINFO: {
+            MINMAXINFO *min_max_info = (MINMAXINFO*)lparam;
+            min_max_info->ptMinTrackSize.x = VD_FW_G.window_min[0] <= 0 ? VD_FW_G.def_window_min[0] : VD_FW_G.window_min[0];
+            min_max_info->ptMinTrackSize.y = VD_FW_G.window_min[1] <= 0 ? VD_FW_G.def_window_min[1] : VD_FW_G.window_min[1];
+            min_max_info->ptMaxTrackSize.x = VD_FW_G.window_max[0] <= 0 ? 0x7FFFFFFF : VD_FW_G.window_max[0];
+            min_max_info->ptMaxTrackSize.y = VD_FW_G.window_max[1] <= 0 ? 0x7FFFFFFF : VD_FW_G.window_max[1];
         } break;
 
         case VD_FW_WIN32_UPDATE_TITLE: {
