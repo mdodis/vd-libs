@@ -6793,9 +6793,8 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     // @note(mdodis): This is an old thing from Windows 7 (I think... era). W
     // SetLayeredWindowAttributes(VD_FW_G.hwnd, RGB(255, 0, 255), 255, LWA_COLORKEY);
 
-
-
-    // @todo(mdodis): Consider using
+    // @todo(mdodis): Consider using RtlGetVersion, since the IsWindows*OrGreater functions only work with app manifest
+    // now.
     // Windows 8 or less -- nothing
     // Windows 10 -- dark/acrylic
     // Windows 11 -- mica
