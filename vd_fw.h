@@ -6479,6 +6479,7 @@ VD_FW_API int vd_fw_get_maximized(int *maximized)
 VD_FW_API void vd_fw_maximize(void)
 {
     VdFwShowWindow(VD_FW_G.hwnd, SW_MAXIMIZE);
+    VD_FW_G.window_state |= VD_FW_WIN32_WINDOW_STATE_MAXIMIZED;
 }
 
 VD_FW_API void vd_fw_normalize(void)
@@ -7512,6 +7513,16 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 } break;
 
                 default: break;
+            }
+
+            if ((wparam == SIZE_MAXIMIZED) || (wparam == SIZE_MINIMIZED) || (wparam == SIZE_RESTORED)) {
+                // @note(mdodis): Send a mouse release event right as we go into minimized or out of maximized/minimized
+                // state. This is because we'll miss the mouse release otherwise.
+                VdFw__Win32Message m;
+                m.msg = VD_FW_WIN32_MESSAGE_TYPE_MOUSEBTN;
+                m.dat.mousebtn.down = 0;
+                m.dat.mousebtn.vkbutton = VK_LBUTTON;
+                vd_fw__msgbuf_w(&m);
             }
         } break;
 
