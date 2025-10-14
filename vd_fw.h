@@ -26,7 +26,8 @@
  *   on the big threes is OpenGL Core Profile 4.1 (MacOS limitation)
  *
  * TODO
- * - Make sure we can build library with C++ and export functions properly
+ * - D3D11 Sample
+ * - Make sure we can export functions properly for C++
  * - Expose customizable function pointer if the user needs to do something platform-specific before/after winthread has initialized or before vd_fw_init returns anyways.
  * - Have a way for a user to request OpenGL extensions/versions via a precedence array, and initialize the maximum possible version
  * - Use bit flags for buttons, an array is a bit overkill
@@ -358,16 +359,15 @@ enum {
 };
 
 typedef enum {
-    VD_FW_GRAPHICS_API_NONE,
-    VD_FW_GRAPHICS_API_OPENGL,
-    VD_FW_GRAPHICS_API_DIRECT3D,
+    VD_FW_GRAPHICS_API_OPENGL = 0,
+    VD_FW_GRAPHICS_API_CUSTOM,
+    VD_FW_GRAPHICS_API_PIXEL_BUFFER,
 } VdFwGraphicsApi;
 
 typedef struct {
+    /* The graphics API you're planning to use. Defaulted to OpenGL. */
+    VdFwGraphicsApi     api;
     struct {
-        /* Don't automatically initialize OpenGL. */
-        int             disabled;
-
         /* What version of OpenGL you'd like to use. 3.3 and upwards recommended. */
         VdFwGlVersion   version;
 
@@ -618,6 +618,15 @@ VD_FW_API void               vd_fw_set_title(const char *title);
  */
 VD_FW_API void               vd_fw_set_app_icon(void *pixels, int width, int height);
 
+/* ----PLATFORM SPECIFIC--------------------------------------------------------------------------------------------- */
+
+/**
+ * @brief Returns a pointer to the window handle allocated by the library
+ * @return Win32(HWND*), MacOS(NSWindow*), X11(Window*)
+ */
+VD_FW_API void*              vd_fw_get_internal_window_handle(void);
+
+/* ----OPENGL SPECIFIC----------------------------------------------------------------------------------------------- */
 /**
  * @brief Compile a GLSL shader and check for errors
  * @param  type   The shader type
@@ -5131,9 +5140,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     VD_FW_G.graphics_api = VD_FW_GRAPHICS_API_OPENGL;
 
     if (info != NULL) {
-        if (info->gl.disabled) {
-            VD_FW_G.graphics_api = VD_FW_GRAPHICS_API_NONE;
-        }    
+        VD_FW_G.graphics_api = info->api;
     }
 
     // Load Win32 Libraries
@@ -5973,6 +5980,11 @@ VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
         WM_SETICON,
         ICON_BIG, /* WPARAM */
         (LPARAM)icon));
+}
+
+VD_FW_API void *vd_fw_get_internal_window_handle(void)
+{
+    return &VD_FW_G.hwnd;
 }
 
 VD_FW_API unsigned long long vd_fw_delta_ns(void)
