@@ -138,6 +138,15 @@
 #endif
 #endif // !VD_FW_MEMSET
 
+#ifndef VD_FW_LOG
+#if VD_FW_NO_CRT
+#define VD_FW_LOG(fmt, ...)
+#else
+#include <stdio.h>
+#define VD_FW_LOG(fmt, ...) printf("vd_fw: " fmt "\n", __VA_ARGS__)
+#endif // VD_FW_NO_CRT
+#endif // !VD_FW_LOG
+
 #ifndef VD_FW_GAMEPAD_COUNT_MAX
 #define VD_FW_GAMEPAD_COUNT_MAX 4
 #endif // !VD_FW_GAMEPAD_COUNT_MAX
@@ -376,6 +385,10 @@ typedef struct {
     } gl;
 
     struct {
+        int             xinput_disabled;
+    } win32;
+
+    struct {
         /* Set to 1 to disable window frame. */
         int             borderless;
     } window_options;
@@ -595,8 +608,13 @@ VD_FW_API int                vd_fw_get_key_down(int key);
  */
 VD_FW_INL const char*        vd_fw_get_key_name(VdFwKey k);
 
+VD_FW_API int                vd_fw_get_last_gamepad_button_raw(int index);
+
+VD_FW_API int                vd_fw_get_num_gamepads(void);
+VD_FW_API void               vd_fw_add_gamepad_mapping(const char *s);
 VD_FW_API int                vd_fw_get_gamepad_down(int index, int button);
 VD_FW_API int                vd_fw_get_gamepad_axis(int index, int axis, float *out);
+VD_FW_API int                vd_fw_get_gamepad_connected(int index);
 
 /**
  * @brief Gets the backing scale factor
@@ -753,13 +771,13 @@ VD_FW_INL float vd_fw_tan(float x)
 
     float x2 = x * x;
     return x * (1.0f
-                 + x2 * ( 1.0f/3.0f
-                 + x2 * ( 2.0f/15.0f
-                 + x2 * ( 17.0f/315.0f
-                 + x2 * ( 62.0f/2835.0f
-                 + x2 * ( 1382.0f/155925.0f
-                 + x2 * ( 21844.0f/6081075.0f
-                 )))))) );
+               + x2 * ( 1.0f/3.0f
+               + x2 * ( 2.0f/15.0f
+               + x2 * ( 17.0f/315.0f
+               + x2 * ( 62.0f/2835.0f
+               + x2 * ( 1382.0f/155925.0f
+               + x2 * ( 21844.0f/6081075.0f
+               )))))) );
 }
 
 VD_FW_INL float vd_fw_sqrt(float x)
@@ -846,6 +864,7 @@ VD_FW_INL void *vd_fw_memset(void *dst, unsigned char val, size_t num)
 /* ----INTERNAL API-------------------------------------------------------------------------------------------------- */
 VD_FW_API int vd_fw__any_time_higher(int num_files, const char **files, unsigned long long *check_against);
 VD_FW_API char *vd_fw__debug_dump_file_text(const char *path);
+VD_FW_API void *vd_fw__realloc_mem(void *prev_ptr, size_t size);
 VD_FW_API void vd_fw__free_mem(void *memory);
 #if _WIN32
 #define VD_FW_WIN32_SUBSYSTEM_CONSOLE 1
@@ -4444,6 +4463,10 @@ static VdFwProcHidP_GetValueCaps *VdFwHidP_GetValueCaps;
 typedef VD_FW_PROC_HidP_GetUsages(VdFwProcHidP_GetUsages);
 static VdFwProcHidP_GetUsages *VdFwHidP_GetUsages;
 
+#define VD_FW_PROC_HidP_MaxUsageListLength(name) VdFwULONG name(VdFwHIDP_REPORT_TYPE ReportType, VdFwUSAGE UsagePage, VdFwPHIDP_PREPARSED_DATA PreparsedData)
+typedef VD_FW_PROC_HidP_MaxUsageListLength(VdFwProcHidP_MaxUsageListLength);
+VdFwProcHidP_MaxUsageListLength *VdFwHidP_MaxUsageListLength;
+
 #define VD_FW_PROC_HidP_GetUsageValue(name) VdFwNTSTATUS name(VdFwHIDP_REPORT_TYPE ReportType, VdFwUSAGE UsagePage, VdFwUSHORT LinkCollection, VdFwUSAGE Usage, VdFwPULONG UsageValue, VdFwPHIDP_PREPARSED_DATA PreparsedData, VdFwPCHAR Report, VdFwULONG ReportLength)
 typedef VD_FW_PROC_HidP_GetUsageValue(VdFwProcHidP_GetUsageValue);
 static VdFwProcHidP_GetUsageValue *VdFwHidP_GetUsageValue;
@@ -4725,8 +4748,11 @@ typedef struct {
     int                         xinput;
     int                         window_min[2], window_max[2];
     int                         def_window_min[2];
+    VdFwUSAGE                   *buttons_buffer;
+    VdFwULONG                   buttons_buffer_count;
 
 /* ----RENDER THREAD ONLY-------------------------------------------------------------------------------------------- */
+    // Internal
     HMODULE                     opengl32;
     VdFwHANDLE                  win_thread;
     VdFwDWORD                   win_thread_id;
@@ -4735,9 +4761,8 @@ typedef struct {
     LARGE_INTEGER               frequency;
     LARGE_INTEGER               performance_counter;
     VdFwProcwglSwapIntervalExt  *proc_swapInterval;
-    int                         wheel_moved;
-    float                       wheel[2];
     unsigned long long          last_ns;
+    // Mouse
     int                         mouse[2];
     int                         prev_mouse_state;
     int                         mouse_state;
@@ -4746,11 +4771,16 @@ typedef struct {
     VdFwDWORD                   mmousedown;
     float                       mouse_delta[2];
     VdFwBOOL                    mouse_is_locked;
+    int                         wheel_moved;
+    float                       wheel[2];
+    // Window
     VdFwBOOL                    is_fullscreen;
-    VdFw__GamepadState          gamepad_curr_states[VD_FW_GAMEPAD_COUNT_MAX];
-    VdFw__GamepadState          gamepad_prev_states[VD_FW_GAMEPAD_COUNT_MAX];
     int                         window_state;
     int                         window_state_changed;
+    // Gamepad
+    VdFw__GamepadState          gamepad_curr_states[VD_FW_GAMEPAD_COUNT_MAX];
+    VdFw__GamepadState          gamepad_prev_states[VD_FW_GAMEPAD_COUNT_MAX];
+    int                         gamepad_raw_buttons[VD_FW_GAMEPAD_COUNT_MAX];
 
 /* ----RENDER THREAD - WINDOW THREAD DATA---------------------------------------------------------------------------- */
     VdFw__Win32Message          msgbuf[VD_FW_WIN32_MESSAGE_BUFFER_SIZE];
@@ -4764,6 +4794,7 @@ typedef struct {
     float                       winthread_mouse_delta[2];
     VdFw__GamepadState          winthread_gamepad_curr_states[VD_FW_GAMEPAD_COUNT_MAX];
     VdFw__GamepadState          winthread_gamepad_prev_states[VD_FW_GAMEPAD_COUNT_MAX];
+    int                         winthread_gamepad_raw_buttons[VD_FW_GAMEPAD_COUNT_MAX];
 
     unsigned char               curr_key_states[VD_FW_KEY_MAX];
     unsigned char               prev_key_states[VD_FW_KEY_MAX];
@@ -5264,15 +5295,16 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         // Hid.dll
         {
             HMODULE m          = LoadLibraryA("Hid.dll");
-            VdFwHidP_GetCaps       =       (VdFwProcHidP_GetCaps*)GetProcAddress(m, "HidP_GetCaps");
-            VdFwHidP_GetButtonCaps = (VdFwProcHidP_GetButtonCaps*)GetProcAddress(m, "HidP_GetButtonCaps");
-            VdFwHidP_GetValueCaps  =  (VdFwProcHidP_GetValueCaps*)GetProcAddress(m, "HidP_GetValueCaps");
-            VdFwHidP_GetUsages     =     (VdFwProcHidP_GetUsages*)GetProcAddress(m, "HidP_GetUsages");
-            VdFwHidP_GetUsageValue = (VdFwProcHidP_GetUsageValue*)GetProcAddress(m, "HidP_GetUsageValue");
+            VdFwHidP_GetCaps            =            (VdFwProcHidP_GetCaps*)GetProcAddress(m, "HidP_GetCaps");
+            VdFwHidP_GetButtonCaps      =      (VdFwProcHidP_GetButtonCaps*)GetProcAddress(m, "HidP_GetButtonCaps");
+            VdFwHidP_GetValueCaps       =       (VdFwProcHidP_GetValueCaps*)GetProcAddress(m, "HidP_GetValueCaps");
+            VdFwHidP_GetUsages          =          (VdFwProcHidP_GetUsages*)GetProcAddress(m, "HidP_GetUsages");
+            VdFwHidP_MaxUsageListLength = (VdFwProcHidP_MaxUsageListLength*)GetProcAddress(m, "HidP_MaxUsageListLength");
+            VdFwHidP_GetUsageValue      =      (VdFwProcHidP_GetUsageValue*)GetProcAddress(m, "HidP_GetUsageValue");
         }
 
         // XInput.dll
-        {
+        if (info && !info->win32.xinput_disabled) {
             const char* xinput_dll_name[] = {
                 "xinput1_4.dll",   // Windows 8+
                 "xinput1_3.dll",   // DirectX SDK, Windows XP...
@@ -5373,7 +5405,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     VD_FW_G.hdc = VdFwGetDC(VD_FW_G.hwnd);
 
     // Create context
-    {
+    if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
         // Temp context flags
         VdFwPIXELFORMATDESCRIPTOR pfd = {
           sizeof(VdFwPIXELFORMATDESCRIPTOR),
@@ -5476,30 +5508,30 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 
         VD_FW__CHECK_NULL(VD_FW_G.hglrc);
         VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(VD_FW_G.hdc, VD_FW_G.hglrc));
-    }
 
-    VD_FW_G.proc_swapInterval = (VdFwProcwglSwapIntervalExt*)VdFwwglGetProcAddress("wglSwapIntervalEXT");
+        VD_FW_G.proc_swapInterval = (VdFwProcwglSwapIntervalExt*)VdFwwglGetProcAddress("wglSwapIntervalEXT");
 
-    VdFwGlVersion version = VD_FW_GL_VERSION_3_3;
-    if (info && info->gl.version != VD_FW_GL_VERSION_BASIC) {
-        version = info->gl.version;
-    }
-    vd_fw__load_opengl(version);
+        VdFwGlVersion version = VD_FW_GL_VERSION_3_3;
+        if (info && info->gl.version != VD_FW_GL_VERSION_BASIC) {
+            version = info->gl.version;
+        }
+        vd_fw__load_opengl(version);
 
-    if (info != 0 && info->gl.debug_on && version > VD_FW_GL_VERSION_3_0) {
-        VdFwProcGL_glDebugMessageCallback glDebugMessageCallback_proc = (VdFwProcGL_glDebugMessageCallback)VdFwwglGetProcAddress("glDebugMessageCallback");
+        if (info != 0 && info->gl.debug_on && version > VD_FW_GL_VERSION_3_0) {
+            VdFwProcGL_glDebugMessageCallback glDebugMessageCallback_proc = (VdFwProcGL_glDebugMessageCallback)VdFwwglGetProcAddress("glDebugMessageCallback");
 
-        if (glDebugMessageCallback_proc == 0) {
-            DWORD written;
-            WriteConsole(
-                GetStdHandle(STD_OUTPUT_HANDLE),
-                TEXT("ERROR: Failed to load glDebugMessageCallback!"),
-                sizeof(TEXT("ERROR: Failed to load glDebugMessageCallback!")) - 1,
-                &written,
-                0);
-        } else {
-            glEnable(0x92E0 /* GL_DEBUG_OUTPUT */);
-            glDebugMessageCallback_proc(vd_fw__gl_debug_message_callback, 0);
+            if (glDebugMessageCallback_proc == 0) {
+                DWORD written;
+                WriteConsole(
+                    GetStdHandle(STD_OUTPUT_HANDLE),
+                    TEXT("ERROR: Failed to load glDebugMessageCallback!"),
+                    sizeof(TEXT("ERROR: Failed to load glDebugMessageCallback!")) - 1,
+                    &written,
+                    0);
+            } else {
+                glEnable(0x92E0 /* GL_DEBUG_OUTPUT */);
+                glDebugMessageCallback_proc(vd_fw__gl_debug_message_callback, 0);
+            }
         }
     }
 
@@ -5635,6 +5667,7 @@ VD_FW_API int vd_fw_running(void)
         for (int i = 0; i < VD_FW_GAMEPAD_COUNT_MAX; ++i) {
             VD_FW_G.gamepad_prev_states[i] = VD_FW_G.winthread_gamepad_prev_states[i];
             VD_FW_G.gamepad_curr_states[i] = VD_FW_G.winthread_gamepad_curr_states[i];
+            VD_FW_G.gamepad_raw_buttons[i] = VD_FW_G.winthread_gamepad_raw_buttons[i];
         }
         LeaveCriticalSection(&VD_FW_G.input_critical_section);
         VD_FW_WIN32_PROFILE_END(read_all_input);
@@ -5677,11 +5710,13 @@ VD_FW_API int vd_fw_swap_buffers(void)
     // is maximized to either section of the screen or the whole screen
     VdFwDwmFlush();
 
-    if (glFenceSync && glClientWaitSync && glDeleteSync) {
-        GLsync fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-        if (fence) {
-            glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, 1000000000ULL);
-            glDeleteSync(fence);
+    if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
+        if (glFenceSync && glClientWaitSync && glDeleteSync) {
+            GLsync fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+            if (fence) {
+                glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, 1000000000ULL);
+                glDeleteSync(fence);
+            }
         }
     }
 
@@ -5850,6 +5885,16 @@ VD_FW_API int vd_fw_get_key_pressed(int key)
 VD_FW_API int vd_fw_get_key_down(int key)
 {
     return VD_FW_G.curr_key_states[key];
+}
+
+VD_FW_API int vd_fw_get_last_gamepad_button_raw(int index)
+{
+    return VD_FW_G.gamepad_raw_buttons[index];
+}
+
+VD_FW_API int vd_fw_get_num_gamepads(void)
+{
+    return VD_FW_G.num_gamepads_present;
 }
 
 VD_FW_API int vd_fw_get_gamepad_down(int index, int button)
@@ -6174,6 +6219,15 @@ VD_FW_API char *vd_fw__debug_dump_file_text(const char *path)
 
     memory[sz.QuadPart] = 0;
     return memory;
+}
+
+VD_FW_API void *vd_fw__realloc_mem(void *prev_ptr, size_t size)
+{
+    if (prev_ptr == 0) {
+        return HeapAlloc(GetProcessHeap(), 0, size);
+    } else {
+        return HeapReAlloc(GetProcessHeap(), 0, prev_ptr, size);
+    }
 }
 
 VD_FW_API void vd_fw__free_mem(void *memory)
@@ -6798,7 +6852,17 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 LeaveCriticalSection(&VD_FW_G.input_critical_section);
             } else if (raw->header.dwType == RIM_TYPEHID) {
 
-                VdFw__Win32GamepadInfo *gamepad_info = &VD_FW_G.gamepad_infos[0];
+                VdFw__Win32GamepadInfo *gamepad_info = 0;
+                for (int i = 0; i < VD_FW_GAMEPAD_COUNT_MAX; ++i) {
+                    if (VD_FW_G.gamepad_infos[i].handle == raw->header.hDevice) {
+                        gamepad_info = &VD_FW_G.gamepad_infos[i];
+                        break;
+                    }
+                }
+
+                if (gamepad_info == 0) {
+                    break;
+                }
 
                 switch (gamepad_info->api) {
                     case VD_FW_GAMEPAD_API_RAWINPUT: {
@@ -6981,7 +7045,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 // We do this by inspecting RIDI_DEVICENAME, and checking for TEXT("IG_")
                 // See: https://learn.microsoft.com/en-us/windows/win32/xinput/xinput-and-directinput
                 int is_xinput_device = 0;
-                {
+                if (VD_FW_G.xinput) {
                     TCHAR name[256];
                     VdFwUINT size = sizeof(name);
                     device_info_result = VdFwGetRawInputDeviceInfo(
@@ -7009,6 +7073,12 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                             break;
                         }
                     }
+                }
+
+                if (is_xinput_device) {
+                    VD_FW_LOG("Discovered XInput Device");
+                } else {
+                    VD_FW_LOG("Discovered RAWINPUT Device");
                 }
 
                 unsigned short vendor_id    = (unsigned short)device_info.hid.dwVendorId;
@@ -7078,9 +7148,18 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 new_gamepad->connected = TRUE;
                 VD_FW_G.num_gamepads_present++;
 
+                VD_FW_LOG("Gamepad Connected");
+
                 VdFwHIDP_CAPS caps;
                 if (VdFwHidP_GetCaps(new_gamepad->ppd, &caps) != VD_FW_HIDP_STATUS_SUCCESS) {
                     break;
+                }
+
+                VdFwULONG max_buttons = VdFwHidP_MaxUsageListLength(VdFwHidP_Input, 0x09, new_gamepad->ppd);
+                if (max_buttons > VD_FW_G.buttons_buffer_count) {
+                    VD_FW_G.buttons_buffer_count = max_buttons;
+                    size_t buttons_buffer_size_req = sizeof(VD_FW_G.buttons_buffer[0]) * max_buttons;
+                    VD_FW_G.buttons_buffer = vd_fw__realloc_mem(VD_FW_G.buttons_buffer, buttons_buffer_size_req);
                 }
 
                 // HID Button Caps
@@ -7273,6 +7352,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 disconnected_gamepad->connected = FALSE;
                 disconnected_gamepad->handle = INVALID_HANDLE_VALUE;
 
+                VD_FW_LOG("Gamepad Disconnected");
                 VD_FW_G.num_gamepads_present--;
             }
 

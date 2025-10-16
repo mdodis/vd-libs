@@ -326,6 +326,9 @@ int main(int argc, char const *argv[])
             .version = VD_FW_GL_VERSION_3_3,
             .debug_on = 1,
         },
+        .win32 = {
+            .xinput_disabled = 0,
+        },
         .window_options = {
             .borderless = 0,
         }
@@ -430,23 +433,74 @@ int main(int argc, char const *argv[])
         vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_LT, &draw_info.lt_value);
         vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RT, &draw_info.rt_value);
 
-        // printf("LT: %f RT: %f\n", draw_info.lt_value, draw_info.rt_value);
+        {
+            int count = 1;
+            float ref_width = Base_Controller_Info.controller_dim[0];
+            float ref_height = Base_Controller_Info.controller_dim[1];
+            float width = (float)w;
+            float height = (float)h;
 
-        float ref_width  = Base_Controller_Info.controller_dim[0];
-        float ref_height = Base_Controller_Info.controller_dim[1];
-        float ratio_width = (float)w / ref_width;
-        float ratio_height = (float)h / ref_height;
+            float best_scale = 0.f;
+            {
+                float s1 = width / (ref_width);
+                float s2 = height / (ref_height);
+                float s = s1 <= s2 ? s1 : s2;
+                best_scale = s;
+            }
 
-        float ratio_min = (ratio_width < ratio_height) ? ratio_width : ratio_height;
+            int best_cols = 1;
+            int best_rows = count;
 
-        float scaled_width = ref_width * ratio_min;
-        float scaled_height = ref_height * ratio_min;
+            for (int cols = 1; cols < count; ++cols) {
+                int rows = (count + cols - 1) / cols;
+                float s1 = width / (cols * ref_width);
+                float s2 = height / (rows * ref_height);
 
-        float x = ((float)w - scaled_width) / 2.0f;
-        float y = ((float)h - scaled_height) / 2.0f;
+                float s = s1 <= s2 ? s1 : s2;
 
-        transform_controller_info(&draw_info, x, y, scaled_width);
-        draw_controller_info(&draw_info);
+                if (s > best_scale) {
+                    best_scale = s;
+                    best_cols = cols;
+                    best_rows = rows;
+                }
+
+            }
+
+            float scaled_w = best_scale * ref_width;
+            float scaled_h = best_scale * ref_height;
+
+            float total_w = best_cols * scaled_w;
+            float total_h = best_rows * scaled_h;
+            float x0 = (width - total_w) / 2.f;
+            float y0 = (height - total_h) / 2.f;
+
+            for (int i = 0; i < count; ++i) {
+                int row = i / best_cols;
+                int col = i % best_cols;
+
+                float x = x0 + col * scaled_w;
+                float y = y0 + row * scaled_h;
+
+                transform_controller_info(&draw_info, x, y, scaled_w);
+                draw_controller_info(&draw_info);
+            }
+
+        }
+        // float ref_width  = Base_Controller_Info.controller_dim[0];
+        // float ref_height = Base_Controller_Info.controller_dim[1];
+        // float ratio_width = (float)w / ref_width;
+        // float ratio_height = (float)h / ref_height;
+
+        // float ratio_min = (ratio_width < ratio_height) ? ratio_width : ratio_height;
+
+        // float scaled_width = ref_width * ratio_min;
+        // float scaled_height = ref_height * ratio_min;
+
+        // float x = ((float)w - scaled_width) / 2.0f;
+        // float y = ((float)h - scaled_height) / 2.0f;
+
+        // transform_controller_info(&draw_info, x, y, scaled_width);
+        // draw_controller_info(&draw_info);
 
         vd_fw_swap_buffers();
     }
