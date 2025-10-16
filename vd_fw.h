@@ -4620,7 +4620,7 @@ static VdFwProcXInputGetState *VdFwXInputGetState;
 #define VD_FW_DISPLAY_PREFERENCE_IGPU 2
 
 #if defined(VD_FW_PREFER_DISCRETE_GPU) && defined(VD_FW_PREFER_INTEGRATED_GPU)
-#warning "You cannot defined VD_FW_PREFER_DISCRETE_GPU and VD_FW_PREFER_INTEGRATED_GPU at the same time."
+#warning "You cannot define VD_FW_PREFER_DISCRETE_GPU and VD_FW_PREFER_INTEGRATED_GPU at the same time."
 #endif
 
 #ifdef VD_FW_PREFER_DISCRETE_GPU
