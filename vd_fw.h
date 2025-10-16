@@ -27,6 +27,7 @@
  *
  * TODO
  * - D3D11 Sample
+ * - On WM_INPUT for controller, use XInput to just get the trigger axes and cache the user index of the controller.
  * - Make sure we can export functions properly for C++
  * - Expose customizable function pointer if the user needs to do something platform-specific before/after winthread has initialized or before vd_fw_init returns anyways.
  * - Have a way for a user to request OpenGL extensions/versions via a precedence array, and initialize the maximum possible version
@@ -4716,15 +4717,22 @@ typedef struct {
     unsigned short us_page;
 } VdFw__Win32GamepadMapping;
 
+enum {
+    VD_FW__WIN32_GAMEPAD_FLAG_XINPUT = 1 << 0,
+    VD_FW__WIN32_GAMEPAD_FLAG_SPLITZ = 1 << 1,
+};
+
 typedef struct VdFw__Win32GamepadInfo {
     VdFwHANDLE               handle;
     unsigned char            guid[16];
     int                      connected;
     int                      assigned_index;
+    int                      xinput_index;
+    int                      flags;
     VdFwPHIDP_PREPARSED_DATA ppd;
-    int                      api;
     VdFwGamepadConfig        config;
-    int                      splitz;
+    int                      splitz_min;
+    int                      splitz_max;
 } VdFw__Win32GamepadInfo;
 
 typedef struct {
@@ -6530,6 +6538,56 @@ static VdFwLRESULT vd_fw__handle_invisible(VdFwHWND hwnd, VdFwUINT msg, VdFwWPAR
     return result;
 }
 
+static struct {
+    VdFwXINPUT_STATE state;
+    int              connected;
+} Vd_Fw__XInput_States[4];
+
+#define XInputTriggersMatch(gamepad) (                                                          \
+    ((state->match_axes[4] == 32767) && (state->match_axes[5] == 32767)) ||   \
+    ((gamepad.bLeftTrigger != 0) && (gamepad.bRightTrigger != 0)) ||                            \
+    ((Uint32)((((int)gamepad.bLeftTrigger * 257) - 32768) - state->match_axes[4]) <= 0x2fff) || \
+    ((Uint32)((((int)gamepad.bRightTrigger * 257) - 32768) - state->match_axes[5]) <= 0x2fff))
+
+
+
+static void vd_fw__win32_correlate_xinput_triggers(VdFw__Win32GamepadInfo *gamepad_info,
+                                                   VdFw__GamepadButtonState *button_states, float *axes,
+                                                   VdFwULONG z_value)
+{
+    for (int i = 0; i < 4; ++i) {
+        Vd_Fw__XInput_States[i].connected = VdFwXInputGetState(i, &Vd_Fw__XInput_States[i].state) == ERROR_SUCCESS;
+    }
+
+    if (gamepad_info->xinput_index == -1) {
+        for (int i = 0; i < 4; ++i) {
+            if (!Vd_Fw__XInput_States[i].connected) {
+                continue;
+            }
+
+            int matched = 0;
+            {
+                VdFwXINPUT_STATE *state = &Vd_Fw__XInput_States[i].state;
+                int l_trigger_match = ((unsigned int)(((int)state->Gamepad.bLeftTrigger  * 257) - 32768) - z_value <= 0x2fff);
+                int r_trigger_match = ((unsigned int)(((int)state->Gamepad.bRightTrigger * 257) - 32768) - z_value <= 0x2fff);
+                matched = matched || l_trigger_match || r_trigger_match;
+            }
+
+            if (matched) {
+                gamepad_info->xinput_index = i;
+                VD_FW_LOG("Gamepad correlated to XInput dwUserIndex: %d", i);
+                break;
+            }
+        }
+    }
+
+    if (gamepad_info->xinput_index != -1) {
+        axes[VD_FW_GAMEPAD_LT] = (float)Vd_Fw__XInput_States[gamepad_info->xinput_index].state.Gamepad.bLeftTrigger / 255.f;
+        axes[VD_FW_GAMEPAD_RT] = (float)Vd_Fw__XInput_States[gamepad_info->xinput_index].state.Gamepad.bRightTrigger / 255.f;
+    }
+
+}
+
 static unsigned char vd_fw__map_usb_id_to_input(int usage)
 {
     switch (usage) {
@@ -6853,6 +6911,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 LeaveCriticalSection(&VD_FW_G.input_critical_section);
             } else if (raw->header.dwType == RIM_TYPEHID) {
 
+
                 VdFw__Win32GamepadInfo *gamepad_info = 0;
                 for (int i = 0; i < VD_FW_GAMEPAD_COUNT_MAX; ++i) {
                     if (VD_FW_G.gamepad_infos[i].handle == raw->header.hDevice) {
@@ -6865,159 +6924,139 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     break;
                 }
 
-                switch (gamepad_info->api) {
-                    case VD_FW_GAMEPAD_API_RAWINPUT: {
-                        VdFw__GamepadButtonState button_states[VD_FW_GAMEPAD_BUTTON_MAX] = {0};
-                        float axes[6] = {0.f};
+                {
+                    VdFw__GamepadButtonState button_states[VD_FW_GAMEPAD_BUTTON_MAX] = {0};
+                    float axes[6] = {0.f};
 
-                        for (VdFwDWORD ri = 0; ri < raw->data.hid.dwCount; ++ri) {
-                            VdFwBYTE *bytes = &raw->data.hid.bRawData[0] + ri * (raw->data.hid.dwSizeHid);
+                    VdFwULONG z_value = 0;
+                    for (VdFwDWORD ri = 0; ri < raw->data.hid.dwCount; ++ri) {
+                        VdFwBYTE *bytes = &raw->data.hid.bRawData[0] + ri * (raw->data.hid.dwSizeHid);
 
-                            // Buttons
+                        // Buttons
+                        {
+                            static VdFwUSAGE usages[32];
+                            VdFwULONG usage_count = 32;
+
+                            if (VdFwHidP_GetUsages(VdFwHidP_Input, 0x09, 0,
+                                                   usages, &usage_count,
+                                                   gamepad_info->ppd,
+                                                   (VdFwPCHAR)bytes, raw->data.hid.dwSizeHid)
+                                == VD_FW_HIDP_STATUS_SUCCESS)
                             {
-                                static VdFwUSAGE usages[32];
-                                VdFwULONG usage_count = 32;
+                                for (ULONG i = 0; i < usage_count; ++i) {
 
-                                if (VdFwHidP_GetUsages(VdFwHidP_Input, 0x09, 0, usages, &usage_count, gamepad_info->ppd, (VdFwPCHAR)bytes, raw->data.hid.dwSizeHid) == VD_FW_HIDP_STATUS_SUCCESS) {
-                                    for (ULONG i = 0; i < usage_count; ++i) {
+                                    for (int j = 0; j < gamepad_info->config.num_digital_mappings; ++j) {
+                                        if (usages[i] == gamepad_info->config.digital_mappings[j].id) {
+                                            button_states[gamepad_info->config.digital_mappings[j].input] = 1;
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
-                                        for (int j = 0; j < gamepad_info->config.num_digital_mappings; ++j) {
-                                            if (usages[i] == gamepad_info->config.digital_mappings[j].id) {
-                                                button_states[gamepad_info->config.digital_mappings[j].input] = 1;
+                        // Hat Switch
+                        {
+                            if (gamepad_info->config.num_hat_switch_mappings > 0) {
+                                VdFwULONG directional_value;
+                                if (VdFwHidP_GetUsageValue(VdFwHidP_Input,
+                                                       0x01, 0, 0x39, &directional_value,
+                                                       gamepad_info->ppd,
+                                                       (VdFwPCHAR)bytes, raw->data.hid.dwSizeHid) == VD_FW_HIDP_STATUS_SUCCESS)
+                                {
+                                    if (gamepad_info->config.hat_switch_mappings[0].logical_range == 8) {
+                                        static const int hat_to_mask[9] = {
+                                            0x00, // Centered
+                                            0x01, // Up
+                                            0x03, // Up+Right
+                                            0x02, // Right
+                                            0x06, // Down+Right
+                                            0x04, // Down
+                                            0x0C, // Down+Left
+                                            0x08, // Left
+                                            0x09, // Up+Left
+                                        };
+                                        int mask = hat_to_mask[directional_value];
+
+                                        button_states[VD_FW_GAMEPAD_DUP] =
+                                            (mask & gamepad_info->config.hat_switch_mappings[0].ids[0]) ? 1 : 0;
+                                        button_states[VD_FW_GAMEPAD_DRIGHT] =
+                                            (mask & gamepad_info->config.hat_switch_mappings[0].ids[1]) ? 1 : 0;
+                                        button_states[VD_FW_GAMEPAD_DDOWN] =
+                                            (mask & gamepad_info->config.hat_switch_mappings[0].ids[2]) ? 1 : 0;
+                                        button_states[VD_FW_GAMEPAD_DLEFT] =
+                                            (mask & gamepad_info->config.hat_switch_mappings[0].ids[3]) ? 1 : 0;
+                                    }
+                                }
+                            }
+                        }
+
+                        // Axes
+                        {
+                            for (int i = 0; i < gamepad_info->config.num_axial_mappings; ++i) {
+                                VdFwULONG value;
+
+                                VdFwUSAGE usage = gamepad_info->config.axial_mappings[i].id;
+                                if (VdFwHidP_GetUsageValue(VdFwHidP_Input, 0x01, 0, usage, &value, gamepad_info->ppd, (VdFwPCHAR)bytes, raw->data.hid.dwSizeHid) == VD_FW_HIDP_STATUS_SUCCESS) {
+
+                                    VdFwLONG min_value = gamepad_info->config.axial_mappings[i].min_value;
+                                    VdFwLONG max_value = gamepad_info->config.axial_mappings[i].max_value;
+
+                                    // Clamp known value
+                                    float value01 = 0.f;
+                                    if (gamepad_info->config.axial_mappings[i].input <= VD_FW_GAMEPAD_RV) {
+                                        value01 = (float)(value - min_value) / (float)(max_value - min_value);
+                                        value01 *= 2.f;
+                                        value01 -= 1.f;
+                                    } else {
+                                        z_value = value;
+                                        if (max_value > min_value) {
+                                            if ((VdFwLONG)value < min_value) {
+                                                value = min_value;
+                                            } else if ((VdFwLONG)value > max_value) {
+                                                value = max_value;
                                             }
-                                        }
-                                    }
-                                }
-                            }
 
-                            // Hat Switch
-                            {
-                                if (gamepad_info->config.num_hat_switch_mappings > 0) {
-                                    VdFwULONG directional_value;
-                                    if (VdFwHidP_GetUsageValue(VdFwHidP_Input,
-                                                           0x01, 0, 0x39, &directional_value,
-                                                           gamepad_info->ppd,
-                                                           (VdFwPCHAR)bytes, raw->data.hid.dwSizeHid) == VD_FW_HIDP_STATUS_SUCCESS)
-                                    {
-                                        if (gamepad_info->config.hat_switch_mappings[0].logical_range == 8) {
-                                            static const int hat_to_mask[9] = {
-                                                0x00, // Centered
-                                                0x01, // Up
-                                                0x03, // Up+Right
-                                                0x02, // Right
-                                                0x06, // Down+Right
-                                                0x04, // Down
-                                                0x0C, // Down+Left
-                                                0x08, // Left
-                                                0x09, // Up+Left
-                                            };
-                                            int mask = hat_to_mask[directional_value];
-
-                                            button_states[VD_FW_GAMEPAD_DUP] =
-                                                (mask & gamepad_info->config.hat_switch_mappings[0].ids[0]) ? 1 : 0;
-                                            button_states[VD_FW_GAMEPAD_DRIGHT] =
-                                                (mask & gamepad_info->config.hat_switch_mappings[0].ids[1]) ? 1 : 0;
-                                            button_states[VD_FW_GAMEPAD_DDOWN] =
-                                                (mask & gamepad_info->config.hat_switch_mappings[0].ids[2]) ? 1 : 0;
-                                            button_states[VD_FW_GAMEPAD_DLEFT] =
-                                                (mask & gamepad_info->config.hat_switch_mappings[0].ids[3]) ? 1 : 0;
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Axes
-                            {
-                                for (int i = 0; i < gamepad_info->config.num_axial_mappings; ++i) {
-                                    VdFwULONG value;
-
-                                    VdFwUSAGE usage = gamepad_info->config.axial_mappings[i].id;
-                                    if (VdFwHidP_GetUsageValue(VdFwHidP_Input, 0x01, 0, usage, &value, gamepad_info->ppd, (VdFwPCHAR)bytes, raw->data.hid.dwSizeHid) == VD_FW_HIDP_STATUS_SUCCESS) {
-
-                                        VdFwLONG min_value = gamepad_info->config.axial_mappings[i].min_value;
-                                        VdFwLONG max_value = gamepad_info->config.axial_mappings[i].max_value;
-
-                                        // Clamp known value
-                                        float value01 = 0.f;
-                                        if (gamepad_info->config.axial_mappings[i].input <= VD_FW_GAMEPAD_RV) {
                                             value01 = (float)(value - min_value) / (float)(max_value - min_value);
-                                            value01 *= 2.f;
-                                            value01 -= 1.f;
                                         } else {
-                                            if (max_value > min_value) {
-                                                if ((VdFwLONG)value < min_value) {
-                                                    value = min_value;
-                                                } else if ((VdFwLONG)value > max_value) {
-                                                    value = max_value;
-                                                }
 
-                                                value01 = (float)(value - min_value) / (float)(max_value - min_value);
-                                            } else {
-
-                                                if ((VdFwLONG)value < max_value) {
-                                                    value = max_value;
-                                                } else if ((VdFwLONG)value > min_value) {
-                                                    value = min_value;
-                                                }
-
-                                                value01 = (float)(value - max_value) / (float)(min_value - max_value);
-                                                value01 = 1.0f - value01;
+                                            if ((VdFwLONG)value < max_value) {
+                                                value = max_value;
+                                            } else if ((VdFwLONG)value > min_value) {
+                                                value = min_value;
                                             }
+
+                                            value01 = (float)(value - max_value) / (float)(min_value - max_value);
+                                            value01 = 1.0f - value01;
                                         }
-
-                                        axes[gamepad_info->config.axial_mappings[i].input] = value01;
-                                        // VD_FW_G.winthread_gamepad_curr_states[vd_fw__get_write_sink_index()][0].axes[gamepad_info->config.axial_mappings[i].input] = value01;
-
                                     }
+
+                                    axes[gamepad_info->config.axial_mappings[i].input] = value01;
                                 }
                             }
                         }
+                    }
 
-                        int index_to_write_to = gamepad_info->assigned_index;
-                        EnterCriticalSection(&VD_FW_G.input_critical_section);
-                        VD_FW_MEMCPY(&VD_FW_G.winthread_gamepad_prev_states[index_to_write_to].buttons,
-                                     &VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].buttons,
-                                     sizeof(VD_FW_G.winthread_gamepad_curr_states[0].buttons));
+                    // If Gamepad is also an XInput device, then correlate to adjust triggers
+                    if ((gamepad_info->flags & VD_FW__WIN32_GAMEPAD_FLAG_SPLITZ) &&
+                        (gamepad_info->flags & VD_FW__WIN32_GAMEPAD_FLAG_XINPUT))
+                    {
+                        vd_fw__win32_correlate_xinput_triggers(gamepad_info, button_states, axes, z_value);
+                    }
 
-                        for (int i = 0; i < VD_FW_GAMEPAD_BUTTON_MAX; ++i) {
-                            VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].buttons[i] = button_states[i];
-                        }
+                    int index_to_write_to = gamepad_info->assigned_index;
+                    EnterCriticalSection(&VD_FW_G.input_critical_section);
+                    VD_FW_MEMCPY(&VD_FW_G.winthread_gamepad_prev_states[index_to_write_to].buttons,
+                                 &VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].buttons,
+                                 sizeof(VD_FW_G.winthread_gamepad_curr_states[0].buttons));
 
-                        for (int i = 0; i < 6; ++i) {
-                            VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].axes[i] = axes[i];
-                        }
-                        LeaveCriticalSection(&VD_FW_G.input_critical_section);
-                    } break;
+                    for (int i = 0; i < VD_FW_GAMEPAD_BUTTON_MAX; ++i) {
+                        VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].buttons[i] = button_states[i];
+                    }
 
-                    case VD_FW_GAMEPAD_API_XINPUT: {
-                        if (!VD_FW_G.xinput) break;
-
-                        int index_to_write_to = gamepad_info->assigned_index;
-                        VdFwXINPUT_STATE state;
-                        if (VdFwXInputGetState(0, &state) == 0) {
-                            EnterCriticalSection(&VD_FW_G.input_critical_section);
-                            VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].buttons[VD_FW_GAMEPAD_A]       = (state.Gamepad.wButtons & VD_FW_XINPUT_GAMEPAD_A) ? 1 : 0;
-                            VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].buttons[VD_FW_GAMEPAD_B]       = (state.Gamepad.wButtons & VD_FW_XINPUT_GAMEPAD_B) ? 1 : 0;
-                            VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].buttons[VD_FW_GAMEPAD_X]       = (state.Gamepad.wButtons & VD_FW_XINPUT_GAMEPAD_X) ? 1 : 0;
-                            VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].buttons[VD_FW_GAMEPAD_Y]       = (state.Gamepad.wButtons & VD_FW_XINPUT_GAMEPAD_Y) ? 1 : 0;
-                            VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].buttons[VD_FW_GAMEPAD_DUP]     = (state.Gamepad.wButtons & VD_FW_XINPUT_GAMEPAD_DPAD_UP) ? 1 : 0;
-                            VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].buttons[VD_FW_GAMEPAD_DDOWN]   = (state.Gamepad.wButtons & VD_FW_XINPUT_GAMEPAD_DPAD_DOWN) ? 1 : 0;
-                            VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].buttons[VD_FW_GAMEPAD_DRIGHT]  = (state.Gamepad.wButtons & VD_FW_XINPUT_GAMEPAD_DPAD_RIGHT) ? 1 : 0;
-                            VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].buttons[VD_FW_GAMEPAD_DLEFT]   = (state.Gamepad.wButtons & VD_FW_XINPUT_GAMEPAD_DPAD_LEFT) ? 1 : 0;
-                            VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].buttons[VD_FW_GAMEPAD_START]   = (state.Gamepad.wButtons & VD_FW_XINPUT_GAMEPAD_START) ? 1 : 0;
-                            VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].buttons[VD_FW_GAMEPAD_L1]      = (state.Gamepad.wButtons & VD_FW_XINPUT_GAMEPAD_LEFT_SHOULDER) ? 1 : 0;
-                            VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].buttons[VD_FW_GAMEPAD_R1]      = (state.Gamepad.wButtons & VD_FW_XINPUT_GAMEPAD_RIGHT_SHOULDER) ? 1 : 0;
-                            VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].axes[VD_FW_GAMEPAD_LH]         = ((float)state.Gamepad.sThumbLX / (float)0x7FFF);
-                            VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].axes[VD_FW_GAMEPAD_LV]         = -((float)state.Gamepad.sThumbLY / (float)0x7FFF);
-                            VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].axes[VD_FW_GAMEPAD_RH]         = ((float)state.Gamepad.sThumbRX / (float)0x7FFF);
-                            VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].axes[VD_FW_GAMEPAD_RV]         = -((float)state.Gamepad.sThumbRY / (float)0x7FFF);
-                            VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].axes[VD_FW_GAMEPAD_LT]         = ((float)state.Gamepad.bLeftTrigger / (float)0xFF);
-                            VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].axes[VD_FW_GAMEPAD_RT]         = ((float)state.Gamepad.bRightTrigger / (float)0xFF);
-                            LeaveCriticalSection(&VD_FW_G.input_critical_section);
-                        }
-                    } break;
-
-                    default: break;
+                    for (int i = 0; i < 6; ++i) {
+                        VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].axes[i] = axes[i];
+                    }
+                    LeaveCriticalSection(&VD_FW_G.input_critical_section);
                 }
             }
 
@@ -7127,12 +7166,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     break;
                 }
 
-                if (is_xinput_device) {
-                    new_gamepad->api = VD_FW_GAMEPAD_API_XINPUT;
-                } else {
-                    new_gamepad->api = VD_FW_GAMEPAD_API_RAWINPUT;
-                }
-
                 UINT ppd_req_size = 0;
                 if (VdFwGetRawInputDeviceInfoA(
                     device_handle,
@@ -7144,7 +7177,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 }
 
                 new_gamepad->ppd = (VdFwPHIDP_PREPARSED_DATA)HeapAlloc(GetProcessHeap(), 0, ppd_req_size);
-
                 if (VdFwGetRawInputDeviceInfoA(
                     device_handle,
                     RIDI_PREPARSEDDATA,
@@ -7154,14 +7186,19 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     break;
                 }
 
+                new_gamepad->flags = VD_FW__WIN32_GAMEPAD_FLAG_SPLITZ;
+                if (is_xinput_device) {
+                    new_gamepad->flags |= VD_FW__WIN32_GAMEPAD_FLAG_XINPUT;
+                }
+
                 new_gamepad->config.num_digital_mappings = 0;
                 new_gamepad->config.num_axial_mappings = 0;
                 new_gamepad->config.num_hat_switch_mappings = 0;
-                new_gamepad->splitz = 1;
                 new_gamepad->handle = device_handle;
                 for (int i = 0; i < 16; ++i) new_gamepad->guid[i] = guid[i];
                 new_gamepad->connected = TRUE;
                 new_gamepad->assigned_index = VD_FW_G.num_gamepads_present++;
+                new_gamepad->xinput_index = -1;
 
                 VD_FW_LOG("Gamepad Connected: %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x :: %s :: Index: %d",
                     guid[0], guid[1], guid[2], guid[3], guid[4], guid[5], guid[6], guid[7],
@@ -7260,7 +7297,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                             }
 
                             if (value_caps[i].v.NotRange.Usage == 0x35) {
-                                new_gamepad->splitz = 0;
+                                new_gamepad->flags &= ~(VD_FW__WIN32_GAMEPAD_FLAG_SPLITZ);
                             }
 
                             int min_value = value_caps[i].LogicalMin;
@@ -7279,8 +7316,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                         }
                     }
 
-                    if (new_gamepad->splitz) {
-
+                    if (new_gamepad->flags & VD_FW__WIN32_GAMEPAD_FLAG_SPLITZ) {
                         // Find LT
                         int lt_idx = -1;
                         for (int i = 0; i < new_gamepad->config.num_axial_mappings; ++i) {
@@ -7301,6 +7337,8 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                             new_gamepad->config.axial_mappings[idx].input = VD_FW_GAMEPAD_RT;
                             new_gamepad->config.axial_mappings[idx].min_value = lt_middle;
                             new_gamepad->config.axial_mappings[idx].max_value = lt_min;
+                            new_gamepad->splitz_min = lt_min;
+                            new_gamepad->splitz_max = lt_max;
 
                             new_gamepad->config.axial_mappings[lt_idx].min_value = lt_middle;
                             new_gamepad->config.axial_mappings[lt_idx].max_value = lt_max;
@@ -7360,8 +7398,10 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 for (int i = 0; i < VD_FW_GAMEPAD_COUNT_MAX; ++i) {
                     if (VD_FW_G.gamepad_infos[i].handle == device_handle) {
                         disconnected_gamepad = &VD_FW_G.gamepad_infos[i];
-                        break;
                     }
+
+                    // Reset correlation from xinput
+                    VD_FW_G.gamepad_infos[i].xinput_index = -1;
                 }
 
                 if (disconnected_gamepad == NULL) {

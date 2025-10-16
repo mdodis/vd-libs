@@ -389,7 +389,7 @@ int main(int argc, char const *argv[])
     glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    ControllerInfo draw_info = {0};
+    ControllerInfo draw_infos[VD_FW_GAMEPAD_COUNT_MAX] = {0};
     while (vd_fw_running()) {
 
         int w, h;
@@ -410,38 +410,43 @@ int main(int argc, char const *argv[])
             glUniformMatrix4fv(glGetUniformLocation(rect_shader, "projection"), 1, GL_FALSE, projection);
         }
 
-        draw_info.button_a      = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_A);
-        draw_info.button_a_grad = move_grad(t * 7.f, draw_info.button_a_grad, draw_info.button_a);
-        draw_info.button_b      = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_B);
-        draw_info.button_b_grad = move_grad(t * 7.f, draw_info.button_b_grad, draw_info.button_b);
-        draw_info.button_x      = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_X);
-        draw_info.button_x_grad = move_grad(t * 7.f, draw_info.button_x_grad, draw_info.button_x);
-        draw_info.button_y      = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_Y);
-        draw_info.button_y_grad = move_grad(t * 7.f, draw_info.button_y_grad, draw_info.button_y);
-        draw_info.button_dup    = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_DUP);
-        draw_info.button_dright = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_DRIGHT);
-        draw_info.button_ddown  = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_DDOWN);
-        draw_info.button_dleft  = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_DLEFT);
-        draw_info.button_start  = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_START);
-        draw_info.button_select = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_SELECT);
-        draw_info.button_l1     = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_L1);
-        draw_info.button_r1     = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_R1);
-        vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_LH, &draw_info.stick_l_value[0]);
-        vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_LV, &draw_info.stick_l_value[1]);
-        vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RH, &draw_info.stick_r_value[0]);
-        vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RV, &draw_info.stick_r_value[1]);
-        vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_LT, &draw_info.lt_value);
-        vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RT, &draw_info.rt_value);
+        int num_gamepads = vd_fw_get_num_gamepads();
+
+        for (int i = 0; i < num_gamepads; ++i) {
+            ControllerInfo *draw_info = &draw_infos[i];
+            draw_info->button_a      = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_A);
+            draw_info->button_a_grad = move_grad(t * 7.f, draw_info->button_a_grad, draw_info->button_a);
+            draw_info->button_b      = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_B);
+            draw_info->button_b_grad = move_grad(t * 7.f, draw_info->button_b_grad, draw_info->button_b);
+            draw_info->button_x      = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_X);
+            draw_info->button_x_grad = move_grad(t * 7.f, draw_info->button_x_grad, draw_info->button_x);
+            draw_info->button_y      = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_Y);
+            draw_info->button_y_grad = move_grad(t * 7.f, draw_info->button_y_grad, draw_info->button_y);
+            draw_info->button_dup    = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_DUP);
+            draw_info->button_dright = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_DRIGHT);
+            draw_info->button_ddown  = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_DDOWN);
+            draw_info->button_dleft  = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_DLEFT);
+            draw_info->button_start  = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_START);
+            draw_info->button_select = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_SELECT);
+            draw_info->button_l1     = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_L1);
+            draw_info->button_r1     = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_R1);
+            vd_fw_get_gamepad_axis(i, VD_FW_GAMEPAD_LH, &draw_info->stick_l_value[0]);
+            vd_fw_get_gamepad_axis(i, VD_FW_GAMEPAD_LV, &draw_info->stick_l_value[1]);
+            vd_fw_get_gamepad_axis(i, VD_FW_GAMEPAD_RH, &draw_info->stick_r_value[0]);
+            vd_fw_get_gamepad_axis(i, VD_FW_GAMEPAD_RV, &draw_info->stick_r_value[1]);
+            vd_fw_get_gamepad_axis(i, VD_FW_GAMEPAD_LT, &draw_info->lt_value);
+            vd_fw_get_gamepad_axis(i, VD_FW_GAMEPAD_RT, &draw_info->rt_value);
+        }
 
         {
-            int count = 1;
+            int count = num_gamepads;
             float ref_width = Base_Controller_Info.controller_dim[0];
             float ref_height = Base_Controller_Info.controller_dim[1];
             float width = (float)w;
             float height = (float)h;
 
             float best_scale = 0.f;
-            {
+            if (count == 1) {
                 float s1 = width / (ref_width);
                 float s2 = height / (ref_height);
                 float s = s1 <= s2 ? s1 : s2;
@@ -481,8 +486,8 @@ int main(int argc, char const *argv[])
                 float x = x0 + col * scaled_w;
                 float y = y0 + row * scaled_h;
 
-                transform_controller_info(&draw_info, x, y, scaled_w);
-                draw_controller_info(&draw_info);
+                transform_controller_info(&draw_infos[i], x, y, scaled_w);
+                draw_controller_info(&draw_infos[i]);
             }
 
         }
