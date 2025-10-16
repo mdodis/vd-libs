@@ -28,12 +28,10 @@
  * TODO
  * - D3D11 Sample
  * - File dialog
- * - On WM_INPUT for controller, use XInput to just get the trigger axes and cache the user index of the controller.
  * - Make sure we can export functions properly for C++
  * - Expose customizable function pointer if the user needs to do something platform-specific before/after winthread has initialized or before vd_fw_init returns anyways.
  * - Have a way for a user to request OpenGL extensions/versions via a precedence array, and initialize the maximum possible version
  * - Use bit flags for buttons, an array is a bit overkill
- * - L3/R3
  * - L4/R4, L5/R5, and maybe a secondary steam controller axis?
  * - Game Controller DB
  * - Properly handle vd_fw_set_receive_ncmouse for clicks and scrolls

@@ -5,7 +5,12 @@
 #include "ext/stb_image.h"
 #include "assert.h"
 
-#define GL_CHECK(expr) do { (expr); int _e_ = glGetError(); if (_e_ != 0) { printf("Check at " __FILE__ ":%d failed with 0x%x\n", __LINE__, _e_); assert(0); }} while(0)
+#define GL_CHECK(expr) do {                                                   \
+    (expr); int _e_ = glGetError();                                           \
+    if (_e_ != 0) {                                                           \
+        printf("Check at " __FILE__ ":%d failed with 0x%x\n", __LINE__, _e_); \
+        assert(0);                                                            \
+    }} while(0)
 
 #define VERTEX_SOURCE \
 "#version 330 core                                                                                                 \n" \
