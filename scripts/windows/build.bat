@@ -48,13 +48,22 @@ pushd build
 set INC_DIR=%PRJ_DIR%
 set EXT_DIR=%PRJ_DIR%\ext
 set SRC_DIR=%PRJ_DIR%\samples
+set CL_FLAGS=/utf-8 /I %INC_DIR% /W4 /GS- /nologo /I %EXT_DIR% /DUNICODE /D_UNICODE
+set CL_DEBUG_FLAGS=/Zi /Od
+set CL_RELEASE_FALGS=/O2
+
+if %BUILD_MODE%=="release" (
+    set CL_FLAGS=%CL_FLAGS% %CL_RELEASE_FALGS%
+) else (
+    set CL_FLAGS=%CL_FLAGS% %CL_DEBUG_FLAGS%
+)
 
 if not %SAMPLE_TO_COMPILE%=="" (
-    cl /utf-8 /Zi /Od /I %INC_DIR% /W4 /GS- /nologo %SRC_DIR%\%SAMPLE_TO_COMPILE%%CSEXT% /Fe:%SAMPLE_TO_COMPILE%.exe 
+    cl %CL_FLAGS% %SRC_DIR%\%SAMPLE_TO_COMPILE%%CSEXT% /Fe:%SAMPLE_TO_COMPILE%.exe 
 )
 
 if %COMPILE_PROGRAMS%==1 (
-    cl /Zi /Od /I %INC_DIR% /I %EXT_DIR% /W4 /GS- /nologo /DUNICODE /D_UNICODE %PRJ_DIR%/programs/%PROGRAM_TO_COMPILE%.c /Fe:%PROGRAM_TO_COMPILE%.exe
+    cl %CL_FLAGS% %PRJ_DIR%/programs/%PROGRAM_TO_COMPILE%.c /Fe:%PROGRAM_TO_COMPILE%.exe
 )
 
 popd

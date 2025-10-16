@@ -27,6 +27,7 @@
  *
  * TODO
  * - D3D11 Sample
+ * - File dialog
  * - On WM_INPUT for controller, use XInput to just get the trigger axes and cache the user index of the controller.
  * - Make sure we can export functions properly for C++
  * - Expose customizable function pointer if the user needs to do something platform-specific before/after winthread has initialized or before vd_fw_init returns anyways.
@@ -149,7 +150,7 @@
 #endif // !VD_FW_LOG
 
 #ifndef VD_FW_GAMEPAD_COUNT_MAX
-#define VD_FW_GAMEPAD_COUNT_MAX 4
+#define VD_FW_GAMEPAD_COUNT_MAX 16
 #endif // !VD_FW_GAMEPAD_COUNT_MAX
 
 typedef enum {
@@ -302,6 +303,8 @@ enum {
     VD_FW_GAMEPAD_SELECT,
     VD_FW_GAMEPAD_L1,
     VD_FW_GAMEPAD_R1,
+    VD_FW_GAMEPAD_L3,
+    VD_FW_GAMEPAD_R3,
     VD_FW_GAMEPAD_BUTTON_MAX,
     VD_FW_GAMEPAD_H = 0 >> 1,
     VD_FW_GAMEPAD_V = 2 >> 1,
@@ -4752,7 +4755,7 @@ typedef struct {
     VdFwLONG                    last_window_style;
     VdFwRECT                    windowed_rect;
     VdFwWINDOWPLACEMENT         last_window_placement;
-    VdFwDWORD                   num_gamepads_present;
+    int                         num_gamepads_present;
     VdFw__Win32GamepadInfo      gamepad_infos[VD_FW_GAMEPAD_COUNT_MAX];
     int                         xinput;
     int                         window_min[2], window_max[2];
@@ -6543,20 +6546,14 @@ static struct {
     int              connected;
 } Vd_Fw__XInput_States[4];
 
-#define XInputTriggersMatch(gamepad) (                                                          \
-    ((state->match_axes[4] == 32767) && (state->match_axes[5] == 32767)) ||   \
-    ((gamepad.bLeftTrigger != 0) && (gamepad.bRightTrigger != 0)) ||                            \
-    ((Uint32)((((int)gamepad.bLeftTrigger * 257) - 32768) - state->match_axes[4]) <= 0x2fff) || \
-    ((Uint32)((((int)gamepad.bRightTrigger * 257) - 32768) - state->match_axes[5]) <= 0x2fff))
-
-
-
 static void vd_fw__win32_correlate_xinput_triggers(VdFw__Win32GamepadInfo *gamepad_info,
                                                    VdFw__GamepadButtonState *button_states, float *axes,
                                                    VdFwULONG z_value)
 {
+    int total_xinput_devices_connected = 0;
     for (int i = 0; i < 4; ++i) {
         Vd_Fw__XInput_States[i].connected = VdFwXInputGetState(i, &Vd_Fw__XInput_States[i].state) == ERROR_SUCCESS;
+        total_xinput_devices_connected += Vd_Fw__XInput_States[i].connected;
     }
 
     if (gamepad_info->xinput_index == -1) {
@@ -6565,9 +6562,32 @@ static void vd_fw__win32_correlate_xinput_triggers(VdFw__Win32GamepadInfo *gamep
                 continue;
             }
 
+            VdFwXINPUT_STATE *state = &Vd_Fw__XInput_States[i].state;
             int matched = 0;
+
             {
-                VdFwXINPUT_STATE *state = &Vd_Fw__XInput_States[i].state;
+                // 0x0400: GUIDE Button
+                int any_xinput_buttons_pressed = (state->Gamepad.wButtons & ~0x0400);
+                if (any_xinput_buttons_pressed) {
+                    matched = matched || 
+                        (
+                            (button_states[VD_FW_GAMEPAD_A]      == ((state->Gamepad.wButtons &               VD_FW_XINPUT_GAMEPAD_A) ? 1 : 0)) &&
+                            (button_states[VD_FW_GAMEPAD_B]      == ((state->Gamepad.wButtons &               VD_FW_XINPUT_GAMEPAD_B) ? 1 : 0)) &&
+                            (button_states[VD_FW_GAMEPAD_X]      == ((state->Gamepad.wButtons &               VD_FW_XINPUT_GAMEPAD_X) ? 1 : 0)) &&
+                            (button_states[VD_FW_GAMEPAD_Y]      == ((state->Gamepad.wButtons &               VD_FW_XINPUT_GAMEPAD_Y) ? 1 : 0)) &&
+                            (button_states[VD_FW_GAMEPAD_DUP]    == ((state->Gamepad.wButtons &         VD_FW_XINPUT_GAMEPAD_DPAD_UP) ? 1 : 0)) &&
+                            (button_states[VD_FW_GAMEPAD_DDOWN]  == ((state->Gamepad.wButtons &       VD_FW_XINPUT_GAMEPAD_DPAD_DOWN) ? 1 : 0)) &&
+                            (button_states[VD_FW_GAMEPAD_DRIGHT] == ((state->Gamepad.wButtons &      VD_FW_XINPUT_GAMEPAD_DPAD_RIGHT) ? 1 : 0)) &&
+                            (button_states[VD_FW_GAMEPAD_DLEFT]  == ((state->Gamepad.wButtons &       VD_FW_XINPUT_GAMEPAD_DPAD_LEFT) ? 1 : 0)) &&
+                            (button_states[VD_FW_GAMEPAD_L1]     == ((state->Gamepad.wButtons &   VD_FW_XINPUT_GAMEPAD_LEFT_SHOULDER) ? 1 : 0)) &&
+                            (button_states[VD_FW_GAMEPAD_R1]     == ((state->Gamepad.wButtons &  VD_FW_XINPUT_GAMEPAD_RIGHT_SHOULDER) ? 1 : 0)) &&
+                            (button_states[VD_FW_GAMEPAD_L3]     == ((state->Gamepad.wButtons &      VD_FW_XINPUT_GAMEPAD_LEFT_THUMB) ? 1 : 0)) &&
+                            (button_states[VD_FW_GAMEPAD_R3]     == ((state->Gamepad.wButtons &     VD_FW_XINPUT_GAMEPAD_RIGHT_THUMB) ? 1 : 0))
+                        );
+                }
+            }
+
+            if (!matched) {
                 int l_trigger_match = ((unsigned int)(((int)state->Gamepad.bLeftTrigger  * 257) - 32768) - z_value <= 0x2fff);
                 int r_trigger_match = ((unsigned int)(((int)state->Gamepad.bRightTrigger * 257) - 32768) - z_value <= 0x2fff);
                 matched = matched || l_trigger_match || r_trigger_match;
@@ -6578,6 +6598,10 @@ static void vd_fw__win32_correlate_xinput_triggers(VdFw__Win32GamepadInfo *gamep
                 VD_FW_LOG("Gamepad correlated to XInput dwUserIndex: %d", i);
                 break;
             }
+        }
+
+        if (gamepad_info->xinput_index == -1) {
+            VD_FW_LOG("Failed to correlate game pad to xinput devices %d/4", total_xinput_devices_connected);
         }
     }
 
@@ -6599,6 +6623,8 @@ static unsigned char vd_fw__map_usb_id_to_input(int usage)
         case 0x08: return VD_FW_GAMEPAD_START;
         case 0x05: return VD_FW_GAMEPAD_L1;
         case 0x06: return VD_FW_GAMEPAD_R1;
+        case 0x09: return VD_FW_GAMEPAD_L3;
+        case 0x0A: return VD_FW_GAMEPAD_R3;
         default:   return VD_FW_GAMEPAD_UNKNOWN; 
     }
 }
@@ -6913,9 +6939,11 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
 
                 VdFw__Win32GamepadInfo *gamepad_info = 0;
+                int                     gamepad_info_index = -1;
                 for (int i = 0; i < VD_FW_GAMEPAD_COUNT_MAX; ++i) {
                     if (VD_FW_G.gamepad_infos[i].handle == raw->header.hDevice) {
                         gamepad_info = &VD_FW_G.gamepad_infos[i];
+                        gamepad_info_index = i;
                         break;
                     }
                 }
@@ -7043,7 +7071,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                         vd_fw__win32_correlate_xinput_triggers(gamepad_info, button_states, axes, z_value);
                     }
 
-                    int index_to_write_to = gamepad_info->assigned_index;
+                    int index_to_write_to = gamepad_info_index;
                     EnterCriticalSection(&VD_FW_G.input_critical_section);
                     VD_FW_MEMCPY(&VD_FW_G.winthread_gamepad_prev_states[index_to_write_to].buttons,
                                  &VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].buttons,
@@ -7394,27 +7422,38 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
             } else {
 
+                int disconnected_gamepad_index = -1;
                 VdFw__Win32GamepadInfo *disconnected_gamepad = NULL;
                 for (int i = 0; i < VD_FW_GAMEPAD_COUNT_MAX; ++i) {
                     if (VD_FW_G.gamepad_infos[i].handle == device_handle) {
                         disconnected_gamepad = &VD_FW_G.gamepad_infos[i];
+                        disconnected_gamepad_index = i;
+                        break;
                     }
-
-                    // Reset correlation from xinput
-                    VD_FW_G.gamepad_infos[i].xinput_index = -1;
                 }
 
                 if (disconnected_gamepad == NULL) {
                     break;
                 }
 
-                disconnected_gamepad->connected = FALSE;
-                disconnected_gamepad->handle = INVALID_HANDLE_VALUE;
+                // Move all gamepad infos after disconnected_gamepad_index to index -1
+                {
+                    for (int i = disconnected_gamepad_index; i < (VD_FW_G.num_gamepads_present - 1); ++i) {
+                        VD_FW_G.gamepad_infos[i] = VD_FW_G.gamepad_infos[i + 1];
+                    }
+                }
+
+                VD_FW_MEMSET(&VD_FW_G.gamepad_infos[VD_FW_G.num_gamepads_present - 1], 0, sizeof(VD_FW_G.gamepad_infos[0]));
 
                 VD_FW_LOG("Gamepad Disconnected");
                 // @todo(mdodis): If controller assigned index was in the middle, move the assigned indices of every
                 // other controller back
                 VD_FW_G.num_gamepads_present--;
+
+                for (int i = 0; i < VD_FW_GAMEPAD_COUNT_MAX; ++i) {
+                    // Reset correlation from xinput
+                    VD_FW_G.gamepad_infos[i].xinput_index = -1;
+                }
             }
 
         } break;
