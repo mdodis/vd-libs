@@ -8,15 +8,19 @@
 #include <wrl.h>
 #include <assert.h>
 
+template <typename T>
+using ComPtr = Microsoft::WRL::ComPtr<T>;
+
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
 
-static IDXGIFactory2        *DXGI_Factory;
-static IDXGISwapChain1      *DXGI_Swapchain;
-static ID3D11Device         *D_Device;
-static ID3D11DeviceContext  *D_Device_Context;
+static IDXGIFactory2            *DXGI_Factory;
+static IDXGISwapChain1          *DXGI_Swapchain;
+static ID3D11Device             *D_Device;
+static ID3D11DeviceContext      *D_Device_Context;
+static ID3D11RenderTargetView   *Render_Target_View;
 
-#define CHECK_HRESULT(expr) if ((expr) != 0) { DebugBreak(); }
+#define CHECK_HRESULT(expr) if ((expr) != 0) { OutputDebugStringA("Failed: " __FILE__ "\n"); DebugBreak(); }
 
 int main(int argc, char const *argv[])
 {
@@ -67,6 +71,13 @@ int main(int argc, char const *argv[])
         NULL,
         &DXGI_Swapchain));
 
+    {
+        ComPtr<ID3D11Texture2D> backbuffer = nullptr;
+        CHECK_HRESULT(DXGI_Swapchain->GetBuffer(0, IID_PPV_ARGS(&backbuffer)));
+
+        CHECK_HRESULT(D_Device->CreateRenderTargetView(backbuffer.Get(), nullptr, &Render_Target_View));
+    }
+
     while (vd_fw_running()) {
 
         int w, h;
@@ -82,13 +93,31 @@ int main(int argc, char const *argv[])
             printf("Maximization Changed: %d\n", maximized);
         }
 
-        if (vd_fw_get_key_pressed(11)) {
+        if (vd_fw_get_key_pressed(VD_FW_KEY_F11)) {
             vd_fw_set_fullscreen(!vd_fw_get_fullscreen());
         }
 
-        glViewport(0, 0, w, h);
-        glClearColor(0.5f, 0.3f, 0.2f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        D3D11_VIEWPORT viewport = {};
+        viewport.TopLeftX = 0;
+        viewport.TopLeftY = 0;
+        viewport.Width = (float)(w);
+        viewport.Height = (float)(h);
+        viewport.MinDepth = 0.0f;
+        viewport.MaxDepth = 1.0f;
+
+        float clearColor[] = { 0.5f, 0.1f, 0.1f, 1.0f };
+
+        D_Device_Context->ClearRenderTargetView(
+            Render_Target_View,
+            clearColor);
+        D_Device_Context->RSSetViewports(
+            1,
+            &viewport);
+        D_Device_Context->OMSetRenderTargets(
+            1,
+            &Render_Target_View,
+            nullptr);
+        DXGI_Swapchain->Present(1, 0);
 
         vd_fw_swap_buffers();
     }
