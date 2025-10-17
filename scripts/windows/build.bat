@@ -48,7 +48,7 @@ pushd build
 set INC_DIR=%PRJ_DIR%
 set EXT_DIR=%PRJ_DIR%\ext
 set SRC_DIR=%PRJ_DIR%\samples
-set CL_FLAGS=/utf-8 /I %INC_DIR% /W4 /GS- /nologo /I %EXT_DIR% /DUNICODE /D_UNICODE
+set CL_FLAGS=/utf-8 /I %INC_DIR% /W4 /GS- /nologo /I %EXT_DIR% /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS
 set CL_DEBUG_FLAGS=/Zi /Od
 set CL_RELEASE_FALGS=/O2
 

@@ -61,84 +61,116 @@ int main(int argc, char const *argv[])
     f = fopen(dbfile, "r");
 
     while (fgets(buffer, sizeof(buffer), f)) {
-        char *guid = 0;
-        char *name = 0;
-        char *a = 0;
-        char *b = 0;
-        char *x = 0;
-        char *y = 0;
-        char *back = 0;
-        char *start = 0;
-        char *dpup = 0;
-        char *dpright = 0;
-        char *dpdown = 0;
-        char *dpleft = 0;
-        char *left_shoulder = 0;
-        char *right_shoulder = 0;
-        char *left_trigger = 0;
-        char *right_trigger = 0;
-        char *left_stick = 0;
-        char *right_stick = 0;
-        char *leftx = 0;
-        char *lefty = 0;
-        char *rightx = 0;
-        char *righty = 0;
-        char *platform = 0;
-        char *c;
-
-        if (!isdigit(buffer[0])) {
+        VdFwGamepadDBEntry db_entry;
+        if (!vd_fw_parse_db_entry(buffer, (int)strlen(buffer), &db_entry)) {
             continue;
         }
 
-        // Parse the string.
-        // We expect:
-        // - GUID
-        // - Name
-        // The rest are mappings, so we handle them accordingly.
-
-        // GUID
-        guid = buffer;
-        c = move_to_comma(buffer);
-        *c++ = 0;
-
-        // Name
-        name = c;
-        c = move_to_comma(c);
-        *c++ = 0;
-
-        // Rest
-        while (*c && (*c != '\n') && (*c != '\r')) {
-
-            if      (strncmp(c, "a",                1) == 0)              a = c +  1 + 1;
-            else if (strncmp(c, "b",                1) == 0)              b = c +  1 + 1;
-            else if (strncmp(c, "x",                1) == 0)              x = c +  1 + 1;
-            else if (strncmp(c, "y",                1) == 0)              y = c +  1 + 1;
-            else if (strncmp(c, "back",             4) == 0)           back = c +  4 + 1;
-            else if (strncmp(c, "dpdown",           6) == 0)         dpdown = c +  6 + 1;
-            else if (strncmp(c, "dpleft",           6) == 0)         dpleft = c +  6 + 1;
-            else if (strncmp(c, "dpright",          7) == 0)        dpright = c +  7 + 1;
-            else if (strncmp(c, "dpup",             4) == 0)           dpup = c +  4 + 1;
-            else if (strncmp(c, "leftshoulder",    12) == 0)  left_shoulder = c + 12 + 1;
-            else if (strncmp(c, "leftstick",        9) == 0)     left_stick = c +  9 + 1;
-            else if (strncmp(c, "lefttrigger",     11) == 0)   left_trigger = c + 11 + 1;
-            else if (strncmp(c, "leftx",            5) == 0)          leftx = c +  5 + 1;
-            else if (strncmp(c, "lefty",            5) == 0)          lefty = c +  5 + 1;
-            else if (strncmp(c, "lefty",            5) == 0)          lefty = c +  5 + 1;
-            else if (strncmp(c, "rightshoulder",   13) == 0) right_shoulder = c + 13 + 1;
-            else if (strncmp(c, "rightstick",      10) == 0)    right_stick = c + 10 + 1;
-            else if (strncmp(c, "righttrigger",    12) == 0)  right_trigger = c + 12 + 1;
-            else if (strncmp(c, "rightx",           6) == 0)         rightx = c +  6 + 1;
-            else if (strncmp(c, "righty",           6) == 0)         righty = c +  6 + 1;
-            else if (strncmp(c, "start",            5) == 0)          start = c +  5 + 1;
-            else if (strncmp(c, "platform",         8) == 0)       platform = c +  8 + 1;
-
-            c = move_to_comma(c);
-            *c++ = 0;
-
+        for (int i = 0; i < 16; ++i) {
+            printf("%02x", db_entry.guid[i]);
         }
 
-        printf("%s :: %s\n", guid, name);
-        printf("%-14s -> %5s\n", "a", a);
+        for (int i = 0; (db_entry.map.mappings[i].kind != VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_NONE) && (i < VD_FW_GAMEPAD_MAX_MAPPINGS); ++i) {
+            VdFwGamepadMapEntry *entry = &db_entry.map.mappings[i];
+
+            switch (entry->target) {
+                case VD_FW_GAMEPAD_A:      printf("A:     -> b%02d\n", entry->index); break;
+                case VD_FW_GAMEPAD_B:      printf("B:     -> b%02d\n", entry->index); break;
+                case VD_FW_GAMEPAD_X:      printf("X:     -> b%02d\n", entry->index); break;
+                case VD_FW_GAMEPAD_Y:      printf("Y:     -> b%02d\n", entry->index); break;
+                case VD_FW_GAMEPAD_DUP:    printf("DUP    -> b%02d\n", entry->index); break;
+                case VD_FW_GAMEPAD_DDOWN:  printf("DDOWN  -> b%02d\n", entry->index); break;
+                case VD_FW_GAMEPAD_DLEFT:  printf("DLEFT  -> b%02d\n", entry->index); break;
+                case VD_FW_GAMEPAD_DRIGHT: printf("DRIGHT -> b%02d\n", entry->index); break;
+                case VD_FW_GAMEPAD_START:  printf("START  -> b%02d\n", entry->index); break;
+                case VD_FW_GAMEPAD_SELECT: printf("SELECT -> b%02d\n", entry->index); break;
+                case VD_FW_GAMEPAD_L1:     printf("L1     -> b%02d\n", entry->index); break;
+                case VD_FW_GAMEPAD_R1:     printf("R1     -> b%02d\n", entry->index); break;
+                case VD_FW_GAMEPAD_L3:     printf("L3     -> b%02d\n", entry->index); break;
+                case VD_FW_GAMEPAD_R3:     printf("R3     -> b%02d\n", entry->index); break;
+                default: break;
+            }
+        }
+        printf("\n");
+
+        // char *guid = 0;
+        // char *name = 0;
+        // char *a = 0;
+        // char *b = 0;
+        // char *x = 0;
+        // char *y = 0;
+        // char *back = 0;
+        // char *start = 0;
+        // char *dpup = 0;
+        // char *dpright = 0;
+        // char *dpdown = 0;
+        // char *dpleft = 0;
+        // char *left_shoulder = 0;
+        // char *right_shoulder = 0;
+        // char *left_trigger = 0;
+        // char *right_trigger = 0;
+        // char *left_stick = 0;
+        // char *right_stick = 0;
+        // char *leftx = 0;
+        // char *lefty = 0;
+        // char *rightx = 0;
+        // char *righty = 0;
+        // char *platform = 0;
+        // char *c;
+
+        // if (!isdigit(buffer[0])) {
+        //     continue;
+        // }
+
+        // // Parse the string.
+        // // We expect:
+        // // - GUID
+        // // - Name
+        // // The rest are mappings, so we handle them accordingly.
+
+        // // GUID
+        // guid = buffer;
+        // c = move_to_comma(buffer);
+        // *c++ = 0;
+
+        // // Name
+        // name = c;
+        // c = move_to_comma(c);
+        // *c++ = 0;
+
+        // // Rest
+        // while (*c && (*c != '\n') && (*c != '\r')) {
+
+        //     if      (strncmp(c, "a",                1) == 0)              a = c +  1 + 1;
+        //     else if (strncmp(c, "b",                1) == 0)              b = c +  1 + 1;
+        //     else if (strncmp(c, "x",                1) == 0)              x = c +  1 + 1;
+        //     else if (strncmp(c, "y",                1) == 0)              y = c +  1 + 1;
+        //     else if (strncmp(c, "back",             4) == 0)           back = c +  4 + 1;
+        //     else if (strncmp(c, "dpdown",           6) == 0)         dpdown = c +  6 + 1;
+        //     else if (strncmp(c, "dpleft",           6) == 0)         dpleft = c +  6 + 1;
+        //     else if (strncmp(c, "dpright",          7) == 0)        dpright = c +  7 + 1;
+        //     else if (strncmp(c, "dpup",             4) == 0)           dpup = c +  4 + 1;
+        //     else if (strncmp(c, "leftshoulder",    12) == 0)  left_shoulder = c + 12 + 1;
+        //     else if (strncmp(c, "leftstick",        9) == 0)     left_stick = c +  9 + 1;
+        //     else if (strncmp(c, "lefttrigger",     11) == 0)   left_trigger = c + 11 + 1;
+        //     else if (strncmp(c, "leftx",            5) == 0)          leftx = c +  5 + 1;
+        //     else if (strncmp(c, "lefty",            5) == 0)          lefty = c +  5 + 1;
+        //     else if (strncmp(c, "lefty",            5) == 0)          lefty = c +  5 + 1;
+        //     else if (strncmp(c, "rightshoulder",   13) == 0) right_shoulder = c + 13 + 1;
+        //     else if (strncmp(c, "rightstick",      10) == 0)    right_stick = c + 10 + 1;
+        //     else if (strncmp(c, "righttrigger",    12) == 0)  right_trigger = c + 12 + 1;
+        //     else if (strncmp(c, "rightx",           6) == 0)         rightx = c +  6 + 1;
+        //     else if (strncmp(c, "righty",           6) == 0)         righty = c +  6 + 1;
+        //     else if (strncmp(c, "start",            5) == 0)          start = c +  5 + 1;
+        //     else if (strncmp(c, "platform",         8) == 0)       platform = c +  8 + 1;
+
+        //     c = move_to_comma(c);
+        //     *c++ = 0;
+
+        // }
+
+        // printf("%s :: %s\n", guid, name);
+        // printf("%-14s -> %5s\n", "a", a);
 
     }
 

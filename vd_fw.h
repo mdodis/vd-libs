@@ -27,6 +27,7 @@
  *
  * TODO
  * - D3D11 Sample
+ * - Make sure /DUNICODE works for console printing
  * - File dialog
  * - Make sure we can export functions properly for C++
  * - Expose customizable function pointer if the user needs to do something platform-specific before/after winthread has initialized or before vd_fw_init returns anyways.
@@ -360,6 +361,31 @@ typedef struct {
 } VdFwGamepadConfig;
 
 enum {
+    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_NONE = 0,
+    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON = 1,
+    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT = 2,
+    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS = 3,
+
+    VD_FW_GAMEPAD_MAX_MAPPINGS = 32,
+};
+typedef unsigned char VdFwGamemapMappingSourceKind;
+
+typedef struct {
+    VdFwGamemapMappingSourceKind kind;  
+    unsigned char                target;
+    unsigned short               index;
+} VdFwGamepadMapEntry;
+
+typedef struct {
+    VdFwGamepadMapEntry mappings[VD_FW_GAMEPAD_MAX_MAPPINGS];
+} VdFwGamepadMap;
+
+typedef struct {
+    unsigned char       guid[16];
+    VdFwGamepadMap      map;
+} VdFwGamepadDBEntry;
+
+enum {
     VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN   = 1 << 0,
     VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN  = 1 << 1,
     VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN = 1 << 2,
@@ -617,6 +643,7 @@ VD_FW_API void               vd_fw_add_gamepad_mapping(const char *s);
 VD_FW_API int                vd_fw_get_gamepad_down(int index, int button);
 VD_FW_API int                vd_fw_get_gamepad_axis(int index, int axis, float *out);
 VD_FW_API int                vd_fw_get_gamepad_connected(int index);
+VD_FW_API int                vd_fw_parse_db_entry(const char *s, int s_len, VdFwGamepadDBEntry *out);
 
 /**
  * @brief Gets the backing scale factor
@@ -5915,6 +5942,257 @@ VD_FW_API int vd_fw_get_gamepad_down(int index, int button)
 VD_FW_API int vd_fw_get_gamepad_axis(int index, int axis, float *out)
 {
     *out = VD_FW_G.gamepad_curr_states[index].axes[axis];
+    return 1;
+}
+
+VD_FW_INL int vd_fw__compare_string(const char *s, int s_len, int i,
+                                    const char *t, int t_len)
+{
+    if ((s_len - i) < t_len) {
+        return 0;
+    }
+
+    int x;
+    for (x = 0; x < t_len; ++x) {
+        if (s[i + x] != t[x]) {
+            return 0;
+        }
+    }
+
+    return x;
+}
+
+VD_FW_INL int vd_fw__parse_map_entry(const char *s, int s_len, VdFwGamepadMapEntry *out)
+{
+    int i = 0;
+    switch (s[i]) {
+        case 'b': {
+            i++;
+            unsigned short number = 0;
+            while ((i < s_len) && (s[i] >= '0' && s[i] <= '9')) {
+                number *= 10;
+                number += s[i++] - '0';
+            }
+
+            if (i >= s_len) {
+                return 0;
+            }
+
+            out->kind = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON;
+            out->index = number;
+        } break;
+
+        case 'h': {
+            i++;
+            unsigned char hat_index = 0;
+
+            while ((i < s_len) && (s[i] >= '0' && s[i] <= '9')) {
+                hat_index *= 10;
+                hat_index += s[i++] - '0';
+            }
+
+            if (i >= s_len) {
+                return 0;
+            }
+
+            if (s[i++] != '.') {
+                return 0;
+            }
+
+            unsigned char hat_value = 0;
+            while ((i < s_len) && (s[i] >= '0' && s[i] <= '9')) {
+                hat_value *= 10;
+                hat_value += s[i++] - '0';
+            }
+
+            if (i >= s_len) {
+                return 0;
+            }
+
+            out->kind = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT;
+            out->index = (((unsigned short)hat_index) << 8) | (hat_value);
+        } break;
+
+        case 'a': {
+            i++;
+            unsigned short number = 0;
+            while ((i < s_len) && (s[i] >= '0' && s[i] <= '9')) {
+                number *= 10;
+                number += s[i++] - '0';
+            }
+
+            if (i >= s_len) {
+                return 0;
+            }
+
+            out->kind = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS;
+            out->index = number;
+        } break;
+
+        default: return 0;
+    }
+
+    return i;
+}
+
+VD_FW_API int vd_fw_parse_db_entry(const char *s, int s_len, VdFwGamepadDBEntry *out)
+{
+    int i = 0;
+    if (s_len < 32) {
+        return 0;
+    }
+
+    for (i = 0; i < 32; i += 2) {
+        unsigned char hi_nibble;
+        unsigned char lo_nibble;
+        if (s[i] >= '0' && s[i] <= '9') {
+            hi_nibble = s[i] - '0';
+        } else if (s[i] >= 'a' && s[i] <= 'f') {
+            hi_nibble = s[i] - 'a' + 0xa;
+        } else if (s[i] >= 'A' && s[i] <= 'F') {
+            hi_nibble = s[i] - 'A' + 0xa;
+        } else {
+            return 0;
+        }
+
+        if (s[i+1] >= '0' && s[i+1] <= '9') {
+            lo_nibble = s[i+1] - '0';
+        } else if (s[i+1] >= 'a' && s[i+1] <= 'f') {
+            lo_nibble = s[i+1] - 'a' + 0xa;
+        } else if (s[i+1] >= 'A' && s[i+1] <= 'F') {
+            lo_nibble = s[i+1] - 'A' + 0xa;
+        } else {
+            return 0;
+        }
+
+        unsigned char byte = hi_nibble * 16 + lo_nibble;
+        out->guid[i / 2] = byte;
+    }
+
+    if (i > s_len || s[i] != ',') {
+        return 0;
+    }
+    i++;
+
+    // Skip device name
+    while ((i < s_len) && (s[i] != ',')) i++;
+    if (i++ > s_len) return 0;
+
+#define VD_FW_STR_AND_LEN(cs) cs, (sizeof(cs) - 1) 
+#define VD_FW_EXPECT_COLON() do { if (!s[i] == ':') return 0; if (++i >= s_len) return 0; } while(0)
+
+    int mapping_count = 0;
+
+    // Parse Entries
+    while (i < s_len) {
+        VdFwGamepadMapEntry map_entry = {0};
+
+        int m;
+        if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("a")))) {
+            i += m;
+            VD_FW_EXPECT_COLON();
+            map_entry.target = VD_FW_GAMEPAD_A;
+        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("dpdown")))) {
+            i += m;
+            VD_FW_EXPECT_COLON();
+            map_entry.target = VD_FW_GAMEPAD_DDOWN;
+        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("dpleft")))) {
+            i += m;
+            VD_FW_EXPECT_COLON();
+            map_entry.target = VD_FW_GAMEPAD_DLEFT;
+        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("dpright")))) {
+            i += m;
+            VD_FW_EXPECT_COLON();
+            map_entry.target = VD_FW_GAMEPAD_DRIGHT;
+        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("dpup")))) {
+            i += m;
+            VD_FW_EXPECT_COLON();
+            map_entry.target = VD_FW_GAMEPAD_DUP;
+        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("guide")))) {
+            i += m;
+            VD_FW_EXPECT_COLON();
+        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("leftshoulder")))) {
+            i += m;
+            VD_FW_EXPECT_COLON();
+            map_entry.target = VD_FW_GAMEPAD_L1;
+        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("leftstick")))) {
+            i += m;
+            VD_FW_EXPECT_COLON();
+            map_entry.target = VD_FW_GAMEPAD_L3;
+        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("lefttrigger")))) {
+            i += m;
+            VD_FW_EXPECT_COLON();
+            map_entry.target = VD_FW_GAMEPAD_L2;
+        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("leftx")))) {
+            i += m;
+            VD_FW_EXPECT_COLON();
+            map_entry.target = VD_FW_GAMEPAD_LH;
+        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("lefty")))) {
+            i += m;
+            VD_FW_EXPECT_COLON();
+            map_entry.target = VD_FW_GAMEPAD_LV;
+        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("rightshoulder")))) {
+            i += m;
+            VD_FW_EXPECT_COLON();
+            map_entry.target = VD_FW_GAMEPAD_R1;
+        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("rightstick")))) {
+            i += m;
+            VD_FW_EXPECT_COLON();
+            map_entry.target = VD_FW_GAMEPAD_R3;
+        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("righttrigger")))) {
+            i += m;
+            VD_FW_EXPECT_COLON();
+            map_entry.target = VD_FW_GAMEPAD_R2;
+        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("rightx")))) {
+            i += m;
+            VD_FW_EXPECT_COLON();
+            map_entry.target = VD_FW_GAMEPAD_RH;
+        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("righty")))) {
+            i += m;
+            VD_FW_EXPECT_COLON();
+            map_entry.target = VD_FW_GAMEPAD_RV;
+        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("start")))) {
+            i += m;
+            VD_FW_EXPECT_COLON();
+            map_entry.target = VD_FW_GAMEPAD_START;
+        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("back")))) {
+            i += m;
+            VD_FW_EXPECT_COLON();
+            map_entry.target = VD_FW_GAMEPAD_SELECT;
+        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("b")))) {
+            i += m;
+            VD_FW_EXPECT_COLON();
+            map_entry.target = VD_FW_GAMEPAD_B;
+        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("x")))) {
+            i += m;
+            VD_FW_EXPECT_COLON();
+            map_entry.target = VD_FW_GAMEPAD_X;
+        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("y")))) {
+            i += m;
+            VD_FW_EXPECT_COLON();
+            map_entry.target = VD_FW_GAMEPAD_Y;
+        } else {
+            // Just skip the comma
+            i++;
+        }
+
+        if (map_entry.target != VD_FW_GAMEPAD_UNKNOWN) {
+            int c = vd_fw__parse_map_entry(s + i, s_len - i, &map_entry);
+            if (c == 0) {
+                return 0;
+            }
+
+            out->map.mappings[mapping_count++] = map_entry;
+
+            i += c;
+        }
+
+        while ((i < s_len) && (s[i] != ',')) i++;
+        i++;
+    }
+
+#undef VD_FW_EXPECT_COLON
+#undef VD_FW_STR_AND_LEN
     return 1;
 }
 
