@@ -422,7 +422,7 @@ int main(int argc, char const *argv[])
             glUniformMatrix4fv(glGetUniformLocation(rect_shader, "projection"), 1, GL_FALSE, projection);
         }
 
-        int num_gamepads = vd_fw_get_num_gamepads();
+        int num_gamepads = vd_fw_get_gamepad_count();
 
         for (int i = 0; i < num_gamepads; ++i) {
             ControllerInfo *draw_info = &draw_infos[i];
