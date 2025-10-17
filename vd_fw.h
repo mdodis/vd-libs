@@ -897,13 +897,14 @@ VD_FW_INL void *vd_fw_memset(void *dst, unsigned char val, size_t num)
 }
 
 /* ----INTERNAL API-------------------------------------------------------------------------------------------------- */
-VD_FW_API int   vd_fw__any_time_higher(int num_files, const char **files, unsigned long long *check_against);
-VD_FW_API char* vd_fw__debug_dump_file_text(const char *path);
-VD_FW_API void* vd_fw__realloc_mem(void *prev_ptr, size_t size);
-VD_FW_API void  vd_fw__free_mem(void *memory);
-VD_FW_API void* vd_fw__resize_buffer(void *buffer, size_t element_size, int required_capacity, int *cap);
-VD_FW_API void  vd_fw__def_gamepad(VdFwGamepadMap *map);
-VD_FW_API int   vd_fw__map_gamepad(unsigned char guid[16], VdFwGamepadMap *map);
+VD_FW_API int             vd_fw__any_time_higher(int num_files, const char **files, unsigned long long *check_against);
+VD_FW_API char*           vd_fw__debug_dump_file_text(const char *path);
+VD_FW_API void*           vd_fw__realloc_mem(void *prev_ptr, size_t size);
+VD_FW_API void            vd_fw__free_mem(void *memory);
+VD_FW_API void*           vd_fw__resize_buffer(void *buffer, size_t element_size, int required_capacity, int *cap);
+VD_FW_API void            vd_fw__def_gamepad(VdFwGamepadMap *map);
+VD_FW_API int             vd_fw__map_gamepad(unsigned char guid[16], VdFwGamepadMap *map);
+VD_FW_API unsigned short  vd_fw__crc16(unsigned short crc, void *data, size_t len);
 
 #if _WIN32
 #define VD_FW_WIN32_SUBSYSTEM_CONSOLE 1
@@ -7572,6 +7573,8 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 unsigned short product_id   = (unsigned short)device_info.hid.dwProductId;
                 unsigned short version      = (unsigned short)device_info.hid.dwVersionNumber;
 
+                // @todo(mdodis): https://github.com/libsdl-org/SDL/blob/main/src/joystick/SDL_joystick.c#L2907
+                //                https://github.com/libsdl-org/SDL/blob/201ad7f79b8c574f720c0d15c4229e0378be2d96/src/joystick/windows/SDL_rawinputjoystick.c#L886
                 unsigned char guid[16] = {0};
                 guid[0] = 0x03;
                 guid[1] = 0x00;
@@ -7636,6 +7639,10 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 new_gamepad->xinput_index = -1;
                 VdFwULONG data_count = VdFwHidP_MaxDataListLength(VdFwHidP_Input, new_gamepad->ppd);
 
+                for (int i = 0; i < 16; ++i) {
+                    printf("%02x", guid[i]);
+                }
+                printf("\n");
                 new_gamepad->hidp_data = (VdFwHIDP_DATA*)vd_fw__resize_buffer(new_gamepad->hidp_data,
                                                                               sizeof(VdFwHIDP_DATA),
                                                                               data_count,
@@ -9474,6 +9481,28 @@ VD_FW_API void vd_fw__def_gamepad(VdFwGamepadMap *map)
 VD_FW_API int vd_fw__map_gamepad(unsigned char guid[16], VdFwGamepadMap *map)
 {
     return 0;
+}
+
+VD_FW_INL unsigned short vd_fw__crc16_byte(unsigned char r)
+{
+    unsigned short result = 0;    
+    int i;
+
+    for (i = 0; i < 8; ++i) {
+        result = ((result ^ r) & 1 ? 0xa001 : 0) ^ result >> 1;
+        r >>= 1;
+    }
+
+    return result;
+} 
+
+VD_FW_API unsigned short vd_fw__crc16(unsigned short crc, void *data, size_t len)
+{
+    size_t i;
+    for (i = 0; i < len; ++i) {
+        crc = vd_fw__crc16_byte((unsigned char)crc ^ ((unsigned char*)data)[i]) ^ crc >> 8;
+    }
+    return crc;
 }
 
 VD_FW_API void *vd_fw__resize_buffer(void *buffer, size_t element_size, int required_capacity, int *cap)
