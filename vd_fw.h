@@ -155,16 +155,16 @@
 #ifndef VD_FW_ENDIANNESS
 #   if defined(_MSC_VER)
 #       if defined(_M_IX86) || defined(_M_X64) || defined(_M_ARM) || defined(_M_ARM64)
-#           define VD_ENDIANNESS VD_FW_ENDIANNESS_LE
+#           define VD_FW_ENDIANNESS VD_FW_ENDIANNESS_LE
 #       else
-#           define VD_ENDIANNESS VD_FW_ENDIANNESS_BE
+#           define VD_FW_ENDIANNESS VD_FW_ENDIANNESS_BE
 #       endif
 #   endif
 #endif // VD_FW_ENDIANESS
 
 #include <stdint.h>
 #define VD_FW_SWAP16(x) ((uint16_t)((x << 8) | (x >> 8)))
-#if VD_FW_ENDIANNESS==VD_FW_ENDIANNESS_LE
+#if VD_FW_ENDIANNESS == VD_FW_ENDIANNESS_LE
 #   define VD_FW_SWAP16LE(x) (x)
 #else
 #   define VD_FW_SWAP16LE(x) VD_FW_SWAP16(x)
@@ -7688,6 +7688,11 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                                          manufacturer_string, product_string,
                                          'r', 0);
 
+                for (int i = 0; i < 16; ++i) {
+                    printf("%02x", guid.dat[i]);
+                }
+                printf("\n");
+
                 // Free strings if needed
                 {
                     if (manufacturer_string) {
@@ -7715,10 +7720,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 new_gamepad->xinput_index = -1;
                 VdFwULONG data_count = VdFwHidP_MaxDataListLength(VdFwHidP_Input, new_gamepad->ppd);
 
-                for (int i = 0; i < 16; ++i) {
-                    printf("%02x", guid.dat[i]);
-                }
-                printf("\n");
 
                 // Resize HIDP_DATA buffer if needed
                 new_gamepad->hidp_data = (VdFwHIDP_DATA*)vd_fw__resize_buffer(new_gamepad->hidp_data,
@@ -9566,9 +9567,9 @@ VD_FW_API int vd_fw__map_gamepad(VdFwGuid guid, VdFwGamepadMap *map)
     return 0;
 }
 
-VD_FW_INL unsigned short vd_fw__crc16_byte(unsigned char r)
+VD_FW_INL uint16_t vd_fw__crc16_byte(unsigned char r)
 {
-    unsigned short result = 0;    
+    uint16_t result = 0;    
     int i;
 
     for (i = 0; i < 8; ++i) {
@@ -9583,7 +9584,7 @@ VD_FW_API unsigned short vd_fw__crc16(unsigned short crc, void *data, size_t len
 {
     size_t i;
     for (i = 0; i < len; ++i) {
-        crc = vd_fw__crc16_byte((unsigned char)crc ^ ((unsigned char*)data)[i]) ^ crc >> 8;
+        crc = vd_fw__crc16_byte((uint8_t)crc ^ ((uint8_t*)data)[i]) ^ crc >> 8;
     }
     return crc;
 }
@@ -9599,7 +9600,7 @@ VD_FW_API VdFwGuid vd_fw__make_gamepad_guid(uint16_t bus, uint16_t vendor, uint1
     VD_FW_MEMSET(&result, 0, sizeof(result));
 
     if (vendor_name && *vendor_name && product_name && *product_name) {
-        crc = vd_fw__crc16(crc, (void*)vendor_name, vd_fw__strlen(vendor_name));
+        crc = vd_fw__crc16(crc, vendor_name,  vd_fw__strlen(vendor_name));
         crc = vd_fw__crc16(crc, " ", 1);
         crc = vd_fw__crc16(crc, product_name, vd_fw__strlen(product_name));
     } else if (product_name) {
@@ -9648,7 +9649,7 @@ VD_FW_API char *vd_fw__utf16_to_utf8(const wchar_t *ws)
 
     int wrt = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
                                   ws, -1,
-                                  0, 0,
+                                  data, req,
                                   NULL, NULL);
 
     if (wrt == 0) {
