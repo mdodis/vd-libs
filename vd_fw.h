@@ -26,10 +26,8 @@
  *   on the big threes is OpenGL Core Profile 4.1 (MacOS limitation)
  *
  * TODO
- * - GetUsageValue for buttons
- * - We don't need to query button caps
- * - 
- * -
+ * - Swap
+ * - Compute GUID in the same way SDL does it
  * - D3D11 Sample
  * - Make sure /DUNICODE works for console printing
  * - File dialog
@@ -151,6 +149,26 @@
 #define VD_FW_LOG(fmt, ...) printf("vd_fw: " fmt "\n", __VA_ARGS__)
 #endif // VD_FW_NO_CRT
 #endif // !VD_FW_LOG
+
+#define VD_FW_ENDIANNESS_LE 1
+#define VD_FW_ENDIANNESS_BE 0
+#ifndef VD_FW_ENDIANNESS
+#   if defined(_MSC_VER)
+#       if defined(_M_IX86) || defined(_M_X64) || defined(_M_ARM) || defined(_M_ARM64)
+#           define VD_ENDIANNESS VD_FW_ENDIANNESS_LE
+#       else
+#           define VD_ENDIANNESS VD_FW_ENDIANNESS_BE
+#       endif
+#   endif
+#endif // VD_FW_ENDIANESS
+
+#include <stdint.h>
+#define VD_FW_SWAP16(x) ((uint16_t)((x << 8) | (x >> 8)))
+#if VD_FW_ENDIANNESS==VD_FW_ENDIANNESS_LE
+#   define VD_FW_SWAP16LE(x) (x)
+#else
+#   define VD_FW_SWAP16LE(x) VD_FW_SWAP16(x)
+#endif
 
 #ifndef VD_FW_GAMEPAD_COUNT_MAX
 #define VD_FW_GAMEPAD_COUNT_MAX 16
@@ -383,6 +401,10 @@ typedef struct {
 typedef struct {
     VdFwGamepadMapEntry mappings[VD_FW_GAMEPAD_MAX_MAPPINGS];
 } VdFwGamepadMap;
+
+typedef struct {
+    unsigned char dat[16];
+} VdFwGuid;
 
 typedef struct {
     unsigned char       guid[16];
@@ -905,6 +927,29 @@ VD_FW_API void*           vd_fw__resize_buffer(void *buffer, size_t element_size
 VD_FW_API void            vd_fw__def_gamepad(VdFwGamepadMap *map);
 VD_FW_API int             vd_fw__map_gamepad(unsigned char guid[16], VdFwGamepadMap *map);
 VD_FW_API unsigned short  vd_fw__crc16(unsigned short crc, void *data, size_t len);
+VD_FW_API VdFwGuid        vd_fw__make_gamepad_guid(uint16_t bus, uint16_t vendor, uint16_t product, uint16_t version,
+                                                   char *vendor_name, char *product_name,
+                                                   uint8_t driver_signature, uint8_t driver_data);
+VD_FW_INL int             vd_fw__strlen(const char *s);
+VD_FW_INL size_t          vd_fw__strlcpy(char *dst, const char *src, size_t maxlen);
+
+VD_FW_INL int vd_fw__strlen(const char *s)
+{
+    int r = 0;
+    while (*s++) r++;
+    return r;
+}
+
+VD_FW_INL size_t vd_fw__strlcpy(char *dst, const char *src, size_t maxlen)
+{
+    size_t srclen = vd_fw__strlen(src);
+    if (maxlen > 0) {
+        size_t len = srclen < (maxlen - 1) ? srclen : (maxlen - 1);
+        VD_FW_MEMCPY(dst, src, len);
+        dst[len] = '\0';
+    }
+    return srclen;
+}
 
 #if _WIN32
 #define VD_FW_WIN32_SUBSYSTEM_CONSOLE 1
@@ -9503,6 +9548,52 @@ VD_FW_API unsigned short vd_fw__crc16(unsigned short crc, void *data, size_t len
         crc = vd_fw__crc16_byte((unsigned char)crc ^ ((unsigned char*)data)[i]) ^ crc >> 8;
     }
     return crc;
+}
+
+VD_FW_API VdFwGuid vd_fw__make_gamepad_guid(uint16_t bus, uint16_t vendor, uint16_t product, uint16_t version,
+                                            char *vendor_name, char *product_name,
+                                            uint8_t driver_signature, uint8_t driver_data)
+{
+    VdFwGuid result;
+    uint16_t *guid16 = (uint16_t*)result.dat;
+    uint16_t crc = 0;
+
+    VD_FW_MEMSET(&result, 0, sizeof(result));
+
+    if (vendor_name && *vendor_name && product_name && *product_name) {
+        crc = vd_fw__crc16(crc, (void*)vendor_name, vd_fw__strlen(vendor_name));
+        crc = vd_fw__crc16(crc, " ", 1);
+        crc = vd_fw__crc16(crc, product_name, vd_fw__strlen(product_name));
+    } else if (product_name) {
+        crc = vd_fw__crc16(crc, product_name, vd_fw__strlen(product_name));
+    }
+
+    *guid16++ = VD_FW_SWAP16LE(bus);
+    *guid16++ = VD_FW_SWAP16LE(crc);
+
+    if (vendor) {
+        *guid16++ = VD_FW_SWAP16LE(vendor);
+        *guid16++ = 0;
+        *guid16++ = VD_FW_SWAP16LE(product);
+        *guid16++ = 0;
+        *guid16++ = VD_FW_SWAP16LE(version);
+        result.dat[14] = driver_signature;
+        result.dat[15] = driver_data;
+    } else {
+        size_t avail = sizeof(result.dat) - 4;
+
+        if (driver_signature) {
+            avail -= 2;
+            result.dat[14] = driver_signature;
+            result.dat[15] = driver_data;
+        }
+
+        if (product_name) {
+            vd_fw__strlcpy((char*)guid16, product_name, avail);
+        }
+    }
+
+    return result;    
 }
 
 VD_FW_API void *vd_fw__resize_buffer(void *buffer, size_t element_size, int required_capacity, int *cap)
