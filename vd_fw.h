@@ -26,8 +26,7 @@
  *   on the big threes is OpenGL Core Profile 4.1 (MacOS limitation)
  *
  * TODO
- * - Swap
- * - Compute GUID in the same way SDL does it
+ * - Controller mapping & assignment
  * - D3D11 Sample
  * - Make sure /DUNICODE works for console printing
  * - File dialog
@@ -7687,11 +7686,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                                          vendor_id, product_id, version,
                                          manufacturer_string, product_string,
                                          'r', 0);
-
-                for (int i = 0; i < 16; ++i) {
-                    printf("%02x", guid.dat[i]);
-                }
-                printf("\n");
 
                 // Free strings if needed
                 {
