@@ -925,13 +925,14 @@ VD_FW_API void*           vd_fw__realloc_mem(void *prev_ptr, size_t size);
 VD_FW_API void            vd_fw__free_mem(void *memory);
 VD_FW_API void*           vd_fw__resize_buffer(void *buffer, size_t element_size, int required_capacity, int *cap);
 VD_FW_API void            vd_fw__def_gamepad(VdFwGamepadMap *map);
-VD_FW_API int             vd_fw__map_gamepad(unsigned char guid[16], VdFwGamepadMap *map);
+VD_FW_API int             vd_fw__map_gamepad(VdFwGuid guid, VdFwGamepadMap *map);
 VD_FW_API unsigned short  vd_fw__crc16(unsigned short crc, void *data, size_t len);
 VD_FW_API VdFwGuid        vd_fw__make_gamepad_guid(uint16_t bus, uint16_t vendor, uint16_t product, uint16_t version,
                                                    char *vendor_name, char *product_name,
                                                    uint8_t driver_signature, uint8_t driver_data);
 VD_FW_INL int             vd_fw__strlen(const char *s);
 VD_FW_INL size_t          vd_fw__strlcpy(char *dst, const char *src, size_t maxlen);
+VD_FW_API char*           vd_fw__utf16_to_utf8(const wchar_t *ws);
 
 VD_FW_INL int vd_fw__strlen(const char *s)
 {
@@ -4572,6 +4573,14 @@ static VdFwProcHidP_MaxDataListLength *VdFwHidP_MaxDataListLength;
 typedef VD_FW_PROC_HidP_GetUsageValue(VdFwProcHidP_GetUsageValue);
 static VdFwProcHidP_GetUsageValue *VdFwHidP_GetUsageValue;
 
+#define VD_FW_PROC_HidD_GetManufacturerString(name) VdFwBOOLEAN name(VdFwHANDLE HidDeviceObject, void *Buffer, VdFwULONG BufferLength)
+typedef VD_FW_PROC_HidD_GetManufacturerString(VdFwProcHidD_GetManufacturerString);
+static VdFwProcHidD_GetManufacturerString *VdFwHidD_GetManufacturerString;
+
+#define VD_FW_PROC_HidD_GetProductString(name) VdFwBOOLEAN name(VdFwHANDLE HidDeviceObject, void *Buffer, VdFwULONG BufferLength)
+typedef VD_FW_PROC_HidD_GetProductString(VdFwProcHidD_GetProductString);
+static VdFwProcHidD_GetProductString *VdFwHidD_GetProductString;
+
 /* ----XInput.dll---------------------------------------------------------------------------------------------------- */
 #define VD_FW_XINPUT_GAMEPAD_DPAD_UP          0x0001
 #define VD_FW_XINPUT_GAMEPAD_DPAD_DOWN        0x0002
@@ -4819,7 +4828,7 @@ enum {
 
 typedef struct VdFw__Win32GamepadInfo {
     VdFwHANDLE               handle;
-    unsigned char            guid[16];
+    VdFwGuid                 guid;
     int                      connected;
     int                      assigned_index;
     int                      xinput_index;
@@ -5414,14 +5423,17 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         // Hid.dll
         {
             HMODULE m          = LoadLibraryA("Hid.dll");
-            VdFwHidP_GetCaps            =            (VdFwProcHidP_GetCaps*)GetProcAddress(m, "HidP_GetCaps");
-            VdFwHidP_GetButtonCaps      =      (VdFwProcHidP_GetButtonCaps*)GetProcAddress(m, "HidP_GetButtonCaps");
-            VdFwHidP_GetValueCaps       =       (VdFwProcHidP_GetValueCaps*)GetProcAddress(m, "HidP_GetValueCaps");
-            VdFwHidP_GetUsages          =          (VdFwProcHidP_GetUsages*)GetProcAddress(m, "HidP_GetUsages");
-            VdFwHidP_GetData            =            (VdFwProcHidP_GetData*)GetProcAddress(m, "HidP_GetData");
-            VdFwHidP_MaxUsageListLength = (VdFwProcHidP_MaxUsageListLength*)GetProcAddress(m, "HidP_MaxUsageListLength");
-            VdFwHidP_MaxDataListLength  =  (VdFwProcHidP_MaxDataListLength*)GetProcAddress(m, "HidP_MaxDataListLength");
-            VdFwHidP_GetUsageValue      =      (VdFwProcHidP_GetUsageValue*)GetProcAddress(m, "HidP_GetUsageValue");
+            VdFwHidP_GetCaps               =               (VdFwProcHidP_GetCaps*)GetProcAddress(m, "HidP_GetCaps");
+            VdFwHidP_GetButtonCaps         =         (VdFwProcHidP_GetButtonCaps*)GetProcAddress(m, "HidP_GetButtonCaps");
+            VdFwHidP_GetValueCaps          =          (VdFwProcHidP_GetValueCaps*)GetProcAddress(m, "HidP_GetValueCaps");
+            VdFwHidP_GetUsages             =             (VdFwProcHidP_GetUsages*)GetProcAddress(m, "HidP_GetUsages");
+            VdFwHidP_GetData               =               (VdFwProcHidP_GetData*)GetProcAddress(m, "HidP_GetData");
+            VdFwHidP_MaxUsageListLength    =    (VdFwProcHidP_MaxUsageListLength*)GetProcAddress(m, "HidP_MaxUsageListLength");
+            VdFwHidP_MaxDataListLength     =     (VdFwProcHidP_MaxDataListLength*)GetProcAddress(m, "HidP_MaxDataListLength");
+            VdFwHidP_GetUsageValue         =         (VdFwProcHidP_GetUsageValue*)GetProcAddress(m, "HidP_GetUsageValue");
+            VdFwHidD_GetManufacturerString = (VdFwProcHidD_GetManufacturerString*)GetProcAddress(m, "HidD_GetManufacturerString");
+            VdFwHidD_GetProductString      =      (VdFwProcHidD_GetProductString*)GetProcAddress(m, "HidD_GetProductString");
+
         }
 
         // XInput.dll
@@ -7557,10 +7569,12 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     &cb_size);
 
                 if ((device_info_result) == ((UINT)-1)) {
+                    // Get device info failed
                     break;
                 }
 
                 if (device_info.dwType != RIM_TYPEHID) {
+                    // Device is not an HID device
                     break;
                 }
 
@@ -7600,40 +7614,9 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
                 if (is_xinput_device) {
                     VD_FW_LOG("Discovered XInput Device");
-                    for (int i = 0; i < 4; ++i) {
-                        VdFwXINPUT_STATE state = {0};
-                        int device_connected = 1;
-                        DWORD get_state_result = VdFwXInputGetState(i, &state);
-                        if (get_state_result == ERROR_DEVICE_NOT_CONNECTED) {
-                            device_connected = 0;
-                        }
-
-                        VD_FW_LOG("Xinput[%d]: Connected: %d dwPacketNumber: %d", i, device_connected, state.dwPacketNumber);
-                    }
                 } else {
                     VD_FW_LOG("Discovered RAWINPUT Device");
                 }
-
-                unsigned short vendor_id    = (unsigned short)device_info.hid.dwVendorId;
-                unsigned short product_id   = (unsigned short)device_info.hid.dwProductId;
-                unsigned short version      = (unsigned short)device_info.hid.dwVersionNumber;
-
-                // @todo(mdodis): https://github.com/libsdl-org/SDL/blob/main/src/joystick/SDL_joystick.c#L2907
-                //                https://github.com/libsdl-org/SDL/blob/201ad7f79b8c574f720c0d15c4229e0378be2d96/src/joystick/windows/SDL_rawinputjoystick.c#L886
-                unsigned char guid[16] = {0};
-                guid[0] = 0x03;
-                guid[1] = 0x00;
-                guid[2] = 0x00;
-                guid[3] = 0x00;
-
-                guid[4] = vendor_id & 0xFF;
-                guid[5] = (vendor_id >> 8) & 0xFF;
-
-                guid[8] = product_id & 0xFF;
-                guid[9] = (product_id >> 8) & 0xFF;
-
-                guid[12] = version & 0xFF;
-                guid[13] = (version >> 8) & 0xFF;
 
                 VdFw__Win32GamepadInfo *new_gamepad = NULL;
                 int new_gamepad_index = 0;
@@ -7649,6 +7632,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     break;
                 }
 
+                // @todo(mdodis): Cache allocated ppd data and realloc only if required size is bigger
                 UINT ppd_req_size = 0;
                 if (VdFwGetRawInputDeviceInfoA(
                     device_handle,
@@ -7669,25 +7653,74 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     break;
                 }
 
+                // Construct GUID form gamepad info
+                VdFwGuid guid;
+                char *manufacturer_string = 0;
+                char *product_string = 0;
+                uint16_t vendor_id    = (uint16_t)device_info.hid.dwVendorId;
+                uint16_t product_id   = (uint16_t)device_info.hid.dwProductId;
+                uint16_t version      = (uint16_t)device_info.hid.dwVersionNumber;
+
+                // Get Manufacturer String & Product String
+                {
+
+                    HANDLE device_file = CreateFileA(device_instance_path,
+                                                     GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                                     NULL, OPEN_EXISTING, 0, NULL);
+                    wchar_t temp_wstring[128];
+                    temp_wstring[0] = 0;
+
+                    if (VdFwHidD_GetManufacturerString(device_file, temp_wstring, sizeof(temp_wstring))) {
+                        manufacturer_string = vd_fw__utf16_to_utf8(temp_wstring);
+                    }
+
+                    temp_wstring[0] = 0;
+                    if (VdFwHidD_GetProductString(device_file, temp_wstring, sizeof(temp_wstring))) {
+                        product_string = vd_fw__utf16_to_utf8(temp_wstring);
+                    }
+
+                    CloseHandle(device_file);
+                }
+
+                // Compute GUID
+                guid = vd_fw__make_gamepad_guid(0x03 /* USB Bus */,
+                                         vendor_id, product_id, version,
+                                         manufacturer_string, product_string,
+                                         'r', 0);
+
+                // Free strings if needed
+                {
+                    if (manufacturer_string) {
+                        vd_fw__free_mem(manufacturer_string);
+                    }
+
+                    if (product_string) {
+                        vd_fw__free_mem(product_string);
+                    }
+                }
+
                 new_gamepad->flags = VD_FW__WIN32_GAMEPAD_FLAG_SPLITZ;
                 if (is_xinput_device) {
                     new_gamepad->flags |= VD_FW__WIN32_GAMEPAD_FLAG_XINPUT;
                 }
 
+                // Reset all gamepad specific data
                 new_gamepad->config.num_digital_mappings = 0;
                 new_gamepad->config.num_axial_mappings = 0;
                 new_gamepad->config.num_hat_switch_mappings = 0;
                 new_gamepad->handle = device_handle;
-                for (int i = 0; i < 16; ++i) new_gamepad->guid[i] = guid[i];
+                new_gamepad->guid = guid;
                 new_gamepad->connected = TRUE;
                 new_gamepad->assigned_index = VD_FW_G.num_gamepads_present++;
                 new_gamepad->xinput_index = -1;
                 VdFwULONG data_count = VdFwHidP_MaxDataListLength(VdFwHidP_Input, new_gamepad->ppd);
 
                 for (int i = 0; i < 16; ++i) {
-                    printf("%02x", guid[i]);
+                    printf("%02x", guid.dat[i]);
                 }
                 printf("\n");
+
+                // Resize HIDP_DATA buffer if needed
                 new_gamepad->hidp_data = (VdFwHIDP_DATA*)vd_fw__resize_buffer(new_gamepad->hidp_data,
                                                                               sizeof(VdFwHIDP_DATA),
                                                                               data_count,
@@ -7695,6 +7728,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 new_gamepad->hidp_data_len = data_count;
 
 
+                // Map gamepad
                 VdFwGamepadMap gamepad_map;
                 if (!vd_fw__map_gamepad(guid, &gamepad_map)) {
                     vd_fw__def_gamepad(&gamepad_map);
@@ -7706,6 +7740,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     break;
                 }
 
+                // @todo(mdodis): Determine if this is needed
                 VdFwULONG max_buttons = VdFwHidP_MaxUsageListLength(VdFwHidP_Input, 0x09, new_gamepad->ppd);
                 if (max_buttons > VD_FW_G.buttons_buffer_count) {
                     VD_FW_G.buttons_buffer_count = max_buttons;
@@ -7713,7 +7748,10 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     VD_FW_G.buttons_buffer = vd_fw__realloc_mem(VD_FW_G.buttons_buffer, buttons_buffer_size_req);
                 }
 
-                // HID Button Caps
+                // For each button, compute the data indices. These will map to:
+                // b0, b1, b2, and so on...
+                // 
+                // HID Button Caps:
                 // - Either are specified individually, (i.e 10 buttons on controller -> 10 button caps)
                 // - Or, they are specified in a range (10 buttons on controller -> 1 button cap with range 10..1)
                 // So, to handle this, we iterate on the button caps, and then iterate on the range, if that caps
@@ -7875,12 +7913,12 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 VD_FW_MEMSET(&VD_FW_G.gamepad_infos[VD_FW_G.num_gamepads_present - 1], 0, sizeof(VD_FW_G.gamepad_infos[0]));
 
                 VD_FW_LOG("Gamepad Disconnected");
-                // @todo(mdodis): If controller assigned index was in the middle, move the assigned indices of every
-                // other controller back
                 VD_FW_G.num_gamepads_present--;
 
                 for (int i = 0; i < VD_FW_GAMEPAD_COUNT_MAX; ++i) {
                     // Reset correlation from xinput
+                    // This is done because we can't know if XInput decided to map the dwUserIndex to other devices
+                    // which usually happens if, for example, player 2/3 disconnects and reconnects.
                     VD_FW_G.gamepad_infos[i].xinput_index = -1;
                 }
             }
@@ -9523,7 +9561,7 @@ VD_FW_API void vd_fw__def_gamepad(VdFwGamepadMap *map)
     map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_NONE;
 }
 
-VD_FW_API int vd_fw__map_gamepad(unsigned char guid[16], VdFwGamepadMap *map)
+VD_FW_API int vd_fw__map_gamepad(VdFwGuid guid, VdFwGamepadMap *map)
 {
     return 0;
 }
@@ -9594,6 +9632,32 @@ VD_FW_API VdFwGuid vd_fw__make_gamepad_guid(uint16_t bus, uint16_t vendor, uint1
     }
 
     return result;    
+}
+
+VD_FW_API char *vd_fw__utf16_to_utf8(const wchar_t *ws)
+{
+    int req = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
+                                  ws, -1,
+                                  0, 0,
+                                  NULL, NULL);
+    if (req <= 0) {
+        return 0;
+    }
+
+    char *data = (char*)vd_fw__realloc_mem(0, req + 1);
+
+    int wrt = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
+                                  ws, -1,
+                                  0, 0,
+                                  NULL, NULL);
+
+    if (wrt == 0) {
+        vd_fw__free_mem(data);
+        return 0;
+    }
+
+    data[req] = 0;
+    return data;
 }
 
 VD_FW_API void *vd_fw__resize_buffer(void *buffer, size_t element_size, int required_capacity, int *cap)
