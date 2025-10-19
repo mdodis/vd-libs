@@ -7877,9 +7877,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                             if (new_gamepad->z_split_max == -1) {
                                 new_gamepad->z_split_max = (1u << value_caps[i].BitSize) - 1;
                             }
-                            VD_FW_LOG("Using ZSplit for controller. Data Index :: %d\nMin/Max :: %d/%d",
-                                      new_gamepad->z_split,
-                                      new_gamepad->z_split_min, new_gamepad->z_split_max);
                             continue;
                         }
 
@@ -9577,11 +9574,6 @@ VD_FW_API void vd_fw__def_gamepad(VdFwGamepadMap *map)
     c++;
 
     map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON;
-    map->mappings[c].index  = 0x0A;
-    map->mappings[c].target = VD_FW_GAMEPAD_SELECT;
-    c++;
-
-    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON;
     map->mappings[c].index  = 0x04;
     map->mappings[c].target = VD_FW_GAMEPAD_L1;
     c++;
@@ -9589,6 +9581,25 @@ VD_FW_API void vd_fw__def_gamepad(VdFwGamepadMap *map)
     map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON;
     map->mappings[c].index  = 0x05;
     map->mappings[c].target = VD_FW_GAMEPAD_R1;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON;
+    map->mappings[c].index  = 0x06;
+    map->mappings[c].target = VD_FW_GAMEPAD_SELECT;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON;
+    map->mappings[c].index  = 0x07;
+    map->mappings[c].target = VD_FW_GAMEPAD_START;
+    c++;
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON;
+    map->mappings[c].index  = 0x08;
+    map->mappings[c].target = VD_FW_GAMEPAD_L3;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON;
+    map->mappings[c].index  = 0x09;
+    map->mappings[c].target = VD_FW_GAMEPAD_R3;
     c++;
 
     map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS;
