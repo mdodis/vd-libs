@@ -7353,6 +7353,8 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                         continue;
                     }
 
+                    VdFwULONG z_value = 0;
+
                     // Iterate over gamepad button entries
                     for (int entry_index = 0; (entry_index < VD_FW_GAMEPAD_MAX_MAPPINGS) && (gamepad_info->map.mappings[entry_index].kind != VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_NONE); ++entry_index) {
                         VdFwGamepadMapEntry *entry = &gamepad_info->map.mappings[entry_index];
@@ -7393,12 +7395,72 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                                     continue;
                                 }
 
-                                float value1mp = ((float)data->dat.RawValue / 65535.0f) * 2.0f - 1.0f;
-                                axes[entry->target] = value1mp;
+                                if (axis_data_index != gamepad_info->z_split) {
+                                    float value1mp = ((float)data->dat.RawValue / 65535.0f) * 2.0f - 1.0f;
+                                    axes[entry->target] = value1mp;
+                                } else {
+                                    int total_range = gamepad_info->z_split_max - gamepad_info->z_split_min;
+                                    z_value = data->dat.RawValue;
+                                    float value = (float)data->dat.RawValue / (float)total_range;
+                                    value -= 0.5f;
+                                    value *= 2.f;
+
+                                    float lt_value = value > 0.f ? +value : 0.f;
+                                    float rt_value = value < 0.f ? -value : 0.f;
+
+                                    axes[VD_FW_GAMEPAD_LT] = lt_value;
+                                    axes[VD_FW_GAMEPAD_RT] = rt_value;
+                                }
+                            } break;
+
+                            case VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT: {
+                                int hat_data_index = gamepad_info->hat_data_indices[entry->index];
+                                VdFwHIDP_DATA *data = 0;
+                                for (VdFwULONG data_index = 0; data_index < data_count; ++data_index) {
+                                    if (hidp_data[data_index].DataIndex == hat_data_index) {
+                                        data = &hidp_data[data_index];
+                                        break;
+                                    }
+                                }
+
+                                if (!data) {
+                                    continue;
+                                }
+
+
+                                VdFwULONG state = data->dat.RawValue;
+                                static const int hat_to_mask[] = {
+                                    0x00,
+                                    0x01,
+                                    0x03,
+                                    0x02,
+                                    0x06,
+                                    0x04,
+                                    0x0C,
+                                    0x08,
+                                    0x09,
+                                    0x00,
+                                };
+
+                                if (state < (sizeof(hat_to_mask)/sizeof(hat_to_mask[0]))) {
+                                    int mask = hat_to_mask[state];
+                                    button_states[VD_FW_GAMEPAD_DUP] =
+                                        (mask & (1 << 0)) ? 1 : 0;
+                                    button_states[VD_FW_GAMEPAD_DRIGHT] =
+                                        (mask & (1 << 1)) ? 1 : 0;
+                                    button_states[VD_FW_GAMEPAD_DDOWN] =
+                                        (mask & (1 << 2)) ? 1 : 0;
+                                    button_states[VD_FW_GAMEPAD_DLEFT] =
+                                        (mask & (1 << 3)) ? 1 : 0;
+                                }
                             } break;
                         }
                     }
 
+                    // Handle XInput correlation
+                    if (gamepad_info->flags & VD_FW__WIN32_GAMEPAD_FLAG_XINPUT) {
+                        vd_fw__win32_correlate_xinput_triggers(gamepad_info, button_states, axes, z_value);
+                    }
                 }
 
                 int index_to_write_to = gamepad_info_index;
@@ -7825,18 +7887,28 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     }
 
                     new_gamepad->axis_data_indices = (int*)vd_fw__resize_buffer(new_gamepad->axis_data_indices,
-                                                                                  sizeof(new_gamepad->axis_data_indices[0]),
-                                                                                  count,
-                                                                                  &new_gamepad->axis_data_indices_cap);
+                                                                                sizeof(new_gamepad->axis_data_indices[0]),
+                                                                                count,
+                                                                                &new_gamepad->axis_data_indices_cap);
                     new_gamepad->axis_data_indices_len = count;
 
+                    if (num_hats > 0) {
+                        new_gamepad->hat_data_indices = (int*)vd_fw__resize_buffer(new_gamepad->hat_data_indices,
+                                                                                   sizeof(new_gamepad->hat_data_indices[0]),
+                                                                                   num_hats,
+                                                                                   &new_gamepad->hat_data_indices_cap);
+                        new_gamepad->hat_data_indices_len = num_hats;
+                    }
+
+                    int count_hats = 0;
                     count = 0;
                     for (int i = 0; i < num_value_caps; ++i) {
                         if (value_caps[i].IsRange) {
                             continue;
                         }
 
-                        if (value_caps[i].v.NotRange.Usage == 0x0032 /* Hat */) {
+                        if (value_caps[i].v.NotRange.Usage == 0x0039 /* Hat */) {
+                            new_gamepad->hat_data_indices[count_hats++] = value_caps[i].v.NotRange.DataIndex;
                             continue; 
                         }
 
@@ -9514,6 +9586,11 @@ VD_FW_API void vd_fw__def_gamepad(VdFwGamepadMap *map)
     map->mappings[c].target = VD_FW_GAMEPAD_L1;
     c++;
 
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON;
+    map->mappings[c].index  = 0x05;
+    map->mappings[c].target = VD_FW_GAMEPAD_R1;
+    c++;
+
     map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS;
     map->mappings[c].index  = 0x01;
     map->mappings[c].target = VD_FW_GAMEPAD_LH;
@@ -9532,6 +9609,21 @@ VD_FW_API void vd_fw__def_gamepad(VdFwGamepadMap *map)
     map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS;
     map->mappings[c].index  = 0x02;
     map->mappings[c].target = VD_FW_GAMEPAD_RV;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS;
+    map->mappings[c].index  = 0x04;
+    map->mappings[c].target = VD_FW_GAMEPAD_LT;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS;
+    map->mappings[c].index  = 0x04;
+    map->mappings[c].target = VD_FW_GAMEPAD_RT;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT;
+    map->mappings[c].index  = 0x00;
+    map->mappings[c].target = VD_FW_GAMEPAD_DUP;
     c++;
 
     map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_NONE;
