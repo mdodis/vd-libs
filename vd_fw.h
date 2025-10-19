@@ -26,6 +26,7 @@
  *   on the big threes is OpenGL Core Profile 4.1 (MacOS limitation)
  *
  * TODO
+ * - Joystick axes with Usage Values and Hats
  * - Controller mapping & assignment
  * - D3D11 Sample
  * - Make sure /DUNICODE works for console printing
@@ -4844,6 +4845,19 @@ typedef struct VdFw__Win32GamepadInfo {
     int                      button_data_indices_len;
     int                      *button_data_indices;
 
+    int                      axis_data_indices_cap;
+    int                      axis_data_indices_len;
+    int                      *axis_data_indices;
+
+    int                      hat_data_indices_cap;
+    int                      hat_data_indices_len;
+    int                      *hat_data_indices;
+
+    int                      z_data_index;
+    int                      z_split;
+    int                      z_split_min;
+    int                      z_split_max;
+
     // @todo(mdodis): remove this
     int                      hidp_data_len;
     int                      hidp_data_cap;
@@ -7342,61 +7356,49 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     // Iterate over gamepad button entries
                     for (int entry_index = 0; (entry_index < VD_FW_GAMEPAD_MAX_MAPPINGS) && (gamepad_info->map.mappings[entry_index].kind != VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_NONE); ++entry_index) {
                         VdFwGamepadMapEntry *entry = &gamepad_info->map.mappings[entry_index];
-                        int button_data_index = gamepad_info->button_data_indices[entry->index];
 
-                        VdFwHIDP_DATA *data = 0;
-                        for (VdFwULONG data_index = 0; data_index < data_count; ++data_index) {
-                            if (hidp_data[data_index].DataIndex == button_data_index) {
-                                data = &hidp_data[data_index];
-                                break;
-                            }
+                        switch (entry->kind) {
+                            case VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON: {
+                                int button_data_index = gamepad_info->button_data_indices[entry->index];
+
+                                VdFwHIDP_DATA *data = 0;
+                                for (VdFwULONG data_index = 0; data_index < data_count; ++data_index) {
+                                    if (hidp_data[data_index].DataIndex == button_data_index) {
+                                        data = &hidp_data[data_index];
+                                        break;
+                                    }
+                                }
+
+                                if (!data) {
+                                    continue;
+                                }
+
+                                if (data->dat.On) {
+                                    button_states[entry->target] = 1;
+                                }
+                            } break;
+
+                            case VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS: {
+                                int axis_data_index = gamepad_info->axis_data_indices[entry->index];
+
+                                VdFwHIDP_DATA *data = 0;
+                                for (VdFwULONG data_index = 0; data_index < data_count; ++data_index) {
+                                    if (hidp_data[data_index].DataIndex == axis_data_index) {
+                                        data = &hidp_data[data_index];
+                                        break;
+                                    }
+                                }
+
+                                if (!data) {
+                                    continue;
+                                }
+
+                                float value1mp = ((float)data->dat.RawValue / 65535.0f) * 2.0f - 1.0f;
+                                axes[entry->target] = value1mp;
+                            } break;
                         }
-
-                        if (!data) {
-                            continue;
-                        }
-
-                        if (data->dat.On) {
-                            button_states[entry->target] = 1;
-                        }
-
                     }
 
-                    // for (int button_index = 0; button_index < gamepad_info->button_data_indices_len; ++button_index) {
-
-                    //     VdFwGamepadMapEntry *entry = 0;
-                    //     for (int i = 0; i < VD_FW_GAMEPAD_MAX_MAPPINGS; ++i) {
-                    //         if (gamepad_info->map.mappings[i].kind != VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON) {
-                    //             continue;
-                    //         }
-
-                    //         if (gamepad_info->button_data_indices[gamepad_info->map.mappings[i].index] == gamepad_info->hidp_data[button_index].DataIndex) {
-                    //             entry = &gamepad_info->map.mappings[i];
-                    //             break;
-                    //         }
-                    //     }
-
-                    //     if (entry == 0) {
-                    //         continue;
-                    //     }
-
-                    //     // Find Data value for button_data_indices[button_index]
-                    //     VdFwHIDP_DATA *data = 0;
-                    //     for (VdFwULONG data_index = 0; data_index < data_count; ++data_index) {
-                    //         if (hidp_data[data_index].DataIndex == gamepad_info->button_data_indices[button_index]) {
-                    //             data = &hidp_data[data_index];
-                    //             break;
-                    //         }
-                    //     }
-
-                    //     if (!data) {
-                    //         continue;
-                    //     }
-
-                    //     if (data->dat.On) {
-                    //         button_states[entry->target] = 1;
-                    //     }
-                    // }
                 }
 
                 int index_to_write_to = gamepad_info_index;
@@ -7409,9 +7411,9 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].buttons[i] = button_states[i];
                 }
 
-                // for (int i = 0; i < 6; ++i) {
-                //     VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].axes[i] = axes[i];
-                // }
+                for (int i = 0; i < 6; ++i) {
+                    VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].axes[i] = axes[i];
+                }
                 LeaveCriticalSection(&VD_FW_G.input_critical_section);
 
                 if (0) {
@@ -7698,7 +7700,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     }
                 }
 
-                new_gamepad->flags = VD_FW__WIN32_GAMEPAD_FLAG_SPLITZ;
+                new_gamepad->flags = 0;
                 if (is_xinput_device) {
                     new_gamepad->flags |= VD_FW__WIN32_GAMEPAD_FLAG_XINPUT;
                 }
@@ -7712,6 +7714,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 new_gamepad->connected = TRUE;
                 new_gamepad->assigned_index = VD_FW_G.num_gamepads_present++;
                 new_gamepad->xinput_index = -1;
+                new_gamepad->z_split = -1;
                 VdFwULONG data_count = VdFwHidP_MaxDataListLength(VdFwHidP_Input, new_gamepad->ppd);
 
 
@@ -7791,97 +7794,55 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 // - Are only useful afaik when they're not ranges
                 static VdFwHIDP_VALUE_CAPS value_caps[32];
                 VdFwUSHORT num_value_caps = caps.NumberInputValueCaps;
+                int num_hats = 0;
                 if (VdFwHidP_GetValueCaps(VdFwHidP_Input, value_caps, &num_value_caps, new_gamepad->ppd) == VD_FW_HIDP_STATUS_SUCCESS) {
+                    int count = 0;
                     for (int i = 0; i < num_value_caps; ++i) {
-                        if (value_caps[i].IsRange)
+                        if (value_caps[i].IsRange) {
                             continue;
-
-                        if (value_caps[i].v.NotRange.Usage == 0x0039) {
-                            // Usage 0x0039: GENERIC HAT
-                            // We compute logical range reported by the hat switch
-                            // - For LogicalMin: 1, LogicalMax: 4:
-                            //   > We know that the hat switch can only encode 4 different directions at a time:
-                            //   > Up, Right, Down, Left (in that order)
-                            // - For LogicalMin: 1, LogicalMax: 8:
-                            //   > We know that the hat switch can encode 8 different directions:
-                            //   > Up, UpRight, Right, RightDown, Down, DownLeft, Left, UpLeft.
-                            int logical_range = value_caps[i].LogicalMax - value_caps[i].LogicalMin + 1;
-                            new_gamepad->config.hat_switch_mappings[0].logical_range = logical_range;
-                            new_gamepad->config.hat_switch_mappings[0].ids[0] = 0x01;
-                            new_gamepad->config.hat_switch_mappings[0].ids[1] = 0x02;
-                            new_gamepad->config.hat_switch_mappings[0].ids[2] = 0x04;
-                            new_gamepad->config.hat_switch_mappings[0].ids[3] = 0x08;
-                            new_gamepad->config.num_hat_switch_mappings = 1;
-                        } else if ((value_caps[i].v.NotRange.Usage >= 0x30) && (value_caps[i].v.NotRange.Usage <= 0x35)) {
-                            // Usages 0x0030 - 0x0035: X,Y,Z,Rx,Ry,Rz
-                            unsigned char axis_input = vd_fw__map_axial_usage_to_axis(value_caps[i].v.NotRange.Usage);
-
-                            // printf("Axis: %02x (%2d)\n", value_caps[i].v.NotRange.Usage, value_caps[i].v.NotRange.Usage);
-                            // printf("--------------------\n");
-                            // printf("DataIndex: %d\n", value_caps[i].v.NotRange.DataIndex);
-                            // printf("ReportCount: %d\n", value_caps[i].ReportCount);
-                            // printf("--------------------\n");
-                            if (axis_input == 0xFF) {
-                                continue;
-                            }
-
-                            if (value_caps[i].v.NotRange.Usage == 0x35) {
-                                new_gamepad->flags &= ~(VD_FW__WIN32_GAMEPAD_FLAG_SPLITZ);
-                            }
-
-                            int min_value = value_caps[i].LogicalMin;
-                            int max_value = value_caps[i].LogicalMax;
-
-                            if (max_value == -1) {
-                                max_value = (1u << value_caps[i].BitSize) - 1;
-                            }
-
-                            int idx = new_gamepad->config.num_axial_mappings++;
-                            new_gamepad->config.axial_mappings[idx].id = value_caps[i].v.NotRange.Usage;
-                            new_gamepad->config.axial_mappings[idx].input = axis_input;
-                            new_gamepad->config.axial_mappings[idx].min_value = min_value;
-                            new_gamepad->config.axial_mappings[idx].max_value = max_value;
-
                         }
+
+                        if (value_caps[i].v.NotRange.Usage == 0x0039 /* Hat */) {
+                            num_hats++;
+                            continue; 
+                        }
+
+                        if (is_xinput_device && value_caps[i].v.NotRange.Usage == 0x0032 /* Generic Z*/) {
+                            new_gamepad->flags |= VD_FW__WIN32_GAMEPAD_FLAG_SPLITZ;
+                            new_gamepad->z_split = value_caps[i].v.NotRange.DataIndex; 
+                            new_gamepad->z_split_min = value_caps[i].LogicalMin;
+                            new_gamepad->z_split_max = value_caps[i].LogicalMax;
+                            if (new_gamepad->z_split_max == -1) {
+                                new_gamepad->z_split_max = (1u << value_caps[i].BitSize) - 1;
+                            }
+                            VD_FW_LOG("Using ZSplit for controller. Data Index :: %d\nMin/Max :: %d/%d",
+                                      new_gamepad->z_split,
+                                      new_gamepad->z_split_min, new_gamepad->z_split_max);
+                            continue;
+                        }
+
+                        count++;
                     }
 
-                    if (new_gamepad->flags & VD_FW__WIN32_GAMEPAD_FLAG_SPLITZ) {
-                        // Find LT
-                        int lt_idx = -1;
-                        for (int i = 0; i < new_gamepad->config.num_axial_mappings; ++i) {
-                            if (new_gamepad->config.axial_mappings[i].input == VD_FW_GAMEPAD_LT) {
-                                lt_idx = i;
-                                break;
-                            }
+                    new_gamepad->axis_data_indices = (int*)vd_fw__resize_buffer(new_gamepad->axis_data_indices,
+                                                                                  sizeof(new_gamepad->axis_data_indices[0]),
+                                                                                  count,
+                                                                                  &new_gamepad->axis_data_indices_cap);
+                    new_gamepad->axis_data_indices_len = count;
+
+                    count = 0;
+                    for (int i = 0; i < num_value_caps; ++i) {
+                        if (value_caps[i].IsRange) {
+                            continue;
                         }
 
-                        if (lt_idx != -1) {
-                            int lt_min = new_gamepad->config.axial_mappings[lt_idx].min_value;
-                            int lt_max = new_gamepad->config.axial_mappings[lt_idx].max_value;
-                            int lt_range = lt_max - lt_min;
-                            int lt_middle = lt_min + (lt_range / 2);
-
-                            int idx = new_gamepad->config.num_axial_mappings++;
-                            new_gamepad->config.axial_mappings[idx].id = new_gamepad->config.axial_mappings[lt_idx].id;
-                            new_gamepad->config.axial_mappings[idx].input = VD_FW_GAMEPAD_RT;
-                            new_gamepad->config.axial_mappings[idx].min_value = lt_middle;
-                            new_gamepad->config.axial_mappings[idx].max_value = lt_min;
-                            new_gamepad->splitz_min = lt_min;
-                            new_gamepad->splitz_max = lt_max;
-
-                            new_gamepad->config.axial_mappings[lt_idx].min_value = lt_middle;
-                            new_gamepad->config.axial_mappings[lt_idx].max_value = lt_max;
+                        if (value_caps[i].v.NotRange.Usage == 0x0032 /* Hat */) {
+                            continue; 
                         }
 
+                        new_gamepad->axis_data_indices[count++] = value_caps[i].v.NotRange.DataIndex;
                     }
                 }
-
-                // unsigned short a0 = 0x30;
-                // unsigned short a1 = 0x31;
-                // unsigned short a2 = 0x32;
-                // unsigned short a3 = 0x33;
-                // unsigned short a4 = 0x34;
-                // unsigned short a5 = 0x35;
             } else {
 
                 int disconnected_gamepad_index = -1;
@@ -9551,6 +9512,26 @@ VD_FW_API void vd_fw__def_gamepad(VdFwGamepadMap *map)
     map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON;
     map->mappings[c].index  = 0x04;
     map->mappings[c].target = VD_FW_GAMEPAD_L1;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS;
+    map->mappings[c].index  = 0x01;
+    map->mappings[c].target = VD_FW_GAMEPAD_LH;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS;
+    map->mappings[c].index  = 0x00;
+    map->mappings[c].target = VD_FW_GAMEPAD_LV;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS;
+    map->mappings[c].index  = 0x03;
+    map->mappings[c].target = VD_FW_GAMEPAD_RH;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS;
+    map->mappings[c].index  = 0x02;
+    map->mappings[c].target = VD_FW_GAMEPAD_RV;
     c++;
 
     map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_NONE;
