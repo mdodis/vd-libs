@@ -170,8 +170,6 @@ int main(int argc, char const *argv[])
             printf("{%42s,%30s,%3d},", source_kind, target, entry->index);
         }
         printf("\t},\n");
-
-        printf("\n");
     }
     printf("}\n");
 
