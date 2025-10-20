@@ -49,50 +49,131 @@ int main(int argc, char const *argv[])
 {
     FILE       *f;
     const char *dbfile;
+    const char *dbplatform;
     char       buffer[512]; // Max string column I saw in the most recent file is ~400 columns
 
     if (argc < 3) {
-        fprintf(stderr, "Invocation: gamecontrollerdb_gen <gamecontrollerdb.txt> <Platform:(Windows|Mac OS X|Android|iOS)\n");
+        fprintf(stderr, "Invocation: gamecontrollerdb_gen <gamecontrollerdb.txt> <Platform:(Windows|Mac OS X|Linux|Android|iOS)\n");
         return -1;
     }
 
     dbfile = argv[1];
+    dbplatform = argv[2];
+
+    VdFwPlatform expected_platform = VD_FW_PLATFORM_UNKNOWN;
+    if (strcmp(dbplatform, "Windows") == 0) {
+        expected_platform = VD_FW_PLATFORM_WINDOWS;
+    } else if (strcmp(dbplatform, "Mac OS X")) {
+        expected_platform = VD_FW_PLATFORM_MACOS;
+    } else if (strcmp(dbplatform, "Linux")) {
+        expected_platform = VD_FW_PLATFORM_LINUX;
+    } else if (strcmp(dbplatform, "Android")) {
+        expected_platform = VD_FW_PLATFORM_ANDROID;
+    } else if (strcmp(dbplatform, "iOS")) {
+        expected_platform = VD_FW_PLATFORM_IOS;
+    }
 
     f = fopen(dbfile, "r");
-
+    int count = 0;
     while (fgets(buffer, sizeof(buffer), f)) {
         VdFwGamepadDBEntry db_entry;
-        if (!vd_fw_parse_gamepad_db_entry(buffer, (int)strlen(buffer), &db_entry)) {
+        VdFwPlatform platform;
+        if (!vd_fw_parse_gamepad_db_entry(buffer, (int)strlen(buffer), &db_entry, &platform)) {
             continue;
         }
 
-        for (int i = 0; i < 16; ++i) {
-            printf("%02x", db_entry.guid[i]);
+        if (platform != expected_platform) {
+            continue;
+        }
+        count++;
+    }
+    fseek(f, 0, SEEK_SET);
+
+    printf("VdFwGamepadDBEntry Gamepad_Db_Entries[%d] = {\n", count);
+    while (fgets(buffer, sizeof(buffer), f)) {
+        VdFwGamepadDBEntry db_entry;
+        VdFwPlatform platform;
+        if (!vd_fw_parse_gamepad_db_entry(buffer, (int)strlen(buffer), &db_entry, &platform)) {
+            continue;
         }
 
+        if (platform != expected_platform) {
+            continue;
+        }
+
+        {
+            printf("\t{"); 
+            for (int j = 0; j < 16; ++j) {
+                printf("0x%02x", db_entry.guid.dat[j]);
+                if (j < 15) {
+                    printf(",");
+                }
+            }
+            printf("},\n"); 
+        }
+
+        printf("\t{");
         for (int i = 0; (db_entry.map.mappings[i].kind != VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_NONE) && (i < VD_FW_GAMEPAD_MAX_MAPPINGS); ++i) {
+
             VdFwGamepadMapEntry *entry = &db_entry.map.mappings[i];
 
-            switch (entry->target) {
-                case VD_FW_GAMEPAD_A:      printf("A:     -> b%02d\n", entry->index); break;
-                case VD_FW_GAMEPAD_B:      printf("B:     -> b%02d\n", entry->index); break;
-                case VD_FW_GAMEPAD_X:      printf("X:     -> b%02d\n", entry->index); break;
-                case VD_FW_GAMEPAD_Y:      printf("Y:     -> b%02d\n", entry->index); break;
-                case VD_FW_GAMEPAD_DUP:    printf("DUP    -> b%02d\n", entry->index); break;
-                case VD_FW_GAMEPAD_DDOWN:  printf("DDOWN  -> b%02d\n", entry->index); break;
-                case VD_FW_GAMEPAD_DLEFT:  printf("DLEFT  -> b%02d\n", entry->index); break;
-                case VD_FW_GAMEPAD_DRIGHT: printf("DRIGHT -> b%02d\n", entry->index); break;
-                case VD_FW_GAMEPAD_START:  printf("START  -> b%02d\n", entry->index); break;
-                case VD_FW_GAMEPAD_SELECT: printf("SELECT -> b%02d\n", entry->index); break;
-                case VD_FW_GAMEPAD_L1:     printf("L1     -> b%02d\n", entry->index); break;
-                case VD_FW_GAMEPAD_R1:     printf("R1     -> b%02d\n", entry->index); break;
-                case VD_FW_GAMEPAD_L3:     printf("L3     -> b%02d\n", entry->index); break;
-                case VD_FW_GAMEPAD_R3:     printf("R3     -> b%02d\n", entry->index); break;
-                default: break;
+
+            int is_axis = 0;
+            const char *source_kind = "ERROR";
+            const char *target = "TARGET_ERROR";
+
+            switch (entry->kind) {
+                case VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON: {
+                    source_kind = "VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON";
+                } break;
+                case VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT: {
+                    source_kind = "VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT";
+                } break;
+                case VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS: {
+                    source_kind = "VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS";
+                    is_axis = 1;
+                } break;
+                default: {
+                    source_kind = "OTHEERRRR";
+                } break;
             }
+
+            if (is_axis) {
+                switch (entry->target) {
+                    case VD_FW_GAMEPAD_LT: target = "VD_FW_GAMEPAD_LT"; break;
+                    case VD_FW_GAMEPAD_RT: target = "VD_FW_GAMEPAD_RT"; break;
+                    case VD_FW_GAMEPAD_LH: target = "VD_FW_GAMEPAD_LH"; break;
+                    case VD_FW_GAMEPAD_LV: target = "VD_FW_GAMEPAD_LV"; break;
+                    case VD_FW_GAMEPAD_RH: target = "VD_FW_GAMEPAD_RH"; break;
+                    case VD_FW_GAMEPAD_RV: target = "VD_FW_GAMEPAD_RV"; break;
+                    default: break;
+                }
+            } else {
+                switch (entry->target) {
+                    case VD_FW_GAMEPAD_A:      target = "VD_FW_GAMEPAD_A";      break;
+                    case VD_FW_GAMEPAD_B:      target = "VD_FW_GAMEPAD_B";      break;
+                    case VD_FW_GAMEPAD_X:      target = "VD_FW_GAMEPAD_X";      break;
+                    case VD_FW_GAMEPAD_Y:      target = "VD_FW_GAMEPAD_Y";      break;
+                    case VD_FW_GAMEPAD_DUP:    target = "VD_FW_GAMEPAD_DUP";    break;
+                    case VD_FW_GAMEPAD_DDOWN:  target = "VD_FW_GAMEPAD_DDOWN";  break;
+                    case VD_FW_GAMEPAD_DLEFT:  target = "VD_FW_GAMEPAD_DLEFT";  break;
+                    case VD_FW_GAMEPAD_DRIGHT: target = "VD_FW_GAMEPAD_DRIGHT"; break;
+                    case VD_FW_GAMEPAD_START:  target = "VD_FW_GAMEPAD_START";  break;
+                    case VD_FW_GAMEPAD_SELECT: target = "VD_FW_GAMEPAD_SELECT"; break;
+                    case VD_FW_GAMEPAD_L1:     target = "VD_FW_GAMEPAD_L1";     break;
+                    case VD_FW_GAMEPAD_R1:     target = "VD_FW_GAMEPAD_R1";     break;
+                    case VD_FW_GAMEPAD_L3:     target = "VD_FW_GAMEPAD_L3";     break;
+                    case VD_FW_GAMEPAD_R3:     target = "VD_FW_GAMEPAD_R3";     break;
+                    default: break;
+                }
+            }
+            printf("{%42s,%30s,%3d},", source_kind, target, entry->index);
         }
+        printf("\t},\n");
+
         printf("\n");
     }
+    printf("}\n");
 
     fclose(f);
 
