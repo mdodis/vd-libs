@@ -369,8 +369,8 @@ enum {
     VD_FW_GAMEPAD_DRIGHT,
     VD_FW_GAMEPAD_START,
     VD_FW_GAMEPAD_BACK,
-    VD_FW_GAMEPAD_LEFT_BUMPER,
-    VD_FW_GAMEPAD_RIGHT_BUMPER,
+    VD_FW_GAMEPAD_LEFT_SHOULDER,
+    VD_FW_GAMEPAD_RIGHT_SHOULDER,
     VD_FW_GAMEPAD_LEFT_STICK,
     VD_FW_GAMEPAD_RIGHT_STICK,
     VD_FW_GAMEPAD_BUTTON_MAX,
@@ -381,8 +381,8 @@ enum {
     VD_FW_GAMEPAD_SQUARE   = VD_FW_GAMEPAD_X,
     VD_FW_GAMEPAD_TRIANGLE = VD_FW_GAMEPAD_Y,
     VD_FW_GAMEPAD_SELECT   = VD_FW_GAMEPAD_BACK,
-    VD_FW_GAMEPAD_L1       = VD_FW_GAMEPAD_LEFT_BUMPER,
-    VD_FW_GAMEPAD_R1       = VD_FW_GAMEPAD_RIGHT_BUMPER,
+    VD_FW_GAMEPAD_L1       = VD_FW_GAMEPAD_LEFT_SHOULDER,
+    VD_FW_GAMEPAD_R1       = VD_FW_GAMEPAD_RIGHT_SHOULDER,
     VD_FW_GAMEPAD_L3       = VD_FW_GAMEPAD_LEFT_STICK,
     VD_FW_GAMEPAD_R3       = VD_FW_GAMEPAD_RIGHT_STICK,
 
@@ -9667,6 +9667,69 @@ static int vd_fw__parse_map_entry(const char *s, int s_len, VdFwGamepadMapEntry 
     return i;
 }
 
+static int vd_fw__is_db_symbol(char c) {
+    return (c >= 'a' && c <= 'z') ||
+           (c >= 'A' && c <= 'Z') ||
+           (c >= '0' && c <= '0');
+}
+
+typedef struct {
+    const char *sym;
+    size_t      len;
+    uint8_t     tgt;
+} VdFw__GamepadSymbolToTarget;
+
+VdFw__GamepadSymbolToTarget Vd_Fw__Gamepad_Symbols_To_Targets[] = {
+#define VD_FW__SYM_LEN(s) s, sizeof(s) - 1
+    {VD_FW__SYM_LEN("a"),                   VD_FW_GAMEPAD_A},
+    {VD_FW__SYM_LEN("b"),                   VD_FW_GAMEPAD_B},
+    {VD_FW__SYM_LEN("x"),                   VD_FW_GAMEPAD_X},
+    {VD_FW__SYM_LEN("y"),                   VD_FW_GAMEPAD_Y},
+    {VD_FW__SYM_LEN("start"),               VD_FW_GAMEPAD_START},
+    {VD_FW__SYM_LEN("back"),                VD_FW_GAMEPAD_BACK},
+    {VD_FW__SYM_LEN("dpup"),                VD_FW_GAMEPAD_DUP},
+    {VD_FW__SYM_LEN("dpdown"),              VD_FW_GAMEPAD_DDOWN},
+    {VD_FW__SYM_LEN("dpleft"),              VD_FW_GAMEPAD_DLEFT},
+    {VD_FW__SYM_LEN("dpright"),             VD_FW_GAMEPAD_DRIGHT},
+    {VD_FW__SYM_LEN("leftshoulder"),        VD_FW_GAMEPAD_LEFT_SHOULDER},
+    {VD_FW__SYM_LEN("leftstick"),           VD_FW_GAMEPAD_LEFT_STICK},
+    {VD_FW__SYM_LEN("lefttrigger"),         VD_FW_GAMEPAD_LT},
+    {VD_FW__SYM_LEN("rightshoulder"),       VD_FW_GAMEPAD_RIGHT_SHOULDER},
+    {VD_FW__SYM_LEN("rightstick"),          VD_FW_GAMEPAD_RIGHT_STICK},
+    {VD_FW__SYM_LEN("righttrigger"),        VD_FW_GAMEPAD_RT},
+    {VD_FW__SYM_LEN("leftx"),               VD_FW_GAMEPAD_LH},
+    {VD_FW__SYM_LEN("lefty"),               VD_FW_GAMEPAD_LV},
+    {VD_FW__SYM_LEN("rightx"),              VD_FW_GAMEPAD_RH},
+    {VD_FW__SYM_LEN("righty"),              VD_FW_GAMEPAD_RV},
+#undef VD_FW__SYM_LEN
+};
+
+static VdFw__GamepadSymbolToTarget *vd_fw__get_map_from_symbol(const char *s, int s_len)
+{
+    int map_count = sizeof(Vd_Fw__Gamepad_Symbols_To_Targets) / sizeof(Vd_Fw__Gamepad_Symbols_To_Targets[0]);
+
+    for (int map_index = 0; map_index < map_count; ++map_index) {
+        VdFw__GamepadSymbolToTarget *check = &Vd_Fw__Gamepad_Symbols_To_Targets[map_index];
+        if (check->len != s_len) {
+            continue;
+        }
+
+        int found = 1;
+        for (int i = 0; i < check->len; ++i) {
+            if (check->sym[i] != s[i]) {
+                found = 0;
+                break;
+            }
+        }
+
+        if (found) {
+            return check;
+        }
+    }
+
+    return 0;
+}
+
 VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepadDBEntry *out, VdFwPlatform *out_platform)
 {
     int i = 0;
@@ -9719,95 +9782,26 @@ VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepad
     while (i < s_len) {
         VdFwGamepadMapEntry map_entry = {0};
 
-        int m;
-        if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("a")))) {
-            i += m;
-            VD_FW_EXPECT_COLON();
-            map_entry.target = VD_FW_GAMEPAD_A;
-        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("dpdown")))) {
-            i += m;
-            VD_FW_EXPECT_COLON();
-            map_entry.target = VD_FW_GAMEPAD_DDOWN;
-        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("dpleft")))) {
-            i += m;
-            VD_FW_EXPECT_COLON();
-            map_entry.target = VD_FW_GAMEPAD_DLEFT;
-        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("dpright")))) {
-            i += m;
-            VD_FW_EXPECT_COLON();
-            map_entry.target = VD_FW_GAMEPAD_DRIGHT;
-        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("dpup")))) {
-            i += m;
-            VD_FW_EXPECT_COLON();
-            map_entry.target = VD_FW_GAMEPAD_DUP;
-        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("guide")))) {
-            i += m;
-            VD_FW_EXPECT_COLON();
-        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("leftshoulder")))) {
-            i += m;
-            VD_FW_EXPECT_COLON();
-            map_entry.target = VD_FW_GAMEPAD_L1;
-        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("leftstick")))) {
-            i += m;
-            VD_FW_EXPECT_COLON();
-            map_entry.target = VD_FW_GAMEPAD_L3;
-        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("lefttrigger")))) {
-            i += m;
-            VD_FW_EXPECT_COLON();
-            map_entry.target = VD_FW_GAMEPAD_L2;
-        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("leftx")))) {
-            i += m;
-            VD_FW_EXPECT_COLON();
-            map_entry.target = VD_FW_GAMEPAD_LH;
-        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("lefty")))) {
-            i += m;
-            VD_FW_EXPECT_COLON();
-            map_entry.target = VD_FW_GAMEPAD_LV;
-        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("rightshoulder")))) {
-            i += m;
-            VD_FW_EXPECT_COLON();
-            map_entry.target = VD_FW_GAMEPAD_R1;
-        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("rightstick")))) {
-            i += m;
-            VD_FW_EXPECT_COLON();
-            map_entry.target = VD_FW_GAMEPAD_R3;
-        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("righttrigger")))) {
-            i += m;
-            VD_FW_EXPECT_COLON();
-            map_entry.target = VD_FW_GAMEPAD_R2;
-        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("rightx")))) {
-            i += m;
-            VD_FW_EXPECT_COLON();
-            map_entry.target = VD_FW_GAMEPAD_RH;
-        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("righty")))) {
-            i += m;
-            VD_FW_EXPECT_COLON();
-            map_entry.target = VD_FW_GAMEPAD_RV;
-        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("start")))) {
-            i += m;
-            VD_FW_EXPECT_COLON();
-            map_entry.target = VD_FW_GAMEPAD_START;
-        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("back")))) {
-            i += m;
-            VD_FW_EXPECT_COLON();
-            map_entry.target = VD_FW_GAMEPAD_SELECT;
-        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("b")))) {
-            i += m;
-            VD_FW_EXPECT_COLON();
-            map_entry.target = VD_FW_GAMEPAD_B;
-        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("x")))) {
-            i += m;
-            VD_FW_EXPECT_COLON();
-            map_entry.target = VD_FW_GAMEPAD_X;
-        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("y")))) {
-            i += m;
-            VD_FW_EXPECT_COLON();
-            map_entry.target = VD_FW_GAMEPAD_Y;
-        } else if ((m = vd_fw__compare_string(s, s_len, i, VD_FW_STR_AND_LEN("platform")))) {
-            i += m;
-            VD_FW_EXPECT_COLON();
+        char sign = 0;
+        if ((s[i] == '+') || (s[i] == '-')) {
+            sign = s[i];
+            i++;
+        }
 
-            // Parse Word
+        // Read word
+        int word_start = i;
+        while ((i < s_len) && vd_fw__is_db_symbol(s[i])) {
+            i++;
+        }
+        int word_end = i;
+
+        VdFw__GamepadSymbolToTarget *sym = vd_fw__get_map_from_symbol(s + word_start, word_end - word_start);
+
+        if (sym != 0) {
+            VD_FW_EXPECT_COLON();
+            map_entry.target = sym->tgt;
+        } else if (vd_fw__compare_string(s, s_len, word_start, VD_FW_STR_AND_LEN("platform"))) {
+            VD_FW_EXPECT_COLON();
             int platform_begin = i;
             {
                 while ((i < s_len) && ((s[i] >= 'a') && (s[i] <= 'z') ||
@@ -9817,24 +9811,21 @@ VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepad
                     i++;
                 }
 
+                if (vd_fw__compare_string(s, s_len, platform_begin, VD_FW_STR_AND_LEN("Windows"))) {
+                    *out_platform = VD_FW_PLATFORM_WINDOWS;
+                } else if (vd_fw__compare_string(s, s_len, platform_begin, VD_FW_STR_AND_LEN("Linux"))) {
+                    *out_platform = VD_FW_PLATFORM_LINUX;
+                } else if (vd_fw__compare_string(s, s_len, platform_begin, VD_FW_STR_AND_LEN("Mac OS X"))) {
+                    *out_platform = VD_FW_PLATFORM_MACOS;
+                } else if (vd_fw__compare_string(s, s_len, platform_begin, VD_FW_STR_AND_LEN("Android"))) {
+                    *out_platform = VD_FW_PLATFORM_ANDROID;
+                } else if (vd_fw__compare_string(s, s_len, platform_begin, VD_FW_STR_AND_LEN("iOS"))) {
+                    *out_platform = VD_FW_PLATFORM_IOS;
+                } else {
+                    *out_platform = VD_FW_PLATFORM_UNKNOWN;
+                }
             }
-
-            if (vd_fw__compare_string(s, s_len, platform_begin, VD_FW_STR_AND_LEN("Windows"))) {
-                *out_platform = VD_FW_PLATFORM_WINDOWS;
-            } else if (vd_fw__compare_string(s, s_len, platform_begin, VD_FW_STR_AND_LEN("Linux"))) {
-                *out_platform = VD_FW_PLATFORM_LINUX;
-            } else if (vd_fw__compare_string(s, s_len, platform_begin, VD_FW_STR_AND_LEN("Mac OS X"))) {
-                *out_platform = VD_FW_PLATFORM_MACOS;
-            } else if (vd_fw__compare_string(s, s_len, platform_begin, VD_FW_STR_AND_LEN("Android"))) {
-                *out_platform = VD_FW_PLATFORM_ANDROID;
-            } else if (vd_fw__compare_string(s, s_len, platform_begin, VD_FW_STR_AND_LEN("iOS"))) {
-                *out_platform = VD_FW_PLATFORM_IOS;
-            } else {
-                *out_platform = VD_FW_PLATFORM_UNKNOWN;
-            }
-
         } else {
-            // Just skip the comma
             i++;
         }
 
