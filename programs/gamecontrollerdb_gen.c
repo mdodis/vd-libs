@@ -122,7 +122,9 @@ int main(int argc, char const *argv[])
             const char *source_kind = "ERROR";
             const char *target = "TARGET_ERROR";
 
-            switch (entry->kind) {
+            VdFwGamepadMappingSourceKind actual_kind = entry->kind & VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_MASK;
+
+            switch (actual_kind) {
                 case VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON: {
                     source_kind = "VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON";
                 } break;

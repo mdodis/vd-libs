@@ -41,8 +41,9 @@
  * ╚════════════════════════════════════════════════════════════╝
  * 
  * TODO
- * - Joystick axes with Usage Values and Hats
  * - Controller mapping & assignment
+ *     - hint:!SDL_GAMECONTROLLER_USE_BUTTON_LABELS:=1
+ *     - Gamepad Face Values
  * - D3D11 Sample
  * - Make sure /DUNICODE works for console printing
  * - File dialog
@@ -51,9 +52,11 @@
  * - Have a way for a user to request OpenGL extensions/versions via a precedence array, and initialize the maximum possible version
  * - Use bit flags for buttons, an array is a bit overkill
  * - L4/R4, L5/R5, and maybe a secondary steam controller axis?
+ * - Clipboard
  * - Game Controller DB
  * - Properly handle vd_fw_set_receive_ncmouse for clicks and scrolls
  * - Set mouse cursor to constants (resize, I, etc...)
+ * - Have a way to store and load the window placement state (size, position, maximization state)
  * - Should vd_fw_set_receive_ncmouse be default 0 or 1?
  *   - Actually, consider removing it entirely
  * - set min/max window size
@@ -65,6 +68,7 @@
  * - MacOS:vd_fw_maximize()
  * - MacOS: vd_fw_set_app_icon
  * - MacOS: vd_fw_set_fullscreen
+ * - MacOS: Use custom preprocessor option to disable OpenGL deprecation warnings
  * - When window not focused, or minimize, delay drawing?
  * - Allow to request specific framerate?
  * - MacOS: There's no way to draw while resizing without changing the api?
