@@ -447,16 +447,18 @@ enum {
     VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON = 1,
     VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT = 2,
     VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS = 3,
+    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_MASK = 0b00000011,
 
-    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_ZERO_TO_MAX = (1 << 7),
+    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_SPLIT       = (1 << 5),
     VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_INVERTED    = (1 << 6),
+    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_ZERO_TO_MAX = (1 << 7),
 
     VD_FW_GAMEPAD_MAX_MAPPINGS = 48,
 };
-typedef uint8_t VdFwGamemapMappingSourceKind;
+typedef uint8_t VdFwGamepadMappingSourceKind;
 
 typedef struct {
-    VdFwGamemapMappingSourceKind kind;  
+    VdFwGamepadMappingSourceKind kind;  
     unsigned char                target;
     unsigned short               index;
 } VdFwGamepadMapEntry;
@@ -753,7 +755,7 @@ VD_FW_API int                vd_fw_get_gamepad_axis(int index, int axis, float *
 VD_FW_API int                vd_fw_get_gamepad_connected(int index);
 VD_FW_API const char*        vd_fw_get_gamepad_button_name(int button);
 
-VD_FW_API int                vd_fw_get_gamepad_input(int index, unsigned short *id, VdFwGamemapMappingSourceKind *kind);
+VD_FW_API int                vd_fw_get_gamepad_input(int index, unsigned short *id, VdFwGamepadMappingSourceKind *kind);
 
 VD_FW_API int                vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepadDBEntry *out, VdFwPlatform *out_platform);
 VD_FW_API int                vd_fw_add_gamepad_db_entry(VdFwGamepadDBEntry *entry);
@@ -7165,8 +7167,9 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     // Iterate over gamepad button entries
                     for (int entry_index = 0; (entry_index < VD_FW_GAMEPAD_MAX_MAPPINGS) && (gamepad_info->map.mappings[entry_index].kind != VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_NONE); ++entry_index) {
                         VdFwGamepadMapEntry *entry = &gamepad_info->map.mappings[entry_index];
+                        VdFwGamepadMappingSourceKind actual_kind = entry->kind & VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_MASK;
 
-                        switch (entry->kind) {
+                        switch (actual_kind) {
                             case VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON: {
                                 int button_data_index = gamepad_info->button_data_indices[entry->index];
 
@@ -9595,7 +9598,20 @@ VD_FW_INL int vd_fw__compare_string(const char *s, int s_len, int i,
 
 static int vd_fw__parse_map_entry(const char *s, int s_len, VdFwGamepadMapEntry *out)
 {
+    int sign_invert = 0;
+    int range_zero_to_max = 0;
+    int range_invert = 0;
+
     int i = 0;
+
+    // Handle sign
+    switch (s[i]) {
+        case '+': range_zero_to_max = 1; i++; break;
+        case '-': range_zero_to_max = 1; range_invert = 1; i++; break;
+        case '~': sign_invert = 1; i++; break;
+        default: break;
+    }
+
     switch (s[i]) {
         case 'b': {
             i++;
@@ -9662,6 +9678,16 @@ static int vd_fw__parse_map_entry(const char *s, int s_len, VdFwGamepadMapEntry 
 
         default: {
         } break;
+    }
+
+    if (range_zero_to_max) {
+        out->kind |= VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_ZERO_TO_MAX;
+
+        if (range_invert) {
+            out->kind |= VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_INVERTED;
+        }
+    } else if (sign_invert) {
+        out->kind |= VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_INVERTED;
     }
 
     return i;
@@ -9782,9 +9808,11 @@ VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepad
     while (i < s_len) {
         VdFwGamepadMapEntry map_entry = {0};
 
-        char sign = 0;
+        // Handle sign before target assignment
+        // This happens
+        char partwise_sign = 0;
         if ((s[i] == '+') || (s[i] == '-')) {
-            sign = s[i];
+            partwise_sign = s[i];
             i++;
         }
 
@@ -9830,6 +9858,8 @@ VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepad
         }
 
         if (map_entry.target != VD_FW_GAMEPAD_UNKNOWN) {
+            // Parse mapping sign
+
             int c = vd_fw__parse_map_entry(s + i, s_len - i, &map_entry);
             if (c == 0) {
                 return 0;
