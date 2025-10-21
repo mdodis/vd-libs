@@ -363,34 +363,6 @@ enum {
     VD_FW_GAMEPAD_INPUT_TYPE_HAT_SWITCH,
 };
 
-typedef struct {
-    unsigned short input;
-    unsigned short id;
-} VdFwGamepadInputMapping;
-
-typedef struct {
-    int min_value;
-    int max_value;
-    unsigned short input;
-    unsigned short id;
-} VdFwGamepadInputMappingWithRange;
-
-typedef struct {
-    int            logical_range;
-    unsigned short ids[4]; // Up, Right, Down, Left
-} VdFwGamepadInputMappingWithDir;
-
-typedef struct {
-    int                              num_digital_mappings;
-    VdFwGamepadInputMapping          digital_mappings[32];
-
-    int                              num_axial_mappings;
-    VdFwGamepadInputMappingWithRange axial_mappings[8];
-
-    int                              num_hat_switch_mappings;
-    VdFwGamepadInputMappingWithDir   hat_switch_mappings[2];
-} VdFwGamepadConfig;
-
 enum {
     VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_NONE = 0,
     VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON = 1,
@@ -4849,7 +4821,6 @@ typedef struct VdFw__Win32GamepadInfo {
     int                      xinput_index;
     int                      flags;
     VdFwPHIDP_PREPARSED_DATA ppd;
-    VdFwGamepadConfig        config;
     int                      splitz_min;
     int                      splitz_max;
     VdFwULONG                data_count;
@@ -6742,36 +6713,6 @@ static void vd_fw__win32_correlate_xinput_triggers(VdFw__Win32GamepadInfo *gamep
 
 }
 
-static unsigned char vd_fw__map_usb_id_to_input(int usage)
-{
-    switch (usage) {
-        case 0x01: return VD_FW_GAMEPAD_A;
-        case 0x02: return VD_FW_GAMEPAD_B;
-        case 0x03: return VD_FW_GAMEPAD_X;
-        case 0x04: return VD_FW_GAMEPAD_Y;
-        case 0x07: return VD_FW_GAMEPAD_SELECT;
-        case 0x08: return VD_FW_GAMEPAD_START;
-        case 0x05: return VD_FW_GAMEPAD_L1;
-        case 0x06: return VD_FW_GAMEPAD_R1;
-        case 0x09: return VD_FW_GAMEPAD_L3;
-        case 0x0A: return VD_FW_GAMEPAD_R3;
-        default:   return VD_FW_GAMEPAD_UNKNOWN; 
-    }
-}
-
-static unsigned char vd_fw__map_axial_usage_to_axis(int usage)
-{
-    switch (usage) {
-        case 0x30: return VD_FW_GAMEPAD_LH;
-        case 0x31: return VD_FW_GAMEPAD_LV;
-        case 0x32: return VD_FW_GAMEPAD_LT;
-        case 0x33: return VD_FW_GAMEPAD_RH;
-        case 0x34: return VD_FW_GAMEPAD_RV;
-        case 0x35: return VD_FW_GAMEPAD_RT;
-        default: return 0xFF;
-    }
-}
-
 static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam, VdFwLPARAM lparam)
 {
     VdFwLRESULT result = 0;
@@ -7378,9 +7319,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 }
 
                 // Reset all gamepad specific data
-                new_gamepad->config.num_digital_mappings = 0;
-                new_gamepad->config.num_axial_mappings = 0;
-                new_gamepad->config.num_hat_switch_mappings = 0;
                 new_gamepad->handle = device_handle;
                 new_gamepad->guid = guid;
                 new_gamepad->connected = TRUE;
