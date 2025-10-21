@@ -101,8 +101,9 @@ int main(int argc, char const *argv[])
             continue;
         }
 
+        printf("\t{");
         {
-            printf("\t{"); 
+            printf("{"); 
             for (int j = 0; j < 16; ++j) {
                 printf("0x%02x", db_entry.guid.dat[j]);
                 if (j < 15) {
@@ -112,7 +113,7 @@ int main(int argc, char const *argv[])
             printf("},\n"); 
         }
 
-        printf("\t{");
+        printf("\t{{");
         for (int i = 0; !vd_fw_gamepad_map_entry_is_none(&db_entry.map.mappings[i]) && (i < VD_FW_GAMEPAD_MAX_MAPPINGS); ++i) {
 
             VdFwGamepadMapEntry *entry = &db_entry.map.mappings[i];
@@ -179,9 +180,12 @@ int main(int argc, char const *argv[])
             }
             printf("{0x%04x,%30s,%3d},", entry->kind, target, entry->index);
         }
-        printf("\t},\n");
+        printf("{0,0,0},");
+        printf("\n\t}},");
+        printf("},\n");
+
     }
-    printf("}\n");
+    printf("};\n");
 
     fclose(f);
 
