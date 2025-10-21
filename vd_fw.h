@@ -209,25 +209,12 @@
 
 typedef enum {
     VD_FW_GL_VERSION_BASIC = 0,
-    VD_FW_GL_VERSION_1_0   = 10,
-    VD_FW_GL_VERSION_1_1   = 11,
-    VD_FW_GL_VERSION_1_2   = 12,
-    VD_FW_GL_VERSION_1_3   = 13,
-    VD_FW_GL_VERSION_1_4   = 14,
-    VD_FW_GL_VERSION_1_5   = 15,
-    VD_FW_GL_VERSION_2_0   = 20,
-    VD_FW_GL_VERSION_2_1   = 21,
-    VD_FW_GL_VERSION_3_0   = 30,
-    VD_FW_GL_VERSION_3_1   = 31,
-    VD_FW_GL_VERSION_3_2   = 32,
-    VD_FW_GL_VERSION_3_3   = 33,
-    VD_FW_GL_VERSION_4_0   = 40,
-    VD_FW_GL_VERSION_4_1   = 41,
-    VD_FW_GL_VERSION_4_2   = 42,
-    VD_FW_GL_VERSION_4_3   = 43,
-    VD_FW_GL_VERSION_4_4   = 44,
-    VD_FW_GL_VERSION_4_5   = 45,
-    VD_FW_GL_VERSION_4_6   = 46,
+    VD_FW_GL_VERSION_1_0 = 10, VD_FW_GL_VERSION_1_1 = 11, VD_FW_GL_VERSION_1_2 = 12, VD_FW_GL_VERSION_1_3 = 13,
+    VD_FW_GL_VERSION_1_4 = 14, VD_FW_GL_VERSION_1_5 = 15,
+    VD_FW_GL_VERSION_2_0 = 20, VD_FW_GL_VERSION_2_1 = 21,
+    VD_FW_GL_VERSION_3_0 = 30, VD_FW_GL_VERSION_3_1 = 31, VD_FW_GL_VERSION_3_2 = 32, VD_FW_GL_VERSION_3_3 = 33,
+    VD_FW_GL_VERSION_4_0 = 40, VD_FW_GL_VERSION_4_1 = 41, VD_FW_GL_VERSION_4_2 = 42, VD_FW_GL_VERSION_4_3 = 43,
+    VD_FW_GL_VERSION_4_4 = 44, VD_FW_GL_VERSION_4_5 = 45, VD_FW_GL_VERSION_4_6 = 46,
 } VdFwGlVersion;
 
 enum /*VdFwPlatformEnum*/ {
@@ -242,49 +229,22 @@ typedef uint8_t VdFwPlatform;
 
 enum {
     VD_FW_KEY_UNKNOWN       = 0,
-    VD_FW_KEY_F1            = 1,
-    VD_FW_KEY_F2            = 2,
-    VD_FW_KEY_F3            = 3,
-    VD_FW_KEY_F4            = 4,
-    VD_FW_KEY_F5            = 5,
-    VD_FW_KEY_F6            = 6,
-    VD_FW_KEY_F7            = 7,
-    VD_FW_KEY_F8            = 8,
-    VD_FW_KEY_F9            = 9,
-    VD_FW_KEY_F10           = 10,
-    VD_FW_KEY_F11           = 11,
-    VD_FW_KEY_F12           = 12,
-    VD_FW_KEY_F13           = 13,
-    VD_FW_KEY_F14           = 14,
-    VD_FW_KEY_F15           = 15,
-    VD_FW_KEY_F16           = 16,
-    VD_FW_KEY_F17           = 17,
-    VD_FW_KEY_F18           = 18,
-    VD_FW_KEY_F19           = 19,
-    VD_FW_KEY_F20           = 20,
-    VD_FW_KEY_F21           = 21,
-    VD_FW_KEY_F22           = 22,
-    VD_FW_KEY_F23           = 23,
-    VD_FW_KEY_F24           = 24,
+    VD_FW_KEY_F1  = 1,  VD_FW_KEY_F2  = 2,  VD_FW_KEY_F3  = 3,  VD_FW_KEY_F4  = 4,
+    VD_FW_KEY_F5  = 5,  VD_FW_KEY_F6  = 6,  VD_FW_KEY_F7  = 7,  VD_FW_KEY_F8  = 8,
+    VD_FW_KEY_F9  = 9,  VD_FW_KEY_F10 = 10, VD_FW_KEY_F11 = 11, VD_FW_KEY_F12 = 12,
+    VD_FW_KEY_F13 = 13, VD_FW_KEY_F14 = 14, VD_FW_KEY_F15 = 15, VD_FW_KEY_F16 = 16,
+    VD_FW_KEY_F17 = 17, VD_FW_KEY_F18 = 18, VD_FW_KEY_F19 = 19, VD_FW_KEY_F20 = 20,
+    VD_FW_KEY_F21 = 21, VD_FW_KEY_F22 = 22, VD_FW_KEY_F23 = 23, VD_FW_KEY_F24 = 24,
     VD_FW_KEY_BACKSPACE     = 25,  
-    VD_FW_KEY_INS           = 26,
-    VD_FW_KEY_HOME          = 27,
-    VD_FW_KEY_PGUP          = 28,
-    VD_FW_KEY_DEL           = 29,
-    VD_FW_KEY_END           = 30,
-    VD_FW_KEY_PGDN          = 31,
+    VD_FW_KEY_INS = 26, VD_FW_KEY_HOME = 27, VD_FW_KEY_PGUP = 28,
+    VD_FW_KEY_DEL = 29, VD_FW_KEY_END  = 30, VD_FW_KEY_PGDN = 31,
     VD_FW_KEY_SPACE         = 32,  /* ' ' */
-    VD_FW_KEY_LCONTROL      = 33,
-    VD_FW_KEY_RCONTROL      = 34,
-    VD_FW_KEY_LALT          = 35,
-    VD_FW_KEY_RALT          = 36,
-    VD_FW_KEY_LSHIFT        = 37,
-    VD_FW_KEY_RSHIFT        = 38,
+    VD_FW_KEY_LCONTROL = 33, VD_FW_KEY_RCONTROL = 34,
+    VD_FW_KEY_LALT     = 35, VD_FW_KEY_RALT     = 36,
+    VD_FW_KEY_LSHIFT   = 37, VD_FW_KEY_RSHIFT   = 38,
     VD_FW_KEY_QUOTE         = 39,  /* '\''*/
-    VD_FW_KEY_ARROW_UP      = 40,
-    VD_FW_KEY_ARROW_LEFT    = 41,
-    VD_FW_KEY_ARROW_DOWN    = 42,
-    VD_FW_KEY_ARROW_RIGHT   = 43,
+    VD_FW_KEY_ARROW_UP   = 40,
+    VD_FW_KEY_ARROW_LEFT = 41, VD_FW_KEY_ARROW_DOWN = 42, VD_FW_KEY_ARROW_RIGHT = 43,
     VD_FW_KEY_COMMA         = 44,  /* ','*/
     VD_FW_KEY_MINUS         = 45,  /* '-' */
     VD_FW_KEY_DOT           = 46,  /* '.' */
@@ -306,32 +266,14 @@ enum {
     VD_FW_KEY_CAPITAL       = 62,
     VD_FW_KEY_ESCAPE        = 63,
     VD_FW_KEY_RESERVED1     = 64,  /* '@' */
-    VD_FW_KEY_A             = 65,  /* 'A' */
-    VD_FW_KEY_B             = 66,  /* 'B' */
-    VD_FW_KEY_C             = 67,  /* 'C' */
-    VD_FW_KEY_D             = 68,  /* 'D' */
-    VD_FW_KEY_E             = 69,  /* 'E' */
-    VD_FW_KEY_F             = 70,  /* 'F' */
-    VD_FW_KEY_G             = 71,  /* 'G' */
-    VD_FW_KEY_H             = 72,  /* 'H' */
-    VD_FW_KEY_I             = 73,  /* 'I' */
-    VD_FW_KEY_J             = 74,  /* 'J' */
-    VD_FW_KEY_K             = 75,  /* 'K' */
-    VD_FW_KEY_L             = 76,  /* 'L' */
-    VD_FW_KEY_M             = 77,  /* 'M' */
-    VD_FW_KEY_N             = 78,  /* 'N' */
-    VD_FW_KEY_O             = 79,  /* 'O' */
-    VD_FW_KEY_P             = 80,  /* 'P' */
-    VD_FW_KEY_Q             = 81,  /* 'Q' */
-    VD_FW_KEY_R             = 82,  /* 'R' */
-    VD_FW_KEY_S             = 83,  /* 'S' */
-    VD_FW_KEY_T             = 84,  /* 'T' */
-    VD_FW_KEY_U             = 85,  /* 'U' */
-    VD_FW_KEY_V             = 86,  /* 'V' */
-    VD_FW_KEY_W             = 87,  /* 'W' */
-    VD_FW_KEY_X             = 88,  /* 'X' */
-    VD_FW_KEY_Y             = 89,  /* 'Y' */
-    VD_FW_KEY_Z             = 90,  /* 'Z' */
+    VD_FW_KEY_A = 65, VD_FW_KEY_B = 66, VD_FW_KEY_C = 67, VD_FW_KEY_D = 68,
+    VD_FW_KEY_E = 69, VD_FW_KEY_F = 70, VD_FW_KEY_G = 71, VD_FW_KEY_H = 72,
+    VD_FW_KEY_I = 73, VD_FW_KEY_J = 74, VD_FW_KEY_K = 75, VD_FW_KEY_L = 76,
+    VD_FW_KEY_M = 77, VD_FW_KEY_N = 78, VD_FW_KEY_O = 79, VD_FW_KEY_P = 80,
+    VD_FW_KEY_Q = 81, VD_FW_KEY_R = 82, VD_FW_KEY_S = 83, VD_FW_KEY_T = 84,
+    VD_FW_KEY_U = 85, VD_FW_KEY_V = 86, VD_FW_KEY_W = 87, VD_FW_KEY_X = 88,
+    VD_FW_KEY_Y = 89,
+    VD_FW_KEY_Z = 90,
     VD_FW_KEY_BRACKET_OPEN  = 91,  /* '[' */
     VD_FW_KEY_SLASH_BACK    = 92,  /* '\\' */
     VD_FW_KEY_BRACKET_CLOSE = 93,  /* ']' */
@@ -5859,25 +5801,6 @@ VD_FW_API int vd_fw_running(void)
     // @note(mdodis): For Raw Input mouse handling, instead of using the message queue
     // We use two sinks with an atomic write index.
     {
-
-        // // Get Raw Input mouse delta sink
-        // LONG curr_sink_index = VD_FW_G.sink_index;
-        // LONG next_sink_index = (curr_sink_index + 1) % 2;
-
-        // // Clear the next sink
-        // VD_FW_G.mouse_delta_sinks[next_sink_index][0] = 0.f;
-        // VD_FW_G.mouse_delta_sinks[next_sink_index][1] = 0.f;
-
-        // MemoryBarrier();
-
-        // // Exchange write index with next_sink_index
-        // InterlockedExchange(&VD_FW_G.sink_index, next_sink_index);
-
-        // // Now we can safely read from the curr_sink_index
-        // VD_FW_G.mouse_delta[0] = VD_FW_G.mouse_delta_sinks[curr_sink_index][0];
-        // VD_FW_G.mouse_delta[1] = VD_FW_G.mouse_delta_sinks[curr_sink_index][1];
-
-
         VD_FW_WIN32_PROFILE_BEGIN(read_all_input);
         VD_FW_G.mouse_delta[0] = VD_FW_G.winthread_mouse_delta[0];
         VD_FW_G.mouse_delta[1] = VD_FW_G.winthread_mouse_delta[1];
@@ -5926,7 +5849,10 @@ VD_FW_API int vd_fw_running(void)
 
 VD_FW_API int vd_fw_swap_buffers(void)
 {
-    VdFwSwapBuffers(VD_FW_G.hdc);
+    if (VD_FW_G.graphics_api != VD_FW_GRAPHICS_API_CUSTOM) {
+        VdFwSwapBuffers(VD_FW_G.hdc);
+    }
+
     // @note(mdodis): This needs to happen, otherwise the window animations and taskbar don't get redrawn if the window
     // is maximized to either section of the screen or the whole screen
     VdFwDwmFlush();
@@ -7298,143 +7224,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].axes[i] = axes[i];
                 }
                 LeaveCriticalSection(&VD_FW_G.input_critical_section);
-
-                if (0) {
-                    // VdFw__GamepadButtonState button_states[VD_FW_GAMEPAD_BUTTON_MAX] = {0};
-
-                    VdFwULONG z_value = 0;
-                    for (VdFwDWORD ri = 0; ri < raw->data.hid.dwCount; ++ri) {
-                        VdFwBYTE *bytes = &raw->data.hid.bRawData[0] + ri * (raw->data.hid.dwSizeHid);
-
-                        // static VdFwHIDP_DATA hidp_data[64];
-                        // VdFwHidP_GetData(VdFwHidP_Input, &hidp_data, )
-                        // Buttons
-                        {
-
-                            static VdFwUSAGE usages[32];
-                            VdFwULONG usage_count = 32;
-
-                            if (VdFwHidP_GetUsages(VdFwHidP_Input, 0x09, 0,
-                                                   usages, &usage_count,
-                                                   gamepad_info->ppd,
-                                                   (VdFwPCHAR)bytes, raw->data.hid.dwSizeHid)
-                                == VD_FW_HIDP_STATUS_SUCCESS)
-                            {
-                                for (ULONG i = 0; i < usage_count; ++i) {
-
-                                    for (int j = 0; j < gamepad_info->config.num_digital_mappings; ++j) {
-                                        if (usages[i] == gamepad_info->config.digital_mappings[j].id) {
-                                            button_states[gamepad_info->config.digital_mappings[j].input] = 1;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Hat Switch
-                        {
-                            if (gamepad_info->config.num_hat_switch_mappings > 0) {
-                                VdFwULONG directional_value;
-                                if (VdFwHidP_GetUsageValue(VdFwHidP_Input,
-                                                       0x01, 0, 0x39, &directional_value,
-                                                       gamepad_info->ppd,
-                                                       (VdFwPCHAR)bytes, raw->data.hid.dwSizeHid) == VD_FW_HIDP_STATUS_SUCCESS)
-                                {
-                                    if (gamepad_info->config.hat_switch_mappings[0].logical_range == 8) {
-                                        static const int hat_to_mask[9] = {
-                                            0x00, // Centered
-                                            0x01, // Up
-                                            0x03, // Up+Right
-                                            0x02, // Right
-                                            0x06, // Down+Right
-                                            0x04, // Down
-                                            0x0C, // Down+Left
-                                            0x08, // Left
-                                            0x09, // Up+Left
-                                        };
-                                        int mask = hat_to_mask[directional_value];
-
-                                        button_states[VD_FW_GAMEPAD_DUP] =
-                                            (mask & gamepad_info->config.hat_switch_mappings[0].ids[0]) ? 1 : 0;
-                                        button_states[VD_FW_GAMEPAD_DRIGHT] =
-                                            (mask & gamepad_info->config.hat_switch_mappings[0].ids[1]) ? 1 : 0;
-                                        button_states[VD_FW_GAMEPAD_DDOWN] =
-                                            (mask & gamepad_info->config.hat_switch_mappings[0].ids[2]) ? 1 : 0;
-                                        button_states[VD_FW_GAMEPAD_DLEFT] =
-                                            (mask & gamepad_info->config.hat_switch_mappings[0].ids[3]) ? 1 : 0;
-                                    }
-                                }
-                            }
-                        }
-
-                        // Axes
-                        {
-                            for (int i = 0; i < gamepad_info->config.num_axial_mappings; ++i) {
-                                VdFwULONG value;
-
-                                VdFwUSAGE usage = gamepad_info->config.axial_mappings[i].id;
-                                if (VdFwHidP_GetUsageValue(VdFwHidP_Input, 0x01, 0, usage, &value, gamepad_info->ppd, (VdFwPCHAR)bytes, raw->data.hid.dwSizeHid) == VD_FW_HIDP_STATUS_SUCCESS) {
-
-                                    VdFwLONG min_value = gamepad_info->config.axial_mappings[i].min_value;
-                                    VdFwLONG max_value = gamepad_info->config.axial_mappings[i].max_value;
-
-                                    // Clamp known value
-                                    float value01 = 0.f;
-                                    if (gamepad_info->config.axial_mappings[i].input <= VD_FW_GAMEPAD_RV) {
-                                        value01 = (float)(value - min_value) / (float)(max_value - min_value);
-                                        value01 *= 2.f;
-                                        value01 -= 1.f;
-                                    } else {
-                                        z_value = value;
-                                        if (max_value > min_value) {
-                                            if ((VdFwLONG)value < min_value) {
-                                                value = min_value;
-                                            } else if ((VdFwLONG)value > max_value) {
-                                                value = max_value;
-                                            }
-
-                                            value01 = (float)(value - min_value) / (float)(max_value - min_value);
-                                        } else {
-
-                                            if ((VdFwLONG)value < max_value) {
-                                                value = max_value;
-                                            } else if ((VdFwLONG)value > min_value) {
-                                                value = min_value;
-                                            }
-
-                                            value01 = (float)(value - max_value) / (float)(min_value - max_value);
-                                            value01 = 1.0f - value01;
-                                        }
-                                    }
-
-                                    axes[gamepad_info->config.axial_mappings[i].input] = value01;
-                                }
-                            }
-                        }
-                    }
-
-                    // If Gamepad is also an XInput device, then correlate to adjust triggers
-                    if ((gamepad_info->flags & VD_FW__WIN32_GAMEPAD_FLAG_SPLITZ) &&
-                        (gamepad_info->flags & VD_FW__WIN32_GAMEPAD_FLAG_XINPUT))
-                    {
-                        vd_fw__win32_correlate_xinput_triggers(gamepad_info, button_states, axes, z_value);
-                    }
-
-                    // int index_to_write_to = gamepad_info_index;
-                    EnterCriticalSection(&VD_FW_G.input_critical_section);
-                    VD_FW_MEMCPY(&VD_FW_G.winthread_gamepad_prev_states[index_to_write_to].buttons,
-                                 &VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].buttons,
-                                 sizeof(VD_FW_G.winthread_gamepad_curr_states[0].buttons));
-
-                    for (int i = 0; i < VD_FW_GAMEPAD_BUTTON_MAX; ++i) {
-                        VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].buttons[i] = button_states[i];
-                    }
-
-                    for (int i = 0; i < 6; ++i) {
-                        VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].axes[i] = axes[i];
-                    }
-                    LeaveCriticalSection(&VD_FW_G.input_critical_section);
-                }
             }
 
         } break;
