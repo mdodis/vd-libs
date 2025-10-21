@@ -113,7 +113,7 @@ int main(int argc, char const *argv[])
         }
 
         printf("\t{");
-        for (int i = 0; (db_entry.map.mappings[i].kind != VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_NONE) && (i < VD_FW_GAMEPAD_MAX_MAPPINGS); ++i) {
+        for (int i = 0; !vd_fw_gamepad_map_entry_is_none(&db_entry.map.mappings[i]) && (i < VD_FW_GAMEPAD_MAX_MAPPINGS); ++i) {
 
             VdFwGamepadMapEntry *entry = &db_entry.map.mappings[i];
 
@@ -140,15 +140,21 @@ int main(int argc, char const *argv[])
                 } break;
             }
 
+            if (entry->kind & VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_AXIS_TO_BUTTON) {
+                is_axis = 0;
+            }
+
             if (is_axis) {
                 switch (entry->target) {
-                    case VD_FW_GAMEPAD_LT: target = "VD_FW_GAMEPAD_LT"; break;
-                    case VD_FW_GAMEPAD_RT: target = "VD_FW_GAMEPAD_RT"; break;
-                    case VD_FW_GAMEPAD_LH: target = "VD_FW_GAMEPAD_LH"; break;
-                    case VD_FW_GAMEPAD_LV: target = "VD_FW_GAMEPAD_LV"; break;
-                    case VD_FW_GAMEPAD_RH: target = "VD_FW_GAMEPAD_RH"; break;
-                    case VD_FW_GAMEPAD_RV: target = "VD_FW_GAMEPAD_RV"; break;
-                    default: break;
+                    case VD_FW_GAMEPAD_LT:     target = "VD_FW_GAMEPAD_LT";     break;
+                    case VD_FW_GAMEPAD_RT:     target = "VD_FW_GAMEPAD_RT";     break;
+                    case VD_FW_GAMEPAD_LH:     target = "VD_FW_GAMEPAD_LH";     break;
+                    case VD_FW_GAMEPAD_LV:     target = "VD_FW_GAMEPAD_LV";     break;
+                    case VD_FW_GAMEPAD_RH:     target = "VD_FW_GAMEPAD_RH";     break;
+                    case VD_FW_GAMEPAD_RV:     target = "VD_FW_GAMEPAD_RV";     break;
+                    default: {
+                        fprintf(stderr, "Unknown axis\n");
+                    } break;
                 }
             } else {
                 switch (entry->target) {
@@ -166,10 +172,12 @@ int main(int argc, char const *argv[])
                     case VD_FW_GAMEPAD_R1:     target = "VD_FW_GAMEPAD_R1";     break;
                     case VD_FW_GAMEPAD_L3:     target = "VD_FW_GAMEPAD_L3";     break;
                     case VD_FW_GAMEPAD_R3:     target = "VD_FW_GAMEPAD_R3";     break;
-                    default: break;
+                    default: {
+                        fprintf(stderr, "Unknown button\n");
+                    }break;
                 }
             }
-            printf("{%42s,%30s,%3d},", source_kind, target, entry->index);
+            printf("{0x%04x,%30s,%3d},", entry->kind, target, entry->index);
         }
         printf("\t},\n");
     }

@@ -59,7 +59,6 @@
  * - Have a way to store and load the window placement state (size, position, maximization state)
  * - Should vd_fw_set_receive_ncmouse be default 0 or 1?
  *   - Actually, consider removing it entirely
- * - set min/max window size
  * - set window unresizable
  * - vd_fw_get_executable_dir() <-- statically allocated char * of executable directory
  * - vd_fw_get_last_key_pressed
@@ -453,9 +452,11 @@ enum {
     VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS = 3,
     VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_MASK = 0b00000011,
 
-    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_SPLIT       = (1 << 5),
-    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_INVERTED    = (1 << 6),
-    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_ZERO_TO_MAX = (1 << 7),
+    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_AXIS_TO_BUTTON = (1 << 3),
+    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_PARTWISE       = (1 << 4),
+    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_SPLIT          = (1 << 5),
+    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_INVERTED       = (1 << 6),
+    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_ZERO_TO_MAX    = (1 << 7),
 
     VD_FW_GAMEPAD_MAX_MAPPINGS = 48,
 };
@@ -762,6 +763,7 @@ VD_FW_API const char*        vd_fw_get_gamepad_button_name(int button);
 VD_FW_API int                vd_fw_get_gamepad_input(int index, unsigned short *id, VdFwGamepadMappingSourceKind *kind);
 
 VD_FW_API int                vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepadDBEntry *out, VdFwPlatform *out_platform);
+VD_FW_API int                vd_fw_gamepad_map_entry_is_none(VdFwGamepadMapEntry *entry);
 VD_FW_API int                vd_fw_add_gamepad_db_entry(VdFwGamepadDBEntry *entry);
 
 /* ----PLATFORM SPECIFIC--------------------------------------------------------------------------------------------- */
@@ -9704,33 +9706,34 @@ static int vd_fw__is_db_symbol(char c) {
 }
 
 typedef struct {
-    const char *sym;
-    size_t      len;
-    uint8_t     tgt;
+    const char                   *sym;
+    size_t                       len;
+    uint8_t                      tgt;
+    uint8_t                      is_axis;
 } VdFw__GamepadSymbolToTarget;
 
 VdFw__GamepadSymbolToTarget Vd_Fw__Gamepad_Symbols_To_Targets[] = {
 #define VD_FW__SYM_LEN(s) s, sizeof(s) - 1
-    {VD_FW__SYM_LEN("a"),                   VD_FW_GAMEPAD_A},
-    {VD_FW__SYM_LEN("b"),                   VD_FW_GAMEPAD_B},
-    {VD_FW__SYM_LEN("x"),                   VD_FW_GAMEPAD_X},
-    {VD_FW__SYM_LEN("y"),                   VD_FW_GAMEPAD_Y},
-    {VD_FW__SYM_LEN("start"),               VD_FW_GAMEPAD_START},
-    {VD_FW__SYM_LEN("back"),                VD_FW_GAMEPAD_BACK},
-    {VD_FW__SYM_LEN("dpup"),                VD_FW_GAMEPAD_DUP},
-    {VD_FW__SYM_LEN("dpdown"),              VD_FW_GAMEPAD_DDOWN},
-    {VD_FW__SYM_LEN("dpleft"),              VD_FW_GAMEPAD_DLEFT},
-    {VD_FW__SYM_LEN("dpright"),             VD_FW_GAMEPAD_DRIGHT},
-    {VD_FW__SYM_LEN("leftshoulder"),        VD_FW_GAMEPAD_LEFT_SHOULDER},
-    {VD_FW__SYM_LEN("leftstick"),           VD_FW_GAMEPAD_LEFT_STICK},
-    {VD_FW__SYM_LEN("lefttrigger"),         VD_FW_GAMEPAD_LT},
-    {VD_FW__SYM_LEN("rightshoulder"),       VD_FW_GAMEPAD_RIGHT_SHOULDER},
-    {VD_FW__SYM_LEN("rightstick"),          VD_FW_GAMEPAD_RIGHT_STICK},
-    {VD_FW__SYM_LEN("righttrigger"),        VD_FW_GAMEPAD_RT},
-    {VD_FW__SYM_LEN("leftx"),               VD_FW_GAMEPAD_LH},
-    {VD_FW__SYM_LEN("lefty"),               VD_FW_GAMEPAD_LV},
-    {VD_FW__SYM_LEN("rightx"),              VD_FW_GAMEPAD_RH},
-    {VD_FW__SYM_LEN("righty"),              VD_FW_GAMEPAD_RV},
+    {VD_FW__SYM_LEN("a"),                   VD_FW_GAMEPAD_A,              0},
+    {VD_FW__SYM_LEN("b"),                   VD_FW_GAMEPAD_B,              0},
+    {VD_FW__SYM_LEN("x"),                   VD_FW_GAMEPAD_X,              0},
+    {VD_FW__SYM_LEN("y"),                   VD_FW_GAMEPAD_Y,              0},
+    {VD_FW__SYM_LEN("start"),               VD_FW_GAMEPAD_START,          0},
+    {VD_FW__SYM_LEN("back"),                VD_FW_GAMEPAD_BACK,           0},
+    {VD_FW__SYM_LEN("dpup"),                VD_FW_GAMEPAD_DUP,            0},
+    {VD_FW__SYM_LEN("dpdown"),              VD_FW_GAMEPAD_DDOWN,          0},
+    {VD_FW__SYM_LEN("dpleft"),              VD_FW_GAMEPAD_DLEFT,          0},
+    {VD_FW__SYM_LEN("dpright"),             VD_FW_GAMEPAD_DRIGHT,         0},
+    {VD_FW__SYM_LEN("leftshoulder"),        VD_FW_GAMEPAD_LEFT_SHOULDER,  0},
+    {VD_FW__SYM_LEN("leftstick"),           VD_FW_GAMEPAD_LEFT_STICK,     0},
+    {VD_FW__SYM_LEN("lefttrigger"),         VD_FW_GAMEPAD_LT,             1},
+    {VD_FW__SYM_LEN("rightshoulder"),       VD_FW_GAMEPAD_RIGHT_SHOULDER, 0},
+    {VD_FW__SYM_LEN("rightstick"),          VD_FW_GAMEPAD_RIGHT_STICK,    0},
+    {VD_FW__SYM_LEN("righttrigger"),        VD_FW_GAMEPAD_RT,             1},
+    {VD_FW__SYM_LEN("leftx"),               VD_FW_GAMEPAD_LH,             1},
+    {VD_FW__SYM_LEN("lefty"),               VD_FW_GAMEPAD_LV,             1},
+    {VD_FW__SYM_LEN("rightx"),              VD_FW_GAMEPAD_RH,             1},
+    {VD_FW__SYM_LEN("righty"),              VD_FW_GAMEPAD_RV,             1},
 #undef VD_FW__SYM_LEN
 };
 
@@ -9758,6 +9761,11 @@ static VdFw__GamepadSymbolToTarget *vd_fw__get_map_from_symbol(const char *s, in
     }
 
     return 0;
+}
+
+VD_FW_API int vd_fw_gamepad_map_entry_is_none(VdFwGamepadMapEntry *entry)
+{
+    return (entry->kind & VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_MASK) == VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_NONE;    
 }
 
 VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepadDBEntry *out, VdFwPlatform *out_platform)
@@ -9862,11 +9870,21 @@ VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepad
         }
 
         if (map_entry.target != VD_FW_GAMEPAD_UNKNOWN) {
-            // Parse mapping sign
-
             int c = vd_fw__parse_map_entry(s + i, s_len - i, &map_entry);
             if (c == 0) {
                 return 0;
+            }
+
+            if (((map_entry.kind & VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_MASK) == VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS) &&
+                (!sym->is_axis))
+            {
+                map_entry.kind |= VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_AXIS_TO_BUTTON;
+            }
+
+            if (partwise_sign == '+') {
+                map_entry.kind |= VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_PARTWISE;
+            } else if (partwise_sign == '-') {
+                map_entry.kind |= VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_PARTWISE | VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_INVERTED;
             }
 
             out->map.mappings[mapping_count++] = map_entry;
