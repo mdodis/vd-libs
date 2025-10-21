@@ -7100,7 +7100,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                                 }
 
                                 if (axis_data_index != gamepad_info->z_split) {
-                                    float v01 = ((float)((data->dat.RawValue + axis_min))) / 
+                                    float v01 = ((float)((data->dat.RawValue - axis_min))) / 
                                                 ((float)(axis_max - axis_min));
 
                                     float value1mp = v01 * 2.f - 1.f;
@@ -7428,6 +7428,18 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 VdFwUSHORT num_value_caps = caps.NumberInputValueCaps;
                 int num_hats = 0;
                 if (VdFwHidP_GetValueCaps(VdFwHidP_Input, value_caps, &num_value_caps, new_gamepad->ppd) == VD_FW_HIDP_STATUS_SUCCESS) {
+
+                    // Sort value caps by v.NotRange.Usage
+                    for (int i = 0; i < num_value_caps - 1; ++i) {
+                        for (int j = i + 1; j < num_value_caps; ++j) {
+                            if (value_caps[i].v.NotRange.Usage > value_caps[j].v.NotRange.Usage) {
+                                VdFwHIDP_VALUE_CAPS temp = value_caps[i];
+                                value_caps[i] = value_caps[j];
+                                value_caps[j] = temp;
+                            }
+                        }
+                    }
+
                     int count = 0;
                     for (int i = 0; i < num_value_caps; ++i) {
                         if (value_caps[i].IsRange) {
@@ -7480,15 +7492,20 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                             continue; 
                         }
 
+                        if (is_xinput_device && value_caps[i].v.NotRange.Usage == 0x0032 /* Generic Z*/) {
+                            continue;
+                        }
+
                         VdFw__Win32Axis *axis = &new_gamepad->axis_data_indices[count++];
                         axis->data_index = value_caps[i].v.NotRange.DataIndex;
                         axis->min_value  = value_caps[i].LogicalMin;
                         axis->max_value  = value_caps[i].LogicalMax;
 
                         if (axis->max_value == -1) {
-                            axis->max_value = (1 << value_caps[i].BitSize) - 1;
+                            axis->max_value = (1u << value_caps[i].BitSize) - 1;
                         }
                     }
+
                 }
                 VD_FW_LOG("Buttons: %d, Axes: %d", new_gamepad->button_data_indices_len, new_gamepad->axis_data_indices_len);
 
@@ -7500,10 +7517,12 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     VdFwGamepadMapEntry *entry = &new_gamepad->map.mappings[entry_index];
                     VdFwGamepadMappingSourceKind actual_kind = entry->kind & VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_MASK; 
                     if (actual_kind == VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS) {
-                        VD_FW_LOG("Axis[%d] (=%d): vd_fw_axis_%d",
+                        VD_FW_LOG("Axis[%d] (=%d): vd_fw_axis_%d [%d %d]",
                             entry->index,
                             new_gamepad->axis_data_indices[entry->index].data_index,
-                            entry->target);
+                            entry->target,
+                            new_gamepad->axis_data_indices[entry->index].min_value,
+                            new_gamepad->axis_data_indices[entry->index].max_value);
                     }
                 }
 
@@ -9552,6 +9571,7 @@ VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepad
                                            VdFwPlatform *out_platform, const char **out_begin_name)
 {
     int i = 0;
+    // @todo(mdodis): somehow, we skip some values. Fix this.
     if (s_len < 32) {
         return 0;
     }
@@ -9618,10 +9638,13 @@ VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepad
         int word_end = i;
 
         VdFw__GamepadSymbolToTarget *sym = vd_fw__get_map_from_symbol(s + word_start, word_end - word_start);
+        int did_map_input = 0;
 
         if (sym != 0) {
             VD_FW_EXPECT_COLON();
             map_entry.target = sym->tgt;
+            fprintf(stderr, "\tDiscover sym: %.*s\n", word_end - word_start, s + word_start);
+            did_map_input = 1;
         } else if (vd_fw__compare_string(s, s_len, word_start, VD_FW_STR_AND_LEN("platform"))) {
             VD_FW_EXPECT_COLON();
             int platform_begin = i;
@@ -9648,10 +9671,11 @@ VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepad
                 }
             }
         } else {
+            fprintf(stderr, "Error at %s:\n\t%s\nNo known sym: %.*s\n", s, s + i, word_end - word_start, s + word_start);
             i++;
         }
 
-        if (map_entry.target != VD_FW_GAMEPAD_UNKNOWN) {
+        if (did_map_input) {
             int c = vd_fw__parse_map_entry(s + i, s_len - i, &map_entry);
             if (c == 0) {
                 return 0;
@@ -9669,6 +9693,7 @@ VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepad
                 map_entry.kind |= VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_PARTWISE | VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_INVERTED;
             }
 
+            fprintf(stderr, "\tMapped sym: %.*s\n", word_end - word_start, s + word_start);
             out->map.mappings[mapping_count++] = map_entry;
 
             i += c;
@@ -9707,6 +9732,7 @@ VdFwGamepadDBEntry Vd_Fw__Gamepad_Db_Entries[1] = {
     {0x0002,           VD_FW_GAMEPAD_DDOWN,  4},
     {0x0002,           VD_FW_GAMEPAD_DLEFT,  8},
     {0x0002,          VD_FW_GAMEPAD_DRIGHT,  2},
+    {0x0003,              VD_FW_GAMEPAD_LH,  0},
     {0x0003,              VD_FW_GAMEPAD_LV,  1},
     {0x0003,              VD_FW_GAMEPAD_RH,  3},
     {0x0003,              VD_FW_GAMEPAD_RV,  4},
