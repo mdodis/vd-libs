@@ -78,7 +78,8 @@ int main(int argc, char const *argv[])
     while (fgets(buffer, sizeof(buffer), f)) {
         VdFwGamepadDBEntry db_entry;
         VdFwPlatform platform;
-        if (!vd_fw_parse_gamepad_db_entry(buffer, (int)strlen(buffer), &db_entry, &platform)) {
+        const char *name;
+        if (!vd_fw_parse_gamepad_db_entry(buffer, (int)strlen(buffer), &db_entry, &platform, &name)) {
             continue;
         }
 
@@ -89,16 +90,26 @@ int main(int argc, char const *argv[])
     }
     fseek(f, 0, SEEK_SET);
 
-    printf("VdFwGamepadDBEntry Gamepad_Db_Entries[%d] = {\n", count);
+    printf("VdFwGamepadDBEntry Vd_Fw__Gamepad_Db_Entries[%d] = {\n", count);
     while (fgets(buffer, sizeof(buffer), f)) {
         VdFwGamepadDBEntry db_entry;
         VdFwPlatform platform;
-        if (!vd_fw_parse_gamepad_db_entry(buffer, (int)strlen(buffer), &db_entry, &platform)) {
+        const char *name = 0;
+        if (!vd_fw_parse_gamepad_db_entry(buffer, (int)strlen(buffer), &db_entry, &platform, &name)) {
             continue;
         }
 
         if (platform != expected_platform) {
             continue;
+        }
+
+        if (name) {
+            printf("\t/*");
+            while (*name != ',') {
+                printf("%c", *name);
+                name++;
+            }
+            printf("*/\n");
         }
 
         printf("\t{");
