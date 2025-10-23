@@ -313,7 +313,7 @@ typedef struct {
 static GLuint load_image(const char *file, int *w, int *h);
 static void   put_image(GLuint texture, float x, float y, float w, float h, float color[4]);
 static void   transform_controller_info(ControllerInfo *info, float x, float y, float wscale);
-static void   draw_controller_info(ControllerInfo *info);
+static void   draw_controller_info(ControllerInfo *info, int selected);
 static Color  button_a_color(int pressed);
 static Color  button_b_color(int pressed);
 static Color  button_x_color(int pressed);
@@ -424,6 +424,9 @@ int main(int argc, char const *argv[])
 
         int num_gamepads = vd_fw_get_gamepad_count();
 
+        float mouse_x, mouse_y;
+        int mouse_pressed = vd_fw_get_mouse_statef(&mouse_x, &mouse_y) & VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN;
+
         for (int i = 0; i < num_gamepads; ++i) {
             ControllerInfo *draw_info = &draw_infos[i];
             draw_info->button_a        = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_A);
@@ -502,8 +505,21 @@ int main(int argc, char const *argv[])
                 float x = x0 + col * scaled_w;
                 float y = y0 + row * scaled_h;
 
+                int mouse_inside = 0;
+                if ((mouse_x > x) && (mouse_x < (x + scaled_w)) &&
+                    (mouse_y > y) && (mouse_y < (y + scaled_h)))
+                {
+                    mouse_inside = 1;
+                }
+
                 transform_controller_info(&draw_infos[i], x, y, scaled_w);
-                draw_controller_info(&draw_infos[i]);
+                draw_controller_info(&draw_infos[i], mouse_inside);
+
+                if (mouse_inside && mouse_pressed) {
+                    vd_fw_set_gamepad_rumble(i, 0x40, 0x40);
+                } else {
+                    vd_fw_set_gamepad_rumble(i, 0x00, 0x00);
+                }
             }
 
         }
@@ -709,11 +725,13 @@ static void put_grad(GLuint tex, float *pos, float *dim, Color color, float grad
                    reveal_color(color, grad).e);
 }
 
-static void draw_controller_info(ControllerInfo *info)
+static void draw_controller_info(ControllerInfo *info, int selected)
 {
     put_image(all.tex_controller, info->controller_pos[0], info->controller_pos[1],
                                   info->controller_dim[0], info->controller_dim[1],
-                                  (float[]){ 0.2f, 0.2f, 0.2f, 1.0f });
+                                  switch_color_digital(make_color(0.15f, 0.15f, 0.15f, 1.0f),
+                                                       make_color(0.01f, 0.38f, 0.71f, 0.3f),
+                                                       selected).e);
 
     put_button_grad(info->button_a_pos, info->button_a_dim, make_color(0.2f, 0.9f, 0.2f, 0.4f), info->button_a_grad);
     put_button_grad(info->button_b_pos, info->button_b_dim, make_color(0.9f, 0.2f, 0.2f, 0.4f), info->button_b_grad);

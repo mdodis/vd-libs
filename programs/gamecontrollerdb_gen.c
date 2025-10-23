@@ -124,7 +124,7 @@ int main(int argc, char const *argv[])
             printf("},\n"); 
         }
 
-        printf("\t{{");
+        printf("\t{\n\t\t{");
         for (int i = 0; !vd_fw_gamepad_map_entry_is_none(&db_entry.map.mappings[i]) && (i < VD_FW_GAMEPAD_MAX_MAPPINGS); ++i) {
 
             VdFwGamepadMapEntry *entry = &db_entry.map.mappings[i];
@@ -192,8 +192,41 @@ int main(int argc, char const *argv[])
             printf("{0x%04x,%30s,%3d},", entry->kind, target, entry->index);
         }
         printf("{0,0,0},");
-        printf("\n\t}},");
         printf("},\n");
+        printf("\t\t{\n");
+        {
+            int print_rest_of_rumble = 1;
+            switch (db_entry.map.rumble_config.type) {
+                case VD_FW_GAMEPAD_RUMBLE_TYPE_NOT_AVAILABLE: {
+                    printf("\t\t\tVD_FW_GAMEPAD_RUMBLE_TYPE_NOT_AVAILABLE,\n");
+                    print_rest_of_rumble = 0;
+                } break;
+
+                case VD_FW_GAMEPAD_RUMBLE_TYPE_RAW: {
+                    printf("\t\t\tVD_FW_GAMEPAD_RUMBLE_TYPE_RAW,\n");
+                } break;
+            }
+
+            if (print_rest_of_rumble) {
+                printf("\t\t\t%d,\n", db_entry.map.rumble_config.prefix_len);
+            }
+
+            printf("\t\t\t{");
+            for (int i = 0; i < db_entry.map.rumble_config.prefix_len; ++i) {
+                printf("0x%02x,", db_entry.map.rumble_config.prefix[i]);
+            }
+            printf("},\n");
+
+            printf("\t\t\t{");
+            {
+                printf("0x%08x,", db_entry.map.rumble_config.dat.raw.rumble_lo.whole);
+                printf("0x%08x", db_entry.map.rumble_config.dat.raw.rumble_hi.whole);
+            }
+            printf("},\n");
+        }
+        printf("\t\t}\n");
+
+        printf("\t}},\n");
 
     }
     printf("};\n");
