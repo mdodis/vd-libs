@@ -1,11 +1,17 @@
 #include "disable_clang_deprecations.h"
 #define VD_FW_NO_CRT 0
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS
+#define VD_FW_GAMEPAD_DB_DEFAULT_EXTERNAL
 #include "vd_fw.h"
 #include "ext/stb_image.h"
 #include "assert.h"
 
-#define GL_CHECK(expr) do { (expr); int _e_ = glGetError(); if (_e_ != 0) { printf("Check at " __FILE__ ":%d failed with 0x%x\n", __LINE__, _e_); assert(0); }} while(0)
+#define GL_CHECK(expr) do {                                                   \
+    (expr); int _e_ = glGetError();                                           \
+    if (_e_ != 0) {                                                           \
+        printf("Check at " __FILE__ ":%d failed with 0x%x\n", __LINE__, _e_); \
+        assert(0);                                                            \
+    }} while(0)
 
 #define VERTEX_SOURCE \
 "#version 330 core                                                                                                 \n" \
@@ -129,6 +135,12 @@ typedef struct {
     float rt_value;
     float rt_bar_pos[2];
     float rt_bar_dim[2];
+
+    int button_l3;
+    float button_l3_grad;
+
+    int button_r3;
+    float button_r3_grad;
 } ControllerInfo;
 
 typedef union {
@@ -302,7 +314,7 @@ typedef struct {
 static GLuint load_image(const char *file, int *w, int *h);
 static void   put_image(GLuint texture, float x, float y, float w, float h, float color[4]);
 static void   transform_controller_info(ControllerInfo *info, float x, float y, float wscale);
-static void   draw_controller_info(ControllerInfo *info);
+static void   draw_controller_info(ControllerInfo *info, int selected);
 static Color  button_a_color(int pressed);
 static Color  button_b_color(int pressed);
 static Color  button_x_color(int pressed);
@@ -310,6 +322,7 @@ static Color  button_y_color(int pressed);
 static Color  button_d_color(int pressed);
 static Color  button_bumper_color(int pressed);
 static Color  stick_base_color(void);
+static Color  stick_color(int pressed);
 static Color  bar_color(void);
 static Color  fill_color(void);
 static Color  switch_color_digital(Color c1, Color c2, int p);
@@ -325,6 +338,9 @@ int main(int argc, char const *argv[])
         .gl = {
             .version = VD_FW_GL_VERSION_3_3,
             .debug_on = 1,
+        },
+        .win32 = {
+            .xinput_disabled = 0,
         },
         .window_options = {
             .borderless = 0,
@@ -386,7 +402,7 @@ int main(int argc, char const *argv[])
     glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    ControllerInfo draw_info = {0};
+    ControllerInfo draw_infos[VD_FW_GAMEPAD_COUNT_MAX] = {0};
     while (vd_fw_running()) {
 
         int w, h;
@@ -407,46 +423,111 @@ int main(int argc, char const *argv[])
             glUniformMatrix4fv(glGetUniformLocation(rect_shader, "projection"), 1, GL_FALSE, projection);
         }
 
-        draw_info.button_a      = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_A);
-        draw_info.button_a_grad = move_grad(t * 7.f, draw_info.button_a_grad, draw_info.button_a);
-        draw_info.button_b      = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_B);
-        draw_info.button_b_grad = move_grad(t * 7.f, draw_info.button_b_grad, draw_info.button_b);
-        draw_info.button_x      = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_X);
-        draw_info.button_x_grad = move_grad(t * 7.f, draw_info.button_x_grad, draw_info.button_x);
-        draw_info.button_y      = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_Y);
-        draw_info.button_y_grad = move_grad(t * 7.f, draw_info.button_y_grad, draw_info.button_y);
-        draw_info.button_dup    = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_DUP);
-        draw_info.button_dright = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_DRIGHT);
-        draw_info.button_ddown  = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_DDOWN);
-        draw_info.button_dleft  = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_DLEFT);
-        draw_info.button_start  = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_START);
-        draw_info.button_select = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_SELECT);
-        draw_info.button_l1     = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_L1);
-        draw_info.button_r1     = vd_fw_get_gamepad_down(0, VD_FW_GAMEPAD_R1);
-        vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_LH, &draw_info.stick_l_value[0]);
-        vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_LV, &draw_info.stick_l_value[1]);
-        vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RH, &draw_info.stick_r_value[0]);
-        vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RV, &draw_info.stick_r_value[1]);
-        vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_LT, &draw_info.lt_value);
-        vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RT, &draw_info.rt_value);
+        int num_gamepads = vd_fw_get_gamepad_count();
 
-        // printf("LT: %f RT: %f\n", draw_info.lt_value, draw_info.rt_value);
+        float mouse_x, mouse_y;
+        vd_fw_get_mouse_statef(&mouse_x, &mouse_y);
 
-        float ref_width  = Base_Controller_Info.controller_dim[0];
-        float ref_height = Base_Controller_Info.controller_dim[1];
-        float ratio_width = (float)w / ref_width;
-        float ratio_height = (float)h / ref_height;
+        for (int i = 0; i < num_gamepads; ++i) {
+            ControllerInfo *draw_info = &draw_infos[i];
+            draw_info->button_a        = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_A);
+            draw_info->button_a_grad   = move_grad(t * 7.f, draw_info->button_a_grad, draw_info->button_a);
+            draw_info->button_b        = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_B);
+            draw_info->button_b_grad   = move_grad(t * 7.f, draw_info->button_b_grad, draw_info->button_b);
+            draw_info->button_x        = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_X);
+            draw_info->button_x_grad   = move_grad(t * 7.f, draw_info->button_x_grad, draw_info->button_x);
+            draw_info->button_y        = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_Y);
+            draw_info->button_y_grad   = move_grad(t * 7.f, draw_info->button_y_grad, draw_info->button_y);
+            draw_info->button_dup      = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_DUP);
+            draw_info->button_dright   = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_DRIGHT);
+            draw_info->button_ddown    = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_DDOWN);
+            draw_info->button_dleft    = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_DLEFT);
+            draw_info->button_start    = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_START);
+            draw_info->button_select   = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_SELECT);
+            draw_info->button_l1       = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_L1);
+            draw_info->button_r1       = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_R1);
+            draw_info->button_l3       = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_L3);
+            draw_info->button_l3_grad  = move_grad(t * 7.f, draw_info->button_l3_grad, draw_info->button_l3);
+            draw_info->button_r3       = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_R3);
+            draw_info->button_r3_grad  = move_grad(t * 7.f, draw_info->button_r3_grad, draw_info->button_r3);
+            vd_fw_get_gamepad_axis(i, VD_FW_GAMEPAD_LH, &draw_info->stick_l_value[0]);
+            vd_fw_get_gamepad_axis(i, VD_FW_GAMEPAD_LV, &draw_info->stick_l_value[1]);
+            vd_fw_get_gamepad_axis(i, VD_FW_GAMEPAD_RH, &draw_info->stick_r_value[0]);
+            vd_fw_get_gamepad_axis(i, VD_FW_GAMEPAD_RV, &draw_info->stick_r_value[1]);
+            vd_fw_get_gamepad_axis(i, VD_FW_GAMEPAD_LT, &draw_info->lt_value);
+            vd_fw_get_gamepad_axis(i, VD_FW_GAMEPAD_RT, &draw_info->rt_value);
+        }
 
-        float ratio_min = (ratio_width < ratio_height) ? ratio_width : ratio_height;
+        {
+            int count = num_gamepads;
+            float ref_width = Base_Controller_Info.controller_dim[0];
+            float ref_height = Base_Controller_Info.controller_dim[1];
+            float width = (float)w;
+            float height = (float)h;
 
-        float scaled_width = ref_width * ratio_min;
-        float scaled_height = ref_height * ratio_min;
+            float best_scale = 0.f;
+            if (count == 1) {
+                float s1 = width / (ref_width);
+                float s2 = height / (ref_height);
+                float s = s1 <= s2 ? s1 : s2;
+                best_scale = s;
+            }
 
-        float x = ((float)w - scaled_width) / 2.0f;
-        float y = ((float)h - scaled_height) / 2.0f;
+            int best_cols = 1;
+            int best_rows = count;
 
-        transform_controller_info(&draw_info, x, y, scaled_width);
-        draw_controller_info(&draw_info);
+            for (int cols = 1; cols < count; ++cols) {
+                int rows = (count + cols - 1) / cols;
+                float s1 = width / (cols * ref_width);
+                float s2 = height / (rows * ref_height);
+
+                float s = s1 <= s2 ? s1 : s2;
+
+                if (s > best_scale) {
+                    best_scale = s;
+                    best_cols = cols;
+                    best_rows = rows;
+                }
+
+            }
+
+            float scaled_w = best_scale * ref_width;
+            float scaled_h = best_scale * ref_height;
+
+            float total_w = best_cols * scaled_w;
+            float total_h = best_rows * scaled_h;
+            float x0 = (width - total_w) / 2.f;
+            float y0 = (height - total_h) / 2.f;
+
+            for (int i = 0; i < count; ++i) {
+                int row = i / best_cols;
+                int col = i % best_cols;
+
+                float x = x0 + col * scaled_w;
+                float y = y0 + row * scaled_h;
+
+                int mouse_inside = 0;
+                if ((mouse_x > x) && (mouse_x < (x + scaled_w)) &&
+                    (mouse_y > y) && (mouse_y < (y + scaled_h)))
+                {
+                    mouse_inside = 1;
+                }
+
+                transform_controller_info(&draw_infos[i], x, y, scaled_w);
+                draw_controller_info(&draw_infos[i], mouse_inside);
+
+                static int change = 0;
+                if (mouse_inside && vd_fw_get_mouse_clicked(VD_FW_MOUSE_BUTTON_LEFT)) {
+                    if (change == 0) {
+                        vd_fw_set_gamepad_rumble(i, 0.5f, 0.5f);
+                    } else {
+                        vd_fw_set_gamepad_rumble(i, 0.f, 0.f);
+                    }
+                    change = !change;
+                }
+            }
+
+        }
 
         vd_fw_swap_buffers();
     }
@@ -619,11 +700,28 @@ static void put_button_grad(float *pos, float *dim, Color color, float grad)
                                reveal_color(color, grad).e);
 }
 
-static void draw_controller_info(ControllerInfo *info)
+static void put_grad(GLuint tex, float *pos, float *dim, Color color, float grad)
+{
+    float graddim[2] = {
+        dim[0], dim[1],
+    };
+
+    float gradpos[2] = {
+        (pos[0] + dim[0] * 0.5f) - graddim[0] * 0.5f,
+        (pos[1] + dim[1] * 0.5f) - graddim[1] * 0.5f,
+    };
+    put_image(tex, gradpos[0], gradpos[1],
+                   graddim[0], graddim[1],
+                   reveal_color(color, grad).e);
+}
+
+static void draw_controller_info(ControllerInfo *info, int selected)
 {
     put_image(all.tex_controller, info->controller_pos[0], info->controller_pos[1],
                                   info->controller_dim[0], info->controller_dim[1],
-                                  (float[]){ 0.2f, 0.2f, 0.2f, 1.0f });
+                                  switch_color_digital(make_color(0.15f, 0.15f, 0.15f, 1.0f),
+                                                       make_color(0.01f, 0.38f, 0.71f, 1.0f),
+                                                       selected).e);
 
     put_button_grad(info->button_a_pos, info->button_a_dim, make_color(0.2f, 0.9f, 0.2f, 0.4f), info->button_a_grad);
     put_button_grad(info->button_b_pos, info->button_b_dim, make_color(0.9f, 0.2f, 0.2f, 0.4f), info->button_b_grad);
@@ -686,13 +784,22 @@ static void draw_controller_info(ControllerInfo *info)
                                     info->stick_r_base_dim[0], info->stick_r_base_dim[1],
                                     stick_base_color().e);
 
+    put_button_grad(info->stick_l_pos,
+                              info->stick_l_dim,
+                              make_color(0.9f, 0.2f, 0.2f, 0.4f),
+                              info->button_l3_grad);
+    put_button_grad(info->stick_r_pos,
+                              info->stick_r_dim,
+                              make_color(0.9f, 0.2f, 0.2f, 0.4f),
+                              info->button_r3_grad);
+
     put_image(all.tex_stick_l, info->stick_l_pos[0], info->stick_l_pos[1],
                                     info->stick_l_dim[0], info->stick_l_dim[1],
-                                    stick_base_color().e);
+                                    stick_color(info->button_l3).e);
 
     put_image(all.tex_stick_r, info->stick_r_pos[0], info->stick_r_pos[1],
                                     info->stick_r_dim[0], info->stick_r_dim[1],
-                                    stick_base_color().e);
+                                    stick_color(info->button_r3).e);
 
     {
         put_image(all.tex_lt_bar, info->lt_bar_pos[0], info->lt_bar_pos[1],
@@ -782,6 +889,14 @@ static Color button_bumper_color(int pressed)
 static Color stick_base_color(void)
 {
     return make_color(0.7f, 0.7f, 0.7f, 1.f);
+}
+
+static Color stick_color(int pressed)
+{
+    return switch_color_digital(
+        stick_base_color(),
+        make_color(0.9f, 0.2f, 0.2f, 1.f),
+        pressed);
 }
 
 static Color bar_color(void)

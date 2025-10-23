@@ -24,19 +24,40 @@
  * - Do NOT include OpenGL headers, or import an OpenGL loader. This library does that already 
  * - The highest possible OpenGL version you should support if you want it to work (as of 2025...)
  *   on the big threes is OpenGL Core Profile 4.1 (MacOS limitation)
- *
+ * 
+ * HID GUIDS
+ * ╔════════════════════════════════════════════════════════════╗
+ * ║ 0300 938d 5e04 0000 ff02 0000 0100 72 00                   ║
+ * ║ │    │    │    │    │    │    │    │  │                    ║
+ * ║ └────│────│────│────│────│────│────│──│── BUS              ║
+ * ║      └────│────│────│────│────│────│──│── CRC              ║
+ * ║           └────│────│────│────│────│──│── Vendor ID        ║
+ * ║                └────│────│────│────│──│── (empty)          ║
+ * ║                     └────│────│────│──│── Product ID       ║
+ * ║                          └────│────│──│── (empty)          ║
+ * ║                               └────│──│── Version          ║
+ * ║                                    └──│── Driver Signature ║
+ * ║                                       └── Driver Data      ║
+ * ╚════════════════════════════════════════════════════════════╝
+ * 
  * TODO
+ * - Controller mapping & assignment
+ *     - Gamepad Face Values
+ * - D3D11 Sample
+ * - Make sure /DUNICODE works for console printing
+ * - File dialog
+ * - OBS Studio breaks ChoosePixelFormat
+ * - Make sure we can export functions properly for C++
  * - Expose customizable function pointer if the user needs to do something platform-specific before/after winthread has initialized or before vd_fw_init returns anyways.
  * - Have a way for a user to request OpenGL extensions/versions via a precedence array, and initialize the maximum possible version
  * - Use bit flags for buttons, an array is a bit overkill
- * - L3/R3
  * - L4/R4, L5/R5, and maybe a secondary steam controller axis?
- * - Game Controller DB
+ * - Clipboard
  * - Properly handle vd_fw_set_receive_ncmouse for clicks and scrolls
  * - Set mouse cursor to constants (resize, I, etc...)
+ * - Have a way to store and load the window placement state (size, position, maximization state)
  * - Should vd_fw_set_receive_ncmouse be default 0 or 1?
  *   - Actually, consider removing it entirely
- * - set min/max window size
  * - set window unresizable
  * - vd_fw_get_executable_dir() <-- statically allocated char * of executable directory
  * - vd_fw_get_last_key_pressed
@@ -45,6 +66,7 @@
  * - MacOS:vd_fw_maximize()
  * - MacOS: vd_fw_set_app_icon
  * - MacOS: vd_fw_set_fullscreen
+ * - MacOS: Use custom preprocessor option to disable OpenGL deprecation warnings
  * - When window not focused, or minimize, delay drawing?
  * - Allow to request specific framerate?
  * - MacOS: There's no way to draw while resizing without changing the api?
@@ -64,218 +86,227 @@
 #endif // !_CRT_SECURE_NO_WARNINGS
 
 #ifndef VD_FW_API
-#ifdef VD_FW_STATIC
-#define VD_FW_API static
-#else
-#define VD_FW_API extern
-#endif // VD_FW_STATIC
+#   ifdef VD_FW_STATIC
+#       define VD_FW_API static
+#   else
+#       define VD_FW_API extern
+#   endif // VD_FW_STATIC
 #endif // !VD_FW_API
 
 #ifndef VD_FW_INL
-#define VD_FW_INL static inline
+#   define VD_FW_INL static inline
 #endif // VD_FW_INL
 
 #ifndef VD_FW_NO_CRT
-#define VD_FW_NO_CRT 0
+#   define VD_FW_NO_CRT 0
 #endif
 #define VD_FW_FPI  3.14159265359f
 #define VD_FW_FPI2 (2 * VD_FW_FPI)
 #define VD_FW_FPIH (0.5f * VD_FW_FPI)
 
 #ifndef VD_FW_SIN
-#if VD_FW_NO_CRT
-#define VD_FW_SIN(x) vd_fw_sin(x)
-#else
-#include <math.h>
-#define VD_FW_SIN(x) sinf(x)
-#endif
+#   if VD_FW_NO_CRT
+#       define VD_FW_SIN(x) vd_fw_sin(x)
+#   else
+#       include <math.h>
+#       define VD_FW_SIN(x) sinf(x)
+#   endif
 #endif // !VD_FW_SIN
 
 #ifndef VD_FW_COS
-#if VD_FW_NO_CRT
-#define VD_FW_COS(x) vd_fw_cos(x)
-#else
-#include <math.h>
-#define VD_FW_COS(x) cosf(x)
-#endif
+#   if VD_FW_NO_CRT
+#       define VD_FW_COS(x) vd_fw_cos(x)
+#   else
+#       include <math.h>
+#       define VD_FW_COS(x) cosf(x)
+#   endif
 #endif // !VD_FW_COS
 
 #ifndef VD_FW_TAN
-#if VD_FW_NO_CRT
-#define VD_FW_TAN(x) vd_fw_tan(x)
-#else
-#include <math.h>
-#define VD_FW_TAN(x) tanf(x)
-#endif
+#   if VD_FW_NO_CRT
+#       define VD_FW_TAN(x) vd_fw_tan(x)
+#   else
+#       include <math.h>
+#       define VD_FW_TAN(x) tanf(x)
+#   endif
 #endif // !VD_FW_TAN
 
 #ifndef VD_FW_SQRT
-#if VD_FW_NO_CRT
-#define VD_FW_SQRT(x) vd_fw_sqrt(x)
-#else
-#include <math.h>
-#define VD_FW_SQRT(x) sqrtf(x)
-#endif
+#   if VD_FW_NO_CRT
+#       define VD_FW_SQRT(x) vd_fw_sqrt(x)
+#   else
+#       include <math.h>
+#       define VD_FW_SQRT(x) sqrtf(x)
+#   endif
 #endif // !VD_FW_SQRT
 
 #ifndef VD_FW_MEMCPY
-#if VD_FW_NO_CRT
-#define VD_FW_MEMCPY(dst, src, count) vd_fw_memcpy(dst, src, count)
-#else
-#include <string.h>
-#define VD_FW_MEMCPY(dst, src, count) memcpy(dst, src, count)
-#endif
+#   if VD_FW_NO_CRT
+#       define VD_FW_MEMCPY(dst, src, count) vd_fw_memcpy(dst, src, count)
+#   else
+#       include <string.h>
+#       define VD_FW_MEMCPY(dst, src, count) memcpy(dst, src, count)
+#   endif
 #endif // !VD_FW_MEMCPY
 
 #ifndef VD_FW_MEMSET
-#if VD_FW_NO_CRT
-#define VD_FW_MEMSET(dst, val, num) vd_fw_memset(dst, val, num)
-#else
-#include <string.h>
-#define VD_FW_MEMSET(dst, val, num) memset(dst, val, num)
-#endif
+#   if VD_FW_NO_CRT
+#       define VD_FW_MEMSET(dst, val, num) vd_fw_memset(dst, val, num)
+#   else
+#       include <string.h>
+#       define VD_FW_MEMSET(dst, val, num) memset(dst, val, num)
+#   endif
 #endif // !VD_FW_MEMSET
 
+#ifndef VD_FW_LOG
+#   if VD_FW_NO_CRT
+#       define VD_FW_LOG(fmt, ...)
+#   else
+#       include <stdio.h>
+#       define VD_FW_LOG(fmt, ...) printf("vd_fw: " fmt "\n", __VA_ARGS__)
+#   endif // VD_FW_NO_CRT
+#endif // !VD_FW_LOG
+
+#define VD_FW_ENDIANNESS_LE 1
+#define VD_FW_ENDIANNESS_BE 0
+#ifndef VD_FW_ENDIANNESS
+#   if defined(_MSC_VER)
+#       if defined(_M_IX86) || defined(_M_X64) || defined(_M_ARM) || defined(_M_ARM64)
+#           define VD_FW_ENDIANNESS VD_FW_ENDIANNESS_LE
+#       else
+#           define VD_FW_ENDIANNESS VD_FW_ENDIANNESS_BE
+#       endif
+#   endif
+#endif // VD_FW_ENDIANESS
+
+#ifndef VD_FW_CUSTOM_TYPEDEFS
+#   define VD_FW_CUSTOM_TYPEDEFS 0
+#endif // !VD_FW_CUSTOM_TYPEDEFS
+
+#if !VD_FW_CUSTOM_TYPEDEFS
+#   include <stdint.h>
+#   define VdFwU16  uint16_t
+#   define VdFwI32  int32_t
+#   define VdFwU32  uint32_t
+#   define VdFwSz   size_t
+#   define VdFwByte uint8_t
+#endif // !VD_FW_CUSTOM_TYPEDEFS
+
+#define VD_FW_SWAP16(x) ((uint16_t)((x << 8) | (x >> 8)))
+#if VD_FW_ENDIANNESS == VD_FW_ENDIANNESS_LE
+#   define VD_FW_SWAP16LE(x) (x)
+#else
+#   define VD_FW_SWAP16LE(x) VD_FW_SWAP16(x)
+#endif
+
 #ifndef VD_FW_GAMEPAD_COUNT_MAX
-#define VD_FW_GAMEPAD_COUNT_MAX 4
+#   define VD_FW_GAMEPAD_COUNT_MAX 16
 #endif // !VD_FW_GAMEPAD_COUNT_MAX
+
+#ifndef VD_FW_GAMEPAD_DB_DEFAULT
+#   define VD_FW_GAMEPAD_DB_DEFAULT 1
+#endif // !VD_FW_GAMEPAD_DB_DEFAULT
 
 typedef enum {
     VD_FW_GL_VERSION_BASIC = 0,
-    VD_FW_GL_VERSION_1_0   = 1,
-    VD_FW_GL_VERSION_1_2   = 12,
-    VD_FW_GL_VERSION_1_3   = 13,
-    VD_FW_GL_VERSION_1_4   = 14,
-    VD_FW_GL_VERSION_1_5   = 15,
-    VD_FW_GL_VERSION_2_0   = 20,
-    VD_FW_GL_VERSION_2_1   = 21,
-    VD_FW_GL_VERSION_3_0   = 30,
-    VD_FW_GL_VERSION_3_1   = 31,
-    VD_FW_GL_VERSION_3_2   = 32,
-    VD_FW_GL_VERSION_3_3   = 33,
-    VD_FW_GL_VERSION_4_0   = 40,
-    VD_FW_GL_VERSION_4_1   = 41,
-    VD_FW_GL_VERSION_4_2   = 42,
-    VD_FW_GL_VERSION_4_3   = 43,
-    VD_FW_GL_VERSION_4_4   = 44,
-    VD_FW_GL_VERSION_4_5   = 45,
-    VD_FW_GL_VERSION_4_6   = 46,
+    VD_FW_GL_VERSION_1_0 = 10, VD_FW_GL_VERSION_1_1 = 11, VD_FW_GL_VERSION_1_2 = 12, VD_FW_GL_VERSION_1_3 = 13,
+    VD_FW_GL_VERSION_1_4 = 14, VD_FW_GL_VERSION_1_5 = 15,
+    VD_FW_GL_VERSION_2_0 = 20, VD_FW_GL_VERSION_2_1 = 21,
+    VD_FW_GL_VERSION_3_0 = 30, VD_FW_GL_VERSION_3_1 = 31, VD_FW_GL_VERSION_3_2 = 32, VD_FW_GL_VERSION_3_3 = 33,
+    VD_FW_GL_VERSION_4_0 = 40, VD_FW_GL_VERSION_4_1 = 41, VD_FW_GL_VERSION_4_2 = 42, VD_FW_GL_VERSION_4_3 = 43,
+    VD_FW_GL_VERSION_4_4 = 44, VD_FW_GL_VERSION_4_5 = 45, VD_FW_GL_VERSION_4_6 = 46,
 } VdFwGlVersion;
+
+enum /*VdFwPlatformEnum*/ {
+    VD_FW_PLATFORM_UNKNOWN,
+    VD_FW_PLATFORM_WINDOWS,
+    VD_FW_PLATFORM_LINUX,
+    VD_FW_PLATFORM_MACOS,
+    VD_FW_PLATFORM_ANDROID,
+    VD_FW_PLATFORM_IOS,
+};
+typedef uint8_t VdFwPlatform;
 
 enum {
     VD_FW_KEY_UNKNOWN       = 0,
-    VD_FW_KEY_F1            = 1,
-    VD_FW_KEY_F2            = 2,
-    VD_FW_KEY_F3            = 3,
-    VD_FW_KEY_F4            = 4,
-    VD_FW_KEY_F5            = 5,
-    VD_FW_KEY_F6            = 6,
-    VD_FW_KEY_F7            = 7,
-    VD_FW_KEY_F8            = 8,
-    VD_FW_KEY_F9            = 9,
-    VD_FW_KEY_F10           = 10,
-    VD_FW_KEY_F11           = 11,
-    VD_FW_KEY_F12           = 12,
-    VD_FW_KEY_F13           = 13,
-    VD_FW_KEY_F14           = 14,
-    VD_FW_KEY_F15           = 15,
-    VD_FW_KEY_F16           = 16,
-    VD_FW_KEY_F17           = 17,
-    VD_FW_KEY_F18           = 18,
-    VD_FW_KEY_F19           = 19,
-    VD_FW_KEY_F20           = 20,
-    VD_FW_KEY_F21           = 21,
-    VD_FW_KEY_F22           = 22,
-    VD_FW_KEY_F23           = 23,
-    VD_FW_KEY_F24           = 24,
+    VD_FW_KEY_F1  = 1,  VD_FW_KEY_F2  = 2,  VD_FW_KEY_F3  = 3,  VD_FW_KEY_F4  = 4,
+    VD_FW_KEY_F5  = 5,  VD_FW_KEY_F6  = 6,  VD_FW_KEY_F7  = 7,  VD_FW_KEY_F8  = 8,
+    VD_FW_KEY_F9  = 9,  VD_FW_KEY_F10 = 10, VD_FW_KEY_F11 = 11, VD_FW_KEY_F12 = 12,
+    VD_FW_KEY_F13 = 13, VD_FW_KEY_F14 = 14, VD_FW_KEY_F15 = 15, VD_FW_KEY_F16 = 16,
+    VD_FW_KEY_F17 = 17, VD_FW_KEY_F18 = 18, VD_FW_KEY_F19 = 19, VD_FW_KEY_F20 = 20,
+    VD_FW_KEY_F21 = 21, VD_FW_KEY_F22 = 22, VD_FW_KEY_F23 = 23, VD_FW_KEY_F24 = 24,
     VD_FW_KEY_BACKSPACE     = 25,  
-    VD_FW_KEY_INS           = 26,
-    VD_FW_KEY_HOME          = 27,
-    VD_FW_KEY_PGUP          = 28,
-    VD_FW_KEY_DEL           = 29,
-    VD_FW_KEY_END           = 30,
-    VD_FW_KEY_PGDN          = 31,
-    VD_FW_KEY_SPACE         = 32,  // ' ' 
-    VD_FW_KEY_LCONTROL      = 33,
-    VD_FW_KEY_RCONTROL      = 34,
-    VD_FW_KEY_LALT          = 35,
-    VD_FW_KEY_RALT          = 36,
-    VD_FW_KEY_LSHIFT        = 37,
-    VD_FW_KEY_RSHIFT        = 38,
-    VD_FW_KEY_QUOTE         = 39,  // '\''
-    VD_FW_KEY_ARROW_UP      = 40,
-    VD_FW_KEY_ARROW_LEFT    = 41,
-    VD_FW_KEY_ARROW_DOWN    = 42,
-    VD_FW_KEY_ARROW_RIGHT   = 43,
-    VD_FW_KEY_COMMA         = 44,  // ','
-    VD_FW_KEY_MINUS         = 45,  // '-'
-    VD_FW_KEY_DOT           = 46,  // '.'
-    VD_FW_KEY_SLASH_FORWARD = 47,  // '/'
-    VD_FW_KEY_0             = 48,  // '0'
-    VD_FW_KEY_1             = 49,  // '1'
-    VD_FW_KEY_2             = 50,  // '2'
-    VD_FW_KEY_3             = 51,  // '3'
-    VD_FW_KEY_4             = 52,  // '4'
-    VD_FW_KEY_5             = 53,  // '5'
-    VD_FW_KEY_6             = 54,  // '6'
-    VD_FW_KEY_7             = 55,  // '7'
-    VD_FW_KEY_8             = 56,  // '8'
-    VD_FW_KEY_9             = 57,  // '9'
+    VD_FW_KEY_INS = 26, VD_FW_KEY_HOME = 27, VD_FW_KEY_PGUP = 28,
+    VD_FW_KEY_DEL = 29, VD_FW_KEY_END  = 30, VD_FW_KEY_PGDN = 31,
+    VD_FW_KEY_SPACE         = 32,  /* ' ' */
+    VD_FW_KEY_LCONTROL = 33, VD_FW_KEY_RCONTROL = 34,
+    VD_FW_KEY_LALT     = 35, VD_FW_KEY_RALT     = 36,
+    VD_FW_KEY_LSHIFT   = 37, VD_FW_KEY_RSHIFT   = 38,
+    VD_FW_KEY_QUOTE         = 39,  /* '\''*/
+    VD_FW_KEY_ARROW_UP   = 40,
+    VD_FW_KEY_ARROW_LEFT = 41, VD_FW_KEY_ARROW_DOWN = 42, VD_FW_KEY_ARROW_RIGHT = 43,
+    VD_FW_KEY_COMMA         = 44,  /* ','*/
+    VD_FW_KEY_MINUS         = 45,  /* '-' */
+    VD_FW_KEY_DOT           = 46,  /* '.' */
+    VD_FW_KEY_SLASH_FORWARD = 47,  /* '/' */
+    VD_FW_KEY_0             = 48,  /* '0' */
+    VD_FW_KEY_1             = 49,  /* '1' */
+    VD_FW_KEY_2             = 50,  /* '2' */
+    VD_FW_KEY_3             = 51,  /* '3' */
+    VD_FW_KEY_4             = 52,  /* '4' */
+    VD_FW_KEY_5             = 53,  /* '5' */
+    VD_FW_KEY_6             = 54,  /* '6' */
+    VD_FW_KEY_7             = 55,  /* '7' */
+    VD_FW_KEY_8             = 56,  /* '8' */
+    VD_FW_KEY_9             = 57,  /* '9' */
     VD_FW_KEY_ENTER         = 58,
-    VD_FW_KEY_SEMICOLON     = 59,  // ';'
+    VD_FW_KEY_SEMICOLON     = 59,  /* ';' */
     VD_FW_KEY_TAB           = 60,
-    VD_FW_KEY_EQUALS        = 61,  // '='
+    VD_FW_KEY_EQUALS        = 61,  /* '=' */
     VD_FW_KEY_CAPITAL       = 62,
     VD_FW_KEY_ESCAPE        = 63,
-    VD_FW_KEY_RESERVED1     = 64,  // '@'
-    VD_FW_KEY_A             = 65,  // 'A'
-    VD_FW_KEY_B             = 66,  // 'B'
-    VD_FW_KEY_C             = 67,  // 'C'
-    VD_FW_KEY_D             = 68,  // 'D'
-    VD_FW_KEY_E             = 69,  // 'E'
-    VD_FW_KEY_F             = 70,  // 'F'
-    VD_FW_KEY_G             = 71,  // 'G'
-    VD_FW_KEY_H             = 72,  // 'H'
-    VD_FW_KEY_I             = 73,  // 'I'
-    VD_FW_KEY_J             = 74,  // 'J'
-    VD_FW_KEY_K             = 75,  // 'K'
-    VD_FW_KEY_L             = 76,  // 'L'
-    VD_FW_KEY_M             = 77,  // 'M'
-    VD_FW_KEY_N             = 78,  // 'N'
-    VD_FW_KEY_O             = 79,  // 'O'
-    VD_FW_KEY_P             = 80,  // 'P'
-    VD_FW_KEY_Q             = 81,  // 'Q'
-    VD_FW_KEY_R             = 82,  // 'R'
-    VD_FW_KEY_S             = 83,  // 'S'
-    VD_FW_KEY_T             = 84,  // 'T'
-    VD_FW_KEY_U             = 85,  // 'U'
-    VD_FW_KEY_V             = 86,  // 'V'
-    VD_FW_KEY_W             = 87,  // 'W'
-    VD_FW_KEY_X             = 88,  // 'X'
-    VD_FW_KEY_Y             = 89,  // 'Y'
-    VD_FW_KEY_Z             = 90,  // 'Z'
-    VD_FW_KEY_BRACKET_OPEN  = 91,  // '['
-    VD_FW_KEY_SLASH_BACK    = 92,  // '\\'
-    VD_FW_KEY_BRACKET_CLOSE = 93,  // ']'
-    VD_FW_KEY_MEDIA_NEXT    = 94,  // Media Next Track
-    VD_FW_KEY_MEDIA_PREV    = 95,  // Media Prev Track
-    VD_FW_KEY_BACKTICK      = 96,  // '`'
-    VD_FW_KEY_MEDIA_PLAY    = 97,  // Media Play/Pause
-    VD_FW_KEY_NUMPAD_0      = 98,  // Numpad 0
-    VD_FW_KEY_NUMPAD_1      = 99,  // Numpad 1
-    VD_FW_KEY_NUMPAD_2      = 100, // Numpad 2
-    VD_FW_KEY_NUMPAD_3      = 101, // Numpad 3
-    VD_FW_KEY_NUMPAD_4      = 102, // Numpad 4
-    VD_FW_KEY_NUMPAD_5      = 103, // Numpad 5
-    VD_FW_KEY_NUMPAD_6      = 104, // Numpad 6
-    VD_FW_KEY_NUMPAD_7      = 105, // Numpad 7
-    VD_FW_KEY_NUMPAD_8      = 106, // Numpad 8
-    VD_FW_KEY_NUMPAD_9      = 107, // Numpad 9
+    VD_FW_KEY_RESERVED1     = 64,  /* '@' */
+    VD_FW_KEY_A = 65, VD_FW_KEY_B = 66, VD_FW_KEY_C = 67, VD_FW_KEY_D = 68,
+    VD_FW_KEY_E = 69, VD_FW_KEY_F = 70, VD_FW_KEY_G = 71, VD_FW_KEY_H = 72,
+    VD_FW_KEY_I = 73, VD_FW_KEY_J = 74, VD_FW_KEY_K = 75, VD_FW_KEY_L = 76,
+    VD_FW_KEY_M = 77, VD_FW_KEY_N = 78, VD_FW_KEY_O = 79, VD_FW_KEY_P = 80,
+    VD_FW_KEY_Q = 81, VD_FW_KEY_R = 82, VD_FW_KEY_S = 83, VD_FW_KEY_T = 84,
+    VD_FW_KEY_U = 85, VD_FW_KEY_V = 86, VD_FW_KEY_W = 87, VD_FW_KEY_X = 88,
+    VD_FW_KEY_Y = 89,
+    VD_FW_KEY_Z = 90,
+    VD_FW_KEY_BRACKET_OPEN  = 91,  /* '[' */
+    VD_FW_KEY_SLASH_BACK    = 92,  /* '\\' */
+    VD_FW_KEY_BRACKET_CLOSE = 93,  /* ']' */
+    VD_FW_KEY_MEDIA_NEXT    = 94,  /* Media Next Track */
+    VD_FW_KEY_MEDIA_PREV    = 95,  /* Media Prev Track */
+    VD_FW_KEY_BACKTICK      = 96,  /* '`' */
+    VD_FW_KEY_MEDIA_PLAY    = 97,  /* Media Play/Pause */
+    VD_FW_KEY_NUMPAD_0      = 98,  /* Numpad 0 */
+    VD_FW_KEY_NUMPAD_1      = 99,  /* Numpad 1 */
+    VD_FW_KEY_NUMPAD_2      = 100, /* Numpad 2 */
+    VD_FW_KEY_NUMPAD_3      = 101, /* Numpad 3 */
+    VD_FW_KEY_NUMPAD_4      = 102, /* Numpad 4 */
+    VD_FW_KEY_NUMPAD_5      = 103, /* Numpad 5 */
+    VD_FW_KEY_NUMPAD_6      = 104, /* Numpad 6 */
+    VD_FW_KEY_NUMPAD_7      = 105, /* Numpad 7 */
+    VD_FW_KEY_NUMPAD_8      = 106, /* Numpad 8 */
+    VD_FW_KEY_NUMPAD_9      = 107, /* Numpad 9 */
     VD_FW_KEY_MAX,
 };
 typedef int VdFwKey;
 
 enum {
+    VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN   = 1 << 0,
+    VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN  = 1 << 1,
+    VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN = 1 << 2,
+
+    VD_FW_MOUSE_BUTTON_LEFT   = VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN,
+    VD_FW_MOUSE_BUTTON_RIGHT  = VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN,
+    VD_FW_MOUSE_BUTTON_MIDDLE = VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN,
+};
+
+enum {
+    // XBox Style Buttons
     VD_FW_GAMEPAD_UNKNOWN = 0,
     VD_FW_GAMEPAD_A,
     VD_FW_GAMEPAD_B,
@@ -286,10 +317,24 @@ enum {
     VD_FW_GAMEPAD_DLEFT,
     VD_FW_GAMEPAD_DRIGHT,
     VD_FW_GAMEPAD_START,
-    VD_FW_GAMEPAD_SELECT,
-    VD_FW_GAMEPAD_L1,
-    VD_FW_GAMEPAD_R1,
+    VD_FW_GAMEPAD_BACK,
+    VD_FW_GAMEPAD_LEFT_SHOULDER,
+    VD_FW_GAMEPAD_RIGHT_SHOULDER,
+    VD_FW_GAMEPAD_LEFT_STICK,
+    VD_FW_GAMEPAD_RIGHT_STICK,
     VD_FW_GAMEPAD_BUTTON_MAX,
+
+    // Playstation Style Buttons
+    VD_FW_GAMEPAD_CROSS    = VD_FW_GAMEPAD_A,
+    VD_FW_GAMEPAD_CIRCLE   = VD_FW_GAMEPAD_B,
+    VD_FW_GAMEPAD_SQUARE   = VD_FW_GAMEPAD_X,
+    VD_FW_GAMEPAD_TRIANGLE = VD_FW_GAMEPAD_Y,
+    VD_FW_GAMEPAD_SELECT   = VD_FW_GAMEPAD_BACK,
+    VD_FW_GAMEPAD_L1       = VD_FW_GAMEPAD_LEFT_SHOULDER,
+    VD_FW_GAMEPAD_R1       = VD_FW_GAMEPAD_RIGHT_SHOULDER,
+    VD_FW_GAMEPAD_L3       = VD_FW_GAMEPAD_LEFT_STICK,
+    VD_FW_GAMEPAD_R3       = VD_FW_GAMEPAD_RIGHT_STICK,
+
     VD_FW_GAMEPAD_H = 0 >> 1,
     VD_FW_GAMEPAD_V = 2 >> 1,
     VD_FW_GAMEPAD_L = 0 << 1,
@@ -302,6 +347,7 @@ enum {
     VD_FW_GAMEPAD_R2 = 5,
     VD_FW_GAMEPAD_LT = VD_FW_GAMEPAD_L2,
     VD_FW_GAMEPAD_RT = VD_FW_GAMEPAD_R2,
+    VD_FW_GAMEPAD_AXIS_MAX,
 };
 typedef int VdFwGamepadInput;
 
@@ -317,56 +363,111 @@ enum {
     VD_FW_GAMEPAD_INPUT_TYPE_HAT_SWITCH,
 };
 
-typedef struct {
-    unsigned short input;
-    unsigned short id;
-} VdFwGamepadInputMapping;
-
-typedef struct {
-    int min_value;
-    int max_value;
-    unsigned short input;
-    unsigned short id;
-} VdFwGamepadInputMappingWithRange;
-
-typedef struct {
-    int            logical_range;
-    unsigned short ids[4]; // Up, Right, Down, Left
-} VdFwGamepadInputMappingWithDir;
-
-typedef struct {
-    int                              num_digital_mappings;
-    VdFwGamepadInputMapping          digital_mappings[16];
-
-    int                              num_axial_mappings;
-    VdFwGamepadInputMappingWithRange axial_mappings[8];
-
-    int                              num_hat_switch_mappings;
-    VdFwGamepadInputMappingWithDir   hat_switch_mappings[2];
-} VdFwGamepadConfig;
-
 enum {
-    VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN   = 1 << 0,
-    VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN  = 1 << 1,
-    VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN = 1 << 2,
+    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_NONE = 0,
+    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON = 1,
+    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT = 2,
+    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS = 3,
+    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_MASK = 0b00000011,
 
-    VD_FW_MOUSE_BUTTON_LEFT   = VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN,
-    VD_FW_MOUSE_BUTTON_RIGHT  = VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN,
-    VD_FW_MOUSE_BUTTON_MIDDLE = VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN,
+    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_BUTTON_TO_AXIS = (1 << 2),
+    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_AXIS_TO_BUTTON = (1 << 3),
+    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_PARTWISE       = (1 << 4),
+    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_SPLIT          = (1 << 5),
+    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_INVERTED       = (1 << 6),
+    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_ZERO_TO_MAX    = (1 << 7),
+
+    VD_FW_GAMEPAD_MAX_MAPPINGS = 48,
+
+    VD_FW_GAMEPAD_RUMBLE_TYPE_NOT_AVAILABLE = 0,
+    // 'w': Writes instantly to file
+    VD_FW_GAMEPAD_RUMBLE_TYPE_RAW           = 1,
+    VD_FW_GAMEPAD_RUMBLE_TYPE_XINPUT        = 2,
+
+    VD_FW_GAMEPAD_RUMBLE_MAX_PREFIX_BYTES   = 14,
 };
+typedef uint8_t VdFwGamepadMappingSourceKind;
 
 typedef struct {
+    VdFwGamepadMappingSourceKind kind;  
+    unsigned char                target;
+    unsigned short               index;
+} VdFwGamepadMapEntry;
+
+typedef union {
+    VdFwU32 whole;
+    struct {
+        VdFwU16 offset;
+        VdFwU16 byte_length;
+    } parts;
+} VdFwGamepadSignificantPacketPosition;
+
+typedef struct {
+    VdFwByte type;
+    VdFwByte prefix_len;
+    VdFwByte prefix[VD_FW_GAMEPAD_RUMBLE_MAX_PREFIX_BYTES];
+    union {
+        struct {
+            VdFwGamepadSignificantPacketPosition    rumble_lo;
+            VdFwGamepadSignificantPacketPosition    rumble_hi;
+        } raw;
+    } dat;
+} VdFwGamepadRumbleConfig;
+
+typedef struct {
+    VdFwGamepadMapEntry     mappings[VD_FW_GAMEPAD_MAX_MAPPINGS];
+    VdFwGamepadRumbleConfig rumble_config;
+} VdFwGamepadMap;
+
+typedef struct {
+    float rumble_lo;
+    float rumble_hi;
+} VdFwGamepadRumbleState;
+
+typedef union {
+    unsigned char dat[16];
+    struct {
+        uint16_t bus;
+        uint16_t crc;
+        uint16_t vendor_id;
+        uint16_t reserved0;
+        uint16_t product_id;
+        uint16_t reserved1;
+        uint16_t version;
+        uint8_t  driver_signature;
+        uint8_t  driver_data;
+    } parts;
+} VdFwGuid;
+
+typedef struct {
+    VdFwGuid        guid;
+    VdFwGamepadMap  map;
+} VdFwGamepadDBEntry;
+
+typedef enum {
+    VD_FW_GRAPHICS_API_OPENGL = 0,
+    VD_FW_GRAPHICS_API_CUSTOM,
+    VD_FW_GRAPHICS_API_PIXEL_BUFFER,
+} VdFwGraphicsApi;
+
+typedef struct {
+    /* The graphics API you're planning to use. Defaulted to OpenGL. */
+    VdFwGraphicsApi     api;
     struct {
         /* What version of OpenGL you'd like to use. 3.3 and upwards recommended. */
-        VdFwGlVersion version;
+        VdFwGlVersion   version;
 
         /* Whether to enable a debug console to show you errors produced by GL calls */
-        int           debug_on;
+        int             debug_on;
     } gl;
 
     struct {
+        int             xinput_disabled;
+    } win32;
+
+    struct {
         /* Set to 1 to disable window frame. */
-        int           borderless;
+        int             borderless;
     } window_options;
 } VdFwInitInfo;
 
@@ -403,6 +504,20 @@ VD_FW_API int                vd_fw_get_size(int *w, int *h);
  * @param  h The height of the window, in pixels
  */
 VD_FW_API void               vd_fw_set_size(int w, int h);
+
+/**
+ * @brief Set minimum window size, in pixels.
+ * @param  w The minimum width of the window, set to 0 to use default.
+ * @param  h The minium height of the window, set to 0 to use default.
+ */
+VD_FW_API void               vd_fw_set_size_min(int w, int h);
+
+/**
+ * @brief Set maximum window size, in pixels.
+ * @param  w The maximum width of the window, set to 0 to use default.
+ * @param  h The maxium height of the window, set to 0 to use default.
+ */
+VD_FW_API void               vd_fw_set_size_max(int w, int h);
 
 /**
  * @brief Get if the window is minimized
@@ -465,6 +580,26 @@ VD_FW_API void               vd_fw_set_ncrects(int caption[4], int count, int (*
  * @param  on 1 if you want to receive those events, 0 otherwise (default)
  */
 VD_FW_API void               vd_fw_set_receive_ncmouse(int on);
+
+/**
+ * @brief Gets the backing scale factor
+ * @return  The backing scale factor (1.0f: 1:1 scale, 2.0f, 2:1 scale, etc...)
+ */
+VD_FW_API float              vd_fw_get_scale(void);
+
+/**
+ * @brief Set the title of the window
+ * @param  title The new title of the window
+ */
+VD_FW_API void               vd_fw_set_title(const char *title);
+
+/**
+ * @brief Set the icon of the window and application
+ * @param  pixels A packed A8B8G8R8 pixel buffer
+ * @param  width  The width of the icon, in pixels, must be at least 16px
+ * @param  height The height of the icon, in pixels, must be at least 16px
+ */
+VD_FW_API void               vd_fw_set_app_icon(void *pixels, int width, int height);
 
 /**
  * @brief Get the time (in nanoseconds) since the last call to vd_fw_swap_buffers
@@ -570,29 +705,30 @@ VD_FW_API int                vd_fw_get_key_down(int key);
  */
 VD_FW_INL const char*        vd_fw_get_key_name(VdFwKey k);
 
+VD_FW_API int                vd_fw_get_gamepad_count(void);
+VD_FW_API int                vd_fw_get_gamepad_connected(int index);
+VD_FW_API int                vd_fw_get_gamepad_guid(int index);
 VD_FW_API int                vd_fw_get_gamepad_down(int index, int button);
 VD_FW_API int                vd_fw_get_gamepad_axis(int index, int axis, float *out);
 
-/**
- * @brief Gets the backing scale factor
- * @return  The backing scale factor (1.0f: 1:1 scale, 2.0f, 2:1 scale, etc...)
- */
-VD_FW_API float              vd_fw_get_scale(void);
+VD_FW_API void               vd_fw_set_gamepad_rumble(int index, float rumble_lo, float rumble_hi);
+
+VD_FW_API const char*        vd_fw_get_gamepad_button_name(int button);
+
+VD_FW_API int                vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepadDBEntry *out,
+                                                          VdFwPlatform *out_platform, const char **out_begin_name);
+VD_FW_API int                vd_fw_gamepad_map_entry_is_none(VdFwGamepadMapEntry *entry);
+VD_FW_API int                vd_fw_add_gamepad_db_entry(VdFwGamepadDBEntry *entry);
+
+/* ----PLATFORM SPECIFIC--------------------------------------------------------------------------------------------- */
 
 /**
- * @brief Set the title of the window
- * @param  title The new title of the window
+ * @brief Returns a pointer to the window handle allocated by the library
+ * @return Win32(HWND*), MacOS(NSWindow*), X11(Window*)
  */
-VD_FW_API void               vd_fw_set_title(const char *title);
+VD_FW_API void*              vd_fw_get_internal_window_handle(void);
 
-/**
- * @brief Set the icon of the window and application
- * @param  pixels A packed A8B8G8R8 pixel buffer
- * @param  width  The width of the icon, in pixels, must be at least 16px
- * @param  height The height of the icon, in pixels, must be at least 16px
- */
-VD_FW_API void               vd_fw_set_app_icon(void *pixels, int width, int height);
-
+/* ----OPENGL SPECIFIC----------------------------------------------------------------------------------------------- */
 /**
  * @brief Compile a GLSL shader and check for errors
  * @param  type   The shader type
@@ -719,13 +855,13 @@ VD_FW_INL float vd_fw_tan(float x)
 
     float x2 = x * x;
     return x * (1.0f
-                 + x2 * ( 1.0f/3.0f
-                 + x2 * ( 2.0f/15.0f
-                 + x2 * ( 17.0f/315.0f
-                 + x2 * ( 62.0f/2835.0f
-                 + x2 * ( 1382.0f/155925.0f
-                 + x2 * ( 21844.0f/6081075.0f
-                 )))))) );
+               + x2 * ( 1.0f/3.0f
+               + x2 * ( 2.0f/15.0f
+               + x2 * ( 17.0f/315.0f
+               + x2 * ( 62.0f/2835.0f
+               + x2 * ( 1382.0f/155925.0f
+               + x2 * ( 21844.0f/6081075.0f
+               )))))) );
 }
 
 VD_FW_INL float vd_fw_sqrt(float x)
@@ -810,9 +946,39 @@ VD_FW_INL void *vd_fw_memset(void *dst, unsigned char val, size_t num)
 }
 
 /* ----INTERNAL API-------------------------------------------------------------------------------------------------- */
-VD_FW_API int vd_fw__any_time_higher(int num_files, const char **files, unsigned long long *check_against);
-VD_FW_API char *vd_fw__debug_dump_file_text(const char *path);
-VD_FW_API void vd_fw__free_mem(void *memory);
+VD_FW_API int             vd_fw__any_time_higher(int num_files, const char **files, unsigned long long *check_against);
+VD_FW_API char*           vd_fw__debug_dump_file_text(const char *path);
+VD_FW_API void*           vd_fw__realloc_mem(void *prev_ptr, size_t size);
+VD_FW_API void            vd_fw__free_mem(void *memory);
+VD_FW_API void*           vd_fw__resize_buffer(void *buffer, size_t element_size, int required_capacity, int *cap);
+VD_FW_API void            vd_fw__def_gamepad(VdFwGamepadMap *map);
+VD_FW_API int             vd_fw__map_gamepad(VdFwGuid guid, VdFwGamepadMap *map);
+VD_FW_API unsigned short  vd_fw__crc16(unsigned short crc, void *data, size_t len);
+VD_FW_API VdFwGuid        vd_fw__make_gamepad_guid(uint16_t bus, uint16_t vendor, uint16_t product, uint16_t version,
+                                                   char *vendor_name, char *product_name,
+                                                   uint8_t driver_signature, uint8_t driver_data);
+VD_FW_INL int             vd_fw__strlen(const char *s);
+VD_FW_INL size_t          vd_fw__strlcpy(char *dst, const char *src, size_t maxlen);
+VD_FW_API char*           vd_fw__utf16_to_utf8(const wchar_t *ws);
+
+VD_FW_INL int vd_fw__strlen(const char *s)
+{
+    int r = 0;
+    while (*s++) r++;
+    return r;
+}
+
+VD_FW_INL size_t vd_fw__strlcpy(char *dst, const char *src, size_t maxlen)
+{
+    size_t srclen = vd_fw__strlen(src);
+    if (maxlen > 0) {
+        size_t len = srclen < (maxlen - 1) ? srclen : (maxlen - 1);
+        VD_FW_MEMCPY(dst, src, len);
+        dst[len] = '\0';
+    }
+    return srclen;
+}
+
 #if _WIN32
 #define VD_FW_WIN32_SUBSYSTEM_CONSOLE 1
 #define VD_FW_WIN32_SUBSYSTEM_WINDOWS 2
@@ -854,6 +1020,8 @@ typedef signed long int    GLintptr;
 typedef char               GLchar;
 typedef unsigned short int GLhalf;
 typedef struct __GLsync *  GLsync;
+typedef int                GLfixed;
+typedef int                GLclampx;
 #ifdef _WIN32
 typedef unsigned __int64   GLuint64;
 typedef __int64            GLint64;
@@ -2234,1980 +2402,1157 @@ typedef void (*GLDEBUGPROC)(GLenum source,GLenum type,GLuint id,GLenum severity,
 #define GL_TRANSFORM_FEEDBACK_STREAM_OVERFLOW                         0x82ED
 #endif // defined(__APPLE__)
 
+#define VD_FW_OPENGL_CORE_FUNCTIONS \
+V(1_0) \
+X(void, glAccum, (GLenum op, GLfloat value)) \
+X(void, glActiveTexture, (GLenum texture)) \
+X(void, glAlphaFunc, (GLenum func, GLfloat ref)) \
+X(void, glAlphaFuncx, (GLenum func, GLfixed ref)) \
+X(void, glBegin, (GLenum mode)) \
+X(void, glBindBuffer, (GLenum target, GLuint buffer)) \
+X(void, glBindTexture, (GLenum target, GLuint texture)) \
+X(void, glBitmap, (GLsizei width, GLsizei height, GLfloat xorig, GLfloat yorig, GLfloat xmove, GLfloat ymove, const GLubyte * bitmap)) \
+X(void, glBlendFunc, (GLenum sfactor, GLenum dfactor)) \
+X(void, glBufferData, (GLenum target, GLsizeiptr size, const void * data, GLenum usage)) \
+X(void, glBufferSubData, (GLenum target, GLintptr offset, GLsizeiptr size, const void * data)) \
+X(void, glCallList, (GLuint list)) \
+X(void, glCallLists, (GLsizei n, GLenum type, const void * lists)) \
+X(void, glClear, (GLbitfield mask)) \
+X(void, glClearAccum, (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha)) \
+X(void, glClearColor, (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha)) \
+X(void, glClearColorx, (GLfixed red, GLfixed green, GLfixed blue, GLfixed alpha)) \
+X(void, glClearDepth, (GLdouble depth)) \
+X(void, glClearDepthf, (GLfloat d)) \
+X(void, glClearDepthx, (GLfixed depth)) \
+X(void, glClearIndex, (GLfloat c)) \
+X(void, glClearStencil, (GLint s)) \
+X(void, glClientActiveTexture, (GLenum texture)) \
+X(void, glClipPlane, (GLenum plane, const GLdouble * equation)) \
+X(void, glClipPlanef, (GLenum p, const GLfloat * eqn)) \
+X(void, glClipPlanex, (GLenum plane, const GLfixed * equation)) \
+X(void, glColor3b, (GLbyte red, GLbyte green, GLbyte blue)) \
+X(void, glColor3bv, (const GLbyte * v)) \
+X(void, glColor3d, (GLdouble red, GLdouble green, GLdouble blue)) \
+X(void, glColor3dv, (const GLdouble * v)) \
+X(void, glColor3f, (GLfloat red, GLfloat green, GLfloat blue)) \
+X(void, glColor3fv, (const GLfloat * v)) \
+X(void, glColor3i, (GLint red, GLint green, GLint blue)) \
+X(void, glColor3iv, (const GLint * v)) \
+X(void, glColor3s, (GLshort red, GLshort green, GLshort blue)) \
+X(void, glColor3sv, (const GLshort * v)) \
+X(void, glColor3ub, (GLubyte red, GLubyte green, GLubyte blue)) \
+X(void, glColor3ubv, (const GLubyte * v)) \
+X(void, glColor3ui, (GLuint red, GLuint green, GLuint blue)) \
+X(void, glColor3uiv, (const GLuint * v)) \
+X(void, glColor3us, (GLushort red, GLushort green, GLushort blue)) \
+X(void, glColor3usv, (const GLushort * v)) \
+X(void, glColor4b, (GLbyte red, GLbyte green, GLbyte blue, GLbyte alpha)) \
+X(void, glColor4bv, (const GLbyte * v)) \
+X(void, glColor4d, (GLdouble red, GLdouble green, GLdouble blue, GLdouble alpha)) \
+X(void, glColor4dv, (const GLdouble * v)) \
+X(void, glColor4f, (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha)) \
+X(void, glColor4fv, (const GLfloat * v)) \
+X(void, glColor4i, (GLint red, GLint green, GLint blue, GLint alpha)) \
+X(void, glColor4iv, (const GLint * v)) \
+X(void, glColor4s, (GLshort red, GLshort green, GLshort blue, GLshort alpha)) \
+X(void, glColor4sv, (const GLshort * v)) \
+X(void, glColor4ub, (GLubyte red, GLubyte green, GLubyte blue, GLubyte alpha)) \
+X(void, glColor4ubv, (const GLubyte * v)) \
+X(void, glColor4ui, (GLuint red, GLuint green, GLuint blue, GLuint alpha)) \
+X(void, glColor4uiv, (const GLuint * v)) \
+X(void, glColor4us, (GLushort red, GLushort green, GLushort blue, GLushort alpha)) \
+X(void, glColor4usv, (const GLushort * v)) \
+X(void, glColor4x, (GLfixed red, GLfixed green, GLfixed blue, GLfixed alpha)) \
+X(void, glColorMask, (GLboolean red, GLboolean green, GLboolean blue, GLboolean alpha)) \
+X(void, glColorMaterial, (GLenum face, GLenum mode)) \
+X(void, glColorPointer, (GLint size, GLenum type, GLsizei stride, const void * pointer)) \
+X(void, glCompressedTexImage2D, (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLint border, GLsizei imageSize, const void * data)) \
+X(void, glCompressedTexSubImage2D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLsizei imageSize, const void * data)) \
+X(void, glCopyPixels, (GLint x, GLint y, GLsizei width, GLsizei height, GLenum type)) \
+X(void, glCopyTexImage2D, (GLenum target, GLint level, GLenum internalformat, GLint x, GLint y, GLsizei width, GLsizei height, GLint border)) \
+X(void, glCopyTexSubImage2D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width, GLsizei height)) \
+X(void, glCullFace, (GLenum mode)) \
+X(void, glDeleteBuffers, (GLsizei n, const GLuint * buffers)) \
+X(void, glDeleteLists, (GLuint list, GLsizei range)) \
+X(void, glDeleteTextures, (GLsizei n, const GLuint * textures)) \
+X(void, glDepthFunc, (GLenum func)) \
+X(void, glDepthMask, (GLboolean flag)) \
+X(void, glDepthRange, (GLdouble n, GLdouble f)) \
+X(void, glDepthRangef, (GLfloat n, GLfloat f)) \
+X(void, glDepthRangex, (GLfixed n, GLfixed f)) \
+X(void, glDisable, (GLenum cap)) \
+X(void, glDisableClientState, (GLenum array)) \
+X(void, glDrawArrays, (GLenum mode, GLint first, GLsizei count)) \
+X(void, glDrawBuffer, (GLenum buf)) \
+X(void, glDrawElements, (GLenum mode, GLsizei count, GLenum type, const void * indices)) \
+X(void, glDrawPixels, (GLsizei width, GLsizei height, GLenum format, GLenum type, const void * pixels)) \
+X(void, glEdgeFlag, (GLboolean flag)) \
+X(void, glEdgeFlagv, (const GLboolean * flag)) \
+X(void, glEnable, (GLenum cap)) \
+X(void, glEnableClientState, (GLenum array)) \
+X(void, glEnd, ()) \
+X(void, glEndList, ()) \
+X(void, glEvalCoord1d, (GLdouble u)) \
+X(void, glEvalCoord1dv, (const GLdouble * u)) \
+X(void, glEvalCoord1f, (GLfloat u)) \
+X(void, glEvalCoord1fv, (const GLfloat * u)) \
+X(void, glEvalCoord2d, (GLdouble u, GLdouble v)) \
+X(void, glEvalCoord2dv, (const GLdouble * u)) \
+X(void, glEvalCoord2f, (GLfloat u, GLfloat v)) \
+X(void, glEvalCoord2fv, (const GLfloat * u)) \
+X(void, glEvalMesh1, (GLenum mode, GLint i1, GLint i2)) \
+X(void, glEvalMesh2, (GLenum mode, GLint i1, GLint i2, GLint j1, GLint j2)) \
+X(void, glEvalPoint1, (GLint i)) \
+X(void, glEvalPoint2, (GLint i, GLint j)) \
+X(void, glFeedbackBuffer, (GLsizei size, GLenum type, GLfloat * buffer)) \
+X(void, glFinish, ()) \
+X(void, glFlush, ()) \
+X(void, glFogf, (GLenum pname, GLfloat param)) \
+X(void, glFogfv, (GLenum pname, const GLfloat * params)) \
+X(void, glFogi, (GLenum pname, GLint param)) \
+X(void, glFogiv, (GLenum pname, const GLint * params)) \
+X(void, glFogx, (GLenum pname, GLfixed param)) \
+X(void, glFogxv, (GLenum pname, const GLfixed * param)) \
+X(void, glFrontFace, (GLenum mode)) \
+X(void, glFrustum, (GLdouble left, GLdouble right, GLdouble bottom, GLdouble top, GLdouble zNear, GLdouble zFar)) \
+X(void, glFrustumf, (GLfloat l, GLfloat r, GLfloat b, GLfloat t, GLfloat n, GLfloat f)) \
+X(void, glFrustumx, (GLfixed l, GLfixed r, GLfixed b, GLfixed t, GLfixed n, GLfixed f)) \
+X(void, glGenBuffers, (GLsizei n, GLuint * buffers)) \
+X(GLuint, glGenLists, (GLsizei range)) \
+X(void, glGenTextures, (GLsizei n, GLuint * textures)) \
+X(void, glGetBooleanv, (GLenum pname, GLboolean * data)) \
+X(void, glGetBufferParameteriv, (GLenum target, GLenum pname, GLint * params)) \
+X(void, glGetClipPlane, (GLenum plane, GLdouble * equation)) \
+X(void, glGetClipPlanef, (GLenum plane, GLfloat * equation)) \
+X(void, glGetClipPlanex, (GLenum plane, GLfixed * equation)) \
+X(void, glGetDoublev, (GLenum pname, GLdouble * data)) \
+X(GLenum, glGetError, ()) \
+X(void, glGetFixedv, (GLenum pname, GLfixed * params)) \
+X(void, glGetFloatv, (GLenum pname, GLfloat * data)) \
+X(void, glGetIntegerv, (GLenum pname, GLint * data)) \
+X(void, glGetLightfv, (GLenum light, GLenum pname, GLfloat * params)) \
+X(void, glGetLightiv, (GLenum light, GLenum pname, GLint * params)) \
+X(void, glGetLightxv, (GLenum light, GLenum pname, GLfixed * params)) \
+X(void, glGetMapdv, (GLenum target, GLenum query, GLdouble * v)) \
+X(void, glGetMapfv, (GLenum target, GLenum query, GLfloat * v)) \
+X(void, glGetMapiv, (GLenum target, GLenum query, GLint * v)) \
+X(void, glGetMaterialfv, (GLenum face, GLenum pname, GLfloat * params)) \
+X(void, glGetMaterialiv, (GLenum face, GLenum pname, GLint * params)) \
+X(void, glGetMaterialxv, (GLenum face, GLenum pname, GLfixed * params)) \
+X(void, glGetPixelMapfv, (GLenum map, GLfloat * values)) \
+X(void, glGetPixelMapuiv, (GLenum map, GLuint * values)) \
+X(void, glGetPixelMapusv, (GLenum map, GLushort * values)) \
+X(void, glGetPointerv, (GLenum pname, void ** params)) \
+X(void, glGetPolygonStipple, (GLubyte * mask)) \
+X(const GLubyte *, glGetString, (GLenum name)) \
+X(void, glGetTexEnvfv, (GLenum target, GLenum pname, GLfloat * params)) \
+X(void, glGetTexEnviv, (GLenum target, GLenum pname, GLint * params)) \
+X(void, glGetTexEnvxv, (GLenum target, GLenum pname, GLfixed * params)) \
+X(void, glGetTexGendv, (GLenum coord, GLenum pname, GLdouble * params)) \
+X(void, glGetTexGenfv, (GLenum coord, GLenum pname, GLfloat * params)) \
+X(void, glGetTexGeniv, (GLenum coord, GLenum pname, GLint * params)) \
+X(void, glGetTexImage, (GLenum target, GLint level, GLenum format, GLenum type, void * pixels)) \
+X(void, glGetTexLevelParameterfv, (GLenum target, GLint level, GLenum pname, GLfloat * params)) \
+X(void, glGetTexLevelParameteriv, (GLenum target, GLint level, GLenum pname, GLint * params)) \
+X(void, glGetTexParameterfv, (GLenum target, GLenum pname, GLfloat * params)) \
+X(void, glGetTexParameteriv, (GLenum target, GLenum pname, GLint * params)) \
+X(void, glGetTexParameterxv, (GLenum target, GLenum pname, GLfixed * params)) \
+X(void, glHint, (GLenum target, GLenum mode)) \
+X(void, glIndexMask, (GLuint mask)) \
+X(void, glIndexd, (GLdouble c)) \
+X(void, glIndexdv, (const GLdouble * c)) \
+X(void, glIndexf, (GLfloat c)) \
+X(void, glIndexfv, (const GLfloat * c)) \
+X(void, glIndexi, (GLint c)) \
+X(void, glIndexiv, (const GLint * c)) \
+X(void, glIndexs, (GLshort c)) \
+X(void, glIndexsv, (const GLshort * c)) \
+X(void, glInitNames, ()) \
+X(GLboolean, glIsBuffer, (GLuint buffer)) \
+X(GLboolean, glIsEnabled, (GLenum cap)) \
+X(GLboolean, glIsList, (GLuint list)) \
+X(GLboolean, glIsTexture, (GLuint texture)) \
+X(void, glLightModelf, (GLenum pname, GLfloat param)) \
+X(void, glLightModelfv, (GLenum pname, const GLfloat * params)) \
+X(void, glLightModeli, (GLenum pname, GLint param)) \
+X(void, glLightModeliv, (GLenum pname, const GLint * params)) \
+X(void, glLightModelx, (GLenum pname, GLfixed param)) \
+X(void, glLightModelxv, (GLenum pname, const GLfixed * param)) \
+X(void, glLightf, (GLenum light, GLenum pname, GLfloat param)) \
+X(void, glLightfv, (GLenum light, GLenum pname, const GLfloat * params)) \
+X(void, glLighti, (GLenum light, GLenum pname, GLint param)) \
+X(void, glLightiv, (GLenum light, GLenum pname, const GLint * params)) \
+X(void, glLightx, (GLenum light, GLenum pname, GLfixed param)) \
+X(void, glLightxv, (GLenum light, GLenum pname, const GLfixed * params)) \
+X(void, glLineStipple, (GLint factor, GLushort pattern)) \
+X(void, glLineWidth, (GLfloat width)) \
+X(void, glLineWidthx, (GLfixed width)) \
+X(void, glListBase, (GLuint base)) \
+X(void, glLoadIdentity, ()) \
+X(void, glLoadMatrixd, (const GLdouble * m)) \
+X(void, glLoadMatrixf, (const GLfloat * m)) \
+X(void, glLoadMatrixx, (const GLfixed * m)) \
+X(void, glLoadName, (GLuint name)) \
+X(void, glLogicOp, (GLenum opcode)) \
+X(void, glMap1d, (GLenum target, GLdouble u1, GLdouble u2, GLint stride, GLint order, const GLdouble * points)) \
+X(void, glMap1f, (GLenum target, GLfloat u1, GLfloat u2, GLint stride, GLint order, const GLfloat * points)) \
+X(void, glMap2d, (GLenum target, GLdouble u1, GLdouble u2, GLint ustride, GLint uorder, GLdouble v1, GLdouble v2, GLint vstride, GLint vorder, const GLdouble * points)) \
+X(void, glMap2f, (GLenum target, GLfloat u1, GLfloat u2, GLint ustride, GLint uorder, GLfloat v1, GLfloat v2, GLint vstride, GLint vorder, const GLfloat * points)) \
+X(void, glMapGrid1d, (GLint un, GLdouble u1, GLdouble u2)) \
+X(void, glMapGrid1f, (GLint un, GLfloat u1, GLfloat u2)) \
+X(void, glMapGrid2d, (GLint un, GLdouble u1, GLdouble u2, GLint vn, GLdouble v1, GLdouble v2)) \
+X(void, glMapGrid2f, (GLint un, GLfloat u1, GLfloat u2, GLint vn, GLfloat v1, GLfloat v2)) \
+X(void, glMaterialf, (GLenum face, GLenum pname, GLfloat param)) \
+X(void, glMaterialfv, (GLenum face, GLenum pname, const GLfloat * params)) \
+X(void, glMateriali, (GLenum face, GLenum pname, GLint param)) \
+X(void, glMaterialiv, (GLenum face, GLenum pname, const GLint * params)) \
+X(void, glMaterialx, (GLenum face, GLenum pname, GLfixed param)) \
+X(void, glMaterialxv, (GLenum face, GLenum pname, const GLfixed * param)) \
+X(void, glMatrixMode, (GLenum mode)) \
+X(void, glMultMatrixd, (const GLdouble * m)) \
+X(void, glMultMatrixf, (const GLfloat * m)) \
+X(void, glMultMatrixx, (const GLfixed * m)) \
+X(void, glMultiTexCoord4f, (GLenum target, GLfloat s, GLfloat t, GLfloat r, GLfloat q)) \
+X(void, glMultiTexCoord4x, (GLenum texture, GLfixed s, GLfixed t, GLfixed r, GLfixed q)) \
+X(void, glNewList, (GLuint list, GLenum mode)) \
+X(void, glNormal3b, (GLbyte nx, GLbyte ny, GLbyte nz)) \
+X(void, glNormal3bv, (const GLbyte * v)) \
+X(void, glNormal3d, (GLdouble nx, GLdouble ny, GLdouble nz)) \
+X(void, glNormal3dv, (const GLdouble * v)) \
+X(void, glNormal3f, (GLfloat nx, GLfloat ny, GLfloat nz)) \
+X(void, glNormal3fv, (const GLfloat * v)) \
+X(void, glNormal3i, (GLint nx, GLint ny, GLint nz)) \
+X(void, glNormal3iv, (const GLint * v)) \
+X(void, glNormal3s, (GLshort nx, GLshort ny, GLshort nz)) \
+X(void, glNormal3sv, (const GLshort * v)) \
+X(void, glNormal3x, (GLfixed nx, GLfixed ny, GLfixed nz)) \
+X(void, glNormalPointer, (GLenum type, GLsizei stride, const void * pointer)) \
+X(void, glOrtho, (GLdouble left, GLdouble right, GLdouble bottom, GLdouble top, GLdouble zNear, GLdouble zFar)) \
+X(void, glOrthof, (GLfloat l, GLfloat r, GLfloat b, GLfloat t, GLfloat n, GLfloat f)) \
+X(void, glOrthox, (GLfixed l, GLfixed r, GLfixed b, GLfixed t, GLfixed n, GLfixed f)) \
+X(void, glPassThrough, (GLfloat token)) \
+X(void, glPixelMapfv, (GLenum map, GLsizei mapsize, const GLfloat * values)) \
+X(void, glPixelMapuiv, (GLenum map, GLsizei mapsize, const GLuint * values)) \
+X(void, glPixelMapusv, (GLenum map, GLsizei mapsize, const GLushort * values)) \
+X(void, glPixelStoref, (GLenum pname, GLfloat param)) \
+X(void, glPixelStorei, (GLenum pname, GLint param)) \
+X(void, glPixelTransferf, (GLenum pname, GLfloat param)) \
+X(void, glPixelTransferi, (GLenum pname, GLint param)) \
+X(void, glPixelZoom, (GLfloat xfactor, GLfloat yfactor)) \
+X(void, glPointParameterf, (GLenum pname, GLfloat param)) \
+X(void, glPointParameterfv, (GLenum pname, const GLfloat * params)) \
+X(void, glPointParameterx, (GLenum pname, GLfixed param)) \
+X(void, glPointParameterxv, (GLenum pname, const GLfixed * params)) \
+X(void, glPointSize, (GLfloat size)) \
+X(void, glPointSizex, (GLfixed size)) \
+X(void, glPolygonMode, (GLenum face, GLenum mode)) \
+X(void, glPolygonOffset, (GLfloat factor, GLfloat units)) \
+X(void, glPolygonOffsetx, (GLfixed factor, GLfixed units)) \
+X(void, glPolygonStipple, (const GLubyte * mask)) \
+X(void, glPopAttrib, ()) \
+X(void, glPopMatrix, ()) \
+X(void, glPopName, ()) \
+X(void, glPushAttrib, (GLbitfield mask)) \
+X(void, glPushMatrix, ()) \
+X(void, glPushName, (GLuint name)) \
+X(void, glRasterPos2d, (GLdouble x, GLdouble y)) \
+X(void, glRasterPos2dv, (const GLdouble * v)) \
+X(void, glRasterPos2f, (GLfloat x, GLfloat y)) \
+X(void, glRasterPos2fv, (const GLfloat * v)) \
+X(void, glRasterPos2i, (GLint x, GLint y)) \
+X(void, glRasterPos2iv, (const GLint * v)) \
+X(void, glRasterPos2s, (GLshort x, GLshort y)) \
+X(void, glRasterPos2sv, (const GLshort * v)) \
+X(void, glRasterPos3d, (GLdouble x, GLdouble y, GLdouble z)) \
+X(void, glRasterPos3dv, (const GLdouble * v)) \
+X(void, glRasterPos3f, (GLfloat x, GLfloat y, GLfloat z)) \
+X(void, glRasterPos3fv, (const GLfloat * v)) \
+X(void, glRasterPos3i, (GLint x, GLint y, GLint z)) \
+X(void, glRasterPos3iv, (const GLint * v)) \
+X(void, glRasterPos3s, (GLshort x, GLshort y, GLshort z)) \
+X(void, glRasterPos3sv, (const GLshort * v)) \
+X(void, glRasterPos4d, (GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
+X(void, glRasterPos4dv, (const GLdouble * v)) \
+X(void, glRasterPos4f, (GLfloat x, GLfloat y, GLfloat z, GLfloat w)) \
+X(void, glRasterPos4fv, (const GLfloat * v)) \
+X(void, glRasterPos4i, (GLint x, GLint y, GLint z, GLint w)) \
+X(void, glRasterPos4iv, (const GLint * v)) \
+X(void, glRasterPos4s, (GLshort x, GLshort y, GLshort z, GLshort w)) \
+X(void, glRasterPos4sv, (const GLshort * v)) \
+X(void, glReadBuffer, (GLenum src)) \
+X(void, glReadPixels, (GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, void * pixels)) \
+X(void, glRectd, (GLdouble x1, GLdouble y1, GLdouble x2, GLdouble y2)) \
+X(void, glRectdv, (const GLdouble * v1, const GLdouble * v2)) \
+X(void, glRectf, (GLfloat x1, GLfloat y1, GLfloat x2, GLfloat y2)) \
+X(void, glRectfv, (const GLfloat * v1, const GLfloat * v2)) \
+X(void, glRecti, (GLint x1, GLint y1, GLint x2, GLint y2)) \
+X(void, glRectiv, (const GLint * v1, const GLint * v2)) \
+X(void, glRects, (GLshort x1, GLshort y1, GLshort x2, GLshort y2)) \
+X(void, glRectsv, (const GLshort * v1, const GLshort * v2)) \
+X(GLint, glRenderMode, (GLenum mode)) \
+X(void, glRotated, (GLdouble angle, GLdouble x, GLdouble y, GLdouble z)) \
+X(void, glRotatef, (GLfloat angle, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, glRotatex, (GLfixed angle, GLfixed x, GLfixed y, GLfixed z)) \
+X(void, glSampleCoverage, (GLfloat value, GLboolean invert)) \
+X(void, glSampleCoveragex, (GLclampx value, GLboolean invert)) \
+X(void, glScaled, (GLdouble x, GLdouble y, GLdouble z)) \
+X(void, glScalef, (GLfloat x, GLfloat y, GLfloat z)) \
+X(void, glScalex, (GLfixed x, GLfixed y, GLfixed z)) \
+X(void, glScissor, (GLint x, GLint y, GLsizei width, GLsizei height)) \
+X(void, glSelectBuffer, (GLsizei size, GLuint * buffer)) \
+X(void, glShadeModel, (GLenum mode)) \
+X(void, glStencilFunc, (GLenum func, GLint ref, GLuint mask)) \
+X(void, glStencilMask, (GLuint mask)) \
+X(void, glStencilOp, (GLenum fail, GLenum zfail, GLenum zpass)) \
+X(void, glTexCoord1d, (GLdouble s)) \
+X(void, glTexCoord1dv, (const GLdouble * v)) \
+X(void, glTexCoord1f, (GLfloat s)) \
+X(void, glTexCoord1fv, (const GLfloat * v)) \
+X(void, glTexCoord1i, (GLint s)) \
+X(void, glTexCoord1iv, (const GLint * v)) \
+X(void, glTexCoord1s, (GLshort s)) \
+X(void, glTexCoord1sv, (const GLshort * v)) \
+X(void, glTexCoord2d, (GLdouble s, GLdouble t)) \
+X(void, glTexCoord2dv, (const GLdouble * v)) \
+X(void, glTexCoord2f, (GLfloat s, GLfloat t)) \
+X(void, glTexCoord2fv, (const GLfloat * v)) \
+X(void, glTexCoord2i, (GLint s, GLint t)) \
+X(void, glTexCoord2iv, (const GLint * v)) \
+X(void, glTexCoord2s, (GLshort s, GLshort t)) \
+X(void, glTexCoord2sv, (const GLshort * v)) \
+X(void, glTexCoord3d, (GLdouble s, GLdouble t, GLdouble r)) \
+X(void, glTexCoord3dv, (const GLdouble * v)) \
+X(void, glTexCoord3f, (GLfloat s, GLfloat t, GLfloat r)) \
+X(void, glTexCoord3fv, (const GLfloat * v)) \
+X(void, glTexCoord3i, (GLint s, GLint t, GLint r)) \
+X(void, glTexCoord3iv, (const GLint * v)) \
+X(void, glTexCoord3s, (GLshort s, GLshort t, GLshort r)) \
+X(void, glTexCoord3sv, (const GLshort * v)) \
+X(void, glTexCoord4d, (GLdouble s, GLdouble t, GLdouble r, GLdouble q)) \
+X(void, glTexCoord4dv, (const GLdouble * v)) \
+X(void, glTexCoord4f, (GLfloat s, GLfloat t, GLfloat r, GLfloat q)) \
+X(void, glTexCoord4fv, (const GLfloat * v)) \
+X(void, glTexCoord4i, (GLint s, GLint t, GLint r, GLint q)) \
+X(void, glTexCoord4iv, (const GLint * v)) \
+X(void, glTexCoord4s, (GLshort s, GLshort t, GLshort r, GLshort q)) \
+X(void, glTexCoord4sv, (const GLshort * v)) \
+X(void, glTexCoordPointer, (GLint size, GLenum type, GLsizei stride, const void * pointer)) \
+X(void, glTexEnvf, (GLenum target, GLenum pname, GLfloat param)) \
+X(void, glTexEnvfv, (GLenum target, GLenum pname, const GLfloat * params)) \
+X(void, glTexEnvi, (GLenum target, GLenum pname, GLint param)) \
+X(void, glTexEnviv, (GLenum target, GLenum pname, const GLint * params)) \
+X(void, glTexEnvx, (GLenum target, GLenum pname, GLfixed param)) \
+X(void, glTexEnvxv, (GLenum target, GLenum pname, const GLfixed * params)) \
+X(void, glTexGend, (GLenum coord, GLenum pname, GLdouble param)) \
+X(void, glTexGendv, (GLenum coord, GLenum pname, const GLdouble * params)) \
+X(void, glTexGenf, (GLenum coord, GLenum pname, GLfloat param)) \
+X(void, glTexGenfv, (GLenum coord, GLenum pname, const GLfloat * params)) \
+X(void, glTexGeni, (GLenum coord, GLenum pname, GLint param)) \
+X(void, glTexGeniv, (GLenum coord, GLenum pname, const GLint * params)) \
+X(void, glTexImage1D, (GLenum target, GLint level, GLint internalformat, GLsizei width, GLint border, GLenum format, GLenum type, const void * pixels)) \
+X(void, glTexImage2D, (GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void * pixels)) \
+X(void, glTexParameterf, (GLenum target, GLenum pname, GLfloat param)) \
+X(void, glTexParameterfv, (GLenum target, GLenum pname, const GLfloat * params)) \
+X(void, glTexParameteri, (GLenum target, GLenum pname, GLint param)) \
+X(void, glTexParameteriv, (GLenum target, GLenum pname, const GLint * params)) \
+X(void, glTexParameterx, (GLenum target, GLenum pname, GLfixed param)) \
+X(void, glTexParameterxv, (GLenum target, GLenum pname, const GLfixed * params)) \
+X(void, glTexSubImage2D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void * pixels)) \
+X(void, glTranslated, (GLdouble x, GLdouble y, GLdouble z)) \
+X(void, glTranslatef, (GLfloat x, GLfloat y, GLfloat z)) \
+X(void, glTranslatex, (GLfixed x, GLfixed y, GLfixed z)) \
+X(void, glVertex2d, (GLdouble x, GLdouble y)) \
+X(void, glVertex2dv, (const GLdouble * v)) \
+X(void, glVertex2f, (GLfloat x, GLfloat y)) \
+X(void, glVertex2fv, (const GLfloat * v)) \
+X(void, glVertex2i, (GLint x, GLint y)) \
+X(void, glVertex2iv, (const GLint * v)) \
+X(void, glVertex2s, (GLshort x, GLshort y)) \
+X(void, glVertex2sv, (const GLshort * v)) \
+X(void, glVertex3d, (GLdouble x, GLdouble y, GLdouble z)) \
+X(void, glVertex3dv, (const GLdouble * v)) \
+X(void, glVertex3f, (GLfloat x, GLfloat y, GLfloat z)) \
+X(void, glVertex3fv, (const GLfloat * v)) \
+X(void, glVertex3i, (GLint x, GLint y, GLint z)) \
+X(void, glVertex3iv, (const GLint * v)) \
+X(void, glVertex3s, (GLshort x, GLshort y, GLshort z)) \
+X(void, glVertex3sv, (const GLshort * v)) \
+X(void, glVertex4d, (GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
+X(void, glVertex4dv, (const GLdouble * v)) \
+X(void, glVertex4f, (GLfloat x, GLfloat y, GLfloat z, GLfloat w)) \
+X(void, glVertex4fv, (const GLfloat * v)) \
+X(void, glVertex4i, (GLint x, GLint y, GLint z, GLint w)) \
+X(void, glVertex4iv, (const GLint * v)) \
+X(void, glVertex4s, (GLshort x, GLshort y, GLshort z, GLshort w)) \
+X(void, glVertex4sv, (const GLshort * v)) \
+X(void, glVertexPointer, (GLint size, GLenum type, GLsizei stride, const void * pointer)) \
+X(void, glViewport, (GLint x, GLint y, GLsizei width, GLsizei height)) \
+VE() \
+V(1_1) \
+X(GLboolean, glAreTexturesResident, (GLsizei n, const GLuint * textures, GLboolean * residences)) \
+X(void, glArrayElement, (GLint i)) \
+X(void, glCopyTexImage1D, (GLenum target, GLint level, GLenum internalformat, GLint x, GLint y, GLsizei width, GLint border)) \
+X(void, glCopyTexSubImage1D, (GLenum target, GLint level, GLint xoffset, GLint x, GLint y, GLsizei width)) \
+X(void, glEdgeFlagPointer, (GLsizei stride, const void * pointer)) \
+X(void, glIndexPointer, (GLenum type, GLsizei stride, const void * pointer)) \
+X(void, glIndexub, (GLubyte c)) \
+X(void, glIndexubv, (const GLubyte * c)) \
+X(void, glInterleavedArrays, (GLenum format, GLsizei stride, const void * pointer)) \
+X(void, glPopClientAttrib, ()) \
+X(void, glPrioritizeTextures, (GLsizei n, const GLuint * textures, const GLfloat * priorities)) \
+X(void, glPushClientAttrib, (GLbitfield mask)) \
+X(void, glTexSubImage1D, (GLenum target, GLint level, GLint xoffset, GLsizei width, GLenum format, GLenum type, const void * pixels)) \
+VE() \
+V(1_2) \
+X(void, glCopyTexSubImage3D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLint x, GLint y, GLsizei width, GLsizei height)) \
+X(void, glDrawRangeElements, (GLenum mode, GLuint start, GLuint end, GLsizei count, GLenum type, const void * indices)) \
+X(void, glTexImage3D, (GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLenum format, GLenum type, const void * pixels)) \
+X(void, glTexSubImage3D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, const void * pixels)) \
+VE() \
+V(1_3) \
+X(void, glCompressedTexImage1D, (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLint border, GLsizei imageSize, const void * data)) \
+X(void, glCompressedTexImage3D, (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLsizei imageSize, const void * data)) \
+X(void, glCompressedTexSubImage1D, (GLenum target, GLint level, GLint xoffset, GLsizei width, GLenum format, GLsizei imageSize, const void * data)) \
+X(void, glCompressedTexSubImage3D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLsizei imageSize, const void * data)) \
+X(void, glGetCompressedTexImage, (GLenum target, GLint level, void * img)) \
+X(void, glLoadTransposeMatrixd, (const GLdouble * m)) \
+X(void, glLoadTransposeMatrixf, (const GLfloat * m)) \
+X(void, glMultTransposeMatrixd, (const GLdouble * m)) \
+X(void, glMultTransposeMatrixf, (const GLfloat * m)) \
+X(void, glMultiTexCoord1d, (GLenum target, GLdouble s)) \
+X(void, glMultiTexCoord1dv, (GLenum target, const GLdouble * v)) \
+X(void, glMultiTexCoord1f, (GLenum target, GLfloat s)) \
+X(void, glMultiTexCoord1fv, (GLenum target, const GLfloat * v)) \
+X(void, glMultiTexCoord1i, (GLenum target, GLint s)) \
+X(void, glMultiTexCoord1iv, (GLenum target, const GLint * v)) \
+X(void, glMultiTexCoord1s, (GLenum target, GLshort s)) \
+X(void, glMultiTexCoord1sv, (GLenum target, const GLshort * v)) \
+X(void, glMultiTexCoord2d, (GLenum target, GLdouble s, GLdouble t)) \
+X(void, glMultiTexCoord2dv, (GLenum target, const GLdouble * v)) \
+X(void, glMultiTexCoord2f, (GLenum target, GLfloat s, GLfloat t)) \
+X(void, glMultiTexCoord2fv, (GLenum target, const GLfloat * v)) \
+X(void, glMultiTexCoord2i, (GLenum target, GLint s, GLint t)) \
+X(void, glMultiTexCoord2iv, (GLenum target, const GLint * v)) \
+X(void, glMultiTexCoord2s, (GLenum target, GLshort s, GLshort t)) \
+X(void, glMultiTexCoord2sv, (GLenum target, const GLshort * v)) \
+X(void, glMultiTexCoord3d, (GLenum target, GLdouble s, GLdouble t, GLdouble r)) \
+X(void, glMultiTexCoord3dv, (GLenum target, const GLdouble * v)) \
+X(void, glMultiTexCoord3f, (GLenum target, GLfloat s, GLfloat t, GLfloat r)) \
+X(void, glMultiTexCoord3fv, (GLenum target, const GLfloat * v)) \
+X(void, glMultiTexCoord3i, (GLenum target, GLint s, GLint t, GLint r)) \
+X(void, glMultiTexCoord3iv, (GLenum target, const GLint * v)) \
+X(void, glMultiTexCoord3s, (GLenum target, GLshort s, GLshort t, GLshort r)) \
+X(void, glMultiTexCoord3sv, (GLenum target, const GLshort * v)) \
+X(void, glMultiTexCoord4d, (GLenum target, GLdouble s, GLdouble t, GLdouble r, GLdouble q)) \
+X(void, glMultiTexCoord4dv, (GLenum target, const GLdouble * v)) \
+X(void, glMultiTexCoord4fv, (GLenum target, const GLfloat * v)) \
+X(void, glMultiTexCoord4i, (GLenum target, GLint s, GLint t, GLint r, GLint q)) \
+X(void, glMultiTexCoord4iv, (GLenum target, const GLint * v)) \
+X(void, glMultiTexCoord4s, (GLenum target, GLshort s, GLshort t, GLshort r, GLshort q)) \
+X(void, glMultiTexCoord4sv, (GLenum target, const GLshort * v)) \
+VE() \
+V(1_4) \
+X(void, glBlendColor, (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha)) \
+X(void, glBlendEquation, (GLenum mode)) \
+X(void, glBlendFuncSeparate, (GLenum sfactorRGB, GLenum dfactorRGB, GLenum sfactorAlpha, GLenum dfactorAlpha)) \
+X(void, glFogCoordPointer, (GLenum type, GLsizei stride, const void * pointer)) \
+X(void, glFogCoordd, (GLdouble coord)) \
+X(void, glFogCoorddv, (const GLdouble * coord)) \
+X(void, glFogCoordf, (GLfloat coord)) \
+X(void, glFogCoordfv, (const GLfloat * coord)) \
+X(void, glMultiDrawArrays, (GLenum mode, const GLint * first, const GLsizei * count, GLsizei drawcount)) \
+X(void, glMultiDrawElements, (GLenum mode, const GLsizei * count, GLenum type, const void *const * indices, GLsizei drawcount)) \
+X(void, glPointParameteri, (GLenum pname, GLint param)) \
+X(void, glPointParameteriv, (GLenum pname, const GLint * params)) \
+X(void, glSecondaryColor3b, (GLbyte red, GLbyte green, GLbyte blue)) \
+X(void, glSecondaryColor3bv, (const GLbyte * v)) \
+X(void, glSecondaryColor3d, (GLdouble red, GLdouble green, GLdouble blue)) \
+X(void, glSecondaryColor3dv, (const GLdouble * v)) \
+X(void, glSecondaryColor3f, (GLfloat red, GLfloat green, GLfloat blue)) \
+X(void, glSecondaryColor3fv, (const GLfloat * v)) \
+X(void, glSecondaryColor3i, (GLint red, GLint green, GLint blue)) \
+X(void, glSecondaryColor3iv, (const GLint * v)) \
+X(void, glSecondaryColor3s, (GLshort red, GLshort green, GLshort blue)) \
+X(void, glSecondaryColor3sv, (const GLshort * v)) \
+X(void, glSecondaryColor3ub, (GLubyte red, GLubyte green, GLubyte blue)) \
+X(void, glSecondaryColor3ubv, (const GLubyte * v)) \
+X(void, glSecondaryColor3ui, (GLuint red, GLuint green, GLuint blue)) \
+X(void, glSecondaryColor3uiv, (const GLuint * v)) \
+X(void, glSecondaryColor3us, (GLushort red, GLushort green, GLushort blue)) \
+X(void, glSecondaryColor3usv, (const GLushort * v)) \
+X(void, glSecondaryColorPointer, (GLint size, GLenum type, GLsizei stride, const void * pointer)) \
+X(void, glWindowPos2d, (GLdouble x, GLdouble y)) \
+X(void, glWindowPos2dv, (const GLdouble * v)) \
+X(void, glWindowPos2f, (GLfloat x, GLfloat y)) \
+X(void, glWindowPos2fv, (const GLfloat * v)) \
+X(void, glWindowPos2i, (GLint x, GLint y)) \
+X(void, glWindowPos2iv, (const GLint * v)) \
+X(void, glWindowPos2s, (GLshort x, GLshort y)) \
+X(void, glWindowPos2sv, (const GLshort * v)) \
+X(void, glWindowPos3d, (GLdouble x, GLdouble y, GLdouble z)) \
+X(void, glWindowPos3dv, (const GLdouble * v)) \
+X(void, glWindowPos3f, (GLfloat x, GLfloat y, GLfloat z)) \
+X(void, glWindowPos3fv, (const GLfloat * v)) \
+X(void, glWindowPos3i, (GLint x, GLint y, GLint z)) \
+X(void, glWindowPos3iv, (const GLint * v)) \
+X(void, glWindowPos3s, (GLshort x, GLshort y, GLshort z)) \
+X(void, glWindowPos3sv, (const GLshort * v)) \
+VE() \
+V(1_5) \
+X(void, glBeginQuery, (GLenum target, GLuint id)) \
+X(void, glDeleteQueries, (GLsizei n, const GLuint * ids)) \
+X(void, glEndQuery, (GLenum target)) \
+X(void, glGenQueries, (GLsizei n, GLuint * ids)) \
+X(void, glGetBufferPointerv, (GLenum target, GLenum pname, void ** params)) \
+X(void, glGetBufferSubData, (GLenum target, GLintptr offset, GLsizeiptr size, void * data)) \
+X(void, glGetQueryObjectiv, (GLuint id, GLenum pname, GLint * params)) \
+X(void, glGetQueryObjectuiv, (GLuint id, GLenum pname, GLuint * params)) \
+X(void, glGetQueryiv, (GLenum target, GLenum pname, GLint * params)) \
+X(GLboolean, glIsQuery, (GLuint id)) \
+X(void *, glMapBuffer, (GLenum target, GLenum access)) \
+X(GLboolean, glUnmapBuffer, (GLenum target)) \
+VE() \
+V(2_0) \
+X(void, glAttachShader, (GLuint program, GLuint shader)) \
+X(void, glBindAttribLocation, (GLuint program, GLuint index, const GLchar * name)) \
+X(void, glBindFramebuffer, (GLenum target, GLuint framebuffer)) \
+X(void, glBindRenderbuffer, (GLenum target, GLuint renderbuffer)) \
+X(void, glBlendEquationSeparate, (GLenum modeRGB, GLenum modeAlpha)) \
+X(GLenum, glCheckFramebufferStatus, (GLenum target)) \
+X(void, glCompileShader, (GLuint shader)) \
+X(GLuint, glCreateProgram, ()) \
+X(GLuint, glCreateShader, (GLenum type)) \
+X(void, glDeleteFramebuffers, (GLsizei n, const GLuint * framebuffers)) \
+X(void, glDeleteProgram, (GLuint program)) \
+X(void, glDeleteRenderbuffers, (GLsizei n, const GLuint * renderbuffers)) \
+X(void, glDeleteShader, (GLuint shader)) \
+X(void, glDetachShader, (GLuint program, GLuint shader)) \
+X(void, glDisableVertexAttribArray, (GLuint index)) \
+X(void, glDrawBuffers, (GLsizei n, const GLenum * bufs)) \
+X(void, glEnableVertexAttribArray, (GLuint index)) \
+X(void, glFramebufferRenderbuffer, (GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer)) \
+X(void, glFramebufferTexture2D, (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level)) \
+X(void, glGenFramebuffers, (GLsizei n, GLuint * framebuffers)) \
+X(void, glGenRenderbuffers, (GLsizei n, GLuint * renderbuffers)) \
+X(void, glGenerateMipmap, (GLenum target)) \
+X(void, glGetActiveAttrib, (GLuint program, GLuint index, GLsizei bufSize, GLsizei * length, GLint * size, GLenum * type, GLchar * name)) \
+X(void, glGetActiveUniform, (GLuint program, GLuint index, GLsizei bufSize, GLsizei * length, GLint * size, GLenum * type, GLchar * name)) \
+X(void, glGetAttachedShaders, (GLuint program, GLsizei maxCount, GLsizei * count, GLuint * shaders)) \
+X(GLint, glGetAttribLocation, (GLuint program, const GLchar * name)) \
+X(void, glGetFramebufferAttachmentParameteriv, (GLenum target, GLenum attachment, GLenum pname, GLint * params)) \
+X(GLenum, glGetGraphicsResetStatus, ()) \
+X(void, glGetProgramInfoLog, (GLuint program, GLsizei bufSize, GLsizei * length, GLchar * infoLog)) \
+X(void, glGetProgramiv, (GLuint program, GLenum pname, GLint * params)) \
+X(void, glGetRenderbufferParameteriv, (GLenum target, GLenum pname, GLint * params)) \
+X(void, glGetShaderInfoLog, (GLuint shader, GLsizei bufSize, GLsizei * length, GLchar * infoLog)) \
+X(void, glGetShaderPrecisionFormat, (GLenum shadertype, GLenum precisiontype, GLint * range, GLint * precision)) \
+X(void, glGetShaderSource, (GLuint shader, GLsizei bufSize, GLsizei * length, GLchar * source)) \
+X(void, glGetShaderiv, (GLuint shader, GLenum pname, GLint * params)) \
+X(GLint, glGetUniformLocation, (GLuint program, const GLchar * name)) \
+X(void, glGetUniformfv, (GLuint program, GLint location, GLfloat * params)) \
+X(void, glGetUniformiv, (GLuint program, GLint location, GLint * params)) \
+X(void, glGetVertexAttribPointerv, (GLuint index, GLenum pname, void ** pointer)) \
+X(void, glGetVertexAttribdv, (GLuint index, GLenum pname, GLdouble * params)) \
+X(void, glGetVertexAttribfv, (GLuint index, GLenum pname, GLfloat * params)) \
+X(void, glGetVertexAttribiv, (GLuint index, GLenum pname, GLint * params)) \
+X(void, glGetnUniformfv, (GLuint program, GLint location, GLsizei bufSize, GLfloat * params)) \
+X(void, glGetnUniformiv, (GLuint program, GLint location, GLsizei bufSize, GLint * params)) \
+X(GLboolean, glIsFramebuffer, (GLuint framebuffer)) \
+X(GLboolean, glIsProgram, (GLuint program)) \
+X(GLboolean, glIsRenderbuffer, (GLuint renderbuffer)) \
+X(GLboolean, glIsShader, (GLuint shader)) \
+X(void, glLinkProgram, (GLuint program)) \
+X(void, glProgramBinary, (GLuint program, GLenum binaryFormat, const void * binary, GLsizei length)) \
+X(void, glReadnPixels, (GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, GLsizei bufSize, void * data)) \
+X(void, glReleaseShaderCompiler, ()) \
+X(void, glRenderbufferStorage, (GLenum target, GLenum internalformat, GLsizei width, GLsizei height)) \
+X(void, glShaderBinary, (GLsizei count, const GLuint * shaders, GLenum binaryFormat, const void * binary, GLsizei length)) \
+X(void, glShaderSource, (GLuint shader, GLsizei count, const GLchar *const * string, const GLint * length)) \
+X(void, glStencilFuncSeparate, (GLenum face, GLenum func, GLint ref, GLuint mask)) \
+X(void, glStencilMaskSeparate, (GLenum face, GLuint mask)) \
+X(void, glStencilOpSeparate, (GLenum face, GLenum sfail, GLenum dpfail, GLenum dppass)) \
+X(void, glTexStorage2D, (GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height)) \
+X(void, glUniform1f, (GLint location, GLfloat v0)) \
+X(void, glUniform1fv, (GLint location, GLsizei count, const GLfloat * value)) \
+X(void, glUniform1i, (GLint location, GLint v0)) \
+X(void, glUniform1iv, (GLint location, GLsizei count, const GLint * value)) \
+X(void, glUniform2f, (GLint location, GLfloat v0, GLfloat v1)) \
+X(void, glUniform2fv, (GLint location, GLsizei count, const GLfloat * value)) \
+X(void, glUniform2i, (GLint location, GLint v0, GLint v1)) \
+X(void, glUniform2iv, (GLint location, GLsizei count, const GLint * value)) \
+X(void, glUniform3f, (GLint location, GLfloat v0, GLfloat v1, GLfloat v2)) \
+X(void, glUniform3fv, (GLint location, GLsizei count, const GLfloat * value)) \
+X(void, glUniform3i, (GLint location, GLint v0, GLint v1, GLint v2)) \
+X(void, glUniform3iv, (GLint location, GLsizei count, const GLint * value)) \
+X(void, glUniform4f, (GLint location, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3)) \
+X(void, glUniform4fv, (GLint location, GLsizei count, const GLfloat * value)) \
+X(void, glUniform4i, (GLint location, GLint v0, GLint v1, GLint v2, GLint v3)) \
+X(void, glUniform4iv, (GLint location, GLsizei count, const GLint * value)) \
+X(void, glUniformMatrix2fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, glUniformMatrix3fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, glUniformMatrix4fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, glUseProgram, (GLuint program)) \
+X(void, glValidateProgram, (GLuint program)) \
+X(void, glVertexAttrib1d, (GLuint index, GLdouble x)) \
+X(void, glVertexAttrib1dv, (GLuint index, const GLdouble * v)) \
+X(void, glVertexAttrib1f, (GLuint index, GLfloat x)) \
+X(void, glVertexAttrib1fv, (GLuint index, const GLfloat * v)) \
+X(void, glVertexAttrib1s, (GLuint index, GLshort x)) \
+X(void, glVertexAttrib1sv, (GLuint index, const GLshort * v)) \
+X(void, glVertexAttrib2d, (GLuint index, GLdouble x, GLdouble y)) \
+X(void, glVertexAttrib2dv, (GLuint index, const GLdouble * v)) \
+X(void, glVertexAttrib2f, (GLuint index, GLfloat x, GLfloat y)) \
+X(void, glVertexAttrib2fv, (GLuint index, const GLfloat * v)) \
+X(void, glVertexAttrib2s, (GLuint index, GLshort x, GLshort y)) \
+X(void, glVertexAttrib2sv, (GLuint index, const GLshort * v)) \
+X(void, glVertexAttrib3d, (GLuint index, GLdouble x, GLdouble y, GLdouble z)) \
+X(void, glVertexAttrib3dv, (GLuint index, const GLdouble * v)) \
+X(void, glVertexAttrib3f, (GLuint index, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, glVertexAttrib3fv, (GLuint index, const GLfloat * v)) \
+X(void, glVertexAttrib3s, (GLuint index, GLshort x, GLshort y, GLshort z)) \
+X(void, glVertexAttrib3sv, (GLuint index, const GLshort * v)) \
+X(void, glVertexAttrib4Nbv, (GLuint index, const GLbyte * v)) \
+X(void, glVertexAttrib4Niv, (GLuint index, const GLint * v)) \
+X(void, glVertexAttrib4Nsv, (GLuint index, const GLshort * v)) \
+X(void, glVertexAttrib4Nub, (GLuint index, GLubyte x, GLubyte y, GLubyte z, GLubyte w)) \
+X(void, glVertexAttrib4Nubv, (GLuint index, const GLubyte * v)) \
+X(void, glVertexAttrib4Nuiv, (GLuint index, const GLuint * v)) \
+X(void, glVertexAttrib4Nusv, (GLuint index, const GLushort * v)) \
+X(void, glVertexAttrib4bv, (GLuint index, const GLbyte * v)) \
+X(void, glVertexAttrib4d, (GLuint index, GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
+X(void, glVertexAttrib4dv, (GLuint index, const GLdouble * v)) \
+X(void, glVertexAttrib4f, (GLuint index, GLfloat x, GLfloat y, GLfloat z, GLfloat w)) \
+X(void, glVertexAttrib4fv, (GLuint index, const GLfloat * v)) \
+X(void, glVertexAttrib4iv, (GLuint index, const GLint * v)) \
+X(void, glVertexAttrib4s, (GLuint index, GLshort x, GLshort y, GLshort z, GLshort w)) \
+X(void, glVertexAttrib4sv, (GLuint index, const GLshort * v)) \
+X(void, glVertexAttrib4ubv, (GLuint index, const GLubyte * v)) \
+X(void, glVertexAttrib4uiv, (GLuint index, const GLuint * v)) \
+X(void, glVertexAttrib4usv, (GLuint index, const GLushort * v)) \
+X(void, glVertexAttribPointer, (GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void * pointer)) \
+VE() \
+V(2_1) \
+X(void, glUniformMatrix2x3fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, glUniformMatrix2x4fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, glUniformMatrix3x2fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, glUniformMatrix3x4fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, glUniformMatrix4x2fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, glUniformMatrix4x3fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+VE() \
+V(3_0) \
+X(void, glBeginConditionalRender, (GLuint id, GLenum mode)) \
+X(void, glBeginTransformFeedback, (GLenum primitiveMode)) \
+X(void, glBindBufferBase, (GLenum target, GLuint index, GLuint buffer)) \
+X(void, glBindBufferRange, (GLenum target, GLuint index, GLuint buffer, GLintptr offset, GLsizeiptr size)) \
+X(void, glBindFragDataLocation, (GLuint program, GLuint color, const GLchar * name)) \
+X(void, glBindSampler, (GLuint unit, GLuint sampler)) \
+X(void, glBindTransformFeedback, (GLenum target, GLuint id)) \
+X(void, glBindVertexArray, (GLuint array)) \
+X(void, glBlitFramebuffer, (GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter)) \
+X(void, glClampColor, (GLenum target, GLenum clamp)) \
+X(void, glClearBufferfi, (GLenum buffer, GLint drawbuffer, GLfloat depth, GLint stencil)) \
+X(void, glClearBufferfv, (GLenum buffer, GLint drawbuffer, const GLfloat * value)) \
+X(void, glClearBufferiv, (GLenum buffer, GLint drawbuffer, const GLint * value)) \
+X(void, glClearBufferuiv, (GLenum buffer, GLint drawbuffer, const GLuint * value)) \
+X(GLenum, glClientWaitSync, (GLsync sync, GLbitfield flags, GLuint64 timeout)) \
+X(void, glColorMaski, (GLuint index, GLboolean r, GLboolean g, GLboolean b, GLboolean a)) \
+X(void, glCopyBufferSubData, (GLenum readTarget, GLenum writeTarget, GLintptr readOffset, GLintptr writeOffset, GLsizeiptr size)) \
+X(void, glDeleteSamplers, (GLsizei count, const GLuint * samplers)) \
+X(void, glDeleteSync, (GLsync sync)) \
+X(void, glDeleteTransformFeedbacks, (GLsizei n, const GLuint * ids)) \
+X(void, glDeleteVertexArrays, (GLsizei n, const GLuint * arrays)) \
+X(void, glDisablei, (GLenum target, GLuint index)) \
+X(void, glDrawArraysInstanced, (GLenum mode, GLint first, GLsizei count, GLsizei instancecount)) \
+X(void, glDrawElementsInstanced, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLsizei instancecount)) \
+X(void, glEnablei, (GLenum target, GLuint index)) \
+X(void, glEndConditionalRender, ()) \
+X(void, glEndTransformFeedback, ()) \
+X(GLsync, glFenceSync, (GLenum condition, GLbitfield flags)) \
+X(void, glFlushMappedBufferRange, (GLenum target, GLintptr offset, GLsizeiptr length)) \
+X(void, glFramebufferTexture1D, (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level)) \
+X(void, glFramebufferTexture3D, (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level, GLint zoffset)) \
+X(void, glFramebufferTextureLayer, (GLenum target, GLenum attachment, GLuint texture, GLint level, GLint layer)) \
+X(void, glGenSamplers, (GLsizei count, GLuint * samplers)) \
+X(void, glGenTransformFeedbacks, (GLsizei n, GLuint * ids)) \
+X(void, glGenVertexArrays, (GLsizei n, GLuint * arrays)) \
+X(void, glGetActiveUniformBlockName, (GLuint program, GLuint uniformBlockIndex, GLsizei bufSize, GLsizei * length, GLchar * uniformBlockName)) \
+X(void, glGetActiveUniformBlockiv, (GLuint program, GLuint uniformBlockIndex, GLenum pname, GLint * params)) \
+X(void, glGetActiveUniformsiv, (GLuint program, GLsizei uniformCount, const GLuint * uniformIndices, GLenum pname, GLint * params)) \
+X(void, glGetBooleani_v, (GLenum target, GLuint index, GLboolean * data)) \
+X(void, glGetBufferParameteri64v, (GLenum target, GLenum pname, GLint64 * params)) \
+X(GLint, glGetFragDataLocation, (GLuint program, const GLchar * name)) \
+X(void, glGetInteger64i_v, (GLenum target, GLuint index, GLint64 * data)) \
+X(void, glGetInteger64v, (GLenum pname, GLint64 * data)) \
+X(void, glGetIntegeri_v, (GLenum target, GLuint index, GLint * data)) \
+X(void, glGetInternalformativ, (GLenum target, GLenum internalformat, GLenum pname, GLsizei count, GLint * params)) \
+X(void, glGetProgramBinary, (GLuint program, GLsizei bufSize, GLsizei * length, GLenum * binaryFormat, void * binary)) \
+X(void, glGetSamplerParameterfv, (GLuint sampler, GLenum pname, GLfloat * params)) \
+X(void, glGetSamplerParameteriv, (GLuint sampler, GLenum pname, GLint * params)) \
+X(const GLubyte *, glGetStringi, (GLenum name, GLuint index)) \
+X(void, glGetSynciv, (GLsync sync, GLenum pname, GLsizei count, GLsizei * length, GLint * values)) \
+X(void, glGetTexParameterIiv, (GLenum target, GLenum pname, GLint * params)) \
+X(void, glGetTexParameterIuiv, (GLenum target, GLenum pname, GLuint * params)) \
+X(void, glGetTransformFeedbackVarying, (GLuint program, GLuint index, GLsizei bufSize, GLsizei * length, GLsizei * size, GLenum * type, GLchar * name)) \
+X(GLuint, glGetUniformBlockIndex, (GLuint program, const GLchar * uniformBlockName)) \
+X(void, glGetUniformIndices, (GLuint program, GLsizei uniformCount, const GLchar *const * uniformNames, GLuint * uniformIndices)) \
+X(void, glGetUniformuiv, (GLuint program, GLint location, GLuint * params)) \
+X(void, glGetVertexAttribIiv, (GLuint index, GLenum pname, GLint * params)) \
+X(void, glGetVertexAttribIuiv, (GLuint index, GLenum pname, GLuint * params)) \
+X(void, glInvalidateFramebuffer, (GLenum target, GLsizei numAttachments, const GLenum * attachments)) \
+X(void, glInvalidateSubFramebuffer, (GLenum target, GLsizei numAttachments, const GLenum * attachments, GLint x, GLint y, GLsizei width, GLsizei height)) \
+X(GLboolean, glIsEnabledi, (GLenum target, GLuint index)) \
+X(GLboolean, glIsSampler, (GLuint sampler)) \
+X(GLboolean, glIsSync, (GLsync sync)) \
+X(GLboolean, glIsTransformFeedback, (GLuint id)) \
+X(GLboolean, glIsVertexArray, (GLuint array)) \
+X(void *, glMapBufferRange, (GLenum target, GLintptr offset, GLsizeiptr length, GLbitfield access)) \
+X(void, glPauseTransformFeedback, ()) \
+X(void, glProgramParameteri, (GLuint program, GLenum pname, GLint value)) \
+X(void, glRenderbufferStorageMultisample, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height)) \
+X(void, glResumeTransformFeedback, ()) \
+X(void, glSamplerParameterf, (GLuint sampler, GLenum pname, GLfloat param)) \
+X(void, glSamplerParameterfv, (GLuint sampler, GLenum pname, const GLfloat * param)) \
+X(void, glSamplerParameteri, (GLuint sampler, GLenum pname, GLint param)) \
+X(void, glSamplerParameteriv, (GLuint sampler, GLenum pname, const GLint * param)) \
+X(void, glTexParameterIiv, (GLenum target, GLenum pname, const GLint * params)) \
+X(void, glTexParameterIuiv, (GLenum target, GLenum pname, const GLuint * params)) \
+X(void, glTexStorage3D, (GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth)) \
+X(void, glTransformFeedbackVaryings, (GLuint program, GLsizei count, const GLchar *const * varyings, GLenum bufferMode)) \
+X(void, glUniform1ui, (GLint location, GLuint v0)) \
+X(void, glUniform1uiv, (GLint location, GLsizei count, const GLuint * value)) \
+X(void, glUniform2ui, (GLint location, GLuint v0, GLuint v1)) \
+X(void, glUniform2uiv, (GLint location, GLsizei count, const GLuint * value)) \
+X(void, glUniform3ui, (GLint location, GLuint v0, GLuint v1, GLuint v2)) \
+X(void, glUniform3uiv, (GLint location, GLsizei count, const GLuint * value)) \
+X(void, glUniform4ui, (GLint location, GLuint v0, GLuint v1, GLuint v2, GLuint v3)) \
+X(void, glUniform4uiv, (GLint location, GLsizei count, const GLuint * value)) \
+X(void, glUniformBlockBinding, (GLuint program, GLuint uniformBlockIndex, GLuint uniformBlockBinding)) \
+X(void, glVertexAttribDivisor, (GLuint index, GLuint divisor)) \
+X(void, glVertexAttribI1i, (GLuint index, GLint x)) \
+X(void, glVertexAttribI1iv, (GLuint index, const GLint * v)) \
+X(void, glVertexAttribI1ui, (GLuint index, GLuint x)) \
+X(void, glVertexAttribI1uiv, (GLuint index, const GLuint * v)) \
+X(void, glVertexAttribI2i, (GLuint index, GLint x, GLint y)) \
+X(void, glVertexAttribI2iv, (GLuint index, const GLint * v)) \
+X(void, glVertexAttribI2ui, (GLuint index, GLuint x, GLuint y)) \
+X(void, glVertexAttribI2uiv, (GLuint index, const GLuint * v)) \
+X(void, glVertexAttribI3i, (GLuint index, GLint x, GLint y, GLint z)) \
+X(void, glVertexAttribI3iv, (GLuint index, const GLint * v)) \
+X(void, glVertexAttribI3ui, (GLuint index, GLuint x, GLuint y, GLuint z)) \
+X(void, glVertexAttribI3uiv, (GLuint index, const GLuint * v)) \
+X(void, glVertexAttribI4bv, (GLuint index, const GLbyte * v)) \
+X(void, glVertexAttribI4i, (GLuint index, GLint x, GLint y, GLint z, GLint w)) \
+X(void, glVertexAttribI4iv, (GLuint index, const GLint * v)) \
+X(void, glVertexAttribI4sv, (GLuint index, const GLshort * v)) \
+X(void, glVertexAttribI4ubv, (GLuint index, const GLubyte * v)) \
+X(void, glVertexAttribI4ui, (GLuint index, GLuint x, GLuint y, GLuint z, GLuint w)) \
+X(void, glVertexAttribI4uiv, (GLuint index, const GLuint * v)) \
+X(void, glVertexAttribI4usv, (GLuint index, const GLushort * v)) \
+X(void, glVertexAttribIPointer, (GLuint index, GLint size, GLenum type, GLsizei stride, const void * pointer)) \
+X(void, glWaitSync, (GLsync sync, GLbitfield flags, GLuint64 timeout)) \
+VE() \
+V(3_1) \
+X(void, glActiveShaderProgram, (GLuint pipeline, GLuint program)) \
+X(void, glBindImageTexture, (GLuint unit, GLuint texture, GLint level, GLboolean layered, GLint layer, GLenum access, GLenum format)) \
+X(void, glBindProgramPipeline, (GLuint pipeline)) \
+X(void, glBindVertexBuffer, (GLuint bindingindex, GLuint buffer, GLintptr offset, GLsizei stride)) \
+X(GLuint, glCreateShaderProgramv, (GLenum type, GLsizei count, const GLchar *const * strings)) \
+X(void, glDeleteProgramPipelines, (GLsizei n, const GLuint * pipelines)) \
+X(void, glDispatchCompute, (GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z)) \
+X(void, glDispatchComputeIndirect, (GLintptr indirect)) \
+X(void, glDrawArraysIndirect, (GLenum mode, const void * indirect)) \
+X(void, glDrawElementsIndirect, (GLenum mode, GLenum type, const void * indirect)) \
+X(void, glFramebufferParameteri, (GLenum target, GLenum pname, GLint param)) \
+X(void, glGenProgramPipelines, (GLsizei n, GLuint * pipelines)) \
+X(void, glGetActiveUniformName, (GLuint program, GLuint uniformIndex, GLsizei bufSize, GLsizei * length, GLchar * uniformName)) \
+X(void, glGetFramebufferParameteriv, (GLenum target, GLenum pname, GLint * params)) \
+X(void, glGetMultisamplefv, (GLenum pname, GLuint index, GLfloat * val)) \
+X(void, glGetProgramInterfaceiv, (GLuint program, GLenum programInterface, GLenum pname, GLint * params)) \
+X(void, glGetProgramPipelineInfoLog, (GLuint pipeline, GLsizei bufSize, GLsizei * length, GLchar * infoLog)) \
+X(void, glGetProgramPipelineiv, (GLuint pipeline, GLenum pname, GLint * params)) \
+X(GLuint, glGetProgramResourceIndex, (GLuint program, GLenum programInterface, const GLchar * name)) \
+X(GLint, glGetProgramResourceLocation, (GLuint program, GLenum programInterface, const GLchar * name)) \
+X(void, glGetProgramResourceName, (GLuint program, GLenum programInterface, GLuint index, GLsizei bufSize, GLsizei * length, GLchar * name)) \
+X(void, glGetProgramResourceiv, (GLuint program, GLenum programInterface, GLuint index, GLsizei propCount, const GLenum * props, GLsizei count, GLsizei * length, GLint * params)) \
+X(GLboolean, glIsProgramPipeline, (GLuint pipeline)) \
+X(void, glMemoryBarrier, (GLbitfield barriers)) \
+X(void, glMemoryBarrierByRegion, (GLbitfield barriers)) \
+X(void, glPrimitiveRestartIndex, (GLuint index)) \
+X(void, glProgramUniform1f, (GLuint program, GLint location, GLfloat v0)) \
+X(void, glProgramUniform1fv, (GLuint program, GLint location, GLsizei count, const GLfloat * value)) \
+X(void, glProgramUniform1i, (GLuint program, GLint location, GLint v0)) \
+X(void, glProgramUniform1iv, (GLuint program, GLint location, GLsizei count, const GLint * value)) \
+X(void, glProgramUniform1ui, (GLuint program, GLint location, GLuint v0)) \
+X(void, glProgramUniform1uiv, (GLuint program, GLint location, GLsizei count, const GLuint * value)) \
+X(void, glProgramUniform2f, (GLuint program, GLint location, GLfloat v0, GLfloat v1)) \
+X(void, glProgramUniform2fv, (GLuint program, GLint location, GLsizei count, const GLfloat * value)) \
+X(void, glProgramUniform2i, (GLuint program, GLint location, GLint v0, GLint v1)) \
+X(void, glProgramUniform2iv, (GLuint program, GLint location, GLsizei count, const GLint * value)) \
+X(void, glProgramUniform2ui, (GLuint program, GLint location, GLuint v0, GLuint v1)) \
+X(void, glProgramUniform2uiv, (GLuint program, GLint location, GLsizei count, const GLuint * value)) \
+X(void, glProgramUniform3f, (GLuint program, GLint location, GLfloat v0, GLfloat v1, GLfloat v2)) \
+X(void, glProgramUniform3fv, (GLuint program, GLint location, GLsizei count, const GLfloat * value)) \
+X(void, glProgramUniform3i, (GLuint program, GLint location, GLint v0, GLint v1, GLint v2)) \
+X(void, glProgramUniform3iv, (GLuint program, GLint location, GLsizei count, const GLint * value)) \
+X(void, glProgramUniform3ui, (GLuint program, GLint location, GLuint v0, GLuint v1, GLuint v2)) \
+X(void, glProgramUniform3uiv, (GLuint program, GLint location, GLsizei count, const GLuint * value)) \
+X(void, glProgramUniform4f, (GLuint program, GLint location, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3)) \
+X(void, glProgramUniform4fv, (GLuint program, GLint location, GLsizei count, const GLfloat * value)) \
+X(void, glProgramUniform4i, (GLuint program, GLint location, GLint v0, GLint v1, GLint v2, GLint v3)) \
+X(void, glProgramUniform4iv, (GLuint program, GLint location, GLsizei count, const GLint * value)) \
+X(void, glProgramUniform4ui, (GLuint program, GLint location, GLuint v0, GLuint v1, GLuint v2, GLuint v3)) \
+X(void, glProgramUniform4uiv, (GLuint program, GLint location, GLsizei count, const GLuint * value)) \
+X(void, glProgramUniformMatrix2fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, glProgramUniformMatrix2x3fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, glProgramUniformMatrix2x4fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, glProgramUniformMatrix3fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, glProgramUniformMatrix3x2fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, glProgramUniformMatrix3x4fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, glProgramUniformMatrix4fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, glProgramUniformMatrix4x2fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, glProgramUniformMatrix4x3fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, glSampleMaski, (GLuint maskNumber, GLbitfield mask)) \
+X(void, glTexBuffer, (GLenum target, GLenum internalformat, GLuint buffer)) \
+X(void, glTexStorage2DMultisample, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLboolean fixedsamplelocations)) \
+X(void, glUseProgramStages, (GLuint pipeline, GLbitfield stages, GLuint program)) \
+X(void, glValidateProgramPipeline, (GLuint pipeline)) \
+X(void, glVertexAttribBinding, (GLuint attribindex, GLuint bindingindex)) \
+X(void, glVertexAttribFormat, (GLuint attribindex, GLint size, GLenum type, GLboolean normalized, GLuint relativeoffset)) \
+X(void, glVertexAttribIFormat, (GLuint attribindex, GLint size, GLenum type, GLuint relativeoffset)) \
+X(void, glVertexBindingDivisor, (GLuint bindingindex, GLuint divisor)) \
+VE() \
+V(3_2) \
+X(void, glBlendBarrier, ()) \
+X(void, glBlendEquationSeparatei, (GLuint buf, GLenum modeRGB, GLenum modeAlpha)) \
+X(void, glBlendEquationi, (GLuint buf, GLenum mode)) \
+X(void, glBlendFuncSeparatei, (GLuint buf, GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, GLenum dstAlpha)) \
+X(void, glBlendFunci, (GLuint buf, GLenum src, GLenum dst)) \
+X(void, glCopyImageSubData, (GLuint srcName, GLenum srcTarget, GLint srcLevel, GLint srcX, GLint srcY, GLint srcZ, GLuint dstName, GLenum dstTarget, GLint dstLevel, GLint dstX, GLint dstY, GLint dstZ, GLsizei srcWidth, GLsizei srcHeight, GLsizei srcDepth)) \
+X(void, glDebugMessageCallback, (GLDEBUGPROC callback, const void * userParam)) \
+X(void, glDebugMessageControl, (GLenum source, GLenum type, GLenum severity, GLsizei count, const GLuint * ids, GLboolean enabled)) \
+X(void, glDebugMessageInsert, (GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar * buf)) \
+X(void, glDrawElementsBaseVertex, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLint basevertex)) \
+X(void, glDrawElementsInstancedBaseVertex, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLsizei instancecount, GLint basevertex)) \
+X(void, glDrawRangeElementsBaseVertex, (GLenum mode, GLuint start, GLuint end, GLsizei count, GLenum type, const void * indices, GLint basevertex)) \
+X(void, glFramebufferTexture, (GLenum target, GLenum attachment, GLuint texture, GLint level)) \
+X(GLuint, glGetDebugMessageLog, (GLuint count, GLsizei bufSize, GLenum * sources, GLenum * types, GLuint * ids, GLenum * severities, GLsizei * lengths, GLchar * messageLog)) \
+X(void, glGetObjectLabel, (GLenum identifier, GLuint name, GLsizei bufSize, GLsizei * length, GLchar * label)) \
+X(void, glGetObjectPtrLabel, (const void * ptr, GLsizei bufSize, GLsizei * length, GLchar * label)) \
+X(void, glGetSamplerParameterIiv, (GLuint sampler, GLenum pname, GLint * params)) \
+X(void, glGetSamplerParameterIuiv, (GLuint sampler, GLenum pname, GLuint * params)) \
+X(void, glGetnUniformuiv, (GLuint program, GLint location, GLsizei bufSize, GLuint * params)) \
+X(void, glMinSampleShading, (GLfloat value)) \
+X(void, glMultiDrawElementsBaseVertex, (GLenum mode, const GLsizei * count, GLenum type, const void *const * indices, GLsizei drawcount, const GLint * basevertex)) \
+X(void, glObjectLabel, (GLenum identifier, GLuint name, GLsizei length, const GLchar * label)) \
+X(void, glObjectPtrLabel, (const void * ptr, GLsizei length, const GLchar * label)) \
+X(void, glPatchParameteri, (GLenum pname, GLint value)) \
+X(void, glPopDebugGroup, ()) \
+X(void, glPrimitiveBoundingBox, (GLfloat minX, GLfloat minY, GLfloat minZ, GLfloat minW, GLfloat maxX, GLfloat maxY, GLfloat maxZ, GLfloat maxW)) \
+X(void, glProvokingVertex, (GLenum mode)) \
+X(void, glPushDebugGroup, (GLenum source, GLuint id, GLsizei length, const GLchar * message)) \
+X(void, glSamplerParameterIiv, (GLuint sampler, GLenum pname, const GLint * param)) \
+X(void, glSamplerParameterIuiv, (GLuint sampler, GLenum pname, const GLuint * param)) \
+X(void, glTexBufferRange, (GLenum target, GLenum internalformat, GLuint buffer, GLintptr offset, GLsizeiptr size)) \
+X(void, glTexImage2DMultisample, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLboolean fixedsamplelocations)) \
+X(void, glTexImage3DMultisample, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLboolean fixedsamplelocations)) \
+X(void, glTexStorage3DMultisample, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLboolean fixedsamplelocations)) \
+VE() \
+V(3_3) \
+X(void, glBindFragDataLocationIndexed, (GLuint program, GLuint colorNumber, GLuint index, const GLchar * name)) \
+X(void, glColorP3ui, (GLenum type, GLuint color)) \
+X(void, glColorP3uiv, (GLenum type, const GLuint * color)) \
+X(void, glColorP4ui, (GLenum type, GLuint color)) \
+X(void, glColorP4uiv, (GLenum type, const GLuint * color)) \
+X(GLint, glGetFragDataIndex, (GLuint program, const GLchar * name)) \
+X(void, glGetQueryObjecti64v, (GLuint id, GLenum pname, GLint64 * params)) \
+X(void, glGetQueryObjectui64v, (GLuint id, GLenum pname, GLuint64 * params)) \
+X(void, glMultiTexCoordP1ui, (GLenum texture, GLenum type, GLuint coords)) \
+X(void, glMultiTexCoordP1uiv, (GLenum texture, GLenum type, const GLuint * coords)) \
+X(void, glMultiTexCoordP2ui, (GLenum texture, GLenum type, GLuint coords)) \
+X(void, glMultiTexCoordP2uiv, (GLenum texture, GLenum type, const GLuint * coords)) \
+X(void, glMultiTexCoordP3ui, (GLenum texture, GLenum type, GLuint coords)) \
+X(void, glMultiTexCoordP3uiv, (GLenum texture, GLenum type, const GLuint * coords)) \
+X(void, glMultiTexCoordP4ui, (GLenum texture, GLenum type, GLuint coords)) \
+X(void, glMultiTexCoordP4uiv, (GLenum texture, GLenum type, const GLuint * coords)) \
+X(void, glNormalP3ui, (GLenum type, GLuint coords)) \
+X(void, glNormalP3uiv, (GLenum type, const GLuint * coords)) \
+X(void, glQueryCounter, (GLuint id, GLenum target)) \
+X(void, glSecondaryColorP3ui, (GLenum type, GLuint color)) \
+X(void, glSecondaryColorP3uiv, (GLenum type, const GLuint * color)) \
+X(void, glTexCoordP1ui, (GLenum type, GLuint coords)) \
+X(void, glTexCoordP1uiv, (GLenum type, const GLuint * coords)) \
+X(void, glTexCoordP2ui, (GLenum type, GLuint coords)) \
+X(void, glTexCoordP2uiv, (GLenum type, const GLuint * coords)) \
+X(void, glTexCoordP3ui, (GLenum type, GLuint coords)) \
+X(void, glTexCoordP3uiv, (GLenum type, const GLuint * coords)) \
+X(void, glTexCoordP4ui, (GLenum type, GLuint coords)) \
+X(void, glTexCoordP4uiv, (GLenum type, const GLuint * coords)) \
+X(void, glVertexAttribP1ui, (GLuint index, GLenum type, GLboolean normalized, GLuint value)) \
+X(void, glVertexAttribP1uiv, (GLuint index, GLenum type, GLboolean normalized, const GLuint * value)) \
+X(void, glVertexAttribP2ui, (GLuint index, GLenum type, GLboolean normalized, GLuint value)) \
+X(void, glVertexAttribP2uiv, (GLuint index, GLenum type, GLboolean normalized, const GLuint * value)) \
+X(void, glVertexAttribP3ui, (GLuint index, GLenum type, GLboolean normalized, GLuint value)) \
+X(void, glVertexAttribP3uiv, (GLuint index, GLenum type, GLboolean normalized, const GLuint * value)) \
+X(void, glVertexAttribP4ui, (GLuint index, GLenum type, GLboolean normalized, GLuint value)) \
+X(void, glVertexAttribP4uiv, (GLuint index, GLenum type, GLboolean normalized, const GLuint * value)) \
+X(void, glVertexP2ui, (GLenum type, GLuint value)) \
+X(void, glVertexP2uiv, (GLenum type, const GLuint * value)) \
+X(void, glVertexP3ui, (GLenum type, GLuint value)) \
+X(void, glVertexP3uiv, (GLenum type, const GLuint * value)) \
+X(void, glVertexP4ui, (GLenum type, GLuint value)) \
+X(void, glVertexP4uiv, (GLenum type, const GLuint * value)) \
+VE() \
+V(4_0) \
+X(void, glBeginQueryIndexed, (GLenum target, GLuint index, GLuint id)) \
+X(void, glDrawTransformFeedback, (GLenum mode, GLuint id)) \
+X(void, glDrawTransformFeedbackStream, (GLenum mode, GLuint id, GLuint stream)) \
+X(void, glEndQueryIndexed, (GLenum target, GLuint index)) \
+X(void, glGetActiveSubroutineName, (GLuint program, GLenum shadertype, GLuint index, GLsizei bufSize, GLsizei * length, GLchar * name)) \
+X(void, glGetActiveSubroutineUniformName, (GLuint program, GLenum shadertype, GLuint index, GLsizei bufSize, GLsizei * length, GLchar * name)) \
+X(void, glGetActiveSubroutineUniformiv, (GLuint program, GLenum shadertype, GLuint index, GLenum pname, GLint * values)) \
+X(void, glGetProgramStageiv, (GLuint program, GLenum shadertype, GLenum pname, GLint * values)) \
+X(void, glGetQueryIndexediv, (GLenum target, GLuint index, GLenum pname, GLint * params)) \
+X(GLuint, glGetSubroutineIndex, (GLuint program, GLenum shadertype, const GLchar * name)) \
+X(GLint, glGetSubroutineUniformLocation, (GLuint program, GLenum shadertype, const GLchar * name)) \
+X(void, glGetUniformSubroutineuiv, (GLenum shadertype, GLint location, GLuint * params)) \
+X(void, glGetUniformdv, (GLuint program, GLint location, GLdouble * params)) \
+X(void, glPatchParameterfv, (GLenum pname, const GLfloat * values)) \
+X(void, glUniform1d, (GLint location, GLdouble x)) \
+X(void, glUniform1dv, (GLint location, GLsizei count, const GLdouble * value)) \
+X(void, glUniform2d, (GLint location, GLdouble x, GLdouble y)) \
+X(void, glUniform2dv, (GLint location, GLsizei count, const GLdouble * value)) \
+X(void, glUniform3d, (GLint location, GLdouble x, GLdouble y, GLdouble z)) \
+X(void, glUniform3dv, (GLint location, GLsizei count, const GLdouble * value)) \
+X(void, glUniform4d, (GLint location, GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
+X(void, glUniform4dv, (GLint location, GLsizei count, const GLdouble * value)) \
+X(void, glUniformMatrix2dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, glUniformMatrix2x3dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, glUniformMatrix2x4dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, glUniformMatrix3dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, glUniformMatrix3x2dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, glUniformMatrix3x4dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, glUniformMatrix4dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, glUniformMatrix4x2dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, glUniformMatrix4x3dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, glUniformSubroutinesuiv, (GLenum shadertype, GLsizei count, const GLuint * indices)) \
+VE() \
+V(4_1) \
+X(void, glDepthRangeArrayv, (GLuint first, GLsizei count, const GLdouble * v)) \
+X(void, glDepthRangeIndexed, (GLuint index, GLdouble n, GLdouble f)) \
+X(void, glGetDoublei_v, (GLenum target, GLuint index, GLdouble * data)) \
+X(void, glGetFloati_v, (GLenum target, GLuint index, GLfloat * data)) \
+X(void, glGetVertexAttribLdv, (GLuint index, GLenum pname, GLdouble * params)) \
+X(void, glProgramUniform1d, (GLuint program, GLint location, GLdouble v0)) \
+X(void, glProgramUniform1dv, (GLuint program, GLint location, GLsizei count, const GLdouble * value)) \
+X(void, glProgramUniform2d, (GLuint program, GLint location, GLdouble v0, GLdouble v1)) \
+X(void, glProgramUniform2dv, (GLuint program, GLint location, GLsizei count, const GLdouble * value)) \
+X(void, glProgramUniform3d, (GLuint program, GLint location, GLdouble v0, GLdouble v1, GLdouble v2)) \
+X(void, glProgramUniform3dv, (GLuint program, GLint location, GLsizei count, const GLdouble * value)) \
+X(void, glProgramUniform4d, (GLuint program, GLint location, GLdouble v0, GLdouble v1, GLdouble v2, GLdouble v3)) \
+X(void, glProgramUniform4dv, (GLuint program, GLint location, GLsizei count, const GLdouble * value)) \
+X(void, glProgramUniformMatrix2dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, glProgramUniformMatrix2x3dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, glProgramUniformMatrix2x4dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, glProgramUniformMatrix3dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, glProgramUniformMatrix3x2dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, glProgramUniformMatrix3x4dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, glProgramUniformMatrix4dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, glProgramUniformMatrix4x2dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, glProgramUniformMatrix4x3dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, glScissorArrayv, (GLuint first, GLsizei count, const GLint * v)) \
+X(void, glScissorIndexed, (GLuint index, GLint left, GLint bottom, GLsizei width, GLsizei height)) \
+X(void, glScissorIndexedv, (GLuint index, const GLint * v)) \
+X(void, glVertexAttribL1d, (GLuint index, GLdouble x)) \
+X(void, glVertexAttribL1dv, (GLuint index, const GLdouble * v)) \
+X(void, glVertexAttribL2d, (GLuint index, GLdouble x, GLdouble y)) \
+X(void, glVertexAttribL2dv, (GLuint index, const GLdouble * v)) \
+X(void, glVertexAttribL3d, (GLuint index, GLdouble x, GLdouble y, GLdouble z)) \
+X(void, glVertexAttribL3dv, (GLuint index, const GLdouble * v)) \
+X(void, glVertexAttribL4d, (GLuint index, GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
+X(void, glVertexAttribL4dv, (GLuint index, const GLdouble * v)) \
+X(void, glVertexAttribLPointer, (GLuint index, GLint size, GLenum type, GLsizei stride, const void * pointer)) \
+X(void, glViewportArrayv, (GLuint first, GLsizei count, const GLfloat * v)) \
+X(void, glViewportIndexedf, (GLuint index, GLfloat x, GLfloat y, GLfloat w, GLfloat h)) \
+X(void, glViewportIndexedfv, (GLuint index, const GLfloat * v)) \
+VE() \
+V(4_2) \
+X(void, glDrawArraysInstancedBaseInstance, (GLenum mode, GLint first, GLsizei count, GLsizei instancecount, GLuint baseinstance)) \
+X(void, glDrawElementsInstancedBaseInstance, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLsizei instancecount, GLuint baseinstance)) \
+X(void, glDrawElementsInstancedBaseVertexBaseInstance, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLsizei instancecount, GLint basevertex, GLuint baseinstance)) \
+X(void, glDrawTransformFeedbackInstanced, (GLenum mode, GLuint id, GLsizei instancecount)) \
+X(void, glDrawTransformFeedbackStreamInstanced, (GLenum mode, GLuint id, GLuint stream, GLsizei instancecount)) \
+X(void, glGetActiveAtomicCounterBufferiv, (GLuint program, GLuint bufferIndex, GLenum pname, GLint * params)) \
+X(void, glTexStorage1D, (GLenum target, GLsizei levels, GLenum internalformat, GLsizei width)) \
+VE() \
+V(4_3) \
+X(void, glClearBufferData, (GLenum target, GLenum internalformat, GLenum format, GLenum type, const void * data)) \
+X(void, glClearBufferSubData, (GLenum target, GLenum internalformat, GLintptr offset, GLsizeiptr size, GLenum format, GLenum type, const void * data)) \
+X(void, glGetInternalformati64v, (GLenum target, GLenum internalformat, GLenum pname, GLsizei count, GLint64 * params)) \
+X(GLint, glGetProgramResourceLocationIndex, (GLuint program, GLenum programInterface, const GLchar * name)) \
+X(void, glInvalidateBufferData, (GLuint buffer)) \
+X(void, glInvalidateBufferSubData, (GLuint buffer, GLintptr offset, GLsizeiptr length)) \
+X(void, glInvalidateTexImage, (GLuint texture, GLint level)) \
+X(void, glInvalidateTexSubImage, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth)) \
+X(void, glMultiDrawArraysIndirect, (GLenum mode, const void * indirect, GLsizei drawcount, GLsizei stride)) \
+X(void, glMultiDrawElementsIndirect, (GLenum mode, GLenum type, const void * indirect, GLsizei drawcount, GLsizei stride)) \
+X(void, glShaderStorageBlockBinding, (GLuint program, GLuint storageBlockIndex, GLuint storageBlockBinding)) \
+X(void, glTextureView, (GLuint texture, GLenum target, GLuint origtexture, GLenum internalformat, GLuint minlevel, GLuint numlevels, GLuint minlayer, GLuint numlayers)) \
+X(void, glVertexAttribLFormat, (GLuint attribindex, GLint size, GLenum type, GLuint relativeoffset)) \
+VE() \
+V(4_4) \
+X(void, glBindBuffersBase, (GLenum target, GLuint first, GLsizei count, const GLuint * buffers)) \
+X(void, glBindBuffersRange, (GLenum target, GLuint first, GLsizei count, const GLuint * buffers, const GLintptr * offsets, const GLsizeiptr * sizes)) \
+X(void, glBindImageTextures, (GLuint first, GLsizei count, const GLuint * textures)) \
+X(void, glBindSamplers, (GLuint first, GLsizei count, const GLuint * samplers)) \
+X(void, glBindTextures, (GLuint first, GLsizei count, const GLuint * textures)) \
+X(void, glBindVertexBuffers, (GLuint first, GLsizei count, const GLuint * buffers, const GLintptr * offsets, const GLsizei * strides)) \
+X(void, glBufferStorage, (GLenum target, GLsizeiptr size, const void * data, GLbitfield flags)) \
+X(void, glClearTexImage, (GLuint texture, GLint level, GLenum format, GLenum type, const void * data)) \
+X(void, glClearTexSubImage, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, const void * data)) \
+VE() \
+V(4_5) \
+X(void, glBindTextureUnit, (GLuint unit, GLuint texture)) \
+X(void, glBlitNamedFramebuffer, (GLuint readFramebuffer, GLuint drawFramebuffer, GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter)) \
+X(GLenum, glCheckNamedFramebufferStatus, (GLuint framebuffer, GLenum target)) \
+X(void, glClearNamedBufferData, (GLuint buffer, GLenum internalformat, GLenum format, GLenum type, const void * data)) \
+X(void, glClearNamedBufferSubData, (GLuint buffer, GLenum internalformat, GLintptr offset, GLsizeiptr size, GLenum format, GLenum type, const void * data)) \
+X(void, glClearNamedFramebufferfi, (GLuint framebuffer, GLenum buffer, GLint drawbuffer, GLfloat depth, GLint stencil)) \
+X(void, glClearNamedFramebufferfv, (GLuint framebuffer, GLenum buffer, GLint drawbuffer, const GLfloat * value)) \
+X(void, glClearNamedFramebufferiv, (GLuint framebuffer, GLenum buffer, GLint drawbuffer, const GLint * value)) \
+X(void, glClearNamedFramebufferuiv, (GLuint framebuffer, GLenum buffer, GLint drawbuffer, const GLuint * value)) \
+X(void, glClipControl, (GLenum origin, GLenum depth)) \
+X(void, glCompressedTextureSubImage1D, (GLuint texture, GLint level, GLint xoffset, GLsizei width, GLenum format, GLsizei imageSize, const void * data)) \
+X(void, glCompressedTextureSubImage2D, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLsizei imageSize, const void * data)) \
+X(void, glCompressedTextureSubImage3D, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLsizei imageSize, const void * data)) \
+X(void, glCopyNamedBufferSubData, (GLuint readBuffer, GLuint writeBuffer, GLintptr readOffset, GLintptr writeOffset, GLsizeiptr size)) \
+X(void, glCopyTextureSubImage1D, (GLuint texture, GLint level, GLint xoffset, GLint x, GLint y, GLsizei width)) \
+X(void, glCopyTextureSubImage2D, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width, GLsizei height)) \
+X(void, glCopyTextureSubImage3D, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLint x, GLint y, GLsizei width, GLsizei height)) \
+X(void, glCreateBuffers, (GLsizei n, GLuint * buffers)) \
+X(void, glCreateFramebuffers, (GLsizei n, GLuint * framebuffers)) \
+X(void, glCreateProgramPipelines, (GLsizei n, GLuint * pipelines)) \
+X(void, glCreateQueries, (GLenum target, GLsizei n, GLuint * ids)) \
+X(void, glCreateRenderbuffers, (GLsizei n, GLuint * renderbuffers)) \
+X(void, glCreateSamplers, (GLsizei n, GLuint * samplers)) \
+X(void, glCreateTextures, (GLenum target, GLsizei n, GLuint * textures)) \
+X(void, glCreateTransformFeedbacks, (GLsizei n, GLuint * ids)) \
+X(void, glCreateVertexArrays, (GLsizei n, GLuint * arrays)) \
+X(void, glDisableVertexArrayAttrib, (GLuint vaobj, GLuint index)) \
+X(void, glEnableVertexArrayAttrib, (GLuint vaobj, GLuint index)) \
+X(void, glFlushMappedNamedBufferRange, (GLuint buffer, GLintptr offset, GLsizeiptr length)) \
+X(void, glGenerateTextureMipmap, (GLuint texture)) \
+X(void, glGetCompressedTextureImage, (GLuint texture, GLint level, GLsizei bufSize, void * pixels)) \
+X(void, glGetCompressedTextureSubImage, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLsizei bufSize, void * pixels)) \
+X(void, glGetNamedBufferParameteri64v, (GLuint buffer, GLenum pname, GLint64 * params)) \
+X(void, glGetNamedBufferParameteriv, (GLuint buffer, GLenum pname, GLint * params)) \
+X(void, glGetNamedBufferPointerv, (GLuint buffer, GLenum pname, void ** params)) \
+X(void, glGetNamedBufferSubData, (GLuint buffer, GLintptr offset, GLsizeiptr size, void * data)) \
+X(void, glGetNamedFramebufferAttachmentParameteriv, (GLuint framebuffer, GLenum attachment, GLenum pname, GLint * params)) \
+X(void, glGetNamedFramebufferParameteriv, (GLuint framebuffer, GLenum pname, GLint * param)) \
+X(void, glGetNamedRenderbufferParameteriv, (GLuint renderbuffer, GLenum pname, GLint * params)) \
+X(void, glGetQueryBufferObjecti64v, (GLuint id, GLuint buffer, GLenum pname, GLintptr offset)) \
+X(void, glGetQueryBufferObjectiv, (GLuint id, GLuint buffer, GLenum pname, GLintptr offset)) \
+X(void, glGetQueryBufferObjectui64v, (GLuint id, GLuint buffer, GLenum pname, GLintptr offset)) \
+X(void, glGetQueryBufferObjectuiv, (GLuint id, GLuint buffer, GLenum pname, GLintptr offset)) \
+X(void, glGetTextureImage, (GLuint texture, GLint level, GLenum format, GLenum type, GLsizei bufSize, void * pixels)) \
+X(void, glGetTextureLevelParameterfv, (GLuint texture, GLint level, GLenum pname, GLfloat * params)) \
+X(void, glGetTextureLevelParameteriv, (GLuint texture, GLint level, GLenum pname, GLint * params)) \
+X(void, glGetTextureParameterIiv, (GLuint texture, GLenum pname, GLint * params)) \
+X(void, glGetTextureParameterIuiv, (GLuint texture, GLenum pname, GLuint * params)) \
+X(void, glGetTextureParameterfv, (GLuint texture, GLenum pname, GLfloat * params)) \
+X(void, glGetTextureParameteriv, (GLuint texture, GLenum pname, GLint * params)) \
+X(void, glGetTextureSubImage, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, GLsizei bufSize, void * pixels)) \
+X(void, glGetTransformFeedbacki64_v, (GLuint xfb, GLenum pname, GLuint index, GLint64 * param)) \
+X(void, glGetTransformFeedbacki_v, (GLuint xfb, GLenum pname, GLuint index, GLint * param)) \
+X(void, glGetTransformFeedbackiv, (GLuint xfb, GLenum pname, GLint * param)) \
+X(void, glGetVertexArrayIndexed64iv, (GLuint vaobj, GLuint index, GLenum pname, GLint64 * param)) \
+X(void, glGetVertexArrayIndexediv, (GLuint vaobj, GLuint index, GLenum pname, GLint * param)) \
+X(void, glGetVertexArrayiv, (GLuint vaobj, GLenum pname, GLint * param)) \
+X(void, glGetnColorTable, (GLenum target, GLenum format, GLenum type, GLsizei bufSize, void * table)) \
+X(void, glGetnCompressedTexImage, (GLenum target, GLint lod, GLsizei bufSize, void * pixels)) \
+X(void, glGetnConvolutionFilter, (GLenum target, GLenum format, GLenum type, GLsizei bufSize, void * image)) \
+X(void, glGetnHistogram, (GLenum target, GLboolean reset, GLenum format, GLenum type, GLsizei bufSize, void * values)) \
+X(void, glGetnMapdv, (GLenum target, GLenum query, GLsizei bufSize, GLdouble * v)) \
+X(void, glGetnMapfv, (GLenum target, GLenum query, GLsizei bufSize, GLfloat * v)) \
+X(void, glGetnMapiv, (GLenum target, GLenum query, GLsizei bufSize, GLint * v)) \
+X(void, glGetnMinmax, (GLenum target, GLboolean reset, GLenum format, GLenum type, GLsizei bufSize, void * values)) \
+X(void, glGetnPixelMapfv, (GLenum map, GLsizei bufSize, GLfloat * values)) \
+X(void, glGetnPixelMapuiv, (GLenum map, GLsizei bufSize, GLuint * values)) \
+X(void, glGetnPixelMapusv, (GLenum map, GLsizei bufSize, GLushort * values)) \
+X(void, glGetnPolygonStipple, (GLsizei bufSize, GLubyte * pattern)) \
+X(void, glGetnSeparableFilter, (GLenum target, GLenum format, GLenum type, GLsizei rowBufSize, void * row, GLsizei columnBufSize, void * column, void * span)) \
+X(void, glGetnTexImage, (GLenum target, GLint level, GLenum format, GLenum type, GLsizei bufSize, void * pixels)) \
+X(void, glGetnUniformdv, (GLuint program, GLint location, GLsizei bufSize, GLdouble * params)) \
+X(void, glInvalidateNamedFramebufferData, (GLuint framebuffer, GLsizei numAttachments, const GLenum * attachments)) \
+X(void, glInvalidateNamedFramebufferSubData, (GLuint framebuffer, GLsizei numAttachments, const GLenum * attachments, GLint x, GLint y, GLsizei width, GLsizei height)) \
+X(void *, glMapNamedBuffer, (GLuint buffer, GLenum access)) \
+X(void *, glMapNamedBufferRange, (GLuint buffer, GLintptr offset, GLsizeiptr length, GLbitfield access)) \
+X(void, glNamedBufferData, (GLuint buffer, GLsizeiptr size, const void * data, GLenum usage)) \
+X(void, glNamedBufferStorage, (GLuint buffer, GLsizeiptr size, const void * data, GLbitfield flags)) \
+X(void, glNamedBufferSubData, (GLuint buffer, GLintptr offset, GLsizeiptr size, const void * data)) \
+X(void, glNamedFramebufferDrawBuffer, (GLuint framebuffer, GLenum buf)) \
+X(void, glNamedFramebufferDrawBuffers, (GLuint framebuffer, GLsizei n, const GLenum * bufs)) \
+X(void, glNamedFramebufferParameteri, (GLuint framebuffer, GLenum pname, GLint param)) \
+X(void, glNamedFramebufferReadBuffer, (GLuint framebuffer, GLenum src)) \
+X(void, glNamedFramebufferRenderbuffer, (GLuint framebuffer, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer)) \
+X(void, glNamedFramebufferTexture, (GLuint framebuffer, GLenum attachment, GLuint texture, GLint level)) \
+X(void, glNamedFramebufferTextureLayer, (GLuint framebuffer, GLenum attachment, GLuint texture, GLint level, GLint layer)) \
+X(void, glNamedRenderbufferStorage, (GLuint renderbuffer, GLenum internalformat, GLsizei width, GLsizei height)) \
+X(void, glNamedRenderbufferStorageMultisample, (GLuint renderbuffer, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height)) \
+X(void, glTextureBarrier, ()) \
+X(void, glTextureBuffer, (GLuint texture, GLenum internalformat, GLuint buffer)) \
+X(void, glTextureBufferRange, (GLuint texture, GLenum internalformat, GLuint buffer, GLintptr offset, GLsizeiptr size)) \
+X(void, glTextureParameterIiv, (GLuint texture, GLenum pname, const GLint * params)) \
+X(void, glTextureParameterIuiv, (GLuint texture, GLenum pname, const GLuint * params)) \
+X(void, glTextureParameterf, (GLuint texture, GLenum pname, GLfloat param)) \
+X(void, glTextureParameterfv, (GLuint texture, GLenum pname, const GLfloat * param)) \
+X(void, glTextureParameteri, (GLuint texture, GLenum pname, GLint param)) \
+X(void, glTextureParameteriv, (GLuint texture, GLenum pname, const GLint * param)) \
+X(void, glTextureStorage1D, (GLuint texture, GLsizei levels, GLenum internalformat, GLsizei width)) \
+X(void, glTextureStorage2D, (GLuint texture, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height)) \
+X(void, glTextureStorage2DMultisample, (GLuint texture, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLboolean fixedsamplelocations)) \
+X(void, glTextureStorage3D, (GLuint texture, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth)) \
+X(void, glTextureStorage3DMultisample, (GLuint texture, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLboolean fixedsamplelocations)) \
+X(void, glTextureSubImage1D, (GLuint texture, GLint level, GLint xoffset, GLsizei width, GLenum format, GLenum type, const void * pixels)) \
+X(void, glTextureSubImage2D, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void * pixels)) \
+X(void, glTextureSubImage3D, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, const void * pixels)) \
+X(void, glTransformFeedbackBufferBase, (GLuint xfb, GLuint index, GLuint buffer)) \
+X(void, glTransformFeedbackBufferRange, (GLuint xfb, GLuint index, GLuint buffer, GLintptr offset, GLsizeiptr size)) \
+X(GLboolean, glUnmapNamedBuffer, (GLuint buffer)) \
+X(void, glVertexArrayAttribBinding, (GLuint vaobj, GLuint attribindex, GLuint bindingindex)) \
+X(void, glVertexArrayAttribFormat, (GLuint vaobj, GLuint attribindex, GLint size, GLenum type, GLboolean normalized, GLuint relativeoffset)) \
+X(void, glVertexArrayAttribIFormat, (GLuint vaobj, GLuint attribindex, GLint size, GLenum type, GLuint relativeoffset)) \
+X(void, glVertexArrayAttribLFormat, (GLuint vaobj, GLuint attribindex, GLint size, GLenum type, GLuint relativeoffset)) \
+X(void, glVertexArrayBindingDivisor, (GLuint vaobj, GLuint bindingindex, GLuint divisor)) \
+X(void, glVertexArrayElementBuffer, (GLuint vaobj, GLuint buffer)) \
+X(void, glVertexArrayVertexBuffer, (GLuint vaobj, GLuint bindingindex, GLuint buffer, GLintptr offset, GLsizei stride)) \
+X(void, glVertexArrayVertexBuffers, (GLuint vaobj, GLuint first, GLsizei count, const GLuint * buffers, const GLintptr * offsets, const GLsizei * strides)) \
+VE() \
+V(4_6) \
+X(void, glMultiDrawArraysIndirectCount, (GLenum mode, const void * indirect, GLintptr drawcount, GLsizei maxdrawcount, GLsizei stride)) \
+X(void, glMultiDrawElementsIndirectCount, (GLenum mode, GLenum type, const void * indirect, GLintptr drawcount, GLsizei maxdrawcount, GLsizei stride)) \
+X(void, glPolygonOffsetClamp, (GLfloat factor, GLfloat units, GLfloat clamp)) \
+X(void, glSpecializeShader, (GLuint shader, const GLchar * pEntryPoint, GLuint numSpecializationConstants, const GLuint * pConstantIndex, const GLuint * pConstantValue)) \
+VE() \
+
 #if !defined(__APPLE__)
-/* ----GL VERSION 1.0------------------------------------------------------------------------------------------------ */
-typedef void (*PFNGLCULLFACEPROC)                 (GLenum mode);
-typedef void (*PFNGLFRONTFACEPROC)                (GLenum mode);
-typedef void (*PFNGLHINTPROC)                     (GLenum target, GLenum mode);
-typedef void (*PFNGLLINEWIDTHPROC)                (GLfloat width);
-typedef void (*PFNGLPOINTSIZEPROC)                (GLfloat size);
-typedef void (*PFNGLPOLYGONMODEPROC)              (GLenum face, GLenum mode);
-typedef void (*PFNGLSCISSORPROC)                  (GLint x, GLint y, GLsizei width, GLsizei height);
-typedef void (*PFNGLTEXPARAMETERFPROC)            (GLenum target, GLenum pname, GLfloat param);
-typedef void (*PFNGLTEXPARAMETERFVPROC)           (GLenum target, GLenum pname, const GLfloat *params);
-typedef void (*PFNGLTEXPARAMETERIPROC)            (GLenum target, GLenum pname, GLint param);
-typedef void (*PFNGLTEXPARAMETERIVPROC)           (GLenum target, GLenum pname, const GLint *params);
-typedef void (*PFNGLTEXIMAGE1DPROC)               (GLenum target, GLint level, GLint internalformat, GLsizei width, GLint border, GLenum format, GLenum type, const void *pixels);
-typedef void (*PFNGLTEXIMAGE2DPROC)               (GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void *pixels);
-typedef void (*PFNGLDRAWBUFFERPROC)               (GLenum buf);
-typedef void (*PFNGLCLEARPROC)                    (GLbitfield mask);
-typedef void (*PFNGLCLEARCOLORPROC)               (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha);
-typedef void (*PFNGLCLEARSTENCILPROC)             (GLint s);
-typedef void (*PFNGLSTENCILMASKPROC)              (GLuint mask);
-typedef void (*PFNGLCOLORMASKPROC)                (GLboolean red, GLboolean green, GLboolean blue, GLboolean alpha);
-typedef void (*PFNGLDEPTHMASKPROC)                (GLboolean flag);
-typedef void (*PFNGLDISABLEPROC)                  (GLenum cap);
-typedef void (*PFNGLENABLEPROC)                   (GLenum cap);
-typedef void (*PFNGLFINISHPROC)                   (void);
-typedef void (*PFNGLFLUSHPROC)                    (void);
-typedef void (*PFNGLBLENDFUNCPROC)                (GLenum sfactor, GLenum dfactor);
-typedef void (*PFNGLLOGICOPPROC)                  (GLenum opcode);
-typedef void (*PFNGLSTENCILFUNCPROC)              (GLenum func, GLint ref, GLuint mask);
-typedef void (*PFNGLSTENCILOPPROC)                (GLenum fail, GLenum zfail, GLenum zpass);
-typedef void (*PFNGLDEPTHFUNCPROC)                (GLenum func);
-typedef void (*PFNGLPIXELSTOREFPROC)              (GLenum pname, GLfloat param);
-typedef void (*PFNGLPIXELSTOREIPROC)              (GLenum pname, GLint param);
-typedef void (*PFNGLREADBUFFERPROC)               (GLenum src);
-typedef void (*PFNGLREADPIXELSPROC)               (GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, void *pixels);
-typedef void (*PFNGLGETBOOLEANVPROC)              (GLenum pname, GLboolean *data);
-typedef void (*PFNGLGETDOUBLEVPROC)               (GLenum pname, GLdouble *data);
-typedef GLenum (*PFNGLGETERRORPROC)               (void);
-typedef void (*PFNGLGETFLOATVPROC)                (GLenum pname, GLfloat *data);
-typedef void (*PFNGLGETINTEGERVPROC)              (GLenum pname, GLint *data);
-typedef const GLubyte *(*PFNGLGETSTRINGPROC)      (GLenum name);
-typedef void (*PFNGLGETTEXIMAGEPROC)              (GLenum target, GLint level, GLenum format, GLenum type, void *pixels);
-typedef void (*PFNGLGETTEXPARAMETERFVPROC)        (GLenum target, GLenum pname, GLfloat *params);
-typedef void (*PFNGLGETTEXPARAMETERIVPROC)        (GLenum target, GLenum pname, GLint *params);
-typedef void (*PFNGLGETTEXLEVELPARAMETERFVPROC)   (GLenum target, GLint level, GLenum pname, GLfloat *params);
-typedef void (*PFNGLGETTEXLEVELPARAMETERIVPROC)   (GLenum target, GLint level, GLenum pname, GLint *params);
-typedef GLboolean (*PFNGLISENABLEDPROC)           (GLenum cap);
-typedef void (*PFNGLDEPTHRANGEPROC)               (GLdouble n, GLdouble f);
-typedef void (*PFNGLVIEWPORTPROC)                 (GLint x, GLint y, GLsizei width, GLsizei height);
-typedef void (*PFNGLACCUMPROC)                    (GLenum op, GLfloat value);
-typedef void (*PFNGLALPHAFUNCPROC)                (GLenum func, GLclampf ref);
-typedef GLboolean (*PFNGLARETEXTURESRESIDENTPROC) (GLsizei n, const GLuint *textures, GLboolean *residences);
-typedef void (*PFNGLARRAYELEMENTPROC)             (GLint i);
-typedef void (*PFNGLBEGINPROC)                    (GLenum mode);
-typedef void (*PFNGLBINDTEXTUREPROC)              (GLenum target, GLuint texture);
-typedef void (*PFNGLBITMAPPROC)                   (GLsizei width, GLsizei height, GLfloat xorig, GLfloat yorig, GLfloat xmove, GLfloat ymove, const GLubyte *bitmap);
-typedef void (*PFNGLBLENDFUNCPROC)                (GLenum sfactor, GLenum dfactor);
-typedef void (*PFNGLCALLLISTPROC)                 (GLuint list);
-typedef void (*PFNGLCALLLISTSPROC)                (GLsizei n, GLenum type, const GLvoid *lists);
-typedef void (*PFNGLCLEARPROC)                    (GLbitfield mask);
-typedef void (*PFNGLCLEARACCUMPROC)               (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha);
-typedef void (*PFNGLCLEARCOLORPROC)               (GLclampf red, GLclampf green, GLclampf blue, GLclampf alpha);
-typedef void (*PFNGLCLEARDEPTHPROC)               (GLclampd depth);
-typedef void (*PFNGLCLEARINDEXPROC)               (GLfloat c);
-typedef void (*PFNGLCLEARSTENCILPROC)             (GLint s);
-typedef void (*PFNGLCLIPPLANEPROC)                (GLenum plane, const GLdouble *equation);
-typedef void (*PFNGLCOLOR3BPROC)                  (GLbyte red, GLbyte green, GLbyte blue);
-typedef void (*PFNGLCOLOR3BVPROC)                 (const GLbyte *v);
-typedef void (*PFNGLCOLOR3DPROC)                  (GLdouble red, GLdouble green, GLdouble blue);
-typedef void (*PFNGLCOLOR3DVPROC)                 (const GLdouble *v);
-typedef void (*PFNGLCOLOR3FPROC)                  (GLfloat red, GLfloat green, GLfloat blue);
-typedef void (*PFNGLCOLOR3FVPROC)                 (const GLfloat *v);
-typedef void (*PFNGLCOLOR3IPROC)                  (GLint red, GLint green, GLint blue);
-typedef void (*PFNGLCOLOR3IVPROC)                 (const GLint *v);
-typedef void (*PFNGLCOLOR3SPROC)                  (GLshort red, GLshort green, GLshort blue);
-typedef void (*PFNGLCOLOR3SVPROC)                 (const GLshort *v);
-typedef void (*PFNGLCOLOR3UBPROC)                 (GLubyte red, GLubyte green, GLubyte blue);
-typedef void (*PFNGLCOLOR3UBVPROC)                (const GLubyte *v);
-typedef void (*PFNGLCOLOR3UIPROC)                 (GLuint red, GLuint green, GLuint blue);
-typedef void (*PFNGLCOLOR3UIVPROC)                (const GLuint *v);
-typedef void (*PFNGLCOLOR3USPROC)                 (GLushort red, GLushort green, GLushort blue);
-typedef void (*PFNGLCOLOR3USVPROC)                (const GLushort *v);
-typedef void (*PFNGLCOLOR4BPROC)                  (GLbyte red, GLbyte green, GLbyte blue, GLbyte alpha);
-typedef void (*PFNGLCOLOR4BVPROC)                 (const GLbyte *v);
-typedef void (*PFNGLCOLOR4DPROC)                  (GLdouble red, GLdouble green, GLdouble blue, GLdouble alpha);
-typedef void (*PFNGLCOLOR4DVPROC)                 (const GLdouble *v);
-typedef void (*PFNGLCOLOR4FPROC)                  (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha);
-typedef void (*PFNGLCOLOR4FVPROC)                 (const GLfloat *v);
-typedef void (*PFNGLCOLOR4IPROC)                  (GLint red, GLint green, GLint blue, GLint alpha);
-typedef void (*PFNGLCOLOR4IVPROC)                 (const GLint *v);
-typedef void (*PFNGLCOLOR4SPROC)                  (GLshort red, GLshort green, GLshort blue, GLshort alpha);
-typedef void (*PFNGLCOLOR4SVPROC)                 (const GLshort *v);
-typedef void (*PFNGLCOLOR4UBPROC)                 (GLubyte red, GLubyte green, GLubyte blue, GLubyte alpha);
-typedef void (*PFNGLCOLOR4UBVPROC)                (const GLubyte *v);
-typedef void (*PFNGLCOLOR4UIPROC)                 (GLuint red, GLuint green, GLuint blue, GLuint alpha);
-typedef void (*PFNGLCOLOR4UIVPROC)                (const GLuint *v);
-typedef void (*PFNGLCOLOR4USPROC)                 (GLushort red, GLushort green, GLushort blue, GLushort alpha);
-typedef void (*PFNGLCOLOR4USVPROC)                (const GLushort *v);
-typedef void (*PFNGLCOLORMASKPROC)                (GLboolean red, GLboolean green, GLboolean blue, GLboolean alpha);
-typedef void (*PFNGLCOLORMATERIALPROC)            (GLenum face, GLenum mode);
-typedef void (*PFNGLCOLORPOINTERPROC)             (GLint size, GLenum type, GLsizei stride, const GLvoid *pointer);
-typedef void (*PFNGLCOPYPIXELSPROC)               (GLint x, GLint y, GLsizei width, GLsizei height, GLenum type);
-typedef void (*PFNGLCOPYTEXIMAGE1DPROC)           (GLenum target, GLint level, GLenum internalFormat, GLint x, GLint y, GLsizei width, GLint border);
-typedef void (*PFNGLCOPYTEXIMAGE2DPROC)           (GLenum target, GLint level, GLenum internalFormat, GLint x, GLint y, GLsizei width, GLsizei height, GLint border);
-typedef void (*PFNGLCOPYTEXSUBIMAGE1DPROC)        (GLenum target, GLint level, GLint xoffset, GLint x, GLint y, GLsizei width);
-typedef void (*PFNGLCOPYTEXSUBIMAGE2DPROC)        (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width, GLsizei height);
-typedef void (*PFNGLCULLFACEPROC)                 (GLenum mode);
-typedef void (*PFNGLDELETELISTSPROC)              (GLuint list, GLsizei range);
-typedef void (*PFNGLDELETETEXTURESPROC)           (GLsizei n, const GLuint *textures);
-typedef void (*PFNGLDEPTHFUNCPROC)                (GLenum func);
-typedef void (*PFNGLDEPTHMASKPROC)                (GLboolean flag);
-typedef void (*PFNGLDEPTHRANGEPROC)               (GLclampd zNear, GLclampd zFar);
-typedef void (*PFNGLDISABLEPROC)                  (GLenum cap);
-typedef void (*PFNGLDISABLECLIENTSTATEPROC)       (GLenum array);
-typedef void (*PFNGLDRAWARRAYSPROC)               (GLenum mode, GLint first, GLsizei count);
-typedef void (*PFNGLDRAWBUFFERPROC)               (GLenum mode);
-typedef void (*PFNGLDRAWELEMENTSPROC)             (GLenum mode, GLsizei count, GLenum type, const GLvoid *indices);
-typedef void (*PFNGLDRAWPIXELSPROC)               (GLsizei width, GLsizei height, GLenum format, GLenum type, const GLvoid *pixels);
-typedef void (*PFNGLEDGEFLAGPROC)                 (GLboolean flag);
-typedef void (*PFNGLEDGEFLAGPOINTERPROC)          (GLsizei stride, const GLvoid *pointer);
-typedef void (*PFNGLEDGEFLAGVPROC)                (const GLboolean *flag);
-typedef void (*PFNGLENABLEPROC)                   (GLenum cap);
-typedef void (*PFNGLENABLECLIENTSTATEPROC)        (GLenum array);
-typedef void (*PFNGLENDPROC)                      (void);
-typedef void (*PFNGLENDLISTPROC)                  (void);
-typedef void (*PFNGLEVALCOORD1DPROC)              (GLdouble u);
-typedef void (*PFNGLEVALCOORD1DVPROC)             (const GLdouble *u);
-typedef void (*PFNGLEVALCOORD1FPROC)              (GLfloat u);
-typedef void (*PFNGLEVALCOORD1FVPROC)             (const GLfloat *u);
-typedef void (*PFNGLEVALCOORD2DPROC)              (GLdouble u, GLdouble v);
-typedef void (*PFNGLEVALCOORD2DVPROC)             (const GLdouble *u);
-typedef void (*PFNGLEVALCOORD2FPROC)              (GLfloat u, GLfloat v);
-typedef void (*PFNGLEVALCOORD2FVPROC)             (const GLfloat *u);
-typedef void (*PFNGLEVALMESH1PROC)                (GLenum mode, GLint i1, GLint i2);
-typedef void (*PFNGLEVALMESH2PROC)                (GLenum mode, GLint i1, GLint i2, GLint j1, GLint j2);
-typedef void (*PFNGLEVALPOINT1PROC)               (GLint i);
-typedef void (*PFNGLEVALPOINT2PROC)               (GLint i, GLint j);
-typedef void (*PFNGLFEEDBACKBUFFERPROC)           (GLsizei size, GLenum type, GLfloat *buffer);
-typedef void (*PFNGLFINISHPROC)                   (void);
-typedef void (*PFNGLFLUSHPROC)                    (void);
-typedef void (*PFNGLFOGFPROC)                     (GLenum pname, GLfloat param);
-typedef void (*PFNGLFOGFVPROC)                    (GLenum pname, const GLfloat *params);
-typedef void (*PFNGLFOGIPROC)                     (GLenum pname, GLint param);
-typedef void (*PFNGLFOGIVPROC)                    (GLenum pname, const GLint *params);
-typedef void (*PFNGLFRONTFACEPROC)                (GLenum mode);
-typedef void (*PFNGLFRUSTUMPROC)                  (GLdouble left, GLdouble right, GLdouble bottom, GLdouble top, GLdouble zNear, GLdouble zFar);
-typedef GLuint (*PFNGLGENLISTSPROC)               (GLsizei range);
-typedef void (*PFNGLGENTEXTURESPROC)              (GLsizei n, GLuint *textures);
-typedef void (*PFNGLGETBOOLEANVPROC)              (GLenum pname, GLboolean *params);
-typedef void (*PFNGLGETCLIPPLANEPROC)             (GLenum plane, GLdouble *equation);
-typedef void (*PFNGLGETDOUBLEVPROC)               (GLenum pname, GLdouble *params);
-typedef GLenum (*PFNGLGETERRORPROC)               (void);
-typedef void (*PFNGLGETFLOATVPROC)                (GLenum pname, GLfloat *params);
-typedef void (*PFNGLGETINTEGERVPROC)              (GLenum pname, GLint *params);
-typedef void (*PFNGLGETLIGHTFVPROC)               (GLenum light, GLenum pname, GLfloat *params);
-typedef void (*PFNGLGETLIGHTIVPROC)               (GLenum light, GLenum pname, GLint *params);
-typedef void (*PFNGLGETMAPDVPROC)                 (GLenum target, GLenum query, GLdouble *v);
-typedef void (*PFNGLGETMAPFVPROC)                 (GLenum target, GLenum query, GLfloat *v);
-typedef void (*PFNGLGETMAPIVPROC)                 (GLenum target, GLenum query, GLint *v);
-typedef void (*PFNGLGETMATERIALFVPROC)            (GLenum face, GLenum pname, GLfloat *params);
-typedef void (*PFNGLGETMATERIALIVPROC)            (GLenum face, GLenum pname, GLint *params);
-typedef void (*PFNGLGETPIXELMAPFVPROC)            (GLenum map, GLfloat *values);
-typedef void (*PFNGLGETPIXELMAPUIVPROC)           (GLenum map, GLuint *values);
-typedef void (*PFNGLGETPIXELMAPUSVPROC)           (GLenum map, GLushort *values);
-typedef void (*PFNGLGETPOINTERVPROC)              (GLenum pname, GLvoid* *params);
-typedef void (*PFNGLGETPOLYGONSTIPPLEPROC)        (GLubyte *mask);
-typedef const GLubyte*(*PGNGLGETSTRINGPROC)      (GLenum name);
-typedef void (*PFNGLGETTEXENVFVPROC)              (GLenum target, GLenum pname, GLfloat *params);
-typedef void (*PFNGLGETTEXENVIVPROC)              (GLenum target, GLenum pname, GLint *params);
-typedef void (*PFNGLGETTEXGENDVPROC)              (GLenum coord, GLenum pname, GLdouble *params);
-typedef void (*PFNGLGETTEXGENFVPROC)              (GLenum coord, GLenum pname, GLfloat *params);
-typedef void (*PFNGLGETTEXGENIVPROC)              (GLenum coord, GLenum pname, GLint *params);
-typedef void (*PFNGLGETTEXIMAGEPROC)              (GLenum target, GLint level, GLenum format, GLenum type, GLvoid *pixels);
-typedef void (*PFNGLGETTEXLEVELPARAMETERFVPROC)   (GLenum target, GLint level, GLenum pname, GLfloat *params);
-typedef void (*PFNGLGETTEXLEVELPARAMETERIVPROC)   (GLenum target, GLint level, GLenum pname, GLint *params);
-typedef void (*PFNGLGETTEXPARAMETERFVPROC)        (GLenum target, GLenum pname, GLfloat *params);
-typedef void (*PFNGLGETTEXPARAMETERIVPROC)        (GLenum target, GLenum pname, GLint *params);
-typedef void (*PFNGLHINTPROC)                     (GLenum target, GLenum mode);
-typedef void (*PFNGLINDEXMASKPROC)                (GLuint mask);
-typedef void (*PFNGLINDEXPOINTERPROC)             (GLenum type, GLsizei stride, const GLvoid *pointer);
-typedef void (*PFNGLINDEXDPROC)                   (GLdouble c);
-typedef void (*PFNGLINDEXDVPROC)                  (const GLdouble *c);
-typedef void (*PFNGLINDEXFPROC)                   (GLfloat c);
-typedef void (*PFNGLINDEXFVPROC)                  (const GLfloat *c);
-typedef void (*PFNGLINDEXIPROC)                   (GLint c);
-typedef void (*PFNGLINDEXIVPROC)                  (const GLint *c);
-typedef void (*PFNGLINDEXSPROC)                   (GLshort c);
-typedef void (*PFNGLINDEXSVPROC)                  (const GLshort *c);
-typedef void (*PFNGLINDEXUBPROC)                  (GLubyte c);
-typedef void (*PFNGLINDEXUBVPROC)                 (const GLubyte *c);
-typedef void (*PFNGLINITNAMESPROC)                (void);
-typedef void (*PFNGLINTERLEAVEDARRAYSPROC)        (GLenum format, GLsizei stride, const GLvoid *pointer);
-typedef GLboolean (*PFNGLISENABLEDPROC)           (GLenum cap);
-typedef GLboolean (*PFNGLISLISTPROC)              (GLuint list);
-typedef GLboolean (*PFNGLISTEXTUREPROC)           (GLuint texture);
-typedef void (*PFNGLLIGHTMODELFPROC)              (GLenum pname, GLfloat param);
-typedef void (*PFNGLLIGHTMODELFVPROC)             (GLenum pname, const GLfloat *params);
-typedef void (*PFNGLLIGHTMODELIPROC)              (GLenum pname, GLint param);
-typedef void (*PFNGLLIGHTMODELIVPROC)             (GLenum pname, const GLint *params);
-typedef void (*PFNGLLIGHTFPROC)                   (GLenum light, GLenum pname, GLfloat param);
-typedef void (*PFNGLLIGHTFVPROC)                  (GLenum light, GLenum pname, const GLfloat *params);
-typedef void (*PFNGLLIGHTIPROC)                   (GLenum light, GLenum pname, GLint param);
-typedef void (*PFNGLLIGHTIVPROC)                  (GLenum light, GLenum pname, const GLint *params);
-typedef void (*PFNGLLINESTIPPLEPROC)              (GLint factor, GLushort pattern);
-typedef void (*PFNGLLINEWIDTHPROC)                (GLfloat width);
-typedef void (*PFNGLLISTBASEPROC)                 (GLuint base);
-typedef void (*PFNGLLOADIDENTITYPROC)             (void);
-typedef void (*PFNGLLOADMATRIXDPROC)              (const GLdouble *m);
-typedef void (*PFNGLLOADMATRIXFPROC)              (const GLfloat *m);
-typedef void (*PFNGLLOADNAMEPROC)                 (GLuint name);
-typedef void (*PFNGLLOGICOPPROC)                  (GLenum opcode);
-typedef void (*PFNGLMAP1DPROC)                    (GLenum target, GLdouble u1, GLdouble u2, GLint stride, GLint order, const GLdouble *points);
-typedef void (*PFNGLMAP1FPROC)                    (GLenum target, GLfloat u1, GLfloat u2, GLint stride, GLint order, const GLfloat *points);
-typedef void (*PFNGLMAP2DPROC)                    (GLenum target, GLdouble u1, GLdouble u2, GLint ustride, GLint uorder, GLdouble v1, GLdouble v2, GLint vstride, GLint vorder, const GLdouble *points);
-typedef void (*PFNGLMAP2FPROC)                    (GLenum target, GLfloat u1, GLfloat u2, GLint ustride, GLint uorder, GLfloat v1, GLfloat v2, GLint vstride, GLint vorder, const GLfloat *points);
-typedef void (*PFNGLMAPGRID1DPROC)                (GLint un, GLdouble u1, GLdouble u2);
-typedef void (*PFNGLMAPGRID1FPROC)                (GLint un, GLfloat u1, GLfloat u2);
-typedef void (*PFNGLMAPGRID2DPROC)                (GLint un, GLdouble u1, GLdouble u2, GLint vn, GLdouble v1, GLdouble v2);
-typedef void (*PFNGLMAPGRID2FPROC)                (GLint un, GLfloat u1, GLfloat u2, GLint vn, GLfloat v1, GLfloat v2);
-typedef void (*PFNGLMATERIALFPROC)                (GLenum face, GLenum pname, GLfloat param);
-typedef void (*PFNGLMATERIALFVPROC)               (GLenum face, GLenum pname, const GLfloat *params);
-typedef void (*PFNGLMATERIALIPROC)                (GLenum face, GLenum pname, GLint param);
-typedef void (*PFNGLMATERIALIVPROC)               (GLenum face, GLenum pname, const GLint *params);
-typedef void (*PFNGLMATRIXMODEPROC)               (GLenum mode);
-typedef void (*PFNGLMULTMATRIXDPROC)              (const GLdouble *m);
-typedef void (*PFNGLMULTMATRIXFPROC)              (const GLfloat *m);
-typedef void (*PFNGLNEWLISTPROC)                  (GLuint list, GLenum mode);
-typedef void (*PFNGLNORMAL3BPROC)                 (GLbyte nx, GLbyte ny, GLbyte nz);
-typedef void (*PFNGLNORMAL3BVPROC)                (const GLbyte *v);
-typedef void (*PFNGLNORMAL3DPROC)                 (GLdouble nx, GLdouble ny, GLdouble nz);
-typedef void (*PFNGLNORMAL3DVPROC)                (const GLdouble *v);
-typedef void (*PFNGLNORMAL3FPROC)                 (GLfloat nx, GLfloat ny, GLfloat nz);
-typedef void (*PFNGLNORMAL3FVPROC)                (const GLfloat *v);
-typedef void (*PFNGLNORMAL3IPROC)                 (GLint nx, GLint ny, GLint nz);
-typedef void (*PFNGLNORMAL3IVPROC)                (const GLint *v);
-typedef void (*PFNGLNORMAL3SPROC)                 (GLshort nx, GLshort ny, GLshort nz);
-typedef void (*PFNGLNORMAL3SVPROC)                (const GLshort *v);
-typedef void (*PFNGLNORMALPOINTERPROC)            (GLenum type, GLsizei stride, const GLvoid *pointer);
-typedef void (*PFNGLORTHOPROC)                    (GLdouble left, GLdouble right, GLdouble bottom, GLdouble top, GLdouble zNear, GLdouble zFar);
-typedef void (*PFNGLPASSTHROUGHPROC)              (GLfloat token);
-typedef void (*PFNGLPIXELMAPFVPROC)               (GLenum map, GLsizei mapsize, const GLfloat *values);
-typedef void (*PFNGLPIXELMAPUIVPROC)              (GLenum map, GLsizei mapsize, const GLuint *values);
-typedef void (*PFNGLPIXELMAPUSVPROC)              (GLenum map, GLsizei mapsize, const GLushort *values);
-typedef void (*PFNGLPIXELSTOREFPROC)              (GLenum pname, GLfloat param);
-typedef void (*PFNGLPIXELSTOREIPROC)              (GLenum pname, GLint param);
-typedef void (*PFNGLPIXELTRANSFERFPROC)           (GLenum pname, GLfloat param);
-typedef void (*PFNGLPIXELTRANSFERIPROC)           (GLenum pname, GLint param);
-typedef void (*PFNGLPIXELZOOMPROC)                (GLfloat xfactor, GLfloat yfactor);
-typedef void (*PFNGLPOINTSIZEPROC)                (GLfloat size);
-typedef void (*PFNGLPOLYGONMODEPROC)              (GLenum face, GLenum mode);
-typedef void (*PFNGLPOLYGONOFFSETPROC)            (GLfloat factor, GLfloat units);
-typedef void (*PFNGLPOLYGONSTIPPLEPROC)           (const GLubyte *mask);
-typedef void (*PFNGLPOPATTRIBPROC)                (void);
-typedef void (*PFNGLPOPCLIENTATTRIBPROC)          (void);
-typedef void (*PFNGLPOPMATRIXPROC)                (void);
-typedef void (*PFNGLPOPNAMEPROC)                  (void);
-typedef void (*PFNGLPRIORITIZETEXTURESPROC)       (GLsizei n, const GLuint *textures, const GLclampf *priorities);
-typedef void (*PFNGLPUSHATTRIBPROC)               (GLbitfield mask);
-typedef void (*PFNGLPUSHCLIENTATTRIBPROC)         (GLbitfield mask);
-typedef void (*PFNGLPUSHMATRIXPROC)               (void);
-typedef void (*PFNGLPUSHNAMEPROC)                 (GLuint name);
-typedef void (*PFNGLRASTERPOS2DPROC)              (GLdouble x, GLdouble y);
-typedef void (*PFNGLRASTERPOS2DVPROC)             (const GLdouble *v);
-typedef void (*PFNGLRASTERPOS2FPROC)              (GLfloat x, GLfloat y);
-typedef void (*PFNGLRASTERPOS2FVPROC)             (const GLfloat *v);
-typedef void (*PFNGLRASTERPOS2IPROC)              (GLint x, GLint y);
-typedef void (*PFNGLRASTERPOS2IVPROC)             (const GLint *v);
-typedef void (*PFNGLRASTERPOS2SPROC)              (GLshort x, GLshort y);
-typedef void (*PFNGLRASTERPOS2SVPROC)             (const GLshort *v);
-typedef void (*PFNGLRASTERPOS3DPROC)              (GLdouble x, GLdouble y, GLdouble z);
-typedef void (*PFNGLRASTERPOS3DVPROC)             (const GLdouble *v);
-typedef void (*PFNGLRASTERPOS3FPROC)              (GLfloat x, GLfloat y, GLfloat z);
-typedef void (*PFNGLRASTERPOS3FVPROC)             (const GLfloat *v);
-typedef void (*PFNGLRASTERPOS3IPROC)              (GLint x, GLint y, GLint z);
-typedef void (*PFNGLRASTERPOS3IVPROC)             (const GLint *v);
-typedef void (*PFNGLRASTERPOS3SPROC)              (GLshort x, GLshort y, GLshort z);
-typedef void (*PFNGLRASTERPOS3SVPROC)             (const GLshort *v);
-typedef void (*PFNGLRASTERPOS4DPROC)              (GLdouble x, GLdouble y, GLdouble z, GLdouble w);
-typedef void (*PFNGLRASTERPOS4DVPROC)             (const GLdouble *v);
-typedef void (*PFNGLRASTERPOS4FPROC)              (GLfloat x, GLfloat y, GLfloat z, GLfloat w);
-typedef void (*PFNGLRASTERPOS4FVPROC)             (const GLfloat *v);
-typedef void (*PFNGLRASTERPOS4IPROC)              (GLint x, GLint y, GLint z, GLint w);
-typedef void (*PFNGLRASTERPOS4IVPROC)             (const GLint *v);
-typedef void (*PFNGLRASTERPOS4SPROC)              (GLshort x, GLshort y, GLshort z, GLshort w);
-typedef void (*PFNGLRASTERPOS4SVPROC)             (const GLshort *v);
-typedef void (*PFNGLREADBUFFERPROC)               (GLenum mode);
-typedef void (*PFNGLREADPIXELSPROC)               (GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, GLvoid *pixels);
-typedef void (*PFNGLRECTDPROC)                    (GLdouble x1, GLdouble y1, GLdouble x2, GLdouble y2);
-typedef void (*PFNGLRECTDVPROC)                   (const GLdouble *v1, const GLdouble *v2);
-typedef void (*PFNGLRECTFPROC)                    (GLfloat x1, GLfloat y1, GLfloat x2, GLfloat y2);
-typedef void (*PFNGLRECTFVPROC)                   (const GLfloat *v1, const GLfloat *v2);
-typedef void (*PFNGLRECTIPROC)                    (GLint x1, GLint y1, GLint x2, GLint y2);
-typedef void (*PFNGLRECTIVPROC)                   (const GLint *v1, const GLint *v2);
-typedef void (*PFNGLRECTSPROC)                    (GLshort x1, GLshort y1, GLshort x2, GLshort y2);
-typedef void (*PFNGLRECTSVPROC)                   (const GLshort *v1, const GLshort *v2);
-typedef GLint (*PFNGLRENDERMODEPROC)              (GLenum mode);
-typedef void (*PFNGLROTATEDPROC)                  (GLdouble angle, GLdouble x, GLdouble y, GLdouble z);
-typedef void (*PFNGLROTATEFPROC)                  (GLfloat angle, GLfloat x, GLfloat y, GLfloat z);
-typedef void (*PFNGLSCALEDPROC)                   (GLdouble x, GLdouble y, GLdouble z);
-typedef void (*PFNGLSCALEFPROC)                   (GLfloat x, GLfloat y, GLfloat z);
-typedef void (*PFNGLSCISSORPROC)                  (GLint x, GLint y, GLsizei width, GLsizei height);
-typedef void (*PFNGLSELECTBUFFERPROC)             (GLsizei size, GLuint *buffer);
-typedef void (*PFNGLSHADEMODELPROC)               (GLenum mode);
-typedef void (*PFNGLSTENCILFUNCPROC)              (GLenum func, GLint ref, GLuint mask);
-typedef void (*PFNGLSTENCILMASKPROC)              (GLuint mask);
-typedef void (*PFNGLSTENCILOPPROC)                (GLenum fail, GLenum zfail, GLenum zpass);
-typedef void (*PFNGLTEXCOORD1DPROC)               (GLdouble s);
-typedef void (*PFNGLTEXCOORD1DVPROC)              (const GLdouble *v);
-typedef void (*PFNGLTEXCOORD1FPROC)               (GLfloat s);
-typedef void (*PFNGLTEXCOORD1FVPROC)              (const GLfloat *v);
-typedef void (*PFNGLTEXCOORD1IPROC)               (GLint s);
-typedef void (*PFNGLTEXCOORD1IVPROC)              (const GLint *v);
-typedef void (*PFNGLTEXCOORD1SPROC)               (GLshort s);
-typedef void (*PFNGLTEXCOORD1SVPROC)              (const GLshort *v);
-typedef void (*PFNGLTEXCOORD2DPROC)               (GLdouble s, GLdouble t);
-typedef void (*PFNGLTEXCOORD2DVPROC)              (const GLdouble *v);
-typedef void (*PFNGLTEXCOORD2FPROC)               (GLfloat s, GLfloat t);
-typedef void (*PFNGLTEXCOORD2FVPROC)              (const GLfloat *v);
-typedef void (*PFNGLTEXCOORD2IPROC)               (GLint s, GLint t);
-typedef void (*PFNGLTEXCOORD2IVPROC)              (const GLint *v);
-typedef void (*PFNGLTEXCOORD2SPROC)               (GLshort s, GLshort t);
-typedef void (*PFNGLTEXCOORD2SVPROC)              (const GLshort *v);
-typedef void (*PFNGLTEXCOORD3DPROC)               (GLdouble s, GLdouble t, GLdouble r);
-typedef void (*PFNGLTEXCOORD3DVPROC)              (const GLdouble *v);
-typedef void (*PFNGLTEXCOORD3FPROC)               (GLfloat s, GLfloat t, GLfloat r);
-typedef void (*PFNGLTEXCOORD3FVPROC)              (const GLfloat *v);
-typedef void (*PFNGLTEXCOORD3IPROC)               (GLint s, GLint t, GLint r);
-typedef void (*PFNGLTEXCOORD3IVPROC)              (const GLint *v);
-typedef void (*PFNGLTEXCOORD3SPROC)               (GLshort s, GLshort t, GLshort r);
-typedef void (*PFNGLTEXCOORD3SVPROC)              (const GLshort *v);
-typedef void (*PFNGLTEXCOORD4DPROC)               (GLdouble s, GLdouble t, GLdouble r, GLdouble q);
-typedef void (*PFNGLTEXCOORD4DVPROC)              (const GLdouble *v);
-typedef void (*PFNGLTEXCOORD4FPROC)               (GLfloat s, GLfloat t, GLfloat r, GLfloat q);
-typedef void (*PFNGLTEXCOORD4FVPROC)              (const GLfloat *v);
-typedef void (*PFNGLTEXCOORD4IPROC)               (GLint s, GLint t, GLint r, GLint q);
-typedef void (*PFNGLTEXCOORD4IVPROC)              (const GLint *v);
-typedef void (*PFNGLTEXCOORD4SPROC)               (GLshort s, GLshort t, GLshort r, GLshort q);
-typedef void (*PFNGLTEXCOORD4SVPROC)              (const GLshort *v);
-typedef void (*PFNGLTEXCOORDPOINTERPROC)          (GLint size, GLenum type, GLsizei stride, const GLvoid *pointer);
-typedef void (*PFNGLTEXENVFPROC)                  (GLenum target, GLenum pname, GLfloat param);
-typedef void (*PFNGLTEXENVFVPROC)                 (GLenum target, GLenum pname, const GLfloat *params);
-typedef void (*PFNGLTEXENVIPROC)                  (GLenum target, GLenum pname, GLint param);
-typedef void (*PFNGLTEXENVIVPROC)                 (GLenum target, GLenum pname, const GLint *params);
-typedef void (*PFNGLTEXGENDPROC)                  (GLenum coord, GLenum pname, GLdouble param);
-typedef void (*PFNGLTEXGENDVPROC)                 (GLenum coord, GLenum pname, const GLdouble *params);
-typedef void (*PFNGLTEXGENFPROC)                  (GLenum coord, GLenum pname, GLfloat param);
-typedef void (*PFNGLTEXGENFVPROC)                 (GLenum coord, GLenum pname, const GLfloat *params);
-typedef void (*PFNGLTEXGENIPROC)                  (GLenum coord, GLenum pname, GLint param);
-typedef void (*PFNGLTEXGENIVPROC)                 (GLenum coord, GLenum pname, const GLint *params);
-typedef void (*PFNGLTEXIMAGE1DPROC)               (GLenum target, GLint level, GLint internalformat, GLsizei width, GLint border, GLenum format, GLenum type, const GLvoid *pixels);
-typedef void (*PFNGLTEXIMAGE2DPROC)               (GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const GLvoid *pixels);
-typedef void (*PFNGLTEXPARAMETERFPROC)            (GLenum target, GLenum pname, GLfloat param);
-typedef void (*PFNGLTEXPARAMETERFVPROC)           (GLenum target, GLenum pname, const GLfloat *params);
-typedef void (*PFNGLTEXPARAMETERIPROC)            (GLenum target, GLenum pname, GLint param);
-typedef void (*PFNGLTEXPARAMETERIVPROC)           (GLenum target, GLenum pname, const GLint *params);
-typedef void (*PFNGLTEXSUBIMAGE1DPROC)            (GLenum target, GLint level, GLint xoffset, GLsizei width, GLenum format, GLenum type, const GLvoid *pixels);
-typedef void (*PFNGLTEXSUBIMAGE2DPROC)            (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const GLvoid *pixels);
-typedef void (*PFNGLTRANSLATEDPROC)               (GLdouble x, GLdouble y, GLdouble z);
-typedef void (*PFNGLTRANSLATEFPROC)               (GLfloat x, GLfloat y, GLfloat z);
-typedef void (*PFNGLVERTEX2DPROC)                 (GLdouble x, GLdouble y);
-typedef void (*PFNGLVERTEX2DVPROC)                (const GLdouble *v);
-typedef void (*PFNGLVERTEX2FPROC)                 (GLfloat x, GLfloat y);
-typedef void (*PFNGLVERTEX2FVPROC)                (const GLfloat *v);
-typedef void (*PFNGLVERTEX2IPROC)                 (GLint x, GLint y);
-typedef void (*PFNGLVERTEX2IVPROC)                (const GLint *v);
-typedef void (*PFNGLVERTEX2SPROC)                 (GLshort x, GLshort y);
-typedef void (*PFNGLVERTEX2SVPROC)                (const GLshort *v);
-typedef void (*PFNGLVERTEX3DPROC)                 (GLdouble x, GLdouble y, GLdouble z);
-typedef void (*PFNGLVERTEX3DVPROC)                (const GLdouble *v);
-typedef void (*PFNGLVERTEX3FPROC)                 (GLfloat x, GLfloat y, GLfloat z);
-typedef void (*PFNGLVERTEX3FVPROC)                (const GLfloat *v);
-typedef void (*PFNGLVERTEX3IPROC)                 (GLint x, GLint y, GLint z);
-typedef void (*PFNGLVERTEX3IVPROC)                (const GLint *v);
-typedef void (*PFNGLVERTEX3SPROC)                 (GLshort x, GLshort y, GLshort z);
-typedef void (*PFNGLVERTEX3SVPROC)                (const GLshort *v);
-typedef void (*PFNGLVERTEX4DPROC)                 (GLdouble x, GLdouble y, GLdouble z, GLdouble w);
-typedef void (*PFNGLVERTEX4DVPROC)                (const GLdouble *v);
-typedef void (*PFNGLVERTEX4FPROC)                 (GLfloat x, GLfloat y, GLfloat z, GLfloat w);
-typedef void (*PFNGLVERTEX4FVPROC)                (const GLfloat *v);
-typedef void (*PFNGLVERTEX4IPROC)                 (GLint x, GLint y, GLint z, GLint w);
-typedef void (*PFNGLVERTEX4IVPROC)                (const GLint *v);
-typedef void (*PFNGLVERTEX4SPROC)                 (GLshort x, GLshort y, GLshort z, GLshort w);
-typedef void (*PFNGLVERTEX4SVPROC)                (const GLshort *v);
-typedef void (*PFNGLVERTEXPOINTERPROC)            (GLint size, GLenum type, GLsizei stride, const GLvoid *pointer);
-typedef void (*PFNGLVIEWPORTPROC)                 (GLint x, GLint y, GLsizei width, GLsizei height);
-extern PFNGLCULLFACEPROC               glCullFace;
-extern PFNGLFRONTFACEPROC              glFrontFace;
-extern PFNGLHINTPROC                   glHint;
-extern PFNGLLINEWIDTHPROC              glLineWidth;
-extern PFNGLPOINTSIZEPROC              glPointSize;
-extern PFNGLPOLYGONMODEPROC            glPolygonMode;
-extern PFNGLSCISSORPROC                glScissor;
-extern PFNGLTEXPARAMETERFPROC          glTexParameterf;
-extern PFNGLTEXPARAMETERFVPROC         glTexParameterfv;
-extern PFNGLTEXPARAMETERIPROC          glTexParameteri;
-extern PFNGLTEXPARAMETERIVPROC         glTexParameteriv;
-extern PFNGLTEXIMAGE1DPROC             glTexImage1D;
-extern PFNGLTEXIMAGE2DPROC             glTexImage2D;
-extern PFNGLDRAWBUFFERPROC             glDrawBuffer;
-extern PFNGLCLEARPROC                  glClear;
-extern PFNGLCLEARCOLORPROC             glClearColor;
-extern PFNGLCLEARSTENCILPROC           glClearStencil;
-extern PFNGLSTENCILMASKPROC            glStencilMask;
-extern PFNGLCOLORMASKPROC              glColorMask;
-extern PFNGLDEPTHMASKPROC              glDepthMask;
-extern PFNGLDISABLEPROC                glDisable;
-extern PFNGLENABLEPROC                 glEnable;
-extern PFNGLFINISHPROC                 glFinish;
-extern PFNGLFLUSHPROC                  glFlush;
-extern PFNGLBLENDFUNCPROC              glBlendFunc;
-extern PFNGLLOGICOPPROC                glLogicOp;
-extern PFNGLSTENCILFUNCPROC            glStencilFunc;
-extern PFNGLSTENCILOPPROC              glStencilOp;
-extern PFNGLDEPTHFUNCPROC              glDepthFunc;
-extern PFNGLPIXELSTOREFPROC            glPixelStoref;
-extern PFNGLPIXELSTOREIPROC            glPixelStorei;
-extern PFNGLREADBUFFERPROC             glReadBuffer;
-extern PFNGLREADPIXELSPROC             glReadPixels;
-extern PFNGLGETBOOLEANVPROC            glGetBooleanv;
-extern PFNGLGETDOUBLEVPROC             glGetDoublev;
-extern PFNGLGETERRORPROC               glGetError;
-extern PFNGLGETFLOATVPROC              glGetFloatv;
-extern PFNGLGETINTEGERVPROC            glGetIntegerv;
-extern PFNGLGETSTRINGPROC              glGetString;
-extern PFNGLGETTEXIMAGEPROC            glGetTexImage;
-extern PFNGLGETTEXPARAMETERFVPROC      glGetTexParameterfv;
-extern PFNGLGETTEXPARAMETERIVPROC      glGetTexParameteriv;
-extern PFNGLGETTEXLEVELPARAMETERFVPROC glGetTexLevelParameterfv;
-extern PFNGLGETTEXLEVELPARAMETERIVPROC glGetTexLevelParameteriv;
-extern PFNGLISENABLEDPROC              glIsEnabled;
-extern PFNGLDEPTHRANGEPROC             glDepthRange;
-extern PFNGLVIEWPORTPROC               glViewport;
-extern PFNGLACCUMPROC                  glAccum;
-extern PFNGLALPHAFUNCPROC              glAlphaFunc;
-extern PFNGLARETEXTURESRESIDENTPROC    glAreTexturesResident;
-extern PFNGLARRAYELEMENTPROC           glArrayElement;
-extern PFNGLBEGINPROC                  glBegin;
-extern PFNGLBINDTEXTUREPROC            glBindTexture;
-extern PFNGLBITMAPPROC                 glBitmap;
-extern PFNGLBLENDFUNCPROC              glBlendFunc;
-extern PFNGLCALLLISTPROC               glCallList;
-extern PFNGLCALLLISTSPROC              glCallLists;
-extern PFNGLCLEARPROC                  glClear;
-extern PFNGLCLEARACCUMPROC             glClearAccum;
-extern PFNGLCLEARCOLORPROC             glClearColor;
-extern PFNGLCLEARDEPTHPROC             glClearDepth;
-extern PFNGLCLEARINDEXPROC             glClearIndex;
-extern PFNGLCLEARSTENCILPROC           glClearStencil;
-extern PFNGLCLIPPLANEPROC              glClipPlane;
-extern PFNGLCOLOR3BPROC                glColor3b;
-extern PFNGLCOLOR3BVPROC               glColor3bv;
-extern PFNGLCOLOR3DPROC                glColor3d;
-extern PFNGLCOLOR3DVPROC               glColor3dv;
-extern PFNGLCOLOR3FPROC                glColor3f;
-extern PFNGLCOLOR3FVPROC               glColor3fv;
-extern PFNGLCOLOR3IPROC                glColor3i;
-extern PFNGLCOLOR3IVPROC               glColor3iv;
-extern PFNGLCOLOR3SPROC                glColor3s;
-extern PFNGLCOLOR3SVPROC               glColor3sv;
-extern PFNGLCOLOR3UBPROC               glColor3ub;
-extern PFNGLCOLOR3UBVPROC              glColor3ubv;
-extern PFNGLCOLOR3UIPROC               glColor3ui;
-extern PFNGLCOLOR3UIVPROC              glColor3uiv;
-extern PFNGLCOLOR3USPROC               glColor3us;
-extern PFNGLCOLOR3USVPROC              glColor3usv;
-extern PFNGLCOLOR4BPROC                glColor4b;
-extern PFNGLCOLOR4BVPROC               glColor4bv;
-extern PFNGLCOLOR4DPROC                glColor4d;
-extern PFNGLCOLOR4DVPROC               glColor4dv;
-extern PFNGLCOLOR4FPROC                glColor4f;
-extern PFNGLCOLOR4FVPROC               glColor4fv;
-extern PFNGLCOLOR4IPROC                glColor4i;
-extern PFNGLCOLOR4IVPROC               glColor4iv;
-extern PFNGLCOLOR4SPROC                glColor4s;
-extern PFNGLCOLOR4SVPROC               glColor4sv;
-extern PFNGLCOLOR4UBPROC               glColor4ub;
-extern PFNGLCOLOR4UBVPROC              glColor4ubv;
-extern PFNGLCOLOR4UIPROC               glColor4ui;
-extern PFNGLCOLOR4UIVPROC              glColor4uiv;
-extern PFNGLCOLOR4USPROC               glColor4us;
-extern PFNGLCOLOR4USVPROC              glColor4usv;
-extern PFNGLCOLORMASKPROC              glColorMask;
-extern PFNGLCOLORMATERIALPROC          glColorMaterial;
-extern PFNGLCOLORPOINTERPROC           glColorPointer;
-extern PFNGLCOPYPIXELSPROC             glCopyPixels;
-extern PFNGLCOPYTEXIMAGE1DPROC         glCopyTexImage1D;
-extern PFNGLCOPYTEXIMAGE2DPROC         glCopyTexImage2D;
-extern PFNGLCOPYTEXSUBIMAGE1DPROC      glCopyTexSubImage1D;
-extern PFNGLCOPYTEXSUBIMAGE2DPROC      glCopyTexSubImage2D;
-extern PFNGLCULLFACEPROC               glCullFace;
-extern PFNGLDELETELISTSPROC            glDeleteLists;
-extern PFNGLDELETETEXTURESPROC         glDeleteTextures;
-extern PFNGLDEPTHFUNCPROC              glDepthFunc;
-extern PFNGLDEPTHMASKPROC              glDepthMask;
-extern PFNGLDEPTHRANGEPROC             glDepthRange;
-extern PFNGLDISABLEPROC                glDisable;
-extern PFNGLDISABLECLIENTSTATEPROC     glDisableClientState;
-extern PFNGLDRAWARRAYSPROC             glDrawArrays;
-extern PFNGLDRAWBUFFERPROC             glDrawBuffer;
-extern PFNGLDRAWELEMENTSPROC           glDrawElements;
-extern PFNGLDRAWPIXELSPROC             glDrawPixels;
-extern PFNGLEDGEFLAGPROC               glEdgeFlag;
-extern PFNGLEDGEFLAGPOINTERPROC        glEdgeFlagPointer;
-extern PFNGLEDGEFLAGVPROC              glEdgeFlagv;
-extern PFNGLENABLEPROC                 glEnable;
-extern PFNGLENABLECLIENTSTATEPROC      glEnableClientState;
-extern PFNGLENDPROC                    glEnd;
-extern PFNGLENDLISTPROC                glEndList;
-extern PFNGLEVALCOORD1DPROC            glEvalCoord1d;
-extern PFNGLEVALCOORD1DVPROC           glEvalCoord1dv;
-extern PFNGLEVALCOORD1FPROC            glEvalCoord1f;
-extern PFNGLEVALCOORD1FVPROC           glEvalCoord1fv;
-extern PFNGLEVALCOORD2DPROC            glEvalCoord2d;
-extern PFNGLEVALCOORD2DVPROC           glEvalCoord2dv;
-extern PFNGLEVALCOORD2FPROC            glEvalCoord2f;
-extern PFNGLEVALCOORD2FVPROC           glEvalCoord2fv;
-extern PFNGLEVALMESH1PROC              glEvalMesh1;
-extern PFNGLEVALMESH2PROC              glEvalMesh2;
-extern PFNGLEVALPOINT1PROC             glEvalPoint1;
-extern PFNGLEVALPOINT2PROC             glEvalPoint2;
-extern PFNGLFEEDBACKBUFFERPROC         glFeedbackBuffer;
-extern PFNGLFINISHPROC                 glFinish;
-extern PFNGLFLUSHPROC                  glFlush;
-extern PFNGLFOGFPROC                   glFogf;
-extern PFNGLFOGFVPROC                  glFogfv;
-extern PFNGLFOGIPROC                   glFogi;
-extern PFNGLFOGIVPROC                  glFogiv;
-extern PFNGLFRONTFACEPROC              glFrontFace;
-extern PFNGLFRUSTUMPROC                glFrustum;
-extern PFNGLGENLISTSPROC               glGenLists;
-extern PFNGLGENTEXTURESPROC            glGenTextures;
-extern PFNGLGETBOOLEANVPROC            glGetBooleanv;
-extern PFNGLGETCLIPPLANEPROC           glGetClipPlane;
-extern PFNGLGETDOUBLEVPROC             glGetDoublev;
-extern PFNGLGETERRORPROC               glGetError;
-extern PFNGLGETFLOATVPROC              glGetFloatv;
-extern PFNGLGETINTEGERVPROC            glGetIntegerv;
-extern PFNGLGETLIGHTFVPROC             glGetLightfv;
-extern PFNGLGETLIGHTIVPROC             glGetLightiv;
-extern PFNGLGETMAPDVPROC               glGetMapdv;
-extern PFNGLGETMAPFVPROC               glGetMapfv;
-extern PFNGLGETMAPIVPROC               glGetMapiv;
-extern PFNGLGETMATERIALFVPROC          glGetMaterialfv;
-extern PFNGLGETMATERIALIVPROC          glGetMaterialiv;
-extern PFNGLGETPIXELMAPFVPROC          glGetPixelMapfv;
-extern PFNGLGETPIXELMAPUIVPROC         glGetPixelMapuiv;
-extern PFNGLGETPIXELMAPUSVPROC         glGetPixelMapusv;
-extern PFNGLGETPOINTERVPROC            glGetPointerv;
-extern PFNGLGETPOLYGONSTIPPLEPROC      glGetPolygonStipple;
-extern PFNGLGETSTRINGPROC              glGetString;
-extern PFNGLGETTEXENVFVPROC            glGetTexEnvfv;
-extern PFNGLGETTEXENVIVPROC            glGetTexEnviv;
-extern PFNGLGETTEXGENDVPROC            glGetTexGendv;
-extern PFNGLGETTEXGENFVPROC            glGetTexGenfv;
-extern PFNGLGETTEXGENIVPROC            glGetTexGeniv;
-extern PFNGLGETTEXIMAGEPROC            glGetTexImage;
-extern PFNGLGETTEXLEVELPARAMETERFVPROC glGetTexLevelParameterfv;
-extern PFNGLGETTEXLEVELPARAMETERIVPROC glGetTexLevelParameteriv;
-extern PFNGLGETTEXPARAMETERFVPROC      glGetTexParameterfv;
-extern PFNGLGETTEXPARAMETERIVPROC      glGetTexParameteriv;
-extern PFNGLHINTPROC                   glHint;
-extern PFNGLINDEXMASKPROC              glIndexMask;
-extern PFNGLINDEXPOINTERPROC           glIndexPointer;
-extern PFNGLINDEXDPROC                 glIndexd;
-extern PFNGLINDEXDVPROC                glIndexdv;
-extern PFNGLINDEXFPROC                 glIndexf;
-extern PFNGLINDEXFVPROC                glIndexfv;
-extern PFNGLINDEXIPROC                 glIndexi;
-extern PFNGLINDEXIVPROC                glIndexiv;
-extern PFNGLINDEXSPROC                 glIndexs;
-extern PFNGLINDEXSVPROC                glIndexsv;
-extern PFNGLINDEXUBPROC                glIndexub;
-extern PFNGLINDEXUBVPROC               glIndexubv;
-extern PFNGLINITNAMESPROC              glInitNames;
-extern PFNGLINTERLEAVEDARRAYSPROC      glInterleavedArrays;
-extern PFNGLISENABLEDPROC              glIsEnabled;
-extern PFNGLISLISTPROC                 glIsList;
-extern PFNGLISTEXTUREPROC              glIsTexture;
-extern PFNGLLIGHTMODELFPROC            glLightModelf;
-extern PFNGLLIGHTMODELFVPROC           glLightModelfv;
-extern PFNGLLIGHTMODELIPROC            glLightModeli;
-extern PFNGLLIGHTMODELIVPROC           glLightModeliv;
-extern PFNGLLIGHTFPROC                 glLightf;
-extern PFNGLLIGHTFVPROC                glLightfv;
-extern PFNGLLIGHTIPROC                 glLighti;
-extern PFNGLLIGHTIVPROC                glLightiv;
-extern PFNGLLINESTIPPLEPROC            glLineStipple;
-extern PFNGLLISTBASEPROC               glListBase;
-extern PFNGLLOADIDENTITYPROC           glLoadIdentity;
-extern PFNGLLOADMATRIXDPROC            glLoadMatrixd;
-extern PFNGLLOADMATRIXFPROC            glLoadMatrixf;
-extern PFNGLLOADNAMEPROC               glLoadName;
-extern PFNGLLOGICOPPROC                glLogicOp;
-extern PFNGLMAP1DPROC                  glMap1d;
-extern PFNGLMAP1FPROC                  glMap1f;
-extern PFNGLMAP2DPROC                  glMap2d;
-extern PFNGLMAP2FPROC                  glMap2f;
-extern PFNGLMAPGRID1DPROC              glMapGrid1d;
-extern PFNGLMAPGRID1FPROC              glMapGrid1f;
-extern PFNGLMAPGRID2DPROC              glMapGrid2d;
-extern PFNGLMAPGRID2FPROC              glMapGrid2f;
-extern PFNGLMATERIALFPROC              glMaterialf;
-extern PFNGLMATERIALFVPROC             glMaterialfv;
-extern PFNGLMATERIALIPROC              glMateriali;
-extern PFNGLMATERIALIVPROC             glMaterialiv;
-extern PFNGLMATRIXMODEPROC             glMatrixMode;
-extern PFNGLMULTMATRIXDPROC            glMultMatrixd;
-extern PFNGLMULTMATRIXFPROC            glMultMatrixf;
-extern PFNGLNEWLISTPROC                glNewList;
-extern PFNGLNORMAL3BPROC               glNormal3b;
-extern PFNGLNORMAL3BVPROC              glNormal3bv;
-extern PFNGLNORMAL3DPROC               glNormal3d;
-extern PFNGLNORMAL3DVPROC              glNormal3dv;
-extern PFNGLNORMAL3FPROC               glNormal3f;
-extern PFNGLNORMAL3FVPROC              glNormal3fv;
-extern PFNGLNORMAL3IPROC               glNormal3i;
-extern PFNGLNORMAL3IVPROC              glNormal3iv;
-extern PFNGLNORMAL3SPROC               glNormal3s;
-extern PFNGLNORMAL3SVPROC              glNormal3sv;
-extern PFNGLNORMALPOINTERPROC          glNormalPointer;
-extern PFNGLORTHOPROC                  glOrtho;
-extern PFNGLPASSTHROUGHPROC            glPassThrough;
-extern PFNGLPIXELMAPFVPROC             glPixelMapfv;
-extern PFNGLPIXELMAPUIVPROC            glPixelMapuiv;
-extern PFNGLPIXELMAPUSVPROC            glPixelMapusv;
-extern PFNGLPIXELSTOREFPROC            glPixelStoref;
-extern PFNGLPIXELSTOREIPROC            glPixelStorei;
-extern PFNGLPIXELTRANSFERFPROC         glPixelTransferf;
-extern PFNGLPIXELTRANSFERIPROC         glPixelTransferi;
-extern PFNGLPIXELZOOMPROC              glPixelZoom;
-extern PFNGLPOINTSIZEPROC              glPointSize;
-extern PFNGLPOLYGONMODEPROC            glPolygonMode;
-extern PFNGLPOLYGONOFFSETPROC          glPolygonOffset;
-extern PFNGLPOLYGONSTIPPLEPROC         glPolygonStipple;
-extern PFNGLPOPATTRIBPROC              glPopAttrib;
-extern PFNGLPOPCLIENTATTRIBPROC        glPopClientAttrib;
-extern PFNGLPOPMATRIXPROC              glPopMatrix;
-extern PFNGLPOPNAMEPROC                glPopName;
-extern PFNGLPRIORITIZETEXTURESPROC     glPrioritizeTextures;
-extern PFNGLPUSHATTRIBPROC             glPushAttrib;
-extern PFNGLPUSHCLIENTATTRIBPROC       glPushClientAttrib;
-extern PFNGLPUSHMATRIXPROC             glPushMatrix;
-extern PFNGLPUSHNAMEPROC               glPushName;
-extern PFNGLRASTERPOS2DPROC            glRasterPos2d;
-extern PFNGLRASTERPOS2DVPROC           glRasterPos2dv;
-extern PFNGLRASTERPOS2FPROC            glRasterPos2f;
-extern PFNGLRASTERPOS2FVPROC           glRasterPos2fv;
-extern PFNGLRASTERPOS2IPROC            glRasterPos2i;
-extern PFNGLRASTERPOS2IVPROC           glRasterPos2iv;
-extern PFNGLRASTERPOS2SPROC            glRasterPos2s;
-extern PFNGLRASTERPOS2SVPROC           glRasterPos2sv;
-extern PFNGLRASTERPOS3DPROC            glRasterPos3d;
-extern PFNGLRASTERPOS3DVPROC           glRasterPos3dv;
-extern PFNGLRASTERPOS3FPROC            glRasterPos3f;
-extern PFNGLRASTERPOS3FVPROC           glRasterPos3fv;
-extern PFNGLRASTERPOS3IPROC            glRasterPos3i;
-extern PFNGLRASTERPOS3IVPROC           glRasterPos3iv;
-extern PFNGLRASTERPOS3SPROC            glRasterPos3s;
-extern PFNGLRASTERPOS3SVPROC           glRasterPos3sv;
-extern PFNGLRASTERPOS4DPROC            glRasterPos4d;
-extern PFNGLRASTERPOS4DVPROC           glRasterPos4dv;
-extern PFNGLRASTERPOS4FPROC            glRasterPos4f;
-extern PFNGLRASTERPOS4FVPROC           glRasterPos4fv;
-extern PFNGLRASTERPOS4IPROC            glRasterPos4i;
-extern PFNGLRASTERPOS4IVPROC           glRasterPos4iv;
-extern PFNGLRASTERPOS4SPROC            glRasterPos4s;
-extern PFNGLRASTERPOS4SVPROC           glRasterPos4sv;
-extern PFNGLREADBUFFERPROC             glReadBuffer;
-extern PFNGLREADPIXELSPROC             glReadPixels;
-extern PFNGLRECTDPROC                  glRectd;
-extern PFNGLRECTDVPROC                 glRectdv;
-extern PFNGLRECTFPROC                  glRectf;
-extern PFNGLRECTFVPROC                 glRectfv;
-extern PFNGLRECTIPROC                  glRecti;
-extern PFNGLRECTIVPROC                 glRectiv;
-extern PFNGLRECTSPROC                  glRects;
-extern PFNGLRECTSVPROC                 glRectsv;
-extern PFNGLRENDERMODEPROC             glRenderMode;
-extern PFNGLROTATEDPROC                glRotated;
-extern PFNGLROTATEFPROC                glRotatef;
-extern PFNGLSCALEDPROC                 glScaled;
-extern PFNGLSCALEFPROC                 glScalef;
-extern PFNGLSCISSORPROC                glScissor;
-extern PFNGLSELECTBUFFERPROC           glSelectBuffer;
-extern PFNGLSHADEMODELPROC             glShadeModel;
-extern PFNGLSTENCILFUNCPROC            glStencilFunc;
-extern PFNGLSTENCILMASKPROC            glStencilMask;
-extern PFNGLSTENCILOPPROC              glStencilOp;
-extern PFNGLTEXCOORD1DPROC             glTexCoord1d;
-extern PFNGLTEXCOORD1DVPROC            glTexCoord1dv;
-extern PFNGLTEXCOORD1FPROC             glTexCoord1f;
-extern PFNGLTEXCOORD1FVPROC            glTexCoord1fv;
-extern PFNGLTEXCOORD1IPROC             glTexCoord1i;
-extern PFNGLTEXCOORD1IVPROC            glTexCoord1iv;
-extern PFNGLTEXCOORD1SPROC             glTexCoord1s;
-extern PFNGLTEXCOORD1SVPROC            glTexCoord1sv;
-extern PFNGLTEXCOORD2DPROC             glTexCoord2d;
-extern PFNGLTEXCOORD2DVPROC            glTexCoord2dv;
-extern PFNGLTEXCOORD2FPROC             glTexCoord2f;
-extern PFNGLTEXCOORD2FVPROC            glTexCoord2fv;
-extern PFNGLTEXCOORD2IPROC             glTexCoord2i;
-extern PFNGLTEXCOORD2IVPROC            glTexCoord2iv;
-extern PFNGLTEXCOORD2SPROC             glTexCoord2s;
-extern PFNGLTEXCOORD2SVPROC            glTexCoord2sv;
-extern PFNGLTEXCOORD3DPROC             glTexCoord3d;
-extern PFNGLTEXCOORD3DVPROC            glTexCoord3dv;
-extern PFNGLTEXCOORD3FPROC             glTexCoord3f;
-extern PFNGLTEXCOORD3FVPROC            glTexCoord3fv;
-extern PFNGLTEXCOORD3IPROC             glTexCoord3i;
-extern PFNGLTEXCOORD3IVPROC            glTexCoord3iv;
-extern PFNGLTEXCOORD3SPROC             glTexCoord3s;
-extern PFNGLTEXCOORD3SVPROC            glTexCoord3sv;
-extern PFNGLTEXCOORD4DPROC             glTexCoord4d;
-extern PFNGLTEXCOORD4DVPROC            glTexCoord4dv;
-extern PFNGLTEXCOORD4FPROC             glTexCoord4f;
-extern PFNGLTEXCOORD4FVPROC            glTexCoord4fv;
-extern PFNGLTEXCOORD4IPROC             glTexCoord4i;
-extern PFNGLTEXCOORD4IVPROC            glTexCoord4iv;
-extern PFNGLTEXCOORD4SPROC             glTexCoord4s;
-extern PFNGLTEXCOORD4SVPROC            glTexCoord4sv;
-extern PFNGLTEXCOORDPOINTERPROC        glTexCoordPointer;
-extern PFNGLTEXENVFPROC                glTexEnvf;
-extern PFNGLTEXENVFVPROC               glTexEnvfv;
-extern PFNGLTEXENVIPROC                glTexEnvi;
-extern PFNGLTEXENVIVPROC               glTexEnviv;
-extern PFNGLTEXGENDPROC                glTexGend;
-extern PFNGLTEXGENDVPROC               glTexGendv;
-extern PFNGLTEXGENFPROC                glTexGenf;
-extern PFNGLTEXGENFVPROC               glTexGenfv;
-extern PFNGLTEXGENIPROC                glTexGeni;
-extern PFNGLTEXGENIVPROC               glTexGeniv;
-extern PFNGLTEXIMAGE1DPROC             glTexImage1D;
-extern PFNGLTEXIMAGE2DPROC             glTexImage2D;
-extern PFNGLTEXPARAMETERFPROC          glTexParameterf;
-extern PFNGLTEXPARAMETERFVPROC         glTexParameterfv;
-extern PFNGLTEXPARAMETERIPROC          glTexParameteri;
-extern PFNGLTEXPARAMETERIVPROC         glTexParameteriv;
-extern PFNGLTEXSUBIMAGE1DPROC          glTexSubImage1D;
-extern PFNGLTEXSUBIMAGE2DPROC          glTexSubImage2D;
-extern PFNGLTRANSLATEDPROC             glTranslated;
-extern PFNGLTRANSLATEFPROC             glTranslatef;
-extern PFNGLVERTEX2DPROC               glVertex2d;
-extern PFNGLVERTEX2DVPROC              glVertex2dv;
-extern PFNGLVERTEX2FPROC               glVertex2f;
-extern PFNGLVERTEX2FVPROC              glVertex2fv;
-extern PFNGLVERTEX2IPROC               glVertex2i;
-extern PFNGLVERTEX2IVPROC              glVertex2iv;
-extern PFNGLVERTEX2SPROC               glVertex2s;
-extern PFNGLVERTEX2SVPROC              glVertex2sv;
-extern PFNGLVERTEX3DPROC               glVertex3d;
-extern PFNGLVERTEX3DVPROC              glVertex3dv;
-extern PFNGLVERTEX3FPROC               glVertex3f;
-extern PFNGLVERTEX3FVPROC              glVertex3fv;
-extern PFNGLVERTEX3IPROC               glVertex3i;
-extern PFNGLVERTEX3IVPROC              glVertex3iv;
-extern PFNGLVERTEX3SPROC               glVertex3s;
-extern PFNGLVERTEX3SVPROC              glVertex3sv;
-extern PFNGLVERTEX4DPROC               glVertex4d;
-extern PFNGLVERTEX4DVPROC              glVertex4dv;
-extern PFNGLVERTEX4FPROC               glVertex4f;
-extern PFNGLVERTEX4FVPROC              glVertex4fv;
-extern PFNGLVERTEX4IPROC               glVertex4i;
-extern PFNGLVERTEX4IVPROC              glVertex4iv;
-extern PFNGLVERTEX4SPROC               glVertex4s;
-extern PFNGLVERTEX4SVPROC              glVertex4sv;
-extern PFNGLVERTEXPOINTERPROC          glVertexPointer;
-extern PFNGLVIEWPORTPROC               glViewport;
-/* ----GL VERSION 1.2------------------------------------------------------------------------------------------------ */
-typedef void (* PFNGLDRAWRANGEELEMENTSPROC) (GLenum mode, GLuint start, GLuint end, GLsizei count, GLenum type, const void *indices);
-typedef void (* PFNGLTEXIMAGE3DPROC)        (GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLenum format, GLenum type, const void *pixels);
-typedef void (* PFNGLTEXSUBIMAGE3DPROC)     (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, const void *pixels);
-typedef void (* PFNGLCOPYTEXSUBIMAGE3DPROC) (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLint x, GLint y, GLsizei width, GLsizei height);
-extern PFNGLDRAWRANGEELEMENTSPROC glDrawRangeElements;
-extern PFNGLTEXIMAGE3DPROC        glTexImage3D;
-extern PFNGLTEXSUBIMAGE3DPROC     glTexSubImage3D;
-extern PFNGLCOPYTEXSUBIMAGE3DPROC glCopyTexSubImage3D;
-/* ----GL VERSION 1.3------------------------------------------------------------------------------------------------ */
-typedef void (* PFNGLACTIVETEXTUREPROC)           (GLenum texture);
-typedef void (* PFNGLSAMPLECOVERAGEPROC)          (GLfloat value, GLboolean invert);
-typedef void (* PFNGLCOMPRESSEDTEXIMAGE3DPROC)    (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLsizei imageSize, const void *data);
-typedef void (* PFNGLCOMPRESSEDTEXIMAGE2DPROC)    (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLint border, GLsizei imageSize, const void *data);
-typedef void (* PFNGLCOMPRESSEDTEXIMAGE1DPROC)    (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLint border, GLsizei imageSize, const void *data);
-typedef void (* PFNGLCOMPRESSEDTEXSUBIMAGE3DPROC) (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLsizei imageSize, const void *data);
-typedef void (* PFNGLCOMPRESSEDTEXSUBIMAGE2DPROC) (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLsizei imageSize, const void *data);
-typedef void (* PFNGLCOMPRESSEDTEXSUBIMAGE1DPROC) (GLenum target, GLint level, GLint xoffset, GLsizei width, GLenum format, GLsizei imageSize, const void *data);
-typedef void (* PFNGLGETCOMPRESSEDTEXIMAGEPROC)   (GLenum target, GLint level, void *img);
-extern PFNGLACTIVETEXTUREPROC           glActiveTexture;
-extern PFNGLSAMPLECOVERAGEPROC          glSampleCoverage;
-extern PFNGLCOMPRESSEDTEXIMAGE3DPROC    glCompressedTexImage3D;
-extern PFNGLCOMPRESSEDTEXIMAGE2DPROC    glCompressedTexImage2D;
-extern PFNGLCOMPRESSEDTEXIMAGE1DPROC    glCompressedTexImage1D;
-extern PFNGLCOMPRESSEDTEXSUBIMAGE3DPROC glCompressedTexSubImage3D;
-extern PFNGLCOMPRESSEDTEXSUBIMAGE2DPROC glCompressedTexSubImage2D;
-extern PFNGLCOMPRESSEDTEXSUBIMAGE1DPROC glCompressedTexSubImage1D;
-extern PFNGLGETCOMPRESSEDTEXIMAGEPROC   glGetCompressedTexImage;
-/* ----GL VERSION 1.4------------------------------------------------------------------------------------------------ */
-typedef void (*PFNGLBLENDFUNCSEPARATEPROC) (GLenum sfactorRGB, GLenum dfactorRGB, GLenum sfactorAlpha, GLenum dfactorAlpha);
-typedef void (*PFNGLMULTIDRAWARRAYSPROC) (GLenum mode, const GLint *first, const GLsizei *count, GLsizei drawcount);
-typedef void (*PFNGLMULTIDRAWELEMENTSPROC) (GLenum mode, const GLsizei *count, GLenum type, const void *const*indices, GLsizei drawcount);
-typedef void (*PFNGLPOINTPARAMETERFPROC) (GLenum pname, GLfloat param);
-typedef void (*PFNGLPOINTPARAMETERFVPROC) (GLenum pname, const GLfloat *params);
-typedef void (*PFNGLPOINTPARAMETERIPROC) (GLenum pname, GLint param);
-typedef void (*PFNGLPOINTPARAMETERIVPROC) (GLenum pname, const GLint *params);
-typedef void (*PFNGLBLENDCOLORPROC) (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha);
-typedef void (*PFNGLBLENDEQUATIONPROC) (GLenum mode);
-extern PFNGLBLENDFUNCSEPARATEPROC glBlendFuncSeparate;
-extern PFNGLMULTIDRAWARRAYSPROC   glMultiDrawArrays;
-extern PFNGLMULTIDRAWELEMENTSPROC glMultiDrawElements;
-extern PFNGLPOINTPARAMETERFPROC   glPointParameterf;
-extern PFNGLPOINTPARAMETERFVPROC  glPointParameterfv;
-extern PFNGLPOINTPARAMETERIPROC   glPointParameteri;
-extern PFNGLPOINTPARAMETERIVPROC  glPointParameteriv;
-extern PFNGLBLENDCOLORPROC        glBlendColor;
-extern PFNGLBLENDEQUATIONPROC     glBlendEquation;
-/* ----GL VERSION 1.5------------------------------------------------------------------------------------------------ */
-typedef void      (*PFNGLGENQUERIESPROC)           (GLsizei n, GLuint *ids);
-typedef void      (*PFNGLDELETEQUERIESPROC)        (GLsizei n, const GLuint *ids);
-typedef GLboolean (*PFNGLISQUERYPROC)              (GLuint id);
-typedef void      (*PFNGLBEGINQUERYPROC)           (GLenum target, GLuint id);
-typedef void      (*PFNGLENDQUERYPROC)             (GLenum target);
-typedef void      (*PFNGLGETQUERYIVPROC)           (GLenum target, GLenum pname, GLint *params);
-typedef void      (*PFNGLGETQUERYOBJECTIVPROC)     (GLuint id, GLenum pname, GLint *params);
-typedef void      (*PFNGLGETQUERYOBJECTUIVPROC)    (GLuint id, GLenum pname, GLuint *params);
-typedef void      (*PFNGLBINDBUFFERPROC)           (GLenum target, GLuint buffer);
-typedef void      (*PFNGLDELETEBUFFERSPROC)        (GLsizei n, const GLuint *buffers);
-typedef void      (*PFNGLGENBUFFERSPROC)           (GLsizei n, GLuint *buffers);
-typedef GLboolean (*PFNGLISBUFFERPROC)             (GLuint buffer);
-typedef void      (*PFNGLBUFFERDATAPROC)           (GLenum target, GLsizeiptr size, const void *data, GLenum usage);
-typedef void      (*PFNGLBUFFERSUBDATAPROC)        (GLenum target, GLintptr offset, GLsizeiptr size, const void *data);
-typedef void      (*PFNGLGETBUFFERSUBDATAPROC)     (GLenum target, GLintptr offset, GLsizeiptr size, void *data);
-typedef void *    (*PFNGLMAPBUFFERPROC)            (GLenum target, GLenum access);
-typedef GLboolean (*PFNGLUNMAPBUFFERPROC)          (GLenum target);
-typedef void      (*PFNGLGETBUFFERPARAMETERIVPROC) (GLenum target, GLenum pname, GLint *params);
-typedef void      (*PFNGLGETBUFFERPOINTERVPROC)    (GLenum target, GLenum pname, void **params);
-extern PFNGLGENQUERIESPROC           glGenQueries;
-extern PFNGLDELETEQUERIESPROC        glDeleteQueries;
-extern PFNGLISQUERYPROC              glIsQuery;
-extern PFNGLBEGINQUERYPROC           glBeginQuery;
-extern PFNGLENDQUERYPROC             glEndQuery;
-extern PFNGLGETQUERYIVPROC           glGetQueryiv;
-extern PFNGLGETQUERYOBJECTIVPROC     glGetQueryObjectiv;
-extern PFNGLGETQUERYOBJECTUIVPROC    glGetQueryObjectuiv;
-extern PFNGLBINDBUFFERPROC           glBindBuffer;
-extern PFNGLDELETEBUFFERSPROC        glDeleteBuffers;
-extern PFNGLGENBUFFERSPROC           glGenBuffers;
-extern PFNGLISBUFFERPROC             glIsBuffer;
-extern PFNGLBUFFERDATAPROC           glBufferData;
-extern PFNGLBUFFERSUBDATAPROC        glBufferSubData;
-extern PFNGLGETBUFFERSUBDATAPROC     glGetBufferSubData;
-extern PFNGLMAPBUFFERPROC            glMapBuffer;
-extern PFNGLUNMAPBUFFERPROC          glUnmapBuffer;
-extern PFNGLGETBUFFERPARAMETERIVPROC glGetBufferParameteriv;
-extern PFNGLGETBUFFERPOINTERVPROC    glGetBufferPointerv;
-/* ----GL VERSION 2.0------------------------------------------------------------------------------------------------ */
-typedef void (*PFNGLBLENDEQUATIONSEPARATEPROC)    (GLenum modeRGB, GLenum modeAlpha);
-typedef void (*PFNGLDRAWBUFFERSPROC)              (GLsizei n, const GLenum *bufs);
-typedef void (*PFNGLSTENCILOPSEPARATEPROC)        (GLenum face, GLenum sfail, GLenum dpfail, GLenum dppass);
-typedef void (*PFNGLSTENCILFUNCSEPARATEPROC)      (GLenum face, GLenum func, GLint ref, GLuint mask);
-typedef void (*PFNGLSTENCILMASKSEPARATEPROC)      (GLenum face, GLuint mask);
-typedef void (*PFNGLATTACHSHADERPROC)             (GLuint program, GLuint shader);
-typedef void (*PFNGLBINDATTRIBLOCATIONPROC)       (GLuint program, GLuint index, const GLchar *name);
-typedef void (*PFNGLCOMPILESHADERPROC)            (GLuint shader);
-typedef GLuint (*PFNGLCREATEPROGRAMPROC)          (void);
-typedef GLuint (*PFNGLCREATESHADERPROC)           (GLenum type);
-typedef void (*PFNGLDELETEPROGRAMPROC)            (GLuint program);
-typedef void (*PFNGLDELETESHADERPROC)             (GLuint shader);
-typedef void (*PFNGLDETACHSHADERPROC)             (GLuint program, GLuint shader);
-typedef void (*PFNGLDISABLEVERTEXATTRIBARRAYPROC) (GLuint index);
-typedef void (*PFNGLENABLEVERTEXATTRIBARRAYPROC)  (GLuint index);
-typedef void (*PFNGLGETACTIVEATTRIBPROC)          (GLuint program, GLuint index, GLsizei bufSize, GLsizei *length, GLint *size, GLenum *type, GLchar *name);
-typedef void (*PFNGLGETACTIVEUNIFORMPROC)         (GLuint program, GLuint index, GLsizei bufSize, GLsizei *length, GLint *size, GLenum *type, GLchar *name);
-typedef void (*PFNGLGETATTACHEDSHADERSPROC)       (GLuint program, GLsizei maxCount, GLsizei *count, GLuint *shaders);
-typedef GLint (*PFNGLGETATTRIBLOCATIONPROC)       (GLuint program, const GLchar *name);
-typedef void (*PFNGLGETPROGRAMIVPROC)             (GLuint program, GLenum pname, GLint *params);
-typedef void (*PFNGLGETPROGRAMINFOLOGPROC)        (GLuint program, GLsizei bufSize, GLsizei *length, GLchar *infoLog);
-typedef void (*PFNGLGETSHADERIVPROC)              (GLuint shader, GLenum pname, GLint *params);
-typedef void (*PFNGLGETSHADERINFOLOGPROC)         (GLuint shader, GLsizei bufSize, GLsizei *length, GLchar *infoLog);
-typedef void (*PFNGLGETSHADERSOURCEPROC)          (GLuint shader, GLsizei bufSize, GLsizei *length, GLchar *source);
-typedef GLint (*PFNGLGETUNIFORMLOCATIONPROC)      (GLuint program, const GLchar *name);
-typedef void (*PFNGLGETUNIFORMFVPROC)             (GLuint program, GLint location, GLfloat *params);
-typedef void (*PFNGLGETUNIFORMIVPROC)             (GLuint program, GLint location, GLint *params);
-typedef void (*PFNGLGETVERTEXATTRIBDVPROC)        (GLuint index, GLenum pname, GLdouble *params);
-typedef void (*PFNGLGETVERTEXATTRIBFVPROC)        (GLuint index, GLenum pname, GLfloat *params);
-typedef void (*PFNGLGETVERTEXATTRIBIVPROC)        (GLuint index, GLenum pname, GLint *params);
-typedef void (*PFNGLGETVERTEXATTRIBPOINTERVPROC)  (GLuint index, GLenum pname, void **pointer);
-typedef GLboolean (*PFNGLISPROGRAMPROC)           (GLuint program);
-typedef GLboolean (*PFNGLISSHADERPROC)            (GLuint shader);
-typedef void (*PFNGLLINKPROGRAMPROC)              (GLuint program);
-typedef void (*PFNGLSHADERSOURCEPROC)             (GLuint shader, GLsizei count, const GLchar *const*string, const GLint *length);
-typedef void (*PFNGLUSEPROGRAMPROC)               (GLuint program);
-typedef void (*PFNGLUNIFORM1FPROC)                (GLint location, GLfloat v0);
-typedef void (*PFNGLUNIFORM2FPROC)                (GLint location, GLfloat v0, GLfloat v1);
-typedef void (*PFNGLUNIFORM3FPROC)                (GLint location, GLfloat v0, GLfloat v1, GLfloat v2);
-typedef void (*PFNGLUNIFORM4FPROC)                (GLint location, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3);
-typedef void (*PFNGLUNIFORM1IPROC)                (GLint location, GLint v0);
-typedef void (*PFNGLUNIFORM2IPROC)                (GLint location, GLint v0, GLint v1);
-typedef void (*PFNGLUNIFORM3IPROC)                (GLint location, GLint v0, GLint v1, GLint v2);
-typedef void (*PFNGLUNIFORM4IPROC)                (GLint location, GLint v0, GLint v1, GLint v2, GLint v3);
-typedef void (*PFNGLUNIFORM1FVPROC)               (GLint location, GLsizei count, const GLfloat *value);
-typedef void (*PFNGLUNIFORM2FVPROC)               (GLint location, GLsizei count, const GLfloat *value);
-typedef void (*PFNGLUNIFORM3FVPROC)               (GLint location, GLsizei count, const GLfloat *value);
-typedef void (*PFNGLUNIFORM4FVPROC)               (GLint location, GLsizei count, const GLfloat *value);
-typedef void (*PFNGLUNIFORM1IVPROC)               (GLint location, GLsizei count, const GLint *value);
-typedef void (*PFNGLUNIFORM2IVPROC)               (GLint location, GLsizei count, const GLint *value);
-typedef void (*PFNGLUNIFORM3IVPROC)               (GLint location, GLsizei count, const GLint *value);
-typedef void (*PFNGLUNIFORM4IVPROC)               (GLint location, GLsizei count, const GLint *value);
-typedef void (*PFNGLUNIFORMMATRIX2FVPROC)         (GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
-typedef void (*PFNGLUNIFORMMATRIX3FVPROC)         (GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
-typedef void (*PFNGLUNIFORMMATRIX4FVPROC)         (GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
-typedef void (*PFNGLVALIDATEPROGRAMPROC)          (GLuint program);
-typedef void (*PFNGLVERTEXATTRIB1DPROC)           (GLuint index, GLdouble x);
-typedef void (*PFNGLVERTEXATTRIB1DVPROC)          (GLuint index, const GLdouble *v);
-typedef void (*PFNGLVERTEXATTRIB1FPROC)           (GLuint index, GLfloat x);
-typedef void (*PFNGLVERTEXATTRIB1FVPROC)          (GLuint index, const GLfloat *v);
-typedef void (*PFNGLVERTEXATTRIB1SPROC)           (GLuint index, GLshort x);
-typedef void (*PFNGLVERTEXATTRIB1SVPROC)          (GLuint index, const GLshort *v);
-typedef void (*PFNGLVERTEXATTRIB2DPROC)           (GLuint index, GLdouble x, GLdouble y);
-typedef void (*PFNGLVERTEXATTRIB2DVPROC)          (GLuint index, const GLdouble *v);
-typedef void (*PFNGLVERTEXATTRIB2FPROC)           (GLuint index, GLfloat x, GLfloat y);
-typedef void (*PFNGLVERTEXATTRIB2FVPROC)          (GLuint index, const GLfloat *v);
-typedef void (*PFNGLVERTEXATTRIB2SPROC)           (GLuint index, GLshort x, GLshort y);
-typedef void (*PFNGLVERTEXATTRIB2SVPROC)          (GLuint index, const GLshort *v);
-typedef void (*PFNGLVERTEXATTRIB3DPROC)           (GLuint index, GLdouble x, GLdouble y, GLdouble z);
-typedef void (*PFNGLVERTEXATTRIB3DVPROC)          (GLuint index, const GLdouble *v);
-typedef void (*PFNGLVERTEXATTRIB3FPROC)           (GLuint index, GLfloat x, GLfloat y, GLfloat z);
-typedef void (*PFNGLVERTEXATTRIB3FVPROC)          (GLuint index, const GLfloat *v);
-typedef void (*PFNGLVERTEXATTRIB3SPROC)           (GLuint index, GLshort x, GLshort y, GLshort z);
-typedef void (*PFNGLVERTEXATTRIB3SVPROC)          (GLuint index, const GLshort *v);
-typedef void (*PFNGLVERTEXATTRIB4NBVPROC)         (GLuint index, const GLbyte *v);
-typedef void (*PFNGLVERTEXATTRIB4NIVPROC)         (GLuint index, const GLint *v);
-typedef void (*PFNGLVERTEXATTRIB4NSVPROC)         (GLuint index, const GLshort *v);
-typedef void (*PFNGLVERTEXATTRIB4NUBPROC)         (GLuint index, GLubyte x, GLubyte y, GLubyte z, GLubyte w);
-typedef void (*PFNGLVERTEXATTRIB4NUBVPROC)        (GLuint index, const GLubyte *v);
-typedef void (*PFNGLVERTEXATTRIB4NUIVPROC)        (GLuint index, const GLuint *v);
-typedef void (*PFNGLVERTEXATTRIB4NUSVPROC)        (GLuint index, const GLushort *v);
-typedef void (*PFNGLVERTEXATTRIB4BVPROC)          (GLuint index, const GLbyte *v);
-typedef void (*PFNGLVERTEXATTRIB4DPROC)           (GLuint index, GLdouble x, GLdouble y, GLdouble z, GLdouble w);
-typedef void (*PFNGLVERTEXATTRIB4DVPROC)          (GLuint index, const GLdouble *v);
-typedef void (*PFNGLVERTEXATTRIB4FPROC)           (GLuint index, GLfloat x, GLfloat y, GLfloat z, GLfloat w);
-typedef void (*PFNGLVERTEXATTRIB4FVPROC)          (GLuint index, const GLfloat *v);
-typedef void (*PFNGLVERTEXATTRIB4IVPROC)          (GLuint index, const GLint *v);
-typedef void (*PFNGLVERTEXATTRIB4SPROC)           (GLuint index, GLshort x, GLshort y, GLshort z, GLshort w);
-typedef void (*PFNGLVERTEXATTRIB4SVPROC)          (GLuint index, const GLshort *v);
-typedef void (*PFNGLVERTEXATTRIB4UBVPROC)         (GLuint index, const GLubyte *v);
-typedef void (*PFNGLVERTEXATTRIB4UIVPROC)         (GLuint index, const GLuint *v);
-typedef void (*PFNGLVERTEXATTRIB4USVPROC)         (GLuint index, const GLushort *v);
-typedef void (*PFNGLVERTEXATTRIBPOINTERPROC)      (GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void *pointer);
-extern PFNGLBLENDEQUATIONSEPARATEPROC    glBlendEquationSeparate;
-extern PFNGLDRAWBUFFERSPROC              glDrawBuffers;
-extern PFNGLSTENCILOPSEPARATEPROC        glStencilOpSeparate;
-extern PFNGLSTENCILFUNCSEPARATEPROC      glStencilFuncSeparate;
-extern PFNGLSTENCILMASKSEPARATEPROC      glStencilMaskSeparate;
-extern PFNGLATTACHSHADERPROC             glAttachShader;
-extern PFNGLBINDATTRIBLOCATIONPROC       glBindAttribLocation;
-extern PFNGLCOMPILESHADERPROC            glCompileShader;
-extern PFNGLCREATEPROGRAMPROC            glCreateProgram;
-extern PFNGLCREATESHADERPROC             glCreateShader;
-extern PFNGLDELETEPROGRAMPROC            glDeleteProgram;
-extern PFNGLDELETESHADERPROC             glDeleteShader;
-extern PFNGLDETACHSHADERPROC             glDetachShader;
-extern PFNGLDISABLEVERTEXATTRIBARRAYPROC glDisableVertexAttribArray;
-extern PFNGLENABLEVERTEXATTRIBARRAYPROC  glEnableVertexAttribArray;
-extern PFNGLGETACTIVEATTRIBPROC          glGetActiveAttrib;
-extern PFNGLGETACTIVEUNIFORMPROC         glGetActiveUniform;
-extern PFNGLGETATTACHEDSHADERSPROC       glGetAttachedShaders;
-extern PFNGLGETATTRIBLOCATIONPROC        glGetAttribLocation;
-extern PFNGLGETPROGRAMIVPROC             glGetProgramiv;
-extern PFNGLGETPROGRAMINFOLOGPROC        glGetProgramInfoLog;
-extern PFNGLGETSHADERIVPROC              glGetShaderiv;
-extern PFNGLGETSHADERINFOLOGPROC         glGetShaderInfoLog;
-extern PFNGLGETSHADERSOURCEPROC          glGetShaderSource;
-extern PFNGLGETUNIFORMLOCATIONPROC       glGetUniformLocation;
-extern PFNGLGETUNIFORMFVPROC             glGetUniformfv;
-extern PFNGLGETUNIFORMIVPROC             glGetUniformiv;
-extern PFNGLGETVERTEXATTRIBDVPROC        glGetVertexAttribdv;
-extern PFNGLGETVERTEXATTRIBFVPROC        glGetVertexAttribfv;
-extern PFNGLGETVERTEXATTRIBIVPROC        glGetVertexAttribiv;
-extern PFNGLGETVERTEXATTRIBPOINTERVPROC  glGetVertexAttribPointerv;
-extern PFNGLISPROGRAMPROC                glIsProgram;
-extern PFNGLISSHADERPROC                 glIsShader;
-extern PFNGLLINKPROGRAMPROC              glLinkProgram;
-extern PFNGLSHADERSOURCEPROC             glShaderSource;
-extern PFNGLUSEPROGRAMPROC               glUseProgram;
-extern PFNGLUNIFORM1FPROC                glUniform1f;
-extern PFNGLUNIFORM2FPROC                glUniform2f;
-extern PFNGLUNIFORM3FPROC                glUniform3f;
-extern PFNGLUNIFORM4FPROC                glUniform4f;
-extern PFNGLUNIFORM1IPROC                glUniform1i;
-extern PFNGLUNIFORM2IPROC                glUniform2i;
-extern PFNGLUNIFORM3IPROC                glUniform3i;
-extern PFNGLUNIFORM4IPROC                glUniform4i;
-extern PFNGLUNIFORM1FVPROC               glUniform1fv;
-extern PFNGLUNIFORM2FVPROC               glUniform2fv;
-extern PFNGLUNIFORM3FVPROC               glUniform3fv;
-extern PFNGLUNIFORM4FVPROC               glUniform4fv;
-extern PFNGLUNIFORM1IVPROC               glUniform1iv;
-extern PFNGLUNIFORM2IVPROC               glUniform2iv;
-extern PFNGLUNIFORM3IVPROC               glUniform3iv;
-extern PFNGLUNIFORM4IVPROC               glUniform4iv;
-extern PFNGLUNIFORMMATRIX2FVPROC         glUniformMatrix2fv;
-extern PFNGLUNIFORMMATRIX3FVPROC         glUniformMatrix3fv;
-extern PFNGLUNIFORMMATRIX4FVPROC         glUniformMatrix4fv;
-extern PFNGLVALIDATEPROGRAMPROC          glValidateProgram;
-extern PFNGLVERTEXATTRIB1DPROC           glVertexAttrib1d;
-extern PFNGLVERTEXATTRIB1DVPROC          glVertexAttrib1dv;
-extern PFNGLVERTEXATTRIB1FPROC           glVertexAttrib1f;
-extern PFNGLVERTEXATTRIB1FVPROC          glVertexAttrib1fv;
-extern PFNGLVERTEXATTRIB1SPROC           glVertexAttrib1s;
-extern PFNGLVERTEXATTRIB1SVPROC          glVertexAttrib1sv;
-extern PFNGLVERTEXATTRIB2DPROC           glVertexAttrib2d;
-extern PFNGLVERTEXATTRIB2DVPROC          glVertexAttrib2dv;
-extern PFNGLVERTEXATTRIB2FPROC           glVertexAttrib2f;
-extern PFNGLVERTEXATTRIB2FVPROC          glVertexAttrib2fv;
-extern PFNGLVERTEXATTRIB2SPROC           glVertexAttrib2s;
-extern PFNGLVERTEXATTRIB2SVPROC          glVertexAttrib2sv;
-extern PFNGLVERTEXATTRIB3DPROC           glVertexAttrib3d;
-extern PFNGLVERTEXATTRIB3DVPROC          glVertexAttrib3dv;
-extern PFNGLVERTEXATTRIB3FPROC           glVertexAttrib3f;
-extern PFNGLVERTEXATTRIB3FVPROC          glVertexAttrib3fv;
-extern PFNGLVERTEXATTRIB3SPROC           glVertexAttrib3s;
-extern PFNGLVERTEXATTRIB3SVPROC          glVertexAttrib3sv;
-extern PFNGLVERTEXATTRIB4NBVPROC         glVertexAttrib4Nbv;
-extern PFNGLVERTEXATTRIB4NIVPROC         glVertexAttrib4Niv;
-extern PFNGLVERTEXATTRIB4NSVPROC         glVertexAttrib4Nsv;
-extern PFNGLVERTEXATTRIB4NUBPROC         glVertexAttrib4Nub;
-extern PFNGLVERTEXATTRIB4NUBVPROC        glVertexAttrib4Nubv;
-extern PFNGLVERTEXATTRIB4NUIVPROC        glVertexAttrib4Nuiv;
-extern PFNGLVERTEXATTRIB4NUSVPROC        glVertexAttrib4Nusv;
-extern PFNGLVERTEXATTRIB4BVPROC          glVertexAttrib4bv;
-extern PFNGLVERTEXATTRIB4DPROC           glVertexAttrib4d;
-extern PFNGLVERTEXATTRIB4DVPROC          glVertexAttrib4dv;
-extern PFNGLVERTEXATTRIB4FPROC           glVertexAttrib4f;
-extern PFNGLVERTEXATTRIB4FVPROC          glVertexAttrib4fv;
-extern PFNGLVERTEXATTRIB4IVPROC          glVertexAttrib4iv;
-extern PFNGLVERTEXATTRIB4SPROC           glVertexAttrib4s;
-extern PFNGLVERTEXATTRIB4SVPROC          glVertexAttrib4sv;
-extern PFNGLVERTEXATTRIB4UBVPROC         glVertexAttrib4ubv;
-extern PFNGLVERTEXATTRIB4UIVPROC         glVertexAttrib4uiv;
-extern PFNGLVERTEXATTRIB4USVPROC         glVertexAttrib4usv;
-extern PFNGLVERTEXATTRIBPOINTERPROC      glVertexAttribPointer;
-/* ----GL VERSION 2.1------------------------------------------------------------------------------------------------ */
-typedef void (*PFNGLUNIFORMMATRIX2X3FVPROC) (GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
-typedef void (*PFNGLUNIFORMMATRIX3X2FVPROC) (GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
-typedef void (*PFNGLUNIFORMMATRIX2X4FVPROC) (GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
-typedef void (*PFNGLUNIFORMMATRIX4X2FVPROC) (GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
-typedef void (*PFNGLUNIFORMMATRIX3X4FVPROC) (GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
-typedef void (*PFNGLUNIFORMMATRIX4X3FVPROC) (GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
-extern PFNGLUNIFORMMATRIX2X3FVPROC glUniformMatrix2x3fv;
-extern PFNGLUNIFORMMATRIX3X2FVPROC glUniformMatrix3x2fv;
-extern PFNGLUNIFORMMATRIX2X4FVPROC glUniformMatrix2x4fv;
-extern PFNGLUNIFORMMATRIX4X2FVPROC glUniformMatrix4x2fv;
-extern PFNGLUNIFORMMATRIX3X4FVPROC glUniformMatrix3x4fv;
-extern PFNGLUNIFORMMATRIX4X3FVPROC glUniformMatrix4x3fv;
-/* ----GL VERSION 3.0------------------------------------------------------------------------------------------------ */
-typedef void            (*PFNGLCOLORMASKIPROC)                          (GLuint index, GLboolean r, GLboolean g, GLboolean b, GLboolean a);
-typedef void            (*PFNGLGETBOOLEANI_VPROC)                       (GLenum target, GLuint index, GLboolean *data);
-typedef void            (*PFNGLGETINTEGERI_VPROC)                       (GLenum target, GLuint index, GLint *data);
-typedef void            (*PFNGLENABLEIPROC)                             (GLenum target, GLuint index);
-typedef void            (*PFNGLDISABLEIPROC)                            (GLenum target, GLuint index);
-typedef GLboolean       (*PFNGLISENABLEDIPROC)                          (GLenum target, GLuint index);
-typedef void            (*PFNGLBEGINTRANSFORMFEEDBACKPROC)              (GLenum primitiveMode);
-typedef void            (*PFNGLENDTRANSFORMFEEDBACKPROC)                (void);
-typedef void            (*PFNGLBINDBUFFERRANGEPROC)                     (GLenum target, GLuint index, GLuint buffer, GLintptr offset, GLsizeiptr size);
-typedef void            (*PFNGLBINDBUFFERBASEPROC)                      (GLenum target, GLuint index, GLuint buffer);
-typedef void            (*PFNGLTRANSFORMFEEDBACKVARYINGSPROC)           (GLuint program, GLsizei count, const GLchar *const*varyings, GLenum bufferMode);
-typedef void            (*PFNGLGETTRANSFORMFEEDBACKVARYINGPROC)         (GLuint program, GLuint index, GLsizei bufSize, GLsizei *length, GLsizei *size, GLenum *type, GLchar *name);
-typedef void            (*PFNGLCLAMPCOLORPROC)                          (GLenum target, GLenum clamp);
-typedef void            (*PFNGLBEGINCONDITIONALRENDERPROC)              (GLuint id, GLenum mode);
-typedef void            (*PFNGLENDCONDITIONALRENDERPROC)                (void);
-typedef void            (*PFNGLVERTEXATTRIBIPOINTERPROC)                (GLuint index, GLint size, GLenum type, GLsizei stride, const void *pointer);
-typedef void            (*PFNGLGETVERTEXATTRIBIIVPROC)                  (GLuint index, GLenum pname, GLint *params);
-typedef void            (*PFNGLGETVERTEXATTRIBIUIVPROC)                 (GLuint index, GLenum pname, GLuint *params);
-typedef void            (*PFNGLVERTEXATTRIBI1IPROC)                     (GLuint index, GLint x);
-typedef void            (*PFNGLVERTEXATTRIBI2IPROC)                     (GLuint index, GLint x, GLint y);
-typedef void            (*PFNGLVERTEXATTRIBI3IPROC)                     (GLuint index, GLint x, GLint y, GLint z);
-typedef void            (*PFNGLVERTEXATTRIBI4IPROC)                     (GLuint index, GLint x, GLint y, GLint z, GLint w);
-typedef void            (*PFNGLVERTEXATTRIBI1UIPROC)                    (GLuint index, GLuint x);
-typedef void            (*PFNGLVERTEXATTRIBI2UIPROC)                    (GLuint index, GLuint x, GLuint y);
-typedef void            (*PFNGLVERTEXATTRIBI3UIPROC)                    (GLuint index, GLuint x, GLuint y, GLuint z);
-typedef void            (*PFNGLVERTEXATTRIBI4UIPROC)                    (GLuint index, GLuint x, GLuint y, GLuint z, GLuint w);
-typedef void            (*PFNGLVERTEXATTRIBI1IVPROC)                    (GLuint index, const GLint *v);
-typedef void            (*PFNGLVERTEXATTRIBI2IVPROC)                    (GLuint index, const GLint *v);
-typedef void            (*PFNGLVERTEXATTRIBI3IVPROC)                    (GLuint index, const GLint *v);
-typedef void            (*PFNGLVERTEXATTRIBI4IVPROC)                    (GLuint index, const GLint *v);
-typedef void            (*PFNGLVERTEXATTRIBI1UIVPROC)                   (GLuint index, const GLuint *v);
-typedef void            (*PFNGLVERTEXATTRIBI2UIVPROC)                   (GLuint index, const GLuint *v);
-typedef void            (*PFNGLVERTEXATTRIBI3UIVPROC)                   (GLuint index, const GLuint *v);
-typedef void            (*PFNGLVERTEXATTRIBI4UIVPROC)                   (GLuint index, const GLuint *v);
-typedef void            (*PFNGLVERTEXATTRIBI4BVPROC)                    (GLuint index, const GLbyte *v);
-typedef void            (*PFNGLVERTEXATTRIBI4SVPROC)                    (GLuint index, const GLshort *v);
-typedef void            (*PFNGLVERTEXATTRIBI4UBVPROC)                   (GLuint index, const GLubyte *v);
-typedef void            (*PFNGLVERTEXATTRIBI4USVPROC)                   (GLuint index, const GLushort *v);
-typedef void            (*PFNGLGETUNIFORMUIVPROC)                       (GLuint program, GLint location, GLuint *params);
-typedef void            (*PFNGLBINDFRAGDATALOCATIONPROC)                (GLuint program, GLuint color, const GLchar *name);
-typedef GLint           (*PFNGLGETFRAGDATALOCATIONPROC)                 (GLuint program, const GLchar *name);
-typedef void            (*PFNGLUNIFORM1UIPROC)                          (GLint location, GLuint v0);
-typedef void            (*PFNGLUNIFORM2UIPROC)                          (GLint location, GLuint v0, GLuint v1);
-typedef void            (*PFNGLUNIFORM3UIPROC)                          (GLint location, GLuint v0, GLuint v1, GLuint v2);
-typedef void            (*PFNGLUNIFORM4UIPROC)                          (GLint location, GLuint v0, GLuint v1, GLuint v2, GLuint v3);
-typedef void            (*PFNGLUNIFORM1UIVPROC)                         (GLint location, GLsizei count, const GLuint *value);
-typedef void            (*PFNGLUNIFORM2UIVPROC)                         (GLint location, GLsizei count, const GLuint *value);
-typedef void            (*PFNGLUNIFORM3UIVPROC)                         (GLint location, GLsizei count, const GLuint *value);
-typedef void            (*PFNGLUNIFORM4UIVPROC)                         (GLint location, GLsizei count, const GLuint *value);
-typedef void            (*PFNGLTEXPARAMETERIIVPROC)                     (GLenum target, GLenum pname, const GLint *params);
-typedef void            (*PFNGLTEXPARAMETERIUIVPROC)                    (GLenum target, GLenum pname, const GLuint *params);
-typedef void            (*PFNGLGETTEXPARAMETERIIVPROC)                  (GLenum target, GLenum pname, GLint *params);
-typedef void            (*PFNGLGETTEXPARAMETERIUIVPROC)                 (GLenum target, GLenum pname, GLuint *params);
-typedef void            (*PFNGLCLEARBUFFERIVPROC)                       (GLenum buffer, GLint drawbuffer, const GLint *value);
-typedef void            (*PFNGLCLEARBUFFERUIVPROC)                      (GLenum buffer, GLint drawbuffer, const GLuint *value);
-typedef void            (*PFNGLCLEARBUFFERFVPROC)                       (GLenum buffer, GLint drawbuffer, const GLfloat *value);
-typedef void            (*PFNGLCLEARBUFFERFIPROC)                       (GLenum buffer, GLint drawbuffer, GLfloat depth, GLint stencil);
-typedef const GLubyte * (*PFNGLGETSTRINGIPROC)                          (GLenum name, GLuint index);
-typedef GLboolean       (*PFNGLISRENDERBUFFERPROC)                      (GLuint renderbuffer);
-typedef void            (*PFNGLBINDRENDERBUFFERPROC)                    (GLenum target, GLuint renderbuffer);
-typedef void            (*PFNGLDELETERENDERBUFFERSPROC)                 (GLsizei n, const GLuint *renderbuffers);
-typedef void            (*PFNGLGENRENDERBUFFERSPROC)                    (GLsizei n, GLuint *renderbuffers);
-typedef void            (*PFNGLRENDERBUFFERSTORAGEPROC)                 (GLenum target, GLenum internalformat, GLsizei width, GLsizei height);
-typedef void            (*PFNGLGETRENDERBUFFERPARAMETERIVPROC)          (GLenum target, GLenum pname, GLint *params);
-typedef GLboolean       (*PFNGLISFRAMEBUFFERPROC)                       (GLuint framebuffer);
-typedef void            (*PFNGLBINDFRAMEBUFFERPROC)                     (GLenum target, GLuint framebuffer);
-typedef void            (*PFNGLDELETEFRAMEBUFFERSPROC)                  (GLsizei n, const GLuint *framebuffers);
-typedef void            (*PFNGLGENFRAMEBUFFERSPROC)                     (GLsizei n, GLuint *framebuffers);
-typedef GLenum          (*PFNGLCHECKFRAMEBUFFERSTATUSPROC)              (GLenum target);
-typedef void            (*PFNGLFRAMEBUFFERTEXTURE1DPROC)                (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level);
-typedef void            (*PFNGLFRAMEBUFFERTEXTURE2DPROC)                (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level);
-typedef void            (*PFNGLFRAMEBUFFERTEXTURE3DPROC)                (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level, GLint zoffset);
-typedef void            (*PFNGLFRAMEBUFFERRENDERBUFFERPROC)             (GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer);
-typedef void            (*PFNGLGETFRAMEBUFFERATTACHMENTPARAMETERIVPROC) (GLenum target, GLenum attachment, GLenum pname, GLint *params);
-typedef void            (*PFNGLGENERATEMIPMAPPROC)                      (GLenum target);
-typedef void            (*PFNGLBLITFRAMEBUFFERPROC)                     (GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter);
-typedef void            (*PFNGLRENDERBUFFERSTORAGEMULTISAMPLEPROC)      (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height);
-typedef void            (*PFNGLFRAMEBUFFERTEXTURELAYERPROC)             (GLenum target, GLenum attachment, GLuint texture, GLint level, GLint layer);
-typedef void *          (*PFNGLMAPBUFFERRANGEPROC)                      (GLenum target, GLintptr offset, GLsizeiptr length, GLbitfield access);
-typedef void            (*PFNGLFLUSHMAPPEDBUFFERRANGEPROC)              (GLenum target, GLintptr offset, GLsizeiptr length);
-typedef void            (*PFNGLBINDVERTEXARRAYPROC)                     (GLuint array);
-typedef void            (*PFNGLDELETEVERTEXARRAYSPROC)                  (GLsizei n, const GLuint *arrays);
-typedef void            (*PFNGLGENVERTEXARRAYSPROC)                     (GLsizei n, GLuint *arrays);
-typedef GLboolean       (*PFNGLISVERTEXARRAYPROC)                       (GLuint array);
-extern PFNGLCOLORMASKIPROC                          glColorMaski;
-extern PFNGLGETBOOLEANI_VPROC                       glGetBooleani_v;
-extern PFNGLGETINTEGERI_VPROC                       glGetIntegeri_v;
-extern PFNGLENABLEIPROC                             glEnablei;
-extern PFNGLDISABLEIPROC                            glDisablei;
-extern PFNGLISENABLEDIPROC                          glIsEnabledi;
-extern PFNGLBEGINTRANSFORMFEEDBACKPROC              glBeginTransformFeedback;
-extern PFNGLENDTRANSFORMFEEDBACKPROC                glEndTransformFeedback;
-extern PFNGLBINDBUFFERRANGEPROC                     glBindBufferRange;
-extern PFNGLBINDBUFFERBASEPROC                      glBindBufferBase;
-extern PFNGLTRANSFORMFEEDBACKVARYINGSPROC           glTransformFeedbackVaryings;
-extern PFNGLGETTRANSFORMFEEDBACKVARYINGPROC         glGetTransformFeedbackVarying;
-extern PFNGLCLAMPCOLORPROC                          glClampColor;
-extern PFNGLBEGINCONDITIONALRENDERPROC              glBeginConditionalRender;
-extern PFNGLENDCONDITIONALRENDERPROC                glEndConditionalRender;
-extern PFNGLVERTEXATTRIBIPOINTERPROC                glVertexAttribIPointer;
-extern PFNGLGETVERTEXATTRIBIIVPROC                  glGetVertexAttribIiv;
-extern PFNGLGETVERTEXATTRIBIUIVPROC                 glGetVertexAttribIuiv;
-extern PFNGLVERTEXATTRIBI1IPROC                     glVertexAttribI1i;
-extern PFNGLVERTEXATTRIBI2IPROC                     glVertexAttribI2i;
-extern PFNGLVERTEXATTRIBI3IPROC                     glVertexAttribI3i;
-extern PFNGLVERTEXATTRIBI4IPROC                     glVertexAttribI4i;
-extern PFNGLVERTEXATTRIBI1UIPROC                    glVertexAttribI1ui;
-extern PFNGLVERTEXATTRIBI2UIPROC                    glVertexAttribI2ui;
-extern PFNGLVERTEXATTRIBI3UIPROC                    glVertexAttribI3ui;
-extern PFNGLVERTEXATTRIBI4UIPROC                    glVertexAttribI4ui;
-extern PFNGLVERTEXATTRIBI1IVPROC                    glVertexAttribI1iv;
-extern PFNGLVERTEXATTRIBI2IVPROC                    glVertexAttribI2iv;
-extern PFNGLVERTEXATTRIBI3IVPROC                    glVertexAttribI3iv;
-extern PFNGLVERTEXATTRIBI4IVPROC                    glVertexAttribI4iv;
-extern PFNGLVERTEXATTRIBI1UIVPROC                   glVertexAttribI1uiv;
-extern PFNGLVERTEXATTRIBI2UIVPROC                   glVertexAttribI2uiv;
-extern PFNGLVERTEXATTRIBI3UIVPROC                   glVertexAttribI3uiv;
-extern PFNGLVERTEXATTRIBI4UIVPROC                   glVertexAttribI4uiv;
-extern PFNGLVERTEXATTRIBI4BVPROC                    glVertexAttribI4bv;
-extern PFNGLVERTEXATTRIBI4SVPROC                    glVertexAttribI4sv;
-extern PFNGLVERTEXATTRIBI4UBVPROC                   glVertexAttribI4ubv;
-extern PFNGLVERTEXATTRIBI4USVPROC                   glVertexAttribI4usv;
-extern PFNGLGETUNIFORMUIVPROC                       glGetUniformuiv;
-extern PFNGLBINDFRAGDATALOCATIONPROC                glBindFragDataLocation;
-extern PFNGLGETFRAGDATALOCATIONPROC                 glGetFragDataLocation;
-extern PFNGLUNIFORM1UIPROC                          glUniform1ui;
-extern PFNGLUNIFORM2UIPROC                          glUniform2ui;
-extern PFNGLUNIFORM3UIPROC                          glUniform3ui;
-extern PFNGLUNIFORM4UIPROC                          glUniform4ui;
-extern PFNGLUNIFORM1UIVPROC                         glUniform1uiv;
-extern PFNGLUNIFORM2UIVPROC                         glUniform2uiv;
-extern PFNGLUNIFORM3UIVPROC                         glUniform3uiv;
-extern PFNGLUNIFORM4UIVPROC                         glUniform4uiv;
-extern PFNGLTEXPARAMETERIIVPROC                     glTexParameterIiv;
-extern PFNGLTEXPARAMETERIUIVPROC                    glTexParameterIuiv;
-extern PFNGLGETTEXPARAMETERIIVPROC                  glGetTexParameterIiv;
-extern PFNGLGETTEXPARAMETERIUIVPROC                 glGetTexParameterIuiv;
-extern PFNGLCLEARBUFFERIVPROC                       glClearBufferiv;
-extern PFNGLCLEARBUFFERUIVPROC                      glClearBufferuiv;
-extern PFNGLCLEARBUFFERFVPROC                       glClearBufferfv;
-extern PFNGLCLEARBUFFERFIPROC                       glClearBufferfi;
-extern PFNGLGETSTRINGIPROC                          glGetStringi;
-extern PFNGLISRENDERBUFFERPROC                      glIsRenderbuffer;
-extern PFNGLBINDRENDERBUFFERPROC                    glBindRenderbuffer;
-extern PFNGLDELETERENDERBUFFERSPROC                 glDeleteRenderbuffers;
-extern PFNGLGENRENDERBUFFERSPROC                    glGenRenderbuffers;
-extern PFNGLRENDERBUFFERSTORAGEPROC                 glRenderbufferStorage;
-extern PFNGLGETRENDERBUFFERPARAMETERIVPROC          glGetRenderbufferParameteriv;
-extern PFNGLISFRAMEBUFFERPROC                       glIsFramebuffer;
-extern PFNGLBINDFRAMEBUFFERPROC                     glBindFramebuffer;
-extern PFNGLDELETEFRAMEBUFFERSPROC                  glDeleteFramebuffers;
-extern PFNGLGENFRAMEBUFFERSPROC                     glGenFramebuffers;
-extern PFNGLCHECKFRAMEBUFFERSTATUSPROC              glCheckFramebufferStatus;
-extern PFNGLFRAMEBUFFERTEXTURE1DPROC                glFramebufferTexture1D;
-extern PFNGLFRAMEBUFFERTEXTURE2DPROC                glFramebufferTexture2D;
-extern PFNGLFRAMEBUFFERTEXTURE3DPROC                glFramebufferTexture3D;
-extern PFNGLFRAMEBUFFERRENDERBUFFERPROC             glFramebufferRenderbuffer;
-extern PFNGLGETFRAMEBUFFERATTACHMENTPARAMETERIVPROC glGetFramebufferAttachmentParameteriv;
-extern PFNGLGENERATEMIPMAPPROC                      glGenerateMipmap;
-extern PFNGLBLITFRAMEBUFFERPROC                     glBlitFramebuffer;
-extern PFNGLRENDERBUFFERSTORAGEMULTISAMPLEPROC      glRenderbufferStorageMultisample;
-extern PFNGLFRAMEBUFFERTEXTURELAYERPROC             glFramebufferTextureLayer;
-extern PFNGLMAPBUFFERRANGEPROC                      glMapBufferRange;
-extern PFNGLFLUSHMAPPEDBUFFERRANGEPROC              glFlushMappedBufferRange;
-extern PFNGLBINDVERTEXARRAYPROC                     glBindVertexArray;
-extern PFNGLDELETEVERTEXARRAYSPROC                  glDeleteVertexArrays;
-extern PFNGLGENVERTEXARRAYSPROC                     glGenVertexArrays;
-extern PFNGLISVERTEXARRAYPROC                       glIsVertexArray;
-/* ----GL VERSION 3.1------------------------------------------------------------------------------------------------ */
-typedef void   (*PFNGLDRAWARRAYSINSTANCEDPROC)       (GLenum mode, GLint first, GLsizei count, GLsizei instancecount);
-typedef void   (*PFNGLDRAWELEMENTSINSTANCEDPROC)     (GLenum mode, GLsizei count, GLenum type, const void *indices, GLsizei instancecount);
-typedef void   (*PFNGLTEXBUFFERPROC)                 (GLenum target, GLenum internalformat, GLuint buffer);
-typedef void   (*PFNGLPRIMITIVERESTARTINDEXPROC)     (GLuint index);
-typedef void   (*PFNGLCOPYBUFFERSUBDATAPROC)         (GLenum readTarget, GLenum writeTarget, GLintptr readOffset, GLintptr writeOffset, GLsizeiptr size);
-typedef void   (*PFNGLGETUNIFORMINDICESPROC)         (GLuint program, GLsizei uniformCount, const GLchar *const*uniformNames, GLuint *uniformIndices);
-typedef void   (*PFNGLGETACTIVEUNIFORMSIVPROC)       (GLuint program, GLsizei uniformCount, const GLuint *uniformIndices, GLenum pname, GLint *params);
-typedef void   (*PFNGLGETACTIVEUNIFORMNAMEPROC)      (GLuint program, GLuint uniformIndex, GLsizei bufSize, GLsizei *length, GLchar *uniformName);
-typedef GLuint (*PFNGLGETUNIFORMBLOCKINDEXPROC)      (GLuint program, const GLchar *uniformBlockName);
-typedef void   (*PFNGLGETACTIVEUNIFORMBLOCKIVPROC)   (GLuint program, GLuint uniformBlockIndex, GLenum pname, GLint *params);
-typedef void   (*PFNGLGETACTIVEUNIFORMBLOCKNAMEPROC) (GLuint program, GLuint uniformBlockIndex, GLsizei bufSize, GLsizei *length, GLchar *uniformBlockName);
-typedef void   (*PFNGLUNIFORMBLOCKBINDINGPROC)       (GLuint program, GLuint uniformBlockIndex, GLuint uniformBlockBinding);
-extern PFNGLDRAWARRAYSINSTANCEDPROC       glDrawArraysInstanced;
-extern PFNGLDRAWELEMENTSINSTANCEDPROC     glDrawElementsInstanced;
-extern PFNGLTEXBUFFERPROC                 glTexBuffer;
-extern PFNGLPRIMITIVERESTARTINDEXPROC     glPrimitiveRestartIndex;
-extern PFNGLCOPYBUFFERSUBDATAPROC         glCopyBufferSubData;
-extern PFNGLGETUNIFORMINDICESPROC         glGetUniformIndices;
-extern PFNGLGETACTIVEUNIFORMSIVPROC       glGetActiveUniformsiv;
-extern PFNGLGETACTIVEUNIFORMNAMEPROC      glGetActiveUniformName;
-extern PFNGLGETUNIFORMBLOCKINDEXPROC      glGetUniformBlockIndex;
-extern PFNGLGETACTIVEUNIFORMBLOCKIVPROC   glGetActiveUniformBlockiv;
-extern PFNGLGETACTIVEUNIFORMBLOCKNAMEPROC glGetActiveUniformBlockName;
-extern PFNGLUNIFORMBLOCKBINDINGPROC       glUniformBlockBinding;
-/* ----GL VERSION 3.2------------------------------------------------------------------------------------------------ */
-typedef void      (*PFNGLDRAWELEMENTSBASEVERTEXPROC)          (GLenum mode, GLsizei count, GLenum type, const void *indices, GLint basevertex);
-typedef void      (*PFNGLDRAWRANGEELEMENTSBASEVERTEXPROC)     (GLenum mode, GLuint start, GLuint end, GLsizei count, GLenum type, const void *indices, GLint basevertex);
-typedef void      (*PFNGLDRAWELEMENTSINSTANCEDBASEVERTEXPROC) (GLenum mode, GLsizei count, GLenum type, const void *indices, GLsizei instancecount, GLint basevertex);
-typedef void      (*PFNGLMULTIDRAWELEMENTSBASEVERTEXPROC)     (GLenum mode, const GLsizei *count, GLenum type, const void *const*indices, GLsizei drawcount, const GLint *basevertex);
-typedef void      (*PFNGLPROVOKINGVERTEXPROC)                 (GLenum mode);
-typedef GLsync    (*PFNGLFENCESYNCPROC)                       (GLenum condition, GLbitfield flags);
-typedef GLboolean (*PFNGLISSYNCPROC)                          (GLsync sync);
-typedef void      (*PFNGLDELETESYNCPROC)                      (GLsync sync);
-typedef GLenum    (*PFNGLCLIENTWAITSYNCPROC)                  (GLsync sync, GLbitfield flags, GLuint64 timeout);
-typedef void      (*PFNGLWAITSYNCPROC)                        (GLsync sync, GLbitfield flags, GLuint64 timeout);
-typedef void      (*PFNGLGETINTEGER64VPROC)                   (GLenum pname, GLint64 *data);
-typedef void      (*PFNGLGETSYNCIVPROC)                       (GLsync sync, GLenum pname, GLsizei count, GLsizei *length, GLint *values);
-typedef void      (*PFNGLGETINTEGER64I_VPROC)                 (GLenum target, GLuint index, GLint64 *data);
-typedef void      (*PFNGLGETBUFFERPARAMETERI64VPROC)          (GLenum target, GLenum pname, GLint64 *params);
-typedef void      (*PFNGLFRAMEBUFFERTEXTUREPROC)              (GLenum target, GLenum attachment, GLuint texture, GLint level);
-typedef void      (*PFNGLTEXIMAGE2DMULTISAMPLEPROC)           (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLboolean fixedsamplelocations);
-typedef void      (*PFNGLTEXIMAGE3DMULTISAMPLEPROC)           (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLboolean fixedsamplelocations);
-typedef void      (*PFNGLGETMULTISAMPLEFVPROC)                (GLenum pname, GLuint index, GLfloat *val);
-typedef void      (*PFNGLSAMPLEMASKIPROC)                     (GLuint maskNumber, GLbitfield mask);
-extern PFNGLDRAWELEMENTSBASEVERTEXPROC          glDrawElementsBaseVertex;
-extern PFNGLDRAWRANGEELEMENTSBASEVERTEXPROC     glDrawRangeElementsBaseVertex;
-extern PFNGLDRAWELEMENTSINSTANCEDBASEVERTEXPROC glDrawElementsInstancedBaseVertex;
-extern PFNGLMULTIDRAWELEMENTSBASEVERTEXPROC     glMultiDrawElementsBaseVertex;
-extern PFNGLPROVOKINGVERTEXPROC                 glProvokingVertex;
-extern PFNGLFENCESYNCPROC                       glFenceSync;
-extern PFNGLISSYNCPROC                          glIsSync;
-extern PFNGLDELETESYNCPROC                      glDeleteSync;
-extern PFNGLCLIENTWAITSYNCPROC                  glClientWaitSync;
-extern PFNGLWAITSYNCPROC                        glWaitSync;
-extern PFNGLGETINTEGER64VPROC                   glGetInteger64v;
-extern PFNGLGETSYNCIVPROC                       glGetSynciv;
-extern PFNGLGETINTEGER64I_VPROC                 glGetInteger64i_v;
-extern PFNGLGETBUFFERPARAMETERI64VPROC          glGetBufferParameteri64v;
-extern PFNGLFRAMEBUFFERTEXTUREPROC              glFramebufferTexture;
-extern PFNGLTEXIMAGE2DMULTISAMPLEPROC           glTexImage2DMultisample;
-extern PFNGLTEXIMAGE3DMULTISAMPLEPROC           glTexImage3DMultisample;
-extern PFNGLGETMULTISAMPLEFVPROC                glGetMultisamplefv;
-extern PFNGLSAMPLEMASKIPROC                     glSampleMaski;
-/* ----GL VERSION 3.3------------------------------------------------------------------------------------------------ */
-typedef void      (*PFNGLBINDFRAGDATALOCATIONINDEXEDPROC) (GLuint program, GLuint colorNumber, GLuint index, const GLchar *name);
-typedef GLint     (*PFNGLGETFRAGDATAINDEXPROC)            (GLuint program, const GLchar *name);
-typedef void      (*PFNGLGENSAMPLERSPROC)                 (GLsizei count, GLuint *samplers);
-typedef void      (*PFNGLDELETESAMPLERSPROC)              (GLsizei count, const GLuint *samplers);
-typedef GLboolean (*PFNGLISSAMPLERPROC)                   (GLuint sampler);
-typedef void      (*PFNGLBINDSAMPLERPROC)                 (GLuint unit, GLuint sampler);
-typedef void      (*PFNGLSAMPLERPARAMETERIPROC)           (GLuint sampler, GLenum pname, GLint param);
-typedef void      (*PFNGLSAMPLERPARAMETERIVPROC)          (GLuint sampler, GLenum pname, const GLint *param);
-typedef void      (*PFNGLSAMPLERPARAMETERFPROC)           (GLuint sampler, GLenum pname, GLfloat param);
-typedef void      (*PFNGLSAMPLERPARAMETERFVPROC)          (GLuint sampler, GLenum pname, const GLfloat *param);
-typedef void      (*PFNGLSAMPLERPARAMETERIIVPROC)         (GLuint sampler, GLenum pname, const GLint *param);
-typedef void      (*PFNGLSAMPLERPARAMETERIUIVPROC)        (GLuint sampler, GLenum pname, const GLuint *param);
-typedef void      (*PFNGLGETSAMPLERPARAMETERIVPROC)       (GLuint sampler, GLenum pname, GLint *params);
-typedef void      (*PFNGLGETSAMPLERPARAMETERIIVPROC)      (GLuint sampler, GLenum pname, GLint *params);
-typedef void      (*PFNGLGETSAMPLERPARAMETERFVPROC)       (GLuint sampler, GLenum pname, GLfloat *params);
-typedef void      (*PFNGLGETSAMPLERPARAMETERIUIVPROC)     (GLuint sampler, GLenum pname, GLuint *params);
-typedef void      (*PFNGLQUERYCOUNTERPROC)                (GLuint id, GLenum target);
-typedef void      (*PFNGLGETQUERYOBJECTI64VPROC)          (GLuint id, GLenum pname, GLint64 *params);
-typedef void      (*PFNGLGETQUERYOBJECTUI64VPROC)         (GLuint id, GLenum pname, GLuint64 *params);
-typedef void      (*PFNGLVERTEXATTRIBDIVISORPROC)         (GLuint index, GLuint divisor);
-typedef void      (*PFNGLVERTEXATTRIBP1UIPROC)            (GLuint index, GLenum type, GLboolean normalized, GLuint value);
-typedef void      (*PFNGLVERTEXATTRIBP1UIVPROC)           (GLuint index, GLenum type, GLboolean normalized, const GLuint *value);
-typedef void      (*PFNGLVERTEXATTRIBP2UIPROC)            (GLuint index, GLenum type, GLboolean normalized, GLuint value);
-typedef void      (*PFNGLVERTEXATTRIBP2UIVPROC)           (GLuint index, GLenum type, GLboolean normalized, const GLuint *value);
-typedef void      (*PFNGLVERTEXATTRIBP3UIPROC)            (GLuint index, GLenum type, GLboolean normalized, GLuint value);
-typedef void      (*PFNGLVERTEXATTRIBP3UIVPROC)           (GLuint index, GLenum type, GLboolean normalized, const GLuint *value);
-typedef void      (*PFNGLVERTEXATTRIBP4UIPROC)            (GLuint index, GLenum type, GLboolean normalized, GLuint value);
-typedef void      (*PFNGLVERTEXATTRIBP4UIVPROC)           (GLuint index, GLenum type, GLboolean normalized, const GLuint *value);
-extern PFNGLBINDFRAGDATALOCATIONINDEXEDPROC glBindFragDataLocationIndexed;
-extern PFNGLGETFRAGDATAINDEXPROC            glGetFragDataIndex;
-extern PFNGLGENSAMPLERSPROC                 glGenSamplers;
-extern PFNGLDELETESAMPLERSPROC              glDeleteSamplers;
-extern PFNGLISSAMPLERPROC                   glIsSampler;
-extern PFNGLBINDSAMPLERPROC                 glBindSampler;
-extern PFNGLSAMPLERPARAMETERIPROC           glSamplerParameteri;
-extern PFNGLSAMPLERPARAMETERIVPROC          glSamplerParameteriv;
-extern PFNGLSAMPLERPARAMETERFPROC           glSamplerParameterf;
-extern PFNGLSAMPLERPARAMETERFVPROC          glSamplerParameterfv;
-extern PFNGLSAMPLERPARAMETERIIVPROC         glSamplerParameterIiv;
-extern PFNGLSAMPLERPARAMETERIUIVPROC        glSamplerParameterIuiv;
-extern PFNGLGETSAMPLERPARAMETERIVPROC       glGetSamplerParameteriv;
-extern PFNGLGETSAMPLERPARAMETERIIVPROC      glGetSamplerParameterIiv;
-extern PFNGLGETSAMPLERPARAMETERFVPROC       glGetSamplerParameterfv;
-extern PFNGLGETSAMPLERPARAMETERIUIVPROC     glGetSamplerParameterIuiv;
-extern PFNGLQUERYCOUNTERPROC                glQueryCounter;
-extern PFNGLGETQUERYOBJECTI64VPROC          glGetQueryObjecti64v;
-extern PFNGLGETQUERYOBJECTUI64VPROC         glGetQueryObjectui64v;
-extern PFNGLVERTEXATTRIBDIVISORPROC         glVertexAttribDivisor;
-extern PFNGLVERTEXATTRIBP1UIPROC            glVertexAttribP1ui;
-extern PFNGLVERTEXATTRIBP1UIVPROC           glVertexAttribP1uiv;
-extern PFNGLVERTEXATTRIBP2UIPROC            glVertexAttribP2ui;
-extern PFNGLVERTEXATTRIBP2UIVPROC           glVertexAttribP2uiv;
-extern PFNGLVERTEXATTRIBP3UIPROC            glVertexAttribP3ui;
-extern PFNGLVERTEXATTRIBP3UIVPROC           glVertexAttribP3uiv;
-extern PFNGLVERTEXATTRIBP4UIPROC            glVertexAttribP4ui;
-extern PFNGLVERTEXATTRIBP4UIVPROC           glVertexAttribP4uiv;
-/* ----GL VERSION 4.0------------------------------------------------------------------------------------------------ */
-typedef void      (*PFNGLMINSAMPLESHADINGPROC) (GLfloat value);
-typedef void      (*PFNGLBLENDEQUATIONIPROC) (GLuint buf, GLenum mode);
-typedef void      (*PFNGLBLENDEQUATIONSEPARATEIPROC) (GLuint buf, GLenum modeRGB, GLenum modeAlpha);
-typedef void      (*PFNGLBLENDFUNCIPROC) (GLuint buf, GLenum src, GLenum dst);
-typedef void      (*PFNGLBLENDFUNCSEPARATEIPROC) (GLuint buf, GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, GLenum dstAlpha);
-typedef void      (*PFNGLDRAWARRAYSINDIRECTPROC) (GLenum mode, const void *indirect);
-typedef void      (*PFNGLDRAWELEMENTSINDIRECTPROC) (GLenum mode, GLenum type, const void *indirect);
-typedef void      (*PFNGLUNIFORM1DPROC) (GLint location, GLdouble x);
-typedef void      (*PFNGLUNIFORM2DPROC) (GLint location, GLdouble x, GLdouble y);
-typedef void      (*PFNGLUNIFORM3DPROC) (GLint location, GLdouble x, GLdouble y, GLdouble z);
-typedef void      (*PFNGLUNIFORM4DPROC) (GLint location, GLdouble x, GLdouble y, GLdouble z, GLdouble w);
-typedef void      (*PFNGLUNIFORM1DVPROC) (GLint location, GLsizei count, const GLdouble *value);
-typedef void      (*PFNGLUNIFORM2DVPROC) (GLint location, GLsizei count, const GLdouble *value);
-typedef void      (*PFNGLUNIFORM3DVPROC) (GLint location, GLsizei count, const GLdouble *value);
-typedef void      (*PFNGLUNIFORM4DVPROC) (GLint location, GLsizei count, const GLdouble *value);
-typedef void      (*PFNGLUNIFORMMATRIX2DVPROC) (GLint location, GLsizei count, GLboolean transpose, const GLdouble *value);
-typedef void      (*PFNGLUNIFORMMATRIX3DVPROC) (GLint location, GLsizei count, GLboolean transpose, const GLdouble *value);
-typedef void      (*PFNGLUNIFORMMATRIX4DVPROC) (GLint location, GLsizei count, GLboolean transpose, const GLdouble *value);
-typedef void      (*PFNGLUNIFORMMATRIX2X3DVPROC) (GLint location, GLsizei count, GLboolean transpose, const GLdouble *value);
-typedef void      (*PFNGLUNIFORMMATRIX2X4DVPROC) (GLint location, GLsizei count, GLboolean transpose, const GLdouble *value);
-typedef void      (*PFNGLUNIFORMMATRIX3X2DVPROC) (GLint location, GLsizei count, GLboolean transpose, const GLdouble *value);
-typedef void      (*PFNGLUNIFORMMATRIX3X4DVPROC) (GLint location, GLsizei count, GLboolean transpose, const GLdouble *value);
-typedef void      (*PFNGLUNIFORMMATRIX4X2DVPROC) (GLint location, GLsizei count, GLboolean transpose, const GLdouble *value);
-typedef void      (*PFNGLUNIFORMMATRIX4X3DVPROC) (GLint location, GLsizei count, GLboolean transpose, const GLdouble *value);
-typedef void      (*PFNGLGETUNIFORMDVPROC) (GLuint program, GLint location, GLdouble *params);
-typedef GLint     (*PFNGLGETSUBROUTINEUNIFORMLOCATIONPROC) (GLuint program, GLenum shadertype, const GLchar *name);
-typedef GLuint    (*PFNGLGETSUBROUTINEINDEXPROC) (GLuint program, GLenum shadertype, const GLchar *name);
-typedef void      (*PFNGLGETACTIVESUBROUTINEUNIFORMIVPROC) (GLuint program, GLenum shadertype, GLuint index, GLenum pname, GLint *values);
-typedef void      (*PFNGLGETACTIVESUBROUTINEUNIFORMNAMEPROC) (GLuint program, GLenum shadertype, GLuint index, GLsizei bufSize, GLsizei *length, GLchar *name);
-typedef void      (*PFNGLGETACTIVESUBROUTINENAMEPROC) (GLuint program, GLenum shadertype, GLuint index, GLsizei bufSize, GLsizei *length, GLchar *name);
-typedef void      (*PFNGLUNIFORMSUBROUTINESUIVPROC) (GLenum shadertype, GLsizei count, const GLuint *indices);
-typedef void      (*PFNGLGETUNIFORMSUBROUTINEUIVPROC) (GLenum shadertype, GLint location, GLuint *params);
-typedef void      (*PFNGLGETPROGRAMSTAGEIVPROC) (GLuint program, GLenum shadertype, GLenum pname, GLint *values);
-typedef void      (*PFNGLPATCHPARAMETERIPROC) (GLenum pname, GLint value);
-typedef void      (*PFNGLPATCHPARAMETERFVPROC) (GLenum pname, const GLfloat *values);
-typedef void      (*PFNGLBINDTRANSFORMFEEDBACKPROC) (GLenum target, GLuint id);
-typedef void      (*PFNGLDELETETRANSFORMFEEDBACKSPROC) (GLsizei n, const GLuint *ids);
-typedef void      (*PFNGLGENTRANSFORMFEEDBACKSPROC) (GLsizei n, GLuint *ids);
-typedef GLboolean (*PFNGLISTRANSFORMFEEDBACKPROC) (GLuint id);
-typedef void      (*PFNGLPAUSETRANSFORMFEEDBACKPROC) (void);
-typedef void      (*PFNGLRESUMETRANSFORMFEEDBACKPROC) (void);
-typedef void      (*PFNGLDRAWTRANSFORMFEEDBACKPROC) (GLenum mode, GLuint id);
-typedef void      (*PFNGLDRAWTRANSFORMFEEDBACKSTREAMPROC) (GLenum mode, GLuint id, GLuint stream);
-typedef void      (*PFNGLBEGINQUERYINDEXEDPROC) (GLenum target, GLuint index, GLuint id);
-typedef void      (*PFNGLENDQUERYINDEXEDPROC) (GLenum target, GLuint index);
-typedef void      (*PFNGLGETQUERYINDEXEDIVPROC) (GLenum target, GLuint index, GLenum pname, GLint *params);
-extern PFNGLMINSAMPLESHADINGPROC               glMinSampleShading;
-extern PFNGLBLENDEQUATIONIPROC                 glBlendEquationi;
-extern PFNGLBLENDEQUATIONSEPARATEIPROC         glBlendEquationSeparatei;
-extern PFNGLBLENDFUNCIPROC                     glBlendFunci;
-extern PFNGLBLENDFUNCSEPARATEIPROC             glBlendFuncSeparatei;
-extern PFNGLDRAWARRAYSINDIRECTPROC             glDrawArraysIndirect;
-extern PFNGLDRAWELEMENTSINDIRECTPROC           glDrawElementsIndirect;
-extern PFNGLUNIFORM1DPROC                      glUniform1d;
-extern PFNGLUNIFORM2DPROC                      glUniform2d;
-extern PFNGLUNIFORM3DPROC                      glUniform3d;
-extern PFNGLUNIFORM4DPROC                      glUniform4d;
-extern PFNGLUNIFORM1DVPROC                     glUniform1dv;
-extern PFNGLUNIFORM2DVPROC                     glUniform2dv;
-extern PFNGLUNIFORM3DVPROC                     glUniform3dv;
-extern PFNGLUNIFORM4DVPROC                     glUniform4dv;
-extern PFNGLUNIFORMMATRIX2DVPROC               glUniformMatrix2dv;
-extern PFNGLUNIFORMMATRIX3DVPROC               glUniformMatrix3dv;
-extern PFNGLUNIFORMMATRIX4DVPROC               glUniformMatrix4dv;
-extern PFNGLUNIFORMMATRIX2X3DVPROC             glUniformMatrix2x3dv;
-extern PFNGLUNIFORMMATRIX2X4DVPROC             glUniformMatrix2x4dv;
-extern PFNGLUNIFORMMATRIX3X2DVPROC             glUniformMatrix3x2dv;
-extern PFNGLUNIFORMMATRIX3X4DVPROC             glUniformMatrix3x4dv;
-extern PFNGLUNIFORMMATRIX4X2DVPROC             glUniformMatrix4x2dv;
-extern PFNGLUNIFORMMATRIX4X3DVPROC             glUniformMatrix4x3dv;
-extern PFNGLGETUNIFORMDVPROC                   glGetUniformdv;
-extern PFNGLGETSUBROUTINEUNIFORMLOCATIONPROC   glGetSubroutineUniformLocation;
-extern PFNGLGETSUBROUTINEINDEXPROC             glGetSubroutineIndex;
-extern PFNGLGETACTIVESUBROUTINEUNIFORMIVPROC   glGetActiveSubroutineUniformiv;
-extern PFNGLGETACTIVESUBROUTINEUNIFORMNAMEPROC glGetActiveSubroutineUniformName;
-extern PFNGLGETACTIVESUBROUTINENAMEPROC        glGetActiveSubroutineName;
-extern PFNGLUNIFORMSUBROUTINESUIVPROC          glUniformSubroutinesuiv;
-extern PFNGLGETUNIFORMSUBROUTINEUIVPROC        glGetUniformSubroutineuiv;
-extern PFNGLGETPROGRAMSTAGEIVPROC              glGetProgramStageiv;
-extern PFNGLPATCHPARAMETERIPROC                glPatchParameteri;
-extern PFNGLPATCHPARAMETERFVPROC               glPatchParameterfv;
-extern PFNGLBINDTRANSFORMFEEDBACKPROC          glBindTransformFeedback;
-extern PFNGLDELETETRANSFORMFEEDBACKSPROC       glDeleteTransformFeedbacks;
-extern PFNGLGENTRANSFORMFEEDBACKSPROC          glGenTransformFeedbacks;
-extern PFNGLISTRANSFORMFEEDBACKPROC            glIsTransformFeedback;
-extern PFNGLPAUSETRANSFORMFEEDBACKPROC         glPauseTransformFeedback;
-extern PFNGLRESUMETRANSFORMFEEDBACKPROC        glResumeTransformFeedback;
-extern PFNGLDRAWTRANSFORMFEEDBACKPROC          glDrawTransformFeedback;
-extern PFNGLDRAWTRANSFORMFEEDBACKSTREAMPROC    glDrawTransformFeedbackStream;
-extern PFNGLBEGINQUERYINDEXEDPROC              glBeginQueryIndexed;
-extern PFNGLENDQUERYINDEXEDPROC                glEndQueryIndexed;
-extern PFNGLGETQUERYINDEXEDIVPROC              glGetQueryIndexediv;
-/* ----GL VERSION 4.1------------------------------------------------------------------------------------------------ */
-typedef void      (*PFNGLRELEASESHADERCOMPILERPROC) (void);
-typedef void      (*PFNGLSHADERBINARYPROC) (GLsizei count, const GLuint *shaders, GLenum binaryFormat, const void *binary, GLsizei length);
-typedef void      (*PFNGLGETSHADERPRECISIONFORMATPROC) (GLenum shadertype, GLenum precisiontype, GLint *range, GLint *precision);
-typedef void      (*PFNGLDEPTHRANGEFPROC) (GLfloat n, GLfloat f);
-typedef void      (*PFNGLCLEARDEPTHFPROC) (GLfloat d);
-typedef void      (*PFNGLGETPROGRAMBINARYPROC) (GLuint program, GLsizei bufSize, GLsizei *length, GLenum *binaryFormat, void *binary);
-typedef void      (*PFNGLPROGRAMBINARYPROC) (GLuint program, GLenum binaryFormat, const void *binary, GLsizei length);
-typedef void      (*PFNGLPROGRAMPARAMETERIPROC) (GLuint program, GLenum pname, GLint value);
-typedef void      (*PFNGLUSEPROGRAMSTAGESPROC) (GLuint pipeline, GLbitfield stages, GLuint program);
-typedef void      (*PFNGLACTIVESHADERPROGRAMPROC) (GLuint pipeline, GLuint program);
-typedef GLuint    (*PFNGLCREATESHADERPROGRAMVPROC) (GLenum type, GLsizei count, const GLchar *const*strings);
-typedef void      (*PFNGLBINDPROGRAMPIPELINEPROC) (GLuint pipeline);
-typedef void      (*PFNGLDELETEPROGRAMPIPELINESPROC) (GLsizei n, const GLuint *pipelines);
-typedef void      (*PFNGLGENPROGRAMPIPELINESPROC) (GLsizei n, GLuint *pipelines);
-typedef GLboolean (*PFNGLISPROGRAMPIPELINEPROC) (GLuint pipeline);
-typedef void      (*PFNGLGETPROGRAMPIPELINEIVPROC) (GLuint pipeline, GLenum pname, GLint *params);
-typedef void      (*PFNGLPROGRAMUNIFORM1IPROC) (GLuint program, GLint location, GLint v0);
-typedef void      (*PFNGLPROGRAMUNIFORM1IVPROC) (GLuint program, GLint location, GLsizei count, const GLint *value);
-typedef void      (*PFNGLPROGRAMUNIFORM1FPROC) (GLuint program, GLint location, GLfloat v0);
-typedef void      (*PFNGLPROGRAMUNIFORM1FVPROC) (GLuint program, GLint location, GLsizei count, const GLfloat *value);
-typedef void      (*PFNGLPROGRAMUNIFORM1DPROC) (GLuint program, GLint location, GLdouble v0);
-typedef void      (*PFNGLPROGRAMUNIFORM1DVPROC) (GLuint program, GLint location, GLsizei count, const GLdouble *value);
-typedef void      (*PFNGLPROGRAMUNIFORM1UIPROC) (GLuint program, GLint location, GLuint v0);
-typedef void      (*PFNGLPROGRAMUNIFORM1UIVPROC) (GLuint program, GLint location, GLsizei count, const GLuint *value);
-typedef void      (*PFNGLPROGRAMUNIFORM2IPROC) (GLuint program, GLint location, GLint v0, GLint v1);
-typedef void      (*PFNGLPROGRAMUNIFORM2IVPROC) (GLuint program, GLint location, GLsizei count, const GLint *value);
-typedef void      (*PFNGLPROGRAMUNIFORM2FPROC) (GLuint program, GLint location, GLfloat v0, GLfloat v1);
-typedef void      (*PFNGLPROGRAMUNIFORM2FVPROC) (GLuint program, GLint location, GLsizei count, const GLfloat *value);
-typedef void      (*PFNGLPROGRAMUNIFORM2DPROC) (GLuint program, GLint location, GLdouble v0, GLdouble v1);
-typedef void      (*PFNGLPROGRAMUNIFORM2DVPROC) (GLuint program, GLint location, GLsizei count, const GLdouble *value);
-typedef void      (*PFNGLPROGRAMUNIFORM2UIPROC) (GLuint program, GLint location, GLuint v0, GLuint v1);
-typedef void      (*PFNGLPROGRAMUNIFORM2UIVPROC) (GLuint program, GLint location, GLsizei count, const GLuint *value);
-typedef void      (*PFNGLPROGRAMUNIFORM3IPROC) (GLuint program, GLint location, GLint v0, GLint v1, GLint v2);
-typedef void      (*PFNGLPROGRAMUNIFORM3IVPROC) (GLuint program, GLint location, GLsizei count, const GLint *value);
-typedef void      (*PFNGLPROGRAMUNIFORM3FPROC) (GLuint program, GLint location, GLfloat v0, GLfloat v1, GLfloat v2);
-typedef void      (*PFNGLPROGRAMUNIFORM3FVPROC) (GLuint program, GLint location, GLsizei count, const GLfloat *value);
-typedef void      (*PFNGLPROGRAMUNIFORM3DPROC) (GLuint program, GLint location, GLdouble v0, GLdouble v1, GLdouble v2);
-typedef void      (*PFNGLPROGRAMUNIFORM3DVPROC) (GLuint program, GLint location, GLsizei count, const GLdouble *value);
-typedef void      (*PFNGLPROGRAMUNIFORM3UIPROC) (GLuint program, GLint location, GLuint v0, GLuint v1, GLuint v2);
-typedef void      (*PFNGLPROGRAMUNIFORM3UIVPROC) (GLuint program, GLint location, GLsizei count, const GLuint *value);
-typedef void      (*PFNGLPROGRAMUNIFORM4IPROC) (GLuint program, GLint location, GLint v0, GLint v1, GLint v2, GLint v3);
-typedef void      (*PFNGLPROGRAMUNIFORM4IVPROC) (GLuint program, GLint location, GLsizei count, const GLint *value);
-typedef void      (*PFNGLPROGRAMUNIFORM4FPROC) (GLuint program, GLint location, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3);
-typedef void      (*PFNGLPROGRAMUNIFORM4FVPROC) (GLuint program, GLint location, GLsizei count, const GLfloat *value);
-typedef void      (*PFNGLPROGRAMUNIFORM4DPROC) (GLuint program, GLint location, GLdouble v0, GLdouble v1, GLdouble v2, GLdouble v3);
-typedef void      (*PFNGLPROGRAMUNIFORM4DVPROC) (GLuint program, GLint location, GLsizei count, const GLdouble *value);
-typedef void      (*PFNGLPROGRAMUNIFORM4UIPROC) (GLuint program, GLint location, GLuint v0, GLuint v1, GLuint v2, GLuint v3);
-typedef void      (*PFNGLPROGRAMUNIFORM4UIVPROC) (GLuint program, GLint location, GLsizei count, const GLuint *value);
-typedef void      (*PFNGLPROGRAMUNIFORMMATRIX2FVPROC) (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
-typedef void      (*PFNGLPROGRAMUNIFORMMATRIX3FVPROC) (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
-typedef void      (*PFNGLPROGRAMUNIFORMMATRIX4FVPROC) (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
-typedef void      (*PFNGLPROGRAMUNIFORMMATRIX2DVPROC) (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble *value);
-typedef void      (*PFNGLPROGRAMUNIFORMMATRIX3DVPROC) (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble *value);
-typedef void      (*PFNGLPROGRAMUNIFORMMATRIX4DVPROC) (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble *value);
-typedef void      (*PFNGLPROGRAMUNIFORMMATRIX2X3FVPROC) (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
-typedef void      (*PFNGLPROGRAMUNIFORMMATRIX3X2FVPROC) (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
-typedef void      (*PFNGLPROGRAMUNIFORMMATRIX2X4FVPROC) (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
-typedef void      (*PFNGLPROGRAMUNIFORMMATRIX4X2FVPROC) (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
-typedef void      (*PFNGLPROGRAMUNIFORMMATRIX3X4FVPROC) (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
-typedef void      (*PFNGLPROGRAMUNIFORMMATRIX4X3FVPROC) (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
-typedef void      (*PFNGLPROGRAMUNIFORMMATRIX2X3DVPROC) (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble *value);
-typedef void      (*PFNGLPROGRAMUNIFORMMATRIX3X2DVPROC) (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble *value);
-typedef void      (*PFNGLPROGRAMUNIFORMMATRIX2X4DVPROC) (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble *value);
-typedef void      (*PFNGLPROGRAMUNIFORMMATRIX4X2DVPROC) (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble *value);
-typedef void      (*PFNGLPROGRAMUNIFORMMATRIX3X4DVPROC) (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble *value);
-typedef void      (*PFNGLPROGRAMUNIFORMMATRIX4X3DVPROC) (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble *value);
-typedef void      (*PFNGLVALIDATEPROGRAMPIPELINEPROC) (GLuint pipeline);
-typedef void      (*PFNGLGETPROGRAMPIPELINEINFOLOGPROC) (GLuint pipeline, GLsizei bufSize, GLsizei *length, GLchar *infoLog);
-typedef void      (*PFNGLVERTEXATTRIBL1DPROC) (GLuint index, GLdouble x);
-typedef void      (*PFNGLVERTEXATTRIBL2DPROC) (GLuint index, GLdouble x, GLdouble y);
-typedef void      (*PFNGLVERTEXATTRIBL3DPROC) (GLuint index, GLdouble x, GLdouble y, GLdouble z);
-typedef void      (*PFNGLVERTEXATTRIBL4DPROC) (GLuint index, GLdouble x, GLdouble y, GLdouble z, GLdouble w);
-typedef void      (*PFNGLVERTEXATTRIBL1DVPROC) (GLuint index, const GLdouble *v);
-typedef void      (*PFNGLVERTEXATTRIBL2DVPROC) (GLuint index, const GLdouble *v);
-typedef void      (*PFNGLVERTEXATTRIBL3DVPROC) (GLuint index, const GLdouble *v);
-typedef void      (*PFNGLVERTEXATTRIBL4DVPROC) (GLuint index, const GLdouble *v);
-typedef void      (*PFNGLVERTEXATTRIBLPOINTERPROC) (GLuint index, GLint size, GLenum type, GLsizei stride, const void *pointer);
-typedef void      (*PFNGLGETVERTEXATTRIBLDVPROC) (GLuint index, GLenum pname, GLdouble *params);
-typedef void      (*PFNGLVIEWPORTARRAYVPROC) (GLuint first, GLsizei count, const GLfloat *v);
-typedef void      (*PFNGLVIEWPORTINDEXEDFPROC) (GLuint index, GLfloat x, GLfloat y, GLfloat w, GLfloat h);
-typedef void      (*PFNGLVIEWPORTINDEXEDFVPROC) (GLuint index, const GLfloat *v);
-typedef void      (*PFNGLSCISSORARRAYVPROC) (GLuint first, GLsizei count, const GLint *v);
-typedef void      (*PFNGLSCISSORINDEXEDPROC) (GLuint index, GLint left, GLint bottom, GLsizei width, GLsizei height);
-typedef void      (*PFNGLSCISSORINDEXEDVPROC) (GLuint index, const GLint *v);
-typedef void      (*PFNGLDEPTHRANGEARRAYVPROC) (GLuint first, GLsizei count, const GLdouble *v);
-typedef void      (*PFNGLDEPTHRANGEINDEXEDPROC) (GLuint index, GLdouble n, GLdouble f);
-typedef void      (*PFNGLGETFLOATI_VPROC) (GLenum target, GLuint index, GLfloat *data);
-typedef void      (*PFNGLGETDOUBLEI_VPROC) (GLenum target, GLuint index, GLdouble *data);
-extern PFNGLRELEASESHADERCOMPILERPROC     glReleaseShaderCompiler;
-extern PFNGLSHADERBINARYPROC              glShaderBinary;
-extern PFNGLGETSHADERPRECISIONFORMATPROC  glGetShaderPrecisionFormat;
-extern PFNGLDEPTHRANGEFPROC               glDepthRangef;
-extern PFNGLCLEARDEPTHFPROC               glClearDepthf;
-extern PFNGLGETPROGRAMBINARYPROC          glGetProgramBinary;
-extern PFNGLPROGRAMBINARYPROC             glProgramBinary;
-extern PFNGLPROGRAMPARAMETERIPROC         glProgramParameteri;
-extern PFNGLUSEPROGRAMSTAGESPROC          glUseProgramStages;
-extern PFNGLACTIVESHADERPROGRAMPROC       glActiveShaderProgram;
-extern PFNGLCREATESHADERPROGRAMVPROC      glCreateShaderProgramv;
-extern PFNGLBINDPROGRAMPIPELINEPROC       glBindProgramPipeline;
-extern PFNGLDELETEPROGRAMPIPELINESPROC    glDeleteProgramPipelines;
-extern PFNGLGENPROGRAMPIPELINESPROC       glGenProgramPipelines;
-extern PFNGLISPROGRAMPIPELINEPROC         glIsProgramPipeline;
-extern PFNGLGETPROGRAMPIPELINEIVPROC      glGetProgramPipelineiv;
-extern PFNGLPROGRAMUNIFORM1IPROC          glProgramUniform1i;
-extern PFNGLPROGRAMUNIFORM1IVPROC         glProgramUniform1iv;
-extern PFNGLPROGRAMUNIFORM1FPROC          glProgramUniform1f;
-extern PFNGLPROGRAMUNIFORM1FVPROC         glProgramUniform1fv;
-extern PFNGLPROGRAMUNIFORM1DPROC          glProgramUniform1d;
-extern PFNGLPROGRAMUNIFORM1DVPROC         glProgramUniform1dv;
-extern PFNGLPROGRAMUNIFORM1UIPROC         glProgramUniform1ui;
-extern PFNGLPROGRAMUNIFORM1UIVPROC        glProgramUniform1uiv;
-extern PFNGLPROGRAMUNIFORM2IPROC          glProgramUniform2i;
-extern PFNGLPROGRAMUNIFORM2IVPROC         glProgramUniform2iv;
-extern PFNGLPROGRAMUNIFORM2FPROC          glProgramUniform2f;
-extern PFNGLPROGRAMUNIFORM2FVPROC         glProgramUniform2fv;
-extern PFNGLPROGRAMUNIFORM2DPROC          glProgramUniform2d;
-extern PFNGLPROGRAMUNIFORM2DVPROC         glProgramUniform2dv;
-extern PFNGLPROGRAMUNIFORM2UIPROC         glProgramUniform2ui;
-extern PFNGLPROGRAMUNIFORM2UIVPROC        glProgramUniform2uiv;
-extern PFNGLPROGRAMUNIFORM3IPROC          glProgramUniform3i;
-extern PFNGLPROGRAMUNIFORM3IVPROC         glProgramUniform3iv;
-extern PFNGLPROGRAMUNIFORM3FPROC          glProgramUniform3f;
-extern PFNGLPROGRAMUNIFORM3FVPROC         glProgramUniform3fv;
-extern PFNGLPROGRAMUNIFORM3DPROC          glProgramUniform3d;
-extern PFNGLPROGRAMUNIFORM3DVPROC         glProgramUniform3dv;
-extern PFNGLPROGRAMUNIFORM3UIPROC         glProgramUniform3ui;
-extern PFNGLPROGRAMUNIFORM3UIVPROC        glProgramUniform3uiv;
-extern PFNGLPROGRAMUNIFORM4IPROC          glProgramUniform4i;
-extern PFNGLPROGRAMUNIFORM4IVPROC         glProgramUniform4iv;
-extern PFNGLPROGRAMUNIFORM4FPROC          glProgramUniform4f;
-extern PFNGLPROGRAMUNIFORM4FVPROC         glProgramUniform4fv;
-extern PFNGLPROGRAMUNIFORM4DPROC          glProgramUniform4d;
-extern PFNGLPROGRAMUNIFORM4DVPROC         glProgramUniform4dv;
-extern PFNGLPROGRAMUNIFORM4UIPROC         glProgramUniform4ui;
-extern PFNGLPROGRAMUNIFORM4UIVPROC        glProgramUniform4uiv;
-extern PFNGLPROGRAMUNIFORMMATRIX2FVPROC   glProgramUniformMatrix2fv;
-extern PFNGLPROGRAMUNIFORMMATRIX3FVPROC   glProgramUniformMatrix3fv;
-extern PFNGLPROGRAMUNIFORMMATRIX4FVPROC   glProgramUniformMatrix4fv;
-extern PFNGLPROGRAMUNIFORMMATRIX2DVPROC   glProgramUniformMatrix2dv;
-extern PFNGLPROGRAMUNIFORMMATRIX3DVPROC   glProgramUniformMatrix3dv;
-extern PFNGLPROGRAMUNIFORMMATRIX4DVPROC   glProgramUniformMatrix4dv;
-extern PFNGLPROGRAMUNIFORMMATRIX2X3FVPROC glProgramUniformMatrix2x3fv;
-extern PFNGLPROGRAMUNIFORMMATRIX3X2FVPROC glProgramUniformMatrix3x2fv;
-extern PFNGLPROGRAMUNIFORMMATRIX2X4FVPROC glProgramUniformMatrix2x4fv;
-extern PFNGLPROGRAMUNIFORMMATRIX4X2FVPROC glProgramUniformMatrix4x2fv;
-extern PFNGLPROGRAMUNIFORMMATRIX3X4FVPROC glProgramUniformMatrix3x4fv;
-extern PFNGLPROGRAMUNIFORMMATRIX4X3FVPROC glProgramUniformMatrix4x3fv;
-extern PFNGLPROGRAMUNIFORMMATRIX2X3DVPROC glProgramUniformMatrix2x3dv;
-extern PFNGLPROGRAMUNIFORMMATRIX3X2DVPROC glProgramUniformMatrix3x2dv;
-extern PFNGLPROGRAMUNIFORMMATRIX2X4DVPROC glProgramUniformMatrix2x4dv;
-extern PFNGLPROGRAMUNIFORMMATRIX4X2DVPROC glProgramUniformMatrix4x2dv;
-extern PFNGLPROGRAMUNIFORMMATRIX3X4DVPROC glProgramUniformMatrix3x4dv;
-extern PFNGLPROGRAMUNIFORMMATRIX4X3DVPROC glProgramUniformMatrix4x3dv;
-extern PFNGLVALIDATEPROGRAMPIPELINEPROC   glValidateProgramPipeline;
-extern PFNGLGETPROGRAMPIPELINEINFOLOGPROC glGetProgramPipelineInfoLog;
-extern PFNGLVERTEXATTRIBL1DPROC           glVertexAttribL1d;
-extern PFNGLVERTEXATTRIBL2DPROC           glVertexAttribL2d;
-extern PFNGLVERTEXATTRIBL3DPROC           glVertexAttribL3d;
-extern PFNGLVERTEXATTRIBL4DPROC           glVertexAttribL4d;
-extern PFNGLVERTEXATTRIBL1DVPROC          glVertexAttribL1dv;
-extern PFNGLVERTEXATTRIBL2DVPROC          glVertexAttribL2dv;
-extern PFNGLVERTEXATTRIBL3DVPROC          glVertexAttribL3dv;
-extern PFNGLVERTEXATTRIBL4DVPROC          glVertexAttribL4dv;
-extern PFNGLVERTEXATTRIBLPOINTERPROC      glVertexAttribLPointer;
-extern PFNGLGETVERTEXATTRIBLDVPROC        glGetVertexAttribLdv;
-extern PFNGLVIEWPORTARRAYVPROC            glViewportArrayv;
-extern PFNGLVIEWPORTINDEXEDFPROC          glViewportIndexedf;
-extern PFNGLVIEWPORTINDEXEDFVPROC         glViewportIndexedfv;
-extern PFNGLSCISSORARRAYVPROC             glScissorArrayv;
-extern PFNGLSCISSORINDEXEDPROC            glScissorIndexed;
-extern PFNGLSCISSORINDEXEDVPROC           glScissorIndexedv;
-extern PFNGLDEPTHRANGEARRAYVPROC          glDepthRangeArrayv;
-extern PFNGLDEPTHRANGEINDEXEDPROC         glDepthRangeIndexed;
-extern PFNGLGETFLOATI_VPROC               glGetFloati_v;
-extern PFNGLGETDOUBLEI_VPROC              glGetDoublei_v;
-/* ----GL VERSION 4.2------------------------------------------------------------------------------------------------ */
-typedef void (*PFNGLDRAWARRAYSINSTANCEDBASEINSTANCEPROC) (GLenum mode, GLint first, GLsizei count, GLsizei instancecount, GLuint baseinstance);
-typedef void (*PFNGLDRAWELEMENTSINSTANCEDBASEINSTANCEPROC) (GLenum mode, GLsizei count, GLenum type, const void *indices, GLsizei instancecount, GLuint baseinstance);
-typedef void (*PFNGLDRAWELEMENTSINSTANCEDBASEVERTEXBASEINSTANCEPROC) (GLenum mode, GLsizei count, GLenum type, const void *indices, GLsizei instancecount, GLint basevertex, GLuint baseinstance);
-typedef void (*PFNGLGETINTERNALFORMATIVPROC) (GLenum target, GLenum internalformat, GLenum pname, GLsizei count, GLint *params);
-typedef void (*PFNGLGETACTIVEATOMICCOUNTERBUFFERIVPROC) (GLuint program, GLuint bufferIndex, GLenum pname, GLint *params);
-typedef void (*PFNGLBINDIMAGETEXTUREPROC) (GLuint unit, GLuint texture, GLint level, GLboolean layered, GLint layer, GLenum access, GLenum format);
-typedef void (*PFNGLMEMORYBARRIERPROC) (GLbitfield barriers);
-typedef void (*PFNGLTEXSTORAGE1DPROC) (GLenum target, GLsizei levels, GLenum internalformat, GLsizei width);
-typedef void (*PFNGLTEXSTORAGE2DPROC) (GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height);
-typedef void (*PFNGLTEXSTORAGE3DPROC) (GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth);
-typedef void (*PFNGLDRAWTRANSFORMFEEDBACKINSTANCEDPROC) (GLenum mode, GLuint id, GLsizei instancecount);
-typedef void (*PFNGLDRAWTRANSFORMFEEDBACKSTREAMINSTANCEDPROC) (GLenum mode, GLuint id, GLuint stream, GLsizei instancecount);
-extern PFNGLDRAWARRAYSINSTANCEDBASEINSTANCEPROC             glDrawArraysInstancedBaseInstance;
-extern PFNGLDRAWELEMENTSINSTANCEDBASEINSTANCEPROC           glDrawElementsInstancedBaseInstance;
-extern PFNGLDRAWELEMENTSINSTANCEDBASEVERTEXBASEINSTANCEPROC glDrawElementsInstancedBaseVertexBaseInstance;
-extern PFNGLGETINTERNALFORMATIVPROC                         glGetInternalformativ;
-extern PFNGLGETACTIVEATOMICCOUNTERBUFFERIVPROC              glGetActiveAtomicCounterBufferiv;
-extern PFNGLBINDIMAGETEXTUREPROC                            glBindImageTexture;
-extern PFNGLMEMORYBARRIERPROC                               glMemoryBarrier;
-extern PFNGLTEXSTORAGE1DPROC                                glTexStorage1D;
-extern PFNGLTEXSTORAGE2DPROC                                glTexStorage2D;
-extern PFNGLTEXSTORAGE3DPROC                                glTexStorage3D;
-extern PFNGLDRAWTRANSFORMFEEDBACKINSTANCEDPROC              glDrawTransformFeedbackInstanced;
-extern PFNGLDRAWTRANSFORMFEEDBACKSTREAMINSTANCEDPROC        glDrawTransformFeedbackStreamInstanced;
-/* ----GL VERSION 4.3------------------------------------------------------------------------------------------------ */
-typedef void   (*PFNGLCLEARBUFFERDATAPROC) (GLenum target, GLenum internalformat, GLenum format, GLenum type, const void *data);
-typedef void   (*PFNGLCLEARBUFFERSUBDATAPROC) (GLenum target, GLenum internalformat, GLintptr offset, GLsizeiptr size, GLenum format, GLenum type, const void *data);
-typedef void   (*PFNGLDISPATCHCOMPUTEPROC) (GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z);
-typedef void   (*PFNGLDISPATCHCOMPUTEINDIRECTPROC) (GLintptr indirect);
-typedef void   (*PFNGLCOPYIMAGESUBDATAPROC) (GLuint srcName, GLenum srcTarget, GLint srcLevel, GLint srcX, GLint srcY, GLint srcZ, GLuint dstName, GLenum dstTarget, GLint dstLevel, GLint dstX, GLint dstY, GLint dstZ, GLsizei srcWidth, GLsizei srcHeight, GLsizei srcDepth);
-typedef void   (*PFNGLFRAMEBUFFERPARAMETERIPROC) (GLenum target, GLenum pname, GLint param);
-typedef void   (*PFNGLGETFRAMEBUFFERPARAMETERIVPROC) (GLenum target, GLenum pname, GLint *params);
-typedef void   (*PFNGLGETINTERNALFORMATI64VPROC) (GLenum target, GLenum internalformat, GLenum pname, GLsizei count, GLint64 *params);
-typedef void   (*PFNGLINVALIDATETEXSUBIMAGEPROC) (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth);
-typedef void   (*PFNGLINVALIDATETEXIMAGEPROC) (GLuint texture, GLint level);
-typedef void   (*PFNGLINVALIDATEBUFFERSUBDATAPROC) (GLuint buffer, GLintptr offset, GLsizeiptr length);
-typedef void   (*PFNGLINVALIDATEBUFFERDATAPROC) (GLuint buffer);
-typedef void   (*PFNGLINVALIDATEFRAMEBUFFERPROC) (GLenum target, GLsizei numAttachments, const GLenum *attachments);
-typedef void   (*PFNGLINVALIDATESUBFRAMEBUFFERPROC) (GLenum target, GLsizei numAttachments, const GLenum *attachments, GLint x, GLint y, GLsizei width, GLsizei height);
-typedef void   (*PFNGLMULTIDRAWARRAYSINDIRECTPROC) (GLenum mode, const void *indirect, GLsizei drawcount, GLsizei stride);
-typedef void   (*PFNGLMULTIDRAWELEMENTSINDIRECTPROC) (GLenum mode, GLenum type, const void *indirect, GLsizei drawcount, GLsizei stride);
-typedef void   (*PFNGLGETPROGRAMINTERFACEIVPROC) (GLuint program, GLenum programInterface, GLenum pname, GLint *params);
-typedef GLuint (*PFNGLGETPROGRAMRESOURCEINDEXPROC) (GLuint program, GLenum programInterface, const GLchar *name);
-typedef void   (*PFNGLGETPROGRAMRESOURCENAMEPROC) (GLuint program, GLenum programInterface, GLuint index, GLsizei bufSize, GLsizei *length, GLchar *name);
-typedef void   (*PFNGLGETPROGRAMRESOURCEIVPROC) (GLuint program, GLenum programInterface, GLuint index, GLsizei propCount, const GLenum *props, GLsizei count, GLsizei *length, GLint *params);
-typedef GLint  (*PFNGLGETPROGRAMRESOURCELOCATIONPROC) (GLuint program, GLenum programInterface, const GLchar *name);
-typedef GLint  (*PFNGLGETPROGRAMRESOURCELOCATIONINDEXPROC) (GLuint program, GLenum programInterface, const GLchar *name);
-typedef void   (*PFNGLSHADERSTORAGEBLOCKBINDINGPROC) (GLuint program, GLuint storageBlockIndex, GLuint storageBlockBinding);
-typedef void   (*PFNGLTEXBUFFERRANGEPROC) (GLenum target, GLenum internalformat, GLuint buffer, GLintptr offset, GLsizeiptr size);
-typedef void   (*PFNGLTEXSTORAGE2DMULTISAMPLEPROC) (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLboolean fixedsamplelocations);
-typedef void   (*PFNGLTEXSTORAGE3DMULTISAMPLEPROC) (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLboolean fixedsamplelocations);
-typedef void   (*PFNGLTEXTUREVIEWPROC) (GLuint texture, GLenum target, GLuint origtexture, GLenum internalformat, GLuint minlevel, GLuint numlevels, GLuint minlayer, GLuint numlayers);
-typedef void   (*PFNGLBINDVERTEXBUFFERPROC) (GLuint bindingindex, GLuint buffer, GLintptr offset, GLsizei stride);
-typedef void   (*PFNGLVERTEXATTRIBFORMATPROC) (GLuint attribindex, GLint size, GLenum type, GLboolean normalized, GLuint relativeoffset);
-typedef void   (*PFNGLVERTEXATTRIBIFORMATPROC) (GLuint attribindex, GLint size, GLenum type, GLuint relativeoffset);
-typedef void   (*PFNGLVERTEXATTRIBLFORMATPROC) (GLuint attribindex, GLint size, GLenum type, GLuint relativeoffset);
-typedef void   (*PFNGLVERTEXATTRIBBINDINGPROC) (GLuint attribindex, GLuint bindingindex);
-typedef void   (*PFNGLVERTEXBINDINGDIVISORPROC) (GLuint bindingindex, GLuint divisor);
-typedef void   (*PFNGLDEBUGMESSAGECONTROLPROC) (GLenum source, GLenum type, GLenum severity, GLsizei count, const GLuint *ids, GLboolean enabled);
-typedef void   (*PFNGLDEBUGMESSAGEINSERTPROC) (GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *buf);
-typedef void   (*PFNGLDEBUGMESSAGECALLBACKPROC) (GLDEBUGPROC callback, const void *userParam);
-typedef GLuint (*PFNGLGETDEBUGMESSAGELOGPROC) (GLuint count, GLsizei bufSize, GLenum *sources, GLenum *types, GLuint *ids, GLenum *severities, GLsizei *lengths, GLchar *messageLog);
-typedef void   (*PFNGLPUSHDEBUGGROUPPROC) (GLenum source, GLuint id, GLsizei length, const GLchar *message);
-typedef void   (*PFNGLPOPDEBUGGROUPPROC) (void);
-typedef void   (*PFNGLOBJECTLABELPROC) (GLenum identifier, GLuint name, GLsizei length, const GLchar *label);
-typedef void   (*PFNGLGETOBJECTLABELPROC) (GLenum identifier, GLuint name, GLsizei bufSize, GLsizei *length, GLchar *label);
-typedef void   (*PFNGLOBJECTPTRLABELPROC) (const void *ptr, GLsizei length, const GLchar *label);
-typedef void   (*PFNGLGETOBJECTPTRLABELPROC) (const void *ptr, GLsizei bufSize, GLsizei *length, GLchar *label);
-extern PFNGLCLEARBUFFERDATAPROC                 glClearBufferData;
-extern PFNGLCLEARBUFFERSUBDATAPROC              glClearBufferSubData;
-extern PFNGLDISPATCHCOMPUTEPROC                 glDispatchCompute;
-extern PFNGLDISPATCHCOMPUTEINDIRECTPROC         glDispatchComputeIndirect;
-extern PFNGLCOPYIMAGESUBDATAPROC                glCopyImageSubData;
-extern PFNGLFRAMEBUFFERPARAMETERIPROC           glFramebufferParameteri;
-extern PFNGLGETFRAMEBUFFERPARAMETERIVPROC       glGetFramebufferParameteriv;
-extern PFNGLGETINTERNALFORMATI64VPROC           glGetInternalformati64v;
-extern PFNGLINVALIDATETEXSUBIMAGEPROC           glInvalidateTexSubImage;
-extern PFNGLINVALIDATETEXIMAGEPROC              glInvalidateTexImage;
-extern PFNGLINVALIDATEBUFFERSUBDATAPROC         glInvalidateBufferSubData;
-extern PFNGLINVALIDATEBUFFERDATAPROC            glInvalidateBufferData;
-extern PFNGLINVALIDATEFRAMEBUFFERPROC           glInvalidateFramebuffer;
-extern PFNGLINVALIDATESUBFRAMEBUFFERPROC        glInvalidateSubFramebuffer;
-extern PFNGLMULTIDRAWARRAYSINDIRECTPROC         glMultiDrawArraysIndirect;
-extern PFNGLMULTIDRAWELEMENTSINDIRECTPROC       glMultiDrawElementsIndirect;
-extern PFNGLGETPROGRAMINTERFACEIVPROC           glGetProgramInterfaceiv;
-extern PFNGLGETPROGRAMRESOURCEINDEXPROC         glGetProgramResourceIndex;
-extern PFNGLGETPROGRAMRESOURCENAMEPROC          glGetProgramResourceName;
-extern PFNGLGETPROGRAMRESOURCEIVPROC            glGetProgramResourceiv;
-extern PFNGLGETPROGRAMRESOURCELOCATIONPROC      glGetProgramResourceLocation;
-extern PFNGLGETPROGRAMRESOURCELOCATIONINDEXPROC glGetProgramResourceLocationIndex;
-extern PFNGLSHADERSTORAGEBLOCKBINDINGPROC       glShaderStorageBlockBinding;
-extern PFNGLTEXBUFFERRANGEPROC                  glTexBufferRange;
-extern PFNGLTEXSTORAGE2DMULTISAMPLEPROC         glTexStorage2DMultisample;
-extern PFNGLTEXSTORAGE3DMULTISAMPLEPROC         glTexStorage3DMultisample;
-extern PFNGLTEXTUREVIEWPROC                     glTextureView;
-extern PFNGLBINDVERTEXBUFFERPROC                glBindVertexBuffer;
-extern PFNGLVERTEXATTRIBFORMATPROC              glVertexAttribFormat;
-extern PFNGLVERTEXATTRIBIFORMATPROC             glVertexAttribIFormat;
-extern PFNGLVERTEXATTRIBLFORMATPROC             glVertexAttribLFormat;
-extern PFNGLVERTEXATTRIBBINDINGPROC             glVertexAttribBinding;
-extern PFNGLVERTEXBINDINGDIVISORPROC            glVertexBindingDivisor;
-extern PFNGLDEBUGMESSAGECONTROLPROC             glDebugMessageControl;
-extern PFNGLDEBUGMESSAGEINSERTPROC              glDebugMessageInsert;
-extern PFNGLDEBUGMESSAGECALLBACKPROC            glDebugMessageCallback;
-extern PFNGLGETDEBUGMESSAGELOGPROC              glGetDebugMessageLog;
-extern PFNGLPUSHDEBUGGROUPPROC                  glPushDebugGroup;
-extern PFNGLPOPDEBUGGROUPPROC                   glPopDebugGroup;
-extern PFNGLOBJECTLABELPROC                     glObjectLabel;
-extern PFNGLGETOBJECTLABELPROC                  glGetObjectLabel;
-extern PFNGLOBJECTPTRLABELPROC                  glObjectPtrLabel;
-extern PFNGLGETOBJECTPTRLABELPROC               glGetObjectPtrLabel;
-/* ----GL VERSION 4.4------------------------------------------------------------------------------------------------ */
-typedef void (*PFNGLBUFFERSTORAGEPROC) (GLenum target, GLsizeiptr size, const void *data, GLbitfield flags);
-typedef void (*PFNGLCLEARTEXIMAGEPROC) (GLuint texture, GLint level, GLenum format, GLenum type, const void *data);
-typedef void (*PFNGLCLEARTEXSUBIMAGEPROC) (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, const void *data);
-typedef void (*PFNGLBINDBUFFERSBASEPROC) (GLenum target, GLuint first, GLsizei count, const GLuint *buffers);
-typedef void (*PFNGLBINDBUFFERSRANGEPROC) (GLenum target, GLuint first, GLsizei count, const GLuint *buffers, const GLintptr *offsets, const GLsizeiptr *sizes);
-typedef void (*PFNGLBINDTEXTURESPROC) (GLuint first, GLsizei count, const GLuint *textures);
-typedef void (*PFNGLBINDSAMPLERSPROC) (GLuint first, GLsizei count, const GLuint *samplers);
-typedef void (*PFNGLBINDIMAGETEXTURESPROC) (GLuint first, GLsizei count, const GLuint *textures);
-typedef void (*PFNGLBINDVERTEXBUFFERSPROC) (GLuint first, GLsizei count, const GLuint *buffers, const GLintptr *offsets, const GLsizei *strides);
-extern PFNGLBUFFERSTORAGEPROC     glBufferStorage;
-extern PFNGLCLEARTEXIMAGEPROC     glClearTexImage;
-extern PFNGLCLEARTEXSUBIMAGEPROC  glClearTexSubImage;
-extern PFNGLBINDBUFFERSBASEPROC   glBindBuffersBase;
-extern PFNGLBINDBUFFERSRANGEPROC  glBindBuffersRange;
-extern PFNGLBINDTEXTURESPROC      glBindTextures;
-extern PFNGLBINDSAMPLERSPROC      glBindSamplers;
-extern PFNGLBINDIMAGETEXTURESPROC glBindImageTextures;
-extern PFNGLBINDVERTEXBUFFERSPROC glBindVertexBuffers;
-/* ----GL VERSION 4.5------------------------------------------------------------------------------------------------ */
-typedef void      (*PFNGLCLIPCONTROLPROC) (GLenum origin, GLenum depth);
-typedef void      (*PFNGLCREATETRANSFORMFEEDBACKSPROC) (GLsizei n, GLuint *ids);
-typedef void      (*PFNGLTRANSFORMFEEDBACKBUFFERBASEPROC) (GLuint xfb, GLuint index, GLuint buffer);
-typedef void      (*PFNGLTRANSFORMFEEDBACKBUFFERRANGEPROC) (GLuint xfb, GLuint index, GLuint buffer, GLintptr offset, GLsizeiptr size);
-typedef void      (*PFNGLGETTRANSFORMFEEDBACKIVPROC) (GLuint xfb, GLenum pname, GLint *param);
-typedef void      (*PFNGLGETTRANSFORMFEEDBACKI_VPROC) (GLuint xfb, GLenum pname, GLuint index, GLint *param);
-typedef void      (*PFNGLGETTRANSFORMFEEDBACKI64_VPROC) (GLuint xfb, GLenum pname, GLuint index, GLint64 *param);
-typedef void      (*PFNGLCREATEBUFFERSPROC) (GLsizei n, GLuint *buffers);
-typedef void      (*PFNGLNAMEDBUFFERSTORAGEPROC) (GLuint buffer, GLsizeiptr size, const void *data, GLbitfield flags);
-typedef void      (*PFNGLNAMEDBUFFERDATAPROC) (GLuint buffer, GLsizeiptr size, const void *data, GLenum usage);
-typedef void      (*PFNGLNAMEDBUFFERSUBDATAPROC) (GLuint buffer, GLintptr offset, GLsizeiptr size, const void *data);
-typedef void      (*PFNGLCOPYNAMEDBUFFERSUBDATAPROC) (GLuint readBuffer, GLuint writeBuffer, GLintptr readOffset, GLintptr writeOffset, GLsizeiptr size);
-typedef void      (*PFNGLCLEARNAMEDBUFFERDATAPROC) (GLuint buffer, GLenum internalformat, GLenum format, GLenum type, const void *data);
-typedef void      (*PFNGLCLEARNAMEDBUFFERSUBDATAPROC) (GLuint buffer, GLenum internalformat, GLintptr offset, GLsizeiptr size, GLenum format, GLenum type, const void *data);
-typedef void     *(*PFNGLMAPNAMEDBUFFERPROC) (GLuint buffer, GLenum access);
-typedef void     *(*PFNGLMAPNAMEDBUFFERRANGEPROC) (GLuint buffer, GLintptr offset, GLsizeiptr length, GLbitfield access);
-typedef GLboolean (*PFNGLUNMAPNAMEDBUFFERPROC) (GLuint buffer);
-typedef void      (*PFNGLFLUSHMAPPEDNAMEDBUFFERRANGEPROC) (GLuint buffer, GLintptr offset, GLsizeiptr length);
-typedef void      (*PFNGLGETNAMEDBUFFERPARAMETERIVPROC) (GLuint buffer, GLenum pname, GLint *params);
-typedef void      (*PFNGLGETNAMEDBUFFERPARAMETERI64VPROC) (GLuint buffer, GLenum pname, GLint64 *params);
-typedef void      (*PFNGLGETNAMEDBUFFERPOINTERVPROC) (GLuint buffer, GLenum pname, void **params);
-typedef void      (*PFNGLGETNAMEDBUFFERSUBDATAPROC) (GLuint buffer, GLintptr offset, GLsizeiptr size, void *data);
-typedef void      (*PFNGLCREATEFRAMEBUFFERSPROC) (GLsizei n, GLuint *framebuffers);
-typedef void      (*PFNGLNAMEDFRAMEBUFFERRENDERBUFFERPROC) (GLuint framebuffer, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer);
-typedef void      (*PFNGLNAMEDFRAMEBUFFERPARAMETERIPROC) (GLuint framebuffer, GLenum pname, GLint param);
-typedef void      (*PFNGLNAMEDFRAMEBUFFERTEXTUREPROC) (GLuint framebuffer, GLenum attachment, GLuint texture, GLint level);
-typedef void      (*PFNGLNAMEDFRAMEBUFFERTEXTURELAYERPROC) (GLuint framebuffer, GLenum attachment, GLuint texture, GLint level, GLint layer);
-typedef void      (*PFNGLNAMEDFRAMEBUFFERDRAWBUFFERPROC) (GLuint framebuffer, GLenum buf);
-typedef void      (*PFNGLNAMEDFRAMEBUFFERDRAWBUFFERSPROC) (GLuint framebuffer, GLsizei n, const GLenum *bufs);
-typedef void      (*PFNGLNAMEDFRAMEBUFFERREADBUFFERPROC) (GLuint framebuffer, GLenum src);
-typedef void      (*PFNGLINVALIDATENAMEDFRAMEBUFFERDATAPROC) (GLuint framebuffer, GLsizei numAttachments, const GLenum *attachments);
-typedef void      (*PFNGLINVALIDATENAMEDFRAMEBUFFERSUBDATAPROC) (GLuint framebuffer, GLsizei numAttachments, const GLenum *attachments, GLint x, GLint y, GLsizei width, GLsizei height);
-typedef void      (*PFNGLCLEARNAMEDFRAMEBUFFERIVPROC) (GLuint framebuffer, GLenum buffer, GLint drawbuffer, const GLint *value);
-typedef void      (*PFNGLCLEARNAMEDFRAMEBUFFERUIVPROC) (GLuint framebuffer, GLenum buffer, GLint drawbuffer, const GLuint *value);
-typedef void      (*PFNGLCLEARNAMEDFRAMEBUFFERFVPROC) (GLuint framebuffer, GLenum buffer, GLint drawbuffer, const GLfloat *value);
-typedef void      (*PFNGLCLEARNAMEDFRAMEBUFFERFIPROC) (GLuint framebuffer, GLenum buffer, GLint drawbuffer, GLfloat depth, GLint stencil);
-typedef void      (*PFNGLBLITNAMEDFRAMEBUFFERPROC) (GLuint readFramebuffer, GLuint drawFramebuffer, GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter);
-typedef GLenum    (*PFNGLCHECKNAMEDFRAMEBUFFERSTATUSPROC) (GLuint framebuffer, GLenum target);
-typedef void      (*PFNGLGETNAMEDFRAMEBUFFERPARAMETERIVPROC) (GLuint framebuffer, GLenum pname, GLint *param);
-typedef void      (*PFNGLGETNAMEDFRAMEBUFFERATTACHMENTPARAMETERIVPROC) (GLuint framebuffer, GLenum attachment, GLenum pname, GLint *params);
-typedef void      (*PFNGLCREATERENDERBUFFERSPROC) (GLsizei n, GLuint *renderbuffers);
-typedef void      (*PFNGLNAMEDRENDERBUFFERSTORAGEPROC) (GLuint renderbuffer, GLenum internalformat, GLsizei width, GLsizei height);
-typedef void      (*PFNGLNAMEDRENDERBUFFERSTORAGEMULTISAMPLEPROC) (GLuint renderbuffer, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height);
-typedef void      (*PFNGLGETNAMEDRENDERBUFFERPARAMETERIVPROC) (GLuint renderbuffer, GLenum pname, GLint *params);
-typedef void      (*PFNGLCREATETEXTURESPROC) (GLenum target, GLsizei n, GLuint *textures);
-typedef void      (*PFNGLTEXTUREBUFFERPROC) (GLuint texture, GLenum internalformat, GLuint buffer);
-typedef void      (*PFNGLTEXTUREBUFFERRANGEPROC) (GLuint texture, GLenum internalformat, GLuint buffer, GLintptr offset, GLsizeiptr size);
-typedef void      (*PFNGLTEXTURESTORAGE1DPROC) (GLuint texture, GLsizei levels, GLenum internalformat, GLsizei width);
-typedef void      (*PFNGLTEXTURESTORAGE2DPROC) (GLuint texture, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height);
-typedef void      (*PFNGLTEXTURESTORAGE3DPROC) (GLuint texture, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth);
-typedef void      (*PFNGLTEXTURESTORAGE2DMULTISAMPLEPROC) (GLuint texture, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLboolean fixedsamplelocations);
-typedef void      (*PFNGLTEXTURESTORAGE3DMULTISAMPLEPROC) (GLuint texture, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLboolean fixedsamplelocations);
-typedef void      (*PFNGLTEXTURESUBIMAGE1DPROC) (GLuint texture, GLint level, GLint xoffset, GLsizei width, GLenum format, GLenum type, const void *pixels);
-typedef void      (*PFNGLTEXTURESUBIMAGE2DPROC) (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void *pixels);
-typedef void      (*PFNGLTEXTURESUBIMAGE3DPROC) (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, const void *pixels);
-typedef void      (*PFNGLCOMPRESSEDTEXTURESUBIMAGE1DPROC) (GLuint texture, GLint level, GLint xoffset, GLsizei width, GLenum format, GLsizei imageSize, const void *data);
-typedef void      (*PFNGLCOMPRESSEDTEXTURESUBIMAGE2DPROC) (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLsizei imageSize, const void *data);
-typedef void      (*PFNGLCOMPRESSEDTEXTURESUBIMAGE3DPROC) (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLsizei imageSize, const void *data);
-typedef void      (*PFNGLCOPYTEXTURESUBIMAGE1DPROC) (GLuint texture, GLint level, GLint xoffset, GLint x, GLint y, GLsizei width);
-typedef void      (*PFNGLCOPYTEXTURESUBIMAGE2DPROC) (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width, GLsizei height);
-typedef void      (*PFNGLCOPYTEXTURESUBIMAGE3DPROC) (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLint x, GLint y, GLsizei width, GLsizei height);
-typedef void      (*PFNGLTEXTUREPARAMETERFPROC) (GLuint texture, GLenum pname, GLfloat param);
-typedef void      (*PFNGLTEXTUREPARAMETERFVPROC) (GLuint texture, GLenum pname, const GLfloat *param);
-typedef void      (*PFNGLTEXTUREPARAMETERIPROC) (GLuint texture, GLenum pname, GLint param);
-typedef void      (*PFNGLTEXTUREPARAMETERIIVPROC) (GLuint texture, GLenum pname, const GLint *params);
-typedef void      (*PFNGLTEXTUREPARAMETERIUIVPROC) (GLuint texture, GLenum pname, const GLuint *params);
-typedef void      (*PFNGLTEXTUREPARAMETERIVPROC) (GLuint texture, GLenum pname, const GLint *param);
-typedef void      (*PFNGLGENERATETEXTUREMIPMAPPROC) (GLuint texture);
-typedef void      (*PFNGLBINDTEXTUREUNITPROC) (GLuint unit, GLuint texture);
-typedef void      (*PFNGLGETTEXTUREIMAGEPROC) (GLuint texture, GLint level, GLenum format, GLenum type, GLsizei bufSize, void *pixels);
-typedef void      (*PFNGLGETCOMPRESSEDTEXTUREIMAGEPROC) (GLuint texture, GLint level, GLsizei bufSize, void *pixels);
-typedef void      (*PFNGLGETTEXTURELEVELPARAMETERFVPROC) (GLuint texture, GLint level, GLenum pname, GLfloat *params);
-typedef void      (*PFNGLGETTEXTURELEVELPARAMETERIVPROC) (GLuint texture, GLint level, GLenum pname, GLint *params);
-typedef void      (*PFNGLGETTEXTUREPARAMETERFVPROC) (GLuint texture, GLenum pname, GLfloat *params);
-typedef void      (*PFNGLGETTEXTUREPARAMETERIIVPROC) (GLuint texture, GLenum pname, GLint *params);
-typedef void      (*PFNGLGETTEXTUREPARAMETERIUIVPROC) (GLuint texture, GLenum pname, GLuint *params);
-typedef void      (*PFNGLGETTEXTUREPARAMETERIVPROC) (GLuint texture, GLenum pname, GLint *params);
-typedef void      (*PFNGLCREATEVERTEXARRAYSPROC) (GLsizei n, GLuint *arrays);
-typedef void      (*PFNGLDISABLEVERTEXARRAYATTRIBPROC) (GLuint vaobj, GLuint index);
-typedef void      (*PFNGLENABLEVERTEXARRAYATTRIBPROC) (GLuint vaobj, GLuint index);
-typedef void      (*PFNGLVERTEXARRAYELEMENTBUFFERPROC) (GLuint vaobj, GLuint buffer);
-typedef void      (*PFNGLVERTEXARRAYVERTEXBUFFERPROC) (GLuint vaobj, GLuint bindingindex, GLuint buffer, GLintptr offset, GLsizei stride);
-typedef void      (*PFNGLVERTEXARRAYVERTEXBUFFERSPROC) (GLuint vaobj, GLuint first, GLsizei count, const GLuint *buffers, const GLintptr *offsets, const GLsizei *strides);
-typedef void      (*PFNGLVERTEXARRAYATTRIBBINDINGPROC) (GLuint vaobj, GLuint attribindex, GLuint bindingindex);
-typedef void      (*PFNGLVERTEXARRAYATTRIBFORMATPROC) (GLuint vaobj, GLuint attribindex, GLint size, GLenum type, GLboolean normalized, GLuint relativeoffset);
-typedef void      (*PFNGLVERTEXARRAYATTRIBIFORMATPROC) (GLuint vaobj, GLuint attribindex, GLint size, GLenum type, GLuint relativeoffset);
-typedef void      (*PFNGLVERTEXARRAYATTRIBLFORMATPROC) (GLuint vaobj, GLuint attribindex, GLint size, GLenum type, GLuint relativeoffset);
-typedef void      (*PFNGLVERTEXARRAYBINDINGDIVISORPROC) (GLuint vaobj, GLuint bindingindex, GLuint divisor);
-typedef void      (*PFNGLGETVERTEXARRAYIVPROC) (GLuint vaobj, GLenum pname, GLint *param);
-typedef void      (*PFNGLGETVERTEXARRAYINDEXEDIVPROC) (GLuint vaobj, GLuint index, GLenum pname, GLint *param);
-typedef void      (*PFNGLGETVERTEXARRAYINDEXED64IVPROC) (GLuint vaobj, GLuint index, GLenum pname, GLint64 *param);
-typedef void      (*PFNGLCREATESAMPLERSPROC) (GLsizei n, GLuint *samplers);
-typedef void      (*PFNGLCREATEPROGRAMPIPELINESPROC) (GLsizei n, GLuint *pipelines);
-typedef void      (*PFNGLCREATEQUERIESPROC) (GLenum target, GLsizei n, GLuint *ids);
-typedef void      (*PFNGLGETQUERYBUFFEROBJECTI64VPROC) (GLuint id, GLuint buffer, GLenum pname, GLintptr offset);
-typedef void      (*PFNGLGETQUERYBUFFEROBJECTIVPROC) (GLuint id, GLuint buffer, GLenum pname, GLintptr offset);
-typedef void      (*PFNGLGETQUERYBUFFEROBJECTUI64VPROC) (GLuint id, GLuint buffer, GLenum pname, GLintptr offset);
-typedef void      (*PFNGLGETQUERYBUFFEROBJECTUIVPROC) (GLuint id, GLuint buffer, GLenum pname, GLintptr offset);
-typedef void      (*PFNGLMEMORYBARRIERBYREGIONPROC) (GLbitfield barriers);
-typedef void      (*PFNGLGETTEXTURESUBIMAGEPROC) (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, GLsizei bufSize, void *pixels);
-typedef void      (*PFNGLGETCOMPRESSEDTEXTURESUBIMAGEPROC) (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLsizei bufSize, void *pixels);
-typedef GLenum    (*PFNGLGETGRAPHICSRESETSTATUSPROC) (void);
-typedef void      (*PFNGLGETNCOMPRESSEDTEXIMAGEPROC) (GLenum target, GLint lod, GLsizei bufSize, void *pixels);
-typedef void      (*PFNGLGETNTEXIMAGEPROC) (GLenum target, GLint level, GLenum format, GLenum type, GLsizei bufSize, void *pixels);
-typedef void      (*PFNGLGETNUNIFORMDVPROC) (GLuint program, GLint location, GLsizei bufSize, GLdouble *params);
-typedef void      (*PFNGLGETNUNIFORMFVPROC) (GLuint program, GLint location, GLsizei bufSize, GLfloat *params);
-typedef void      (*PFNGLGETNUNIFORMIVPROC) (GLuint program, GLint location, GLsizei bufSize, GLint *params);
-typedef void      (*PFNGLGETNUNIFORMUIVPROC) (GLuint program, GLint location, GLsizei bufSize, GLuint *params);
-typedef void      (*PFNGLREADNPIXELSPROC) (GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, GLsizei bufSize, void *data);
-typedef void      (*PFNGLTEXTUREBARRIERPROC) (void);
-extern  PFNGLCLIPCONTROLPROC                              glClipControl;
-extern  PFNGLCREATETRANSFORMFEEDBACKSPROC                 glCreateTransformFeedbacks;
-extern  PFNGLTRANSFORMFEEDBACKBUFFERBASEPROC              glTransformFeedbackBufferBase;
-extern  PFNGLTRANSFORMFEEDBACKBUFFERRANGEPROC             glTransformFeedbackBufferRange;
-extern  PFNGLGETTRANSFORMFEEDBACKIVPROC                   glGetTransformFeedbackiv;
-extern  PFNGLGETTRANSFORMFEEDBACKI_VPROC                  glGetTransformFeedbacki_v;
-extern  PFNGLGETTRANSFORMFEEDBACKI64_VPROC                glGetTransformFeedbacki64_v;
-extern  PFNGLCREATEBUFFERSPROC                            glCreateBuffers;
-extern  PFNGLNAMEDBUFFERSTORAGEPROC                       glNamedBufferStorage;
-extern  PFNGLNAMEDBUFFERDATAPROC                          glNamedBufferData;
-extern  PFNGLNAMEDBUFFERSUBDATAPROC                       glNamedBufferSubData;
-extern  PFNGLCOPYNAMEDBUFFERSUBDATAPROC                   glCopyNamedBufferSubData;
-extern  PFNGLCLEARNAMEDBUFFERDATAPROC                     glClearNamedBufferData;
-extern  PFNGLCLEARNAMEDBUFFERSUBDATAPROC                  glClearNamedBufferSubData;
-extern  PFNGLMAPNAMEDBUFFERPROC                           glMapNamedBuffer;
-extern  PFNGLMAPNAMEDBUFFERRANGEPROC                      glMapNamedBufferRange;
-extern  PFNGLUNMAPNAMEDBUFFERPROC                         glUnmapNamedBuffer;
-extern  PFNGLFLUSHMAPPEDNAMEDBUFFERRANGEPROC              glFlushMappedNamedBufferRange;
-extern  PFNGLGETNAMEDBUFFERPARAMETERIVPROC                glGetNamedBufferParameteriv;
-extern  PFNGLGETNAMEDBUFFERPARAMETERI64VPROC              glGetNamedBufferParameteri64v;
-extern  PFNGLGETNAMEDBUFFERPOINTERVPROC                   glGetNamedBufferPointerv;
-extern  PFNGLGETNAMEDBUFFERSUBDATAPROC                    glGetNamedBufferSubData;
-extern  PFNGLCREATEFRAMEBUFFERSPROC                       glCreateFramebuffers;
-extern  PFNGLNAMEDFRAMEBUFFERRENDERBUFFERPROC             glNamedFramebufferRenderbuffer;
-extern  PFNGLNAMEDFRAMEBUFFERPARAMETERIPROC               glNamedFramebufferParameteri;
-extern  PFNGLNAMEDFRAMEBUFFERTEXTUREPROC                  glNamedFramebufferTexture;
-extern  PFNGLNAMEDFRAMEBUFFERTEXTURELAYERPROC             glNamedFramebufferTextureLayer;
-extern  PFNGLNAMEDFRAMEBUFFERDRAWBUFFERPROC               glNamedFramebufferDrawBuffer;
-extern  PFNGLNAMEDFRAMEBUFFERDRAWBUFFERSPROC              glNamedFramebufferDrawBuffers;
-extern  PFNGLNAMEDFRAMEBUFFERREADBUFFERPROC               glNamedFramebufferReadBuffer;
-extern  PFNGLINVALIDATENAMEDFRAMEBUFFERDATAPROC           glInvalidateNamedFramebufferData;
-extern  PFNGLINVALIDATENAMEDFRAMEBUFFERSUBDATAPROC        glInvalidateNamedFramebufferSubData;
-extern  PFNGLCLEARNAMEDFRAMEBUFFERIVPROC                  glClearNamedFramebufferiv;
-extern  PFNGLCLEARNAMEDFRAMEBUFFERUIVPROC                 glClearNamedFramebufferuiv;
-extern  PFNGLCLEARNAMEDFRAMEBUFFERFVPROC                  glClearNamedFramebufferfv;
-extern  PFNGLCLEARNAMEDFRAMEBUFFERFIPROC                  glClearNamedFramebufferfi;
-extern  PFNGLBLITNAMEDFRAMEBUFFERPROC                     glBlitNamedFramebuffer;
-extern  PFNGLCHECKNAMEDFRAMEBUFFERSTATUSPROC              glCheckNamedFramebufferStatus;
-extern  PFNGLGETNAMEDFRAMEBUFFERPARAMETERIVPROC           glGetNamedFramebufferParameteriv;
-extern  PFNGLGETNAMEDFRAMEBUFFERATTACHMENTPARAMETERIVPROC glGetNamedFramebufferAttachmentParameteriv;
-extern  PFNGLCREATERENDERBUFFERSPROC                      glCreateRenderbuffers;
-extern  PFNGLNAMEDRENDERBUFFERSTORAGEPROC                 glNamedRenderbufferStorage;
-extern  PFNGLNAMEDRENDERBUFFERSTORAGEMULTISAMPLEPROC      glNamedRenderbufferStorageMultisample;
-extern  PFNGLGETNAMEDRENDERBUFFERPARAMETERIVPROC          glGetNamedRenderbufferParameteriv;
-extern  PFNGLCREATETEXTURESPROC                           glCreateTextures;
-extern  PFNGLTEXTUREBUFFERPROC                            glTextureBuffer;
-extern  PFNGLTEXTUREBUFFERRANGEPROC                       glTextureBufferRange;
-extern  PFNGLTEXTURESTORAGE1DPROC                         glTextureStorage1D;
-extern  PFNGLTEXTURESTORAGE2DPROC                         glTextureStorage2D;
-extern  PFNGLTEXTURESTORAGE3DPROC                         glTextureStorage3D;
-extern  PFNGLTEXTURESTORAGE2DMULTISAMPLEPROC              glTextureStorage2DMultisample;
-extern  PFNGLTEXTURESTORAGE3DMULTISAMPLEPROC              glTextureStorage3DMultisample;
-extern  PFNGLTEXTURESUBIMAGE1DPROC                        glTextureSubImage1D;
-extern  PFNGLTEXTURESUBIMAGE2DPROC                        glTextureSubImage2D;
-extern  PFNGLTEXTURESUBIMAGE3DPROC                        glTextureSubImage3D;
-extern  PFNGLCOMPRESSEDTEXTURESUBIMAGE1DPROC              glCompressedTextureSubImage1D;
-extern  PFNGLCOMPRESSEDTEXTURESUBIMAGE2DPROC              glCompressedTextureSubImage2D;
-extern  PFNGLCOMPRESSEDTEXTURESUBIMAGE3DPROC              glCompressedTextureSubImage3D;
-extern  PFNGLCOPYTEXTURESUBIMAGE1DPROC                    glCopyTextureSubImage1D;
-extern  PFNGLCOPYTEXTURESUBIMAGE2DPROC                    glCopyTextureSubImage2D;
-extern  PFNGLCOPYTEXTURESUBIMAGE3DPROC                    glCopyTextureSubImage3D;
-extern  PFNGLTEXTUREPARAMETERFPROC                        glTextureParameterf;
-extern  PFNGLTEXTUREPARAMETERFVPROC                       glTextureParameterfv;
-extern  PFNGLTEXTUREPARAMETERIPROC                        glTextureParameteri;
-extern  PFNGLTEXTUREPARAMETERIIVPROC                      glTextureParameterIiv;
-extern  PFNGLTEXTUREPARAMETERIUIVPROC                     glTextureParameterIuiv;
-extern  PFNGLTEXTUREPARAMETERIVPROC                       glTextureParameteriv;
-extern  PFNGLGENERATETEXTUREMIPMAPPROC                    glGenerateTextureMipmap;
-extern  PFNGLBINDTEXTUREUNITPROC                          glBindTextureUnit;
-extern  PFNGLGETTEXTUREIMAGEPROC                          glGetTextureImage;
-extern  PFNGLGETCOMPRESSEDTEXTUREIMAGEPROC                glGetCompressedTextureImage;
-extern  PFNGLGETTEXTURELEVELPARAMETERFVPROC               glGetTextureLevelParameterfv;
-extern  PFNGLGETTEXTURELEVELPARAMETERIVPROC               glGetTextureLevelParameteriv;
-extern  PFNGLGETTEXTUREPARAMETERFVPROC                    glGetTextureParameterfv;
-extern  PFNGLGETTEXTUREPARAMETERIIVPROC                   glGetTextureParameterIiv;
-extern  PFNGLGETTEXTUREPARAMETERIUIVPROC                  glGetTextureParameterIuiv;
-extern  PFNGLGETTEXTUREPARAMETERIVPROC                    glGetTextureParameteriv;
-extern  PFNGLCREATEVERTEXARRAYSPROC                       glCreateVertexArrays;
-extern  PFNGLDISABLEVERTEXARRAYATTRIBPROC                 glDisableVertexArrayAttrib;
-extern  PFNGLENABLEVERTEXARRAYATTRIBPROC                  glEnableVertexArrayAttrib;
-extern  PFNGLVERTEXARRAYELEMENTBUFFERPROC                 glVertexArrayElementBuffer;
-extern  PFNGLVERTEXARRAYVERTEXBUFFERPROC                  glVertexArrayVertexBuffer;
-extern  PFNGLVERTEXARRAYVERTEXBUFFERSPROC                 glVertexArrayVertexBuffers;
-extern  PFNGLVERTEXARRAYATTRIBBINDINGPROC                 glVertexArrayAttribBinding;
-extern  PFNGLVERTEXARRAYATTRIBFORMATPROC                  glVertexArrayAttribFormat;
-extern  PFNGLVERTEXARRAYATTRIBIFORMATPROC                 glVertexArrayAttribIFormat;
-extern  PFNGLVERTEXARRAYATTRIBLFORMATPROC                 glVertexArrayAttribLFormat;
-extern  PFNGLVERTEXARRAYBINDINGDIVISORPROC                glVertexArrayBindingDivisor;
-extern  PFNGLGETVERTEXARRAYIVPROC                         glGetVertexArrayiv;
-extern  PFNGLGETVERTEXARRAYINDEXEDIVPROC                  glGetVertexArrayIndexediv;
-extern  PFNGLGETVERTEXARRAYINDEXED64IVPROC                glGetVertexArrayIndexed64iv;
-extern  PFNGLCREATESAMPLERSPROC                           glCreateSamplers;
-extern  PFNGLCREATEPROGRAMPIPELINESPROC                   glCreateProgramPipelines;
-extern  PFNGLCREATEQUERIESPROC                            glCreateQueries;
-extern  PFNGLGETQUERYBUFFEROBJECTI64VPROC                 glGetQueryBufferObjecti64v;
-extern  PFNGLGETQUERYBUFFEROBJECTIVPROC                   glGetQueryBufferObjectiv;
-extern  PFNGLGETQUERYBUFFEROBJECTUI64VPROC                glGetQueryBufferObjectui64v;
-extern  PFNGLGETQUERYBUFFEROBJECTUIVPROC                  glGetQueryBufferObjectuiv;
-extern  PFNGLMEMORYBARRIERBYREGIONPROC                    glMemoryBarrierByRegion;
-extern  PFNGLGETTEXTURESUBIMAGEPROC                       glGetTextureSubImage;
-extern  PFNGLGETCOMPRESSEDTEXTURESUBIMAGEPROC             glGetCompressedTextureSubImage;
-extern  PFNGLGETGRAPHICSRESETSTATUSPROC                   glGetGraphicsResetStatus;
-extern  PFNGLGETNCOMPRESSEDTEXIMAGEPROC                   glGetnCompressedTexImage;
-extern  PFNGLGETNTEXIMAGEPROC                             glGetnTexImage;
-extern  PFNGLGETNUNIFORMDVPROC                            glGetnUniformdv;
-extern  PFNGLGETNUNIFORMFVPROC                            glGetnUniformfv;
-extern  PFNGLGETNUNIFORMIVPROC                            glGetnUniformiv;
-extern  PFNGLGETNUNIFORMUIVPROC                           glGetnUniformuiv;
-extern  PFNGLREADNPIXELSPROC                              glReadnPixels;
-extern  PFNGLTEXTUREBARRIERPROC                           glTextureBarrier;
-/* ----GL VERSION 4.6------------------------------------------------------------------------------------------------ */
-typedef void (*PFNGLSPECIALIZESHADERPROC) (GLuint shader, const GLchar *pEntryPoint, GLuint numSpecializationConstants, const GLuint *pConstantIndex, const GLuint *pConstantValue);
-typedef void (*PFNGLMULTIDRAWARRAYSINDIRECTCOUNTPROC) (GLenum mode, const void *indirect, GLintptr drawcount, GLsizei maxdrawcount, GLsizei stride);
-typedef void (*PFNGLMULTIDRAWELEMENTSINDIRECTCOUNTPROC) (GLenum mode, GLenum type, const void *indirect, GLintptr drawcount, GLsizei maxdrawcount, GLsizei stride);
-typedef void (*PFNGLPOLYGONOFFSETCLAMPPROC) (GLfloat factor, GLfloat units, GLfloat clamp);
-extern PFNGLSPECIALIZESHADERPROC               glSpecializeShader;
-extern PFNGLMULTIDRAWARRAYSINDIRECTCOUNTPROC   glMultiDrawArraysIndirectCount;
-extern PFNGLMULTIDRAWELEMENTSINDIRECTCOUNTPROC glMultiDrawElementsIndirectCount;
-extern PFNGLPOLYGONOFFSETCLAMPPROC             glPolygonOffsetClamp;
+/* ----TYPEDEFS------------------------------------------------------------------------------------------------------ */
+#define X(retval, name, params) typedef retval (*VdFwProcGL_##name)params;
+#define V(v)
+#define VE()
+VD_FW_OPENGL_CORE_FUNCTIONS
+#undef X
+#undef V
+#undef VE
+
+/* ----EXTERNS------------------------------------------------------------------------------------------------------- */
+#define X(retval, name, params) extern VdFwProcGL_##name name;
+#define V(v)
+#define VE()
+VD_FW_OPENGL_CORE_FUNCTIONS
+#undef X
+#undef V
+#undef VE
 #endif // !defined(__APPLE__)
 
 #if defined(__APPLE__)
@@ -4223,12 +3568,8 @@ extern PFNGLPOLYGONOFFSETCLAMPPROC             glPolygonOffsetClamp;
 
 typedef unsigned char VdFw__GamepadButtonState;
 
-enum {
-    VD_FW__BUTTON_COUNT_MASK = 0x7F,
-    VD_FW__BUTTON_STATE_MASK = 0x80,
-};
-
 typedef struct VdFw__GamepadState {
+    VdFwGuid                 guid;
     VdFw__GamepadButtonState buttons[VD_FW_GAMEPAD_BUTTON_MAX];
     float                    axes[6];
 } VdFw__GamepadState;
@@ -4370,6 +3711,7 @@ typedef struct VdFwtagRECT
 #define VD_FW_WM_USER 0x0400
 
 typedef VdFwLRESULT(*VdFwWNDPROC)(VdFwHWND, VdFwUINT, VdFwWPARAM, VdFwLPARAM);
+typedef void (*VdFwTIMERPROC)(VdFwHWND, VdFwUINT, VdFwUINT_PTR, VdFwDWORD);
 
 VD_FW_DECLARE_HANDLE(VdFwHICON);
 VD_FW_DECLARE_HANDLE(VdFwHBRUSH);
@@ -4856,6 +4198,14 @@ static VdFwProcGetRawInputDeviceInfoA *VdFwGetRawInputDeviceInfoA;
 typedef VD_FW_PROC_GetRawInputDeviceInfoW(VdFwProcGetRawInputDeviceInfoW);
 static VdFwProcGetRawInputDeviceInfoW *VdFwGetRawInputDeviceInfoW;
 
+#define VD_FW_PROC_SetTimer(name) VdFwUINT_PTR name(VdFwHWND hWnd, VdFwUINT_PTR nIDEvent, VdFwUINT uElapse, VdFwTIMERPROC lpTimerFunc)
+typedef VD_FW_PROC_SetTimer(VdFwProcSetTimer);
+static VdFwProcSetTimer *VdFwSetTimer;
+
+#define VD_FW_PROC_KillTimer(name) VdFwBOOL name(VdFwHWND hWnd, VdFwUINT_PTR uIDEvent)
+typedef VD_FW_PROC_KillTimer(VdFwProcKillTimer);
+static VdFwProcKillTimer *VdFwKillTimer;
+
 /* ----Shell32.dll--------------------------------------------------------------------------------------------------- */
 #define VD_FW_ABM_GETAUTOHIDEBAREX    0x0000000b
 #define VD_FW_ABM_SETAUTOHIDEBAREX    0x0000000c
@@ -4864,6 +4214,20 @@ static VdFwProcGetRawInputDeviceInfoW *VdFwGetRawInputDeviceInfoW;
 #define VD_FW_PROC_SHAppBarMessage(name) VdFwUINT_PTR name(VdFwDWORD dwMessage, VdFwPAPPBARDATA pData)
 typedef VD_FW_PROC_SHAppBarMessage(VdFwProcSHAppBarMessage);
 static VdFwProcSHAppBarMessage *VdFwSHAppBarMessage;
+
+/* ----ntdll.dll----------------------------------------------------------------------------------------------------- */
+typedef struct VdFw_OSVERSIONINFOW {
+  VdFwULONG dwOSVersionInfoSize;
+  VdFwULONG dwMajorVersion;
+  VdFwULONG dwMinorVersion;
+  VdFwULONG dwBuildNumber;
+  VdFwULONG dwPlatformId;
+  VdFwWCHAR szCSDVersion[128];
+} VdFwOSVERSIONINFOW, *VdFwPOSVERSIONINFOW, *VdFwLPOSVERSIONINFOW, VdFwRTL_OSVERSIONINFOW, *VdFwPRTL_OSVERSIONINFOW;
+
+#define VD_FW_PROC_RtlGetVersion(name) void name(VdFwPRTL_OSVERSIONINFOW info)
+typedef VD_FW_PROC_RtlGetVersion(VdFwProcRtlGetVersion);
+static VdFwProcRtlGetVersion *VdFwRtlGetVersion;
 
 /* ----Winmm.dll----------------------------------------------------------------------------------------------------- */
 typedef VdFwUINT VdFwMMRESULT;
@@ -5200,6 +4564,14 @@ typedef struct VdFw_HIDP_VALUE_CAPS
     } v;
 } VdFwHIDP_VALUE_CAPS, * VdFwPHIDP_VALUE_CAPS;
 
+typedef struct VdFw_HIDP_DATA {
+  VdFwUSHORT DataIndex;
+  VdFwUSHORT Reserved;
+  union {
+    VdFwULONG   RawValue;
+    VdFwBOOLEAN On;
+  } dat;
+} VdFwHIDP_DATA, *VdFwPHIDP_DATA;
 
 #define VD_FW_PROC_HidP_GetCaps(name) VdFwNTSTATUS name(VdFwPHIDP_PREPARSED_DATA PreparsedData, VdFwPHIDP_CAPS Capabilities)
 typedef VD_FW_PROC_HidP_GetCaps(VdFwProcHidP_GetCaps);
@@ -5217,9 +4589,37 @@ static VdFwProcHidP_GetValueCaps *VdFwHidP_GetValueCaps;
 typedef VD_FW_PROC_HidP_GetUsages(VdFwProcHidP_GetUsages);
 static VdFwProcHidP_GetUsages *VdFwHidP_GetUsages;
 
+#define VD_FW_PROC_HidP_GetData(name) VdFwNTSTATUS name(VdFwHIDP_REPORT_TYPE ReportType, VdFwPHIDP_DATA DataList, VdFwPULONG DataLength, VdFwPHIDP_PREPARSED_DATA PreparsedData, VdFwPCHAR Report, VdFwULONG ReportLength)
+typedef VD_FW_PROC_HidP_GetData(VdFwProcHidP_GetData);
+static VdFwProcHidP_GetData *VdFwHidP_GetData;
+
+#define VD_FW_PROC_HidP_MaxUsageListLength(name) VdFwULONG name(VdFwHIDP_REPORT_TYPE ReportType, VdFwUSAGE UsagePage, VdFwPHIDP_PREPARSED_DATA PreparsedData)
+typedef VD_FW_PROC_HidP_MaxUsageListLength(VdFwProcHidP_MaxUsageListLength);
+VdFwProcHidP_MaxUsageListLength *VdFwHidP_MaxUsageListLength;
+
+#define VD_FW_PROC_HidP_MaxDataListLength(name) VdFwULONG name(VdFwHIDP_REPORT_TYPE ReportType, VdFwPHIDP_PREPARSED_DATA PreparsedData)
+typedef VD_FW_PROC_HidP_MaxDataListLength(VdFwProcHidP_MaxDataListLength);
+static VdFwProcHidP_MaxDataListLength *VdFwHidP_MaxDataListLength;
+
 #define VD_FW_PROC_HidP_GetUsageValue(name) VdFwNTSTATUS name(VdFwHIDP_REPORT_TYPE ReportType, VdFwUSAGE UsagePage, VdFwUSHORT LinkCollection, VdFwUSAGE Usage, VdFwPULONG UsageValue, VdFwPHIDP_PREPARSED_DATA PreparsedData, VdFwPCHAR Report, VdFwULONG ReportLength)
 typedef VD_FW_PROC_HidP_GetUsageValue(VdFwProcHidP_GetUsageValue);
 static VdFwProcHidP_GetUsageValue *VdFwHidP_GetUsageValue;
+
+#define VD_FW_PROC_HidD_GetManufacturerString(name) VdFwBOOLEAN name(VdFwHANDLE HidDeviceObject, void *Buffer, VdFwULONG BufferLength)
+typedef VD_FW_PROC_HidD_GetManufacturerString(VdFwProcHidD_GetManufacturerString);
+static VdFwProcHidD_GetManufacturerString *VdFwHidD_GetManufacturerString;
+
+#define VD_FW_PROC_HidD_GetProductString(name) VdFwBOOLEAN name(VdFwHANDLE HidDeviceObject, void *Buffer, VdFwULONG BufferLength)
+typedef VD_FW_PROC_HidD_GetProductString(VdFwProcHidD_GetProductString);
+static VdFwProcHidD_GetProductString *VdFwHidD_GetProductString;
+
+#define VD_FW_PROC_HidD_SetFeature(name) VdFwBOOLEAN name(VdFwHANDLE HidDeviceObject, void *ReportBuffer, VdFwULONG ReportBufferLength)
+typedef VD_FW_PROC_HidD_SetFeature(VdFwProcHidD_SetFeature);
+static VdFwProcHidD_SetFeature *VdFwHidD_SetFeature;
+
+#define VD_FW_PROC_HidD_SetOutputReport(name) VdFwBOOLEAN name(VdFwHANDLE HidDeviceObject, void *ReportBuffer, VdFwULONG ReportBufferLength)
+typedef VD_FW_PROC_HidD_SetOutputReport(VdFwProcHidD_SetOutputReport);
+static VdFwProcHidD_SetOutputReport *VdFwHidD_SetOutputReport;
 
 /* ----XInput.dll---------------------------------------------------------------------------------------------------- */
 #define VD_FW_XINPUT_GAMEPAD_DPAD_UP          0x0001
@@ -5253,9 +4653,18 @@ typedef struct VdFw_XINPUT_STATE {
     VdFwXINPUT_GAMEPAD Gamepad;
 } VdFwXINPUT_STATE, * VdFwPXINPUT_STATE;
 
+typedef struct VdFw_XINPUT_VIBRATION {
+    VdFwWORD wLeftMotorSpeed;
+    VdFwWORD wRightMotorSpeed;
+} VdFwXINPUT_VIBRATION, *VdFwPXINPUT_VIBRATION;
+
 #define VD_FW_PROC_XInputGetState(name) VdFwDWORD name(VdFwDWORD dwUserIndex, VdFwXINPUT_STATE* pState)
 typedef VD_FW_PROC_XInputGetState(VdFwProcXInputGetState);
 static VdFwProcXInputGetState *VdFwXInputGetState;
+
+#define VD_FW_PROC_XInputSetState(name) VdFwDWORD name(VdFwDWORD dwUserIndex, VdFwXINPUT_VIBRATION* pVibration)
+typedef VD_FW_PROC_XInputSetState(VdFwProcXInputSetState);
+static VdFwProcXInputSetState *VdFwXInputSetState;
 
 /* ----Winnt.h------------------------------------------------------------------------------------------------------- */
 #define VD_FW_LOWORD(l)           ((VdFwWORD)(((VdFwDWORD_PTR)(l)) & 0xffff))
@@ -5370,7 +4779,7 @@ static VdFwProcXInputGetState *VdFwXInputGetState;
 #define VD_FW_DISPLAY_PREFERENCE_IGPU 2
 
 #if defined(VD_FW_PREFER_DISCRETE_GPU) && defined(VD_FW_PREFER_INTEGRATED_GPU)
-#warning "You cannot defined VD_FW_PREFER_DISCRETE_GPU and VD_FW_PREFER_INTEGRATED_GPU at the same time."
+#warning "You cannot define VD_FW_PREFER_DISCRETE_GPU and VD_FW_PREFER_INTEGRATED_GPU at the same time."
 #endif
 
 #ifdef VD_FW_PREFER_DISCRETE_GPU
@@ -5413,14 +4822,16 @@ enum {
     VD_FW_WIN32_MESSAGE_TYPE_KEYSTATE    = 14,
     VD_FW_WIN32_MESSAGE_TYPE_STATECHANGE = 15,
 
-    VD_FW_WIN32_SHOW_CURSOR  = VD_FW_WM_USER + 1,
-    VD_FW_WIN32_UPDATE_TITLE = VD_FW_WM_USER + 2, 
-    VD_FW_WIN32_FULLSCREEN   = VD_FW_WM_USER + 3, 
-    VD_FW_WIN32_SIZE         = VD_FW_WM_USER + 4, 
+    VD_FW_WIN32_SHOW_CURSOR     = VD_FW_WM_USER + 1,
+    VD_FW_WIN32_UPDATE_TITLE    = VD_FW_WM_USER + 2,
+    VD_FW_WIN32_FULLSCREEN      = VD_FW_WM_USER + 3,
+    VD_FW_WIN32_SIZE            = VD_FW_WM_USER + 4,
+    VD_FW_WIN32_SIZEMIN         = VD_FW_WM_USER + 5,
+    VD_FW_WIN32_SIZEMAX         = VD_FW_WM_USER + 6,
+    VD_FW_WIN32_GAMEPADRMBREQ   = VD_FW_WM_USER + 7,
 
     VD_FW_WIN32_WINDOW_STATE_MINIMIZED = 1 << 0,
     VD_FW_WIN32_WINDOW_STATE_MAXIMIZED = 1 << 1,
-
 };
 
 typedef struct {
@@ -5460,23 +4871,58 @@ typedef struct {
     } dat;
 } VdFw__Win32Message;
 
+enum {
+    VD_FW__WIN32_GAMEPAD_FLAG_XINPUT = 1 << 0,
+    VD_FW__WIN32_GAMEPAD_FLAG_SPLITZ = 1 << 1,
+};
+
 typedef struct {
-    unsigned short us_id;
-    unsigned short us_page;
-} VdFw__Win32GamepadMapping;
+    VdFwI32 data_index;
+    VdFwI32 min_value;
+    VdFwI32 max_value;
+} VdFw__Win32Axis;
 
 typedef struct VdFw__Win32GamepadInfo {
     VdFwHANDLE               handle;
-    unsigned char            guid[16];
+    VdFwHANDLE               write_handle;
+    VdFwGamepadRumbleState   rumble_state;
+    VdFwGuid                 guid;
     int                      connected;
+    int                      xinput_index;
+    int                      flags;
     VdFwPHIDP_PREPARSED_DATA ppd;
-    int                      api;
-    VdFwGamepadConfig        config;
-    int                      splitz;
+    VdFwULONG                data_count;
+    int                      output_report_size;
+
+    VdFwGamepadMap           map;
+
+    int                      button_data_indices_cap;
+    int                      button_data_indices_len;
+    int                      *button_data_indices;
+
+    int                      axis_data_indices_cap;
+    int                      axis_data_indices_len;
+    VdFw__Win32Axis          *axis_data_indices;
+
+    // @todo(mdodis): Replace this with VdFw__Win32Axis
+    int                      hat_data_indices_cap;
+    int                      hat_data_indices_len;
+    VdFw__Win32Axis          *hat_data_indices;
+
+    int                      z_data_index;
+    int                      z_split;
+    int                      z_split_min;
+    int                      z_split_max;
+
+    // @todo(mdodis): remove this
+    int                      hidp_data_len;
+    int                      hidp_data_cap;
+    VdFwHIDP_DATA            *hidp_data;
 } VdFw__Win32GamepadInfo;
 
 typedef struct {
 /* ----WINDOW THREAD ONLY-------------------------------------------------------------------------------------------- */
+    VdFwGraphicsApi             graphics_api;
     VdFwHWND                    hwnd;
     int                         w, h;
     volatile VdFwBOOL           t_paint_ready;
@@ -5491,11 +4937,19 @@ typedef struct {
     VdFwLONG                    last_window_style;
     VdFwRECT                    windowed_rect;
     VdFwWINDOWPLACEMENT         last_window_placement;
-    VdFwDWORD                   num_gamepads_present;
     VdFw__Win32GamepadInfo      gamepad_infos[VD_FW_GAMEPAD_COUNT_MAX];
     int                         xinput;
+    int                         window_min[2], window_max[2];
+    int                         def_window_min[2];
+    int                         cap_gamepad_db_entries;
+    int                         num_gamepad_db_entries;
+    VdFwGamepadDBEntry          *gamepad_db_entries;
+    VdFwUINT_PTR                rumble_timer_handle;
+    VdFwByte                    *report_buffer;
+    int                         report_buffer_len;
 
 /* ----RENDER THREAD ONLY-------------------------------------------------------------------------------------------- */
+    // Internal
     HMODULE                     opengl32;
     VdFwHANDLE                  win_thread;
     VdFwDWORD                   win_thread_id;
@@ -5504,9 +4958,8 @@ typedef struct {
     LARGE_INTEGER               frequency;
     LARGE_INTEGER               performance_counter;
     VdFwProcwglSwapIntervalExt  *proc_swapInterval;
-    int                         wheel_moved;
-    float                       wheel[2];
     unsigned long long          last_ns;
+    // Mouse
     int                         mouse[2];
     int                         prev_mouse_state;
     int                         mouse_state;
@@ -5515,11 +4968,17 @@ typedef struct {
     VdFwDWORD                   mmousedown;
     float                       mouse_delta[2];
     VdFwBOOL                    mouse_is_locked;
+    int                         wheel_moved;
+    float                       wheel[2];
+    // Window
     VdFwBOOL                    is_fullscreen;
-    VdFw__GamepadState          gamepad_curr_states[VD_FW_GAMEPAD_COUNT_MAX];
-    VdFw__GamepadState          gamepad_prev_states[VD_FW_GAMEPAD_COUNT_MAX];
     int                         window_state;
     int                         window_state_changed;
+    // Gamepad
+    VdFw__GamepadState          gamepad_curr_states[VD_FW_GAMEPAD_COUNT_MAX];
+    VdFw__GamepadState          gamepad_prev_states[VD_FW_GAMEPAD_COUNT_MAX];
+    int                         gamepad_raw_buttons[VD_FW_GAMEPAD_COUNT_MAX];
+    int                         num_gamepads_present;
 
 /* ----RENDER THREAD - WINDOW THREAD DATA---------------------------------------------------------------------------- */
     VdFw__Win32Message          msgbuf[VD_FW_WIN32_MESSAGE_BUFFER_SIZE];
@@ -5533,11 +4992,14 @@ typedef struct {
     float                       winthread_mouse_delta[2];
     VdFw__GamepadState          winthread_gamepad_curr_states[VD_FW_GAMEPAD_COUNT_MAX];
     VdFw__GamepadState          winthread_gamepad_prev_states[VD_FW_GAMEPAD_COUNT_MAX];
+    int                         winthread_gamepad_raw_buttons[VD_FW_GAMEPAD_COUNT_MAX];
+    int                         winthread_num_gamepads_present;
 
     unsigned char               curr_key_states[VD_FW_KEY_MAX];
     unsigned char               prev_key_states[VD_FW_KEY_MAX];
     char                        title[128];
     int                         title_len;
+    VdFwRTL_OSVERSIONINFOW      os_version;
 
 /* ----RENDER THREAD - WINDOW THREAD SYNC---------------------------------------------------------------------------- */
     VdFwHANDLE                  sem_window_ready;
@@ -5905,6 +5367,12 @@ static void *vd_fw__gl_get_proc_address(const char *name)
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
+    VD_FW_G.graphics_api = VD_FW_GRAPHICS_API_OPENGL;
+
+    if (info != NULL) {
+        VD_FW_G.graphics_api = info->api;
+    }
+
     // Load Win32 Libraries
     {
         // User32.dll
@@ -5969,6 +5437,8 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
             VdFwGetRawInputData               =               (VdFwProcGetRawInputData*)GetProcAddress(m, "GetRawInputData");
             VdFwGetRawInputDeviceInfoA        =        (VdFwProcGetRawInputDeviceInfoA*)GetProcAddress(m, "GetRawInputDeviceInfoA");
             VdFwGetRawInputDeviceInfoW        =        (VdFwProcGetRawInputDeviceInfoW*)GetProcAddress(m, "GetRawInputDeviceInfoW");
+            VdFwSetTimer                      =                      (VdFwProcSetTimer*)GetProcAddress(m, "SetTimer");
+            VdFwKillTimer                     =                     (VdFwProcKillTimer*)GetProcAddress(m, "KillTimer");
         }
 
         // Shell32.dll
@@ -5981,6 +5451,18 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         {
             HMODULE m       = LoadLibraryA("Winmm.dll");
             VdFwtimeBeginPeriod = (VdFwProctimeBeginPeriod*)GetProcAddress(m, "timeBeginPeriod");
+        }
+
+        // ntdll.dll
+        {
+            HMODULE m = LoadLibraryA("ntdll.dll");
+            VdFwRtlGetVersion = (VdFwProcRtlGetVersion*)GetProcAddress(m, "RtlGetVersion");
+
+            if (VdFwRtlGetVersion) {
+                VdFwRtlGetVersion((VdFwPRTL_OSVERSIONINFOW)&VD_FW_G.os_version);
+            }
+
+            FreeLibrary(m);
         }
 
         // UxTheme.dll
@@ -6014,15 +5496,22 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         // Hid.dll
         {
             HMODULE m          = LoadLibraryA("Hid.dll");
-            VdFwHidP_GetCaps       =       (VdFwProcHidP_GetCaps*)GetProcAddress(m, "HidP_GetCaps");
-            VdFwHidP_GetButtonCaps = (VdFwProcHidP_GetButtonCaps*)GetProcAddress(m, "HidP_GetButtonCaps");
-            VdFwHidP_GetValueCaps  =  (VdFwProcHidP_GetValueCaps*)GetProcAddress(m, "HidP_GetValueCaps");
-            VdFwHidP_GetUsages     =     (VdFwProcHidP_GetUsages*)GetProcAddress(m, "HidP_GetUsages");
-            VdFwHidP_GetUsageValue = (VdFwProcHidP_GetUsageValue*)GetProcAddress(m, "HidP_GetUsageValue");
+            VdFwHidP_GetCaps               =               (VdFwProcHidP_GetCaps*)GetProcAddress(m, "HidP_GetCaps");
+            VdFwHidP_GetButtonCaps         =         (VdFwProcHidP_GetButtonCaps*)GetProcAddress(m, "HidP_GetButtonCaps");
+            VdFwHidP_GetValueCaps          =          (VdFwProcHidP_GetValueCaps*)GetProcAddress(m, "HidP_GetValueCaps");
+            VdFwHidP_GetUsages             =             (VdFwProcHidP_GetUsages*)GetProcAddress(m, "HidP_GetUsages");
+            VdFwHidP_GetData               =               (VdFwProcHidP_GetData*)GetProcAddress(m, "HidP_GetData");
+            VdFwHidP_MaxUsageListLength    =    (VdFwProcHidP_MaxUsageListLength*)GetProcAddress(m, "HidP_MaxUsageListLength");
+            VdFwHidP_MaxDataListLength     =     (VdFwProcHidP_MaxDataListLength*)GetProcAddress(m, "HidP_MaxDataListLength");
+            VdFwHidP_GetUsageValue         =         (VdFwProcHidP_GetUsageValue*)GetProcAddress(m, "HidP_GetUsageValue");
+            VdFwHidD_GetManufacturerString = (VdFwProcHidD_GetManufacturerString*)GetProcAddress(m, "HidD_GetManufacturerString");
+            VdFwHidD_GetProductString      =      (VdFwProcHidD_GetProductString*)GetProcAddress(m, "HidD_GetProductString");
+            VdFwHidD_SetFeature            =            (VdFwProcHidD_SetFeature*)GetProcAddress(m, "HidD_SetFeature");
+            VdFwHidD_SetOutputReport       =       (VdFwProcHidD_SetOutputReport*)GetProcAddress(m, "HidD_SetOutputReport");
         }
 
         // XInput.dll
-        {
+        if (info && !info->win32.xinput_disabled) {
             const char* xinput_dll_name[] = {
                 "xinput1_4.dll",   // Windows 8+
                 "xinput1_3.dll",   // DirectX SDK, Windows XP...
@@ -6041,6 +5530,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
             VD_FW_G.xinput = m != NULL;
             if (VD_FW_G.xinput) {
                 VdFwXInputGetState = (VdFwProcXInputGetState*)GetProcAddress(m, "XInputGetState");
+                VdFwXInputSetState = (VdFwProcXInputSetState*)GetProcAddress(m, "XInputSetState");
             }
         }
 
@@ -6059,8 +5549,10 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     QueryPerformanceFrequency(&VD_FW_G.frequency);
 
     VD_FW_G.focused = 1;
-    VD_FW_G.draw_decorations = 1;
+    VD_FW_G.def_window_min[0] = VdFwGetSystemMetrics(SM_CXMINTRACK);
+    VD_FW_G.def_window_min[1] = VdFwGetSystemMetrics(SM_CYMINTRACK);
 
+    VD_FW_G.draw_decorations = 1;
     if (info != NULL) {
         VD_FW_G.draw_decorations = !info->window_options.borderless;
     }
@@ -6121,7 +5613,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     VD_FW_G.hdc = VdFwGetDC(VD_FW_G.hwnd);
 
     // Create context
-    {
+    if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
         // Temp context flags
         VdFwPIXELFORMATDESCRIPTOR pfd = {
           sizeof(VdFwPIXELFORMATDESCRIPTOR),
@@ -6224,30 +5716,30 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 
         VD_FW__CHECK_NULL(VD_FW_G.hglrc);
         VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(VD_FW_G.hdc, VD_FW_G.hglrc));
-    }
 
-    VD_FW_G.proc_swapInterval = (VdFwProcwglSwapIntervalExt*)VdFwwglGetProcAddress("wglSwapIntervalEXT");
+        VD_FW_G.proc_swapInterval = (VdFwProcwglSwapIntervalExt*)VdFwwglGetProcAddress("wglSwapIntervalEXT");
 
-    VdFwGlVersion version = VD_FW_GL_VERSION_3_3;
-    if (info && info->gl.version != VD_FW_GL_VERSION_BASIC) {
-        version = info->gl.version;
-    }
-    vd_fw__load_opengl(version);
+        VdFwGlVersion version = VD_FW_GL_VERSION_3_3;
+        if (info && info->gl.version != VD_FW_GL_VERSION_BASIC) {
+            version = info->gl.version;
+        }
+        vd_fw__load_opengl(version);
 
-    if (info != 0 && info->gl.debug_on && version > VD_FW_GL_VERSION_3_0) {
-        PFNGLDEBUGMESSAGECALLBACKPROC glDebugMessageCallback_proc = (PFNGLDEBUGMESSAGECALLBACKPROC)VdFwwglGetProcAddress("glDebugMessageCallback");
+        if (info != 0 && info->gl.debug_on && version > VD_FW_GL_VERSION_3_0) {
+            VdFwProcGL_glDebugMessageCallback glDebugMessageCallback_proc = (VdFwProcGL_glDebugMessageCallback)VdFwwglGetProcAddress("glDebugMessageCallback");
 
-        if (glDebugMessageCallback_proc == 0) {
-            DWORD written;
-            WriteConsole(
-                GetStdHandle(STD_OUTPUT_HANDLE),
-                TEXT("ERROR: Failed to load glDebugMessageCallback!"),
-                sizeof(TEXT("ERROR: Failed to load glDebugMessageCallback!")) - 1,
-                &written,
-                0);
-        } else {
-            glEnable(0x92E0 /* GL_DEBUG_OUTPUT */);
-            glDebugMessageCallback_proc(vd_fw__gl_debug_message_callback, 0);
+            if (glDebugMessageCallback_proc == 0) {
+                DWORD written;
+                WriteConsole(
+                    GetStdHandle(STD_OUTPUT_HANDLE),
+                    TEXT("ERROR: Failed to load glDebugMessageCallback!"),
+                    sizeof(TEXT("ERROR: Failed to load glDebugMessageCallback!")) - 1,
+                    &written,
+                    0);
+            } else {
+                glEnable(0x92E0 /* GL_DEBUG_OUTPUT */);
+                glDebugMessageCallback_proc(vd_fw__gl_debug_message_callback, 0);
+            }
         }
     }
 
@@ -6355,34 +5847,17 @@ VD_FW_API int vd_fw_running(void)
     // @note(mdodis): For Raw Input mouse handling, instead of using the message queue
     // We use two sinks with an atomic write index.
     {
-
-        // // Get Raw Input mouse delta sink
-        // LONG curr_sink_index = VD_FW_G.sink_index;
-        // LONG next_sink_index = (curr_sink_index + 1) % 2;
-
-        // // Clear the next sink
-        // VD_FW_G.mouse_delta_sinks[next_sink_index][0] = 0.f;
-        // VD_FW_G.mouse_delta_sinks[next_sink_index][1] = 0.f;
-
-        // MemoryBarrier();
-
-        // // Exchange write index with next_sink_index
-        // InterlockedExchange(&VD_FW_G.sink_index, next_sink_index);
-
-        // // Now we can safely read from the curr_sink_index
-        // VD_FW_G.mouse_delta[0] = VD_FW_G.mouse_delta_sinks[curr_sink_index][0];
-        // VD_FW_G.mouse_delta[1] = VD_FW_G.mouse_delta_sinks[curr_sink_index][1];
-
-
         VD_FW_WIN32_PROFILE_BEGIN(read_all_input);
         VD_FW_G.mouse_delta[0] = VD_FW_G.winthread_mouse_delta[0];
         VD_FW_G.mouse_delta[1] = VD_FW_G.winthread_mouse_delta[1];
         VD_FW_G.winthread_mouse_delta[0] = 0.f;
         VD_FW_G.winthread_mouse_delta[1] = 0.f;
         EnterCriticalSection(&VD_FW_G.input_critical_section);
-        for (int i = 0; i < VD_FW_GAMEPAD_COUNT_MAX; ++i) {
+        VD_FW_G.num_gamepads_present = VD_FW_G.winthread_num_gamepads_present;
+        for (int i = 0; i < VD_FW_G.num_gamepads_present; ++i) {
             VD_FW_G.gamepad_prev_states[i] = VD_FW_G.winthread_gamepad_prev_states[i];
             VD_FW_G.gamepad_curr_states[i] = VD_FW_G.winthread_gamepad_curr_states[i];
+            VD_FW_G.gamepad_raw_buttons[i] = VD_FW_G.winthread_gamepad_raw_buttons[i];
         }
         LeaveCriticalSection(&VD_FW_G.input_critical_section);
         VD_FW_WIN32_PROFILE_END(read_all_input);
@@ -6420,16 +5895,21 @@ VD_FW_API int vd_fw_running(void)
 
 VD_FW_API int vd_fw_swap_buffers(void)
 {
-    VdFwSwapBuffers(VD_FW_G.hdc);
+    if (VD_FW_G.graphics_api != VD_FW_GRAPHICS_API_CUSTOM) {
+        VdFwSwapBuffers(VD_FW_G.hdc);
+    }
+
     // @note(mdodis): This needs to happen, otherwise the window animations and taskbar don't get redrawn if the window
     // is maximized to either section of the screen or the whole screen
     VdFwDwmFlush();
 
-    if (glFenceSync && glClientWaitSync && glDeleteSync) {
-        GLsync fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-        if (fence) {
-            glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, 1000000000ULL);
-            glDeleteSync(fence);
+    if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
+        if (glFenceSync && glClientWaitSync && glDeleteSync) {
+            GLsync fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+            if (fence) {
+                glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, 1000000000ULL);
+                glDeleteSync(fence);
+            }
         }
     }
 
@@ -6455,6 +5935,32 @@ VD_FW_API void vd_fw_set_size(int w, int h)
     VD_FW__CHECK_TRUE(VdFwPostMessage(
         VD_FW_G.hwnd,
         VD_FW_WIN32_SIZE,
+        0, /* WPARAM */
+        lparam));
+}
+
+VD_FW_API void vd_fw_set_size_min(int w, int h)
+{
+    WORD ww = (WORD)w;
+    WORD wh = (WORD)h;
+    LPARAM lparam = MAKELPARAM(ww, wh);
+
+    VD_FW__CHECK_TRUE(VdFwPostMessage(
+        VD_FW_G.hwnd,
+        VD_FW_WIN32_SIZEMIN,
+        0, /* WPARAM */
+        lparam));
+}
+
+VD_FW_API void vd_fw_set_size_max(int w, int h)
+{
+    WORD ww = (WORD)w;
+    WORD wh = (WORD)h;
+    LPARAM lparam = MAKELPARAM(ww, wh);
+
+    VD_FW__CHECK_TRUE(VdFwPostMessage(
+        VD_FW_G.hwnd,
+        VD_FW_WIN32_SIZEMAX,
         0, /* WPARAM */
         lparam));
 }
@@ -6574,6 +6080,11 @@ VD_FW_API int vd_fw_get_key_down(int key)
     return VD_FW_G.curr_key_states[key];
 }
 
+VD_FW_API int vd_fw_get_gamepad_count(void)
+{
+    return VD_FW_G.num_gamepads_present;
+}
+
 VD_FW_API int vd_fw_get_gamepad_down(int index, int button)
 {
     return VD_FW_G.gamepad_curr_states[index].buttons[button];
@@ -6583,6 +6094,19 @@ VD_FW_API int vd_fw_get_gamepad_axis(int index, int axis, float *out)
 {
     *out = VD_FW_G.gamepad_curr_states[index].axes[axis];
     return 1;
+}
+
+VD_FW_API void vd_fw_set_gamepad_rumble(int index, float rumble_lo, float rumble_hi)
+{
+    WORD rl = (WORD)(rumble_lo * 65535.f);
+    WORD rh = (WORD)(rumble_hi * 65535.f);
+    LPARAM lparam = MAKELPARAM(rl, rh);
+
+    VD_FW__CHECK_TRUE(VdFwPostMessage(
+        VD_FW_G.hwnd,
+        VD_FW_WIN32_GAMEPADRMBREQ,
+        index, /* WPARAM */
+        lparam));
 }
 
 VD_FW_API void vd_fw_set_mouse_capture(int on)
@@ -6704,37 +6228,14 @@ VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
         (LPARAM)icon));
 }
 
+VD_FW_API void *vd_fw_get_internal_window_handle(void)
+{
+    return &VD_FW_G.hwnd;
+}
+
 VD_FW_API unsigned long long vd_fw_delta_ns(void)
 {
     return VD_FW_G.last_ns;
-}
-
-static VdFwBOOL IsWindows11OrGreater()
-{
-    OSVERSIONINFOEX vi;
-    VdFwULONGLONG conditions;
-
-    VD_FW_MEMSET(&vi, 0, sizeof(vi));
-    vi.dwOSVersionInfoSize = sizeof(vi);
-    vi.dwMajorVersion = 10;
-    vi.dwMinorVersion = 0;
-    vi.dwBuildNumber = 21996;
-    conditions = VerSetConditionMask (0,
-            VER_MAJORVERSION, VER_GREATER_EQUAL);
-    conditions = VerSetConditionMask (conditions,
-        VER_MINORVERSION, VER_GREATER_EQUAL);
-    conditions = VerSetConditionMask (conditions,
-        VER_BUILDNUMBER, VER_GREATER_EQUAL);
-
-    return VerifyVersionInfo (&vi,
-            VER_MAJORVERSION | VER_MINORVERSION | VER_BUILDNUMBER,
-            conditions) != FALSE;
-}
-
-
-static int is_windows_11_or_greater()
-{
-    return IsWindows11OrGreater();
 }
 
 static DWORD vd_fw__win_thread_proc(LPVOID param)
@@ -6793,15 +6294,18 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     // @note(mdodis): This is an old thing from Windows 7 (I think... era). W
     // SetLayeredWindowAttributes(VD_FW_G.hwnd, RGB(255, 0, 255), 255, LWA_COLORKEY);
 
-
-
-    // @todo(mdodis): Consider using
-    // Windows 8 or less -- nothing
-    // Windows 10 -- dark/acrylic
-    // Windows 11 -- mica
     if (VD_FW_G.draw_decorations) {
-        VdFwDWORD t = TRUE;
-        VdFwDwmSetWindowAttribute(VD_FW_G.hwnd, 20, &t, sizeof(t));
+        if (VD_FW_G.os_version.dwBuildNumber >= 22000) {
+            // @note(mdodis): Undocumented mica values: 0x02: 0x04
+            VdFwDWORD t = TRUE;
+            VdFwDwmSetWindowAttribute(VD_FW_G.hwnd, 20, &t, sizeof(t));
+            int mica_value = 0x04;
+            VdFwDwmSetWindowAttribute(VD_FW_G.hwnd, 38, &mica_value, sizeof(mica_value));
+        } else if (VD_FW_G.os_version.dwMajorVersion >= 10) {
+            // @note(mdodis): Dark mode
+            VdFwDWORD t = TRUE;
+            VdFwDwmSetWindowAttribute(VD_FW_G.hwnd, 20, &t, sizeof(t));
+        }
     }
     vd_fw__composition_changed();
     VD_FW_SANITY_CHECK();
@@ -6824,21 +6328,16 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
 
     // Register raw input mouse
     {
-        VdFwRAWINPUTDEVICE rids[] = {
-            {
-                .usUsagePage   = 0x01, // Generic desktop controls
-                .usUsage       = 0x02, // Mouse
-                .dwFlags       = 0, // RIDEV_INPUTSINK,
-                .hwndTarget    = VD_FW_G.hwnd,
-            },
-            {
+        VdFwRAWINPUTDEVICE rids[2];
+        rids[0].usUsagePage = 0x01; // Generic desktop controls
+        rids[0].usUsage     = 0x02; // Mouse
+        rids[0].dwFlags     = 0x00; // None (NO RIDEV_INPUTSINK)
+        rids[0].hwndTarget  = VD_FW_G.hwnd;
 
-                .usUsagePage   = 0x01, // Generic desktop controls
-                .usUsage       = 0x05, // Gamepad
-                .dwFlags       = RIDEV_DEVNOTIFY,
-                .hwndTarget    = VD_FW_G.hwnd,
-            },
-        };
+        rids[1].usUsagePage = 0x01; // Generic desktop controls
+        rids[1].usUsage     = 0x05; // Gamepad
+        rids[1].dwFlags     = RIDEV_DEVNOTIFY;
+        rids[1].hwndTarget  = VD_FW_G.hwnd;
         VD_FW__CHECK_TRUE(VdFwRegisterRawInputDevices(rids, 2, sizeof(rids[0])));
     }
 
@@ -6921,6 +6420,15 @@ VD_FW_API char *vd_fw__debug_dump_file_text(const char *path)
 
     memory[sz.QuadPart] = 0;
     return memory;
+}
+
+VD_FW_API void *vd_fw__realloc_mem(void *prev_ptr, size_t size)
+{
+    if (prev_ptr == 0) {
+        return HeapAlloc(GetProcessHeap(), 0, size);
+    } else {
+        return HeapReAlloc(GetProcessHeap(), 0, prev_ptr, size);
+    }
 }
 
 VD_FW_API void vd_fw__free_mem(void *memory)
@@ -7047,6 +6555,7 @@ static int vd_fw__hit_test(int x, int y)
 
 static void vd_fw__composition_changed(void)
 {
+    if (VD_FW_G.draw_decorations) return;
     VD_FW_WIN32_PROFILE_BEGIN(composition_changed);
 
     BOOL enabled = FALSE;
@@ -7085,36 +6594,30 @@ static void vd_fw__update_region(void)
         VdFwWINDOWINFO window_info = {};
         window_info.cbSize = sizeof(window_info);
         VdFwGetWindowInfo(VD_FW_G.hwnd, &window_info);
-        VD_FW_G.rgn = (VdFwRECT) {
-            .left   = window_info.rcClient.left   - window_info.rcWindow.left,
-            .top    = window_info.rcClient.top    - window_info.rcWindow.top,
-            .right  = window_info.rcClient.right  - window_info.rcWindow.left,
-            .bottom = window_info.rcClient.bottom - window_info.rcWindow.top,
-        };
+        VD_FW_G.rgn.left   = window_info.rcClient.left   - window_info.rcWindow.left;
+        VD_FW_G.rgn.top    = window_info.rcClient.top    - window_info.rcWindow.top;
+        VD_FW_G.rgn.right  = window_info.rcClient.right  - window_info.rcWindow.left;
+        VD_FW_G.rgn.bottom = window_info.rcClient.bottom - window_info.rcWindow.top;
     } else if (!VD_FW_G.composition_enabled) {
         // @note(mdodis): If composition is enabled, set the window's region to something really high so that shadows of
         // the window are still drawn
-        VD_FW_G.rgn = (VdFwRECT) {
-            .left   = 0,
-            .top    = 0,
-            .right  = 32767,
-            .bottom = 32767,
-        };
+        VD_FW_G.rgn.left   = 0;
+        VD_FW_G.rgn.top    = 0;
+        VD_FW_G.rgn.right  = 32767;
+        VD_FW_G.rgn.bottom = 32767;
     } else {
         // @note(mdodis): Otherwise, the window's region is left unchanged
-        VD_FW_G.rgn = (VdFwRECT) {
-            .left   = 0,
-            .top    = 0,
-            .right  = 0,
-            .bottom = 0,
-        };
+        VD_FW_G.rgn.left   = 0;
+        VD_FW_G.rgn.top    = 0;
+        VD_FW_G.rgn.right  = 0;
+        VD_FW_G.rgn.bottom = 0;
     }
 
     if (VdFwEqualRect(&VD_FW_G.rgn, &old_rgn)) {
         return;
     }
 
-    VdFwRECT zero_rect = {0};
+    VdFwRECT zero_rect = {};
     if (VdFwEqualRect(&VD_FW_G.rgn, &zero_rect)) {
         VdFwSetWindowRgn(VD_FW_G.hwnd, NULL, TRUE);
     } else {
@@ -7227,32 +6730,75 @@ static VdFwLRESULT vd_fw__handle_invisible(VdFwHWND hwnd, VdFwUINT msg, VdFwWPAR
     return result;
 }
 
-static unsigned char vd_fw__map_usb_id_to_input(int usage)
-{
-    switch (usage) {
-        case 0x01: return VD_FW_GAMEPAD_A;
-        case 0x02: return VD_FW_GAMEPAD_B;
-        case 0x03: return VD_FW_GAMEPAD_X;
-        case 0x04: return VD_FW_GAMEPAD_Y;
-        case 0x07: return VD_FW_GAMEPAD_SELECT;
-        case 0x08: return VD_FW_GAMEPAD_START;
-        case 0x05: return VD_FW_GAMEPAD_L1;
-        case 0x06: return VD_FW_GAMEPAD_R1;
-        default:   return VD_FW_GAMEPAD_UNKNOWN; 
-    }
-}
+static struct {
+    VdFwXINPUT_STATE state;
+    int              connected;
+} Vd_Fw__XInput_States[4];
 
-static unsigned char vd_fw__map_axial_usage_to_axis(int usage)
+static void vd_fw__win32_correlate_xinput_triggers(VdFw__Win32GamepadInfo *gamepad_info,
+                                                   VdFw__GamepadButtonState *button_states, float *axes,
+                                                   VdFwULONG z_value)
 {
-    switch (usage) {
-        case 0x30: return VD_FW_GAMEPAD_LH;
-        case 0x31: return VD_FW_GAMEPAD_LV;
-        case 0x32: return VD_FW_GAMEPAD_LT;
-        case 0x33: return VD_FW_GAMEPAD_RH;
-        case 0x34: return VD_FW_GAMEPAD_RV;
-        case 0x35: return VD_FW_GAMEPAD_RT;
-        default: return 0xFF;
+    int total_xinput_devices_connected = 0;
+    for (int i = 0; i < 4; ++i) {
+        Vd_Fw__XInput_States[i].connected = VdFwXInputGetState(i, &Vd_Fw__XInput_States[i].state) == ERROR_SUCCESS;
+        total_xinput_devices_connected += Vd_Fw__XInput_States[i].connected;
     }
+
+    if (gamepad_info->xinput_index == -1) {
+        for (int i = 0; i < 4; ++i) {
+            if (!Vd_Fw__XInput_States[i].connected) {
+                continue;
+            }
+
+            VdFwXINPUT_STATE *state = &Vd_Fw__XInput_States[i].state;
+            int matched = 0;
+
+            {
+                // 0x0400: GUIDE Button
+                int any_xinput_buttons_pressed = (state->Gamepad.wButtons & ~0x0400);
+                if (any_xinput_buttons_pressed) {
+                    matched = matched || 
+                        (
+                            (button_states[VD_FW_GAMEPAD_A]      == ((state->Gamepad.wButtons &               VD_FW_XINPUT_GAMEPAD_A) ? 1 : 0)) &&
+                            (button_states[VD_FW_GAMEPAD_B]      == ((state->Gamepad.wButtons &               VD_FW_XINPUT_GAMEPAD_B) ? 1 : 0)) &&
+                            (button_states[VD_FW_GAMEPAD_X]      == ((state->Gamepad.wButtons &               VD_FW_XINPUT_GAMEPAD_X) ? 1 : 0)) &&
+                            (button_states[VD_FW_GAMEPAD_Y]      == ((state->Gamepad.wButtons &               VD_FW_XINPUT_GAMEPAD_Y) ? 1 : 0)) &&
+                            (button_states[VD_FW_GAMEPAD_DUP]    == ((state->Gamepad.wButtons &         VD_FW_XINPUT_GAMEPAD_DPAD_UP) ? 1 : 0)) &&
+                            (button_states[VD_FW_GAMEPAD_DDOWN]  == ((state->Gamepad.wButtons &       VD_FW_XINPUT_GAMEPAD_DPAD_DOWN) ? 1 : 0)) &&
+                            (button_states[VD_FW_GAMEPAD_DRIGHT] == ((state->Gamepad.wButtons &      VD_FW_XINPUT_GAMEPAD_DPAD_RIGHT) ? 1 : 0)) &&
+                            (button_states[VD_FW_GAMEPAD_DLEFT]  == ((state->Gamepad.wButtons &       VD_FW_XINPUT_GAMEPAD_DPAD_LEFT) ? 1 : 0)) &&
+                            (button_states[VD_FW_GAMEPAD_L1]     == ((state->Gamepad.wButtons &   VD_FW_XINPUT_GAMEPAD_LEFT_SHOULDER) ? 1 : 0)) &&
+                            (button_states[VD_FW_GAMEPAD_R1]     == ((state->Gamepad.wButtons &  VD_FW_XINPUT_GAMEPAD_RIGHT_SHOULDER) ? 1 : 0)) &&
+                            (button_states[VD_FW_GAMEPAD_L3]     == ((state->Gamepad.wButtons &      VD_FW_XINPUT_GAMEPAD_LEFT_THUMB) ? 1 : 0)) &&
+                            (button_states[VD_FW_GAMEPAD_R3]     == ((state->Gamepad.wButtons &     VD_FW_XINPUT_GAMEPAD_RIGHT_THUMB) ? 1 : 0))
+                        );
+                }
+            }
+
+            if (!matched) {
+                int l_trigger_match = ((unsigned int)(((int)state->Gamepad.bLeftTrigger  * 257) - 32768) - z_value <= 0x2fff);
+                int r_trigger_match = ((unsigned int)(((int)state->Gamepad.bRightTrigger * 257) - 32768) - z_value <= 0x2fff);
+                matched = matched || l_trigger_match || r_trigger_match;
+            }
+
+            if (matched) {
+                gamepad_info->xinput_index = i;
+                VD_FW_LOG("Gamepad correlated to XInput dwUserIndex: %d", i);
+                break;
+            }
+        }
+
+        if (gamepad_info->xinput_index == -1) {
+            VD_FW_LOG("Failed to correlate game pad to xinput devices %d/4", total_xinput_devices_connected);
+        }
+    }
+
+    if (gamepad_info->xinput_index != -1) {
+        axes[VD_FW_GAMEPAD_LT] = (float)Vd_Fw__XInput_States[gamepad_info->xinput_index].state.Gamepad.bLeftTrigger / 255.f;
+        axes[VD_FW_GAMEPAD_RT] = (float)Vd_Fw__XInput_States[gamepad_info->xinput_index].state.Gamepad.bRightTrigger / 255.f;
+    }
+
 }
 
 static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam, VdFwLPARAM lparam)
@@ -7364,14 +6910,14 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         } break;
 
 
-        // @note(mdodis): The two message below are handled just to send a left mouse button up message
+        // @note(mdodis): The two messages below are handled just to send a left mouse button up message
         // When a custom chrome window is defined, DefWindowProc will consume several non client area messages regarding
         // the mouse.
         // 
         // This results in WM_NCLBUTTONUP not being sent when the left mouse button is left on a window sub-rectangle
         // for which WM_NCHITTEST returns HTCAPTION. 
         // 
-        // The only two reliable ways I've found to handle this is by emitting left mouse button up during the following
+        // The only reliable way I've found to handle this is by emitting left mouse button up during the following
         // messages:
         // - WM_EXITSIZEMOVE 
         // - WM_SYSCOMMAND, with wParam == 0x0000F012.
@@ -7550,160 +7096,178 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 LeaveCriticalSection(&VD_FW_G.input_critical_section);
             } else if (raw->header.dwType == RIM_TYPEHID) {
 
-                VdFw__Win32GamepadInfo *gamepad_info = &VD_FW_G.gamepad_infos[0];
-
-                switch (gamepad_info->api) {
-                    case VD_FW_GAMEPAD_API_RAWINPUT: {
-                        VdFw__GamepadButtonState button_states[VD_FW_GAMEPAD_BUTTON_MAX] = {0};
-                        float axes[6] = {0.f};
-
-                        for (VdFwDWORD ri = 0; ri < raw->data.hid.dwCount; ++ri) {
-                            VdFwBYTE *bytes = &raw->data.hid.bRawData[0] + ri * (raw->data.hid.dwSizeHid);
-
-                            // Buttons
-                            {
-                                static VdFwUSAGE usages[32];
-                                VdFwULONG usage_count = 32;
-
-                                if (VdFwHidP_GetUsages(VdFwHidP_Input, 0x09, 0, usages, &usage_count, gamepad_info->ppd, (VdFwPCHAR)bytes, raw->data.hid.dwSizeHid) == VD_FW_HIDP_STATUS_SUCCESS) {
-                                    for (ULONG i = 0; i < usage_count; ++i) {
-
-                                        for (int j = 0; j < gamepad_info->config.num_digital_mappings; ++j) {
-                                            if (usages[i] == gamepad_info->config.digital_mappings[j].id) {
-                                                button_states[gamepad_info->config.digital_mappings[j].input] = 1;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Hat Switch
-                            {
-                                if (gamepad_info->config.num_hat_switch_mappings > 0) {
-                                    VdFwULONG directional_value;
-                                    if (VdFwHidP_GetUsageValue(VdFwHidP_Input,
-                                                           0x01, 0, 0x39, &directional_value,
-                                                           gamepad_info->ppd,
-                                                           (VdFwPCHAR)bytes, raw->data.hid.dwSizeHid) == VD_FW_HIDP_STATUS_SUCCESS)
-                                    {
-                                        if (gamepad_info->config.hat_switch_mappings[0].logical_range == 8) {
-                                            static const int hat_to_mask[9] = {
-                                                0x00, // Centered
-                                                0x01, // Up
-                                                0x03, // Up+Right
-                                                0x02, // Right
-                                                0x06, // Down+Right
-                                                0x04, // Down
-                                                0x0C, // Down+Left
-                                                0x08, // Left
-                                                0x09, // Up+Left
-                                            };
-                                            int mask = hat_to_mask[directional_value];
-
-                                            button_states[VD_FW_GAMEPAD_DUP] =
-                                                (mask & gamepad_info->config.hat_switch_mappings[0].ids[0]) ? 1 : 0;
-                                            button_states[VD_FW_GAMEPAD_DRIGHT] =
-                                                (mask & gamepad_info->config.hat_switch_mappings[0].ids[1]) ? 1 : 0;
-                                            button_states[VD_FW_GAMEPAD_DDOWN] =
-                                                (mask & gamepad_info->config.hat_switch_mappings[0].ids[2]) ? 1 : 0;
-                                            button_states[VD_FW_GAMEPAD_DLEFT] =
-                                                (mask & gamepad_info->config.hat_switch_mappings[0].ids[3]) ? 1 : 0;
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Axes
-                            {
-                                for (int i = 0; i < gamepad_info->config.num_axial_mappings; ++i) {
-                                    VdFwULONG value;
-
-                                    VdFwUSAGE usage = gamepad_info->config.axial_mappings[i].id;
-                                    if (VdFwHidP_GetUsageValue(VdFwHidP_Input, 0x01, 0, usage, &value, gamepad_info->ppd, (VdFwPCHAR)bytes, raw->data.hid.dwSizeHid) == VD_FW_HIDP_STATUS_SUCCESS) {
-
-                                        VdFwLONG min_value = gamepad_info->config.axial_mappings[i].min_value;
-                                        VdFwLONG max_value = gamepad_info->config.axial_mappings[i].max_value;
-
-                                        // Clamp known value
-                                        float value01 = 0.f;
-                                        if (gamepad_info->config.axial_mappings[i].input <= VD_FW_GAMEPAD_RV) {
-                                            value01 = (float)(value - min_value) / (float)(max_value - min_value);
-                                            value01 *= 2.f;
-                                            value01 -= 1.f;
-                                        } else {
-                                            if (max_value > min_value) {
-                                                if ((VdFwLONG)value < min_value) {
-                                                    value = min_value;
-                                                } else if ((VdFwLONG)value > max_value) {
-                                                    value = max_value;
-                                                }
-
-                                                value01 = (float)(value - min_value) / (float)(max_value - min_value);
-                                            } else {
-
-                                                if ((VdFwLONG)value < max_value) {
-                                                    value = max_value;
-                                                } else if ((VdFwLONG)value > min_value) {
-                                                    value = min_value;
-                                                }
-
-                                                value01 = (float)(value - max_value) / (float)(min_value - max_value);
-                                                value01 = 1.0f - value01;
-                                            }
-                                        }
-
-                                        axes[gamepad_info->config.axial_mappings[i].input] = value01;
-                                        // VD_FW_G.winthread_gamepad_curr_states[vd_fw__get_write_sink_index()][0].axes[gamepad_info->config.axial_mappings[i].input] = value01;
-
-                                    }
-                                }
-                            }
-                        }
-
-                        EnterCriticalSection(&VD_FW_G.input_critical_section);
-                        VD_FW_MEMCPY(&VD_FW_G.winthread_gamepad_prev_states[0].buttons,
-                                     &VD_FW_G.winthread_gamepad_curr_states[0].buttons,
-                                     sizeof(VD_FW_G.winthread_gamepad_curr_states[0].buttons));
-
-                        for (int i = 0; i < VD_FW_GAMEPAD_BUTTON_MAX; ++i) {
-                            VD_FW_G.winthread_gamepad_curr_states[0].buttons[i] = button_states[i];
-                        }
-
-                        for (int i = 0; i < 6; ++i) {
-                            VD_FW_G.winthread_gamepad_curr_states[0].axes[i] = axes[i];
-                        }
-                        LeaveCriticalSection(&VD_FW_G.input_critical_section);
-                    } break;
-
-                    case VD_FW_GAMEPAD_API_XINPUT: {
-                        if (!VD_FW_G.xinput) break;
-                        VdFwXINPUT_STATE state;
-                        if (VdFwXInputGetState(0, &state) == 0) {
-                            EnterCriticalSection(&VD_FW_G.input_critical_section);
-                            VD_FW_G.winthread_gamepad_curr_states[0].buttons[VD_FW_GAMEPAD_A]          = (state.Gamepad.wButtons & VD_FW_XINPUT_GAMEPAD_A) ? 1 : 0;
-                            VD_FW_G.winthread_gamepad_curr_states[0].buttons[VD_FW_GAMEPAD_B]          = (state.Gamepad.wButtons & VD_FW_XINPUT_GAMEPAD_B) ? 1 : 0;
-                            VD_FW_G.winthread_gamepad_curr_states[0].buttons[VD_FW_GAMEPAD_X]          = (state.Gamepad.wButtons & VD_FW_XINPUT_GAMEPAD_X) ? 1 : 0;
-                            VD_FW_G.winthread_gamepad_curr_states[0].buttons[VD_FW_GAMEPAD_Y]          = (state.Gamepad.wButtons & VD_FW_XINPUT_GAMEPAD_Y) ? 1 : 0;
-                            VD_FW_G.winthread_gamepad_curr_states[0].buttons[VD_FW_GAMEPAD_DUP]        = (state.Gamepad.wButtons & VD_FW_XINPUT_GAMEPAD_DPAD_UP) ? 1 : 0;
-                            VD_FW_G.winthread_gamepad_curr_states[0].buttons[VD_FW_GAMEPAD_DDOWN]      = (state.Gamepad.wButtons & VD_FW_XINPUT_GAMEPAD_DPAD_DOWN) ? 1 : 0;
-                            VD_FW_G.winthread_gamepad_curr_states[0].buttons[VD_FW_GAMEPAD_DRIGHT]     = (state.Gamepad.wButtons & VD_FW_XINPUT_GAMEPAD_DPAD_RIGHT) ? 1 : 0;
-                            VD_FW_G.winthread_gamepad_curr_states[0].buttons[VD_FW_GAMEPAD_DLEFT]      = (state.Gamepad.wButtons & VD_FW_XINPUT_GAMEPAD_DPAD_LEFT) ? 1 : 0;
-                            VD_FW_G.winthread_gamepad_curr_states[0].buttons[VD_FW_GAMEPAD_START]      = (state.Gamepad.wButtons & VD_FW_XINPUT_GAMEPAD_START) ? 1 : 0;
-                            VD_FW_G.winthread_gamepad_curr_states[0].buttons[VD_FW_GAMEPAD_L1]         = (state.Gamepad.wButtons & VD_FW_XINPUT_GAMEPAD_LEFT_SHOULDER) ? 1 : 0;
-                            VD_FW_G.winthread_gamepad_curr_states[0].buttons[VD_FW_GAMEPAD_R1]         = (state.Gamepad.wButtons & VD_FW_XINPUT_GAMEPAD_RIGHT_SHOULDER) ? 1 : 0;
-
-                            VD_FW_G.winthread_gamepad_curr_states[0].axes[VD_FW_GAMEPAD_LH]  = ((float)state.Gamepad.sThumbLX / (float)0x7FFF);
-                            VD_FW_G.winthread_gamepad_curr_states[0].axes[VD_FW_GAMEPAD_LV]  = -((float)state.Gamepad.sThumbLY / (float)0x7FFF);
-                            VD_FW_G.winthread_gamepad_curr_states[0].axes[VD_FW_GAMEPAD_RH]  = ((float)state.Gamepad.sThumbRX / (float)0x7FFF);
-                            VD_FW_G.winthread_gamepad_curr_states[0].axes[VD_FW_GAMEPAD_RV]  = -((float)state.Gamepad.sThumbRY / (float)0x7FFF);
-                            VD_FW_G.winthread_gamepad_curr_states[0].axes[VD_FW_GAMEPAD_LT]  = ((float)state.Gamepad.bLeftTrigger / (float)0xFF);
-                            VD_FW_G.winthread_gamepad_curr_states[0].axes[VD_FW_GAMEPAD_RT]  = ((float)state.Gamepad.bRightTrigger / (float)0xFF);
-                            LeaveCriticalSection(&VD_FW_G.input_critical_section);
-                        }
-                    } break;
-
-                    default: break;
+                VdFw__Win32GamepadInfo *gamepad_info = 0;
+                int                     gamepad_info_index = -1;
+                for (int i = 0; i < VD_FW_GAMEPAD_COUNT_MAX; ++i) {
+                    if (VD_FW_G.gamepad_infos[i].handle == raw->header.hDevice) {
+                        gamepad_info = &VD_FW_G.gamepad_infos[i];
+                        gamepad_info_index = i;
+                        break;
+                    }
                 }
+
+                if (gamepad_info == 0) {
+                    break;
+                }
+
+                VdFw__GamepadButtonState button_states[VD_FW_GAMEPAD_BUTTON_MAX] = {0};
+                float axes[6] = {0.f};
+
+                for (VdFwDWORD ri = 0; ri < raw->data.hid.dwCount; ++ri) {
+                    VdFwBYTE *bytes = &raw->data.hid.bRawData[0] + ri * (raw->data.hid.dwSizeHid);
+
+                    VdFwHIDP_DATA *hidp_data = gamepad_info->hidp_data;
+                    VdFwULONG data_count = gamepad_info->hidp_data_cap;
+                    VdFwNTSTATUS status = VdFwHidP_GetData(VdFwHidP_Input,
+                                                           gamepad_info->hidp_data, &data_count,
+                                                           gamepad_info->ppd,
+                                                           (VdFwPCHAR)bytes, raw->data.hid.dwSizeHid);
+                    if (status != VD_FW_HIDP_STATUS_SUCCESS) {
+                        continue;
+                    }
+
+                    VdFwULONG z_value = 0;
+
+                    // Iterate over gamepad button entries
+                    for (int entry_index = 0;
+                             ((entry_index < VD_FW_GAMEPAD_MAX_MAPPINGS) && 
+                             !vd_fw_gamepad_map_entry_is_none(&gamepad_info->map.mappings[entry_index]));
+                         ++entry_index)
+                    {
+
+                        VdFwGamepadMapEntry *entry = &gamepad_info->map.mappings[entry_index];
+                        VdFwGamepadMappingSourceKind actual_kind = entry->kind & VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_MASK;
+
+                        switch (actual_kind) {
+                            case VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON: {
+                                int button_data_index = gamepad_info->button_data_indices[entry->index];
+
+                                VdFwHIDP_DATA *data = 0;
+                                for (VdFwULONG data_index = 0; data_index < data_count; ++data_index) {
+                                    if (hidp_data[data_index].DataIndex == button_data_index) {
+                                        data = &hidp_data[data_index];
+                                        break;
+                                    }
+                                }
+
+                                if (!data) {
+                                    continue;
+                                }
+
+                                if (data->dat.On) {
+                                    button_states[entry->target] = 1;
+                                }
+                            } break;
+
+                            case VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS: {
+
+                                int axis_data_index = gamepad_info->axis_data_indices[entry->index].data_index;
+                                int axis_min = gamepad_info->axis_data_indices[entry->index].min_value;
+                                int axis_max = gamepad_info->axis_data_indices[entry->index].max_value;
+
+                                VdFwHIDP_DATA *data = 0;
+                                for (VdFwULONG data_index = 0; data_index < data_count; ++data_index) {
+                                    if (hidp_data[data_index].DataIndex == axis_data_index) {
+                                        data = &hidp_data[data_index];
+                                        break;
+                                    }
+                                }
+
+                                if (!data) {
+                                    continue;
+                                }
+
+                                if (axis_data_index != gamepad_info->z_split) {
+                                    float v01 = ((float)((data->dat.RawValue - axis_min))) / 
+                                                ((float)(axis_max - axis_min));
+
+                                    if (entry->target < VD_FW_GAMEPAD_LT) {
+                                        axes[entry->target] = v01 * 2.f - 1.f;
+                                    } else {
+                                        axes[entry->target] = v01;
+                                    }
+                                } else {
+                                    int total_range = gamepad_info->z_split_max - gamepad_info->z_split_min;
+                                    z_value = data->dat.RawValue;
+                                    float value = (float)data->dat.RawValue / (float)total_range;
+                                    value -= 0.5f;
+                                    value *= 2.f;
+
+                                    float lt_value = value > 0.f ? +value : 0.f;
+                                    float rt_value = value < 0.f ? -value : 0.f;
+
+                                    axes[VD_FW_GAMEPAD_LT] = lt_value;
+                                    axes[VD_FW_GAMEPAD_RT] = rt_value;
+                                }
+                            } break;
+
+                            case VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT: {
+                                VdFwByte hat_index = (VdFwByte)(entry->index >> 8);
+                                VdFwByte hat_mask  = (VdFwByte)(entry->index & 0xFF);
+
+                                int hat_data_index = gamepad_info->hat_data_indices[hat_index].data_index;
+                                int min_value = gamepad_info->hat_data_indices[hat_index].min_value;
+                                int max_value = gamepad_info->hat_data_indices[hat_index].max_value;
+
+                                VdFwHIDP_DATA *data = 0;
+                                for (VdFwULONG data_index = 0; data_index < data_count; ++data_index) {
+                                    if (hidp_data[data_index].DataIndex == hat_data_index) {
+                                        data = &hidp_data[data_index];
+                                        break;
+                                    }
+                                }
+
+                                if (!data) {
+                                    continue;
+                                }
+
+                                VdFwULONG state = data->dat.RawValue;
+
+                                if ((min_value == 1) && (max_value == 8)) {
+                                    state -= 1;
+                                }
+
+                                static const int hat_to_mask[] = {
+                                    0x01,
+                                    0x01 | 0x02,
+                                    0x02,
+                                    0x02 | 0x04,
+                                    0x04,
+                                    0x04 | 0x08,
+                                    0x08,
+                                    0x08 | 0x01,
+                                    0x00,
+                                };
+
+                                if (state < (sizeof(hat_to_mask)/sizeof(hat_to_mask[0]))) {
+                                    int mask = hat_to_mask[state];
+                                    button_states[entry->target] = (mask & hat_mask) ? 1 : 0;
+                                }
+                            } break;
+                        }
+                    }
+
+                    // Handle XInput correlation
+                    if (gamepad_info->flags & VD_FW__WIN32_GAMEPAD_FLAG_XINPUT) {
+                        vd_fw__win32_correlate_xinput_triggers(gamepad_info, button_states, axes, z_value);
+                    }
+                }
+
+                int index_to_write_to = gamepad_info_index;
+                EnterCriticalSection(&VD_FW_G.input_critical_section);
+                VD_FW_MEMCPY(&VD_FW_G.winthread_gamepad_prev_states[index_to_write_to].buttons,
+                             &VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].buttons,
+                             sizeof(VD_FW_G.winthread_gamepad_curr_states[0].buttons));
+
+                VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].guid = gamepad_info->guid;
+                for (int i = 0; i < VD_FW_GAMEPAD_BUTTON_MAX; ++i) {
+                    VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].buttons[i] = button_states[i];
+                }
+
+                for (int i = 0; i < 6; ++i) {
+                    VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].axes[i] = axes[i];
+                }
+                LeaveCriticalSection(&VD_FW_G.input_critical_section);
             }
 
         } break;
@@ -7722,10 +7286,12 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     &cb_size);
 
                 if ((device_info_result) == ((UINT)-1)) {
+                    // Get device info failed
                     break;
                 }
 
                 if (device_info.dwType != RIM_TYPEHID) {
+                    // Device is not an HID device
                     break;
                 }
 
@@ -7733,13 +7299,13 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 // We do this by inspecting RIDI_DEVICENAME, and checking for TEXT("IG_")
                 // See: https://learn.microsoft.com/en-us/windows/win32/xinput/xinput-and-directinput
                 int is_xinput_device = 0;
-                {
-                    TCHAR name[256];
-                    VdFwUINT size = sizeof(name);
-                    device_info_result = VdFwGetRawInputDeviceInfo(
+                char device_instance_path[256];
+                if (VD_FW_G.xinput) {
+                    VdFwUINT size = sizeof(device_instance_path);
+                    device_info_result = VdFwGetRawInputDeviceInfoA(
                         device_handle,
                         VD_FW_RIDI_DEVICENAME,
-                        name,
+                        device_instance_path,
                         &size);
 
                     // If we can't even get the device name, then there's obviously something more wrong
@@ -7753,9 +7319,9 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                             continue;
                         }
 
-                        if (name[i + 0] == TEXT('I') &&
-                            name[i + 1] == TEXT('G') &&
-                            name[i + 2] == TEXT('_'))
+                        if (device_instance_path[i + 0] == ('I') &&
+                            device_instance_path[i + 1] == ('G') &&
+                            device_instance_path[i + 2] == ('_'))
                         {
                             is_xinput_device = 1;
                             break;
@@ -7763,29 +7329,18 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     }
                 }
 
-                unsigned short vendor_id    = (unsigned short)device_info.hid.dwVendorId;
-                unsigned short product_id   = (unsigned short)device_info.hid.dwProductId;
-                unsigned short version      = (unsigned short)device_info.hid.dwVersionNumber;
-
-                unsigned char guid[16] = {0};
-                guid[0] = 0x03;
-                guid[1] = 0x00;
-                guid[2] = 0x00;
-                guid[3] = 0x00;
-
-                guid[4] = vendor_id & 0xFF;
-                guid[5] = (vendor_id >> 8) & 0xFF;
-
-                guid[8] = product_id & 0xFF;
-                guid[9] = (product_id >> 8) & 0xFF;
-
-                guid[12] = version & 0xFF;
-                guid[13] = (version >> 8) & 0xFF;
+                if (is_xinput_device) {
+                    VD_FW_LOG("Discovered XInput Device");
+                } else {
+                    VD_FW_LOG("Discovered RAWINPUT Device");
+                }
 
                 VdFw__Win32GamepadInfo *new_gamepad = NULL;
+                int new_gamepad_index = 0;
                 for (int i = 0; i < VD_FW_GAMEPAD_COUNT_MAX; ++i) {
                     if (!VD_FW_G.gamepad_infos[i].connected) {
                         new_gamepad = &VD_FW_G.gamepad_infos[i];
+                        new_gamepad_index = i;
                         break;
                     }
                 }
@@ -7794,12 +7349,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     break;
                 }
 
-                if (is_xinput_device) {
-                    new_gamepad->api = VD_FW_GAMEPAD_API_XINPUT;
-                } else {
-                    new_gamepad->api = VD_FW_GAMEPAD_API_RAWINPUT;
-                }
-
+                // @todo(mdodis): Cache allocated ppd data and realloc only if required size is bigger
                 UINT ppd_req_size = 0;
                 if (VdFwGetRawInputDeviceInfoA(
                     device_handle,
@@ -7811,7 +7361,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 }
 
                 new_gamepad->ppd = (VdFwPHIDP_PREPARSED_DATA)HeapAlloc(GetProcessHeap(), 0, ppd_req_size);
-
                 if (VdFwGetRawInputDeviceInfoA(
                     device_handle,
                     RIDI_PREPARSEDDATA,
@@ -7821,21 +7370,138 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     break;
                 }
 
-                new_gamepad->config.num_digital_mappings = 0;
-                new_gamepad->config.num_axial_mappings = 0;
-                new_gamepad->config.num_hat_switch_mappings = 0;
-                new_gamepad->splitz = 1;
+                // Construct GUID form gamepad info
+                VdFwGuid guid;
+                char *manufacturer_string = 0;
+                char *product_string = 0;
+                uint16_t vendor_id    = (uint16_t)device_info.hid.dwVendorId;
+                uint16_t product_id   = (uint16_t)device_info.hid.dwProductId;
+                uint16_t version      = (uint16_t)device_info.hid.dwVersionNumber;
+
+                // Get Manufacturer String & Product String
+                {
+
+                    HANDLE device_file = CreateFileA(device_instance_path,
+                                                     GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                                     NULL, OPEN_EXISTING, 0, NULL);
+                    wchar_t temp_wstring[128];
+                    temp_wstring[0] = 0;
+
+                    if (VdFwHidD_GetManufacturerString(device_file, temp_wstring, sizeof(temp_wstring))) {
+                        manufacturer_string = vd_fw__utf16_to_utf8(temp_wstring);
+                    }
+
+                    temp_wstring[0] = 0;
+                    if (VdFwHidD_GetProductString(device_file, temp_wstring, sizeof(temp_wstring))) {
+                        product_string = vd_fw__utf16_to_utf8(temp_wstring);
+                    }
+
+                    CloseHandle(device_file);
+
+                    new_gamepad->write_handle = CreateFileA(device_instance_path,
+                                                            GENERIC_READ | GENERIC_WRITE,
+                                                            FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                                            NULL, OPEN_EXISTING, 0, NULL);
+
+                    // TEST TEST Rumble
+                    // if (device_file != INVALID_HANDLE_VALUE) {
+                    //     VdFwByte report[32] = {
+                    //         // 0, 0, 0, 200, 2,
+                    //         0x05, 0xFF, 0x00, 0x00, 0x40, 0x40, 0x00,
+                    //     };
+
+                    //     DWORD num_written = 0;
+                    //     if (!WriteFile(device_file,
+                    //                    report,
+                    //                    sizeof(report),
+                    //                    &num_written,
+                    //                    NULL))
+                    //     {
+                    //         VD_FW_LOG("Failed to send report: %d", GetLastError());
+                    //     }
+
+                    //     // if (!DeviceIoControl(device_file, 0x8000a010, report, sizeof(report), NULL, 0, NULL, NULL)) {
+                    //     //     VD_FW_LOG("Failed to send report: %d", GetLastError());
+                    //     // }
+
+                    //     // if (!VdFwHidD_SetOutputReport(device_file, report, sizeof(report))) {
+                    //     //     VD_FW_LOG("Failed to send report: %d", GetLastError());
+                    //     // } else {
+                    //     //     VD_FW_LOG("Successfully sent report: %d", GetLastError());
+                    //     // }
+
+                    //     // if (!VdFwHidD_SetFeature(device_file, report, sizeof(report))) {
+                    //     //     VD_FW_LOG("Failed to send report: %d", GetLastError());
+                    //     // } else {
+                    //     //     VD_FW_LOG("Successfully sent report: %d", GetLastError());
+                    //     // }
+                    // }
+                    // CloseHandle(device_file);
+                }
+                // Compute GUID
+                guid = vd_fw__make_gamepad_guid(0x03 /* USB Bus */,
+                                         vendor_id, product_id, version,
+                                         manufacturer_string, product_string,
+                                         'r', 0);
+
+
+                // Free strings if needed
+                {
+                    if (manufacturer_string) {
+                        vd_fw__free_mem(manufacturer_string);
+                    }
+
+                    if (product_string) {
+                        vd_fw__free_mem(product_string);
+                    }
+                }
+
+                for (int i = 0; i < 16; ++i) {
+                    printf("%02x", guid.dat[i]);
+                }
+                printf("\n");
+
+                new_gamepad->flags = 0;
+                if (is_xinput_device) {
+                    new_gamepad->flags |= VD_FW__WIN32_GAMEPAD_FLAG_XINPUT;
+                }
+
+                // Reset all gamepad specific data
                 new_gamepad->handle = device_handle;
-                for (int i = 0; i < 16; ++i) new_gamepad->guid[i] = guid[i];
+                new_gamepad->guid = guid;
                 new_gamepad->connected = TRUE;
-                VD_FW_G.num_gamepads_present++;
+                new_gamepad->xinput_index = -1;
+                new_gamepad->z_split = -1;
+                VdFwULONG data_count = VdFwHidP_MaxDataListLength(VdFwHidP_Input, new_gamepad->ppd);
+
+
+                // Resize HIDP_DATA buffer if needed
+                new_gamepad->hidp_data = (VdFwHIDP_DATA*)vd_fw__resize_buffer(new_gamepad->hidp_data,
+                                                                              sizeof(VdFwHIDP_DATA),
+                                                                              data_count,
+                                                                              &new_gamepad->hidp_data_cap);
+                new_gamepad->hidp_data_len = data_count;
+
+
+                // Map gamepad
+                VdFwGamepadMap gamepad_map;
+                if (!vd_fw__map_gamepad(guid, &gamepad_map)) {
+                    vd_fw__def_gamepad(&gamepad_map);
+                }
+                new_gamepad->map = gamepad_map;
+
 
                 VdFwHIDP_CAPS caps;
                 if (VdFwHidP_GetCaps(new_gamepad->ppd, &caps) != VD_FW_HIDP_STATUS_SUCCESS) {
                     break;
                 }
 
-                // HID Button Caps
+                new_gamepad->output_report_size = caps.OutputReportByteLength;
+
+                // For each button, compute the data indices. These will map to:
+                // b0, b1, b2, and so on...
+                // 
+                // HID Button Caps:
                 // - Either are specified individually, (i.e 10 buttons on controller -> 10 button caps)
                 // - Or, they are specified in a range (10 buttons on controller -> 1 button cap with range 10..1)
                 // So, to handle this, we iterate on the button caps, and then iterate on the range, if that caps
@@ -7843,34 +7509,35 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 static VdFwHIDP_BUTTON_CAPS button_caps[32];
                 VdFwUSHORT num_button_caps = caps.NumberInputButtonCaps;
                 if (VdFwHidP_GetButtonCaps(VdFwHidP_Input, button_caps, &num_button_caps, new_gamepad->ppd) == VD_FW_HIDP_STATUS_SUCCESS) {
+                    int count = 0;
+                    // Count the total button caps
                     for (int i = 0; i < num_button_caps; ++i) {
                         if (button_caps[i].IsRange) {
-                            int count = 1 + (button_caps[i].v.Range.DataIndexMax - button_caps[i].v.Range.DataIndexMin);
+                            count += 1 + button_caps[i].v.Range.DataIndexMax - button_caps[i].v.Range.DataIndexMin;
+                        } else {
+                            count++;
+                        }
+                    }
 
-                            for (unsigned short j = 0; j < count; ++j) {
-                                unsigned short usage = button_caps[i].v.Range.UsageMin + j;
-                                unsigned char input_value = vd_fw__map_usb_id_to_input(usage);
+                    new_gamepad->button_data_indices = (int*)vd_fw__resize_buffer(new_gamepad->button_data_indices,
+                                                                                  sizeof(new_gamepad->button_data_indices[0]),
+                                                                                  count,
+                                                                                  &new_gamepad->button_data_indices_cap);
+                    new_gamepad->button_data_indices_len = count;
 
-                                if (input_value == VD_FW_GAMEPAD_UNKNOWN) {
-                                    continue;
-                                }
+                    // Write the button data indices
+                    count = 0;
+                    for (int i = 0; i < num_button_caps; ++i) {
+                        if (button_caps[i].IsRange) {
 
-                                int idx = new_gamepad->config.num_digital_mappings++;
-                                new_gamepad->config.digital_mappings[idx].input = input_value;
-                                new_gamepad->config.digital_mappings[idx].id = usage;
+                            unsigned short usage_count = 1 + button_caps[i].v.Range.DataIndexMax - button_caps[i].v.Range.DataIndexMin;
+                            for (unsigned short j = 0; j < usage_count; ++j) {
+                                int button_data_index = button_caps[i].v.Range.DataIndexMin + j;
+                                new_gamepad->button_data_indices[count++] = button_data_index;
                             }
                         } else {
-
-                            unsigned short usage = button_caps[i].v.NotRange.Usage;
-                            unsigned char input_value = vd_fw__map_usb_id_to_input(usage);
-
-                            if (input_value == VD_FW_GAMEPAD_UNKNOWN) {
-                                continue;
-                            }
-
-                            int idx = new_gamepad->config.num_digital_mappings++;
-                            new_gamepad->config.digital_mappings[idx].input = input_value;
-                            new_gamepad->config.digital_mappings[idx].id = usage;
+                            unsigned short usage = button_caps[i].v.NotRange.DataIndex;
+                            new_gamepad->button_data_indices[count++] = usage;
                         }
                     }
                 }
@@ -7879,141 +7546,131 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 // - Are only useful afaik when they're not ranges
                 static VdFwHIDP_VALUE_CAPS value_caps[32];
                 VdFwUSHORT num_value_caps = caps.NumberInputValueCaps;
+                int num_hats = 0;
                 if (VdFwHidP_GetValueCaps(VdFwHidP_Input, value_caps, &num_value_caps, new_gamepad->ppd) == VD_FW_HIDP_STATUS_SUCCESS) {
-                    for (int i = 0; i < num_value_caps; ++i) {
-                        if (value_caps[i].IsRange)
-                            continue;
 
-                        if (value_caps[i].v.NotRange.Usage == 0x0039) {
-                            // Usage 0x0039: GENERIC HAT
-                            // We compute logical range reported by the hat switch
-                            // - For LogicalMin: 1, LogicalMax: 4:
-                            //   > We know that the hat switch can only encode 4 different directions at a time:
-                            //   > Up, Right, Down, Left (in that order)
-                            // - For LogicalMin: 1, LogicalMax: 8:
-                            //   > We know that the hat switch can encode 8 different directions:
-                            //   > Up, UpRight, Right, RightDown, Down, DownLeft, Left, UpLeft.
-                            int logical_range = value_caps[i].LogicalMax - value_caps[i].LogicalMin + 1;
-                            new_gamepad->config.hat_switch_mappings[0].logical_range = logical_range;
-                            new_gamepad->config.hat_switch_mappings[0].ids[0] = 0x01;
-                            new_gamepad->config.hat_switch_mappings[0].ids[1] = 0x02;
-                            new_gamepad->config.hat_switch_mappings[0].ids[2] = 0x04;
-                            new_gamepad->config.hat_switch_mappings[0].ids[3] = 0x08;
-                            new_gamepad->config.num_hat_switch_mappings = 1;
-                        } else if ((value_caps[i].v.NotRange.Usage >= 0x30) && (value_caps[i].v.NotRange.Usage <= 0x35)) {
-                            // Usages 0x0030 - 0x0035: X,Y,Z,Rx,Ry,Rz
-                            unsigned char axis_input = vd_fw__map_axial_usage_to_axis(value_caps[i].v.NotRange.Usage);
-
-                            // printf("Axis: %02x (%2d)\n", value_caps[i].v.NotRange.Usage, value_caps[i].v.NotRange.Usage);
-                            // printf("--------------------\n");
-                            // printf("DataIndex: %d\n", value_caps[i].v.NotRange.DataIndex);
-                            // printf("ReportCount: %d\n", value_caps[i].ReportCount);
-                            // printf("--------------------\n");
-                            if (axis_input == 0xFF) {
-                                continue;
+                    // Sort value caps by v.NotRange.Usage
+                    for (int i = 0; i < num_value_caps - 1; ++i) {
+                        for (int j = i + 1; j < num_value_caps; ++j) {
+                            if (value_caps[i].v.NotRange.Usage > value_caps[j].v.NotRange.Usage) {
+                                VdFwHIDP_VALUE_CAPS temp = value_caps[i];
+                                value_caps[i] = value_caps[j];
+                                value_caps[j] = temp;
                             }
-
-                            if (value_caps[i].v.NotRange.Usage == 0x35) {
-                                new_gamepad->splitz = 0;
-                            }
-
-                            int min_value = value_caps[i].LogicalMin;
-                            int max_value = value_caps[i].LogicalMax;
-
-                            if (max_value == -1) {
-                                max_value = (1u << value_caps[i].BitSize) - 1;
-                            }
-
-                            int idx = new_gamepad->config.num_axial_mappings++;
-                            new_gamepad->config.axial_mappings[idx].id = value_caps[i].v.NotRange.Usage;
-                            new_gamepad->config.axial_mappings[idx].input = axis_input;
-                            new_gamepad->config.axial_mappings[idx].min_value = min_value;
-                            new_gamepad->config.axial_mappings[idx].max_value = max_value;
-
                         }
                     }
 
-                    if (new_gamepad->splitz) {
+                    for (int i = 0; i < num_value_caps; ++i) {
+                        VD_FW_LOG("a%2d -> %2d, Usage: %04x Page: %04x LMin: %5d LMax:%5d", i, 
+                            value_caps[i].v.NotRange.DataIndex,
+                            value_caps[i].v.NotRange.Usage,
+                            value_caps[i].UsagePage,
+                            value_caps[i].LogicalMin,
+                            value_caps[i].LogicalMax);
+                    }
 
-                        // Find LT
-                        int lt_idx = -1;
-                        for (int i = 0; i < new_gamepad->config.num_axial_mappings; ++i) {
-                            if (new_gamepad->config.axial_mappings[i].input == VD_FW_GAMEPAD_LT) {
-                                lt_idx = i;
-                                break;
+                    int count = 0;
+                    for (int i = 0; i < num_value_caps; ++i) {
+                        if (value_caps[i].IsRange) {
+                            continue;
+                        }
+
+                        if (value_caps[i].v.NotRange.Usage == 0x0039 /* Hat */) {
+                            num_hats++;
+                            continue; 
+                        }
+
+                        if (is_xinput_device && value_caps[i].v.NotRange.Usage == 0x0032 /* Generic Z*/) {
+                            new_gamepad->flags |= VD_FW__WIN32_GAMEPAD_FLAG_SPLITZ;
+                            new_gamepad->z_split = value_caps[i].v.NotRange.DataIndex; 
+                            new_gamepad->z_split_min = value_caps[i].LogicalMin;
+                            new_gamepad->z_split_max = value_caps[i].LogicalMax;
+                            if (new_gamepad->z_split_max == -1) {
+                                new_gamepad->z_split_max = (1u << value_caps[i].BitSize) - 1;
                             }
+                            continue;
                         }
 
-                        if (lt_idx != -1) {
-                            int lt_min = new_gamepad->config.axial_mappings[lt_idx].min_value;
-                            int lt_max = new_gamepad->config.axial_mappings[lt_idx].max_value;
-                            int lt_range = lt_max - lt_min;
-                            int lt_middle = lt_min + (lt_range / 2);
+                        count++;
+                    }
 
-                            int idx = new_gamepad->config.num_axial_mappings++;
-                            new_gamepad->config.axial_mappings[idx].id = new_gamepad->config.axial_mappings[lt_idx].id;
-                            new_gamepad->config.axial_mappings[idx].input = VD_FW_GAMEPAD_RT;
-                            new_gamepad->config.axial_mappings[idx].min_value = lt_middle;
-                            new_gamepad->config.axial_mappings[idx].max_value = lt_min;
+                    new_gamepad->axis_data_indices = (VdFw__Win32Axis*)
+                        vd_fw__resize_buffer(new_gamepad->axis_data_indices,
+                                             sizeof(new_gamepad->axis_data_indices[0]),
+                                             count,
+                                             &new_gamepad->axis_data_indices_cap);
+                    new_gamepad->axis_data_indices_len = count;
 
-                            new_gamepad->config.axial_mappings[lt_idx].min_value = lt_middle;
-                            new_gamepad->config.axial_mappings[lt_idx].max_value = lt_max;
+                    if (num_hats > 0) {
+                        new_gamepad->hat_data_indices = (VdFw__Win32Axis*)vd_fw__resize_buffer(new_gamepad->hat_data_indices,
+                                                                                               sizeof(new_gamepad->hat_data_indices[0]),
+                                                                                               num_hats,
+                                                                                               &new_gamepad->hat_data_indices_cap);
+                        new_gamepad->hat_data_indices_len = num_hats;
+                    }
+
+                    int count_hats = 0;
+                    count = 0;
+                    for (int i = 0; i < num_value_caps; ++i) {
+                        if (value_caps[i].IsRange) {
+                            continue;
                         }
 
+                        if (value_caps[i].v.NotRange.Usage == 0x0039 /* Hat */) {
+                            int new_index = count_hats++;
+                            new_gamepad->hat_data_indices[new_index].data_index = value_caps[i].v.NotRange.DataIndex;
+                            new_gamepad->hat_data_indices[new_index].min_value  = value_caps[i].LogicalMin;
+                            new_gamepad->hat_data_indices[new_index].max_value  = value_caps[i].LogicalMax;
+                            continue; 
+                        }
+
+                        if (is_xinput_device && value_caps[i].v.NotRange.Usage == 0x0032 /* Generic Z*/) {
+                            continue;
+                        }
+
+                        VdFw__Win32Axis *axis = &new_gamepad->axis_data_indices[count++];
+                        axis->data_index = value_caps[i].v.NotRange.DataIndex;
+                        axis->min_value  = value_caps[i].LogicalMin;
+                        axis->max_value  = value_caps[i].LogicalMax;
+
+                        if (axis->max_value == -1) {
+                            axis->max_value = (1u << value_caps[i].BitSize) - 1;
+                        }
+                    }
+
+                }
+                VD_FW_LOG("Buttons: %d, Axes: %d, ZSplit: %d", new_gamepad->button_data_indices_len, new_gamepad->axis_data_indices_len, new_gamepad->z_split);
+                for (int i = 0; i < new_gamepad->axis_data_indices_len; ++i) {
+                    VD_FW_LOG("a%d -> %d", i, new_gamepad->axis_data_indices[i].data_index);
+                }
+
+                for (int entry_index = 0;
+                         (entry_index < VD_FW_GAMEPAD_MAX_MAPPINGS) && 
+                         !vd_fw_gamepad_map_entry_is_none(&new_gamepad->map.mappings[entry_index]);
+                     ++entry_index)
+                {
+                    VdFwGamepadMapEntry *entry = &new_gamepad->map.mappings[entry_index];
+                    VdFwGamepadMappingSourceKind actual_kind = entry->kind & VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_MASK; 
+                    if (actual_kind == VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS) {
+                        VD_FW_LOG("Axis[%d] (=%d): vd_fw_axis_%d [%d %d]",
+                            entry->index,
+                            new_gamepad->axis_data_indices[entry->index].data_index,
+                            entry->target,
+                            new_gamepad->axis_data_indices[entry->index].min_value,
+                            new_gamepad->axis_data_indices[entry->index].max_value);
                     }
                 }
 
-                // unsigned short a0 = 0x30;
-                // unsigned short a1 = 0x31;
-                // unsigned short a2 = 0x32;
-                // unsigned short a3 = 0x33;
-                // unsigned short a4 = 0x34;
-                // unsigned short a5 = 0x35;
 
-                // new_gamepad->config.axial_mappings[0].id         = a0;
-                // new_gamepad->config.axial_mappings[0].input      = VD_FW_GAMEPAD_LH;
-                // (vd_fw__get_min_max_axial_value(new_gamepad->ppd, 0x01, a0,
-                //                                &new_gamepad->config.axial_mappings[0].min_value,
-                //                                &new_gamepad->config.axial_mappings[0].max_value));
-
-                // new_gamepad->config.axial_mappings[1].id         = a1;
-                // new_gamepad->config.axial_mappings[1].input      = VD_FW_GAMEPAD_LV;
-                // (vd_fw__get_min_max_axial_value(new_gamepad->ppd, 0x01, a1,
-                //                                &new_gamepad->config.axial_mappings[1].min_value,
-                //                                &new_gamepad->config.axial_mappings[1].max_value));
-
-                // new_gamepad->config.axial_mappings[2].id         = a3;
-                // new_gamepad->config.axial_mappings[2].input      = VD_FW_GAMEPAD_RH;
-                // (vd_fw__get_min_max_axial_value(new_gamepad->ppd, 0x01, a3,
-                //                                &new_gamepad->config.axial_mappings[2].min_value,
-                //                                &new_gamepad->config.axial_mappings[2].max_value));
-
-                // new_gamepad->config.axial_mappings[3].id         = a4;
-                // new_gamepad->config.axial_mappings[3].input      = VD_FW_GAMEPAD_RV;
-                // (vd_fw__get_min_max_axial_value(new_gamepad->ppd, 0x01, a4,
-                //                                &new_gamepad->config.axial_mappings[3].min_value,
-                //                                &new_gamepad->config.axial_mappings[3].max_value));
-
-                // new_gamepad->config.axial_mappings[4].id         = a2;
-                // new_gamepad->config.axial_mappings[4].input      = VD_FW_GAMEPAD_LT;
-                // (vd_fw__get_min_max_axial_value(new_gamepad->ppd, 0x01, a2,
-                //                                &new_gamepad->config.axial_mappings[4].min_value,
-                //                                &new_gamepad->config.axial_mappings[4].max_value));
-
-                // new_gamepad->config.axial_mappings[5].id         = a5;
-                // new_gamepad->config.axial_mappings[5].input      = VD_FW_GAMEPAD_RT;
-                // (vd_fw__get_min_max_axial_value(new_gamepad->ppd, 0x01, a5,
-                //                                &new_gamepad->config.axial_mappings[5].min_value,
-                //                                &new_gamepad->config.axial_mappings[5].max_value));
-                // new_gamepad->config.num_axial_mappings = 6;
-                // // @todo(mdodis): first figure out what is a1..a5 then map the behavior
-
+                VD_FW_G.winthread_num_gamepads_present++;
             } else {
 
+                int disconnected_gamepad_index = -1;
                 VdFw__Win32GamepadInfo *disconnected_gamepad = NULL;
                 for (int i = 0; i < VD_FW_GAMEPAD_COUNT_MAX; ++i) {
                     if (VD_FW_G.gamepad_infos[i].handle == device_handle) {
                         disconnected_gamepad = &VD_FW_G.gamepad_infos[i];
+                        disconnected_gamepad_index = i;
                         break;
                     }
                 }
@@ -8022,10 +7679,26 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     break;
                 }
 
-                disconnected_gamepad->connected = FALSE;
-                disconnected_gamepad->handle = INVALID_HANDLE_VALUE;
+                CloseHandle(disconnected_gamepad->write_handle);
 
-                VD_FW_G.num_gamepads_present--;
+                // Move all gamepad infos after disconnected_gamepad_index to index -1
+                {
+                    for (int i = disconnected_gamepad_index; i < (VD_FW_G.winthread_num_gamepads_present - 1); ++i) {
+                        VD_FW_G.gamepad_infos[i] = VD_FW_G.gamepad_infos[i + 1];
+                    }
+                }
+
+                VD_FW_MEMSET(&VD_FW_G.gamepad_infos[VD_FW_G.winthread_num_gamepads_present - 1], 0, sizeof(VD_FW_G.gamepad_infos[0]));
+
+                VD_FW_LOG("Gamepad Disconnected");
+                VD_FW_G.winthread_num_gamepads_present--;
+
+                for (int i = 0; i < VD_FW_GAMEPAD_COUNT_MAX; ++i) {
+                    // Reset correlation from xinput
+                    // This is done because we can't know if XInput decided to map the dwUserIndex to other devices
+                    // which usually happens if, for example, player 2/3 disconnects and reconnects.
+                    VD_FW_G.gamepad_infos[i].xinput_index = -1;
+                }
             }
 
         } break;
@@ -8237,6 +7910,102 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
         } break;
 
+        case VD_FW_WIN32_SIZEMIN:
+        case VD_FW_WIN32_SIZEMAX: {
+            VdFwDWORD width  = LOWORD(lparam);
+            VdFwDWORD height = HIWORD(lparam);
+            if (msg == VD_FW_WIN32_SIZEMIN) {
+                VD_FW_G.window_min[0] = width;
+                VD_FW_G.window_min[1] = height;
+            } else {
+                VD_FW_G.window_max[0] = width;
+                VD_FW_G.window_max[1] = height;
+            }
+        } break;
+
+        case VD_FW_WIN32_GAMEPADRMBREQ: {
+            VdFwWORD lo = LOWORD(lparam);
+            VdFwWORD hi = HIWORD(lparam);
+            VdFw__Win32GamepadInfo *gamepad_info = &VD_FW_G.gamepad_infos[wparam];
+            gamepad_info->rumble_state.rumble_lo = (float)lo / 65535.f;
+            gamepad_info->rumble_state.rumble_hi = (float)hi / 65535.f;
+
+            if (VD_FW_G.rumble_timer_handle == 0) {
+                VD_FW_G.rumble_timer_handle = VdFwSetTimer(VD_FW_G.hwnd, 1, 100, NULL);
+            }
+
+        } break;
+
+        case WM_TIMER: {
+            int timer_should_stop = 1;
+
+            for (int i = 0; i < VD_FW_G.winthread_num_gamepads_present; ++i) {
+                VdFw__Win32GamepadInfo *gamepad_info = &VD_FW_G.gamepad_infos[i];
+                VdFwGamepadRumbleConfig *rumble_config = &gamepad_info->map.rumble_config;
+                VdFwByte rumble_type = rumble_config->type;
+
+                if (gamepad_info->xinput_index != -1) {
+                    // Gamepad is correlated. We switch to XInput
+                    rumble_type = VD_FW_GAMEPAD_RUMBLE_TYPE_XINPUT;
+                }
+
+                switch (rumble_type) {
+                    case VD_FW_GAMEPAD_RUMBLE_TYPE_RAW: {
+                        VD_FW_G.report_buffer = (VdFwByte*)vd_fw__resize_buffer(VD_FW_G.report_buffer,
+                                                                                sizeof(VD_FW_G.report_buffer[0]),
+                                                                                gamepad_info->output_report_size,
+                                                                                &VD_FW_G.report_buffer_len);
+                        VD_FW_MEMSET(VD_FW_G.report_buffer, 0, sizeof(VD_FW_G.report_buffer[0]) * gamepad_info->output_report_size);
+                        for (int j = 0; j < gamepad_info->map.rumble_config.prefix_len; ++j) {
+                            VD_FW_G.report_buffer[j] = gamepad_info->map.rumble_config.prefix[j];
+                        }
+
+                        VD_FW_G.report_buffer[gamepad_info->map.rumble_config.dat.raw.rumble_lo.parts.offset] = (VdFwByte)(gamepad_info->rumble_state.rumble_lo * 255.f);
+                        VD_FW_G.report_buffer[gamepad_info->map.rumble_config.dat.raw.rumble_hi.parts.offset] = (VdFwByte)(gamepad_info->rumble_state.rumble_hi * 255.f);
+                        DWORD num_written = 0;
+                        if (!WriteFile(gamepad_info->write_handle,
+                                       VD_FW_G.report_buffer,
+                                       gamepad_info->output_report_size,
+                                       &num_written,
+                                       NULL))
+                        {
+                            VD_FW_LOG("Failed to send report: %d", GetLastError());
+                        }
+
+                    } break;
+
+                    case VD_FW_GAMEPAD_RUMBLE_TYPE_XINPUT: {
+
+                        VdFwXINPUT_VIBRATION vib;
+                        vib.wLeftMotorSpeed  = (VdFwWORD)(gamepad_info->rumble_state.rumble_lo * 65535.f);
+                        vib.wRightMotorSpeed = (VdFwWORD)(gamepad_info->rumble_state.rumble_hi * 65535.f);
+                        VdFwXInputSetState(gamepad_info->xinput_index, &vib);
+
+                    } break;
+
+                    default: continue;
+                }
+
+                if ((gamepad_info->rumble_state.rumble_lo != 0) || (gamepad_info->rumble_state.rumble_hi != 0)) {
+                    timer_should_stop = 0;
+                }
+            }
+
+            if (timer_should_stop) {
+                VdFwKillTimer(VD_FW_G.hwnd, VD_FW_G.rumble_timer_handle);
+                VD_FW_LOG("Killing rumble timer");
+                VD_FW_G.rumble_timer_handle = 0;
+            }
+        } break;
+
+        case WM_GETMINMAXINFO: {
+            MINMAXINFO *min_max_info = (MINMAXINFO*)lparam;
+            min_max_info->ptMinTrackSize.x = VD_FW_G.window_min[0] <= 0 ? VD_FW_G.def_window_min[0] : VD_FW_G.window_min[0];
+            min_max_info->ptMinTrackSize.y = VD_FW_G.window_min[1] <= 0 ? VD_FW_G.def_window_min[1] : VD_FW_G.window_min[1];
+            min_max_info->ptMaxTrackSize.x = VD_FW_G.window_max[0] <= 0 ? 0x7FFFFFFF : VD_FW_G.window_max[0];
+            min_max_info->ptMaxTrackSize.y = VD_FW_G.window_max[1] <= 0 ? 0x7FFFFFFF : VD_FW_G.window_max[1];
+        } break;
+
         case VD_FW_WIN32_UPDATE_TITLE: {
             VdFwSetWindowTextA(VD_FW_G.hwnd, VD_FW_G.title);
         } break;
@@ -8315,6 +8084,12 @@ void *__cdecl memset(void *dest, int value, size_t num)
     return dest;
 }
 
+#pragma function(memcpy)
+void *__cdecl memcpy(void *dest, void *src, size_t num)
+{
+    __movsb((unsigned char *)dest, (unsigned const char*)src, num);
+    return dest;
+}
 int _fltused;
 #ifdef _M_IX86
 
@@ -9484,1002 +9259,14 @@ VD_FW_API void vd_fw__free_mem(void *memory)
 #endif // _WIN32, __APPLE__, __linux__
 
 #if !defined(__APPLE__)
-/* ----GL VERSION 1.0------------------------------------------------------------------------------------------------ */
-PFNGLCULLFACEPROC               glCullFace;
-PFNGLFRONTFACEPROC              glFrontFace;
-PFNGLHINTPROC                   glHint;
-PFNGLLINEWIDTHPROC              glLineWidth;
-PFNGLPOINTSIZEPROC              glPointSize;
-PFNGLPOLYGONMODEPROC            glPolygonMode;
-PFNGLSCISSORPROC                glScissor;
-PFNGLTEXPARAMETERFPROC          glTexParameterf;
-PFNGLTEXPARAMETERFVPROC         glTexParameterfv;
-PFNGLTEXPARAMETERIPROC          glTexParameteri;
-PFNGLTEXPARAMETERIVPROC         glTexParameteriv;
-PFNGLTEXIMAGE1DPROC             glTexImage1D;
-PFNGLTEXIMAGE2DPROC             glTexImage2D;
-PFNGLDRAWBUFFERPROC             glDrawBuffer;
-PFNGLCLEARPROC                  glClear;
-PFNGLCLEARCOLORPROC             glClearColor;
-PFNGLCLEARSTENCILPROC           glClearStencil;
-PFNGLSTENCILMASKPROC            glStencilMask;
-PFNGLCOLORMASKPROC              glColorMask;
-PFNGLDEPTHMASKPROC              glDepthMask;
-PFNGLDISABLEPROC                glDisable;
-PFNGLENABLEPROC                 glEnable;
-PFNGLFINISHPROC                 glFinish;
-PFNGLFLUSHPROC                  glFlush;
-PFNGLBLENDFUNCPROC              glBlendFunc;
-PFNGLLOGICOPPROC                glLogicOp;
-PFNGLSTENCILFUNCPROC            glStencilFunc;
-PFNGLSTENCILOPPROC              glStencilOp;
-PFNGLDEPTHFUNCPROC              glDepthFunc;
-PFNGLPIXELSTOREFPROC            glPixelStoref;
-PFNGLPIXELSTOREIPROC            glPixelStorei;
-PFNGLREADBUFFERPROC             glReadBuffer;
-PFNGLREADPIXELSPROC             glReadPixels;
-PFNGLGETBOOLEANVPROC            glGetBooleanv;
-PFNGLGETDOUBLEVPROC             glGetDoublev;
-PFNGLGETERRORPROC               glGetError;
-PFNGLGETFLOATVPROC              glGetFloatv;
-PFNGLGETINTEGERVPROC            glGetIntegerv;
-PFNGLGETSTRINGPROC              glGetString;
-PFNGLGETTEXIMAGEPROC            glGetTexImage;
-PFNGLGETTEXPARAMETERFVPROC      glGetTexParameterfv;
-PFNGLGETTEXPARAMETERIVPROC      glGetTexParameteriv;
-PFNGLGETTEXLEVELPARAMETERFVPROC glGetTexLevelParameterfv;
-PFNGLGETTEXLEVELPARAMETERIVPROC glGetTexLevelParameteriv;
-PFNGLISENABLEDPROC              glIsEnabled;
-PFNGLDEPTHRANGEPROC             glDepthRange;
-PFNGLVIEWPORTPROC               glViewport;
-PFNGLACCUMPROC                  glAccum;
-PFNGLALPHAFUNCPROC              glAlphaFunc;
-PFNGLARETEXTURESRESIDENTPROC    glAreTexturesResident;
-PFNGLARRAYELEMENTPROC           glArrayElement;
-PFNGLBEGINPROC                  glBegin;
-PFNGLBINDTEXTUREPROC            glBindTexture;
-PFNGLBITMAPPROC                 glBitmap;
-PFNGLBLENDFUNCPROC              glBlendFunc;
-PFNGLCALLLISTPROC               glCallList;
-PFNGLCALLLISTSPROC              glCallLists;
-PFNGLCLEARPROC                  glClear;
-PFNGLCLEARACCUMPROC             glClearAccum;
-PFNGLCLEARCOLORPROC             glClearColor;
-PFNGLCLEARDEPTHPROC             glClearDepth;
-PFNGLCLEARINDEXPROC             glClearIndex;
-PFNGLCLEARSTENCILPROC           glClearStencil;
-PFNGLCLIPPLANEPROC              glClipPlane;
-PFNGLCOLOR3BPROC                glColor3b;
-PFNGLCOLOR3BVPROC               glColor3bv;
-PFNGLCOLOR3DPROC                glColor3d;
-PFNGLCOLOR3DVPROC               glColor3dv;
-PFNGLCOLOR3FPROC                glColor3f;
-PFNGLCOLOR3FVPROC               glColor3fv;
-PFNGLCOLOR3IPROC                glColor3i;
-PFNGLCOLOR3IVPROC               glColor3iv;
-PFNGLCOLOR3SPROC                glColor3s;
-PFNGLCOLOR3SVPROC               glColor3sv;
-PFNGLCOLOR3UBPROC               glColor3ub;
-PFNGLCOLOR3UBVPROC              glColor3ubv;
-PFNGLCOLOR3UIPROC               glColor3ui;
-PFNGLCOLOR3UIVPROC              glColor3uiv;
-PFNGLCOLOR3USPROC               glColor3us;
-PFNGLCOLOR3USVPROC              glColor3usv;
-PFNGLCOLOR4BPROC                glColor4b;
-PFNGLCOLOR4BVPROC               glColor4bv;
-PFNGLCOLOR4DPROC                glColor4d;
-PFNGLCOLOR4DVPROC               glColor4dv;
-PFNGLCOLOR4FPROC                glColor4f;
-PFNGLCOLOR4FVPROC               glColor4fv;
-PFNGLCOLOR4IPROC                glColor4i;
-PFNGLCOLOR4IVPROC               glColor4iv;
-PFNGLCOLOR4SPROC                glColor4s;
-PFNGLCOLOR4SVPROC               glColor4sv;
-PFNGLCOLOR4UBPROC               glColor4ub;
-PFNGLCOLOR4UBVPROC              glColor4ubv;
-PFNGLCOLOR4UIPROC               glColor4ui;
-PFNGLCOLOR4UIVPROC              glColor4uiv;
-PFNGLCOLOR4USPROC               glColor4us;
-PFNGLCOLOR4USVPROC              glColor4usv;
-PFNGLCOLORMASKPROC              glColorMask;
-PFNGLCOLORMATERIALPROC          glColorMaterial;
-PFNGLCOLORPOINTERPROC           glColorPointer;
-PFNGLCOPYPIXELSPROC             glCopyPixels;
-PFNGLCOPYTEXIMAGE1DPROC         glCopyTexImage1D;
-PFNGLCOPYTEXIMAGE2DPROC         glCopyTexImage2D;
-PFNGLCOPYTEXSUBIMAGE1DPROC      glCopyTexSubImage1D;
-PFNGLCOPYTEXSUBIMAGE2DPROC      glCopyTexSubImage2D;
-PFNGLCULLFACEPROC               glCullFace;
-PFNGLDELETELISTSPROC            glDeleteLists;
-PFNGLDELETETEXTURESPROC         glDeleteTextures;
-PFNGLDEPTHFUNCPROC              glDepthFunc;
-PFNGLDEPTHMASKPROC              glDepthMask;
-PFNGLDEPTHRANGEPROC             glDepthRange;
-PFNGLDISABLEPROC                glDisable;
-PFNGLDISABLECLIENTSTATEPROC     glDisableClientState;
-PFNGLDRAWARRAYSPROC             glDrawArrays;
-PFNGLDRAWBUFFERPROC             glDrawBuffer;
-PFNGLDRAWELEMENTSPROC           glDrawElements;
-PFNGLDRAWPIXELSPROC             glDrawPixels;
-PFNGLEDGEFLAGPROC               glEdgeFlag;
-PFNGLEDGEFLAGPOINTERPROC        glEdgeFlagPointer;
-PFNGLEDGEFLAGVPROC              glEdgeFlagv;
-PFNGLENABLEPROC                 glEnable;
-PFNGLENABLECLIENTSTATEPROC      glEnableClientState;
-PFNGLENDPROC                    glEnd;
-PFNGLENDLISTPROC                glEndList;
-PFNGLEVALCOORD1DPROC            glEvalCoord1d;
-PFNGLEVALCOORD1DVPROC           glEvalCoord1dv;
-PFNGLEVALCOORD1FPROC            glEvalCoord1f;
-PFNGLEVALCOORD1FVPROC           glEvalCoord1fv;
-PFNGLEVALCOORD2DPROC            glEvalCoord2d;
-PFNGLEVALCOORD2DVPROC           glEvalCoord2dv;
-PFNGLEVALCOORD2FPROC            glEvalCoord2f;
-PFNGLEVALCOORD2FVPROC           glEvalCoord2fv;
-PFNGLEVALMESH1PROC              glEvalMesh1;
-PFNGLEVALMESH2PROC              glEvalMesh2;
-PFNGLEVALPOINT1PROC             glEvalPoint1;
-PFNGLEVALPOINT2PROC             glEvalPoint2;
-PFNGLFEEDBACKBUFFERPROC         glFeedbackBuffer;
-PFNGLFINISHPROC                 glFinish;
-PFNGLFLUSHPROC                  glFlush;
-PFNGLFOGFPROC                   glFogf;
-PFNGLFOGFVPROC                  glFogfv;
-PFNGLFOGIPROC                   glFogi;
-PFNGLFOGIVPROC                  glFogiv;
-PFNGLFRONTFACEPROC              glFrontFace;
-PFNGLFRUSTUMPROC                glFrustum;
-PFNGLGENLISTSPROC               glGenLists;
-PFNGLGENTEXTURESPROC            glGenTextures;
-PFNGLGETBOOLEANVPROC            glGetBooleanv;
-PFNGLGETCLIPPLANEPROC           glGetClipPlane;
-PFNGLGETDOUBLEVPROC             glGetDoublev;
-PFNGLGETERRORPROC               glGetError;
-PFNGLGETFLOATVPROC              glGetFloatv;
-PFNGLGETINTEGERVPROC            glGetIntegerv;
-PFNGLGETLIGHTFVPROC             glGetLightfv;
-PFNGLGETLIGHTIVPROC             glGetLightiv;
-PFNGLGETMAPDVPROC               glGetMapdv;
-PFNGLGETMAPFVPROC               glGetMapfv;
-PFNGLGETMAPIVPROC               glGetMapiv;
-PFNGLGETMATERIALFVPROC          glGetMaterialfv;
-PFNGLGETMATERIALIVPROC          glGetMaterialiv;
-PFNGLGETPIXELMAPFVPROC          glGetPixelMapfv;
-PFNGLGETPIXELMAPUIVPROC         glGetPixelMapuiv;
-PFNGLGETPIXELMAPUSVPROC         glGetPixelMapusv;
-PFNGLGETPOINTERVPROC            glGetPointerv;
-PFNGLGETPOLYGONSTIPPLEPROC      glGetPolygonStipple;
-PFNGLGETSTRINGPROC              glGetString;
-PFNGLGETTEXENVFVPROC            glGetTexEnvfv;
-PFNGLGETTEXENVIVPROC            glGetTexEnviv;
-PFNGLGETTEXGENDVPROC            glGetTexGendv;
-PFNGLGETTEXGENFVPROC            glGetTexGenfv;
-PFNGLGETTEXGENIVPROC            glGetTexGeniv;
-PFNGLGETTEXIMAGEPROC            glGetTexImage;
-PFNGLGETTEXLEVELPARAMETERFVPROC glGetTexLevelParameterfv;
-PFNGLGETTEXLEVELPARAMETERIVPROC glGetTexLevelParameteriv;
-PFNGLGETTEXPARAMETERFVPROC      glGetTexParameterfv;
-PFNGLGETTEXPARAMETERIVPROC      glGetTexParameteriv;
-PFNGLHINTPROC                   glHint;
-PFNGLINDEXMASKPROC              glIndexMask;
-PFNGLINDEXPOINTERPROC           glIndexPointer;
-PFNGLINDEXDPROC                 glIndexd;
-PFNGLINDEXDVPROC                glIndexdv;
-PFNGLINDEXFPROC                 glIndexf;
-PFNGLINDEXFVPROC                glIndexfv;
-PFNGLINDEXIPROC                 glIndexi;
-PFNGLINDEXIVPROC                glIndexiv;
-PFNGLINDEXSPROC                 glIndexs;
-PFNGLINDEXSVPROC                glIndexsv;
-PFNGLINDEXUBPROC                glIndexub;
-PFNGLINDEXUBVPROC               glIndexubv;
-PFNGLINITNAMESPROC              glInitNames;
-PFNGLINTERLEAVEDARRAYSPROC      glInterleavedArrays;
-PFNGLISENABLEDPROC              glIsEnabled;
-PFNGLISLISTPROC                 glIsList;
-PFNGLISTEXTUREPROC              glIsTexture;
-PFNGLLIGHTMODELFPROC            glLightModelf;
-PFNGLLIGHTMODELFVPROC           glLightModelfv;
-PFNGLLIGHTMODELIPROC            glLightModeli;
-PFNGLLIGHTMODELIVPROC           glLightModeliv;
-PFNGLLIGHTFPROC                 glLightf;
-PFNGLLIGHTFVPROC                glLightfv;
-PFNGLLIGHTIPROC                 glLighti;
-PFNGLLIGHTIVPROC                glLightiv;
-PFNGLLINESTIPPLEPROC            glLineStipple;
-PFNGLLISTBASEPROC               glListBase;
-PFNGLLOADIDENTITYPROC           glLoadIdentity;
-PFNGLLOADMATRIXDPROC            glLoadMatrixd;
-PFNGLLOADMATRIXFPROC            glLoadMatrixf;
-PFNGLLOADNAMEPROC               glLoadName;
-PFNGLLOGICOPPROC                glLogicOp;
-PFNGLMAP1DPROC                  glMap1d;
-PFNGLMAP1FPROC                  glMap1f;
-PFNGLMAP2DPROC                  glMap2d;
-PFNGLMAP2FPROC                  glMap2f;
-PFNGLMAPGRID1DPROC              glMapGrid1d;
-PFNGLMAPGRID1FPROC              glMapGrid1f;
-PFNGLMAPGRID2DPROC              glMapGrid2d;
-PFNGLMAPGRID2FPROC              glMapGrid2f;
-PFNGLMATERIALFPROC              glMaterialf;
-PFNGLMATERIALFVPROC             glMaterialfv;
-PFNGLMATERIALIPROC              glMateriali;
-PFNGLMATERIALIVPROC             glMaterialiv;
-PFNGLMATRIXMODEPROC             glMatrixMode;
-PFNGLMULTMATRIXDPROC            glMultMatrixd;
-PFNGLMULTMATRIXFPROC            glMultMatrixf;
-PFNGLNEWLISTPROC                glNewList;
-PFNGLNORMAL3BPROC               glNormal3b;
-PFNGLNORMAL3BVPROC              glNormal3bv;
-PFNGLNORMAL3DPROC               glNormal3d;
-PFNGLNORMAL3DVPROC              glNormal3dv;
-PFNGLNORMAL3FPROC               glNormal3f;
-PFNGLNORMAL3FVPROC              glNormal3fv;
-PFNGLNORMAL3IPROC               glNormal3i;
-PFNGLNORMAL3IVPROC              glNormal3iv;
-PFNGLNORMAL3SPROC               glNormal3s;
-PFNGLNORMAL3SVPROC              glNormal3sv;
-PFNGLNORMALPOINTERPROC          glNormalPointer;
-PFNGLORTHOPROC                  glOrtho;
-PFNGLPASSTHROUGHPROC            glPassThrough;
-PFNGLPIXELMAPFVPROC             glPixelMapfv;
-PFNGLPIXELMAPUIVPROC            glPixelMapuiv;
-PFNGLPIXELMAPUSVPROC            glPixelMapusv;
-PFNGLPIXELSTOREFPROC            glPixelStoref;
-PFNGLPIXELSTOREIPROC            glPixelStorei;
-PFNGLPIXELTRANSFERFPROC         glPixelTransferf;
-PFNGLPIXELTRANSFERIPROC         glPixelTransferi;
-PFNGLPIXELZOOMPROC              glPixelZoom;
-PFNGLPOINTSIZEPROC              glPointSize;
-PFNGLPOLYGONMODEPROC            glPolygonMode;
-PFNGLPOLYGONOFFSETPROC          glPolygonOffset;
-PFNGLPOLYGONSTIPPLEPROC         glPolygonStipple;
-PFNGLPOPATTRIBPROC              glPopAttrib;
-PFNGLPOPCLIENTATTRIBPROC        glPopClientAttrib;
-PFNGLPOPMATRIXPROC              glPopMatrix;
-PFNGLPOPNAMEPROC                glPopName;
-PFNGLPRIORITIZETEXTURESPROC     glPrioritizeTextures;
-PFNGLPUSHATTRIBPROC             glPushAttrib;
-PFNGLPUSHCLIENTATTRIBPROC       glPushClientAttrib;
-PFNGLPUSHMATRIXPROC             glPushMatrix;
-PFNGLPUSHNAMEPROC               glPushName;
-PFNGLRASTERPOS2DPROC            glRasterPos2d;
-PFNGLRASTERPOS2DVPROC           glRasterPos2dv;
-PFNGLRASTERPOS2FPROC            glRasterPos2f;
-PFNGLRASTERPOS2FVPROC           glRasterPos2fv;
-PFNGLRASTERPOS2IPROC            glRasterPos2i;
-PFNGLRASTERPOS2IVPROC           glRasterPos2iv;
-PFNGLRASTERPOS2SPROC            glRasterPos2s;
-PFNGLRASTERPOS2SVPROC           glRasterPos2sv;
-PFNGLRASTERPOS3DPROC            glRasterPos3d;
-PFNGLRASTERPOS3DVPROC           glRasterPos3dv;
-PFNGLRASTERPOS3FPROC            glRasterPos3f;
-PFNGLRASTERPOS3FVPROC           glRasterPos3fv;
-PFNGLRASTERPOS3IPROC            glRasterPos3i;
-PFNGLRASTERPOS3IVPROC           glRasterPos3iv;
-PFNGLRASTERPOS3SPROC            glRasterPos3s;
-PFNGLRASTERPOS3SVPROC           glRasterPos3sv;
-PFNGLRASTERPOS4DPROC            glRasterPos4d;
-PFNGLRASTERPOS4DVPROC           glRasterPos4dv;
-PFNGLRASTERPOS4FPROC            glRasterPos4f;
-PFNGLRASTERPOS4FVPROC           glRasterPos4fv;
-PFNGLRASTERPOS4IPROC            glRasterPos4i;
-PFNGLRASTERPOS4IVPROC           glRasterPos4iv;
-PFNGLRASTERPOS4SPROC            glRasterPos4s;
-PFNGLRASTERPOS4SVPROC           glRasterPos4sv;
-PFNGLREADBUFFERPROC             glReadBuffer;
-PFNGLREADPIXELSPROC             glReadPixels;
-PFNGLRECTDPROC                  glRectd;
-PFNGLRECTDVPROC                 glRectdv;
-PFNGLRECTFPROC                  glRectf;
-PFNGLRECTFVPROC                 glRectfv;
-PFNGLRECTIPROC                  glRecti;
-PFNGLRECTIVPROC                 glRectiv;
-PFNGLRECTSPROC                  glRects;
-PFNGLRECTSVPROC                 glRectsv;
-PFNGLRENDERMODEPROC             glRenderMode;
-PFNGLROTATEDPROC                glRotated;
-PFNGLROTATEFPROC                glRotatef;
-PFNGLSCALEDPROC                 glScaled;
-PFNGLSCALEFPROC                 glScalef;
-PFNGLSCISSORPROC                glScissor;
-PFNGLSELECTBUFFERPROC           glSelectBuffer;
-PFNGLSHADEMODELPROC             glShadeModel;
-PFNGLSTENCILFUNCPROC            glStencilFunc;
-PFNGLSTENCILMASKPROC            glStencilMask;
-PFNGLSTENCILOPPROC              glStencilOp;
-PFNGLTEXCOORD1DPROC             glTexCoord1d;
-PFNGLTEXCOORD1DVPROC            glTexCoord1dv;
-PFNGLTEXCOORD1FPROC             glTexCoord1f;
-PFNGLTEXCOORD1FVPROC            glTexCoord1fv;
-PFNGLTEXCOORD1IPROC             glTexCoord1i;
-PFNGLTEXCOORD1IVPROC            glTexCoord1iv;
-PFNGLTEXCOORD1SPROC             glTexCoord1s;
-PFNGLTEXCOORD1SVPROC            glTexCoord1sv;
-PFNGLTEXCOORD2DPROC             glTexCoord2d;
-PFNGLTEXCOORD2DVPROC            glTexCoord2dv;
-PFNGLTEXCOORD2FPROC             glTexCoord2f;
-PFNGLTEXCOORD2FVPROC            glTexCoord2fv;
-PFNGLTEXCOORD2IPROC             glTexCoord2i;
-PFNGLTEXCOORD2IVPROC            glTexCoord2iv;
-PFNGLTEXCOORD2SPROC             glTexCoord2s;
-PFNGLTEXCOORD2SVPROC            glTexCoord2sv;
-PFNGLTEXCOORD3DPROC             glTexCoord3d;
-PFNGLTEXCOORD3DVPROC            glTexCoord3dv;
-PFNGLTEXCOORD3FPROC             glTexCoord3f;
-PFNGLTEXCOORD3FVPROC            glTexCoord3fv;
-PFNGLTEXCOORD3IPROC             glTexCoord3i;
-PFNGLTEXCOORD3IVPROC            glTexCoord3iv;
-PFNGLTEXCOORD3SPROC             glTexCoord3s;
-PFNGLTEXCOORD3SVPROC            glTexCoord3sv;
-PFNGLTEXCOORD4DPROC             glTexCoord4d;
-PFNGLTEXCOORD4DVPROC            glTexCoord4dv;
-PFNGLTEXCOORD4FPROC             glTexCoord4f;
-PFNGLTEXCOORD4FVPROC            glTexCoord4fv;
-PFNGLTEXCOORD4IPROC             glTexCoord4i;
-PFNGLTEXCOORD4IVPROC            glTexCoord4iv;
-PFNGLTEXCOORD4SPROC             glTexCoord4s;
-PFNGLTEXCOORD4SVPROC            glTexCoord4sv;
-PFNGLTEXCOORDPOINTERPROC        glTexCoordPointer;
-PFNGLTEXENVFPROC                glTexEnvf;
-PFNGLTEXENVFVPROC               glTexEnvfv;
-PFNGLTEXENVIPROC                glTexEnvi;
-PFNGLTEXENVIVPROC               glTexEnviv;
-PFNGLTEXGENDPROC                glTexGend;
-PFNGLTEXGENDVPROC               glTexGendv;
-PFNGLTEXGENFPROC                glTexGenf;
-PFNGLTEXGENFVPROC               glTexGenfv;
-PFNGLTEXGENIPROC                glTexGeni;
-PFNGLTEXGENIVPROC               glTexGeniv;
-PFNGLTEXIMAGE1DPROC             glTexImage1D;
-PFNGLTEXIMAGE2DPROC             glTexImage2D;
-PFNGLTEXPARAMETERFPROC          glTexParameterf;
-PFNGLTEXPARAMETERFVPROC         glTexParameterfv;
-PFNGLTEXPARAMETERIPROC          glTexParameteri;
-PFNGLTEXPARAMETERIVPROC         glTexParameteriv;
-PFNGLTEXSUBIMAGE1DPROC          glTexSubImage1D;
-PFNGLTEXSUBIMAGE2DPROC          glTexSubImage2D;
-PFNGLTRANSLATEDPROC             glTranslated;
-PFNGLTRANSLATEFPROC             glTranslatef;
-PFNGLVERTEX2DPROC               glVertex2d;
-PFNGLVERTEX2DVPROC              glVertex2dv;
-PFNGLVERTEX2FPROC               glVertex2f;
-PFNGLVERTEX2FVPROC              glVertex2fv;
-PFNGLVERTEX2IPROC               glVertex2i;
-PFNGLVERTEX2IVPROC              glVertex2iv;
-PFNGLVERTEX2SPROC               glVertex2s;
-PFNGLVERTEX2SVPROC              glVertex2sv;
-PFNGLVERTEX3DPROC               glVertex3d;
-PFNGLVERTEX3DVPROC              glVertex3dv;
-PFNGLVERTEX3FPROC               glVertex3f;
-PFNGLVERTEX3FVPROC              glVertex3fv;
-PFNGLVERTEX3IPROC               glVertex3i;
-PFNGLVERTEX3IVPROC              glVertex3iv;
-PFNGLVERTEX3SPROC               glVertex3s;
-PFNGLVERTEX3SVPROC              glVertex3sv;
-PFNGLVERTEX4DPROC               glVertex4d;
-PFNGLVERTEX4DVPROC              glVertex4dv;
-PFNGLVERTEX4FPROC               glVertex4f;
-PFNGLVERTEX4FVPROC              glVertex4fv;
-PFNGLVERTEX4IPROC               glVertex4i;
-PFNGLVERTEX4IVPROC              glVertex4iv;
-PFNGLVERTEX4SPROC               glVertex4s;
-PFNGLVERTEX4SVPROC              glVertex4sv;
-PFNGLVERTEXPOINTERPROC          glVertexPointer;
-PFNGLVIEWPORTPROC               glViewport;
-/* ----GL VERSION 1.2------------------------------------------------------------------------------------------------ */
-PFNGLDRAWRANGEELEMENTSPROC       glDrawRangeElements;
-PFNGLTEXIMAGE3DPROC              glTexImage3D;
-PFNGLTEXSUBIMAGE3DPROC           glTexSubImage3D;
-PFNGLCOPYTEXSUBIMAGE3DPROC       glCopyTexSubImage3D;
-/* ----GL VERSION 1.3------------------------------------------------------------------------------------------------ */
-PFNGLACTIVETEXTUREPROC           glActiveTexture;
-PFNGLSAMPLECOVERAGEPROC          glSampleCoverage;
-PFNGLCOMPRESSEDTEXIMAGE3DPROC    glCompressedTexImage3D;
-PFNGLCOMPRESSEDTEXIMAGE2DPROC    glCompressedTexImage2D;
-PFNGLCOMPRESSEDTEXIMAGE1DPROC    glCompressedTexImage1D;
-PFNGLCOMPRESSEDTEXSUBIMAGE3DPROC glCompressedTexSubImage3D;
-PFNGLCOMPRESSEDTEXSUBIMAGE2DPROC glCompressedTexSubImage2D;
-PFNGLCOMPRESSEDTEXSUBIMAGE1DPROC glCompressedTexSubImage1D;
-PFNGLGETCOMPRESSEDTEXIMAGEPROC   glGetCompressedTexImage;
-/* ----GL VERSION 1.4------------------------------------------------------------------------------------------------ */
-PFNGLBLENDFUNCSEPARATEPROC glBlendFuncSeparate;
-PFNGLMULTIDRAWARRAYSPROC   glMultiDrawArrays;
-PFNGLMULTIDRAWELEMENTSPROC glMultiDrawElements;
-PFNGLPOINTPARAMETERFPROC   glPointParameterf;
-PFNGLPOINTPARAMETERFVPROC  glPointParameterfv;
-PFNGLPOINTPARAMETERIPROC   glPointParameteri;
-PFNGLPOINTPARAMETERIVPROC  glPointParameteriv;
-PFNGLBLENDCOLORPROC        glBlendColor;
-PFNGLBLENDEQUATIONPROC     glBlendEquation;
-/* ----GL VERSION 1.5------------------------------------------------------------------------------------------------ */
-PFNGLGENQUERIESPROC           glGenQueries;
-PFNGLDELETEQUERIESPROC        glDeleteQueries;
-PFNGLISQUERYPROC              glIsQuery;
-PFNGLBEGINQUERYPROC           glBeginQuery;
-PFNGLENDQUERYPROC             glEndQuery;
-PFNGLGETQUERYIVPROC           glGetQueryiv;
-PFNGLGETQUERYOBJECTIVPROC     glGetQueryObjectiv;
-PFNGLGETQUERYOBJECTUIVPROC    glGetQueryObjectuiv;
-PFNGLBINDBUFFERPROC           glBindBuffer;
-PFNGLDELETEBUFFERSPROC        glDeleteBuffers;
-PFNGLGENBUFFERSPROC           glGenBuffers;
-PFNGLISBUFFERPROC             glIsBuffer;
-PFNGLBUFFERDATAPROC           glBufferData;
-PFNGLBUFFERSUBDATAPROC        glBufferSubData;
-PFNGLGETBUFFERSUBDATAPROC     glGetBufferSubData;
-PFNGLMAPBUFFERPROC            glMapBuffer;
-PFNGLUNMAPBUFFERPROC          glUnmapBuffer;
-PFNGLGETBUFFERPARAMETERIVPROC glGetBufferParameteriv;
-PFNGLGETBUFFERPOINTERVPROC    glGetBufferPointerv;
-/* ----GL VERSION 2.0------------------------------------------------------------------------------------------------ */
-PFNGLBLENDEQUATIONSEPARATEPROC    glBlendEquationSeparate;
-PFNGLDRAWBUFFERSPROC              glDrawBuffers;
-PFNGLSTENCILOPSEPARATEPROC        glStencilOpSeparate;
-PFNGLSTENCILFUNCSEPARATEPROC      glStencilFuncSeparate;
-PFNGLSTENCILMASKSEPARATEPROC      glStencilMaskSeparate;
-PFNGLATTACHSHADERPROC             glAttachShader;
-PFNGLBINDATTRIBLOCATIONPROC       glBindAttribLocation;
-PFNGLCOMPILESHADERPROC            glCompileShader;
-PFNGLCREATEPROGRAMPROC            glCreateProgram;
-PFNGLCREATESHADERPROC             glCreateShader;
-PFNGLDELETEPROGRAMPROC            glDeleteProgram;
-PFNGLDELETESHADERPROC             glDeleteShader;
-PFNGLDETACHSHADERPROC             glDetachShader;
-PFNGLDISABLEVERTEXATTRIBARRAYPROC glDisableVertexAttribArray;
-PFNGLENABLEVERTEXATTRIBARRAYPROC  glEnableVertexAttribArray;
-PFNGLGETACTIVEATTRIBPROC          glGetActiveAttrib;
-PFNGLGETACTIVEUNIFORMPROC         glGetActiveUniform;
-PFNGLGETATTACHEDSHADERSPROC       glGetAttachedShaders;
-PFNGLGETATTRIBLOCATIONPROC        glGetAttribLocation;
-PFNGLGETPROGRAMIVPROC             glGetProgramiv;
-PFNGLGETPROGRAMINFOLOGPROC        glGetProgramInfoLog;
-PFNGLGETSHADERIVPROC              glGetShaderiv;
-PFNGLGETSHADERINFOLOGPROC         glGetShaderInfoLog;
-PFNGLGETSHADERSOURCEPROC          glGetShaderSource;
-PFNGLGETUNIFORMLOCATIONPROC       glGetUniformLocation;
-PFNGLGETUNIFORMFVPROC             glGetUniformfv;
-PFNGLGETUNIFORMIVPROC             glGetUniformiv;
-PFNGLGETVERTEXATTRIBDVPROC        glGetVertexAttribdv;
-PFNGLGETVERTEXATTRIBFVPROC        glGetVertexAttribfv;
-PFNGLGETVERTEXATTRIBIVPROC        glGetVertexAttribiv;
-PFNGLGETVERTEXATTRIBPOINTERVPROC  glGetVertexAttribPointerv;
-PFNGLISPROGRAMPROC                glIsProgram;
-PFNGLISSHADERPROC                 glIsShader;
-PFNGLLINKPROGRAMPROC              glLinkProgram;
-PFNGLSHADERSOURCEPROC             glShaderSource;
-PFNGLUSEPROGRAMPROC               glUseProgram;
-PFNGLUNIFORM1FPROC                glUniform1f;
-PFNGLUNIFORM2FPROC                glUniform2f;
-PFNGLUNIFORM3FPROC                glUniform3f;
-PFNGLUNIFORM4FPROC                glUniform4f;
-PFNGLUNIFORM1IPROC                glUniform1i;
-PFNGLUNIFORM2IPROC                glUniform2i;
-PFNGLUNIFORM3IPROC                glUniform3i;
-PFNGLUNIFORM4IPROC                glUniform4i;
-PFNGLUNIFORM1FVPROC               glUniform1fv;
-PFNGLUNIFORM2FVPROC               glUniform2fv;
-PFNGLUNIFORM3FVPROC               glUniform3fv;
-PFNGLUNIFORM4FVPROC               glUniform4fv;
-PFNGLUNIFORM1IVPROC               glUniform1iv;
-PFNGLUNIFORM2IVPROC               glUniform2iv;
-PFNGLUNIFORM3IVPROC               glUniform3iv;
-PFNGLUNIFORM4IVPROC               glUniform4iv;
-PFNGLUNIFORMMATRIX2FVPROC         glUniformMatrix2fv;
-PFNGLUNIFORMMATRIX3FVPROC         glUniformMatrix3fv;
-PFNGLUNIFORMMATRIX4FVPROC         glUniformMatrix4fv;
-PFNGLVALIDATEPROGRAMPROC          glValidateProgram;
-PFNGLVERTEXATTRIB1DPROC           glVertexAttrib1d;
-PFNGLVERTEXATTRIB1DVPROC          glVertexAttrib1dv;
-PFNGLVERTEXATTRIB1FPROC           glVertexAttrib1f;
-PFNGLVERTEXATTRIB1FVPROC          glVertexAttrib1fv;
-PFNGLVERTEXATTRIB1SPROC           glVertexAttrib1s;
-PFNGLVERTEXATTRIB1SVPROC          glVertexAttrib1sv;
-PFNGLVERTEXATTRIB2DPROC           glVertexAttrib2d;
-PFNGLVERTEXATTRIB2DVPROC          glVertexAttrib2dv;
-PFNGLVERTEXATTRIB2FPROC           glVertexAttrib2f;
-PFNGLVERTEXATTRIB2FVPROC          glVertexAttrib2fv;
-PFNGLVERTEXATTRIB2SPROC           glVertexAttrib2s;
-PFNGLVERTEXATTRIB2SVPROC          glVertexAttrib2sv;
-PFNGLVERTEXATTRIB3DPROC           glVertexAttrib3d;
-PFNGLVERTEXATTRIB3DVPROC          glVertexAttrib3dv;
-PFNGLVERTEXATTRIB3FPROC           glVertexAttrib3f;
-PFNGLVERTEXATTRIB3FVPROC          glVertexAttrib3fv;
-PFNGLVERTEXATTRIB3SPROC           glVertexAttrib3s;
-PFNGLVERTEXATTRIB3SVPROC          glVertexAttrib3sv;
-PFNGLVERTEXATTRIB4NBVPROC         glVertexAttrib4Nbv;
-PFNGLVERTEXATTRIB4NIVPROC         glVertexAttrib4Niv;
-PFNGLVERTEXATTRIB4NSVPROC         glVertexAttrib4Nsv;
-PFNGLVERTEXATTRIB4NUBPROC         glVertexAttrib4Nub;
-PFNGLVERTEXATTRIB4NUBVPROC        glVertexAttrib4Nubv;
-PFNGLVERTEXATTRIB4NUIVPROC        glVertexAttrib4Nuiv;
-PFNGLVERTEXATTRIB4NUSVPROC        glVertexAttrib4Nusv;
-PFNGLVERTEXATTRIB4BVPROC          glVertexAttrib4bv;
-PFNGLVERTEXATTRIB4DPROC           glVertexAttrib4d;
-PFNGLVERTEXATTRIB4DVPROC          glVertexAttrib4dv;
-PFNGLVERTEXATTRIB4FPROC           glVertexAttrib4f;
-PFNGLVERTEXATTRIB4FVPROC          glVertexAttrib4fv;
-PFNGLVERTEXATTRIB4IVPROC          glVertexAttrib4iv;
-PFNGLVERTEXATTRIB4SPROC           glVertexAttrib4s;
-PFNGLVERTEXATTRIB4SVPROC          glVertexAttrib4sv;
-PFNGLVERTEXATTRIB4UBVPROC         glVertexAttrib4ubv;
-PFNGLVERTEXATTRIB4UIVPROC         glVertexAttrib4uiv;
-PFNGLVERTEXATTRIB4USVPROC         glVertexAttrib4usv;
-PFNGLVERTEXATTRIBPOINTERPROC      glVertexAttribPointer;
-/* ----GL VERSION 2.1------------------------------------------------------------------------------------------------ */
-PFNGLUNIFORMMATRIX2X3FVPROC glUniformMatrix2x3fv;
-PFNGLUNIFORMMATRIX3X2FVPROC glUniformMatrix3x2fv;
-PFNGLUNIFORMMATRIX2X4FVPROC glUniformMatrix2x4fv;
-PFNGLUNIFORMMATRIX4X2FVPROC glUniformMatrix4x2fv;
-PFNGLUNIFORMMATRIX3X4FVPROC glUniformMatrix3x4fv;
-PFNGLUNIFORMMATRIX4X3FVPROC glUniformMatrix4x3fv;
-/* ----GL VERSION 3.0------------------------------------------------------------------------------------------------ */
-PFNGLCOLORMASKIPROC                          glColorMaski;
-PFNGLGETBOOLEANI_VPROC                       glGetBooleani_v;
-PFNGLGETINTEGERI_VPROC                       glGetIntegeri_v;
-PFNGLENABLEIPROC                             glEnablei;
-PFNGLDISABLEIPROC                            glDisablei;
-PFNGLISENABLEDIPROC                          glIsEnabledi;
-PFNGLBEGINTRANSFORMFEEDBACKPROC              glBeginTransformFeedback;
-PFNGLENDTRANSFORMFEEDBACKPROC                glEndTransformFeedback;
-PFNGLBINDBUFFERRANGEPROC                     glBindBufferRange;
-PFNGLBINDBUFFERBASEPROC                      glBindBufferBase;
-PFNGLTRANSFORMFEEDBACKVARYINGSPROC           glTransformFeedbackVaryings;
-PFNGLGETTRANSFORMFEEDBACKVARYINGPROC         glGetTransformFeedbackVarying;
-PFNGLCLAMPCOLORPROC                          glClampColor;
-PFNGLBEGINCONDITIONALRENDERPROC              glBeginConditionalRender;
-PFNGLENDCONDITIONALRENDERPROC                glEndConditionalRender;
-PFNGLVERTEXATTRIBIPOINTERPROC                glVertexAttribIPointer;
-PFNGLGETVERTEXATTRIBIIVPROC                  glGetVertexAttribIiv;
-PFNGLGETVERTEXATTRIBIUIVPROC                 glGetVertexAttribIuiv;
-PFNGLVERTEXATTRIBI1IPROC                     glVertexAttribI1i;
-PFNGLVERTEXATTRIBI2IPROC                     glVertexAttribI2i;
-PFNGLVERTEXATTRIBI3IPROC                     glVertexAttribI3i;
-PFNGLVERTEXATTRIBI4IPROC                     glVertexAttribI4i;
-PFNGLVERTEXATTRIBI1UIPROC                    glVertexAttribI1ui;
-PFNGLVERTEXATTRIBI2UIPROC                    glVertexAttribI2ui;
-PFNGLVERTEXATTRIBI3UIPROC                    glVertexAttribI3ui;
-PFNGLVERTEXATTRIBI4UIPROC                    glVertexAttribI4ui;
-PFNGLVERTEXATTRIBI1IVPROC                    glVertexAttribI1iv;
-PFNGLVERTEXATTRIBI2IVPROC                    glVertexAttribI2iv;
-PFNGLVERTEXATTRIBI3IVPROC                    glVertexAttribI3iv;
-PFNGLVERTEXATTRIBI4IVPROC                    glVertexAttribI4iv;
-PFNGLVERTEXATTRIBI1UIVPROC                   glVertexAttribI1uiv;
-PFNGLVERTEXATTRIBI2UIVPROC                   glVertexAttribI2uiv;
-PFNGLVERTEXATTRIBI3UIVPROC                   glVertexAttribI3uiv;
-PFNGLVERTEXATTRIBI4UIVPROC                   glVertexAttribI4uiv;
-PFNGLVERTEXATTRIBI4BVPROC                    glVertexAttribI4bv;
-PFNGLVERTEXATTRIBI4SVPROC                    glVertexAttribI4sv;
-PFNGLVERTEXATTRIBI4UBVPROC                   glVertexAttribI4ubv;
-PFNGLVERTEXATTRIBI4USVPROC                   glVertexAttribI4usv;
-PFNGLGETUNIFORMUIVPROC                       glGetUniformuiv;
-PFNGLBINDFRAGDATALOCATIONPROC                glBindFragDataLocation;
-PFNGLGETFRAGDATALOCATIONPROC                 glGetFragDataLocation;
-PFNGLUNIFORM1UIPROC                          glUniform1ui;
-PFNGLUNIFORM2UIPROC                          glUniform2ui;
-PFNGLUNIFORM3UIPROC                          glUniform3ui;
-PFNGLUNIFORM4UIPROC                          glUniform4ui;
-PFNGLUNIFORM1UIVPROC                         glUniform1uiv;
-PFNGLUNIFORM2UIVPROC                         glUniform2uiv;
-PFNGLUNIFORM3UIVPROC                         glUniform3uiv;
-PFNGLUNIFORM4UIVPROC                         glUniform4uiv;
-PFNGLTEXPARAMETERIIVPROC                     glTexParameterIiv;
-PFNGLTEXPARAMETERIUIVPROC                    glTexParameterIuiv;
-PFNGLGETTEXPARAMETERIIVPROC                  glGetTexParameterIiv;
-PFNGLGETTEXPARAMETERIUIVPROC                 glGetTexParameterIuiv;
-PFNGLCLEARBUFFERIVPROC                       glClearBufferiv;
-PFNGLCLEARBUFFERUIVPROC                      glClearBufferuiv;
-PFNGLCLEARBUFFERFVPROC                       glClearBufferfv;
-PFNGLCLEARBUFFERFIPROC                       glClearBufferfi;
-PFNGLGETSTRINGIPROC                          glGetStringi;
-PFNGLISRENDERBUFFERPROC                      glIsRenderbuffer;
-PFNGLBINDRENDERBUFFERPROC                    glBindRenderbuffer;
-PFNGLDELETERENDERBUFFERSPROC                 glDeleteRenderbuffers;
-PFNGLGENRENDERBUFFERSPROC                    glGenRenderbuffers;
-PFNGLRENDERBUFFERSTORAGEPROC                 glRenderbufferStorage;
-PFNGLGETRENDERBUFFERPARAMETERIVPROC          glGetRenderbufferParameteriv;
-PFNGLISFRAMEBUFFERPROC                       glIsFramebuffer;
-PFNGLBINDFRAMEBUFFERPROC                     glBindFramebuffer;
-PFNGLDELETEFRAMEBUFFERSPROC                  glDeleteFramebuffers;
-PFNGLGENFRAMEBUFFERSPROC                     glGenFramebuffers;
-PFNGLCHECKFRAMEBUFFERSTATUSPROC              glCheckFramebufferStatus;
-PFNGLFRAMEBUFFERTEXTURE1DPROC                glFramebufferTexture1D;
-PFNGLFRAMEBUFFERTEXTURE2DPROC                glFramebufferTexture2D;
-PFNGLFRAMEBUFFERTEXTURE3DPROC                glFramebufferTexture3D;
-PFNGLFRAMEBUFFERRENDERBUFFERPROC             glFramebufferRenderbuffer;
-PFNGLGETFRAMEBUFFERATTACHMENTPARAMETERIVPROC glGetFramebufferAttachmentParameteriv;
-PFNGLGENERATEMIPMAPPROC                      glGenerateMipmap;
-PFNGLBLITFRAMEBUFFERPROC                     glBlitFramebuffer;
-PFNGLRENDERBUFFERSTORAGEMULTISAMPLEPROC      glRenderbufferStorageMultisample;
-PFNGLFRAMEBUFFERTEXTURELAYERPROC             glFramebufferTextureLayer;
-PFNGLMAPBUFFERRANGEPROC                      glMapBufferRange;
-PFNGLFLUSHMAPPEDBUFFERRANGEPROC              glFlushMappedBufferRange;
-PFNGLBINDVERTEXARRAYPROC                     glBindVertexArray;
-PFNGLDELETEVERTEXARRAYSPROC                  glDeleteVertexArrays;
-PFNGLGENVERTEXARRAYSPROC                     glGenVertexArrays;
-PFNGLISVERTEXARRAYPROC                       glIsVertexArray;
-/* ----GL VERSION 3.1------------------------------------------------------------------------------------------------ */
-PFNGLDRAWARRAYSINSTANCEDPROC       glDrawArraysInstanced;
-PFNGLDRAWELEMENTSINSTANCEDPROC     glDrawElementsInstanced;
-PFNGLTEXBUFFERPROC                 glTexBuffer;
-PFNGLPRIMITIVERESTARTINDEXPROC     glPrimitiveRestartIndex;
-PFNGLCOPYBUFFERSUBDATAPROC         glCopyBufferSubData;
-PFNGLGETUNIFORMINDICESPROC         glGetUniformIndices;
-PFNGLGETACTIVEUNIFORMSIVPROC       glGetActiveUniformsiv;
-PFNGLGETACTIVEUNIFORMNAMEPROC      glGetActiveUniformName;
-PFNGLGETUNIFORMBLOCKINDEXPROC      glGetUniformBlockIndex;
-PFNGLGETACTIVEUNIFORMBLOCKIVPROC   glGetActiveUniformBlockiv;
-PFNGLGETACTIVEUNIFORMBLOCKNAMEPROC glGetActiveUniformBlockName;
-PFNGLUNIFORMBLOCKBINDINGPROC       glUniformBlockBinding;
-/* ----GL VERSION 3.2------------------------------------------------------------------------------------------------ */
-PFNGLDRAWELEMENTSBASEVERTEXPROC          glDrawElementsBaseVertex;
-PFNGLDRAWRANGEELEMENTSBASEVERTEXPROC     glDrawRangeElementsBaseVertex;
-PFNGLDRAWELEMENTSINSTANCEDBASEVERTEXPROC glDrawElementsInstancedBaseVertex;
-PFNGLMULTIDRAWELEMENTSBASEVERTEXPROC     glMultiDrawElementsBaseVertex;
-PFNGLPROVOKINGVERTEXPROC                 glProvokingVertex;
-PFNGLFENCESYNCPROC                       glFenceSync;
-PFNGLISSYNCPROC                          glIsSync;
-PFNGLDELETESYNCPROC                      glDeleteSync;
-PFNGLCLIENTWAITSYNCPROC                  glClientWaitSync;
-PFNGLWAITSYNCPROC                        glWaitSync;
-PFNGLGETINTEGER64VPROC                   glGetInteger64v;
-PFNGLGETSYNCIVPROC                       glGetSynciv;
-PFNGLGETINTEGER64I_VPROC                 glGetInteger64i_v;
-PFNGLGETBUFFERPARAMETERI64VPROC          glGetBufferParameteri64v;
-PFNGLFRAMEBUFFERTEXTUREPROC              glFramebufferTexture;
-PFNGLTEXIMAGE2DMULTISAMPLEPROC           glTexImage2DMultisample;
-PFNGLTEXIMAGE3DMULTISAMPLEPROC           glTexImage3DMultisample;
-PFNGLGETMULTISAMPLEFVPROC                glGetMultisamplefv;
-PFNGLSAMPLEMASKIPROC                     glSampleMaski;
-/* ----GL VERSION 3.3------------------------------------------------------------------------------------------------ */
-PFNGLBINDFRAGDATALOCATIONINDEXEDPROC glBindFragDataLocationIndexed;
-PFNGLGETFRAGDATAINDEXPROC            glGetFragDataIndex;
-PFNGLGENSAMPLERSPROC                 glGenSamplers;
-PFNGLDELETESAMPLERSPROC              glDeleteSamplers;
-PFNGLISSAMPLERPROC                   glIsSampler;
-PFNGLBINDSAMPLERPROC                 glBindSampler;
-PFNGLSAMPLERPARAMETERIPROC           glSamplerParameteri;
-PFNGLSAMPLERPARAMETERIVPROC          glSamplerParameteriv;
-PFNGLSAMPLERPARAMETERFPROC           glSamplerParameterf;
-PFNGLSAMPLERPARAMETERFVPROC          glSamplerParameterfv;
-PFNGLSAMPLERPARAMETERIIVPROC         glSamplerParameterIiv;
-PFNGLSAMPLERPARAMETERIUIVPROC        glSamplerParameterIuiv;
-PFNGLGETSAMPLERPARAMETERIVPROC       glGetSamplerParameteriv;
-PFNGLGETSAMPLERPARAMETERIIVPROC      glGetSamplerParameterIiv;
-PFNGLGETSAMPLERPARAMETERFVPROC       glGetSamplerParameterfv;
-PFNGLGETSAMPLERPARAMETERIUIVPROC     glGetSamplerParameterIuiv;
-PFNGLQUERYCOUNTERPROC                glQueryCounter;
-PFNGLGETQUERYOBJECTI64VPROC          glGetQueryObjecti64v;
-PFNGLGETQUERYOBJECTUI64VPROC         glGetQueryObjectui64v;
-PFNGLVERTEXATTRIBDIVISORPROC         glVertexAttribDivisor;
-PFNGLVERTEXATTRIBP1UIPROC            glVertexAttribP1ui;
-PFNGLVERTEXATTRIBP1UIVPROC           glVertexAttribP1uiv;
-PFNGLVERTEXATTRIBP2UIPROC            glVertexAttribP2ui;
-PFNGLVERTEXATTRIBP2UIVPROC           glVertexAttribP2uiv;
-PFNGLVERTEXATTRIBP3UIPROC            glVertexAttribP3ui;
-PFNGLVERTEXATTRIBP3UIVPROC           glVertexAttribP3uiv;
-PFNGLVERTEXATTRIBP4UIPROC            glVertexAttribP4ui;
-PFNGLVERTEXATTRIBP4UIVPROC           glVertexAttribP4uiv;
-PFNGLDEBUGMESSAGECALLBACKPROC glDebugMessageCallback;
-/* ----GL VERSION 4.0------------------------------------------------------------------------------------------------ */
-PFNGLMINSAMPLESHADINGPROC               glMinSampleShading;
-PFNGLBLENDEQUATIONIPROC                 glBlendEquationi;
-PFNGLBLENDEQUATIONSEPARATEIPROC         glBlendEquationSeparatei;
-PFNGLBLENDFUNCIPROC                     glBlendFunci;
-PFNGLBLENDFUNCSEPARATEIPROC             glBlendFuncSeparatei;
-PFNGLDRAWARRAYSINDIRECTPROC             glDrawArraysIndirect;
-PFNGLDRAWELEMENTSINDIRECTPROC           glDrawElementsIndirect;
-PFNGLUNIFORM1DPROC                      glUniform1d;
-PFNGLUNIFORM2DPROC                      glUniform2d;
-PFNGLUNIFORM3DPROC                      glUniform3d;
-PFNGLUNIFORM4DPROC                      glUniform4d;
-PFNGLUNIFORM1DVPROC                     glUniform1dv;
-PFNGLUNIFORM2DVPROC                     glUniform2dv;
-PFNGLUNIFORM3DVPROC                     glUniform3dv;
-PFNGLUNIFORM4DVPROC                     glUniform4dv;
-PFNGLUNIFORMMATRIX2DVPROC               glUniformMatrix2dv;
-PFNGLUNIFORMMATRIX3DVPROC               glUniformMatrix3dv;
-PFNGLUNIFORMMATRIX4DVPROC               glUniformMatrix4dv;
-PFNGLUNIFORMMATRIX2X3DVPROC             glUniformMatrix2x3dv;
-PFNGLUNIFORMMATRIX2X4DVPROC             glUniformMatrix2x4dv;
-PFNGLUNIFORMMATRIX3X2DVPROC             glUniformMatrix3x2dv;
-PFNGLUNIFORMMATRIX3X4DVPROC             glUniformMatrix3x4dv;
-PFNGLUNIFORMMATRIX4X2DVPROC             glUniformMatrix4x2dv;
-PFNGLUNIFORMMATRIX4X3DVPROC             glUniformMatrix4x3dv;
-PFNGLGETUNIFORMDVPROC                   glGetUniformdv;
-PFNGLGETSUBROUTINEUNIFORMLOCATIONPROC   glGetSubroutineUniformLocation;
-PFNGLGETSUBROUTINEINDEXPROC             glGetSubroutineIndex;
-PFNGLGETACTIVESUBROUTINEUNIFORMIVPROC   glGetActiveSubroutineUniformiv;
-PFNGLGETACTIVESUBROUTINEUNIFORMNAMEPROC glGetActiveSubroutineUniformName;
-PFNGLGETACTIVESUBROUTINENAMEPROC        glGetActiveSubroutineName;
-PFNGLUNIFORMSUBROUTINESUIVPROC          glUniformSubroutinesuiv;
-PFNGLGETUNIFORMSUBROUTINEUIVPROC        glGetUniformSubroutineuiv;
-PFNGLGETPROGRAMSTAGEIVPROC              glGetProgramStageiv;
-PFNGLPATCHPARAMETERIPROC                glPatchParameteri;
-PFNGLPATCHPARAMETERFVPROC               glPatchParameterfv;
-PFNGLBINDTRANSFORMFEEDBACKPROC          glBindTransformFeedback;
-PFNGLDELETETRANSFORMFEEDBACKSPROC       glDeleteTransformFeedbacks;
-PFNGLGENTRANSFORMFEEDBACKSPROC          glGenTransformFeedbacks;
-PFNGLISTRANSFORMFEEDBACKPROC            glIsTransformFeedback;
-PFNGLPAUSETRANSFORMFEEDBACKPROC         glPauseTransformFeedback;
-PFNGLRESUMETRANSFORMFEEDBACKPROC        glResumeTransformFeedback;
-PFNGLDRAWTRANSFORMFEEDBACKPROC          glDrawTransformFeedback;
-PFNGLDRAWTRANSFORMFEEDBACKSTREAMPROC    glDrawTransformFeedbackStream;
-PFNGLBEGINQUERYINDEXEDPROC              glBeginQueryIndexed;
-PFNGLENDQUERYINDEXEDPROC                glEndQueryIndexed;
-PFNGLGETQUERYINDEXEDIVPROC              glGetQueryIndexediv;
-/* ----GL VERSION 4.1------------------------------------------------------------------------------------------------ */
-PFNGLRELEASESHADERCOMPILERPROC     glReleaseShaderCompiler;
-PFNGLSHADERBINARYPROC              glShaderBinary;
-PFNGLGETSHADERPRECISIONFORMATPROC  glGetShaderPrecisionFormat;
-PFNGLDEPTHRANGEFPROC               glDepthRangef;
-PFNGLCLEARDEPTHFPROC               glClearDepthf;
-PFNGLGETPROGRAMBINARYPROC          glGetProgramBinary;
-PFNGLPROGRAMBINARYPROC             glProgramBinary;
-PFNGLPROGRAMPARAMETERIPROC         glProgramParameteri;
-PFNGLUSEPROGRAMSTAGESPROC          glUseProgramStages;
-PFNGLACTIVESHADERPROGRAMPROC       glActiveShaderProgram;
-PFNGLCREATESHADERPROGRAMVPROC      glCreateShaderProgramv;
-PFNGLBINDPROGRAMPIPELINEPROC       glBindProgramPipeline;
-PFNGLDELETEPROGRAMPIPELINESPROC    glDeleteProgramPipelines;
-PFNGLGENPROGRAMPIPELINESPROC       glGenProgramPipelines;
-PFNGLISPROGRAMPIPELINEPROC         glIsProgramPipeline;
-PFNGLGETPROGRAMPIPELINEIVPROC      glGetProgramPipelineiv;
-PFNGLPROGRAMUNIFORM1IPROC          glProgramUniform1i;
-PFNGLPROGRAMUNIFORM1IVPROC         glProgramUniform1iv;
-PFNGLPROGRAMUNIFORM1FPROC          glProgramUniform1f;
-PFNGLPROGRAMUNIFORM1FVPROC         glProgramUniform1fv;
-PFNGLPROGRAMUNIFORM1DPROC          glProgramUniform1d;
-PFNGLPROGRAMUNIFORM1DVPROC         glProgramUniform1dv;
-PFNGLPROGRAMUNIFORM1UIPROC         glProgramUniform1ui;
-PFNGLPROGRAMUNIFORM1UIVPROC        glProgramUniform1uiv;
-PFNGLPROGRAMUNIFORM2IPROC          glProgramUniform2i;
-PFNGLPROGRAMUNIFORM2IVPROC         glProgramUniform2iv;
-PFNGLPROGRAMUNIFORM2FPROC          glProgramUniform2f;
-PFNGLPROGRAMUNIFORM2FVPROC         glProgramUniform2fv;
-PFNGLPROGRAMUNIFORM2DPROC          glProgramUniform2d;
-PFNGLPROGRAMUNIFORM2DVPROC         glProgramUniform2dv;
-PFNGLPROGRAMUNIFORM2UIPROC         glProgramUniform2ui;
-PFNGLPROGRAMUNIFORM2UIVPROC        glProgramUniform2uiv;
-PFNGLPROGRAMUNIFORM3IPROC          glProgramUniform3i;
-PFNGLPROGRAMUNIFORM3IVPROC         glProgramUniform3iv;
-PFNGLPROGRAMUNIFORM3FPROC          glProgramUniform3f;
-PFNGLPROGRAMUNIFORM3FVPROC         glProgramUniform3fv;
-PFNGLPROGRAMUNIFORM3DPROC          glProgramUniform3d;
-PFNGLPROGRAMUNIFORM3DVPROC         glProgramUniform3dv;
-PFNGLPROGRAMUNIFORM3UIPROC         glProgramUniform3ui;
-PFNGLPROGRAMUNIFORM3UIVPROC        glProgramUniform3uiv;
-PFNGLPROGRAMUNIFORM4IPROC          glProgramUniform4i;
-PFNGLPROGRAMUNIFORM4IVPROC         glProgramUniform4iv;
-PFNGLPROGRAMUNIFORM4FPROC          glProgramUniform4f;
-PFNGLPROGRAMUNIFORM4FVPROC         glProgramUniform4fv;
-PFNGLPROGRAMUNIFORM4DPROC          glProgramUniform4d;
-PFNGLPROGRAMUNIFORM4DVPROC         glProgramUniform4dv;
-PFNGLPROGRAMUNIFORM4UIPROC         glProgramUniform4ui;
-PFNGLPROGRAMUNIFORM4UIVPROC        glProgramUniform4uiv;
-PFNGLPROGRAMUNIFORMMATRIX2FVPROC   glProgramUniformMatrix2fv;
-PFNGLPROGRAMUNIFORMMATRIX3FVPROC   glProgramUniformMatrix3fv;
-PFNGLPROGRAMUNIFORMMATRIX4FVPROC   glProgramUniformMatrix4fv;
-PFNGLPROGRAMUNIFORMMATRIX2DVPROC   glProgramUniformMatrix2dv;
-PFNGLPROGRAMUNIFORMMATRIX3DVPROC   glProgramUniformMatrix3dv;
-PFNGLPROGRAMUNIFORMMATRIX4DVPROC   glProgramUniformMatrix4dv;
-PFNGLPROGRAMUNIFORMMATRIX2X3FVPROC glProgramUniformMatrix2x3fv;
-PFNGLPROGRAMUNIFORMMATRIX3X2FVPROC glProgramUniformMatrix3x2fv;
-PFNGLPROGRAMUNIFORMMATRIX2X4FVPROC glProgramUniformMatrix2x4fv;
-PFNGLPROGRAMUNIFORMMATRIX4X2FVPROC glProgramUniformMatrix4x2fv;
-PFNGLPROGRAMUNIFORMMATRIX3X4FVPROC glProgramUniformMatrix3x4fv;
-PFNGLPROGRAMUNIFORMMATRIX4X3FVPROC glProgramUniformMatrix4x3fv;
-PFNGLPROGRAMUNIFORMMATRIX2X3DVPROC glProgramUniformMatrix2x3dv;
-PFNGLPROGRAMUNIFORMMATRIX3X2DVPROC glProgramUniformMatrix3x2dv;
-PFNGLPROGRAMUNIFORMMATRIX2X4DVPROC glProgramUniformMatrix2x4dv;
-PFNGLPROGRAMUNIFORMMATRIX4X2DVPROC glProgramUniformMatrix4x2dv;
-PFNGLPROGRAMUNIFORMMATRIX3X4DVPROC glProgramUniformMatrix3x4dv;
-PFNGLPROGRAMUNIFORMMATRIX4X3DVPROC glProgramUniformMatrix4x3dv;
-PFNGLVALIDATEPROGRAMPIPELINEPROC   glValidateProgramPipeline;
-PFNGLGETPROGRAMPIPELINEINFOLOGPROC glGetProgramPipelineInfoLog;
-PFNGLVERTEXATTRIBL1DPROC           glVertexAttribL1d;
-PFNGLVERTEXATTRIBL2DPROC           glVertexAttribL2d;
-PFNGLVERTEXATTRIBL3DPROC           glVertexAttribL3d;
-PFNGLVERTEXATTRIBL4DPROC           glVertexAttribL4d;
-PFNGLVERTEXATTRIBL1DVPROC          glVertexAttribL1dv;
-PFNGLVERTEXATTRIBL2DVPROC          glVertexAttribL2dv;
-PFNGLVERTEXATTRIBL3DVPROC          glVertexAttribL3dv;
-PFNGLVERTEXATTRIBL4DVPROC          glVertexAttribL4dv;
-PFNGLVERTEXATTRIBLPOINTERPROC      glVertexAttribLPointer;
-PFNGLGETVERTEXATTRIBLDVPROC        glGetVertexAttribLdv;
-PFNGLVIEWPORTARRAYVPROC            glViewportArrayv;
-PFNGLVIEWPORTINDEXEDFPROC          glViewportIndexedf;
-PFNGLVIEWPORTINDEXEDFVPROC         glViewportIndexedfv;
-PFNGLSCISSORARRAYVPROC             glScissorArrayv;
-PFNGLSCISSORINDEXEDPROC            glScissorIndexed;
-PFNGLSCISSORINDEXEDVPROC           glScissorIndexedv;
-PFNGLDEPTHRANGEARRAYVPROC          glDepthRangeArrayv;
-PFNGLDEPTHRANGEINDEXEDPROC         glDepthRangeIndexed;
-PFNGLGETFLOATI_VPROC               glGetFloati_v;
-PFNGLGETDOUBLEI_VPROC              glGetDoublei_v;
-/* ----GL VERSION 4.2------------------------------------------------------------------------------------------------ */
-PFNGLDRAWARRAYSINSTANCEDBASEINSTANCEPROC             glDrawArraysInstancedBaseInstance;
-PFNGLDRAWELEMENTSINSTANCEDBASEINSTANCEPROC           glDrawElementsInstancedBaseInstance;
-PFNGLDRAWELEMENTSINSTANCEDBASEVERTEXBASEINSTANCEPROC glDrawElementsInstancedBaseVertexBaseInstance;
-PFNGLGETINTERNALFORMATIVPROC                         glGetInternalformativ;
-PFNGLGETACTIVEATOMICCOUNTERBUFFERIVPROC              glGetActiveAtomicCounterBufferiv;
-PFNGLBINDIMAGETEXTUREPROC                            glBindImageTexture;
-PFNGLMEMORYBARRIERPROC                               glMemoryBarrier;
-PFNGLTEXSTORAGE1DPROC                                glTexStorage1D;
-PFNGLTEXSTORAGE2DPROC                                glTexStorage2D;
-PFNGLTEXSTORAGE3DPROC                                glTexStorage3D;
-PFNGLDRAWTRANSFORMFEEDBACKINSTANCEDPROC              glDrawTransformFeedbackInstanced;
-PFNGLDRAWTRANSFORMFEEDBACKSTREAMINSTANCEDPROC        glDrawTransformFeedbackStreamInstanced;
-/* ----GL VERSION 4.3------------------------------------------------------------------------------------------------ */
-PFNGLCLEARBUFFERDATAPROC                 glClearBufferData;
-PFNGLCLEARBUFFERSUBDATAPROC              glClearBufferSubData;
-PFNGLDISPATCHCOMPUTEPROC                 glDispatchCompute;
-PFNGLDISPATCHCOMPUTEINDIRECTPROC         glDispatchComputeIndirect;
-PFNGLCOPYIMAGESUBDATAPROC                glCopyImageSubData;
-PFNGLFRAMEBUFFERPARAMETERIPROC           glFramebufferParameteri;
-PFNGLGETFRAMEBUFFERPARAMETERIVPROC       glGetFramebufferParameteriv;
-PFNGLGETINTERNALFORMATI64VPROC           glGetInternalformati64v;
-PFNGLINVALIDATETEXSUBIMAGEPROC           glInvalidateTexSubImage;
-PFNGLINVALIDATETEXIMAGEPROC              glInvalidateTexImage;
-PFNGLINVALIDATEBUFFERSUBDATAPROC         glInvalidateBufferSubData;
-PFNGLINVALIDATEBUFFERDATAPROC            glInvalidateBufferData;
-PFNGLINVALIDATEFRAMEBUFFERPROC           glInvalidateFramebuffer;
-PFNGLINVALIDATESUBFRAMEBUFFERPROC        glInvalidateSubFramebuffer;
-PFNGLMULTIDRAWARRAYSINDIRECTPROC         glMultiDrawArraysIndirect;
-PFNGLMULTIDRAWELEMENTSINDIRECTPROC       glMultiDrawElementsIndirect;
-PFNGLGETPROGRAMINTERFACEIVPROC           glGetProgramInterfaceiv;
-PFNGLGETPROGRAMRESOURCEINDEXPROC         glGetProgramResourceIndex;
-PFNGLGETPROGRAMRESOURCENAMEPROC          glGetProgramResourceName;
-PFNGLGETPROGRAMRESOURCEIVPROC            glGetProgramResourceiv;
-PFNGLGETPROGRAMRESOURCELOCATIONPROC      glGetProgramResourceLocation;
-PFNGLGETPROGRAMRESOURCELOCATIONINDEXPROC glGetProgramResourceLocationIndex;
-PFNGLSHADERSTORAGEBLOCKBINDINGPROC       glShaderStorageBlockBinding;
-PFNGLTEXBUFFERRANGEPROC                  glTexBufferRange;
-PFNGLTEXSTORAGE2DMULTISAMPLEPROC         glTexStorage2DMultisample;
-PFNGLTEXSTORAGE3DMULTISAMPLEPROC         glTexStorage3DMultisample;
-PFNGLTEXTUREVIEWPROC                     glTextureView;
-PFNGLBINDVERTEXBUFFERPROC                glBindVertexBuffer;
-PFNGLVERTEXATTRIBFORMATPROC              glVertexAttribFormat;
-PFNGLVERTEXATTRIBIFORMATPROC             glVertexAttribIFormat;
-PFNGLVERTEXATTRIBLFORMATPROC             glVertexAttribLFormat;
-PFNGLVERTEXATTRIBBINDINGPROC             glVertexAttribBinding;
-PFNGLVERTEXBINDINGDIVISORPROC            glVertexBindingDivisor;
-PFNGLDEBUGMESSAGECONTROLPROC             glDebugMessageControl;
-PFNGLDEBUGMESSAGEINSERTPROC              glDebugMessageInsert;
-PFNGLDEBUGMESSAGECALLBACKPROC            glDebugMessageCallback;
-PFNGLGETDEBUGMESSAGELOGPROC              glGetDebugMessageLog;
-PFNGLPUSHDEBUGGROUPPROC                  glPushDebugGroup;
-PFNGLPOPDEBUGGROUPPROC                   glPopDebugGroup;
-PFNGLOBJECTLABELPROC                     glObjectLabel;
-PFNGLGETOBJECTLABELPROC                  glGetObjectLabel;
-PFNGLOBJECTPTRLABELPROC                  glObjectPtrLabel;
-PFNGLGETOBJECTPTRLABELPROC               glGetObjectPtrLabel;
-/* ----GL VERSION 4.4------------------------------------------------------------------------------------------------ */
-PFNGLBUFFERSTORAGEPROC     glBufferStorage;
-PFNGLCLEARTEXIMAGEPROC     glClearTexImage;
-PFNGLCLEARTEXSUBIMAGEPROC  glClearTexSubImage;
-PFNGLBINDBUFFERSBASEPROC   glBindBuffersBase;
-PFNGLBINDBUFFERSRANGEPROC  glBindBuffersRange;
-PFNGLBINDTEXTURESPROC      glBindTextures;
-PFNGLBINDSAMPLERSPROC      glBindSamplers;
-PFNGLBINDIMAGETEXTURESPROC glBindImageTextures;
-PFNGLBINDVERTEXBUFFERSPROC glBindVertexBuffers;
-/* ----GL VERSION 4.5------------------------------------------------------------------------------------------------ */
-PFNGLCLIPCONTROLPROC                              glClipControl;
-PFNGLCREATETRANSFORMFEEDBACKSPROC                 glCreateTransformFeedbacks;
-PFNGLTRANSFORMFEEDBACKBUFFERBASEPROC              glTransformFeedbackBufferBase;
-PFNGLTRANSFORMFEEDBACKBUFFERRANGEPROC             glTransformFeedbackBufferRange;
-PFNGLGETTRANSFORMFEEDBACKIVPROC                   glGetTransformFeedbackiv;
-PFNGLGETTRANSFORMFEEDBACKI_VPROC                  glGetTransformFeedbacki_v;
-PFNGLGETTRANSFORMFEEDBACKI64_VPROC                glGetTransformFeedbacki64_v;
-PFNGLCREATEBUFFERSPROC                            glCreateBuffers;
-PFNGLNAMEDBUFFERSTORAGEPROC                       glNamedBufferStorage;
-PFNGLNAMEDBUFFERDATAPROC                          glNamedBufferData;
-PFNGLNAMEDBUFFERSUBDATAPROC                       glNamedBufferSubData;
-PFNGLCOPYNAMEDBUFFERSUBDATAPROC                   glCopyNamedBufferSubData;
-PFNGLCLEARNAMEDBUFFERDATAPROC                     glClearNamedBufferData;
-PFNGLCLEARNAMEDBUFFERSUBDATAPROC                  glClearNamedBufferSubData;
-PFNGLMAPNAMEDBUFFERPROC                           glMapNamedBuffer;
-PFNGLMAPNAMEDBUFFERRANGEPROC                      glMapNamedBufferRange;
-PFNGLUNMAPNAMEDBUFFERPROC                         glUnmapNamedBuffer;
-PFNGLFLUSHMAPPEDNAMEDBUFFERRANGEPROC              glFlushMappedNamedBufferRange;
-PFNGLGETNAMEDBUFFERPARAMETERIVPROC                glGetNamedBufferParameteriv;
-PFNGLGETNAMEDBUFFERPARAMETERI64VPROC              glGetNamedBufferParameteri64v;
-PFNGLGETNAMEDBUFFERPOINTERVPROC                   glGetNamedBufferPointerv;
-PFNGLGETNAMEDBUFFERSUBDATAPROC                    glGetNamedBufferSubData;
-PFNGLCREATEFRAMEBUFFERSPROC                       glCreateFramebuffers;
-PFNGLNAMEDFRAMEBUFFERRENDERBUFFERPROC             glNamedFramebufferRenderbuffer;
-PFNGLNAMEDFRAMEBUFFERPARAMETERIPROC               glNamedFramebufferParameteri;
-PFNGLNAMEDFRAMEBUFFERTEXTUREPROC                  glNamedFramebufferTexture;
-PFNGLNAMEDFRAMEBUFFERTEXTURELAYERPROC             glNamedFramebufferTextureLayer;
-PFNGLNAMEDFRAMEBUFFERDRAWBUFFERPROC               glNamedFramebufferDrawBuffer;
-PFNGLNAMEDFRAMEBUFFERDRAWBUFFERSPROC              glNamedFramebufferDrawBuffers;
-PFNGLNAMEDFRAMEBUFFERREADBUFFERPROC               glNamedFramebufferReadBuffer;
-PFNGLINVALIDATENAMEDFRAMEBUFFERDATAPROC           glInvalidateNamedFramebufferData;
-PFNGLINVALIDATENAMEDFRAMEBUFFERSUBDATAPROC        glInvalidateNamedFramebufferSubData;
-PFNGLCLEARNAMEDFRAMEBUFFERIVPROC                  glClearNamedFramebufferiv;
-PFNGLCLEARNAMEDFRAMEBUFFERUIVPROC                 glClearNamedFramebufferuiv;
-PFNGLCLEARNAMEDFRAMEBUFFERFVPROC                  glClearNamedFramebufferfv;
-PFNGLCLEARNAMEDFRAMEBUFFERFIPROC                  glClearNamedFramebufferfi;
-PFNGLBLITNAMEDFRAMEBUFFERPROC                     glBlitNamedFramebuffer;
-PFNGLCHECKNAMEDFRAMEBUFFERSTATUSPROC              glCheckNamedFramebufferStatus;
-PFNGLGETNAMEDFRAMEBUFFERPARAMETERIVPROC           glGetNamedFramebufferParameteriv;
-PFNGLGETNAMEDFRAMEBUFFERATTACHMENTPARAMETERIVPROC glGetNamedFramebufferAttachmentParameteriv;
-PFNGLCREATERENDERBUFFERSPROC                      glCreateRenderbuffers;
-PFNGLNAMEDRENDERBUFFERSTORAGEPROC                 glNamedRenderbufferStorage;
-PFNGLNAMEDRENDERBUFFERSTORAGEMULTISAMPLEPROC      glNamedRenderbufferStorageMultisample;
-PFNGLGETNAMEDRENDERBUFFERPARAMETERIVPROC          glGetNamedRenderbufferParameteriv;
-PFNGLCREATETEXTURESPROC                           glCreateTextures;
-PFNGLTEXTUREBUFFERPROC                            glTextureBuffer;
-PFNGLTEXTUREBUFFERRANGEPROC                       glTextureBufferRange;
-PFNGLTEXTURESTORAGE1DPROC                         glTextureStorage1D;
-PFNGLTEXTURESTORAGE2DPROC                         glTextureStorage2D;
-PFNGLTEXTURESTORAGE3DPROC                         glTextureStorage3D;
-PFNGLTEXTURESTORAGE2DMULTISAMPLEPROC              glTextureStorage2DMultisample;
-PFNGLTEXTURESTORAGE3DMULTISAMPLEPROC              glTextureStorage3DMultisample;
-PFNGLTEXTURESUBIMAGE1DPROC                        glTextureSubImage1D;
-PFNGLTEXTURESUBIMAGE2DPROC                        glTextureSubImage2D;
-PFNGLTEXTURESUBIMAGE3DPROC                        glTextureSubImage3D;
-PFNGLCOMPRESSEDTEXTURESUBIMAGE1DPROC              glCompressedTextureSubImage1D;
-PFNGLCOMPRESSEDTEXTURESUBIMAGE2DPROC              glCompressedTextureSubImage2D;
-PFNGLCOMPRESSEDTEXTURESUBIMAGE3DPROC              glCompressedTextureSubImage3D;
-PFNGLCOPYTEXTURESUBIMAGE1DPROC                    glCopyTextureSubImage1D;
-PFNGLCOPYTEXTURESUBIMAGE2DPROC                    glCopyTextureSubImage2D;
-PFNGLCOPYTEXTURESUBIMAGE3DPROC                    glCopyTextureSubImage3D;
-PFNGLTEXTUREPARAMETERFPROC                        glTextureParameterf;
-PFNGLTEXTUREPARAMETERFVPROC                       glTextureParameterfv;
-PFNGLTEXTUREPARAMETERIPROC                        glTextureParameteri;
-PFNGLTEXTUREPARAMETERIIVPROC                      glTextureParameterIiv;
-PFNGLTEXTUREPARAMETERIUIVPROC                     glTextureParameterIuiv;
-PFNGLTEXTUREPARAMETERIVPROC                       glTextureParameteriv;
-PFNGLGENERATETEXTUREMIPMAPPROC                    glGenerateTextureMipmap;
-PFNGLBINDTEXTUREUNITPROC                          glBindTextureUnit;
-PFNGLGETTEXTUREIMAGEPROC                          glGetTextureImage;
-PFNGLGETCOMPRESSEDTEXTUREIMAGEPROC                glGetCompressedTextureImage;
-PFNGLGETTEXTURELEVELPARAMETERFVPROC               glGetTextureLevelParameterfv;
-PFNGLGETTEXTURELEVELPARAMETERIVPROC               glGetTextureLevelParameteriv;
-PFNGLGETTEXTUREPARAMETERFVPROC                    glGetTextureParameterfv;
-PFNGLGETTEXTUREPARAMETERIIVPROC                   glGetTextureParameterIiv;
-PFNGLGETTEXTUREPARAMETERIUIVPROC                  glGetTextureParameterIuiv;
-PFNGLGETTEXTUREPARAMETERIVPROC                    glGetTextureParameteriv;
-PFNGLCREATEVERTEXARRAYSPROC                       glCreateVertexArrays;
-PFNGLDISABLEVERTEXARRAYATTRIBPROC                 glDisableVertexArrayAttrib;
-PFNGLENABLEVERTEXARRAYATTRIBPROC                  glEnableVertexArrayAttrib;
-PFNGLVERTEXARRAYELEMENTBUFFERPROC                 glVertexArrayElementBuffer;
-PFNGLVERTEXARRAYVERTEXBUFFERPROC                  glVertexArrayVertexBuffer;
-PFNGLVERTEXARRAYVERTEXBUFFERSPROC                 glVertexArrayVertexBuffers;
-PFNGLVERTEXARRAYATTRIBBINDINGPROC                 glVertexArrayAttribBinding;
-PFNGLVERTEXARRAYATTRIBFORMATPROC                  glVertexArrayAttribFormat;
-PFNGLVERTEXARRAYATTRIBIFORMATPROC                 glVertexArrayAttribIFormat;
-PFNGLVERTEXARRAYATTRIBLFORMATPROC                 glVertexArrayAttribLFormat;
-PFNGLVERTEXARRAYBINDINGDIVISORPROC                glVertexArrayBindingDivisor;
-PFNGLGETVERTEXARRAYIVPROC                         glGetVertexArrayiv;
-PFNGLGETVERTEXARRAYINDEXEDIVPROC                  glGetVertexArrayIndexediv;
-PFNGLGETVERTEXARRAYINDEXED64IVPROC                glGetVertexArrayIndexed64iv;
-PFNGLCREATESAMPLERSPROC                           glCreateSamplers;
-PFNGLCREATEPROGRAMPIPELINESPROC                   glCreateProgramPipelines;
-PFNGLCREATEQUERIESPROC                            glCreateQueries;
-PFNGLGETQUERYBUFFEROBJECTI64VPROC                 glGetQueryBufferObjecti64v;
-PFNGLGETQUERYBUFFEROBJECTIVPROC                   glGetQueryBufferObjectiv;
-PFNGLGETQUERYBUFFEROBJECTUI64VPROC                glGetQueryBufferObjectui64v;
-PFNGLGETQUERYBUFFEROBJECTUIVPROC                  glGetQueryBufferObjectuiv;
-PFNGLMEMORYBARRIERBYREGIONPROC                    glMemoryBarrierByRegion;
-PFNGLGETTEXTURESUBIMAGEPROC                       glGetTextureSubImage;
-PFNGLGETCOMPRESSEDTEXTURESUBIMAGEPROC             glGetCompressedTextureSubImage;
-PFNGLGETGRAPHICSRESETSTATUSPROC                   glGetGraphicsResetStatus;
-PFNGLGETNCOMPRESSEDTEXIMAGEPROC                   glGetnCompressedTexImage;
-PFNGLGETNTEXIMAGEPROC                             glGetnTexImage;
-PFNGLGETNUNIFORMDVPROC                            glGetnUniformdv;
-PFNGLGETNUNIFORMFVPROC                            glGetnUniformfv;
-PFNGLGETNUNIFORMIVPROC                            glGetnUniformiv;
-PFNGLGETNUNIFORMUIVPROC                           glGetnUniformuiv;
-PFNGLREADNPIXELSPROC                              glReadnPixels;
-PFNGLTEXTUREBARRIERPROC                           glTextureBarrier;
-/* ----GL VERSION 4.6------------------------------------------------------------------------------------------------ */
-PFNGLSPECIALIZESHADERPROC                         glSpecializeShader;
-PFNGLMULTIDRAWARRAYSINDIRECTCOUNTPROC             glMultiDrawArraysIndirectCount;
-PFNGLMULTIDRAWELEMENTSINDIRECTCOUNTPROC           glMultiDrawElementsIndirectCount;
-PFNGLPOLYGONOFFSETCLAMPPROC                       glPolygonOffsetClamp;
+/* ----EXTERNS DEFINITIONS------------------------------------------------------------------------------------------- */
+#define X(retval, name, params) VdFwProcGL_##name name;
+#define V(v)
+#define VE()
+VD_FW_OPENGL_CORE_FUNCTIONS
+#undef X
+#undef V
+#undef VE
 
 #endif // !defined(__APPLE__)
 
@@ -10492,1040 +9279,17 @@ static void vd_fw__load_opengl(VdFwGlVersion version)
     // }
 #else
 #define LOAD(p, s) s = (p)vd_fw__gl_get_proc_address(#s)
-
-    if (version >= VD_FW_GL_VERSION_1_0) {
-        LOAD(PFNGLCULLFACEPROC,               glCullFace);
-        LOAD(PFNGLFRONTFACEPROC,              glFrontFace);
-        LOAD(PFNGLHINTPROC,                   glHint);
-        LOAD(PFNGLLINEWIDTHPROC,              glLineWidth);
-        LOAD(PFNGLPOINTSIZEPROC,              glPointSize);
-        LOAD(PFNGLPOLYGONMODEPROC,            glPolygonMode);
-        LOAD(PFNGLSCISSORPROC,                glScissor);
-        LOAD(PFNGLTEXPARAMETERFPROC,          glTexParameterf);
-        LOAD(PFNGLTEXPARAMETERFVPROC,         glTexParameterfv);
-        LOAD(PFNGLTEXPARAMETERIPROC,          glTexParameteri);
-        LOAD(PFNGLTEXPARAMETERIVPROC,         glTexParameteriv);
-        LOAD(PFNGLTEXIMAGE1DPROC,             glTexImage1D);
-        LOAD(PFNGLTEXIMAGE2DPROC,             glTexImage2D);
-        LOAD(PFNGLDRAWBUFFERPROC,             glDrawBuffer);
-        LOAD(PFNGLCLEARPROC,                  glClear);
-        LOAD(PFNGLCLEARCOLORPROC,             glClearColor);
-        LOAD(PFNGLCLEARSTENCILPROC,           glClearStencil);
-        LOAD(PFNGLSTENCILMASKPROC,            glStencilMask);
-        LOAD(PFNGLCOLORMASKPROC,              glColorMask);
-        LOAD(PFNGLDEPTHMASKPROC,              glDepthMask);
-        LOAD(PFNGLDISABLEPROC,                glDisable);
-        LOAD(PFNGLENABLEPROC,                 glEnable);
-        LOAD(PFNGLFINISHPROC,                 glFinish);
-        LOAD(PFNGLFLUSHPROC,                  glFlush);
-        LOAD(PFNGLBLENDFUNCPROC,              glBlendFunc);
-        LOAD(PFNGLLOGICOPPROC,                glLogicOp);
-        LOAD(PFNGLSTENCILFUNCPROC,            glStencilFunc);
-        LOAD(PFNGLSTENCILOPPROC,              glStencilOp);
-        LOAD(PFNGLDEPTHFUNCPROC,              glDepthFunc);
-        LOAD(PFNGLPIXELSTOREFPROC,            glPixelStoref);
-        LOAD(PFNGLPIXELSTOREIPROC,            glPixelStorei);
-        LOAD(PFNGLREADBUFFERPROC,             glReadBuffer);
-        LOAD(PFNGLREADPIXELSPROC,             glReadPixels);
-        LOAD(PFNGLGETBOOLEANVPROC,            glGetBooleanv);
-        LOAD(PFNGLGETDOUBLEVPROC,             glGetDoublev);
-        LOAD(PFNGLGETERRORPROC,               glGetError);
-        LOAD(PFNGLGETFLOATVPROC,              glGetFloatv);
-        LOAD(PFNGLGETINTEGERVPROC,            glGetIntegerv);
-        LOAD(PFNGLGETSTRINGPROC,              glGetString);
-        LOAD(PFNGLGETTEXIMAGEPROC,            glGetTexImage);
-        LOAD(PFNGLGETTEXPARAMETERFVPROC,      glGetTexParameterfv);
-        LOAD(PFNGLGETTEXPARAMETERIVPROC,      glGetTexParameteriv);
-        LOAD(PFNGLGETTEXLEVELPARAMETERFVPROC, glGetTexLevelParameterfv);
-        LOAD(PFNGLGETTEXLEVELPARAMETERIVPROC, glGetTexLevelParameteriv);
-        LOAD(PFNGLISENABLEDPROC,              glIsEnabled);
-        LOAD(PFNGLDEPTHRANGEPROC,             glDepthRange);
-        LOAD(PFNGLVIEWPORTPROC,               glViewport);
-        LOAD(PFNGLACCUMPROC,                  glAccum);
-        LOAD(PFNGLALPHAFUNCPROC,              glAlphaFunc);
-        LOAD(PFNGLARETEXTURESRESIDENTPROC,    glAreTexturesResident);
-        LOAD(PFNGLARRAYELEMENTPROC,           glArrayElement);
-        LOAD(PFNGLBEGINPROC,                  glBegin);
-        LOAD(PFNGLBINDTEXTUREPROC,            glBindTexture);
-        LOAD(PFNGLBITMAPPROC,                 glBitmap);
-        LOAD(PFNGLBLENDFUNCPROC,              glBlendFunc);
-        LOAD(PFNGLCALLLISTPROC,               glCallList);
-        LOAD(PFNGLCALLLISTSPROC,              glCallLists);
-        LOAD(PFNGLCLEARPROC,                  glClear);
-        LOAD(PFNGLCLEARACCUMPROC,             glClearAccum);
-        LOAD(PFNGLCLEARCOLORPROC,             glClearColor);
-        LOAD(PFNGLCLEARDEPTHPROC,             glClearDepth);
-        LOAD(PFNGLCLEARINDEXPROC,             glClearIndex);
-        LOAD(PFNGLCLEARSTENCILPROC,           glClearStencil);
-        LOAD(PFNGLCLIPPLANEPROC,              glClipPlane);
-        LOAD(PFNGLCOLOR3BPROC,                glColor3b);
-        LOAD(PFNGLCOLOR3BVPROC,               glColor3bv);
-        LOAD(PFNGLCOLOR3DPROC,                glColor3d);
-        LOAD(PFNGLCOLOR3DVPROC,               glColor3dv);
-        LOAD(PFNGLCOLOR3FPROC,                glColor3f);
-        LOAD(PFNGLCOLOR3FVPROC,               glColor3fv);
-        LOAD(PFNGLCOLOR3IPROC,                glColor3i);
-        LOAD(PFNGLCOLOR3IVPROC,               glColor3iv);
-        LOAD(PFNGLCOLOR3SPROC,                glColor3s);
-        LOAD(PFNGLCOLOR3SVPROC,               glColor3sv);
-        LOAD(PFNGLCOLOR3UBPROC,               glColor3ub);
-        LOAD(PFNGLCOLOR3UBVPROC,              glColor3ubv);
-        LOAD(PFNGLCOLOR3UIPROC,               glColor3ui);
-        LOAD(PFNGLCOLOR3UIVPROC,              glColor3uiv);
-        LOAD(PFNGLCOLOR3USPROC,               glColor3us);
-        LOAD(PFNGLCOLOR3USVPROC,              glColor3usv);
-        LOAD(PFNGLCOLOR4BPROC,                glColor4b);
-        LOAD(PFNGLCOLOR4BVPROC,               glColor4bv);
-        LOAD(PFNGLCOLOR4DPROC,                glColor4d);
-        LOAD(PFNGLCOLOR4DVPROC,               glColor4dv);
-        LOAD(PFNGLCOLOR4FPROC,                glColor4f);
-        LOAD(PFNGLCOLOR4FVPROC,               glColor4fv);
-        LOAD(PFNGLCOLOR4IPROC,                glColor4i);
-        LOAD(PFNGLCOLOR4IVPROC,               glColor4iv);
-        LOAD(PFNGLCOLOR4SPROC,                glColor4s);
-        LOAD(PFNGLCOLOR4SVPROC,               glColor4sv);
-        LOAD(PFNGLCOLOR4UBPROC,               glColor4ub);
-        LOAD(PFNGLCOLOR4UBVPROC,              glColor4ubv);
-        LOAD(PFNGLCOLOR4UIPROC,               glColor4ui);
-        LOAD(PFNGLCOLOR4UIVPROC,              glColor4uiv);
-        LOAD(PFNGLCOLOR4USPROC,               glColor4us);
-        LOAD(PFNGLCOLOR4USVPROC,              glColor4usv);
-        LOAD(PFNGLCOLORMASKPROC,              glColorMask);
-        LOAD(PFNGLCOLORMATERIALPROC,          glColorMaterial);
-        LOAD(PFNGLCOLORPOINTERPROC,           glColorPointer);
-        LOAD(PFNGLCOPYPIXELSPROC,             glCopyPixels);
-        LOAD(PFNGLCOPYTEXIMAGE1DPROC,         glCopyTexImage1D);
-        LOAD(PFNGLCOPYTEXIMAGE2DPROC,         glCopyTexImage2D);
-        LOAD(PFNGLCOPYTEXSUBIMAGE1DPROC,      glCopyTexSubImage1D);
-        LOAD(PFNGLCOPYTEXSUBIMAGE2DPROC,      glCopyTexSubImage2D);
-        LOAD(PFNGLCULLFACEPROC,               glCullFace);
-        LOAD(PFNGLDELETELISTSPROC,            glDeleteLists);
-        LOAD(PFNGLDELETETEXTURESPROC,         glDeleteTextures);
-        LOAD(PFNGLDEPTHFUNCPROC,              glDepthFunc);
-        LOAD(PFNGLDEPTHMASKPROC,              glDepthMask);
-        LOAD(PFNGLDEPTHRANGEPROC,             glDepthRange);
-        LOAD(PFNGLDISABLEPROC,                glDisable);
-        LOAD(PFNGLDISABLECLIENTSTATEPROC,     glDisableClientState);
-        LOAD(PFNGLDRAWARRAYSPROC,             glDrawArrays);
-        LOAD(PFNGLDRAWBUFFERPROC,             glDrawBuffer);
-        LOAD(PFNGLDRAWELEMENTSPROC,           glDrawElements);
-        LOAD(PFNGLDRAWPIXELSPROC,             glDrawPixels);
-        LOAD(PFNGLEDGEFLAGPROC,               glEdgeFlag);
-        LOAD(PFNGLEDGEFLAGPOINTERPROC,        glEdgeFlagPointer);
-        LOAD(PFNGLEDGEFLAGVPROC,              glEdgeFlagv);
-        LOAD(PFNGLENABLEPROC,                 glEnable);
-        LOAD(PFNGLENABLECLIENTSTATEPROC,      glEnableClientState);
-        LOAD(PFNGLENDPROC,                    glEnd);
-        LOAD(PFNGLENDLISTPROC,                glEndList);
-        LOAD(PFNGLEVALCOORD1DPROC,            glEvalCoord1d);
-        LOAD(PFNGLEVALCOORD1DVPROC,           glEvalCoord1dv);
-        LOAD(PFNGLEVALCOORD1FPROC,            glEvalCoord1f);
-        LOAD(PFNGLEVALCOORD1FVPROC,           glEvalCoord1fv);
-        LOAD(PFNGLEVALCOORD2DPROC,            glEvalCoord2d);
-        LOAD(PFNGLEVALCOORD2DVPROC,           glEvalCoord2dv);
-        LOAD(PFNGLEVALCOORD2FPROC,            glEvalCoord2f);
-        LOAD(PFNGLEVALCOORD2FVPROC,           glEvalCoord2fv);
-        LOAD(PFNGLEVALMESH1PROC,              glEvalMesh1);
-        LOAD(PFNGLEVALMESH2PROC,              glEvalMesh2);
-        LOAD(PFNGLEVALPOINT1PROC,             glEvalPoint1);
-        LOAD(PFNGLEVALPOINT2PROC,             glEvalPoint2);
-        LOAD(PFNGLFEEDBACKBUFFERPROC,         glFeedbackBuffer);
-        LOAD(PFNGLFINISHPROC,                 glFinish);
-        LOAD(PFNGLFLUSHPROC,                  glFlush);
-        LOAD(PFNGLFOGFPROC,                   glFogf);
-        LOAD(PFNGLFOGFVPROC,                  glFogfv);
-        LOAD(PFNGLFOGIPROC,                   glFogi);
-        LOAD(PFNGLFOGIVPROC,                  glFogiv);
-        LOAD(PFNGLFRONTFACEPROC,              glFrontFace);
-        LOAD(PFNGLFRUSTUMPROC,                glFrustum);
-        LOAD(PFNGLGENLISTSPROC,               glGenLists);
-        LOAD(PFNGLGENTEXTURESPROC,            glGenTextures);
-        LOAD(PFNGLGETBOOLEANVPROC,            glGetBooleanv);
-        LOAD(PFNGLGETCLIPPLANEPROC,           glGetClipPlane);
-        LOAD(PFNGLGETDOUBLEVPROC,             glGetDoublev);
-        LOAD(PFNGLGETERRORPROC,               glGetError);
-        LOAD(PFNGLGETFLOATVPROC,              glGetFloatv);
-        LOAD(PFNGLGETINTEGERVPROC,            glGetIntegerv);
-        LOAD(PFNGLGETLIGHTFVPROC,             glGetLightfv);
-        LOAD(PFNGLGETLIGHTIVPROC,             glGetLightiv);
-        LOAD(PFNGLGETMAPDVPROC,               glGetMapdv);
-        LOAD(PFNGLGETMAPFVPROC,               glGetMapfv);
-        LOAD(PFNGLGETMAPIVPROC,               glGetMapiv);
-        LOAD(PFNGLGETMATERIALFVPROC,          glGetMaterialfv);
-        LOAD(PFNGLGETMATERIALIVPROC,          glGetMaterialiv);
-        LOAD(PFNGLGETPIXELMAPFVPROC,          glGetPixelMapfv);
-        LOAD(PFNGLGETPIXELMAPUIVPROC,         glGetPixelMapuiv);
-        LOAD(PFNGLGETPIXELMAPUSVPROC,         glGetPixelMapusv);
-        LOAD(PFNGLGETPOINTERVPROC,            glGetPointerv);
-        LOAD(PFNGLGETPOLYGONSTIPPLEPROC,      glGetPolygonStipple);
-        LOAD(PFNGLGETSTRINGPROC,              glGetString);
-        LOAD(PFNGLGETTEXENVFVPROC,            glGetTexEnvfv);
-        LOAD(PFNGLGETTEXENVIVPROC,            glGetTexEnviv);
-        LOAD(PFNGLGETTEXGENDVPROC,            glGetTexGendv);
-        LOAD(PFNGLGETTEXGENFVPROC,            glGetTexGenfv);
-        LOAD(PFNGLGETTEXGENIVPROC,            glGetTexGeniv);
-        LOAD(PFNGLGETTEXIMAGEPROC,            glGetTexImage);
-        LOAD(PFNGLGETTEXLEVELPARAMETERFVPROC, glGetTexLevelParameterfv);
-        LOAD(PFNGLGETTEXLEVELPARAMETERIVPROC, glGetTexLevelParameteriv);
-        LOAD(PFNGLGETTEXPARAMETERFVPROC,      glGetTexParameterfv);
-        LOAD(PFNGLGETTEXPARAMETERIVPROC,      glGetTexParameteriv);
-        LOAD(PFNGLHINTPROC,                   glHint);
-        LOAD(PFNGLINDEXMASKPROC,              glIndexMask);
-        LOAD(PFNGLINDEXPOINTERPROC,           glIndexPointer);
-        LOAD(PFNGLINDEXDPROC,                 glIndexd);
-        LOAD(PFNGLINDEXDVPROC,                glIndexdv);
-        LOAD(PFNGLINDEXFPROC,                 glIndexf);
-        LOAD(PFNGLINDEXFVPROC,                glIndexfv);
-        LOAD(PFNGLINDEXIPROC,                 glIndexi);
-        LOAD(PFNGLINDEXIVPROC,                glIndexiv);
-        LOAD(PFNGLINDEXSPROC,                 glIndexs);
-        LOAD(PFNGLINDEXSVPROC,                glIndexsv);
-        LOAD(PFNGLINDEXUBPROC,                glIndexub);
-        LOAD(PFNGLINDEXUBVPROC,               glIndexubv);
-        LOAD(PFNGLINITNAMESPROC,              glInitNames);
-        LOAD(PFNGLINTERLEAVEDARRAYSPROC,      glInterleavedArrays);
-        LOAD(PFNGLISENABLEDPROC,              glIsEnabled);
-        LOAD(PFNGLISLISTPROC,                 glIsList);
-        LOAD(PFNGLISTEXTUREPROC,              glIsTexture);
-        LOAD(PFNGLLIGHTMODELFPROC,            glLightModelf);
-        LOAD(PFNGLLIGHTMODELFVPROC,           glLightModelfv);
-        LOAD(PFNGLLIGHTMODELIPROC,            glLightModeli);
-        LOAD(PFNGLLIGHTMODELIVPROC,           glLightModeliv);
-        LOAD(PFNGLLIGHTFPROC,                 glLightf);
-        LOAD(PFNGLLIGHTFVPROC,                glLightfv);
-        LOAD(PFNGLLIGHTIPROC,                 glLighti);
-        LOAD(PFNGLLIGHTIVPROC,                glLightiv);
-        LOAD(PFNGLLINESTIPPLEPROC,            glLineStipple);
-        LOAD(PFNGLLISTBASEPROC,               glListBase);
-        LOAD(PFNGLLOADIDENTITYPROC,           glLoadIdentity);
-        LOAD(PFNGLLOADMATRIXDPROC,            glLoadMatrixd);
-        LOAD(PFNGLLOADMATRIXFPROC,            glLoadMatrixf);
-        LOAD(PFNGLLOADNAMEPROC,               glLoadName);
-        LOAD(PFNGLLOGICOPPROC,                glLogicOp);
-        LOAD(PFNGLMAP1DPROC,                  glMap1d);
-        LOAD(PFNGLMAP1FPROC,                  glMap1f);
-        LOAD(PFNGLMAP2DPROC,                  glMap2d);
-        LOAD(PFNGLMAP2FPROC,                  glMap2f);
-        LOAD(PFNGLMAPGRID1DPROC,              glMapGrid1d);
-        LOAD(PFNGLMAPGRID1FPROC,              glMapGrid1f);
-        LOAD(PFNGLMAPGRID2DPROC,              glMapGrid2d);
-        LOAD(PFNGLMAPGRID2FPROC,              glMapGrid2f);
-        LOAD(PFNGLMATERIALFPROC,              glMaterialf);
-        LOAD(PFNGLMATERIALFVPROC,             glMaterialfv);
-        LOAD(PFNGLMATERIALIPROC,              glMateriali);
-        LOAD(PFNGLMATERIALIVPROC,             glMaterialiv);
-        LOAD(PFNGLMATRIXMODEPROC,             glMatrixMode);
-        LOAD(PFNGLMULTMATRIXDPROC,            glMultMatrixd);
-        LOAD(PFNGLMULTMATRIXFPROC,            glMultMatrixf);
-        LOAD(PFNGLNEWLISTPROC,                glNewList);
-        LOAD(PFNGLNORMAL3BPROC,               glNormal3b);
-        LOAD(PFNGLNORMAL3BVPROC,              glNormal3bv);
-        LOAD(PFNGLNORMAL3DPROC,               glNormal3d);
-        LOAD(PFNGLNORMAL3DVPROC,              glNormal3dv);
-        LOAD(PFNGLNORMAL3FPROC,               glNormal3f);
-        LOAD(PFNGLNORMAL3FVPROC,              glNormal3fv);
-        LOAD(PFNGLNORMAL3IPROC,               glNormal3i);
-        LOAD(PFNGLNORMAL3IVPROC,              glNormal3iv);
-        LOAD(PFNGLNORMAL3SPROC,               glNormal3s);
-        LOAD(PFNGLNORMAL3SVPROC,              glNormal3sv);
-        LOAD(PFNGLNORMALPOINTERPROC,          glNormalPointer);
-        LOAD(PFNGLORTHOPROC,                  glOrtho);
-        LOAD(PFNGLPASSTHROUGHPROC,            glPassThrough);
-        LOAD(PFNGLPIXELMAPFVPROC,             glPixelMapfv);
-        LOAD(PFNGLPIXELMAPUIVPROC,            glPixelMapuiv);
-        LOAD(PFNGLPIXELMAPUSVPROC,            glPixelMapusv);
-        LOAD(PFNGLPIXELSTOREFPROC,            glPixelStoref);
-        LOAD(PFNGLPIXELSTOREIPROC,            glPixelStorei);
-        LOAD(PFNGLPIXELTRANSFERFPROC,         glPixelTransferf);
-        LOAD(PFNGLPIXELTRANSFERIPROC,         glPixelTransferi);
-        LOAD(PFNGLPIXELZOOMPROC,              glPixelZoom);
-        LOAD(PFNGLPOINTSIZEPROC,              glPointSize);
-        LOAD(PFNGLPOLYGONMODEPROC,            glPolygonMode);
-        LOAD(PFNGLPOLYGONOFFSETPROC,          glPolygonOffset);
-        LOAD(PFNGLPOLYGONSTIPPLEPROC,         glPolygonStipple);
-        LOAD(PFNGLPOPATTRIBPROC,              glPopAttrib);
-        LOAD(PFNGLPOPCLIENTATTRIBPROC,        glPopClientAttrib);
-        LOAD(PFNGLPOPMATRIXPROC,              glPopMatrix);
-        LOAD(PFNGLPOPNAMEPROC,                glPopName);
-        LOAD(PFNGLPRIORITIZETEXTURESPROC,     glPrioritizeTextures);
-        LOAD(PFNGLPUSHATTRIBPROC,             glPushAttrib);
-        LOAD(PFNGLPUSHCLIENTATTRIBPROC,       glPushClientAttrib);
-        LOAD(PFNGLPUSHMATRIXPROC,             glPushMatrix);
-        LOAD(PFNGLPUSHNAMEPROC,               glPushName);
-        LOAD(PFNGLRASTERPOS2DPROC,            glRasterPos2d);
-        LOAD(PFNGLRASTERPOS2DVPROC,           glRasterPos2dv);
-        LOAD(PFNGLRASTERPOS2FPROC,            glRasterPos2f);
-        LOAD(PFNGLRASTERPOS2FVPROC,           glRasterPos2fv);
-        LOAD(PFNGLRASTERPOS2IPROC,            glRasterPos2i);
-        LOAD(PFNGLRASTERPOS2IVPROC,           glRasterPos2iv);
-        LOAD(PFNGLRASTERPOS2SPROC,            glRasterPos2s);
-        LOAD(PFNGLRASTERPOS2SVPROC,           glRasterPos2sv);
-        LOAD(PFNGLRASTERPOS3DPROC,            glRasterPos3d);
-        LOAD(PFNGLRASTERPOS3DVPROC,           glRasterPos3dv);
-        LOAD(PFNGLRASTERPOS3FPROC,            glRasterPos3f);
-        LOAD(PFNGLRASTERPOS3FVPROC,           glRasterPos3fv);
-        LOAD(PFNGLRASTERPOS3IPROC,            glRasterPos3i);
-        LOAD(PFNGLRASTERPOS3IVPROC,           glRasterPos3iv);
-        LOAD(PFNGLRASTERPOS3SPROC,            glRasterPos3s);
-        LOAD(PFNGLRASTERPOS3SVPROC,           glRasterPos3sv);
-        LOAD(PFNGLRASTERPOS4DPROC,            glRasterPos4d);
-        LOAD(PFNGLRASTERPOS4DVPROC,           glRasterPos4dv);
-        LOAD(PFNGLRASTERPOS4FPROC,            glRasterPos4f);
-        LOAD(PFNGLRASTERPOS4FVPROC,           glRasterPos4fv);
-        LOAD(PFNGLRASTERPOS4IPROC,            glRasterPos4i);
-        LOAD(PFNGLRASTERPOS4IVPROC,           glRasterPos4iv);
-        LOAD(PFNGLRASTERPOS4SPROC,            glRasterPos4s);
-        LOAD(PFNGLRASTERPOS4SVPROC,           glRasterPos4sv);
-        LOAD(PFNGLREADBUFFERPROC,             glReadBuffer);
-        LOAD(PFNGLREADPIXELSPROC,             glReadPixels);
-        LOAD(PFNGLRECTDPROC,                  glRectd);
-        LOAD(PFNGLRECTDVPROC,                 glRectdv);
-        LOAD(PFNGLRECTFPROC,                  glRectf);
-        LOAD(PFNGLRECTFVPROC,                 glRectfv);
-        LOAD(PFNGLRECTIPROC,                  glRecti);
-        LOAD(PFNGLRECTIVPROC,                 glRectiv);
-        LOAD(PFNGLRECTSPROC,                  glRects);
-        LOAD(PFNGLRECTSVPROC,                 glRectsv);
-        LOAD(PFNGLRENDERMODEPROC,             glRenderMode);
-        LOAD(PFNGLROTATEDPROC,                glRotated);
-        LOAD(PFNGLROTATEFPROC,                glRotatef);
-        LOAD(PFNGLSCALEDPROC,                 glScaled);
-        LOAD(PFNGLSCALEFPROC,                 glScalef);
-        LOAD(PFNGLSCISSORPROC,                glScissor);
-        LOAD(PFNGLSELECTBUFFERPROC,           glSelectBuffer);
-        LOAD(PFNGLSHADEMODELPROC,             glShadeModel);
-        LOAD(PFNGLSTENCILFUNCPROC,            glStencilFunc);
-        LOAD(PFNGLSTENCILMASKPROC,            glStencilMask);
-        LOAD(PFNGLSTENCILOPPROC,              glStencilOp);
-        LOAD(PFNGLTEXCOORD1DPROC,             glTexCoord1d);
-        LOAD(PFNGLTEXCOORD1DVPROC,            glTexCoord1dv);
-        LOAD(PFNGLTEXCOORD1FPROC,             glTexCoord1f);
-        LOAD(PFNGLTEXCOORD1FVPROC,            glTexCoord1fv);
-        LOAD(PFNGLTEXCOORD1IPROC,             glTexCoord1i);
-        LOAD(PFNGLTEXCOORD1IVPROC,            glTexCoord1iv);
-        LOAD(PFNGLTEXCOORD1SPROC,             glTexCoord1s);
-        LOAD(PFNGLTEXCOORD1SVPROC,            glTexCoord1sv);
-        LOAD(PFNGLTEXCOORD2DPROC,             glTexCoord2d);
-        LOAD(PFNGLTEXCOORD2DVPROC,            glTexCoord2dv);
-        LOAD(PFNGLTEXCOORD2FPROC,             glTexCoord2f);
-        LOAD(PFNGLTEXCOORD2FVPROC,            glTexCoord2fv);
-        LOAD(PFNGLTEXCOORD2IPROC,             glTexCoord2i);
-        LOAD(PFNGLTEXCOORD2IVPROC,            glTexCoord2iv);
-        LOAD(PFNGLTEXCOORD2SPROC,             glTexCoord2s);
-        LOAD(PFNGLTEXCOORD2SVPROC,            glTexCoord2sv);
-        LOAD(PFNGLTEXCOORD3DPROC,             glTexCoord3d);
-        LOAD(PFNGLTEXCOORD3DVPROC,            glTexCoord3dv);
-        LOAD(PFNGLTEXCOORD3FPROC,             glTexCoord3f);
-        LOAD(PFNGLTEXCOORD3FVPROC,            glTexCoord3fv);
-        LOAD(PFNGLTEXCOORD3IPROC,             glTexCoord3i);
-        LOAD(PFNGLTEXCOORD3IVPROC,            glTexCoord3iv);
-        LOAD(PFNGLTEXCOORD3SPROC,             glTexCoord3s);
-        LOAD(PFNGLTEXCOORD3SVPROC,            glTexCoord3sv);
-        LOAD(PFNGLTEXCOORD4DPROC,             glTexCoord4d);
-        LOAD(PFNGLTEXCOORD4DVPROC,            glTexCoord4dv);
-        LOAD(PFNGLTEXCOORD4FPROC,             glTexCoord4f);
-        LOAD(PFNGLTEXCOORD4FVPROC,            glTexCoord4fv);
-        LOAD(PFNGLTEXCOORD4IPROC,             glTexCoord4i);
-        LOAD(PFNGLTEXCOORD4IVPROC,            glTexCoord4iv);
-        LOAD(PFNGLTEXCOORD4SPROC,             glTexCoord4s);
-        LOAD(PFNGLTEXCOORD4SVPROC,            glTexCoord4sv);
-        LOAD(PFNGLTEXCOORDPOINTERPROC,        glTexCoordPointer);
-        LOAD(PFNGLTEXENVFPROC,                glTexEnvf);
-        LOAD(PFNGLTEXENVFVPROC,               glTexEnvfv);
-        LOAD(PFNGLTEXENVIPROC,                glTexEnvi);
-        LOAD(PFNGLTEXENVIVPROC,               glTexEnviv);
-        LOAD(PFNGLTEXGENDPROC,                glTexGend);
-        LOAD(PFNGLTEXGENDVPROC,               glTexGendv);
-        LOAD(PFNGLTEXGENFPROC,                glTexGenf);
-        LOAD(PFNGLTEXGENFVPROC,               glTexGenfv);
-        LOAD(PFNGLTEXGENIPROC,                glTexGeni);
-        LOAD(PFNGLTEXGENIVPROC,               glTexGeniv);
-        LOAD(PFNGLTEXIMAGE1DPROC,             glTexImage1D);
-        LOAD(PFNGLTEXIMAGE2DPROC,             glTexImage2D);
-        LOAD(PFNGLTEXPARAMETERFPROC,          glTexParameterf);
-        LOAD(PFNGLTEXPARAMETERFVPROC,         glTexParameterfv);
-        LOAD(PFNGLTEXPARAMETERIPROC,          glTexParameteri);
-        LOAD(PFNGLTEXPARAMETERIVPROC,         glTexParameteriv);
-        LOAD(PFNGLTEXSUBIMAGE1DPROC,          glTexSubImage1D);
-        LOAD(PFNGLTEXSUBIMAGE2DPROC,          glTexSubImage2D);
-        LOAD(PFNGLTRANSLATEDPROC,             glTranslated);
-        LOAD(PFNGLTRANSLATEFPROC,             glTranslatef);
-        LOAD(PFNGLVERTEX2DPROC,               glVertex2d);
-        LOAD(PFNGLVERTEX2DVPROC,              glVertex2dv);
-        LOAD(PFNGLVERTEX2FPROC,               glVertex2f);
-        LOAD(PFNGLVERTEX2FVPROC,              glVertex2fv);
-        LOAD(PFNGLVERTEX2IPROC,               glVertex2i);
-        LOAD(PFNGLVERTEX2IVPROC,              glVertex2iv);
-        LOAD(PFNGLVERTEX2SPROC,               glVertex2s);
-        LOAD(PFNGLVERTEX2SVPROC,              glVertex2sv);
-        LOAD(PFNGLVERTEX3DPROC,               glVertex3d);
-        LOAD(PFNGLVERTEX3DVPROC,              glVertex3dv);
-        LOAD(PFNGLVERTEX3FPROC,               glVertex3f);
-        LOAD(PFNGLVERTEX3FVPROC,              glVertex3fv);
-        LOAD(PFNGLVERTEX3IPROC,               glVertex3i);
-        LOAD(PFNGLVERTEX3IVPROC,              glVertex3iv);
-        LOAD(PFNGLVERTEX3SPROC,               glVertex3s);
-        LOAD(PFNGLVERTEX3SVPROC,              glVertex3sv);
-        LOAD(PFNGLVERTEX4DPROC,               glVertex4d);
-        LOAD(PFNGLVERTEX4DVPROC,              glVertex4dv);
-        LOAD(PFNGLVERTEX4FPROC,               glVertex4f);
-        LOAD(PFNGLVERTEX4FVPROC,              glVertex4fv);
-        LOAD(PFNGLVERTEX4IPROC,               glVertex4i);
-        LOAD(PFNGLVERTEX4IVPROC,              glVertex4iv);
-        LOAD(PFNGLVERTEX4SPROC,               glVertex4s);
-        LOAD(PFNGLVERTEX4SVPROC,              glVertex4sv);
-        LOAD(PFNGLVERTEXPOINTERPROC,          glVertexPointer);
-        LOAD(PFNGLVIEWPORTPROC,               glViewport);
-    }
-
-    if (version >= VD_FW_GL_VERSION_1_2) {
-        LOAD(PFNGLDRAWRANGEELEMENTSPROC, glDrawRangeElements);
-        LOAD(PFNGLTEXIMAGE3DPROC,        glTexImage3D);
-        LOAD(PFNGLTEXSUBIMAGE3DPROC,     glTexSubImage3D);
-        LOAD(PFNGLCOPYTEXSUBIMAGE3DPROC, glCopyTexSubImage3D);
-    }
-
-    if (version >= VD_FW_GL_VERSION_1_3) {
-        LOAD(PFNGLACTIVETEXTUREPROC,           glActiveTexture);
-        LOAD(PFNGLSAMPLECOVERAGEPROC,          glSampleCoverage);
-        LOAD(PFNGLCOMPRESSEDTEXIMAGE3DPROC,    glCompressedTexImage3D);
-        LOAD(PFNGLCOMPRESSEDTEXIMAGE2DPROC,    glCompressedTexImage2D);
-        LOAD(PFNGLCOMPRESSEDTEXIMAGE1DPROC,    glCompressedTexImage1D);
-        LOAD(PFNGLCOMPRESSEDTEXSUBIMAGE3DPROC, glCompressedTexSubImage3D);
-        LOAD(PFNGLCOMPRESSEDTEXSUBIMAGE2DPROC, glCompressedTexSubImage2D);
-        LOAD(PFNGLCOMPRESSEDTEXSUBIMAGE1DPROC, glCompressedTexSubImage1D);
-        LOAD(PFNGLGETCOMPRESSEDTEXIMAGEPROC,   glGetCompressedTexImage);
-    }
-
-    if (version >= VD_FW_GL_VERSION_1_4) {
-        LOAD(PFNGLBLENDFUNCSEPARATEPROC, glBlendFuncSeparate);
-        LOAD(PFNGLMULTIDRAWARRAYSPROC,   glMultiDrawArrays);
-        LOAD(PFNGLMULTIDRAWELEMENTSPROC, glMultiDrawElements);
-        LOAD(PFNGLPOINTPARAMETERFPROC,   glPointParameterf);
-        LOAD(PFNGLPOINTPARAMETERFVPROC,  glPointParameterfv);
-        LOAD(PFNGLPOINTPARAMETERIPROC,   glPointParameteri);
-        LOAD(PFNGLPOINTPARAMETERIVPROC,  glPointParameteriv);
-        LOAD(PFNGLBLENDCOLORPROC,        glBlendColor);
-        LOAD(PFNGLBLENDEQUATIONPROC,     glBlendEquation);
-    }
-
-    if (version >= VD_FW_GL_VERSION_1_5) {
-        LOAD(PFNGLGENQUERIESPROC,           glGenQueries);
-        LOAD(PFNGLDELETEQUERIESPROC,        glDeleteQueries);
-        LOAD(PFNGLISQUERYPROC,              glIsQuery);
-        LOAD(PFNGLBEGINQUERYPROC,           glBeginQuery);
-        LOAD(PFNGLENDQUERYPROC,             glEndQuery);
-        LOAD(PFNGLGETQUERYIVPROC,           glGetQueryiv);
-        LOAD(PFNGLGETQUERYOBJECTIVPROC,     glGetQueryObjectiv);
-        LOAD(PFNGLGETQUERYOBJECTUIVPROC,    glGetQueryObjectuiv);
-        LOAD(PFNGLBINDBUFFERPROC,           glBindBuffer);
-        LOAD(PFNGLDELETEBUFFERSPROC,        glDeleteBuffers);
-        LOAD(PFNGLGENBUFFERSPROC,           glGenBuffers);
-        LOAD(PFNGLISBUFFERPROC,             glIsBuffer);
-        LOAD(PFNGLBUFFERDATAPROC,           glBufferData);
-        LOAD(PFNGLBUFFERSUBDATAPROC,        glBufferSubData);
-        LOAD(PFNGLGETBUFFERSUBDATAPROC,     glGetBufferSubData);
-        LOAD(PFNGLMAPBUFFERPROC,            glMapBuffer);
-        LOAD(PFNGLUNMAPBUFFERPROC,          glUnmapBuffer);
-        LOAD(PFNGLGETBUFFERPARAMETERIVPROC, glGetBufferParameteriv);
-        LOAD(PFNGLGETBUFFERPOINTERVPROC,    glGetBufferPointerv);
-    }
-
-    if (version >= VD_FW_GL_VERSION_2_0) {
-        LOAD(PFNGLBLENDEQUATIONSEPARATEPROC,    glBlendEquationSeparate);
-        LOAD(PFNGLDRAWBUFFERSPROC,              glDrawBuffers);
-        LOAD(PFNGLSTENCILOPSEPARATEPROC,        glStencilOpSeparate);
-        LOAD(PFNGLSTENCILFUNCSEPARATEPROC,      glStencilFuncSeparate);
-        LOAD(PFNGLSTENCILMASKSEPARATEPROC,      glStencilMaskSeparate);
-        LOAD(PFNGLATTACHSHADERPROC,             glAttachShader);
-        LOAD(PFNGLBINDATTRIBLOCATIONPROC,       glBindAttribLocation);
-        LOAD(PFNGLCOMPILESHADERPROC,            glCompileShader);
-        LOAD(PFNGLCREATEPROGRAMPROC,            glCreateProgram);
-        LOAD(PFNGLCREATESHADERPROC,             glCreateShader);
-        LOAD(PFNGLDELETEPROGRAMPROC,            glDeleteProgram);
-        LOAD(PFNGLDELETESHADERPROC,             glDeleteShader);
-        LOAD(PFNGLDETACHSHADERPROC,             glDetachShader);
-        LOAD(PFNGLDISABLEVERTEXATTRIBARRAYPROC, glDisableVertexAttribArray);
-        LOAD(PFNGLENABLEVERTEXATTRIBARRAYPROC,  glEnableVertexAttribArray);
-        LOAD(PFNGLGETACTIVEATTRIBPROC,          glGetActiveAttrib);
-        LOAD(PFNGLGETACTIVEUNIFORMPROC,         glGetActiveUniform);
-        LOAD(PFNGLGETATTACHEDSHADERSPROC,       glGetAttachedShaders);
-        LOAD(PFNGLGETATTRIBLOCATIONPROC,        glGetAttribLocation);
-        LOAD(PFNGLGETPROGRAMIVPROC,             glGetProgramiv);
-        LOAD(PFNGLGETPROGRAMINFOLOGPROC,        glGetProgramInfoLog);
-        LOAD(PFNGLGETSHADERIVPROC,              glGetShaderiv);
-        LOAD(PFNGLGETSHADERINFOLOGPROC,         glGetShaderInfoLog);
-        LOAD(PFNGLGETSHADERSOURCEPROC,          glGetShaderSource);
-        LOAD(PFNGLGETUNIFORMLOCATIONPROC,       glGetUniformLocation);
-        LOAD(PFNGLGETUNIFORMFVPROC,             glGetUniformfv);
-        LOAD(PFNGLGETUNIFORMIVPROC,             glGetUniformiv);
-        LOAD(PFNGLGETVERTEXATTRIBDVPROC,        glGetVertexAttribdv);
-        LOAD(PFNGLGETVERTEXATTRIBFVPROC,        glGetVertexAttribfv);
-        LOAD(PFNGLGETVERTEXATTRIBIVPROC,        glGetVertexAttribiv);
-        LOAD(PFNGLGETVERTEXATTRIBPOINTERVPROC,  glGetVertexAttribPointerv);
-        LOAD(PFNGLISPROGRAMPROC,                glIsProgram);
-        LOAD(PFNGLISSHADERPROC,                 glIsShader);
-        LOAD(PFNGLLINKPROGRAMPROC,              glLinkProgram);
-        LOAD(PFNGLSHADERSOURCEPROC,             glShaderSource);
-        LOAD(PFNGLUSEPROGRAMPROC,               glUseProgram);
-        LOAD(PFNGLUNIFORM1FPROC,                glUniform1f);
-        LOAD(PFNGLUNIFORM2FPROC,                glUniform2f);
-        LOAD(PFNGLUNIFORM3FPROC,                glUniform3f);
-        LOAD(PFNGLUNIFORM4FPROC,                glUniform4f);
-        LOAD(PFNGLUNIFORM1IPROC,                glUniform1i);
-        LOAD(PFNGLUNIFORM2IPROC,                glUniform2i);
-        LOAD(PFNGLUNIFORM3IPROC,                glUniform3i);
-        LOAD(PFNGLUNIFORM4IPROC,                glUniform4i);
-        LOAD(PFNGLUNIFORM1FVPROC,               glUniform1fv);
-        LOAD(PFNGLUNIFORM2FVPROC,               glUniform2fv);
-        LOAD(PFNGLUNIFORM3FVPROC,               glUniform3fv);
-        LOAD(PFNGLUNIFORM4FVPROC,               glUniform4fv);
-        LOAD(PFNGLUNIFORM1IVPROC,               glUniform1iv);
-        LOAD(PFNGLUNIFORM2IVPROC,               glUniform2iv);
-        LOAD(PFNGLUNIFORM3IVPROC,               glUniform3iv);
-        LOAD(PFNGLUNIFORM4IVPROC,               glUniform4iv);
-        LOAD(PFNGLUNIFORMMATRIX2FVPROC,         glUniformMatrix2fv);
-        LOAD(PFNGLUNIFORMMATRIX3FVPROC,         glUniformMatrix3fv);
-        LOAD(PFNGLUNIFORMMATRIX4FVPROC,         glUniformMatrix4fv);
-        LOAD(PFNGLVALIDATEPROGRAMPROC,          glValidateProgram);
-        LOAD(PFNGLVERTEXATTRIB1DPROC,           glVertexAttrib1d);
-        LOAD(PFNGLVERTEXATTRIB1DVPROC,          glVertexAttrib1dv);
-        LOAD(PFNGLVERTEXATTRIB1FPROC,           glVertexAttrib1f);
-        LOAD(PFNGLVERTEXATTRIB1FVPROC,          glVertexAttrib1fv);
-        LOAD(PFNGLVERTEXATTRIB1SPROC,           glVertexAttrib1s);
-        LOAD(PFNGLVERTEXATTRIB1SVPROC,          glVertexAttrib1sv);
-        LOAD(PFNGLVERTEXATTRIB2DPROC,           glVertexAttrib2d);
-        LOAD(PFNGLVERTEXATTRIB2DVPROC,          glVertexAttrib2dv);
-        LOAD(PFNGLVERTEXATTRIB2FPROC,           glVertexAttrib2f);
-        LOAD(PFNGLVERTEXATTRIB2FVPROC,          glVertexAttrib2fv);
-        LOAD(PFNGLVERTEXATTRIB2SPROC,           glVertexAttrib2s);
-        LOAD(PFNGLVERTEXATTRIB2SVPROC,          glVertexAttrib2sv);
-        LOAD(PFNGLVERTEXATTRIB3DPROC,           glVertexAttrib3d);
-        LOAD(PFNGLVERTEXATTRIB3DVPROC,          glVertexAttrib3dv);
-        LOAD(PFNGLVERTEXATTRIB3FPROC,           glVertexAttrib3f);
-        LOAD(PFNGLVERTEXATTRIB3FVPROC,          glVertexAttrib3fv);
-        LOAD(PFNGLVERTEXATTRIB3SPROC,           glVertexAttrib3s);
-        LOAD(PFNGLVERTEXATTRIB3SVPROC,          glVertexAttrib3sv);
-        LOAD(PFNGLVERTEXATTRIB4NBVPROC,         glVertexAttrib4Nbv);
-        LOAD(PFNGLVERTEXATTRIB4NIVPROC,         glVertexAttrib4Niv);
-        LOAD(PFNGLVERTEXATTRIB4NSVPROC,         glVertexAttrib4Nsv);
-        LOAD(PFNGLVERTEXATTRIB4NUBPROC,         glVertexAttrib4Nub);
-        LOAD(PFNGLVERTEXATTRIB4NUBVPROC,        glVertexAttrib4Nubv);
-        LOAD(PFNGLVERTEXATTRIB4NUIVPROC,        glVertexAttrib4Nuiv);
-        LOAD(PFNGLVERTEXATTRIB4NUSVPROC,        glVertexAttrib4Nusv);
-        LOAD(PFNGLVERTEXATTRIB4BVPROC,          glVertexAttrib4bv);
-        LOAD(PFNGLVERTEXATTRIB4DPROC,           glVertexAttrib4d);
-        LOAD(PFNGLVERTEXATTRIB4DVPROC,          glVertexAttrib4dv);
-        LOAD(PFNGLVERTEXATTRIB4FPROC,           glVertexAttrib4f);
-        LOAD(PFNGLVERTEXATTRIB4FVPROC,          glVertexAttrib4fv);
-        LOAD(PFNGLVERTEXATTRIB4IVPROC,          glVertexAttrib4iv);
-        LOAD(PFNGLVERTEXATTRIB4SPROC,           glVertexAttrib4s);
-        LOAD(PFNGLVERTEXATTRIB4SVPROC,          glVertexAttrib4sv);
-        LOAD(PFNGLVERTEXATTRIB4UBVPROC,         glVertexAttrib4ubv);
-        LOAD(PFNGLVERTEXATTRIB4UIVPROC,         glVertexAttrib4uiv);
-        LOAD(PFNGLVERTEXATTRIB4USVPROC,         glVertexAttrib4usv);
-        LOAD(PFNGLVERTEXATTRIBPOINTERPROC,      glVertexAttribPointer);
-    }
-
-    if (version >= VD_FW_GL_VERSION_2_1) {
-        LOAD(PFNGLUNIFORMMATRIX2X3FVPROC, glUniformMatrix2x3fv);
-        LOAD(PFNGLUNIFORMMATRIX3X2FVPROC, glUniformMatrix3x2fv);
-        LOAD(PFNGLUNIFORMMATRIX2X4FVPROC, glUniformMatrix2x4fv);
-        LOAD(PFNGLUNIFORMMATRIX4X2FVPROC, glUniformMatrix4x2fv);
-        LOAD(PFNGLUNIFORMMATRIX3X4FVPROC, glUniformMatrix3x4fv);
-        LOAD(PFNGLUNIFORMMATRIX4X3FVPROC, glUniformMatrix4x3fv);
-    }
-
-    if (version >= VD_FW_GL_VERSION_3_0) {
-        LOAD(PFNGLCOLORMASKIPROC,                          glColorMaski);
-        LOAD(PFNGLGETBOOLEANI_VPROC,                       glGetBooleani_v);
-        LOAD(PFNGLGETINTEGERI_VPROC,                       glGetIntegeri_v);
-        LOAD(PFNGLENABLEIPROC,                             glEnablei);
-        LOAD(PFNGLDISABLEIPROC,                            glDisablei);
-        LOAD(PFNGLISENABLEDIPROC,                          glIsEnabledi);
-        LOAD(PFNGLBEGINTRANSFORMFEEDBACKPROC,              glBeginTransformFeedback);
-        LOAD(PFNGLENDTRANSFORMFEEDBACKPROC,                glEndTransformFeedback);
-        LOAD(PFNGLBINDBUFFERRANGEPROC,                     glBindBufferRange);
-        LOAD(PFNGLBINDBUFFERBASEPROC,                      glBindBufferBase);
-        LOAD(PFNGLTRANSFORMFEEDBACKVARYINGSPROC,           glTransformFeedbackVaryings);
-        LOAD(PFNGLGETTRANSFORMFEEDBACKVARYINGPROC,         glGetTransformFeedbackVarying);
-        LOAD(PFNGLCLAMPCOLORPROC,                          glClampColor);
-        LOAD(PFNGLBEGINCONDITIONALRENDERPROC,              glBeginConditionalRender);
-        LOAD(PFNGLENDCONDITIONALRENDERPROC,                glEndConditionalRender);
-        LOAD(PFNGLVERTEXATTRIBIPOINTERPROC,                glVertexAttribIPointer);
-        LOAD(PFNGLGETVERTEXATTRIBIIVPROC,                  glGetVertexAttribIiv);
-        LOAD(PFNGLGETVERTEXATTRIBIUIVPROC,                 glGetVertexAttribIuiv);
-        LOAD(PFNGLVERTEXATTRIBI1IPROC,                     glVertexAttribI1i);
-        LOAD(PFNGLVERTEXATTRIBI2IPROC,                     glVertexAttribI2i);
-        LOAD(PFNGLVERTEXATTRIBI3IPROC,                     glVertexAttribI3i);
-        LOAD(PFNGLVERTEXATTRIBI4IPROC,                     glVertexAttribI4i);
-        LOAD(PFNGLVERTEXATTRIBI1UIPROC,                    glVertexAttribI1ui);
-        LOAD(PFNGLVERTEXATTRIBI2UIPROC,                    glVertexAttribI2ui);
-        LOAD(PFNGLVERTEXATTRIBI3UIPROC,                    glVertexAttribI3ui);
-        LOAD(PFNGLVERTEXATTRIBI4UIPROC,                    glVertexAttribI4ui);
-        LOAD(PFNGLVERTEXATTRIBI1IVPROC,                    glVertexAttribI1iv);
-        LOAD(PFNGLVERTEXATTRIBI2IVPROC,                    glVertexAttribI2iv);
-        LOAD(PFNGLVERTEXATTRIBI3IVPROC,                    glVertexAttribI3iv);
-        LOAD(PFNGLVERTEXATTRIBI4IVPROC,                    glVertexAttribI4iv);
-        LOAD(PFNGLVERTEXATTRIBI1UIVPROC,                   glVertexAttribI1uiv);
-        LOAD(PFNGLVERTEXATTRIBI2UIVPROC,                   glVertexAttribI2uiv);
-        LOAD(PFNGLVERTEXATTRIBI3UIVPROC,                   glVertexAttribI3uiv);
-        LOAD(PFNGLVERTEXATTRIBI4UIVPROC,                   glVertexAttribI4uiv);
-        LOAD(PFNGLVERTEXATTRIBI4BVPROC,                    glVertexAttribI4bv);
-        LOAD(PFNGLVERTEXATTRIBI4SVPROC,                    glVertexAttribI4sv);
-        LOAD(PFNGLVERTEXATTRIBI4UBVPROC,                   glVertexAttribI4ubv);
-        LOAD(PFNGLVERTEXATTRIBI4USVPROC,                   glVertexAttribI4usv);
-        LOAD(PFNGLGETUNIFORMUIVPROC,                       glGetUniformuiv);
-        LOAD(PFNGLBINDFRAGDATALOCATIONPROC,                glBindFragDataLocation);
-        LOAD(PFNGLGETFRAGDATALOCATIONPROC,                 glGetFragDataLocation);
-        LOAD(PFNGLUNIFORM1UIPROC,                          glUniform1ui);
-        LOAD(PFNGLUNIFORM2UIPROC,                          glUniform2ui);
-        LOAD(PFNGLUNIFORM3UIPROC,                          glUniform3ui);
-        LOAD(PFNGLUNIFORM4UIPROC,                          glUniform4ui);
-        LOAD(PFNGLUNIFORM1UIVPROC,                         glUniform1uiv);
-        LOAD(PFNGLUNIFORM2UIVPROC,                         glUniform2uiv);
-        LOAD(PFNGLUNIFORM3UIVPROC,                         glUniform3uiv);
-        LOAD(PFNGLUNIFORM4UIVPROC,                         glUniform4uiv);
-        LOAD(PFNGLTEXPARAMETERIIVPROC,                     glTexParameterIiv);
-        LOAD(PFNGLTEXPARAMETERIUIVPROC,                    glTexParameterIuiv);
-        LOAD(PFNGLGETTEXPARAMETERIIVPROC,                  glGetTexParameterIiv);
-        LOAD(PFNGLGETTEXPARAMETERIUIVPROC,                 glGetTexParameterIuiv);
-        LOAD(PFNGLCLEARBUFFERIVPROC,                       glClearBufferiv);
-        LOAD(PFNGLCLEARBUFFERUIVPROC,                      glClearBufferuiv);
-        LOAD(PFNGLCLEARBUFFERFVPROC,                       glClearBufferfv);
-        LOAD(PFNGLCLEARBUFFERFIPROC,                       glClearBufferfi);
-        LOAD(PFNGLGETSTRINGIPROC,                          glGetStringi);
-        LOAD(PFNGLISRENDERBUFFERPROC,                      glIsRenderbuffer);
-        LOAD(PFNGLBINDRENDERBUFFERPROC,                    glBindRenderbuffer);
-        LOAD(PFNGLDELETERENDERBUFFERSPROC,                 glDeleteRenderbuffers);
-        LOAD(PFNGLGENRENDERBUFFERSPROC,                    glGenRenderbuffers);
-        LOAD(PFNGLRENDERBUFFERSTORAGEPROC,                 glRenderbufferStorage);
-        LOAD(PFNGLGETRENDERBUFFERPARAMETERIVPROC,          glGetRenderbufferParameteriv);
-        LOAD(PFNGLISFRAMEBUFFERPROC,                       glIsFramebuffer);
-        LOAD(PFNGLBINDFRAMEBUFFERPROC,                     glBindFramebuffer);
-        LOAD(PFNGLDELETEFRAMEBUFFERSPROC,                  glDeleteFramebuffers);
-        LOAD(PFNGLGENFRAMEBUFFERSPROC,                     glGenFramebuffers);
-        LOAD(PFNGLCHECKFRAMEBUFFERSTATUSPROC,              glCheckFramebufferStatus);
-        LOAD(PFNGLFRAMEBUFFERTEXTURE1DPROC,                glFramebufferTexture1D);
-        LOAD(PFNGLFRAMEBUFFERTEXTURE2DPROC,                glFramebufferTexture2D);
-        LOAD(PFNGLFRAMEBUFFERTEXTURE3DPROC,                glFramebufferTexture3D);
-        LOAD(PFNGLFRAMEBUFFERRENDERBUFFERPROC,             glFramebufferRenderbuffer);
-        LOAD(PFNGLGETFRAMEBUFFERATTACHMENTPARAMETERIVPROC, glGetFramebufferAttachmentParameteriv);
-        LOAD(PFNGLGENERATEMIPMAPPROC,                      glGenerateMipmap);
-        LOAD(PFNGLBLITFRAMEBUFFERPROC,                     glBlitFramebuffer);
-        LOAD(PFNGLRENDERBUFFERSTORAGEMULTISAMPLEPROC,      glRenderbufferStorageMultisample);
-        LOAD(PFNGLFRAMEBUFFERTEXTURELAYERPROC,             glFramebufferTextureLayer);
-        LOAD(PFNGLMAPBUFFERRANGEPROC,                      glMapBufferRange);
-        LOAD(PFNGLFLUSHMAPPEDBUFFERRANGEPROC,              glFlushMappedBufferRange);
-        LOAD(PFNGLBINDVERTEXARRAYPROC,                     glBindVertexArray);
-        LOAD(PFNGLDELETEVERTEXARRAYSPROC,                  glDeleteVertexArrays);
-        LOAD(PFNGLGENVERTEXARRAYSPROC,                     glGenVertexArrays);
-        LOAD(PFNGLISVERTEXARRAYPROC,                       glIsVertexArray);
-    }
-
-    if (version >= VD_FW_GL_VERSION_3_1) {
-        LOAD(PFNGLDRAWARRAYSINSTANCEDPROC,       glDrawArraysInstanced);
-        LOAD(PFNGLDRAWELEMENTSINSTANCEDPROC,     glDrawElementsInstanced);
-        LOAD(PFNGLTEXBUFFERPROC,                 glTexBuffer);
-        LOAD(PFNGLPRIMITIVERESTARTINDEXPROC,     glPrimitiveRestartIndex);
-        LOAD(PFNGLCOPYBUFFERSUBDATAPROC,         glCopyBufferSubData);
-        LOAD(PFNGLGETUNIFORMINDICESPROC,         glGetUniformIndices);
-        LOAD(PFNGLGETACTIVEUNIFORMSIVPROC,       glGetActiveUniformsiv);
-        LOAD(PFNGLGETACTIVEUNIFORMNAMEPROC,      glGetActiveUniformName);
-        LOAD(PFNGLGETUNIFORMBLOCKINDEXPROC,      glGetUniformBlockIndex);
-        LOAD(PFNGLGETACTIVEUNIFORMBLOCKIVPROC,   glGetActiveUniformBlockiv);
-        LOAD(PFNGLGETACTIVEUNIFORMBLOCKNAMEPROC, glGetActiveUniformBlockName);
-        LOAD(PFNGLUNIFORMBLOCKBINDINGPROC,       glUniformBlockBinding);
-    }
-
-    if (version >= VD_FW_GL_VERSION_3_2) {
-        LOAD(PFNGLDRAWELEMENTSBASEVERTEXPROC,          glDrawElementsBaseVertex);
-        LOAD(PFNGLDRAWRANGEELEMENTSBASEVERTEXPROC,     glDrawRangeElementsBaseVertex);
-        LOAD(PFNGLDRAWELEMENTSINSTANCEDBASEVERTEXPROC, glDrawElementsInstancedBaseVertex);
-        LOAD(PFNGLMULTIDRAWELEMENTSBASEVERTEXPROC,     glMultiDrawElementsBaseVertex);
-        LOAD(PFNGLPROVOKINGVERTEXPROC,                 glProvokingVertex);
-        LOAD(PFNGLFENCESYNCPROC,                       glFenceSync);
-        LOAD(PFNGLISSYNCPROC,                          glIsSync);
-        LOAD(PFNGLDELETESYNCPROC,                      glDeleteSync);
-        LOAD(PFNGLCLIENTWAITSYNCPROC,                  glClientWaitSync);
-        LOAD(PFNGLWAITSYNCPROC,                        glWaitSync);
-        LOAD(PFNGLGETINTEGER64VPROC,                   glGetInteger64v);
-        LOAD(PFNGLGETSYNCIVPROC,                       glGetSynciv);
-        LOAD(PFNGLGETINTEGER64I_VPROC,                 glGetInteger64i_v);
-        LOAD(PFNGLGETBUFFERPARAMETERI64VPROC,          glGetBufferParameteri64v);
-        LOAD(PFNGLFRAMEBUFFERTEXTUREPROC,              glFramebufferTexture);
-        LOAD(PFNGLTEXIMAGE2DMULTISAMPLEPROC,           glTexImage2DMultisample);
-        LOAD(PFNGLTEXIMAGE3DMULTISAMPLEPROC,           glTexImage3DMultisample);
-        LOAD(PFNGLGETMULTISAMPLEFVPROC,                glGetMultisamplefv);
-        LOAD(PFNGLSAMPLEMASKIPROC,                     glSampleMaski);
-    }
-
-    if (version >= VD_FW_GL_VERSION_3_3) {
-        LOAD(PFNGLBINDFRAGDATALOCATIONINDEXEDPROC, glBindFragDataLocationIndexed);
-        LOAD(PFNGLGETFRAGDATAINDEXPROC,            glGetFragDataIndex);
-        LOAD(PFNGLGENSAMPLERSPROC,                 glGenSamplers);
-        LOAD(PFNGLDELETESAMPLERSPROC,              glDeleteSamplers);
-        LOAD(PFNGLISSAMPLERPROC,                   glIsSampler);
-        LOAD(PFNGLBINDSAMPLERPROC,                 glBindSampler);
-        LOAD(PFNGLSAMPLERPARAMETERIPROC,           glSamplerParameteri);
-        LOAD(PFNGLSAMPLERPARAMETERIVPROC,          glSamplerParameteriv);
-        LOAD(PFNGLSAMPLERPARAMETERFPROC,           glSamplerParameterf);
-        LOAD(PFNGLSAMPLERPARAMETERFVPROC,          glSamplerParameterfv);
-        LOAD(PFNGLSAMPLERPARAMETERIIVPROC,         glSamplerParameterIiv);
-        LOAD(PFNGLSAMPLERPARAMETERIUIVPROC,        glSamplerParameterIuiv);
-        LOAD(PFNGLGETSAMPLERPARAMETERIVPROC,       glGetSamplerParameteriv);
-        LOAD(PFNGLGETSAMPLERPARAMETERIIVPROC,      glGetSamplerParameterIiv);
-        LOAD(PFNGLGETSAMPLERPARAMETERFVPROC,       glGetSamplerParameterfv);
-        LOAD(PFNGLGETSAMPLERPARAMETERIUIVPROC,     glGetSamplerParameterIuiv);
-        LOAD(PFNGLQUERYCOUNTERPROC,                glQueryCounter);
-        LOAD(PFNGLGETQUERYOBJECTI64VPROC,          glGetQueryObjecti64v);
-        LOAD(PFNGLGETQUERYOBJECTUI64VPROC,         glGetQueryObjectui64v);
-        LOAD(PFNGLVERTEXATTRIBDIVISORPROC,         glVertexAttribDivisor);
-        LOAD(PFNGLVERTEXATTRIBP1UIPROC,            glVertexAttribP1ui);
-        LOAD(PFNGLVERTEXATTRIBP1UIVPROC,           glVertexAttribP1uiv);
-        LOAD(PFNGLVERTEXATTRIBP2UIPROC,            glVertexAttribP2ui);
-        LOAD(PFNGLVERTEXATTRIBP2UIVPROC,           glVertexAttribP2uiv);
-        LOAD(PFNGLVERTEXATTRIBP3UIPROC,            glVertexAttribP3ui);
-        LOAD(PFNGLVERTEXATTRIBP3UIVPROC,           glVertexAttribP3uiv);
-        LOAD(PFNGLVERTEXATTRIBP4UIPROC,            glVertexAttribP4ui);
-        LOAD(PFNGLVERTEXATTRIBP4UIVPROC,           glVertexAttribP4uiv);
-    }
-
-    if (version >= VD_FW_GL_VERSION_4_0) {
-        LOAD(PFNGLMINSAMPLESHADINGPROC,               glMinSampleShading);
-        LOAD(PFNGLBLENDEQUATIONIPROC,                 glBlendEquationi);
-        LOAD(PFNGLBLENDEQUATIONSEPARATEIPROC,         glBlendEquationSeparatei);
-        LOAD(PFNGLBLENDFUNCIPROC,                     glBlendFunci);
-        LOAD(PFNGLBLENDFUNCSEPARATEIPROC,             glBlendFuncSeparatei);
-        LOAD(PFNGLDRAWARRAYSINDIRECTPROC,             glDrawArraysIndirect);
-        LOAD(PFNGLDRAWELEMENTSINDIRECTPROC,           glDrawElementsIndirect);
-        LOAD(PFNGLUNIFORM1DPROC,                      glUniform1d);
-        LOAD(PFNGLUNIFORM2DPROC,                      glUniform2d);
-        LOAD(PFNGLUNIFORM3DPROC,                      glUniform3d);
-        LOAD(PFNGLUNIFORM4DPROC,                      glUniform4d);
-        LOAD(PFNGLUNIFORM1DVPROC,                     glUniform1dv);
-        LOAD(PFNGLUNIFORM2DVPROC,                     glUniform2dv);
-        LOAD(PFNGLUNIFORM3DVPROC,                     glUniform3dv);
-        LOAD(PFNGLUNIFORM4DVPROC,                     glUniform4dv);
-        LOAD(PFNGLUNIFORMMATRIX2DVPROC,               glUniformMatrix2dv);
-        LOAD(PFNGLUNIFORMMATRIX3DVPROC,               glUniformMatrix3dv);
-        LOAD(PFNGLUNIFORMMATRIX4DVPROC,               glUniformMatrix4dv);
-        LOAD(PFNGLUNIFORMMATRIX2X3DVPROC,             glUniformMatrix2x3dv);
-        LOAD(PFNGLUNIFORMMATRIX2X4DVPROC,             glUniformMatrix2x4dv);
-        LOAD(PFNGLUNIFORMMATRIX3X2DVPROC,             glUniformMatrix3x2dv);
-        LOAD(PFNGLUNIFORMMATRIX3X4DVPROC,             glUniformMatrix3x4dv);
-        LOAD(PFNGLUNIFORMMATRIX4X2DVPROC,             glUniformMatrix4x2dv);
-        LOAD(PFNGLUNIFORMMATRIX4X3DVPROC,             glUniformMatrix4x3dv);
-        LOAD(PFNGLGETUNIFORMDVPROC,                   glGetUniformdv);
-        LOAD(PFNGLGETSUBROUTINEUNIFORMLOCATIONPROC,   glGetSubroutineUniformLocation);
-        LOAD(PFNGLGETSUBROUTINEINDEXPROC,             glGetSubroutineIndex);
-        LOAD(PFNGLGETACTIVESUBROUTINEUNIFORMIVPROC,   glGetActiveSubroutineUniformiv);
-        LOAD(PFNGLGETACTIVESUBROUTINEUNIFORMNAMEPROC, glGetActiveSubroutineUniformName);
-        LOAD(PFNGLGETACTIVESUBROUTINENAMEPROC,        glGetActiveSubroutineName);
-        LOAD(PFNGLUNIFORMSUBROUTINESUIVPROC,          glUniformSubroutinesuiv);
-        LOAD(PFNGLGETUNIFORMSUBROUTINEUIVPROC,        glGetUniformSubroutineuiv);
-        LOAD(PFNGLGETPROGRAMSTAGEIVPROC,              glGetProgramStageiv);
-        LOAD(PFNGLPATCHPARAMETERIPROC,                glPatchParameteri);
-        LOAD(PFNGLPATCHPARAMETERFVPROC,               glPatchParameterfv);
-        LOAD(PFNGLBINDTRANSFORMFEEDBACKPROC,          glBindTransformFeedback);
-        LOAD(PFNGLDELETETRANSFORMFEEDBACKSPROC,       glDeleteTransformFeedbacks);
-        LOAD(PFNGLGENTRANSFORMFEEDBACKSPROC,          glGenTransformFeedbacks);
-        LOAD(PFNGLISTRANSFORMFEEDBACKPROC,            glIsTransformFeedback);
-        LOAD(PFNGLPAUSETRANSFORMFEEDBACKPROC,         glPauseTransformFeedback);
-        LOAD(PFNGLRESUMETRANSFORMFEEDBACKPROC,        glResumeTransformFeedback);
-        LOAD(PFNGLDRAWTRANSFORMFEEDBACKPROC,          glDrawTransformFeedback);
-        LOAD(PFNGLDRAWTRANSFORMFEEDBACKSTREAMPROC,    glDrawTransformFeedbackStream);
-        LOAD(PFNGLBEGINQUERYINDEXEDPROC,              glBeginQueryIndexed);
-        LOAD(PFNGLENDQUERYINDEXEDPROC,                glEndQueryIndexed);
-        LOAD(PFNGLGETQUERYINDEXEDIVPROC,              glGetQueryIndexediv);
-    }
-
-    if (version >= VD_FW_GL_VERSION_4_1) {
-        LOAD(PFNGLRELEASESHADERCOMPILERPROC,     glReleaseShaderCompiler);
-        LOAD(PFNGLSHADERBINARYPROC,              glShaderBinary);
-        LOAD(PFNGLGETSHADERPRECISIONFORMATPROC,  glGetShaderPrecisionFormat);
-        LOAD(PFNGLDEPTHRANGEFPROC,               glDepthRangef);
-        LOAD(PFNGLCLEARDEPTHFPROC,               glClearDepthf);
-        LOAD(PFNGLGETPROGRAMBINARYPROC,          glGetProgramBinary);
-        LOAD(PFNGLPROGRAMBINARYPROC,             glProgramBinary);
-        LOAD(PFNGLPROGRAMPARAMETERIPROC,         glProgramParameteri);
-        LOAD(PFNGLUSEPROGRAMSTAGESPROC,          glUseProgramStages);
-        LOAD(PFNGLACTIVESHADERPROGRAMPROC,       glActiveShaderProgram);
-        LOAD(PFNGLCREATESHADERPROGRAMVPROC,      glCreateShaderProgramv);
-        LOAD(PFNGLBINDPROGRAMPIPELINEPROC,       glBindProgramPipeline);
-        LOAD(PFNGLDELETEPROGRAMPIPELINESPROC,    glDeleteProgramPipelines);
-        LOAD(PFNGLGENPROGRAMPIPELINESPROC,       glGenProgramPipelines);
-        LOAD(PFNGLISPROGRAMPIPELINEPROC,         glIsProgramPipeline);
-        LOAD(PFNGLGETPROGRAMPIPELINEIVPROC,      glGetProgramPipelineiv);
-        LOAD(PFNGLPROGRAMUNIFORM1IPROC,          glProgramUniform1i);
-        LOAD(PFNGLPROGRAMUNIFORM1IVPROC,         glProgramUniform1iv);
-        LOAD(PFNGLPROGRAMUNIFORM1FPROC,          glProgramUniform1f);
-        LOAD(PFNGLPROGRAMUNIFORM1FVPROC,         glProgramUniform1fv);
-        LOAD(PFNGLPROGRAMUNIFORM1DPROC,          glProgramUniform1d);
-        LOAD(PFNGLPROGRAMUNIFORM1DVPROC,         glProgramUniform1dv);
-        LOAD(PFNGLPROGRAMUNIFORM1UIPROC,         glProgramUniform1ui);
-        LOAD(PFNGLPROGRAMUNIFORM1UIVPROC,        glProgramUniform1uiv);
-        LOAD(PFNGLPROGRAMUNIFORM2IPROC,          glProgramUniform2i);
-        LOAD(PFNGLPROGRAMUNIFORM2IVPROC,         glProgramUniform2iv);
-        LOAD(PFNGLPROGRAMUNIFORM2FPROC,          glProgramUniform2f);
-        LOAD(PFNGLPROGRAMUNIFORM2FVPROC,         glProgramUniform2fv);
-        LOAD(PFNGLPROGRAMUNIFORM2DPROC,          glProgramUniform2d);
-        LOAD(PFNGLPROGRAMUNIFORM2DVPROC,         glProgramUniform2dv);
-        LOAD(PFNGLPROGRAMUNIFORM2UIPROC,         glProgramUniform2ui);
-        LOAD(PFNGLPROGRAMUNIFORM2UIVPROC,        glProgramUniform2uiv);
-        LOAD(PFNGLPROGRAMUNIFORM3IPROC,          glProgramUniform3i);
-        LOAD(PFNGLPROGRAMUNIFORM3IVPROC,         glProgramUniform3iv);
-        LOAD(PFNGLPROGRAMUNIFORM3FPROC,          glProgramUniform3f);
-        LOAD(PFNGLPROGRAMUNIFORM3FVPROC,         glProgramUniform3fv);
-        LOAD(PFNGLPROGRAMUNIFORM3DPROC,          glProgramUniform3d);
-        LOAD(PFNGLPROGRAMUNIFORM3DVPROC,         glProgramUniform3dv);
-        LOAD(PFNGLPROGRAMUNIFORM3UIPROC,         glProgramUniform3ui);
-        LOAD(PFNGLPROGRAMUNIFORM3UIVPROC,        glProgramUniform3uiv);
-        LOAD(PFNGLPROGRAMUNIFORM4IPROC,          glProgramUniform4i);
-        LOAD(PFNGLPROGRAMUNIFORM4IVPROC,         glProgramUniform4iv);
-        LOAD(PFNGLPROGRAMUNIFORM4FPROC,          glProgramUniform4f);
-        LOAD(PFNGLPROGRAMUNIFORM4FVPROC,         glProgramUniform4fv);
-        LOAD(PFNGLPROGRAMUNIFORM4DPROC,          glProgramUniform4d);
-        LOAD(PFNGLPROGRAMUNIFORM4DVPROC,         glProgramUniform4dv);
-        LOAD(PFNGLPROGRAMUNIFORM4UIPROC,         glProgramUniform4ui);
-        LOAD(PFNGLPROGRAMUNIFORM4UIVPROC,        glProgramUniform4uiv);
-        LOAD(PFNGLPROGRAMUNIFORMMATRIX2FVPROC,   glProgramUniformMatrix2fv);
-        LOAD(PFNGLPROGRAMUNIFORMMATRIX3FVPROC,   glProgramUniformMatrix3fv);
-        LOAD(PFNGLPROGRAMUNIFORMMATRIX4FVPROC,   glProgramUniformMatrix4fv);
-        LOAD(PFNGLPROGRAMUNIFORMMATRIX2DVPROC,   glProgramUniformMatrix2dv);
-        LOAD(PFNGLPROGRAMUNIFORMMATRIX3DVPROC,   glProgramUniformMatrix3dv);
-        LOAD(PFNGLPROGRAMUNIFORMMATRIX4DVPROC,   glProgramUniformMatrix4dv);
-        LOAD(PFNGLPROGRAMUNIFORMMATRIX2X3FVPROC, glProgramUniformMatrix2x3fv);
-        LOAD(PFNGLPROGRAMUNIFORMMATRIX3X2FVPROC, glProgramUniformMatrix3x2fv);
-        LOAD(PFNGLPROGRAMUNIFORMMATRIX2X4FVPROC, glProgramUniformMatrix2x4fv);
-        LOAD(PFNGLPROGRAMUNIFORMMATRIX4X2FVPROC, glProgramUniformMatrix4x2fv);
-        LOAD(PFNGLPROGRAMUNIFORMMATRIX3X4FVPROC, glProgramUniformMatrix3x4fv);
-        LOAD(PFNGLPROGRAMUNIFORMMATRIX4X3FVPROC, glProgramUniformMatrix4x3fv);
-        LOAD(PFNGLPROGRAMUNIFORMMATRIX2X3DVPROC, glProgramUniformMatrix2x3dv);
-        LOAD(PFNGLPROGRAMUNIFORMMATRIX3X2DVPROC, glProgramUniformMatrix3x2dv);
-        LOAD(PFNGLPROGRAMUNIFORMMATRIX2X4DVPROC, glProgramUniformMatrix2x4dv);
-        LOAD(PFNGLPROGRAMUNIFORMMATRIX4X2DVPROC, glProgramUniformMatrix4x2dv);
-        LOAD(PFNGLPROGRAMUNIFORMMATRIX3X4DVPROC, glProgramUniformMatrix3x4dv);
-        LOAD(PFNGLPROGRAMUNIFORMMATRIX4X3DVPROC, glProgramUniformMatrix4x3dv);
-        LOAD(PFNGLVALIDATEPROGRAMPIPELINEPROC,   glValidateProgramPipeline);
-        LOAD(PFNGLGETPROGRAMPIPELINEINFOLOGPROC, glGetProgramPipelineInfoLog);
-        LOAD(PFNGLVERTEXATTRIBL1DPROC,           glVertexAttribL1d);
-        LOAD(PFNGLVERTEXATTRIBL2DPROC,           glVertexAttribL2d);
-        LOAD(PFNGLVERTEXATTRIBL3DPROC,           glVertexAttribL3d);
-        LOAD(PFNGLVERTEXATTRIBL4DPROC,           glVertexAttribL4d);
-        LOAD(PFNGLVERTEXATTRIBL1DVPROC,          glVertexAttribL1dv);
-        LOAD(PFNGLVERTEXATTRIBL2DVPROC,          glVertexAttribL2dv);
-        LOAD(PFNGLVERTEXATTRIBL3DVPROC,          glVertexAttribL3dv);
-        LOAD(PFNGLVERTEXATTRIBL4DVPROC,          glVertexAttribL4dv);
-        LOAD(PFNGLVERTEXATTRIBLPOINTERPROC,      glVertexAttribLPointer);
-        LOAD(PFNGLGETVERTEXATTRIBLDVPROC,        glGetVertexAttribLdv);
-        LOAD(PFNGLVIEWPORTARRAYVPROC,            glViewportArrayv);
-        LOAD(PFNGLVIEWPORTINDEXEDFPROC,          glViewportIndexedf);
-        LOAD(PFNGLVIEWPORTINDEXEDFVPROC,         glViewportIndexedfv);
-        LOAD(PFNGLSCISSORARRAYVPROC,             glScissorArrayv);
-        LOAD(PFNGLSCISSORINDEXEDPROC,            glScissorIndexed);
-        LOAD(PFNGLSCISSORINDEXEDVPROC,           glScissorIndexedv);
-        LOAD(PFNGLDEPTHRANGEARRAYVPROC,          glDepthRangeArrayv);
-        LOAD(PFNGLDEPTHRANGEINDEXEDPROC,         glDepthRangeIndexed);
-        LOAD(PFNGLGETFLOATI_VPROC,               glGetFloati_v);
-        LOAD(PFNGLGETDOUBLEI_VPROC,              glGetDoublei_v);
-    }
-
-    if (version >= VD_FW_GL_VERSION_4_2) {
-        LOAD(PFNGLDRAWARRAYSINSTANCEDBASEINSTANCEPROC,             glDrawArraysInstancedBaseInstance);
-        LOAD(PFNGLDRAWELEMENTSINSTANCEDBASEINSTANCEPROC,           glDrawElementsInstancedBaseInstance);
-        LOAD(PFNGLDRAWELEMENTSINSTANCEDBASEVERTEXBASEINSTANCEPROC, glDrawElementsInstancedBaseVertexBaseInstance);
-        LOAD(PFNGLGETINTERNALFORMATIVPROC,                         glGetInternalformativ);
-        LOAD(PFNGLGETACTIVEATOMICCOUNTERBUFFERIVPROC,              glGetActiveAtomicCounterBufferiv);
-        LOAD(PFNGLBINDIMAGETEXTUREPROC,                            glBindImageTexture);
-        LOAD(PFNGLMEMORYBARRIERPROC,                               glMemoryBarrier);
-        LOAD(PFNGLTEXSTORAGE1DPROC,                                glTexStorage1D);
-        LOAD(PFNGLTEXSTORAGE2DPROC,                                glTexStorage2D);
-        LOAD(PFNGLTEXSTORAGE3DPROC,                                glTexStorage3D);
-        LOAD(PFNGLDRAWTRANSFORMFEEDBACKINSTANCEDPROC,              glDrawTransformFeedbackInstanced);
-        LOAD(PFNGLDRAWTRANSFORMFEEDBACKSTREAMINSTANCEDPROC,        glDrawTransformFeedbackStreamInstanced);
-    }
-
-    if (version >= VD_FW_GL_VERSION_4_3) {
-        LOAD(PFNGLCLEARBUFFERDATAPROC,                 glClearBufferData);
-        LOAD(PFNGLCLEARBUFFERSUBDATAPROC,              glClearBufferSubData);
-        LOAD(PFNGLDISPATCHCOMPUTEPROC,                 glDispatchCompute);
-        LOAD(PFNGLDISPATCHCOMPUTEINDIRECTPROC,         glDispatchComputeIndirect);
-        LOAD(PFNGLCOPYIMAGESUBDATAPROC,                glCopyImageSubData);
-        LOAD(PFNGLFRAMEBUFFERPARAMETERIPROC,           glFramebufferParameteri);
-        LOAD(PFNGLGETFRAMEBUFFERPARAMETERIVPROC,       glGetFramebufferParameteriv);
-        LOAD(PFNGLGETINTERNALFORMATI64VPROC,           glGetInternalformati64v);
-        LOAD(PFNGLINVALIDATETEXSUBIMAGEPROC,           glInvalidateTexSubImage);
-        LOAD(PFNGLINVALIDATETEXIMAGEPROC,              glInvalidateTexImage);
-        LOAD(PFNGLINVALIDATEBUFFERSUBDATAPROC,         glInvalidateBufferSubData);
-        LOAD(PFNGLINVALIDATEBUFFERDATAPROC,            glInvalidateBufferData);
-        LOAD(PFNGLINVALIDATEFRAMEBUFFERPROC,           glInvalidateFramebuffer);
-        LOAD(PFNGLINVALIDATESUBFRAMEBUFFERPROC,        glInvalidateSubFramebuffer);
-        LOAD(PFNGLMULTIDRAWARRAYSINDIRECTPROC,         glMultiDrawArraysIndirect);
-        LOAD(PFNGLMULTIDRAWELEMENTSINDIRECTPROC,       glMultiDrawElementsIndirect);
-        LOAD(PFNGLGETPROGRAMINTERFACEIVPROC,           glGetProgramInterfaceiv);
-        LOAD(PFNGLGETPROGRAMRESOURCEINDEXPROC,         glGetProgramResourceIndex);
-        LOAD(PFNGLGETPROGRAMRESOURCENAMEPROC,          glGetProgramResourceName);
-        LOAD(PFNGLGETPROGRAMRESOURCEIVPROC,            glGetProgramResourceiv);
-        LOAD(PFNGLGETPROGRAMRESOURCELOCATIONPROC,      glGetProgramResourceLocation);
-        LOAD(PFNGLGETPROGRAMRESOURCELOCATIONINDEXPROC, glGetProgramResourceLocationIndex);
-        LOAD(PFNGLSHADERSTORAGEBLOCKBINDINGPROC,       glShaderStorageBlockBinding);
-        LOAD(PFNGLTEXBUFFERRANGEPROC,                  glTexBufferRange);
-        LOAD(PFNGLTEXSTORAGE2DMULTISAMPLEPROC,         glTexStorage2DMultisample);
-        LOAD(PFNGLTEXSTORAGE3DMULTISAMPLEPROC,         glTexStorage3DMultisample);
-        LOAD(PFNGLTEXTUREVIEWPROC,                     glTextureView);
-        LOAD(PFNGLBINDVERTEXBUFFERPROC,                glBindVertexBuffer);
-        LOAD(PFNGLVERTEXATTRIBFORMATPROC,              glVertexAttribFormat);
-        LOAD(PFNGLVERTEXATTRIBIFORMATPROC,             glVertexAttribIFormat);
-        LOAD(PFNGLVERTEXATTRIBLFORMATPROC,             glVertexAttribLFormat);
-        LOAD(PFNGLVERTEXATTRIBBINDINGPROC,             glVertexAttribBinding);
-        LOAD(PFNGLVERTEXBINDINGDIVISORPROC,            glVertexBindingDivisor);
-        LOAD(PFNGLDEBUGMESSAGECONTROLPROC,             glDebugMessageControl);
-        LOAD(PFNGLDEBUGMESSAGEINSERTPROC,              glDebugMessageInsert);
-        LOAD(PFNGLDEBUGMESSAGECALLBACKPROC,            glDebugMessageCallback);
-        LOAD(PFNGLGETDEBUGMESSAGELOGPROC,              glGetDebugMessageLog);
-        LOAD(PFNGLPUSHDEBUGGROUPPROC,                  glPushDebugGroup);
-        LOAD(PFNGLPOPDEBUGGROUPPROC,                   glPopDebugGroup);
-        LOAD(PFNGLOBJECTLABELPROC,                     glObjectLabel);
-        LOAD(PFNGLGETOBJECTLABELPROC,                  glGetObjectLabel);
-        LOAD(PFNGLOBJECTPTRLABELPROC,                  glObjectPtrLabel);
-        LOAD(PFNGLGETOBJECTPTRLABELPROC,               glGetObjectPtrLabel);
-    }
-
-    if (version >= VD_FW_GL_VERSION_4_4) {
-        LOAD(PFNGLBUFFERSTORAGEPROC,     glBufferStorage);
-        LOAD(PFNGLCLEARTEXIMAGEPROC,     glClearTexImage);
-        LOAD(PFNGLCLEARTEXSUBIMAGEPROC,  glClearTexSubImage);
-        LOAD(PFNGLBINDBUFFERSBASEPROC,   glBindBuffersBase);
-        LOAD(PFNGLBINDBUFFERSRANGEPROC,  glBindBuffersRange);
-        LOAD(PFNGLBINDTEXTURESPROC,      glBindTextures);
-        LOAD(PFNGLBINDSAMPLERSPROC,      glBindSamplers);
-        LOAD(PFNGLBINDIMAGETEXTURESPROC, glBindImageTextures);
-        LOAD(PFNGLBINDVERTEXBUFFERSPROC, glBindVertexBuffers);
-    }
-
-    if (version >= VD_FW_GL_VERSION_4_5) {
-        LOAD(PFNGLCLIPCONTROLPROC,                              glClipControl);
-        LOAD(PFNGLCREATETRANSFORMFEEDBACKSPROC,                 glCreateTransformFeedbacks);
-        LOAD(PFNGLTRANSFORMFEEDBACKBUFFERBASEPROC,              glTransformFeedbackBufferBase);
-        LOAD(PFNGLTRANSFORMFEEDBACKBUFFERRANGEPROC,             glTransformFeedbackBufferRange);
-        LOAD(PFNGLGETTRANSFORMFEEDBACKIVPROC,                   glGetTransformFeedbackiv);
-        LOAD(PFNGLGETTRANSFORMFEEDBACKI_VPROC,                  glGetTransformFeedbacki_v);
-        LOAD(PFNGLGETTRANSFORMFEEDBACKI64_VPROC,                glGetTransformFeedbacki64_v);
-        LOAD(PFNGLCREATEBUFFERSPROC,                            glCreateBuffers);
-        LOAD(PFNGLNAMEDBUFFERSTORAGEPROC,                       glNamedBufferStorage);
-        LOAD(PFNGLNAMEDBUFFERDATAPROC,                          glNamedBufferData);
-        LOAD(PFNGLNAMEDBUFFERSUBDATAPROC,                       glNamedBufferSubData);
-        LOAD(PFNGLCOPYNAMEDBUFFERSUBDATAPROC,                   glCopyNamedBufferSubData);
-        LOAD(PFNGLCLEARNAMEDBUFFERDATAPROC,                     glClearNamedBufferData);
-        LOAD(PFNGLCLEARNAMEDBUFFERSUBDATAPROC,                  glClearNamedBufferSubData);
-        LOAD(PFNGLMAPNAMEDBUFFERPROC,                           glMapNamedBuffer);
-        LOAD(PFNGLMAPNAMEDBUFFERRANGEPROC,                      glMapNamedBufferRange);
-        LOAD(PFNGLUNMAPNAMEDBUFFERPROC,                         glUnmapNamedBuffer);
-        LOAD(PFNGLFLUSHMAPPEDNAMEDBUFFERRANGEPROC,              glFlushMappedNamedBufferRange);
-        LOAD(PFNGLGETNAMEDBUFFERPARAMETERIVPROC,                glGetNamedBufferParameteriv);
-        LOAD(PFNGLGETNAMEDBUFFERPARAMETERI64VPROC,              glGetNamedBufferParameteri64v);
-        LOAD(PFNGLGETNAMEDBUFFERPOINTERVPROC,                   glGetNamedBufferPointerv);
-        LOAD(PFNGLGETNAMEDBUFFERSUBDATAPROC,                    glGetNamedBufferSubData);
-        LOAD(PFNGLCREATEFRAMEBUFFERSPROC,                       glCreateFramebuffers);
-        LOAD(PFNGLNAMEDFRAMEBUFFERRENDERBUFFERPROC,             glNamedFramebufferRenderbuffer);
-        LOAD(PFNGLNAMEDFRAMEBUFFERPARAMETERIPROC,               glNamedFramebufferParameteri);
-        LOAD(PFNGLNAMEDFRAMEBUFFERTEXTUREPROC,                  glNamedFramebufferTexture);
-        LOAD(PFNGLNAMEDFRAMEBUFFERTEXTURELAYERPROC,             glNamedFramebufferTextureLayer);
-        LOAD(PFNGLNAMEDFRAMEBUFFERDRAWBUFFERPROC,               glNamedFramebufferDrawBuffer);
-        LOAD(PFNGLNAMEDFRAMEBUFFERDRAWBUFFERSPROC,              glNamedFramebufferDrawBuffers);
-        LOAD(PFNGLNAMEDFRAMEBUFFERREADBUFFERPROC,               glNamedFramebufferReadBuffer);
-        LOAD(PFNGLINVALIDATENAMEDFRAMEBUFFERDATAPROC,           glInvalidateNamedFramebufferData);
-        LOAD(PFNGLINVALIDATENAMEDFRAMEBUFFERSUBDATAPROC,        glInvalidateNamedFramebufferSubData);
-        LOAD(PFNGLCLEARNAMEDFRAMEBUFFERIVPROC,                  glClearNamedFramebufferiv);
-        LOAD(PFNGLCLEARNAMEDFRAMEBUFFERUIVPROC,                 glClearNamedFramebufferuiv);
-        LOAD(PFNGLCLEARNAMEDFRAMEBUFFERFVPROC,                  glClearNamedFramebufferfv);
-        LOAD(PFNGLCLEARNAMEDFRAMEBUFFERFIPROC,                  glClearNamedFramebufferfi);
-        LOAD(PFNGLBLITNAMEDFRAMEBUFFERPROC,                     glBlitNamedFramebuffer);
-        LOAD(PFNGLCHECKNAMEDFRAMEBUFFERSTATUSPROC,              glCheckNamedFramebufferStatus);
-        LOAD(PFNGLGETNAMEDFRAMEBUFFERPARAMETERIVPROC,           glGetNamedFramebufferParameteriv);
-        LOAD(PFNGLGETNAMEDFRAMEBUFFERATTACHMENTPARAMETERIVPROC, glGetNamedFramebufferAttachmentParameteriv);
-        LOAD(PFNGLCREATERENDERBUFFERSPROC,                      glCreateRenderbuffers);
-        LOAD(PFNGLNAMEDRENDERBUFFERSTORAGEPROC,                 glNamedRenderbufferStorage);
-        LOAD(PFNGLNAMEDRENDERBUFFERSTORAGEMULTISAMPLEPROC,      glNamedRenderbufferStorageMultisample);
-        LOAD(PFNGLGETNAMEDRENDERBUFFERPARAMETERIVPROC,          glGetNamedRenderbufferParameteriv);
-        LOAD(PFNGLCREATETEXTURESPROC,                           glCreateTextures);
-        LOAD(PFNGLTEXTUREBUFFERPROC,                            glTextureBuffer);
-        LOAD(PFNGLTEXTUREBUFFERRANGEPROC,                       glTextureBufferRange);
-        LOAD(PFNGLTEXTURESTORAGE1DPROC,                         glTextureStorage1D);
-        LOAD(PFNGLTEXTURESTORAGE2DPROC,                         glTextureStorage2D);
-        LOAD(PFNGLTEXTURESTORAGE3DPROC,                         glTextureStorage3D);
-        LOAD(PFNGLTEXTURESTORAGE2DMULTISAMPLEPROC,              glTextureStorage2DMultisample);
-        LOAD(PFNGLTEXTURESTORAGE3DMULTISAMPLEPROC,              glTextureStorage3DMultisample);
-        LOAD(PFNGLTEXTURESUBIMAGE1DPROC,                        glTextureSubImage1D);
-        LOAD(PFNGLTEXTURESUBIMAGE2DPROC,                        glTextureSubImage2D);
-        LOAD(PFNGLTEXTURESUBIMAGE3DPROC,                        glTextureSubImage3D);
-        LOAD(PFNGLCOMPRESSEDTEXTURESUBIMAGE1DPROC,              glCompressedTextureSubImage1D);
-        LOAD(PFNGLCOMPRESSEDTEXTURESUBIMAGE2DPROC,              glCompressedTextureSubImage2D);
-        LOAD(PFNGLCOMPRESSEDTEXTURESUBIMAGE3DPROC,              glCompressedTextureSubImage3D);
-        LOAD(PFNGLCOPYTEXTURESUBIMAGE1DPROC,                    glCopyTextureSubImage1D);
-        LOAD(PFNGLCOPYTEXTURESUBIMAGE2DPROC,                    glCopyTextureSubImage2D);
-        LOAD(PFNGLCOPYTEXTURESUBIMAGE3DPROC,                    glCopyTextureSubImage3D);
-        LOAD(PFNGLTEXTUREPARAMETERFPROC,                        glTextureParameterf);
-        LOAD(PFNGLTEXTUREPARAMETERFVPROC,                       glTextureParameterfv);
-        LOAD(PFNGLTEXTUREPARAMETERIPROC,                        glTextureParameteri);
-        LOAD(PFNGLTEXTUREPARAMETERIIVPROC,                      glTextureParameterIiv);
-        LOAD(PFNGLTEXTUREPARAMETERIUIVPROC,                     glTextureParameterIuiv);
-        LOAD(PFNGLTEXTUREPARAMETERIVPROC,                       glTextureParameteriv);
-        LOAD(PFNGLGENERATETEXTUREMIPMAPPROC,                    glGenerateTextureMipmap);
-        LOAD(PFNGLBINDTEXTUREUNITPROC,                          glBindTextureUnit);
-        LOAD(PFNGLGETTEXTUREIMAGEPROC,                          glGetTextureImage);
-        LOAD(PFNGLGETCOMPRESSEDTEXTUREIMAGEPROC,                glGetCompressedTextureImage);
-        LOAD(PFNGLGETTEXTURELEVELPARAMETERFVPROC,               glGetTextureLevelParameterfv);
-        LOAD(PFNGLGETTEXTURELEVELPARAMETERIVPROC,               glGetTextureLevelParameteriv);
-        LOAD(PFNGLGETTEXTUREPARAMETERFVPROC,                    glGetTextureParameterfv);
-        LOAD(PFNGLGETTEXTUREPARAMETERIIVPROC,                   glGetTextureParameterIiv);
-        LOAD(PFNGLGETTEXTUREPARAMETERIUIVPROC,                  glGetTextureParameterIuiv);
-        LOAD(PFNGLGETTEXTUREPARAMETERIVPROC,                    glGetTextureParameteriv);
-        LOAD(PFNGLCREATEVERTEXARRAYSPROC,                       glCreateVertexArrays);
-        LOAD(PFNGLDISABLEVERTEXARRAYATTRIBPROC,                 glDisableVertexArrayAttrib);
-        LOAD(PFNGLENABLEVERTEXARRAYATTRIBPROC,                  glEnableVertexArrayAttrib);
-        LOAD(PFNGLVERTEXARRAYELEMENTBUFFERPROC,                 glVertexArrayElementBuffer);
-        LOAD(PFNGLVERTEXARRAYVERTEXBUFFERPROC,                  glVertexArrayVertexBuffer);
-        LOAD(PFNGLVERTEXARRAYVERTEXBUFFERSPROC,                 glVertexArrayVertexBuffers);
-        LOAD(PFNGLVERTEXARRAYATTRIBBINDINGPROC,                 glVertexArrayAttribBinding);
-        LOAD(PFNGLVERTEXARRAYATTRIBFORMATPROC,                  glVertexArrayAttribFormat);
-        LOAD(PFNGLVERTEXARRAYATTRIBIFORMATPROC,                 glVertexArrayAttribIFormat);
-        LOAD(PFNGLVERTEXARRAYATTRIBLFORMATPROC,                 glVertexArrayAttribLFormat);
-        LOAD(PFNGLVERTEXARRAYBINDINGDIVISORPROC,                glVertexArrayBindingDivisor);
-        LOAD(PFNGLGETVERTEXARRAYIVPROC,                         glGetVertexArrayiv);
-        LOAD(PFNGLGETVERTEXARRAYINDEXEDIVPROC,                  glGetVertexArrayIndexediv);
-        LOAD(PFNGLGETVERTEXARRAYINDEXED64IVPROC,                glGetVertexArrayIndexed64iv);
-        LOAD(PFNGLCREATESAMPLERSPROC,                           glCreateSamplers);
-        LOAD(PFNGLCREATEPROGRAMPIPELINESPROC,                   glCreateProgramPipelines);
-        LOAD(PFNGLCREATEQUERIESPROC,                            glCreateQueries);
-        LOAD(PFNGLGETQUERYBUFFEROBJECTI64VPROC,                 glGetQueryBufferObjecti64v);
-        LOAD(PFNGLGETQUERYBUFFEROBJECTIVPROC,                   glGetQueryBufferObjectiv);
-        LOAD(PFNGLGETQUERYBUFFEROBJECTUI64VPROC,                glGetQueryBufferObjectui64v);
-        LOAD(PFNGLGETQUERYBUFFEROBJECTUIVPROC,                  glGetQueryBufferObjectuiv);
-        LOAD(PFNGLMEMORYBARRIERBYREGIONPROC,                    glMemoryBarrierByRegion);
-        LOAD(PFNGLGETTEXTURESUBIMAGEPROC,                       glGetTextureSubImage);
-        LOAD(PFNGLGETCOMPRESSEDTEXTURESUBIMAGEPROC,             glGetCompressedTextureSubImage);
-        LOAD(PFNGLGETGRAPHICSRESETSTATUSPROC,                   glGetGraphicsResetStatus);
-        LOAD(PFNGLGETNCOMPRESSEDTEXIMAGEPROC,                   glGetnCompressedTexImage);
-        LOAD(PFNGLGETNTEXIMAGEPROC,                             glGetnTexImage);
-        LOAD(PFNGLGETNUNIFORMDVPROC,                            glGetnUniformdv);
-        LOAD(PFNGLGETNUNIFORMFVPROC,                            glGetnUniformfv);
-        LOAD(PFNGLGETNUNIFORMIVPROC,                            glGetnUniformiv);
-        LOAD(PFNGLGETNUNIFORMUIVPROC,                           glGetnUniformuiv);
-        LOAD(PFNGLREADNPIXELSPROC,                              glReadnPixels);
-        LOAD(PFNGLTEXTUREBARRIERPROC,                           glTextureBarrier);
-    }
-
-    if (version >= VD_FW_GL_VERSION_4_6) {
-        LOAD(PFNGLSPECIALIZESHADERPROC,                         glSpecializeShader);
-        LOAD(PFNGLMULTIDRAWARRAYSINDIRECTCOUNTPROC,             glMultiDrawArraysIndirectCount);
-        LOAD(PFNGLMULTIDRAWELEMENTSINDIRECTCOUNTPROC,           glMultiDrawElementsIndirectCount);
-        LOAD(PFNGLPOLYGONOFFSETCLAMPPROC,                       glPolygonOffsetClamp);
-    }
+/* ----LOADING------------------------------------------------------------------------------------------------------- */
+#define X(retval, name, params) LOAD(VdFwProcGL_##name, name);
+#define V(v) if (version > VD_FW_GL_VERSION_##v) {
+#define VE() }
+VD_FW_OPENGL_CORE_FUNCTIONS
+#undef X
+#undef V
+#undef VE
 
 #undef LOAD
-#endif 
+#endif  // defined(__APPLE__)
 }
 
 VD_FW_API unsigned int vd_fw_compile_shader(unsigned int type, const char *source)
@@ -11620,120 +9384,645 @@ VD_FW_API int vd_fw_compile_or_hotload_program(unsigned int *program, unsigned l
     return result;
 }
 
+VD_FW_API void vd_fw__def_gamepad(VdFwGamepadMap *map)
+{
+    int c = 0;
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON;
+    map->mappings[c].index  = 0x00;
+    map->mappings[c].target = VD_FW_GAMEPAD_A;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON;
+    map->mappings[c].index  = 0x01;
+    map->mappings[c].target = VD_FW_GAMEPAD_B;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON;
+    map->mappings[c].index  = 0x02;
+    map->mappings[c].target = VD_FW_GAMEPAD_X;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON;
+    map->mappings[c].index  = 0x03;
+    map->mappings[c].target = VD_FW_GAMEPAD_Y;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON;
+    map->mappings[c].index  = 0x04;
+    map->mappings[c].target = VD_FW_GAMEPAD_L1;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON;
+    map->mappings[c].index  = 0x05;
+    map->mappings[c].target = VD_FW_GAMEPAD_R1;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON;
+    map->mappings[c].index  = 0x06;
+    map->mappings[c].target = VD_FW_GAMEPAD_SELECT;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON;
+    map->mappings[c].index  = 0x07;
+    map->mappings[c].target = VD_FW_GAMEPAD_START;
+    c++;
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON;
+    map->mappings[c].index  = 0x08;
+    map->mappings[c].target = VD_FW_GAMEPAD_L3;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON;
+    map->mappings[c].index  = 0x09;
+    map->mappings[c].target = VD_FW_GAMEPAD_R3;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS;
+    map->mappings[c].index  = 0x00;
+    map->mappings[c].target = VD_FW_GAMEPAD_LH;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS;
+    map->mappings[c].index  = 0x01;
+    map->mappings[c].target = VD_FW_GAMEPAD_LV;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS;
+    map->mappings[c].index  = 0x02;
+    map->mappings[c].target = VD_FW_GAMEPAD_RH;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS;
+    map->mappings[c].index  = 0x03;
+    map->mappings[c].target = VD_FW_GAMEPAD_RV;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS;
+    map->mappings[c].index  = 0x04;
+    map->mappings[c].target = VD_FW_GAMEPAD_LT;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS;
+    map->mappings[c].index  = 0x04;
+    map->mappings[c].target = VD_FW_GAMEPAD_RT;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT;
+    map->mappings[c].index  = 0x00;
+    map->mappings[c].target = VD_FW_GAMEPAD_DUP;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_NONE;
+}
+
+VD_FW_INL uint16_t vd_fw__crc16_byte(unsigned char r)
+{
+    uint16_t result = 0;    
+    int i;
+
+    for (i = 0; i < 8; ++i) {
+        result = ((result ^ r) & 1 ? 0xa001 : 0) ^ result >> 1;
+        r >>= 1;
+    }
+
+    return result;
+} 
+
+VD_FW_API unsigned short vd_fw__crc16(unsigned short crc, void *data, size_t len)
+{
+    size_t i;
+    for (i = 0; i < len; ++i) {
+        crc = vd_fw__crc16_byte((uint8_t)crc ^ ((uint8_t*)data)[i]) ^ crc >> 8;
+    }
+    return crc;
+}
+
+VD_FW_API VdFwGuid vd_fw__make_gamepad_guid(uint16_t bus, uint16_t vendor, uint16_t product, uint16_t version,
+                                            char *vendor_name, char *product_name,
+                                            uint8_t driver_signature, uint8_t driver_data)
+{
+    VdFwGuid result;
+    uint16_t *guid16 = (uint16_t*)result.dat;
+    uint16_t crc = 0;
+
+    VD_FW_MEMSET(&result, 0, sizeof(result));
+
+    if (vendor_name && *vendor_name && product_name && *product_name) {
+        crc = vd_fw__crc16(crc, vendor_name,  vd_fw__strlen(vendor_name));
+        crc = vd_fw__crc16(crc, " ", 1);
+        crc = vd_fw__crc16(crc, product_name, vd_fw__strlen(product_name));
+    } else if (product_name) {
+        crc = vd_fw__crc16(crc, product_name, vd_fw__strlen(product_name));
+    }
+
+    *guid16++ = VD_FW_SWAP16LE(bus);
+    *guid16++ = VD_FW_SWAP16LE(crc);
+
+    if (vendor) {
+        *guid16++ = VD_FW_SWAP16LE(vendor);
+        *guid16++ = 0;
+        *guid16++ = VD_FW_SWAP16LE(product);
+        *guid16++ = 0;
+        *guid16++ = VD_FW_SWAP16LE(version);
+        result.dat[14] = driver_signature;
+        result.dat[15] = driver_data;
+    } else {
+        size_t avail = sizeof(result.dat) - 4;
+
+        if (driver_signature) {
+            avail -= 2;
+            result.dat[14] = driver_signature;
+            result.dat[15] = driver_data;
+        }
+
+        if (product_name) {
+            vd_fw__strlcpy((char*)guid16, product_name, avail);
+        }
+    }
+
+    return result;    
+}
+
+VD_FW_API char *vd_fw__utf16_to_utf8(const wchar_t *ws)
+{
+    int req = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
+                                  ws, -1,
+                                  0, 0,
+                                  NULL, NULL);
+    if (req <= 0) {
+        return 0;
+    }
+
+    char *data = (char*)vd_fw__realloc_mem(0, req + 1);
+
+    int wrt = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
+                                  ws, -1,
+                                  data, req,
+                                  NULL, NULL);
+
+    if (wrt == 0) {
+        vd_fw__free_mem(data);
+        return 0;
+    }
+
+    data[req] = 0;
+    return data;
+}
+
+VD_FW_API void *vd_fw__resize_buffer(void *buffer, size_t element_size, int required_capacity, int *cap)
+{
+    if (required_capacity <= *cap) {
+        return buffer;
+    }
+
+    int resize_capacity = required_capacity;
+    buffer = vd_fw__realloc_mem(buffer, element_size * resize_capacity);
+    *cap = resize_capacity;
+    return buffer;
+}
+
 VD_FW_INL const char *vd_fw_get_key_name(VdFwKey k)
 {
     static const char *translation_table[VD_FW_KEY_MAX] = {
-        "Unknown",       // VD_FW_KEY_UNKNOWN
-        "F1",            // VD_FW_KEY_F1
-        "F2",            // VD_FW_KEY_F2
-        "F3",            // VD_FW_KEY_F3
-        "F4",            // VD_FW_KEY_F4
-        "F5",            // VD_FW_KEY_F5
-        "F6",            // VD_FW_KEY_F6
-        "F7",            // VD_FW_KEY_F7
-        "F8",            // VD_FW_KEY_F8
-        "F9",            // VD_FW_KEY_F9
-        "F10",           // VD_FW_KEY_F10
-        "F11",           // VD_FW_KEY_F11
-        "F12",           // VD_FW_KEY_F12
-        "F13",           // VD_FW_KEY_F13
-        "F14",           // VD_FW_KEY_F14
-        "F15",           // VD_FW_KEY_F15
-        "F16",           // VD_FW_KEY_F16
-        "F17",           // VD_FW_KEY_F17
-        "F18",           // VD_FW_KEY_F18
-        "F19",           // VD_FW_KEY_F19
-        "F20",           // VD_FW_KEY_F20
-        "F21",           // VD_FW_KEY_F21
-        "F22",           // VD_FW_KEY_F22
-        "F23",           // VD_FW_KEY_F23
-        "F24",           // VD_FW_KEY_F24
-        "Backspace",     // VD_FW_KEY_BACKSPACE
-        "Ins",           // VD_FW_KEY_INS
-        "Home",          // VD_FW_KEY_HOME
-        "Pgup",          // VD_FW_KEY_PGUP
-        "Del",           // VD_FW_KEY_DEL
-        "End",           // VD_FW_KEY_END
-        "Pgdn",          // VD_FW_KEY_PGDN
-        "Space",         // VD_FW_KEY_SPACE
-        "Lcontrol",      // VD_FW_KEY_LCONTROL
-        "Rcontrol",      // VD_FW_KEY_RCONTROL
-        "Lalt",          // VD_FW_KEY_LALT
-        "Ralt",          // VD_FW_KEY_RALT
-        "Lshift",        // VD_FW_KEY_LSHIFT
-        "Rshift",        // VD_FW_KEY_RSHIFT
-        "Quote",         // VD_FW_KEY_QUOTE
-        "ArrowUp",       // VD_FW_KEY_ARROW_UP
-        "ArrowLeft",     // VD_FW_KEY_ARROW_LEFT
-        "ArrowDown",     // VD_FW_KEY_ARROW_DOWN
-        "ArrowRight",    // VD_FW_KEY_ARROW_RIGHT
-        "Comma",         // VD_FW_KEY_COMMA
-        "Minus",         // VD_FW_KEY_MINUS
-        "Dot",           // VD_FW_KEY_DOT
-        "SlashForward",  // VD_FW_KEY_SLASH_FORWARD
-        "0",             // VD_FW_KEY_0
-        "1",             // VD_FW_KEY_1
-        "2",             // VD_FW_KEY_2
-        "3",             // VD_FW_KEY_3
-        "4",             // VD_FW_KEY_4
-        "5",             // VD_FW_KEY_5
-        "6",             // VD_FW_KEY_6
-        "7",             // VD_FW_KEY_7
-        "8",             // VD_FW_KEY_8
-        "9",             // VD_FW_KEY_9
-        "Enter",         // VD_FW_KEY_ENTER
-        "Semicolon",     // VD_FW_KEY_SEMICOLON
-        "Tab",           // VD_FW_KEY_TAB
-        "Equals",        // VD_FW_KEY_EQUALS
-        "Capital",       // VD_FW_KEY_CAPITAL
-        "Escape",        // VD_FW_KEY_ESCAPE
-        "Reserved1",     // VD_FW_KEY_RESERVED1
-        "A",             // VD_FW_KEY_A
-        "B",             // VD_FW_KEY_B
-        "C",             // VD_FW_KEY_C
-        "D",             // VD_FW_KEY_D
-        "E",             // VD_FW_KEY_E
-        "F",             // VD_FW_KEY_F
-        "G",             // VD_FW_KEY_G
-        "H",             // VD_FW_KEY_H
-        "I",             // VD_FW_KEY_I
-        "J",             // VD_FW_KEY_J
-        "K",             // VD_FW_KEY_K
-        "L",             // VD_FW_KEY_L
-        "M",             // VD_FW_KEY_M
-        "N",             // VD_FW_KEY_N
-        "O",             // VD_FW_KEY_O
-        "P",             // VD_FW_KEY_P
-        "Q",             // VD_FW_KEY_Q
-        "R",             // VD_FW_KEY_R
-        "S",             // VD_FW_KEY_S
-        "T",             // VD_FW_KEY_T
-        "U",             // VD_FW_KEY_U
-        "V",             // VD_FW_KEY_V
-        "W",             // VD_FW_KEY_W
-        "X",             // VD_FW_KEY_X
-        "Y",             // VD_FW_KEY_Y
-        "Z",             // VD_FW_KEY_Z
-        "BracketOpen",   // VD_FW_KEY_BRACKET_OPEN
-        "SlashBack",     // VD_FW_KEY_SLASH_BACK
-        "BracketClose",  // VD_FW_KEY_BRACKET_CLOSE
-        "MediaNext",     // VD_FW_KEY_MEDIA_NEXT
-        "MediaPrev",     // VD_FW_KEY_MEDIA_PREV
-        "Backtick",      // VD_FW_KEY_BACKTICK
-        "MediaPlay",     // VD_FW_KEY_MEDIA_PLAY
-        "Numpad0",       // VD_FW_KEY_NUMPAD_0
-        "Numpad1",       // VD_FW_KEY_NUMPAD_1
-        "Numpad2",       // VD_FW_KEY_NUMPAD_2
-        "Numpad3",       // VD_FW_KEY_NUMPAD_3
-        "Numpad4",       // VD_FW_KEY_NUMPAD_4
-        "Numpad5",       // VD_FW_KEY_NUMPAD_5
-        "Numpad6",       // VD_FW_KEY_NUMPAD_6
-        "Numpad7",       // VD_FW_KEY_NUMPAD_7
-        "Numpad8",       // VD_FW_KEY_NUMPAD_8
-        "Numpad9",       // VD_FW_KEY_NUMPAD_9
+        "Unknown","F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12","F13","F14","F15",
+        "F16","F17","F18","F19","F20","F21","F22","F23","F24","Backspace","Ins","Home","Pgup","Del","End","Pgdn",
+        "Space","Lcontrol","Rcontrol","Lalt","Ralt","Lshift","Rshift","Quote","ArrowUp","ArrowLeft","ArrowDown","ArrowRight","Comma","Minus","Dot","SlashForward",
+        "0","1","2","3","4","5","6","7","8","9","Enter","Semicolon","Tab","Equals","Capital","Escape",
+        "Reserved1","A","B","C","D","E","F","G","H","I","J","K","L","M","N","O",
+        "P","Q","R","S","T","U","V","W","X","Y","Z","BracketOpen","SlashBack","BracketClose","MediaNext","MediaPrev",
+        "Backtick","MediaPlay","Numpad0","Numpad1",
+        "Numpad2","Numpad3","Numpad4","Numpad5",
+        "Numpad6","Numpad7","Numpad8","Numpad9",
     };
 
     return translation_table[k];
+}
+
+VD_FW_INL int vd_fw__compare_string(const char *s, int s_len, int i,
+                                    const char *t, int t_len)
+{
+    if ((s_len - i) < t_len) {
+        return 0;
+    }
+
+    int x;
+    for (x = 0; x < t_len; ++x) {
+        if (s[i + x] != t[x]) {
+            return 0;
+        }
+    }
+
+    return x;
+}
+
+static int vd_fw__parse_map_entry(const char *s, int s_len, VdFwGamepadMapEntry *out)
+{
+    int sign_invert = 0;
+    int range_zero_to_max = 0;
+    int range_invert = 0;
+
+    int i = 0;
+
+    // Handle sign
+    switch (s[i]) {
+        case '+': range_zero_to_max = 1; i++; break;
+        case '-': range_zero_to_max = 1; range_invert = 1; i++; break;
+        case '~': sign_invert = 1; i++; break;
+        default: break;
+    }
+
+    switch (s[i]) {
+        case 'b': {
+            i++;
+            unsigned short number = 0;
+            while ((i < s_len) && (s[i] >= '0' && s[i] <= '9')) {
+                number *= 10;
+                number += s[i++] - '0';
+            }
+
+            if (i >= s_len) {
+                return 0;
+            }
+
+            out->kind = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON;
+            out->index = number;
+        } break;
+
+        case 'h': {
+            i++;
+            unsigned char hat_index = 0;
+
+            while ((i < s_len) && (s[i] >= '0' && s[i] <= '9')) {
+                hat_index *= 10;
+                hat_index += s[i++] - '0';
+            }
+
+            if (i >= s_len) {
+                return 0;
+            }
+
+            if (s[i++] != '.') {
+                return 0;
+            }
+
+            unsigned char hat_value = 0;
+            while ((i < s_len) && (s[i] >= '0' && s[i] <= '9')) {
+                hat_value *= 10;
+                hat_value += s[i++] - '0';
+            }
+
+            if (i >= s_len) {
+                return 0;
+            }
+
+            out->kind = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT;
+            out->index = (((unsigned short)hat_index) << 8) | (hat_value);
+        } break;
+
+        case 'a': {
+            i++;
+            unsigned short number = 0;
+            while ((i < s_len) && (s[i] >= '0' && s[i] <= '9')) {
+                number *= 10;
+                number += s[i++] - '0';
+            }
+
+            if (i >= s_len) {
+                return 0;
+            }
+
+            out->kind = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS;
+            out->index = number;
+        } break;
+
+        default: {
+        } break;
+    }
+
+    if (range_zero_to_max) {
+        out->kind |= VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_ZERO_TO_MAX;
+
+        if (range_invert) {
+            out->kind |= VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_INVERTED;
+        }
+    } else if (sign_invert) {
+        out->kind |= VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_INVERTED;
+    }
+
+    return i;
+}
+
+static int vd_fw__is_db_symbol(char c) {
+    return (c >= 'a' && c <= 'z') ||
+           (c >= 'A' && c <= 'Z') ||
+           (c >= '0' && c <= '0');
+}
+
+typedef struct {
+    const char                   *sym;
+    size_t                       len;
+    uint8_t                      tgt;
+    uint8_t                      is_axis;
+} VdFw__GamepadSymbolToTarget;
+
+VdFw__GamepadSymbolToTarget Vd_Fw__Gamepad_Symbols_To_Targets[] = {
+#define VD_FW__SYM_LEN(s) s, sizeof(s) - 1
+    {VD_FW__SYM_LEN("a"),                   VD_FW_GAMEPAD_A,              0},
+    {VD_FW__SYM_LEN("b"),                   VD_FW_GAMEPAD_B,              0},
+    {VD_FW__SYM_LEN("x"),                   VD_FW_GAMEPAD_X,              0},
+    {VD_FW__SYM_LEN("y"),                   VD_FW_GAMEPAD_Y,              0},
+    {VD_FW__SYM_LEN("start"),               VD_FW_GAMEPAD_START,          0},
+    {VD_FW__SYM_LEN("back"),                VD_FW_GAMEPAD_BACK,           0},
+    {VD_FW__SYM_LEN("dpup"),                VD_FW_GAMEPAD_DUP,            0},
+    {VD_FW__SYM_LEN("dpdown"),              VD_FW_GAMEPAD_DDOWN,          0},
+    {VD_FW__SYM_LEN("dpleft"),              VD_FW_GAMEPAD_DLEFT,          0},
+    {VD_FW__SYM_LEN("dpright"),             VD_FW_GAMEPAD_DRIGHT,         0},
+    {VD_FW__SYM_LEN("leftshoulder"),        VD_FW_GAMEPAD_LEFT_SHOULDER,  0},
+    {VD_FW__SYM_LEN("leftstick"),           VD_FW_GAMEPAD_LEFT_STICK,     0},
+    {VD_FW__SYM_LEN("lefttrigger"),         VD_FW_GAMEPAD_LT,             1},
+    {VD_FW__SYM_LEN("rightshoulder"),       VD_FW_GAMEPAD_RIGHT_SHOULDER, 0},
+    {VD_FW__SYM_LEN("rightstick"),          VD_FW_GAMEPAD_RIGHT_STICK,    0},
+    {VD_FW__SYM_LEN("righttrigger"),        VD_FW_GAMEPAD_RT,             1},
+    {VD_FW__SYM_LEN("leftx"),               VD_FW_GAMEPAD_LH,             1},
+    {VD_FW__SYM_LEN("lefty"),               VD_FW_GAMEPAD_LV,             1},
+    {VD_FW__SYM_LEN("rightx"),              VD_FW_GAMEPAD_RH,             1},
+    {VD_FW__SYM_LEN("righty"),              VD_FW_GAMEPAD_RV,             1},
+#undef VD_FW__SYM_LEN
+};
+
+static VdFw__GamepadSymbolToTarget *vd_fw__get_map_from_symbol(const char *s, int s_len)
+{
+    int map_count = sizeof(Vd_Fw__Gamepad_Symbols_To_Targets) / sizeof(Vd_Fw__Gamepad_Symbols_To_Targets[0]);
+
+    for (int map_index = 0; map_index < map_count; ++map_index) {
+        VdFw__GamepadSymbolToTarget *check = &Vd_Fw__Gamepad_Symbols_To_Targets[map_index];
+        if (check->len != s_len) {
+            continue;
+        }
+
+        int found = 1;
+        for (int i = 0; i < check->len; ++i) {
+            if (check->sym[i] != s[i]) {
+                found = 0;
+                break;
+            }
+        }
+
+        if (found) {
+            return check;
+        }
+    }
+
+    return 0;
+}
+
+static int vd_fw__parse_hex_byte(const char *s, int i, VdFwByte *out)
+{
+    VdFwByte hi_nibble;
+    VdFwByte lo_nibble;
+
+    if (s[i] >= '0' && s[i] <= '9') {
+        hi_nibble = s[i] - '0';
+    } else if (s[i] >= 'a' && s[i] <= 'f') {
+        hi_nibble = s[i] - 'a' + 0xa;
+    } else if (s[i] >= 'A' && s[i] <= 'F') {
+        hi_nibble = s[i] - 'A' + 0xa;
+    } else {
+        return 0;
+    }
+
+    if (s[i+1] >= '0' && s[i+1] <= '9') {
+        lo_nibble = s[i+1] - '0';
+    } else if (s[i+1] >= 'a' && s[i+1] <= 'f') {
+        lo_nibble = s[i+1] - 'a' + 0xa;
+    } else if (s[i+1] >= 'A' && s[i+1] <= 'F') {
+        lo_nibble = s[i+1] - 'A' + 0xa;
+    } else {
+        return 0;
+    }
+
+    *out = hi_nibble * 16 + lo_nibble;
+    return 1;
+}
+
+VD_FW_API int vd_fw_gamepad_map_entry_is_none(VdFwGamepadMapEntry *entry)
+{
+    return (entry->kind & VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_MASK) == VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_NONE;    
+}
+
+VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepadDBEntry *out,
+                                           VdFwPlatform *out_platform, const char **out_begin_name)
+{
+    int i = 0;
+    // @todo(mdodis): somehow, we skip some values. Fix this.
+    if (s_len < 32) {
+        return 0;
+    }
+
+    for (i = 0; i < 32; i += 2) {
+        unsigned char byte;
+        if (!vd_fw__parse_hex_byte(s, i, &byte)) {
+            return 0;
+        }
+
+        out->guid.dat[i / 2] = byte;
+    }
+
+    if (i > s_len || s[i] != ',') {
+        return 0;
+    }
+    i++;
+
+    // Skip device name
+    *out_begin_name = &s[i];
+    while ((i < s_len) && (s[i] != ',')) i++;
+    if (i++ > s_len) return 0;
+
+#define VD_FW_STR_AND_LEN(cs) cs, (sizeof(cs) - 1) 
+#define VD_FW_EXPECT_COLON() do { if (!s[i] == ':') return 0; if (++i >= s_len) return 0; } while(0)
+
+    int mapping_count = 0;
+
+    // Parse Entries
+    while (i < s_len) {
+        VdFwGamepadMapEntry map_entry = {0};
+
+        // Handle sign before target assignment
+        // This happens
+        char partwise_sign = 0;
+        if ((s[i] == '+') || (s[i] == '-')) {
+            partwise_sign = s[i];
+            i++;
+        }
+
+        // Read word
+        int word_start = i;
+        while ((i < s_len) && vd_fw__is_db_symbol(s[i])) {
+            i++;
+        }
+        int word_end = i;
+
+        VdFw__GamepadSymbolToTarget *sym = vd_fw__get_map_from_symbol(s + word_start, word_end - word_start);
+        int did_map_input = 0;
+
+        if (sym != 0) {
+            VD_FW_EXPECT_COLON();
+            map_entry.target = sym->tgt;
+            did_map_input = 1;
+        } else if (vd_fw__compare_string(s, s_len, word_start, VD_FW_STR_AND_LEN("platform"))) {
+            VD_FW_EXPECT_COLON();
+            int platform_begin = i;
+            {
+                while ((i < s_len) && ((s[i] >= 'a') && (s[i] <= 'z') ||
+                                       (s[i] >= 'A') && (s[i] <= 'Z') ||
+                                       (s[i] == ' ')))
+                {
+                    i++;
+                }
+
+                if (vd_fw__compare_string(s, s_len, platform_begin, VD_FW_STR_AND_LEN("Windows"))) {
+                    *out_platform = VD_FW_PLATFORM_WINDOWS;
+                } else if (vd_fw__compare_string(s, s_len, platform_begin, VD_FW_STR_AND_LEN("Linux"))) {
+                    *out_platform = VD_FW_PLATFORM_LINUX;
+                } else if (vd_fw__compare_string(s, s_len, platform_begin, VD_FW_STR_AND_LEN("Mac OS X"))) {
+                    *out_platform = VD_FW_PLATFORM_MACOS;
+                } else if (vd_fw__compare_string(s, s_len, platform_begin, VD_FW_STR_AND_LEN("Android"))) {
+                    *out_platform = VD_FW_PLATFORM_ANDROID;
+                } else if (vd_fw__compare_string(s, s_len, platform_begin, VD_FW_STR_AND_LEN("iOS"))) {
+                    *out_platform = VD_FW_PLATFORM_IOS;
+                } else {
+                    *out_platform = VD_FW_PLATFORM_UNKNOWN;
+                }
+            }
+        } else if (vd_fw__compare_string(s, s_len, word_start, VD_FW_STR_AND_LEN("rumble"))) {
+            VD_FW_EXPECT_COLON();
+            // Format
+            // <mode char><prefix as hex><ll><mm>
+
+            if (s[i] == 'w') {
+                out->map.rumble_config.type = VD_FW_GAMEPAD_RUMBLE_TYPE_RAW;
+                i++;
+            }
+
+            VdFwByte byte_count = 0;
+            while ((i + 1) < s_len) {
+
+                VdFwByte byte;
+                if (!vd_fw__parse_hex_byte(s, i, &byte)) {
+                    break;
+                }
+
+                out->map.rumble_config.prefix[byte_count++] = byte;
+                i += 2;
+            }
+            out->map.rumble_config.prefix_len = byte_count;
+
+            while ((i + 1) < s_len) {
+
+                if ((s[i] == 'l') && (s[i + 1] == 'l')) {
+                    out->map.rumble_config.dat.raw.rumble_lo.parts.offset      = byte_count++;
+                    out->map.rumble_config.dat.raw.rumble_lo.parts.byte_length = 1;
+                    i += 2;
+                    continue;
+                }
+
+                if ((s[i] == 'h') && (s[i + 1] == 'h')) {
+                    out->map.rumble_config.dat.raw.rumble_hi.parts.offset      = byte_count++;
+                    out->map.rumble_config.dat.raw.rumble_hi.parts.byte_length = 1;
+                    i += 2;
+                    continue;
+                }
+
+                break;
+            }
+        } else {
+            i++;
+        }
+
+        if (did_map_input) {
+            int c = vd_fw__parse_map_entry(s + i, s_len - i, &map_entry);
+            if (c == 0) {
+                return 0;
+            }
+
+            if (((map_entry.kind & VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_MASK) == VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS) &&
+                (!sym->is_axis))
+            {
+                map_entry.kind |= VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_AXIS_TO_BUTTON;
+            }
+
+            if (partwise_sign == '+') {
+                map_entry.kind |= VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_PARTWISE;
+            } else if (partwise_sign == '-') {
+                map_entry.kind |= VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_PARTWISE | VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_INVERTED;
+            }
+
+            out->map.mappings[mapping_count++] = map_entry;
+
+            i += c;
+        }
+
+        while ((i < s_len) && (s[i] != ',')) i++;
+        i++;
+    }
+
+#undef VD_FW_EXPECT_COLON
+#undef VD_FW_STR_AND_LEN
+    return 1;
+}
+
+
+VD_FW_API const char *vd_fw_get_gamepad_button_name(int button)
+{
+    return 0;    
+}
+
+#if VD_FW_GAMEPAD_DB_DEFAULT
+#if defined(VD_FW_GAMEPAD_DB_DEFAULT_EXTERNAL)
+#include "builtin.rgcdb.c"
+#else
+VdFwGamepadDBEntry Vd_Fw__Gamepad_Db_Entries[1] = {
+    /*Sony Dualshock 4*/
+    {{0x03,0x00,0xd0,0x42,0x4c,0x05,0x00,0x00,0xcc,0x09,0x00,0x00,0x00,0x01,0x72,0x00},
+    {
+        {{0x0001,               VD_FW_GAMEPAD_A,  0},{0x0001,               VD_FW_GAMEPAD_B,  1},{0x0001,               VD_FW_GAMEPAD_X,  3},{0x0001,               VD_FW_GAMEPAD_Y,  4},{0x0003,              VD_FW_GAMEPAD_LH,  0},{0x0003,              VD_FW_GAMEPAD_LV,  1},{0x0003,              VD_FW_GAMEPAD_RH,  3},{0x0003,              VD_FW_GAMEPAD_RV,  4},{0,0,0},},
+        {
+            VD_FW_GAMEPAD_RUMBLE_TYPE_RAW,
+            4,
+            {0x05,0xff,0x00,0x00,},
+            {0x00010004,0x00010005},
+        }
+    }},
+};
+#endif // VD_FW_GAMEPAD_DB_DEFAULT_EXTERNAL
+#endif // VD_FW_GAMEPAD_DB_DEFAULT
+
+static int vd_fw__guid_matches(VdFwGuid *detected_guid, VdFwGuid *candidate_guid)
+{
+    return (detected_guid->parts.bus == candidate_guid->parts.bus) &&
+           (detected_guid->parts.vendor_id == candidate_guid->parts.vendor_id) &&
+           (detected_guid->parts.product_id == candidate_guid->parts.product_id);
+}
+
+VD_FW_API int vd_fw__map_gamepad(VdFwGuid guid, VdFwGamepadMap *map)
+{
+    VdFwGamepadDBEntry *db_entry = 0;
+#if VD_FW_GAMEPAD_DB_DEFAULT
+    size_t default_db_count = sizeof(Vd_Fw__Gamepad_Db_Entries)/sizeof(Vd_Fw__Gamepad_Db_Entries[0]);
+    for (size_t i = 0; i < default_db_count; ++i) {
+        if (vd_fw__guid_matches(&guid, &Vd_Fw__Gamepad_Db_Entries[i].guid)) {
+            db_entry = &Vd_Fw__Gamepad_Db_Entries[i];
+            break;
+        }
+    }
+#endif
+
+    if (!db_entry) {
+        return 0;
+    }
+
+    // @todo(mdodis): Only copy the actual count of maps we use
+    *map = db_entry->map;
+    return 1;
 }
 
 
