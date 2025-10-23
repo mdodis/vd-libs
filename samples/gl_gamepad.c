@@ -519,9 +519,9 @@ int main(int argc, char const *argv[])
                 static int change = 0;
                 if (mouse_inside && vd_fw_get_mouse_clicked(VD_FW_MOUSE_BUTTON_LEFT)) {
                     if (change == 0) {
-                        vd_fw_set_gamepad_rumble(i, 0x40, 0x40);
+                        vd_fw_set_gamepad_rumble(i, 0.5f, 0.5f);
                     } else {
-                        vd_fw_set_gamepad_rumble(i, 0x00, 0x00);
+                        vd_fw_set_gamepad_rumble(i, 0.f, 0.f);
                     }
                     change = !change;
                 }
