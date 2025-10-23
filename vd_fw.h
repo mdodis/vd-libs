@@ -185,14 +185,15 @@
 
 #if !VD_FW_CUSTOM_TYPEDEFS
 #   include <stdint.h>
+#   define VdFwU8   uint8_t
 #   define VdFwU16  uint16_t
-#   define VdFwI32  int32_t
 #   define VdFwU32  uint32_t
+#   define VdFwI32  int32_t
 #   define VdFwSz   size_t
-#   define VdFwByte uint8_t
+#   define VdFwU64  uint64_t
 #endif // !VD_FW_CUSTOM_TYPEDEFS
 
-#define VD_FW_SWAP16(x) ((uint16_t)((x << 8) | (x >> 8)))
+#define VD_FW_SWAP16(x) ((VdFwU16)((x << 8) | (x >> 8)))
 #if VD_FW_ENDIANNESS == VD_FW_ENDIANNESS_LE
 #   define VD_FW_SWAP16LE(x) (x)
 #else
@@ -206,6 +207,8 @@
 #ifndef VD_FW_GAMEPAD_DB_DEFAULT
 #   define VD_FW_GAMEPAD_DB_DEFAULT 1
 #endif // !VD_FW_GAMEPAD_DB_DEFAULT
+
+#define VD_FW_ARRAY_COUNT(x) (sizeof(x)/sizeof(x[0]))
 
 typedef enum {
     VD_FW_GL_VERSION_BASIC = 0,
@@ -225,7 +228,7 @@ enum /*VdFwPlatformEnum*/ {
     VD_FW_PLATFORM_ANDROID,
     VD_FW_PLATFORM_IOS,
 };
-typedef uint8_t VdFwPlatform;
+typedef VdFwU8 VdFwPlatform;
 
 enum {
     VD_FW_KEY_UNKNOWN       = 0,
@@ -281,16 +284,11 @@ enum {
     VD_FW_KEY_MEDIA_PREV    = 95,  /* Media Prev Track */
     VD_FW_KEY_BACKTICK      = 96,  /* '`' */
     VD_FW_KEY_MEDIA_PLAY    = 97,  /* Media Play/Pause */
-    VD_FW_KEY_NUMPAD_0      = 98,  /* Numpad 0 */
-    VD_FW_KEY_NUMPAD_1      = 99,  /* Numpad 1 */
-    VD_FW_KEY_NUMPAD_2      = 100, /* Numpad 2 */
-    VD_FW_KEY_NUMPAD_3      = 101, /* Numpad 3 */
-    VD_FW_KEY_NUMPAD_4      = 102, /* Numpad 4 */
-    VD_FW_KEY_NUMPAD_5      = 103, /* Numpad 5 */
-    VD_FW_KEY_NUMPAD_6      = 104, /* Numpad 6 */
-    VD_FW_KEY_NUMPAD_7      = 105, /* Numpad 7 */
-    VD_FW_KEY_NUMPAD_8      = 106, /* Numpad 8 */
-    VD_FW_KEY_NUMPAD_9      = 107, /* Numpad 9 */
+    VD_FW_KEY_NUMPAD_0 = 98,  /* Numpad 0 */ VD_FW_KEY_NUMPAD_1 = 99,  /* Numpad 1 */
+    VD_FW_KEY_NUMPAD_2 = 100, /* Numpad 2 */ VD_FW_KEY_NUMPAD_3 = 101, /* Numpad 3 */
+    VD_FW_KEY_NUMPAD_4 = 102, /* Numpad 4 */ VD_FW_KEY_NUMPAD_5 = 103, /* Numpad 5 */
+    VD_FW_KEY_NUMPAD_6 = 104, /* Numpad 6 */ VD_FW_KEY_NUMPAD_7 = 105, /* Numpad 7 */
+    VD_FW_KEY_NUMPAD_8 = 106, /* Numpad 8 */ VD_FW_KEY_NUMPAD_9 = 107, /* Numpad 9 */
     VD_FW_KEY_MAX,
 };
 typedef int VdFwKey;
@@ -382,11 +380,13 @@ enum {
     VD_FW_GAMEPAD_RUMBLE_TYPE_NOT_AVAILABLE = 0,
     // 'w': Writes instantly to file
     VD_FW_GAMEPAD_RUMBLE_TYPE_RAW           = 1,
+
+    // Used Internally when a gamepad has been correlated to an xinput dwUserIndex
     VD_FW_GAMEPAD_RUMBLE_TYPE_XINPUT        = 2,
 
     VD_FW_GAMEPAD_RUMBLE_MAX_PREFIX_BYTES   = 14,
 };
-typedef uint8_t VdFwGamepadMappingSourceKind;
+typedef VdFwU8 VdFwGamepadMappingSourceKind;
 
 typedef struct {
     VdFwGamepadMappingSourceKind kind;  
@@ -403,9 +403,9 @@ typedef union {
 } VdFwGamepadSignificantPacketPosition;
 
 typedef struct {
-    VdFwByte type;
-    VdFwByte prefix_len;
-    VdFwByte prefix[VD_FW_GAMEPAD_RUMBLE_MAX_PREFIX_BYTES];
+    VdFwU8 type;
+    VdFwU8 prefix_len;
+    VdFwU8 prefix[VD_FW_GAMEPAD_RUMBLE_MAX_PREFIX_BYTES];
     union {
         struct {
             VdFwGamepadSignificantPacketPosition    rumble_lo;
@@ -425,17 +425,17 @@ typedef struct {
 } VdFwGamepadRumbleState;
 
 typedef union {
-    unsigned char dat[16];
+    VdFwU8 dat[16];
     struct {
-        uint16_t bus;
-        uint16_t crc;
-        uint16_t vendor_id;
-        uint16_t reserved0;
-        uint16_t product_id;
-        uint16_t reserved1;
-        uint16_t version;
-        uint8_t  driver_signature;
-        uint8_t  driver_data;
+        VdFwU16 bus;
+        VdFwU16 crc;
+        VdFwU16 vendor_id;
+        VdFwU16 reserved0;
+        VdFwU16 product_id;
+        VdFwU16 reserved1;
+        VdFwU16 version;
+        VdFwU8  driver_signature;
+        VdFwU8  driver_data;
     } parts;
 } VdFwGuid;
 
@@ -460,10 +460,6 @@ typedef struct {
         /* Whether to enable a debug console to show you errors produced by GL calls */
         int             debug_on;
     } gl;
-
-    struct {
-        int             xinput_disabled;
-    } win32;
 
     struct {
         /* Set to 1 to disable window frame. */
@@ -946,20 +942,20 @@ VD_FW_INL void *vd_fw_memset(void *dst, unsigned char val, size_t num)
 }
 
 /* ----INTERNAL API-------------------------------------------------------------------------------------------------- */
-VD_FW_API int             vd_fw__any_time_higher(int num_files, const char **files, unsigned long long *check_against);
-VD_FW_API char*           vd_fw__debug_dump_file_text(const char *path);
-VD_FW_API void*           vd_fw__realloc_mem(void *prev_ptr, size_t size);
-VD_FW_API void            vd_fw__free_mem(void *memory);
-VD_FW_API void*           vd_fw__resize_buffer(void *buffer, size_t element_size, int required_capacity, int *cap);
-VD_FW_API void            vd_fw__def_gamepad(VdFwGamepadMap *map);
-VD_FW_API int             vd_fw__map_gamepad(VdFwGuid guid, VdFwGamepadMap *map);
-VD_FW_API unsigned short  vd_fw__crc16(unsigned short crc, void *data, size_t len);
-VD_FW_API VdFwGuid        vd_fw__make_gamepad_guid(uint16_t bus, uint16_t vendor, uint16_t product, uint16_t version,
-                                                   char *vendor_name, char *product_name,
-                                                   uint8_t driver_signature, uint8_t driver_data);
-VD_FW_INL int             vd_fw__strlen(const char *s);
-VD_FW_INL size_t          vd_fw__strlcpy(char *dst, const char *src, size_t maxlen);
-VD_FW_API char*           vd_fw__utf16_to_utf8(const wchar_t *ws);
+VD_FW_API int      vd_fw__any_time_higher(int num_files, const char **files, unsigned long long *check_against);
+VD_FW_API char*    vd_fw__debug_dump_file_text(const char *path);
+VD_FW_API void*    vd_fw__realloc_mem(void *prev_ptr, size_t size);
+VD_FW_API void     vd_fw__free_mem(void *memory);
+VD_FW_API void*    vd_fw__resize_buffer(void *buffer, size_t element_size, int required_capacity, int *cap);
+VD_FW_API void     vd_fw__def_gamepad(VdFwGamepadMap *map);
+VD_FW_API int      vd_fw__map_gamepad(VdFwGuid guid, VdFwGamepadMap *map);
+VD_FW_API VdFwU16  vd_fw__crc16(unsigned short crc, void *data, VdFwSz len);
+VD_FW_API VdFwGuid vd_fw__make_gamepad_guid(VdFwU16 bus, VdFwU16 vendor, VdFwU16 product, VdFwU16 version,
+                                            char *vendor_name, char *product_name,
+                                            VdFwU8 driver_signature, VdFwU8 driver_data);
+VD_FW_INL int      vd_fw__strlen(const char *s);
+VD_FW_INL size_t   vd_fw__strlcpy(char *dst, const char *src, size_t maxlen);
+VD_FW_API char*    vd_fw__utf16_to_utf8(const wchar_t *ws);
 
 VD_FW_INL int vd_fw__strlen(const char *s)
 {
@@ -4945,7 +4941,7 @@ typedef struct {
     int                         num_gamepad_db_entries;
     VdFwGamepadDBEntry          *gamepad_db_entries;
     VdFwUINT_PTR                rumble_timer_handle;
-    VdFwByte                    *report_buffer;
+    VdFwU8                    *report_buffer;
     int                         report_buffer_len;
 
 /* ----RENDER THREAD ONLY-------------------------------------------------------------------------------------------- */
@@ -5511,7 +5507,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         }
 
         // XInput.dll
-        if (info && !info->win32.xinput_disabled) {
+        {
             const char* xinput_dll_name[] = {
                 "xinput1_4.dll",   // Windows 8+
                 "xinput1_3.dll",   // DirectX SDK, Windows XP...
@@ -7202,8 +7198,8 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                             } break;
 
                             case VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT: {
-                                VdFwByte hat_index = (VdFwByte)(entry->index >> 8);
-                                VdFwByte hat_mask  = (VdFwByte)(entry->index & 0xFF);
+                                VdFwU8 hat_index = (VdFwU8)(entry->index >> 8);
+                                VdFwU8 hat_mask  = (VdFwU8)(entry->index & 0xFF);
 
                                 int hat_data_index = gamepad_info->hat_data_indices[hat_index].data_index;
                                 int min_value = gamepad_info->hat_data_indices[hat_index].min_value;
@@ -7374,9 +7370,9 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 VdFwGuid guid;
                 char *manufacturer_string = 0;
                 char *product_string = 0;
-                uint16_t vendor_id    = (uint16_t)device_info.hid.dwVendorId;
-                uint16_t product_id   = (uint16_t)device_info.hid.dwProductId;
-                uint16_t version      = (uint16_t)device_info.hid.dwVersionNumber;
+                VdFwU16 vendor_id    = (VdFwU16)device_info.hid.dwVendorId;
+                VdFwU16 product_id   = (VdFwU16)device_info.hid.dwProductId;
+                VdFwU16 version      = (VdFwU16)device_info.hid.dwVersionNumber;
 
                 // Get Manufacturer String & Product String
                 {
@@ -7402,41 +7398,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                                                             GENERIC_READ | GENERIC_WRITE,
                                                             FILE_SHARE_READ | FILE_SHARE_WRITE,
                                                             NULL, OPEN_EXISTING, 0, NULL);
-
-                    // TEST TEST Rumble
-                    // if (device_file != INVALID_HANDLE_VALUE) {
-                    //     VdFwByte report[32] = {
-                    //         // 0, 0, 0, 200, 2,
-                    //         0x05, 0xFF, 0x00, 0x00, 0x40, 0x40, 0x00,
-                    //     };
-
-                    //     DWORD num_written = 0;
-                    //     if (!WriteFile(device_file,
-                    //                    report,
-                    //                    sizeof(report),
-                    //                    &num_written,
-                    //                    NULL))
-                    //     {
-                    //         VD_FW_LOG("Failed to send report: %d", GetLastError());
-                    //     }
-
-                    //     // if (!DeviceIoControl(device_file, 0x8000a010, report, sizeof(report), NULL, 0, NULL, NULL)) {
-                    //     //     VD_FW_LOG("Failed to send report: %d", GetLastError());
-                    //     // }
-
-                    //     // if (!VdFwHidD_SetOutputReport(device_file, report, sizeof(report))) {
-                    //     //     VD_FW_LOG("Failed to send report: %d", GetLastError());
-                    //     // } else {
-                    //     //     VD_FW_LOG("Successfully sent report: %d", GetLastError());
-                    //     // }
-
-                    //     // if (!VdFwHidD_SetFeature(device_file, report, sizeof(report))) {
-                    //     //     VD_FW_LOG("Failed to send report: %d", GetLastError());
-                    //     // } else {
-                    //     //     VD_FW_LOG("Successfully sent report: %d", GetLastError());
-                    //     // }
-                    // }
-                    // CloseHandle(device_file);
                 }
                 // Compute GUID
                 guid = vd_fw__make_gamepad_guid(0x03 /* USB Bus */,
@@ -7942,7 +7903,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             for (int i = 0; i < VD_FW_G.winthread_num_gamepads_present; ++i) {
                 VdFw__Win32GamepadInfo *gamepad_info = &VD_FW_G.gamepad_infos[i];
                 VdFwGamepadRumbleConfig *rumble_config = &gamepad_info->map.rumble_config;
-                VdFwByte rumble_type = rumble_config->type;
+                VdFwU8 rumble_type = rumble_config->type;
 
                 if (gamepad_info->xinput_index != -1) {
                     // Gamepad is correlated. We switch to XInput
@@ -7951,7 +7912,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
                 switch (rumble_type) {
                     case VD_FW_GAMEPAD_RUMBLE_TYPE_RAW: {
-                        VD_FW_G.report_buffer = (VdFwByte*)vd_fw__resize_buffer(VD_FW_G.report_buffer,
+                        VD_FW_G.report_buffer = (VdFwU8*)vd_fw__resize_buffer(VD_FW_G.report_buffer,
                                                                                 sizeof(VD_FW_G.report_buffer[0]),
                                                                                 gamepad_info->output_report_size,
                                                                                 &VD_FW_G.report_buffer_len);
@@ -7960,8 +7921,8 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                             VD_FW_G.report_buffer[j] = gamepad_info->map.rumble_config.prefix[j];
                         }
 
-                        VD_FW_G.report_buffer[gamepad_info->map.rumble_config.dat.raw.rumble_lo.parts.offset] = (VdFwByte)(gamepad_info->rumble_state.rumble_lo * 255.f);
-                        VD_FW_G.report_buffer[gamepad_info->map.rumble_config.dat.raw.rumble_hi.parts.offset] = (VdFwByte)(gamepad_info->rumble_state.rumble_hi * 255.f);
+                        VD_FW_G.report_buffer[gamepad_info->map.rumble_config.dat.raw.rumble_lo.parts.offset] = (VdFwU8)(gamepad_info->rumble_state.rumble_lo * 255.f);
+                        VD_FW_G.report_buffer[gamepad_info->map.rumble_config.dat.raw.rumble_hi.parts.offset] = (VdFwU8)(gamepad_info->rumble_state.rumble_hi * 255.f);
                         DWORD num_written = 0;
                         if (!WriteFile(gamepad_info->write_handle,
                                        VD_FW_G.report_buffer,
@@ -9474,9 +9435,9 @@ VD_FW_API void vd_fw__def_gamepad(VdFwGamepadMap *map)
     map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_NONE;
 }
 
-VD_FW_INL uint16_t vd_fw__crc16_byte(unsigned char r)
+VD_FW_INL VdFwU16 vd_fw__crc16_byte(VdFwU8 r)
 {
-    uint16_t result = 0;    
+    VdFwU16 result = 0;
     int i;
 
     for (i = 0; i < 8; ++i) {
@@ -9487,22 +9448,22 @@ VD_FW_INL uint16_t vd_fw__crc16_byte(unsigned char r)
     return result;
 } 
 
-VD_FW_API unsigned short vd_fw__crc16(unsigned short crc, void *data, size_t len)
+VD_FW_API VdFwU16 vd_fw__crc16(VdFwU16 crc, void *data, VdFwSz len)
 {
     size_t i;
     for (i = 0; i < len; ++i) {
-        crc = vd_fw__crc16_byte((uint8_t)crc ^ ((uint8_t*)data)[i]) ^ crc >> 8;
+        crc = vd_fw__crc16_byte((VdFwU8)crc ^ ((VdFwU8*)data)[i]) ^ crc >> 8;
     }
     return crc;
 }
 
-VD_FW_API VdFwGuid vd_fw__make_gamepad_guid(uint16_t bus, uint16_t vendor, uint16_t product, uint16_t version,
+VD_FW_API VdFwGuid vd_fw__make_gamepad_guid(VdFwU16 bus, VdFwU16 vendor, VdFwU16 product, VdFwU16 version,
                                             char *vendor_name, char *product_name,
-                                            uint8_t driver_signature, uint8_t driver_data)
+                                            VdFwU8 driver_signature, VdFwU8 driver_data)
 {
     VdFwGuid result;
-    uint16_t *guid16 = (uint16_t*)result.dat;
-    uint16_t crc = 0;
+    VdFwU16 *guid16 = (VdFwU16*)result.dat;
+    VdFwU16 crc = 0;
 
     VD_FW_MEMSET(&result, 0, sizeof(result));
 
@@ -9775,10 +9736,10 @@ static VdFw__GamepadSymbolToTarget *vd_fw__get_map_from_symbol(const char *s, in
     return 0;
 }
 
-static int vd_fw__parse_hex_byte(const char *s, int i, VdFwByte *out)
+static int vd_fw__parse_hex_byte(const char *s, int i, VdFwU8 *out)
 {
-    VdFwByte hi_nibble;
-    VdFwByte lo_nibble;
+    VdFwU8 hi_nibble;
+    VdFwU8 lo_nibble;
 
     if (s[i] >= '0' && s[i] <= '9') {
         hi_nibble = s[i] - '0';
@@ -9903,10 +9864,10 @@ VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepad
                 i++;
             }
 
-            VdFwByte byte_count = 0;
+            VdFwU8 byte_count = 0;
             while ((i + 1) < s_len) {
 
-                VdFwByte byte;
+                VdFwU8 byte;
                 if (!vd_fw__parse_hex_byte(s, i, &byte)) {
                     break;
                 }

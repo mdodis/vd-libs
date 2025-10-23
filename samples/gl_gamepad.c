@@ -339,9 +339,6 @@ int main(int argc, char const *argv[])
             .version = VD_FW_GL_VERSION_3_3,
             .debug_on = 1,
         },
-        .win32 = {
-            .xinput_disabled = 0,
-        },
         .window_options = {
             .borderless = 0,
         }
