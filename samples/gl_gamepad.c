@@ -528,21 +528,6 @@ int main(int argc, char const *argv[])
             }
 
         }
-        // float ref_width  = Base_Controller_Info.controller_dim[0];
-        // float ref_height = Base_Controller_Info.controller_dim[1];
-        // float ratio_width = (float)w / ref_width;
-        // float ratio_height = (float)h / ref_height;
-
-        // float ratio_min = (ratio_width < ratio_height) ? ratio_width : ratio_height;
-
-        // float scaled_width = ref_width * ratio_min;
-        // float scaled_height = ref_height * ratio_min;
-
-        // float x = ((float)w - scaled_width) / 2.0f;
-        // float y = ((float)h - scaled_height) / 2.0f;
-
-        // transform_controller_info(&draw_info, x, y, scaled_width);
-        // draw_controller_info(&draw_info, 1);
 
         vd_fw_swap_buffers();
     }
