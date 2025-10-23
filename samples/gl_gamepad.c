@@ -1,6 +1,7 @@
 #include "disable_clang_deprecations.h"
 #define VD_FW_NO_CRT 0
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS
+#define VD_FW_GAMEPAD_DB_DEFAULT_EXTERNAL
 #include "vd_fw.h"
 #include "ext/stb_image.h"
 #include "assert.h"
@@ -425,7 +426,7 @@ int main(int argc, char const *argv[])
         int num_gamepads = vd_fw_get_gamepad_count();
 
         float mouse_x, mouse_y;
-        int mouse_pressed = vd_fw_get_mouse_statef(&mouse_x, &mouse_y) & VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN;
+        vd_fw_get_mouse_statef(&mouse_x, &mouse_y);
 
         for (int i = 0; i < num_gamepads; ++i) {
             ControllerInfo *draw_info = &draw_infos[i];
@@ -515,10 +516,14 @@ int main(int argc, char const *argv[])
                 transform_controller_info(&draw_infos[i], x, y, scaled_w);
                 draw_controller_info(&draw_infos[i], mouse_inside);
 
-                if (mouse_inside && mouse_pressed) {
-                    vd_fw_set_gamepad_rumble(i, 0x40, 0x40);
-                } else {
-                    vd_fw_set_gamepad_rumble(i, 0x00, 0x00);
+                static int change = 0;
+                if (mouse_inside && vd_fw_get_mouse_clicked(VD_FW_MOUSE_BUTTON_LEFT)) {
+                    if (change == 0) {
+                        vd_fw_set_gamepad_rumble(i, 0x40, 0x40);
+                    } else {
+                        vd_fw_set_gamepad_rumble(i, 0x00, 0x00);
+                    }
+                    change = !change;
                 }
             }
 
@@ -537,7 +542,7 @@ int main(int argc, char const *argv[])
         // float y = ((float)h - scaled_height) / 2.0f;
 
         // transform_controller_info(&draw_info, x, y, scaled_width);
-        // draw_controller_info(&draw_info);
+        // draw_controller_info(&draw_info, 1);
 
         vd_fw_swap_buffers();
     }
@@ -730,7 +735,7 @@ static void draw_controller_info(ControllerInfo *info, int selected)
     put_image(all.tex_controller, info->controller_pos[0], info->controller_pos[1],
                                   info->controller_dim[0], info->controller_dim[1],
                                   switch_color_digital(make_color(0.15f, 0.15f, 0.15f, 1.0f),
-                                                       make_color(0.01f, 0.38f, 0.71f, 0.3f),
+                                                       make_color(0.01f, 0.38f, 0.71f, 1.0f),
                                                        selected).e);
 
     put_button_grad(info->button_a_pos, info->button_a_dim, make_color(0.2f, 0.9f, 0.2f, 0.4f), info->button_a_grad);
