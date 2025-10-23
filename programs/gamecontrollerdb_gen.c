@@ -76,7 +76,7 @@ int main(int argc, char const *argv[])
     f = fopen(dbfile, "r");
     int count = 0;
     while (fgets(buffer, sizeof(buffer), f)) {
-        VdFwGamepadDBEntry db_entry;
+        VdFwGamepadDBEntry db_entry = {0};
         VdFwPlatform platform;
         const char *name;
         if (!vd_fw_parse_gamepad_db_entry(buffer, (int)strlen(buffer), &db_entry, &platform, &name)) {
@@ -92,7 +92,7 @@ int main(int argc, char const *argv[])
 
     printf("VdFwGamepadDBEntry Vd_Fw__Gamepad_Db_Entries[%d] = {\n", count);
     while (fgets(buffer, sizeof(buffer), f)) {
-        VdFwGamepadDBEntry db_entry;
+        VdFwGamepadDBEntry db_entry = {0};
         VdFwPlatform platform;
         const char *name = 0;
         if (!vd_fw_parse_gamepad_db_entry(buffer, (int)strlen(buffer), &db_entry, &platform, &name)) {
