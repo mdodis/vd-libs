@@ -7146,7 +7146,11 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                                 }
 
                                 if (data->dat.On) {
-                                    button_states[entry->target] = 1;
+                                    if (entry->kind & VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_BUTTON_TO_AXIS) {
+                                        axes[entry->target] = 1.f;
+                                    } else {
+                                        button_states[entry->target] = 1;
+                                    }
                                 }
                             } break;
 
@@ -9422,8 +9426,23 @@ VD_FW_API void vd_fw__def_gamepad(VdFwGamepadMap *map)
     c++;
 
     map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT;
-    map->mappings[c].index  = 0x00;
+    map->mappings[c].index  = 0x01;
     map->mappings[c].target = VD_FW_GAMEPAD_DUP;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT;
+    map->mappings[c].index  = 0x02;
+    map->mappings[c].target = VD_FW_GAMEPAD_DRIGHT;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT;
+    map->mappings[c].index  = 0x04;
+    map->mappings[c].target = VD_FW_GAMEPAD_DDOWN;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT;
+    map->mappings[c].index  = 0x08;
+    map->mappings[c].target = VD_FW_GAMEPAD_DLEFT;
     c++;
 
     map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_NONE;
@@ -9905,6 +9924,12 @@ VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepad
                 map_entry.kind |= VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_AXIS_TO_BUTTON;
             }
 
+            if (((map_entry.kind & VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_MASK) == VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON) &&
+                (sym->is_axis))
+            {
+                map_entry.kind |= VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_BUTTON_TO_AXIS;
+            }
+
             if (partwise_sign == '+') {
                 map_entry.kind |= VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_PARTWISE;
             } else if (partwise_sign == '-') {
@@ -9962,7 +9987,7 @@ VD_FW_API int vd_fw__map_gamepad(VdFwGuid guid, VdFwGamepadMap *map)
 {
     VdFwGamepadDBEntry *db_entry = 0;
 #if VD_FW_GAMEPAD_DB_DEFAULT
-    size_t default_db_count = sizeof(Vd_Fw__Gamepad_Db_Entries)/sizeof(Vd_Fw__Gamepad_Db_Entries[0]);
+    size_t default_db_count = VD_FW_ARRAY_COUNT(Vd_Fw__Gamepad_Db_Entries);
     for (size_t i = 0; i < default_db_count; ++i) {
         if (vd_fw__guid_matches(&guid, &Vd_Fw__Gamepad_Db_Entries[i].guid)) {
             db_entry = &Vd_Fw__Gamepad_Db_Entries[i];

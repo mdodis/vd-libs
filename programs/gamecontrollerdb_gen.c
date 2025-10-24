@@ -90,7 +90,7 @@ int main(int argc, char const *argv[])
     }
     fseek(f, 0, SEEK_SET);
 
-    printf("VdFwGamepadDBEntry Vd_Fw__Gamepad_Db_Entries[%d] = {\n", count);
+    printf("static VdFwGamepadDBEntry Vd_Fw__Gamepad_Db_Entries[%d] = {\n", count);
     while (fgets(buffer, sizeof(buffer), f)) {
         VdFwGamepadDBEntry db_entry = {0};
         VdFwPlatform platform;
@@ -156,6 +156,10 @@ int main(int argc, char const *argv[])
                 is_axis = 0;
             }
 
+            if (entry->kind & VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_BUTTON_TO_AXIS) {
+                is_axis = 1;
+            }
+
             if (is_axis) {
                 switch (entry->target) {
                     case VD_FW_GAMEPAD_LT:     target = "VD_FW_GAMEPAD_LT";     break;
@@ -209,20 +213,21 @@ int main(int argc, char const *argv[])
 
             if (print_rest_of_rumble) {
                 printf("\t\t\t%d,\n", db_entry.map.rumble_config.prefix_len);
+
+                printf("\t\t\t{");
+                for (int i = 0; i < db_entry.map.rumble_config.prefix_len; ++i) {
+                    printf("0x%02x,", db_entry.map.rumble_config.prefix[i]);
+                }
+                printf("},\n");
+
+                printf("\t\t\t{");
+                {
+                    printf("0x%08x,", db_entry.map.rumble_config.dat.raw.rumble_lo.whole);
+                    printf("0x%08x", db_entry.map.rumble_config.dat.raw.rumble_hi.whole);
+                }
+                printf("},\n");
             }
 
-            printf("\t\t\t{");
-            for (int i = 0; i < db_entry.map.rumble_config.prefix_len; ++i) {
-                printf("0x%02x,", db_entry.map.rumble_config.prefix[i]);
-            }
-            printf("},\n");
-
-            printf("\t\t\t{");
-            {
-                printf("0x%08x,", db_entry.map.rumble_config.dat.raw.rumble_lo.whole);
-                printf("0x%08x", db_entry.map.rumble_config.dat.raw.rumble_hi.whole);
-            }
-            printf("},\n");
         }
         printf("\t\t}\n");
 
