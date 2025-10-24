@@ -954,7 +954,6 @@ VD_FW_API VdFwGuid vd_fw__make_gamepad_guid(VdFwU16 bus, VdFwU16 vendor, VdFwU16
                                             VdFwU8 driver_signature, VdFwU8 driver_data);
 VD_FW_INL int      vd_fw__strlen(const char *s);
 VD_FW_INL size_t   vd_fw__strlcpy(char *dst, const char *src, size_t maxlen);
-VD_FW_API char*    vd_fw__utf16_to_utf8(const wchar_t *ws);
 
 VD_FW_INL int vd_fw__strlen(const char *s)
 {
@@ -990,8 +989,9 @@ VD_FW_INL size_t vd_fw__strlcpy(char *dst, const char *src, size_t maxlen)
 #endif // !VD_FW_WIN32_NO_LINKER_COMMENTS
 
 #if defined(__APPLE__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#ifndef GL_SILENCE_DEPRECATION
+#   define GL_SILENCE_DEPRECATION
+#endif // !GL_SILENCE_DEPRECATION
 #import <OpenGL/gl3.h>
 #else
 /* ----GL TYPEDEFS--------------------------------------------------------------------------------------------------- */
@@ -3551,7 +3551,6 @@ VD_FW_OPENGL_CORE_FUNCTIONS
 #endif // !defined(__APPLE__)
 
 #if defined(__APPLE__)
-#pragma clang diagnostic pop
 #endif
 #endif // !VD_FW_H
 
@@ -6792,6 +6791,8 @@ static void vd_fw__win32_correlate_xinput_triggers(VdFw__Win32GamepadInfo *gamep
 
 }
 
+VD_FW_API char* vd_fw__utf16_to_utf8(const wchar_t *ws);
+
 static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam, VdFwLPARAM lparam)
 {
     VdFwLRESULT result = 0;
@@ -8035,6 +8036,32 @@ static int vd_fw__msgbuf_w(VdFw__Win32Message *message)
     return 1;
 }
 
+VD_FW_API char *vd_fw__utf16_to_utf8(const wchar_t *ws)
+{
+    int req = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
+                                  ws, -1,
+                                  0, 0,
+                                  NULL, NULL);
+    if (req <= 0) {
+        return 0;
+    }
+
+    char *data = (char*)vd_fw__realloc_mem(0, req + 1);
+
+    int wrt = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
+                                  ws, -1,
+                                  data, req,
+                                  NULL, NULL);
+
+    if (wrt == 0) {
+        vd_fw__free_mem(data);
+        return 0;
+    }
+
+    data[req] = 0;
+    return data;
+}
+
 #if VD_FW_NO_CRT
 #pragma function(memset)
 void *__cdecl memset(void *dest, int value, size_t num)
@@ -9084,6 +9111,11 @@ VD_FW_API void vd_fw__free_mem(void *memory)
     free(memory);
 }
 
+VD_FW_API void *vd_fw__realloc_mem(void *prev_ptr, size_t size)
+{
+    return realloc(prev_ptr, size);
+}
+
 #undef VD_FW_G
 
 #elif defined(__linux__)
@@ -9516,32 +9548,6 @@ VD_FW_API VdFwGuid vd_fw__make_gamepad_guid(VdFwU16 bus, VdFwU16 vendor, VdFwU16
     return result;    
 }
 
-VD_FW_API char *vd_fw__utf16_to_utf8(const wchar_t *ws)
-{
-    int req = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
-                                  ws, -1,
-                                  0, 0,
-                                  NULL, NULL);
-    if (req <= 0) {
-        return 0;
-    }
-
-    char *data = (char*)vd_fw__realloc_mem(0, req + 1);
-
-    int wrt = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
-                                  ws, -1,
-                                  data, req,
-                                  NULL, NULL);
-
-    if (wrt == 0) {
-        vd_fw__free_mem(data);
-        return 0;
-    }
-
-    data[req] = 0;
-    return data;
-}
-
 VD_FW_API void *vd_fw__resize_buffer(void *buffer, size_t element_size, int required_capacity, int *cap)
 {
     if (required_capacity <= *cap) {
@@ -9812,7 +9818,7 @@ VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepad
     if (i++ > s_len) return 0;
 
 #define VD_FW_STR_AND_LEN(cs) cs, (sizeof(cs) - 1) 
-#define VD_FW_EXPECT_COLON() do { if (!s[i] == ':') return 0; if (++i >= s_len) return 0; } while(0)
+#define VD_FW_EXPECT_COLON() do { if (s[i] != ':') return 0; if (++i >= s_len) return 0; } while(0)
 
     int mapping_count = 0;
 
@@ -9846,8 +9852,8 @@ VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepad
             VD_FW_EXPECT_COLON();
             int platform_begin = i;
             {
-                while ((i < s_len) && ((s[i] >= 'a') && (s[i] <= 'z') ||
-                                       (s[i] >= 'A') && (s[i] <= 'Z') ||
+                while ((i < s_len) && (((s[i] >= 'a') && (s[i] <= 'z')) ||
+                                       ((s[i] >= 'A') && (s[i] <= 'Z')) ||
                                        (s[i] == ' ')))
                 {
                     i++;
