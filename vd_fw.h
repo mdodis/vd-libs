@@ -208,6 +208,10 @@
 #   define VD_FW_GAMEPAD_DB_DEFAULT 1
 #endif // !VD_FW_GAMEPAD_DB_DEFAULT
 
+#ifndef VD_FW_NCRECTS_MAX
+#   define VD_FW_NCRECTS_MAX 16
+#endif // !VD_FW_NCRECTS_MAX
+
 #define VD_FW_ARRAY_COUNT(x) (sizeof(x)/sizeof(x[0]))
 
 typedef enum {
@@ -252,16 +256,11 @@ enum {
     VD_FW_KEY_MINUS         = 45,  /* '-' */
     VD_FW_KEY_DOT           = 46,  /* '.' */
     VD_FW_KEY_SLASH_FORWARD = 47,  /* '/' */
-    VD_FW_KEY_0             = 48,  /* '0' */
-    VD_FW_KEY_1             = 49,  /* '1' */
-    VD_FW_KEY_2             = 50,  /* '2' */
-    VD_FW_KEY_3             = 51,  /* '3' */
-    VD_FW_KEY_4             = 52,  /* '4' */
-    VD_FW_KEY_5             = 53,  /* '5' */
-    VD_FW_KEY_6             = 54,  /* '6' */
-    VD_FW_KEY_7             = 55,  /* '7' */
-    VD_FW_KEY_8             = 56,  /* '8' */
-    VD_FW_KEY_9             = 57,  /* '9' */
+    VD_FW_KEY_0 = 48,  /* '0' */ VD_FW_KEY_1 = 49,  /* '1' */
+    VD_FW_KEY_2 = 50,  /* '2' */ VD_FW_KEY_3 = 51,  /* '3' */
+    VD_FW_KEY_4 = 52,  /* '4' */ VD_FW_KEY_5 = 53,  /* '5' */
+    VD_FW_KEY_6 = 54,  /* '6' */ VD_FW_KEY_7 = 55,  /* '7' */
+    VD_FW_KEY_8 = 56,  /* '8' */ VD_FW_KEY_9 = 57,  /* '9' */
     VD_FW_KEY_ENTER         = 58,
     VD_FW_KEY_SEMICOLON     = 59,  /* ';' */
     VD_FW_KEY_TAB           = 60,
@@ -4918,55 +4917,53 @@ typedef struct VdFw__Win32GamepadInfo {
 
 typedef struct {
 /* ----WINDOW THREAD ONLY-------------------------------------------------------------------------------------------- */
-    VdFwGraphicsApi             graphics_api;
-    VdFwHWND                    hwnd;
-    int                         w, h;
-    volatile VdFwBOOL           t_paint_ready;
-    VdFwBOOL                    draw_decorations;
-    VdFwRECT                    rgn;
-    VdFwBOOL                    theme_enabled;
-    VdFwBOOL                    composition_enabled;
-    VdFwDWORD                   main_thread_id;
-    VdFwBOOL                    focus_changed;
-    VdFwBOOL                    focused;
+    VdFwGraphicsApi             graphics_api;           // Currently selected graphics api
+    VdFwHWND                    hwnd;                   // Window handle
+    int                         w, h;                   // Current window dimensions
+    VdFwBOOL                    t_paint_ready;          // One time signal that window thread is paint-ready
+                                                        // (to respond properly to events sent before we enter the
+                                                        // message loop)
+
+    VdFwBOOL                    draw_decorations;       // Draw window frame, or be frame-less
+    VdFwRECT                    rgn;                    // Cached Window Region
+    VdFwBOOL                    theme_enabled;          // Whether theming is enabled
+    VdFwBOOL                    composition_enabled;    // Whether Compositor is enabled
     VdFwRAWINPUT                raw_input_buffer[VD_FW_WIN32_RAW_INPUT_BUFFER_COUNT];
-    VdFwLONG                    last_window_style;
-    VdFwRECT                    windowed_rect;
-    VdFwWINDOWPLACEMENT         last_window_placement;
+    VdFwLONG                    last_window_style;      // Keeps last window style to switch back from fullscreen
+    VdFwWINDOWPLACEMENT         last_window_placement;  // Keeps last window placement to switch back from fullscreen
     VdFw__Win32GamepadInfo      gamepad_infos[VD_FW_GAMEPAD_COUNT_MAX];
-    int                         xinput;
+    int                         xinput;                 // Whether XInput is available
     int                         window_min[2], window_max[2];
     int                         def_window_min[2];
     int                         cap_gamepad_db_entries;
     int                         num_gamepad_db_entries;
     VdFwGamepadDBEntry          *gamepad_db_entries;
-    VdFwUINT_PTR                rumble_timer_handle;
-    VdFwU8                    *report_buffer;
+    VdFwUINT_PTR                rumble_timer_handle;    // Handle to the timer proc that lets us rumble gamepads
+    VdFwU8                      *report_buffer;         // Dynamically sized report buffer, for writing to HIDs
     int                         report_buffer_len;
 
 /* ----RENDER THREAD ONLY-------------------------------------------------------------------------------------------- */
     // Internal
-    HMODULE                     opengl32;
-    VdFwHANDLE                  win_thread;
-    VdFwDWORD                   win_thread_id;
-    VdFwHDC                     hdc;
+    HMODULE                     opengl32;               // Handle to OpenGL32.dll, used when wglGetProcAddress fails.
+    VdFwHANDLE                  win_thread;             // Handle to the window-thread
+    VdFwDWORD                   win_thread_id;          // Window-thread ID
+    VdFwHDC                     hdc;                    // Device Context
     VdFwHGLRC                   hglrc;
     LARGE_INTEGER               frequency;
     LARGE_INTEGER               performance_counter;
-    VdFwProcwglSwapIntervalExt  *proc_swapInterval;
-    unsigned long long          last_ns;
+    VdFwProcwglSwapIntervalExt  *proc_swapInterval;     // Used for vd_fw_set_vsync
+    unsigned long long          last_ns;                // Cached delta time
     // Mouse
     int                         mouse[2];
     int                         prev_mouse_state;
     int                         mouse_state;
-    VdFwDWORD                   lmousedown;
-    VdFwDWORD                   rmousedown;
-    VdFwDWORD                   mmousedown;
     float                       mouse_delta[2];
     VdFwBOOL                    mouse_is_locked;
     int                         wheel_moved;
     float                       wheel[2];
     // Window
+    VdFwBOOL                    focus_changed;
+    VdFwBOOL                    focused;
     VdFwBOOL                    is_fullscreen;
     int                         window_state;
     int                         window_state_changed;
@@ -4981,7 +4978,7 @@ typedef struct {
     volatile VdFwLONG           msgbuf_r;
     volatile VdFwLONG           msgbuf_w;
     int                         ncrect_count;
-    int                         ncrects[16][4];
+    int                         ncrects[VD_FW_NCRECTS_MAX][4];
     int                         nccaption[4];
     int                         nccaption_set;
     int                         receive_ncmouse_on;
@@ -5576,8 +5573,6 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 #endif
     }
 
-    VD_FW_G.main_thread_id = GetCurrentThreadId();
-
     InitializeCriticalSection(&VD_FW_G.critical_section);
     InitializeCriticalSectionAndSpinCount(&VD_FW_G.input_critical_section, 3000);
     InitializeConditionVariable(&VD_FW_G.cond_var);
@@ -5598,7 +5593,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         NULL,
         0,
         vd_fw__win_thread_proc,
-        &VD_FW_G.main_thread_id,
+        0,
         0,
         &VD_FW_G.win_thread_id);
     SetThreadDescription(VD_FW_G.win_thread, L"Window Thread");
@@ -6025,8 +6020,8 @@ VD_FW_API void vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4])
 
     VD_FW_G.ncrect_count = count;
     int c = count;
-    if (c > 16) {
-        c = 16;
+    if (c > VD_FW_NCRECTS_MAX) {
+        c = VD_FW_NCRECTS_MAX;
     }
     for (int i = 0; i < c; ++i) {
         VD_FW_G.ncrects[i][0] = rects[i][0];
@@ -7491,14 +7486,14 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     for (int i = 0; i < num_button_caps; ++i) {
                         if (button_caps[i].IsRange) {
 
-                            unsigned short usage_count = 1 + button_caps[i].v.Range.DataIndexMax - button_caps[i].v.Range.DataIndexMin;
-                            for (unsigned short j = 0; j < usage_count; ++j) {
-                                int button_data_index = button_caps[i].v.Range.DataIndexMin + j;
+                            VdFwUSHORT usage_count = 1 + button_caps[i].v.Range.DataIndexMax - button_caps[i].v.Range.DataIndexMin;
+                            for (VdFwUSHORT j = 0; j < usage_count; ++j) {
+                                VdFwUSHORT button_data_index = button_caps[i].v.Range.DataIndexMin + j;
                                 new_gamepad->button_data_indices[count++] = button_data_index;
                             }
                         } else {
-                            unsigned short usage = button_caps[i].v.NotRange.DataIndex;
-                            new_gamepad->button_data_indices[count++] = usage;
+                            VdFwUSHORT data_index = button_caps[i].v.NotRange.DataIndex;
+                            new_gamepad->button_data_indices[count++] = data_index;
                         }
                     }
                 }
@@ -7818,7 +7813,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
             if (should_be_fullscreen) {
 
-                VdFwGetWindowRect(VD_FW_G.hwnd, &VD_FW_G.windowed_rect);
                 VdFwGetWindowPlacement(VD_FW_G.hwnd, &VD_FW_G.last_window_placement);
 
                 VdFwHMONITOR monitor = VdFwMonitorFromWindow(VD_FW_G.hwnd, MONITOR_DEFAULTTOPRIMARY);
@@ -8177,7 +8171,7 @@ typedef struct {
     BOOL                        dragging;
     BOOL                        draw_decorations;
     int                         ncrect_count;
-    NSRect                      ncrects[16];
+    NSRect                      ncrects[VD_FW_NCRECTS_MAX];
     NSRect                      nccaption;
     int                         nccaption_set;
     BOOL                        mouse_is_locked;
@@ -8998,8 +8992,8 @@ VD_FW_API void vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4])
 
     VD_FW_G.ncrect_count = count;
     int c = count;
-    if (c > 16) {
-        c = 16;
+    if (c > VD_FW_NCRECTS_MAX) {
+        c = VD_FW_NCRECTS_MAX;
     }
     for (int i = 0; i < c; ++i) {
 
