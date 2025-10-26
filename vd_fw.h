@@ -62,8 +62,8 @@
  * - vd_fw_get_executable_dir() <-- statically allocated char * of executable directory
  * - vd_fw_get_last_key_pressed
  * - vd_fw_get_last_mouse_button_pressed
- * - MacOS:vd_fw_minimize()
- * - MacOS:vd_fw_maximize()
+ * - MacOS: vd_fw_minimize()
+ * - MacOS: vd_fw_maximize()
  * - MacOS: vd_fw_set_app_icon
  * - MacOS: vd_fw_set_fullscreen
  * - MacOS: Use custom preprocessor option to disable OpenGL deprecation warnings
@@ -974,21 +974,25 @@ VD_FW_INL size_t vd_fw__strlcpy(char *dst, const char *src, size_t maxlen)
 }
 
 #if _WIN32
-#define VD_FW_WIN32_SUBSYSTEM_CONSOLE 1
-#define VD_FW_WIN32_SUBSYSTEM_WINDOWS 2
-
-#ifndef VD_FW_WIN32_SUBSYSTEM
-#define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_CONSOLE
-#endif // !VD_FW_WIN32_SUBSYSTEM
+#   define VD_FW_WIN32_SUBSYSTEM_CONSOLE 1
+#   define VD_FW_WIN32_SUBSYSTEM_WINDOWS 2
+#   ifndef VD_FW_WIN32_SUBSYSTEM
+#       define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_CONSOLE
+#   endif // !VD_FW_WIN32_SUBSYSTEM
 #endif // _WIN32
 
 #ifdef VD_FW_WIN32_NO_LINKER_COMMENTS
-#define VD_FW_WIN32_LINKER_COMMENTS 0
+#   define VD_FW_WIN32_LINKER_COMMENTS 0
 #else
-#define VD_FW_WIN32_LINKER_COMMENTS 1
+#   define VD_FW_WIN32_LINKER_COMMENTS 1
 #endif // !VD_FW_WIN32_NO_LINKER_COMMENTS
 
 #if defined(__APPLE__)
+
+#ifndef VD_FW_MACOS_NO_MAIN_OVERRIDE
+#   define main vd_fw__macos_main
+#endif // !VD_FW_MACOS_NO_MAIN_OVERRIDE
+
 #ifndef GL_SILENCE_DEPRECATION
 #   define GL_SILENCE_DEPRECATION
 #endif // !GL_SILENCE_DEPRECATION
@@ -8178,6 +8182,8 @@ int wWinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPWSTR cmdline, int n
 #import <stdio.h>
 #import <pthread.h>
 #include <semaphore.h>
+#include <stdatomic.h>
+
 #define VD_FW_G Vd_Fw_Globals
 
 @interface VdFwWindowDelegate : NSObject<NSApplicationDelegate, NSWindowDelegate>
@@ -8186,6 +8192,28 @@ int wWinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPWSTR cmdline, int n
 @end
 @interface VdFwWindow : NSWindow
 @end
+
+typedef enum {
+    VD_FW__MAC_MESSAGE_INVALID = 0,
+    VD_FW__MAC_MESSAGE_INIT,
+    VD_FW__MAC_FLAGS_WAKE_COND_VAR = 1 << 0,
+    VD_FW__MAC_FLAGS_SIZE_CHANGED  = 1 << 1,
+
+} VdFw__MacMessageType;
+
+typedef struct {
+    VdFw__MacMessageType type;
+    union {
+        struct {
+            VdFwInitInfo init_info;
+        } init;
+    } dat;
+} VdFw__MacMessage;
+
+typedef struct {
+    int w, h;
+    int flags;
+} VdFw__MacFrame;
 
 typedef struct {
     VdFwWindow                  *window;
@@ -8213,6 +8241,20 @@ typedef struct {
     unsigned char               prev_key_states[VD_FW_KEY_MAX];
     int                         focus_changed;
     int                         focused;
+    int                         argc;
+    const char                  **argv;
+
+    VdFwInitInfo                c_init_info;
+
+    int                         w, h;
+    VdFw__MacFrame              next_frame;
+    VdFw__MacFrame              curr_frame;
+
+    pthread_t                   main_thread;
+    pthread_mutex_t             m_paint;
+    pthread_cond_t              n_paint;
+    sem_t                       *s_main_thread_opened_me;
+    sem_t                       *s_main_thread_window_ready;
 } VdFw__MacOsInternalData;
 
 static VdFw__MacOsInternalData Vd_Fw_Globals;
@@ -8525,8 +8567,12 @@ static VdFwWindowDelegate *Vd_Fw_Delegate;
 }
 
 - (void)windowDidResize:(NSNotification *)notification {
-    [VD_FW_G.content_view setNeedsDisplay: YES];
-    [VD_FW_G.gl_context update];
+
+    NSRect rect = [[VD_FW_G.window contentView] frame];
+    VD_FW_G.w = (int)rect.size.width * VD_FW_G.scale;
+    VD_FW_G.h = (int)rect.size.height * VD_FW_G.scale;
+    // [VD_FW_G.content_view setNeedsDisplay: YES];
+    // [VD_FW_G.gl_context update];
 }
 - (BOOL)acceptsFirstResponder {
     return YES;
@@ -8562,7 +8608,22 @@ static VdFwWindowDelegate *Vd_Fw_Delegate;
 
 @implementation VdFwContentView
 
-// - (BOOL)performKeyEquivalent:(NSEvent *)event {
+- (void)drawRect:(NSRect)dirtyRect {
+    pthread_mutex_lock(&VD_FW_G.m_paint);
+
+    if ((VD_FW_G.w != VD_FW_G.next_frame.w) || (VD_FW_G.h != VD_FW_G.next_frame.h)) {
+        VD_FW_G.next_frame.w = VD_FW_G.w;
+        VD_FW_G.next_frame.h = VD_FW_G.h;
+        VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_SIZE_CHANGED;
+    }
+
+    VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_WAKE_COND_VAR;
+
+    pthread_cond_signal(&VD_FW_G.n_paint);
+    pthread_cond_wait(&VD_FW_G.n_paint, &VD_FW_G.m_paint);
+    pthread_mutex_unlock(&VD_FW_G.m_paint);
+}
+
 //     if (event.type == NSEventTypeKeyDown) {
 //         // swallow key events you don't want to beep
 //         return YES;
@@ -8571,117 +8632,16 @@ static VdFwWindowDelegate *Vd_Fw_Delegate;
 // }
 @end
 
+static void vd_fw__mac_init(VdFwInitInfo *info);
+static void vd_fw__mac_init_gl(VdFwInitInfo *info);
+static void vd_fw__mac_runloop(int wait);
+
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
-    VD_FW_G.draw_decorations = 1;
-    if (info) {
-        VD_FW_G.draw_decorations = !info->window_options.borderless;
-    }
-
-    [NSApplication sharedApplication];
-    [NSApp setActivationPolicy: NSApplicationActivationPolicyRegular];
-    [NSEvent setMouseCoalescingEnabled:NO];
-
-    // @autoreleasepool
-    {
-        NSScreen *main_screen = [NSScreen mainScreen];
-        VD_FW_G.scale = [main_screen backingScaleFactor];
-
-        NSRect screen_rect = [main_screen frame];
-
-        VdFwWindowDelegate *delegate = [[VdFwWindowDelegate alloc] init];
-        [NSApp setDelegate: delegate];
-        Vd_Fw_Delegate = delegate;
-
-        // Create a simple menu bar so the app shows in the Dock
-        NSMenu *menubar = [[NSMenu new] autorelease];
-        NSMenuItem *appMenuItem = [[NSMenuItem new] autorelease];
-        [menubar addItem:appMenuItem];
-        [NSApp setMainMenu:menubar];
-        NSMenu *appMenu = [[NSMenu new] initWithTitle:@"Application"];
-        NSMenuItem *quitMenuItem = [[NSMenuItem alloc]
-            initWithTitle:@"Quit"
-                   action:@selector(terminate:)
-            keyEquivalent:@"q"];
-        [appMenu addItem:quitMenuItem];
-        [appMenuItem setSubmenu:appMenu];
-        int w = 640;
-        int h = 480;
-        int x = screen_rect.size.width  * 0.5f - w * 0.5f;
-        int y = screen_rect.size.height * 0.5f - h * 0.5f;
-        NSRect frame = NSMakeRect(x, y, w, h);
-        NSWindowStyleMask window_style_mask = NSWindowStyleMaskClosable |
-                                              NSWindowStyleMaskMiniaturizable |
-                                              NSWindowStyleMaskTitled |
-                                              NSWindowStyleMaskResizable;
-        // if (!VD_FW_G.draw_decorations) {
-        //     window_style_mask              |= NSWindowStyleMaskFullSizeContentView;
-        // }
-
-        VD_FW_G.window = [[VdFwWindow alloc] initWithContentRect: frame
-                                                     styleMask: window_style_mask
-                                                       backing: NSBackingStoreBuffered
-                                                         defer: NO];
-
-        if (!VD_FW_G.draw_decorations) {
-            VD_FW_G.window.titleVisibility = NSWindowTitleHidden;
-            VD_FW_G.window.titlebarAppearsTransparent = YES;
-            [[VD_FW_G.window standardWindowButton:NSWindowCloseButton] setHidden:YES];
-            [[VD_FW_G.window standardWindowButton:NSWindowMiniaturizeButton] setHidden:YES];
-            [[VD_FW_G.window standardWindowButton:NSWindowZoomButton] setHidden:YES];
-            VD_FW_G.window.styleMask |= NSWindowStyleMaskFullSizeContentView;
-            [VD_FW_G.window setMovable:NO];
-            [VD_FW_G.window setMovableByWindowBackground:NO];
-
-        }
-        [VD_FW_G.window                       setTitle: [NSString stringWithUTF8String: "FW Window"]];
-        [VD_FW_G.window           makeKeyAndOrderFront: nil];
-        [VD_FW_G.window                   setHasShadow: YES];
-        [VD_FW_G.window setAllowsConcurrentViewDrawing: YES];
-
-        NSOpenGLPixelFormatAttribute attrs[] = {
-            NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersion3_2Core,
-            NSOpenGLPFAColorSize, 24,
-            NSOpenGLPFAAlphaSize, 8,
-            NSOpenGLPFADepthSize, 24,
-            NSOpenGLPFADoubleBuffer,
-            NSOpenGLPFAAccelerated,
-            0
-        };
-
-        NSOpenGLPixelFormat *pf = [[NSOpenGLPixelFormat alloc] initWithAttributes: attrs];
-        VD_FW_G.gl_context = [[NSOpenGLContext alloc]              initWithFormat: pf
-                                                                     shareContext: nil];
-        NSRect wframe = [[VD_FW_G.window contentView] bounds];
-        NSView *fw_view = [[VdFwContentView alloc] initWithFrame:wframe];
-        VD_FW_G.content_view = (VdFwContentView*)fw_view;
-        [VD_FW_G.window setContentView: fw_view];
-        // NSView *content_view = [VD_FW_G.window contentView];
-        [fw_view setWantsLayer: YES];
-        // [[fw_view layer] setDrawsAsynchronously: YES];
-        [fw_view setAcceptsTouchEvents:YES]; // optional for touch, but ok
-        [fw_view addTrackingArea:[[NSTrackingArea alloc] initWithRect:fw_view.bounds
-                                                             options:NSTrackingMouseMoved |
-                                                                     NSTrackingActiveAlways |
-                                                                     NSTrackingInVisibleRect
-                                                               owner:fw_view
-                                                            userInfo:nil]];
-
-        [VD_FW_G.gl_context setView: fw_view];
-        [VD_FW_G.gl_context makeCurrentContext];
-
-        [VD_FW_G.window setDelegate:delegate];
-        [NSApp activateIgnoringOtherApps:YES];
-    }
-
-    VdFwGlVersion version = VD_FW_GL_VERSION_3_3;
-    if (info && info->gl.version != 0) {
-        version = info->gl.version;
-    }
-    vd_fw__load_opengl(version);
-
-    mach_timebase_info(&VD_FW_G.time_base);
-    VD_FW_G.last_time = mach_absolute_time();
+    VD_FW_G.c_init_info = *info;
+    sem_post(VD_FW_G.s_main_thread_opened_me);
+    sem_wait(VD_FW_G.s_main_thread_window_ready);
+    vd_fw__mac_init_gl(info);
 
     return 1;
 }
@@ -8791,15 +8751,325 @@ VD_FW_API int vd_fw_running(void)
         VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
     }
 
+    pthread_mutex_lock(&VD_FW_G.m_paint);
+    VD_FW_G.curr_frame = VD_FW_G.next_frame;
+    VD_FW_G.next_frame.flags = 0;
+    pthread_mutex_unlock(&VD_FW_G.m_paint);
+
+    return !VD_FW_G.should_close;
+}
+
+VD_FW_API int vd_fw_swap_buffers(void)
+{
+
+    VD_FW_G.last_time = mach_absolute_time();
     @autoreleasepool {
+        [VD_FW_G.gl_context flushBuffer];
+    }
+
+    if (VD_FW_G.curr_frame.flags & VD_FW__MAC_FLAGS_WAKE_COND_VAR) {
+        pthread_cond_signal(&VD_FW_G.n_paint);
+    }
+    return 1;
+}
+
+VD_FW_API int vd_fw_get_focused(int *focused)
+{
+    *focused = VD_FW_G.focused;
+    return VD_FW_G.focus_changed;
+}
+
+VD_FW_API int vd_fw_get_size(int *w, int *h)
+{
+    NSRect rect = [[VD_FW_G.window contentView] frame];
+    if (w) *w = (int)rect.size.width * VD_FW_G.scale;
+    if (h) *h = (int)rect.size.height * VD_FW_G.scale;
+    return 0;
+}
+
+VD_FW_API void vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4])
+{
+    NSView *cv = [VD_FW_G.window contentView];
+    NSRect cvf = [cv frame];
+
+    cvf.size.width  *= VD_FW_G.scale;
+    cvf.size.height *= VD_FW_G.scale;
+
+    VD_FW_G.nccaption_set = 1;
+    VD_FW_G.nccaption.origin.x    = caption[0];
+    VD_FW_G.nccaption.origin.y    = cvf.size.height - (caption[3] - caption[1]);
+    VD_FW_G.nccaption.size.width  = caption[2] - caption[0];
+    VD_FW_G.nccaption.size.height = (caption[3] - caption[1]);
+
+    VD_FW_G.ncrect_count = count;
+    int c = count;
+    if (c > VD_FW_NCRECTS_MAX) {
+        c = VD_FW_NCRECTS_MAX;
+    }
+    for (int i = 0; i < c; ++i) {
+
+        VD_FW_G.ncrects[i].origin.x    = rects[i][0];
+        VD_FW_G.ncrects[i].origin.y    = cvf.size.height - (rects[i][3] - rects[i][1]);
+        VD_FW_G.ncrects[i].size.width  = rects[i][2] - rects[i][0];
+        VD_FW_G.ncrects[i].size.height = (rects[i][3] - rects[i][1]);
+    }
+}
+
+VD_FW_API float vd_fw_get_scale(void)
+{
+    return VD_FW_G.scale;
+}
+
+VD_FW_API void vd_fw_set_title(const char *title)
+{
+    [VD_FW_G.window setTitle: [NSString stringWithUTF8String: (title)]];
+}
+
+VD_FW_API int vd_fw_set_vsync_on(int on)
+{
+    @autoreleasepool {
+        if (VD_FW_G.gl_context) {
+            GLint sync = on;
+            [VD_FW_G.gl_context setValues:&sync forParameter:NSOpenGLCPSwapInterval];
+        }
+    }
+    return 1;
+}
+
+VD_FW_API int vd_fw__any_time_higher(int num_files, const char **files, unsigned long long *check_against)
+{
+    int result = 0;
+    for (int i = 0; i < num_files; ++i) {
+        int fd = open(files[i], O_RDONLY);
+
+        if (fd < 0) {
+            return 0;
+        }
+
+        struct stat st;
+        if (fstat(fd, &st) != 0) {
+            close(fd);
+            return 0;
+        }
+
+        close(fd);
+
+        unsigned long long file_secs = st.st_mtimespec.tv_sec;
+
+        if (file_secs > *check_against) {
+            *check_against = file_secs;
+            close(fd);
+            result = 1;
+            break;
+        }
+
+    }
+
+    return result;
+}
+
+VD_FW_API char *vd_fw__debug_dump_file_text(const char *path)
+{
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        return 0;
+    }
+
+    fseek(f, 0, SEEK_END);
+    size_t size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    char *result = (char*)malloc(size +1);
+    fread(result, size, 1, f);
+
+    result[size] = 0;
+    return result;
+}
+
+VD_FW_API void vd_fw__free_mem(void *memory)
+{
+    free(memory);
+}
+
+VD_FW_API void *vd_fw__realloc_mem(void *prev_ptr, size_t size)
+{
+    return realloc(prev_ptr, size);
+}
+
+
+#ifndef VD_FW_MACOS_NO_MAIN_OVERRIDE
+#   undef main
+static void *vd_fw__macos__main(void *arg)
+{
+    (void)arg;
+    vd_fw__macos_main(VD_FW_G.argc, VD_FW_G.argv);
+
+    return NULL;
+}
+
+
+int main(int argc, char const *argv[])
+{
+    VD_FW_G.argc = argc;
+    VD_FW_G.argv = argv;
+
+    VD_FW_G.s_main_thread_opened_me = sem_open("/sm-fw-cmtom",
+                                               O_CREAT,
+                                               0644,
+                                               0);
+    VD_FW_G.s_main_thread_window_ready = sem_open("/sm-fw-cmtwr",
+                                                  O_CREAT,
+                                                  0644,
+                                                  0);
+    pthread_mutex_init(&VD_FW_G.m_paint, NULL);
+    pthread_cond_init(&VD_FW_G.n_paint, NULL);
+    pthread_create(&VD_FW_G.main_thread, NULL, vd_fw__macos__main, NULL);
+
+    while (1) {
+
+        sem_wait(VD_FW_G.s_main_thread_opened_me);
+        vd_fw__mac_init(&VD_FW_G.c_init_info);
+        sem_post(VD_FW_G.s_main_thread_window_ready);
+
+        vd_fw__mac_runloop(1);
+    }
+
+    return 0;
+}
+#endif // !VD_FW_MACOS_NO_MAIN_OVERRIDE
+
+static void vd_fw__mac_init(VdFwInitInfo *info)
+{
+    VD_FW_G.draw_decorations = 1;
+    if (info) {
+        VD_FW_G.draw_decorations = !info->window_options.borderless;
+    }
+
+    [NSApplication sharedApplication];
+    [NSApp setActivationPolicy: NSApplicationActivationPolicyRegular];
+    [NSEvent setMouseCoalescingEnabled:NO];
+
+    // @autoreleasepool
+    {
+        NSScreen *main_screen = [NSScreen mainScreen];
+        VD_FW_G.scale = [main_screen backingScaleFactor];
+
+        NSRect screen_rect = [main_screen frame];
+
+        VdFwWindowDelegate *delegate = [[VdFwWindowDelegate alloc] init];
+        [NSApp setDelegate: delegate];
+        Vd_Fw_Delegate = delegate;
+
+        // Create a simple menu bar so the app shows in the Dock
+        NSMenu *menubar = [[NSMenu new] autorelease];
+        NSMenuItem *appMenuItem = [[NSMenuItem new] autorelease];
+        [menubar addItem:appMenuItem];
+        [NSApp setMainMenu:menubar];
+        NSMenu *appMenu = [[NSMenu new] initWithTitle:@"Application"];
+        NSMenuItem *quitMenuItem = [[NSMenuItem alloc]
+            initWithTitle:@"Quit"
+                   action:@selector(terminate:)
+            keyEquivalent:@"q"];
+        [appMenu addItem:quitMenuItem];
+        [appMenuItem setSubmenu:appMenu];
+        int w = 640;
+        int h = 480;
+        int x = screen_rect.size.width  * 0.5f - w * 0.5f;
+        int y = screen_rect.size.height * 0.5f - h * 0.5f;
+        NSRect frame = NSMakeRect(x, y, w, h);
+        NSWindowStyleMask window_style_mask = NSWindowStyleMaskClosable |
+                                              NSWindowStyleMaskMiniaturizable |
+                                              NSWindowStyleMaskTitled |
+                                              NSWindowStyleMaskResizable;
+        // if (!VD_FW_G.draw_decorations) {
+        //     window_style_mask              |= NSWindowStyleMaskFullSizeContentView;
+        // }
+
+        VD_FW_G.window = [[VdFwWindow alloc] initWithContentRect: frame
+                                                     styleMask: window_style_mask
+                                                       backing: NSBackingStoreBuffered
+                                                         defer: NO];
+
+        if (!VD_FW_G.draw_decorations) {
+            VD_FW_G.window.titleVisibility = NSWindowTitleHidden;
+            VD_FW_G.window.titlebarAppearsTransparent = YES;
+            [[VD_FW_G.window standardWindowButton:NSWindowCloseButton] setHidden:YES];
+            [[VD_FW_G.window standardWindowButton:NSWindowMiniaturizeButton] setHidden:YES];
+            [[VD_FW_G.window standardWindowButton:NSWindowZoomButton] setHidden:YES];
+            VD_FW_G.window.styleMask |= NSWindowStyleMaskFullSizeContentView;
+            [VD_FW_G.window setMovable:NO];
+            [VD_FW_G.window setMovableByWindowBackground:NO];
+
+        }
+        [VD_FW_G.window                       setTitle: [NSString stringWithUTF8String: "FW Window"]];
+        [VD_FW_G.window           makeKeyAndOrderFront: nil];
+        [VD_FW_G.window                   setHasShadow: YES];
+        [VD_FW_G.window setAllowsConcurrentViewDrawing: YES];
+
+        NSOpenGLPixelFormatAttribute attrs[] = {
+            NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersion3_2Core,
+            NSOpenGLPFAColorSize, 24,
+            NSOpenGLPFAAlphaSize, 8,
+            NSOpenGLPFADepthSize, 24,
+            NSOpenGLPFADoubleBuffer,
+            NSOpenGLPFAAccelerated,
+            0
+        };
+
+        NSOpenGLPixelFormat *pf = [[NSOpenGLPixelFormat alloc] initWithAttributes: attrs];
+        VD_FW_G.gl_context = [[NSOpenGLContext alloc]              initWithFormat: pf
+                                                                     shareContext: nil];
+        NSRect wframe = [[VD_FW_G.window contentView] bounds];
+        NSView *fw_view = [[VdFwContentView alloc] initWithFrame:wframe];
+        VD_FW_G.content_view = (VdFwContentView*)fw_view;
+        [VD_FW_G.window setContentView: fw_view];
+        // NSView *content_view = [VD_FW_G.window contentView];
+        [fw_view setWantsLayer: YES];
+        // [[fw_view layer] setDrawsAsynchronously: YES];
+        [fw_view setAcceptsTouchEvents:YES]; // optional for touch, but ok
+        [fw_view addTrackingArea:[[NSTrackingArea alloc] initWithRect:fw_view.bounds
+                                                             options:NSTrackingMouseMoved |
+                                                                     NSTrackingActiveAlways |
+                                                                     NSTrackingInVisibleRect
+                                                               owner:fw_view
+                                                            userInfo:nil]];
+
+        [VD_FW_G.gl_context setView: fw_view];
+
+        [VD_FW_G.window setDelegate:delegate];
+        [NSApp activateIgnoringOtherApps:YES];
+    }
+
+    VdFwGlVersion version = VD_FW_GL_VERSION_3_3;
+    if (info && info->gl.version != 0) {
+        version = info->gl.version;
+    }
+    vd_fw__load_opengl(version);
+
+    mach_timebase_info(&VD_FW_G.time_base);
+    VD_FW_G.last_time = mach_absolute_time();
+}
+
+static void vd_fw__mac_init_gl(VdFwInitInfo *info)
+{
+    [VD_FW_G.gl_context makeCurrentContext];
+}
+
+static void vd_fw__mac_runloop(int wait)
+{
+    @autoreleasepool {
+        NSDate *date = [NSDate distantFuture];
+        if (!wait) {
+            date = [NSDate distantPast];
+        }
+
         NSEvent *event;
-        while ((event = [NSApp nextEventMatchingMask:NSEventMaskAny
-                                           untilDate:[NSDate distantPast]
-                                              inMode:NSDefaultRunLoopMode
-                                             dequeue:YES]))
+        while ((event = [NSApp nextEventMatchingMask: NSEventMaskAny
+                                           untilDate: date
+                                              inMode: NSDefaultRunLoopMode
+                                             dequeue: YES]))
         {
             NSEventType type = [event type];
-
             // Handle Cmd+Q manually
             if (event.type == NSEventTypeKeyDown &&
                 (event.modifierFlags & NSEventModifierFlagCommand) &&
@@ -8979,141 +9249,6 @@ VD_FW_API int vd_fw_running(void)
             }
         }
     }
-
-    return !VD_FW_G.should_close;
-}
-
-VD_FW_API int vd_fw_swap_buffers(void)
-{
-
-    VD_FW_G.last_time = mach_absolute_time();
-    @autoreleasepool {
-        [VD_FW_G.gl_context flushBuffer];
-    }
-    return 1;
-}
-
-VD_FW_API int vd_fw_get_focused(int *focused)
-{
-    *focused = VD_FW_G.focused;
-    return VD_FW_G.focus_changed;
-}
-
-VD_FW_API int vd_fw_get_size(int *w, int *h)
-{
-    NSRect rect = [[VD_FW_G.window contentView] frame];
-    if (w) *w = (int)rect.size.width * VD_FW_G.scale;
-    if (h) *h = (int)rect.size.height * VD_FW_G.scale;
-    return 0;
-}
-
-VD_FW_API void vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4])
-{
-    NSView *cv = [VD_FW_G.window contentView];
-    NSRect cvf = [cv frame];
-
-    cvf.size.width  *= VD_FW_G.scale;
-    cvf.size.height *= VD_FW_G.scale;
-
-    VD_FW_G.nccaption_set = 1;
-    VD_FW_G.nccaption.origin.x    = caption[0];
-    VD_FW_G.nccaption.origin.y    = cvf.size.height - (caption[3] - caption[1]);
-    VD_FW_G.nccaption.size.width  = caption[2] - caption[0];
-    VD_FW_G.nccaption.size.height = (caption[3] - caption[1]);
-
-    VD_FW_G.ncrect_count = count;
-    int c = count;
-    if (c > VD_FW_NCRECTS_MAX) {
-        c = VD_FW_NCRECTS_MAX;
-    }
-    for (int i = 0; i < c; ++i) {
-
-        VD_FW_G.ncrects[i].origin.x    = rects[i][0];
-        VD_FW_G.ncrects[i].origin.y    = cvf.size.height - (rects[i][3] - rects[i][1]);
-        VD_FW_G.ncrects[i].size.width  = rects[i][2] - rects[i][0];
-        VD_FW_G.ncrects[i].size.height = (rects[i][3] - rects[i][1]);
-    }
-}
-
-VD_FW_API float vd_fw_get_scale(void)
-{
-    return VD_FW_G.scale;
-}
-
-VD_FW_API void vd_fw_set_title(const char *title)
-{
-    [VD_FW_G.window setTitle: [NSString stringWithUTF8String: (title)]];
-}
-
-VD_FW_API int vd_fw_set_vsync_on(int on)
-{
-    @autoreleasepool {
-        if (VD_FW_G.gl_context) {
-            GLint sync = on;
-            [VD_FW_G.gl_context setValues:&sync forParameter:NSOpenGLCPSwapInterval];
-        }
-    }
-    return 1;
-}
-
-VD_FW_API int vd_fw__any_time_higher(int num_files, const char **files, unsigned long long *check_against)
-{
-    int result = 0;
-    for (int i = 0; i < num_files; ++i) {
-        int fd = open(files[i], O_RDONLY);
-
-        if (fd < 0) {
-            return 0;
-        }
-
-        struct stat st;
-        if (fstat(fd, &st) != 0) {
-            close(fd);
-            return 0;
-        }
-
-        close(fd);
-
-        unsigned long long file_secs = st.st_mtimespec.tv_sec;
-
-        if (file_secs > *check_against) {
-            *check_against = file_secs;
-            close(fd);
-            result = 1;
-            break;
-        }
-
-    }
-
-    return result;
-}
-
-VD_FW_API char *vd_fw__debug_dump_file_text(const char *path)
-{
-    FILE *f = fopen(path, "rb");
-    if (!f) {
-        return 0;
-    }
-
-    fseek(f, 0, SEEK_END);
-    size_t size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    char *result = (char*)malloc(size +1);
-    fread(result, size, 1, f);
-
-    result[size] = 0;
-    return result;
-}
-
-VD_FW_API void vd_fw__free_mem(void *memory)
-{
-    free(memory);
-}
-
-VD_FW_API void *vd_fw__realloc_mem(void *prev_ptr, size_t size)
-{
-    return realloc(prev_ptr, size);
 }
 
 #undef VD_FW_G
@@ -9246,7 +9381,6 @@ VD_FW_API void vd_fw__free_mem(void *memory)
 {
     free(memory);
 }
-
 #endif // _WIN32, __APPLE__, __linux__
 
 #if !defined(__APPLE__)
@@ -9962,6 +10096,10 @@ VD_FW_API const char *vd_fw_get_gamepad_button_name(int button)
     return 0;    
 }
 
+#ifdef __clang__
+#   pragma clang diagnostic push
+#   pragma clang diagnostic ignored "-Wmissing-braces"
+#endif
 #if VD_FW_GAMEPAD_DB_DEFAULT
 #if defined(VD_FW_GAMEPAD_DB_DEFAULT_EXTERNAL)
 #include "builtin.rgcdb.c"
@@ -9981,6 +10119,9 @@ VdFwGamepadDBEntry Vd_Fw__Gamepad_Db_Entries[1] = {
 };
 #endif // VD_FW_GAMEPAD_DB_DEFAULT_EXTERNAL
 #endif // VD_FW_GAMEPAD_DB_DEFAULT
+#ifdef __clang__
+#   pragma clang diagnostic pop
+#endif
 
 static int vd_fw__guid_matches(VdFwGuid *detected_guid, VdFwGuid *candidate_guid)
 {
