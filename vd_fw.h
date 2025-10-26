@@ -185,6 +185,7 @@
 
 #if !VD_FW_CUSTOM_TYPEDEFS
 #   include <stdint.h>
+#   include <stddef.h>
 #   define VdFwU8   uint8_t
 #   define VdFwU16  uint16_t
 #   define VdFwU32  uint32_t
@@ -967,7 +968,7 @@ VD_FW_INL size_t vd_fw__strlcpy(char *dst, const char *src, size_t maxlen)
     size_t srclen = vd_fw__strlen(src);
     if (maxlen > 0) {
         size_t len = srclen < (maxlen - 1) ? srclen : (maxlen - 1);
-        VD_FW_MEMCPY(dst, src, len);
+        VD_FW_MEMCPY(dst, (void*)src, len);
         dst[len] = '\0';
     }
     return srclen;
@@ -8571,7 +8572,6 @@ static VdFwWindowDelegate *Vd_Fw_Delegate;
     NSRect rect = [[VD_FW_G.window contentView] frame];
     VD_FW_G.w = (int)rect.size.width * VD_FW_G.scale;
     VD_FW_G.h = (int)rect.size.height * VD_FW_G.scale;
-    // [VD_FW_G.content_view setNeedsDisplay: YES];
     // [VD_FW_G.gl_context update];
 }
 - (BOOL)acceptsFirstResponder {
@@ -8781,10 +8781,9 @@ VD_FW_API int vd_fw_get_focused(int *focused)
 
 VD_FW_API int vd_fw_get_size(int *w, int *h)
 {
-    NSRect rect = [[VD_FW_G.window contentView] frame];
-    if (w) *w = (int)rect.size.width * VD_FW_G.scale;
-    if (h) *h = (int)rect.size.height * VD_FW_G.scale;
-    return 0;
+    *w = VD_FW_G.curr_frame.w;
+    *h = VD_FW_G.curr_frame.h;
+    return VD_FW_G.curr_frame.flags & VD_FW__MAC_FLAGS_SIZE_CHANGED;
 }
 
 VD_FW_API void vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4])
