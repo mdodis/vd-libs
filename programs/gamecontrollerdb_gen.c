@@ -193,7 +193,7 @@ int main(int argc, char const *argv[])
                     }break;
                 }
             }
-            printf("{0x%04x,%30s,%3d},", entry->kind, target, entry->index);
+            printf("{0x%x,%s,%d},", entry->kind, target, entry->index);
         }
         printf("{0,0,0},");
         printf("},\n");
@@ -229,8 +229,36 @@ int main(int argc, char const *argv[])
             }
 
         }
-        printf("\t\t}\n");
+        printf("\t\t},\n");
 
+        {
+            switch (db_entry.map.face) {
+                case VD_FW_GAMEPAD_FACE_TYPE_NUMBERED:      printf("\t\tVD_FW_GAMEPAD_FACE_TYPE_NUMBERED,\n");    break;
+                case VD_FW_GAMEPAD_FACE_TYPE_XBOX:          printf("\t\tVD_FW_GAMEPAD_FACE_TYPE_XBOX,\n");        break;
+                case VD_FW_GAMEPAD_FACE_TYPE_PLAYSTATION:   printf("\t\tVD_FW_GAMEPAD_FACE_TYPE_PLAYSTATION,\n"); break;
+                case VD_FW_GAMEPAD_FACE_TYPE_NINTENDO:      printf("\t\tVD_FW_GAMEPAD_FACE_TYPE_NINTENDO,\n");    break;
+                default:
+                case VD_FW_GAMEPAD_FACE_TYPE_UNKNOWN:       printf("\t\tVD_FW_GAMEPAD_FACE_TYPE_UNKNOWN,\n");     break;
+            }
+        }
+
+        {
+            switch (db_entry.map.klass) {
+                case VD_FW_GAMEPAD_CLASS_NES:       printf("\t\tVD_FW_GAMEPAD_CLASS_NES,\n");       break;
+                case VD_FW_GAMEPAD_CLASS_MEGADRIVE: printf("\t\tVD_FW_GAMEPAD_CLASS_MEGADRIVE,\n"); break;
+                case VD_FW_GAMEPAD_CLASS_GENESIS:   printf("\t\tVD_FW_GAMEPAD_CLASS_GENESIS,\n");   break;
+                case VD_FW_GAMEPAD_CLASS_SNES:      printf("\t\tVD_FW_GAMEPAD_CLASS_SNES,\n");      break;
+                case VD_FW_GAMEPAD_CLASS_PS1:       printf("\t\tVD_FW_GAMEPAD_CLASS_PS1,\n");       break;
+                case VD_FW_GAMEPAD_CLASS_JOYCON:    printf("\t\tVD_FW_GAMEPAD_CLASS_JOYCON,\n");    break;
+                case VD_FW_GAMEPAD_CLASS_N64:       printf("\t\tVD_FW_GAMEPAD_CLASS_N64,\n");       break;
+                case VD_FW_GAMEPAD_CLASS_PS2:       printf("\t\tVD_FW_GAMEPAD_CLASS_PS2,\n");       break;
+                case VD_FW_GAMEPAD_CLASS_XBOX:      printf("\t\tVD_FW_GAMEPAD_CLASS_XBOX,\n");      break;
+                case VD_FW_GAMEPAD_CLASS_PS4:       printf("\t\tVD_FW_GAMEPAD_CLASS_PS4,\n");       break;
+                case VD_FW_GAMEPAD_CLASS_STEAMDECK: printf("\t\tVD_FW_GAMEPAD_CLASS_STEAMDECK,\n"); break;
+                default:
+                case VD_FW_GAMEPAD_CLASS_INVALID:   printf("\t\tVD_FW_GAMEPAD_CLASS_INVALID,\n");   break;
+            }
+        }
         printf("\t}},\n");
 
     }

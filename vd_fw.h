@@ -611,10 +611,11 @@ enum {
 typedef int VdFwGamepadInput;
 
 enum {
-    VD_FW_GAMEPAD_FACE_TYPE_NUMBERED    = 0, /* face:numbered */
-    VD_FW_GAMEPAD_FACE_TYPE_XBOX,            /* face:xbox */
-    VD_FW_GAMEPAD_FACE_TYPE_PLAYSTATION,     /* face:playstation */
-    VD_FW_GAMEPAD_FACE_TYPE_NINTENDO,        /* face:nintendo */
+    VD_FW_GAMEPAD_FACE_TYPE_UNKNOWN = 0,
+    VD_FW_GAMEPAD_FACE_TYPE_NUMBERED,    /* face:numbered */
+    VD_FW_GAMEPAD_FACE_TYPE_XBOX,        /* face:xbox */
+    VD_FW_GAMEPAD_FACE_TYPE_PLAYSTATION, /* face:playstation */
+    VD_FW_GAMEPAD_FACE_TYPE_NINTENDO,    /* face:nintendo */
 };
 typedef VdFwU8 VdFwGamepadFaceType;
 
@@ -722,6 +723,8 @@ typedef struct {
 typedef struct {
     VdFwGamepadMapEntry     mappings[VD_FW_GAMEPAD_MAX_MAPPINGS];
     VdFwGamepadRumbleConfig rumble_config;
+    VdFwGamepadFaceType     face;
+    VdFwGamepadClass        klass;
 } VdFwGamepadMap;
 
 typedef struct {
@@ -745,8 +748,8 @@ typedef union {
 } VdFwGuid;
 
 typedef struct {
-    VdFwGuid        guid;
-    VdFwGamepadMap  map;
+    VdFwGuid            guid;
+    VdFwGamepadMap      map;
 } VdFwGamepadDBEntry;
 
 VD_FW_API int                vd_fw_get_gamepad_count(void);
@@ -754,7 +757,6 @@ VD_FW_API int                vd_fw_get_gamepad_guid(int index);
 VD_FW_API int                vd_fw_get_gamepad_down(int index, int button);
 VD_FW_API int                vd_fw_get_gamepad_pressed(int index, int button);
 VD_FW_API int                vd_fw_get_gamepad_axis(int index, int axis, float *out);
-VD_FW_API 
 
 VD_FW_API void               vd_fw_set_gamepad_rumble(int index, float rumble_lo, float rumble_hi);
 
@@ -3619,9 +3621,10 @@ typedef VdFwU64 VdFw__GamepadButtonBits;
 
 typedef struct VdFw__GamepadState {
     VdFwGuid                 guid;
-    // VdFw__GamepadButtonState buttons[VD_FW_GAMEPAD_BUTTON_MAX];
     VdFw__GamepadButtonBits  bits;
     float                    axes[6];
+    VdFwGamepadFaceType      face;
+    VdFwGamepadClass         klass;
 } VdFw__GamepadState;
 
 #if defined(__APPLE__)
@@ -7315,8 +7318,10 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
                 int index_to_write_to = gamepad_info_index;
                 EnterCriticalSection(&VD_FW_G.input_critical_section);
-                VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].guid = gamepad_info->guid;
-                VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].bits = button_states;
+                VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].guid  = gamepad_info->guid;
+                VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].bits  = button_states;
+                VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].face  = gamepad_info->map.face;
+                VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].klass = gamepad_info->map.klass;
 
                 for (int i = 0; i < 6; ++i) {
                     VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].axes[i] = axes[i];
@@ -9780,6 +9785,99 @@ VD_FW_INL int vd_fw__compare_string(const char *s, int s_len, int i,
     return x;
 }
 
+typedef struct {
+    const char          *sym;
+    int                 len;
+    VdFwGamepadFaceType face;
+} VdFw__GamepadSymbolToFace;
+
+static VdFw__GamepadSymbolToFace Vd_Fw__Gamepad_Symbols_To_Faces[] = {
+#define VD_FW__SYM_LEN(s) s, sizeof(s) - 1
+    {VD_FW__SYM_LEN("numbered"),    VD_FW_GAMEPAD_FACE_TYPE_NUMBERED},
+    {VD_FW__SYM_LEN("xbox"),        VD_FW_GAMEPAD_FACE_TYPE_XBOX},
+    {VD_FW__SYM_LEN("playstation"), VD_FW_GAMEPAD_FACE_TYPE_PLAYSTATION},
+    {VD_FW__SYM_LEN("nintendo"),    VD_FW_GAMEPAD_FACE_TYPE_NINTENDO},
+#undef VD_FW__SYM_LEN
+};
+
+static int vd_fw__parse_map_face(const char *s, int s_len, VdFwGamepadFaceType *out)
+{
+    *out = VD_FW_GAMEPAD_FACE_TYPE_UNKNOWN;
+
+    int map_count = VD_FW_ARRAY_COUNT(Vd_Fw__Gamepad_Symbols_To_Faces);
+
+    for (int map_index = 0; map_index < map_count; ++map_index) {
+        VdFw__GamepadSymbolToFace *check = &Vd_Fw__Gamepad_Symbols_To_Faces[map_index];
+        if (check->len != s_len) {
+            continue;
+        }
+
+        int found = 1;
+        for (int i = 0; i < check->len; ++i) {
+            if (check->sym[i] != s[i]) {
+                found = 0;
+                break;
+            }
+        }
+
+        if (found) {
+            *out = check->face;
+            return check->len;
+        }
+    }
+    return 0;
+}
+
+typedef struct {
+    const char       *sym;
+    int              len;
+    VdFwGamepadClass klass;
+} VdFw__GamepadSymbolToClass;
+static VdFw__GamepadSymbolToClass Vd_Fw__Gamepad_Symbols_To_Classes[] = {
+#define VD_FW__SYM_LEN(s) s, sizeof(s) - 1
+    {VD_FW__SYM_LEN("nes"),       VD_FW_GAMEPAD_CLASS_NES},
+    {VD_FW__SYM_LEN("megadrive"), VD_FW_GAMEPAD_CLASS_MEGADRIVE},
+    {VD_FW__SYM_LEN("genesis"),   VD_FW_GAMEPAD_CLASS_GENESIS},
+    {VD_FW__SYM_LEN("snes"),      VD_FW_GAMEPAD_CLASS_SNES},
+    {VD_FW__SYM_LEN("ps1"),       VD_FW_GAMEPAD_CLASS_PS1},
+    {VD_FW__SYM_LEN("joycon"),    VD_FW_GAMEPAD_CLASS_JOYCON},
+    {VD_FW__SYM_LEN("n64"),       VD_FW_GAMEPAD_CLASS_N64},
+    {VD_FW__SYM_LEN("ps2"),       VD_FW_GAMEPAD_CLASS_PS2},
+    {VD_FW__SYM_LEN("xbox"),      VD_FW_GAMEPAD_CLASS_XBOX},
+    {VD_FW__SYM_LEN("ps4"),       VD_FW_GAMEPAD_CLASS_PS4},
+    {VD_FW__SYM_LEN("steamdeck"), VD_FW_GAMEPAD_CLASS_STEAMDECK},
+#undef VD_FW__SYM_LEN
+};
+
+static int vd_fw__parse_map_class(const char *s, int s_len, VdFwGamepadClass *out)
+{
+    *out = VD_FW_GAMEPAD_CLASS_INVALID;
+
+    int map_count = VD_FW_ARRAY_COUNT(Vd_Fw__Gamepad_Symbols_To_Classes);
+
+    for (int map_index = 0; map_index < map_count; ++map_index) {
+        VdFw__GamepadSymbolToClass *check = &Vd_Fw__Gamepad_Symbols_To_Classes[map_index];
+        if (check->len != s_len) {
+            continue;
+        }
+
+        int found = 1;
+        for (int i = 0; i < check->len; ++i) {
+            if (check->sym[i] != s[i]) {
+                found = 0;
+                break;
+            }
+        }
+
+        if (found) {
+            *out = check->klass;
+            return check->len;
+        }
+    }
+    return 0;
+}
+
+
 static int vd_fw__parse_map_entry(const char *s, int s_len, VdFwGamepadMapEntry *out)
 {
     int sign_invert = 0;
@@ -10099,6 +10197,32 @@ VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepad
                 }
 
                 break;
+            }
+        } else if (vd_fw__compare_string(s, s_len, word_start, VD_FW_STR_AND_LEN("face"))) {
+            VD_FW_EXPECT_COLON();
+            int face_start = i;
+            while ((i < s_len) && vd_fw__is_db_symbol(s[i])) {
+                i++;
+            }
+            int face_end = i;
+
+            int c = vd_fw__parse_map_face(s + face_start, face_end - face_start, &out->map.face);
+
+            if (c == 0) {
+                return 0;
+            }
+        } else if (vd_fw__compare_string(s, s_len, word_start, VD_FW_STR_AND_LEN("class"))) {
+            VD_FW_EXPECT_COLON();
+            int class_start = i;
+            while ((i < s_len) && vd_fw__is_db_symbol(s[i])) {
+                i++;
+            }
+            int class_end = i;
+
+            int c = vd_fw__parse_map_class(s + class_start, class_end - class_start, &out->map.klass);
+
+            if (c == 0) {
+                return 0;
             }
         } else {
             i++;
