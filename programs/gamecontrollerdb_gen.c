@@ -233,12 +233,12 @@ int main(int argc, char const *argv[])
 
         {
             switch (db_entry.map.face) {
-                case VD_FW_GAMEPAD_FACE_TYPE_NUMBERED:      printf("\t\tVD_FW_GAMEPAD_FACE_TYPE_NUMBERED,\n");    break;
-                case VD_FW_GAMEPAD_FACE_TYPE_XBOX:          printf("\t\tVD_FW_GAMEPAD_FACE_TYPE_XBOX,\n");        break;
-                case VD_FW_GAMEPAD_FACE_TYPE_PLAYSTATION:   printf("\t\tVD_FW_GAMEPAD_FACE_TYPE_PLAYSTATION,\n"); break;
-                case VD_FW_GAMEPAD_FACE_TYPE_NINTENDO:      printf("\t\tVD_FW_GAMEPAD_FACE_TYPE_NINTENDO,\n");    break;
+                case VD_FW_GAMEPAD_FACE_NUMBERED:      printf("\t\tVD_FW_GAMEPAD_FACE_NUMBERED,\n");    break;
+                case VD_FW_GAMEPAD_FACE_XBOX:          printf("\t\tVD_FW_GAMEPAD_FACE_XBOX,\n");        break;
+                case VD_FW_GAMEPAD_FACE_PLAYSTATION:   printf("\t\tVD_FW_GAMEPAD_FACE_PLAYSTATION,\n"); break;
+                case VD_FW_GAMEPAD_FACE_NINTENDO:      printf("\t\tVD_FW_GAMEPAD_FACE_NINTENDO,\n");    break;
                 default:
-                case VD_FW_GAMEPAD_FACE_TYPE_UNKNOWN:       printf("\t\tVD_FW_GAMEPAD_FACE_TYPE_UNKNOWN,\n");     break;
+                case VD_FW_GAMEPAD_FACE_UNKNOWN:       printf("\t\tVD_FW_GAMEPAD_FACE_UNKNOWN,\n");     break;
             }
         }
 

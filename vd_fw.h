@@ -43,8 +43,8 @@
  * TODO
  * - Gamepads
  *     - Define Auxiliary & Paddle buttons (VD_FW_GAMEPAD_AUX<number>, VD_FW_GAMEPAD_<L/R>PADDLE<number> for symmetrical)
- *     - Face Parsing/Heuristics/Reporting
- *     - Class Parsing/Reporting
+ *     - Face Heuristics/Reporting
+ *     - Class Heuristics/Reporting
  * - D3D11 Sample
  * - Make sure /DUNICODE works for console printing
  * - File dialog
@@ -563,7 +563,6 @@ VD_FW_API int                vd_fw_get_key_down(int key);
 VD_FW_INL const char*        vd_fw_get_key_name(VdFwKey k);
 
 /* ----GAMEPADS------------------------------------------------------------------------------------------------------ */
-
 enum {
     // XBox Style Buttons
     VD_FW_GAMEPAD_UNKNOWN = 0,
@@ -611,13 +610,13 @@ enum {
 typedef int VdFwGamepadInput;
 
 enum {
-    VD_FW_GAMEPAD_FACE_TYPE_UNKNOWN = 0,
-    VD_FW_GAMEPAD_FACE_TYPE_NUMBERED,    /* face:numbered */
-    VD_FW_GAMEPAD_FACE_TYPE_XBOX,        /* face:xbox */
-    VD_FW_GAMEPAD_FACE_TYPE_PLAYSTATION, /* face:playstation */
-    VD_FW_GAMEPAD_FACE_TYPE_NINTENDO,    /* face:nintendo */
+    VD_FW_GAMEPAD_FACE_UNKNOWN = 0,
+    VD_FW_GAMEPAD_FACE_NUMBERED,    /* face:numbered */
+    VD_FW_GAMEPAD_FACE_XBOX,        /* face:xbox */
+    VD_FW_GAMEPAD_FACE_PLAYSTATION, /* face:playstation */
+    VD_FW_GAMEPAD_FACE_NINTENDO,    /* face:nintendo */
 };
-typedef VdFwU8 VdFwGamepadFaceType;
+typedef VdFwU8 VdFwGamepadFace;
 
 // Gamepads are ranked based weighted-importance input capability
 // Generally, higher value -> more important inputs
@@ -657,10 +656,14 @@ enum {
     // class:ps4          | 1 PoV, 4 Control, 2 System, 2 Symmetrical, 2 Clickable Sticks, 2 Symmetrical Axes, 1 Touchpad
     VD_FW_GAMEPAD_CLASS_PS4,
     // class:steamdeck    | 1 PoV, 4 Control, 2 System, 6 Symmetrical, 2 Clickable Sticks, 2 Symmetrical Axes, 2 Touchpads 
-    VD_FW_GAMEPAD_CLASS_STEAMDECK
+    VD_FW_GAMEPAD_CLASS_STEAMDECK,
 };
 typedef VdFwU8 VdFwGamepadClass;
 
+// ATTENTION
+// Most of the enums regarding gamepad mapping are intended for internal usage
+// But they are present here for future usages/features and to allow you to stack-allocate
+// Gamepad entries, get debugging info and so on.
 enum {
     VD_FW_GAMEPAD_INPUT_TYPE_DIGITAL,
     VD_FW_GAMEPAD_INPUT_TYPE_AXIAL,
@@ -668,23 +671,40 @@ enum {
 };
 
 enum {
+    // No source kind. Used for the terminating entry.
     VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_NONE = 0,
+    // Digital state input in report.
     VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON = 1,
+    // Directional PoV input in report. Usually 0-7 or 1-8 to indicate NESW direction coming from d-pad
     VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT = 2,
+    // Axial input in report.
     VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS = 3,
+    // Use this to mask a VdFwGamepadMappingSourceKind variable to get the aforementioned source kinds.
     VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_MASK = 0b00000011,
 
+    // Reinterpret button as axis (On/Off) -> (1.0/0.0).
     VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_BUTTON_TO_AXIS = (1 << 2),
+    // Reinterpret axis as button (+0.1/0.0) -> (On/Off).
     VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_AXIS_TO_BUTTON = (1 << 3),
+    // Reinterpret input axis value as a 2 part vd_fw axis (rarely used).
     VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_PARTWISE       = (1 << 4),
+    // Reserved.
     VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_SPLIT          = (1 << 5),
+    // Invert button or axis values ([0.0, 1.0] -> [1.0, 0.0])
     VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_INVERTED       = (1 << 6),
+    // Combined with other source flags to handle usage value reports that express multiple controller analog inputs.
     VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_ZERO_TO_MAX    = (1 << 7),
 
     VD_FW_GAMEPAD_MAX_MAPPINGS = 48,
 
+    // Some Gamepads, while shipping with rumble motors may not support rumble (or the state packets that should be sent
+    // to manipulate the actuators is unknown).
+    // 
+    // Additionally, certain gamepads, like 8BitDo may support rumble based on the mode they're in (e.g.
+    // XInput-Compatible vs. RawInput/DirectInput-Compatible)
     VD_FW_GAMEPAD_RUMBLE_TYPE_NOT_AVAILABLE = 0,
-    // 'w': Writes instantly to file
+
+    // rumble:w<prefix>llhh: Writes instantly to file
     VD_FW_GAMEPAD_RUMBLE_TYPE_RAW           = 1,
 
     // Used Internally when a gamepad has been correlated to an xinput dwUserIndex
@@ -723,7 +743,7 @@ typedef struct {
 typedef struct {
     VdFwGamepadMapEntry     mappings[VD_FW_GAMEPAD_MAX_MAPPINGS];
     VdFwGamepadRumbleConfig rumble_config;
-    VdFwGamepadFaceType     face;
+    VdFwGamepadFace     face;
     VdFwGamepadClass        klass;
 } VdFwGamepadMap;
 
@@ -752,19 +772,77 @@ typedef struct {
     VdFwGamepadMap      map;
 } VdFwGamepadDBEntry;
 
+/**
+ * @brief Gets the number of gamepads currently connected
+ * @return  The number of currently connected gamepads
+ */
 VD_FW_API int                vd_fw_get_gamepad_count(void);
-VD_FW_API int                vd_fw_get_gamepad_guid(int index);
+
+/**
+ * @brief Gets the state for a Gamepad button (digital)
+ * @param  index  The gamepad index
+ * @param  button The gamepad button to check
+ * @return 1 for On, 0 for Off
+ */
 VD_FW_API int                vd_fw_get_gamepad_down(int index, int button);
+
+/**
+ * @brief Gets whether the Gamepad button was just pressed this frame
+ * @param  index  The gamepad index
+ * @param  button The gamepad button to check
+ * @return 1 if the button was just pressed this frame, 0 otherwise
+ */
 VD_FW_API int                vd_fw_get_gamepad_pressed(int index, int button);
+
+/** 
+ * @brief Gets the gamepad's axis value 
+ * @param  index The gamepad index
+ * @param  axis  The axis to check
+ * @param  out   The axis value [-1, 1] for directional axes (VD_FW_GAMEPAD_LH, etc..), [0, 1] for triggers
+ * @return (Reserved)
+ */
 VD_FW_API int                vd_fw_get_gamepad_axis(int index, int axis, float *out);
 
+/**
+ * @brief Set the state of a gamepad's force-feedback motors
+ * @param  index     The gamepad index
+ * @param  rumble_lo The value of the small/left motor [0, 1]
+ * @param  rumble_hi The value of the big/right motor [0, 1]
+ */
 VD_FW_API void               vd_fw_set_gamepad_rumble(int index, float rumble_lo, float rumble_hi);
 
-VD_FW_API const char*        vd_fw_get_gamepad_button_name(int button);
+/**
+ * @brief Get the gamepad's GUID
+ * @param  index The gamepad index
+ * @return The guid
+ */
+VD_FW_API VdFwGuid           vd_fw_get_gamepad_guid(int index);
 
-VD_FW_API int                vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepadDBEntry *out,
-                                                          VdFwPlatform *out_platform, const char **out_begin_name);
+VD_FW_API VdFwGamepadFace    vd_fw_get_gamepad_face(int index);
+
+/**
+ * @brief Parse an RGCDB entry ascii string, can be called without initializing this library
+ * @param  s              The string
+ * @param  s_len          The string's length, in bytes
+ * @param  out            The db entry info
+ * @param  out_platform   The platform for which this entry is valid
+ * @param  out_begin_name The start of the name part of this gamepad (unused in db entries)
+ * @return                1 for Success, 0 otherwise
+ */
+VD_FW_API int                vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepadDBEntry *out, VdFwPlatform *out_platform, const char **out_begin_name);
+
+/**
+ * @brief Check if a map entry is a terminating entry. Use to iterate over vd_fw_parse_gamepad_db_entry results
+ * @param  entry The entry
+ * @return       1 if the entry is a terminating entry
+ */
 VD_FW_API int                vd_fw_gamepad_map_entry_is_none(VdFwGamepadMapEntry *entry);
+
+/**
+ * @brief Add an entry to the runtime gamepad db
+ * @param  entry The entry to add
+ * @return (Reserved)
+ */
 VD_FW_API int                vd_fw_add_gamepad_db_entry(VdFwGamepadDBEntry *entry);
 
 /* ----PLATFORM SPECIFIC--------------------------------------------------------------------------------------------- */
@@ -3623,7 +3701,7 @@ typedef struct VdFw__GamepadState {
     VdFwGuid                 guid;
     VdFw__GamepadButtonBits  bits;
     float                    axes[6];
-    VdFwGamepadFaceType      face;
+    VdFwGamepadFace      face;
     VdFwGamepadClass         klass;
 } VdFw__GamepadState;
 
@@ -6164,6 +6242,11 @@ VD_FW_API void vd_fw_set_gamepad_rumble(int index, float rumble_lo, float rumble
         lparam));
 }
 
+VD_FW_API VdFwGuid vd_fw_get_gamepad_guid(int index)
+{
+    return VD_FW_G.gamepad_curr_states[index].guid;
+}
+
 VD_FW_API void vd_fw_set_mouse_capture(int on)
 {
     if (on) {
@@ -6790,6 +6873,49 @@ static struct {
     int              connected;
 } Vd_Fw__XInput_States[4];
 
+// See: https://learn.microsoft.com/en-us/windows/win32/xinput/directinput-and-xusb-devices
+// 
+// In essence, for legacy reasons some controllers report a single "Generic Z (0x0032)" as a partwise mapping to
+// [LT, 0, RT].
+// By using RAWINPUT/DirectInput it is impossible to distinguish between the left and right triggers being fully
+// depressed or released simultaneously.
+// 
+// However, it is possible to tell if such an HID behaves this way, heuristically. Typically, these are all XInput
+// devices.
+// 
+// So, to handle this issue, SDL correlates mapped gamepad inputs to XInput states to first determine if a controller
+// reported by RAWINPUT/DirectInput actually maps to its assigned dwUserIndex by XInput. This is because XInput 'tries'
+// to bring the same 4-player couch co-op experience supported by the xbox consoles, and as such:
+// - There is a way to determine if a controller is handled by XInput (By checking its path)
+// - But there is no simple way to know which dwUserIndex was assigned to said controller.
+// 
+// As far as I can understand, once a controller is correlated in XInput, SDL will switch to using that API to get
+// buttons, axes and triggers. My tests, however, indicate that there is at least _one_ XInput controller that can
+// report more buttons than those exposed by XInput (including the guide button). So in this function, only the reported
+// trigger values are written if the controller was correlated to an xinput controller.
+// 
+// So... to summarize: Here I check each dwUserIndex controller state and match:
+// - Each button to the raw input mapped ones
+// - The combined Z value to the triggers
+// - (In the future possibly the analog sticks as well)
+// 
+// After that we can safely assume that this dwUserIndex will stay mapped to the corresponding controller.
+// 
+// When any controller is connected/disconnected, the .xinput_index value is reset to -1, and then correlation has to
+// happen again...
+// 
+// This essentially means that for xinput controllers, we'll have to use mmozeiko's 
+// xbox DeviceIoControl (https://gist.github.com/mmozeiko/b8ccc54037a5eaf35432396feabbe435) call to send rumble
+// to the controller, and then once (or if) the controller is correlated use XInputSetState.
+// 
+// https://learn.microsoft.com/en-us/windows/win32/xinput/getting-started-with-xinput#getting-controller-state
+// Microsoft states here:
+// | For performance reasons, don't call XInputGetState for an 'empty' user slot every frame. We recommend that
+// | you space out checks for new controllers every few seconds instead.
+// 
+// This function is only called when a WM_INPUT message arrives, and when that gamepad is determined to be an xinput
+// gamepad. Since XInputGetState is only called on a per-packet basis, this function's performance implications should
+// be relatively small. However, should you get _any_ bottleneck from this function please report it!
 static void vd_fw__win32_correlate_xinput_triggers(VdFw__Win32GamepadInfo *gamepad_info,
                                                    VdFw__GamepadButtonBits button_states, float *axes,
                                                    VdFwULONG z_value)
@@ -9788,21 +9914,21 @@ VD_FW_INL int vd_fw__compare_string(const char *s, int s_len, int i,
 typedef struct {
     const char          *sym;
     int                 len;
-    VdFwGamepadFaceType face;
+    VdFwGamepadFace face;
 } VdFw__GamepadSymbolToFace;
 
 static VdFw__GamepadSymbolToFace Vd_Fw__Gamepad_Symbols_To_Faces[] = {
 #define VD_FW__SYM_LEN(s) s, sizeof(s) - 1
-    {VD_FW__SYM_LEN("numbered"),    VD_FW_GAMEPAD_FACE_TYPE_NUMBERED},
-    {VD_FW__SYM_LEN("xbox"),        VD_FW_GAMEPAD_FACE_TYPE_XBOX},
-    {VD_FW__SYM_LEN("playstation"), VD_FW_GAMEPAD_FACE_TYPE_PLAYSTATION},
-    {VD_FW__SYM_LEN("nintendo"),    VD_FW_GAMEPAD_FACE_TYPE_NINTENDO},
+    {VD_FW__SYM_LEN("numbered"),    VD_FW_GAMEPAD_FACE_NUMBERED},
+    {VD_FW__SYM_LEN("xbox"),        VD_FW_GAMEPAD_FACE_XBOX},
+    {VD_FW__SYM_LEN("playstation"), VD_FW_GAMEPAD_FACE_PLAYSTATION},
+    {VD_FW__SYM_LEN("nintendo"),    VD_FW_GAMEPAD_FACE_NINTENDO},
 #undef VD_FW__SYM_LEN
 };
 
-static int vd_fw__parse_map_face(const char *s, int s_len, VdFwGamepadFaceType *out)
+static int vd_fw__parse_map_face(const char *s, int s_len, VdFwGamepadFace *out)
 {
-    *out = VD_FW_GAMEPAD_FACE_TYPE_UNKNOWN;
+    *out = VD_FW_GAMEPAD_FACE_UNKNOWN;
 
     int map_count = VD_FW_ARRAY_COUNT(Vd_Fw__Gamepad_Symbols_To_Faces);
 
@@ -10264,12 +10390,6 @@ VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepad
 #undef VD_FW_EXPECT_COLON
 #undef VD_FW_STR_AND_LEN
     return 1;
-}
-
-
-VD_FW_API const char *vd_fw_get_gamepad_button_name(int button)
-{
-    return 0;    
 }
 
 #ifdef __clang__

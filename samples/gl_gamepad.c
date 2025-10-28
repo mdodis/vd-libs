@@ -3,7 +3,6 @@
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS
 #define VD_FW_GAMEPAD_DB_DEFAULT_EXTERNAL
 #include "vd_fw.h"
-#include "vd_ft.h"
 #include "ext/stb_image.h"
 #include "assert.h"
 
@@ -365,10 +364,6 @@ int main(int argc, char const *argv[])
             vd_fw_get_gamepad_axis(i, VD_FW_GAMEPAD_RV, &draw_info->stick_r_value[1]);
             vd_fw_get_gamepad_axis(i, VD_FW_GAMEPAD_LT, &draw_info->lt_value);
             vd_fw_get_gamepad_axis(i, VD_FW_GAMEPAD_RT, &draw_info->rt_value);
-
-            if (vd_fw_get_gamepad_pressed(i, VD_FW_GAMEPAD_A)) {
-                printf("A Pressed\n");
-            }
         }
 
         {
@@ -812,9 +807,6 @@ static void digital_input_update(DigitalInput *input, float t, int index, int bu
 #define VD_FW_IMPL
 #include "vd_fw.h"
 #include "disable_clang_deprecations.h"
-
-#define VD_FT_IMPL
-#include "vd_ft.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "ext/stb_image.h"
