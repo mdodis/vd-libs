@@ -51,7 +51,6 @@
  * - Make sure we can export functions properly for C++
  * - Expose customizable function pointer if the user needs to do something platform-specific before/after winthread has initialized or before vd_fw_init returns anyways.
  * - Have a way for a user to request OpenGL extensions/versions via a precedence array, and initialize the maximum possible version
- * - Use bit flags for buttons, an array is a bit overkill
  * - L4/R4, L5/R5, and maybe a secondary steam controller axis?
  * - Clipboard
  * - Properly handle vd_fw_set_receive_ncmouse for clicks and scrolls
@@ -67,7 +66,6 @@
  * - MacOS: vd_fw_maximize()
  * - MacOS: vd_fw_set_app_icon
  * - MacOS: vd_fw_set_fullscreen
- * - MacOS: Use custom preprocessor option to disable OpenGL deprecation warnings
  * - When window not focused, or minimize, delay drawing?
  * - Allow to request specific framerate?
  * - MacOS: There's no way to draw while resizing without changing the api?
@@ -236,215 +234,6 @@ enum /*VdFwPlatformEnum*/ {
 };
 typedef VdFwU8 VdFwPlatform;
 
-enum {
-    VD_FW_KEY_UNKNOWN       = 0,
-    VD_FW_KEY_F1  = 1,  VD_FW_KEY_F2  = 2,  VD_FW_KEY_F3  = 3,  VD_FW_KEY_F4  = 4,
-    VD_FW_KEY_F5  = 5,  VD_FW_KEY_F6  = 6,  VD_FW_KEY_F7  = 7,  VD_FW_KEY_F8  = 8,
-    VD_FW_KEY_F9  = 9,  VD_FW_KEY_F10 = 10, VD_FW_KEY_F11 = 11, VD_FW_KEY_F12 = 12,
-    VD_FW_KEY_F13 = 13, VD_FW_KEY_F14 = 14, VD_FW_KEY_F15 = 15, VD_FW_KEY_F16 = 16,
-    VD_FW_KEY_F17 = 17, VD_FW_KEY_F18 = 18, VD_FW_KEY_F19 = 19, VD_FW_KEY_F20 = 20,
-    VD_FW_KEY_F21 = 21, VD_FW_KEY_F22 = 22, VD_FW_KEY_F23 = 23, VD_FW_KEY_F24 = 24,
-    VD_FW_KEY_BACKSPACE     = 25,  
-    VD_FW_KEY_INS = 26, VD_FW_KEY_HOME = 27, VD_FW_KEY_PGUP = 28,
-    VD_FW_KEY_DEL = 29, VD_FW_KEY_END  = 30, VD_FW_KEY_PGDN = 31,
-    VD_FW_KEY_SPACE         = 32,  /* ' ' */
-    VD_FW_KEY_LCONTROL = 33, VD_FW_KEY_RCONTROL = 34,
-    VD_FW_KEY_LALT     = 35, VD_FW_KEY_RALT     = 36,
-    VD_FW_KEY_LSHIFT   = 37, VD_FW_KEY_RSHIFT   = 38,
-    VD_FW_KEY_QUOTE         = 39,  /* '\''*/
-    VD_FW_KEY_ARROW_UP   = 40,
-    VD_FW_KEY_ARROW_LEFT = 41, VD_FW_KEY_ARROW_DOWN = 42, VD_FW_KEY_ARROW_RIGHT = 43,
-    VD_FW_KEY_COMMA         = 44,  /* ','*/
-    VD_FW_KEY_MINUS         = 45,  /* '-' */
-    VD_FW_KEY_DOT           = 46,  /* '.' */
-    VD_FW_KEY_SLASH_FORWARD = 47,  /* '/' */
-    VD_FW_KEY_0 = 48,  /* '0' */ VD_FW_KEY_1 = 49,  /* '1' */
-    VD_FW_KEY_2 = 50,  /* '2' */ VD_FW_KEY_3 = 51,  /* '3' */
-    VD_FW_KEY_4 = 52,  /* '4' */ VD_FW_KEY_5 = 53,  /* '5' */
-    VD_FW_KEY_6 = 54,  /* '6' */ VD_FW_KEY_7 = 55,  /* '7' */
-    VD_FW_KEY_8 = 56,  /* '8' */ VD_FW_KEY_9 = 57,  /* '9' */
-    VD_FW_KEY_ENTER         = 58,
-    VD_FW_KEY_SEMICOLON     = 59,  /* ';' */
-    VD_FW_KEY_TAB           = 60,
-    VD_FW_KEY_EQUALS        = 61,  /* '=' */
-    VD_FW_KEY_CAPITAL       = 62,
-    VD_FW_KEY_ESCAPE        = 63,
-    VD_FW_KEY_RESERVED1     = 64,  /* '@' */
-    VD_FW_KEY_A = 65, VD_FW_KEY_B = 66, VD_FW_KEY_C = 67, VD_FW_KEY_D = 68,
-    VD_FW_KEY_E = 69, VD_FW_KEY_F = 70, VD_FW_KEY_G = 71, VD_FW_KEY_H = 72,
-    VD_FW_KEY_I = 73, VD_FW_KEY_J = 74, VD_FW_KEY_K = 75, VD_FW_KEY_L = 76,
-    VD_FW_KEY_M = 77, VD_FW_KEY_N = 78, VD_FW_KEY_O = 79, VD_FW_KEY_P = 80,
-    VD_FW_KEY_Q = 81, VD_FW_KEY_R = 82, VD_FW_KEY_S = 83, VD_FW_KEY_T = 84,
-    VD_FW_KEY_U = 85, VD_FW_KEY_V = 86, VD_FW_KEY_W = 87, VD_FW_KEY_X = 88,
-    VD_FW_KEY_Y = 89,
-    VD_FW_KEY_Z = 90,
-    VD_FW_KEY_BRACKET_OPEN  = 91,  /* '[' */
-    VD_FW_KEY_SLASH_BACK    = 92,  /* '\\' */
-    VD_FW_KEY_BRACKET_CLOSE = 93,  /* ']' */
-    VD_FW_KEY_MEDIA_NEXT    = 94,  /* Media Next Track */
-    VD_FW_KEY_MEDIA_PREV    = 95,  /* Media Prev Track */
-    VD_FW_KEY_BACKTICK      = 96,  /* '`' */
-    VD_FW_KEY_MEDIA_PLAY    = 97,  /* Media Play/Pause */
-    VD_FW_KEY_NUMPAD_0 = 98,  /* Numpad 0 */ VD_FW_KEY_NUMPAD_1 = 99,  /* Numpad 1 */
-    VD_FW_KEY_NUMPAD_2 = 100, /* Numpad 2 */ VD_FW_KEY_NUMPAD_3 = 101, /* Numpad 3 */
-    VD_FW_KEY_NUMPAD_4 = 102, /* Numpad 4 */ VD_FW_KEY_NUMPAD_5 = 103, /* Numpad 5 */
-    VD_FW_KEY_NUMPAD_6 = 104, /* Numpad 6 */ VD_FW_KEY_NUMPAD_7 = 105, /* Numpad 7 */
-    VD_FW_KEY_NUMPAD_8 = 106, /* Numpad 8 */ VD_FW_KEY_NUMPAD_9 = 107, /* Numpad 9 */
-    VD_FW_KEY_MAX,
-};
-typedef int VdFwKey;
-
-enum {
-    VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN   = 1 << 0,
-    VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN  = 1 << 1,
-    VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN = 1 << 2,
-
-    VD_FW_MOUSE_BUTTON_LEFT   = VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN,
-    VD_FW_MOUSE_BUTTON_RIGHT  = VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN,
-    VD_FW_MOUSE_BUTTON_MIDDLE = VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN,
-};
-
-enum {
-    // XBox Style Buttons
-    VD_FW_GAMEPAD_UNKNOWN = 0,
-    VD_FW_GAMEPAD_A,
-    VD_FW_GAMEPAD_B,
-    VD_FW_GAMEPAD_X,
-    VD_FW_GAMEPAD_Y,
-    VD_FW_GAMEPAD_DUP,
-    VD_FW_GAMEPAD_DDOWN,
-    VD_FW_GAMEPAD_DLEFT,
-    VD_FW_GAMEPAD_DRIGHT,
-    VD_FW_GAMEPAD_START,
-    VD_FW_GAMEPAD_BACK,
-    VD_FW_GAMEPAD_LEFT_SHOULDER,
-    VD_FW_GAMEPAD_RIGHT_SHOULDER,
-    VD_FW_GAMEPAD_LEFT_STICK,
-    VD_FW_GAMEPAD_RIGHT_STICK,
-    VD_FW_GAMEPAD_BUTTON_MAX,
-
-    // Playstation Style Buttons
-    VD_FW_GAMEPAD_CROSS    = VD_FW_GAMEPAD_A,
-    VD_FW_GAMEPAD_CIRCLE   = VD_FW_GAMEPAD_B,
-    VD_FW_GAMEPAD_SQUARE   = VD_FW_GAMEPAD_X,
-    VD_FW_GAMEPAD_TRIANGLE = VD_FW_GAMEPAD_Y,
-    VD_FW_GAMEPAD_SELECT   = VD_FW_GAMEPAD_BACK,
-    VD_FW_GAMEPAD_L1       = VD_FW_GAMEPAD_LEFT_SHOULDER,
-    VD_FW_GAMEPAD_R1       = VD_FW_GAMEPAD_RIGHT_SHOULDER,
-    VD_FW_GAMEPAD_L3       = VD_FW_GAMEPAD_LEFT_STICK,
-    VD_FW_GAMEPAD_R3       = VD_FW_GAMEPAD_RIGHT_STICK,
-
-    VD_FW_GAMEPAD_H = 0 >> 1,
-    VD_FW_GAMEPAD_V = 2 >> 1,
-    VD_FW_GAMEPAD_L = 0 << 1,
-    VD_FW_GAMEPAD_R = 1 << 1,
-    VD_FW_GAMEPAD_LH = VD_FW_GAMEPAD_L | VD_FW_GAMEPAD_H,
-    VD_FW_GAMEPAD_LV = VD_FW_GAMEPAD_L | VD_FW_GAMEPAD_V,
-    VD_FW_GAMEPAD_RH = VD_FW_GAMEPAD_R | VD_FW_GAMEPAD_H,
-    VD_FW_GAMEPAD_RV = VD_FW_GAMEPAD_R | VD_FW_GAMEPAD_V,
-    VD_FW_GAMEPAD_L2 = 4,
-    VD_FW_GAMEPAD_R2 = 5,
-    VD_FW_GAMEPAD_LT = VD_FW_GAMEPAD_L2,
-    VD_FW_GAMEPAD_RT = VD_FW_GAMEPAD_R2,
-    VD_FW_GAMEPAD_AXIS_MAX,
-};
-typedef int VdFwGamepadInput;
-
-enum {
-    VD_FW_GAMEPAD_API_UNKNOWN = 0,
-    VD_FW_GAMEPAD_API_RAWINPUT = 1,
-    VD_FW_GAMEPAD_API_XINPUT = 2,
-};
-
-enum {
-    VD_FW_GAMEPAD_INPUT_TYPE_DIGITAL,
-    VD_FW_GAMEPAD_INPUT_TYPE_AXIAL,
-    VD_FW_GAMEPAD_INPUT_TYPE_HAT_SWITCH,
-};
-
-enum {
-    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_NONE = 0,
-    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON = 1,
-    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT = 2,
-    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS = 3,
-    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_MASK = 0b00000011,
-
-    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_BUTTON_TO_AXIS = (1 << 2),
-    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_AXIS_TO_BUTTON = (1 << 3),
-    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_PARTWISE       = (1 << 4),
-    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_SPLIT          = (1 << 5),
-    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_INVERTED       = (1 << 6),
-    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_ZERO_TO_MAX    = (1 << 7),
-
-    VD_FW_GAMEPAD_MAX_MAPPINGS = 48,
-
-    VD_FW_GAMEPAD_RUMBLE_TYPE_NOT_AVAILABLE = 0,
-    // 'w': Writes instantly to file
-    VD_FW_GAMEPAD_RUMBLE_TYPE_RAW           = 1,
-
-    // Used Internally when a gamepad has been correlated to an xinput dwUserIndex
-    VD_FW_GAMEPAD_RUMBLE_TYPE_XINPUT        = 2,
-
-    VD_FW_GAMEPAD_RUMBLE_MAX_PREFIX_BYTES   = 14,
-};
-typedef VdFwU8 VdFwGamepadMappingSourceKind;
-
-typedef struct {
-    VdFwGamepadMappingSourceKind kind;  
-    unsigned char                target;
-    unsigned short               index;
-} VdFwGamepadMapEntry;
-
-typedef union {
-    VdFwU32 whole;
-    struct {
-        VdFwU16 offset;
-        VdFwU16 byte_length;
-    } parts;
-} VdFwGamepadSignificantPacketPosition;
-
-typedef struct {
-    VdFwU8 type;
-    VdFwU8 prefix_len;
-    VdFwU8 prefix[VD_FW_GAMEPAD_RUMBLE_MAX_PREFIX_BYTES];
-    union {
-        struct {
-            VdFwGamepadSignificantPacketPosition    rumble_lo;
-            VdFwGamepadSignificantPacketPosition    rumble_hi;
-        } raw;
-    } dat;
-} VdFwGamepadRumbleConfig;
-
-typedef struct {
-    VdFwGamepadMapEntry     mappings[VD_FW_GAMEPAD_MAX_MAPPINGS];
-    VdFwGamepadRumbleConfig rumble_config;
-} VdFwGamepadMap;
-
-typedef struct {
-    float rumble_lo;
-    float rumble_hi;
-} VdFwGamepadRumbleState;
-
-typedef union {
-    VdFwU8 dat[16];
-    struct {
-        VdFwU16 bus;
-        VdFwU16 crc;
-        VdFwU16 vendor_id;
-        VdFwU16 reserved0;
-        VdFwU16 product_id;
-        VdFwU16 reserved1;
-        VdFwU16 version;
-        VdFwU8  driver_signature;
-        VdFwU8  driver_data;
-    } parts;
-} VdFwGuid;
-
-typedef struct {
-    VdFwGuid        guid;
-    VdFwGamepadMap  map;
-} VdFwGamepadDBEntry;
-
 typedef enum {
     VD_FW_GRAPHICS_API_OPENGL = 0,
     VD_FW_GRAPHICS_API_CUSTOM,
@@ -487,6 +276,7 @@ VD_FW_API int                vd_fw_running(void);
  */
 VD_FW_API int                vd_fw_swap_buffers(void);
 
+/* ----WINDOW-------------------------------------------------------------------------------------------------------- */
 /**
  * @brief Get the size of the window, in pixels
  * @param  w The width of the window, in pixels
@@ -617,6 +407,17 @@ VD_FW_INL float              vd_fw_delta_s(void);
  */
 VD_FW_API int                vd_fw_set_vsync_on(int on);
 
+/* ----MOUSE--------------------------------------------------------------------------------------------------------- */
+enum {
+    VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN   = 1 << 0,
+    VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN  = 1 << 1,
+    VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN = 1 << 2,
+
+    VD_FW_MOUSE_BUTTON_LEFT   = VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN,
+    VD_FW_MOUSE_BUTTON_RIGHT  = VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN,
+    VD_FW_MOUSE_BUTTON_MIDDLE = VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN,
+};
+
 /**
  * @brief Read the mouse state.
  * @param  x The horizontal position of the mouse, in pixels (left -> right)
@@ -681,6 +482,65 @@ VD_FW_API int                vd_fw_get_mouse_locked(void);
  */
 VD_FW_API int                vd_fw_get_mouse_wheel(float *dx, float *dy);
 
+/* ----KEYBOARD------------------------------------------------------------------------------------------------------ */
+enum {
+    VD_FW_KEY_UNKNOWN       = 0,
+    VD_FW_KEY_F1  = 1,  VD_FW_KEY_F2  = 2,  VD_FW_KEY_F3  = 3,  VD_FW_KEY_F4  = 4,
+    VD_FW_KEY_F5  = 5,  VD_FW_KEY_F6  = 6,  VD_FW_KEY_F7  = 7,  VD_FW_KEY_F8  = 8,
+    VD_FW_KEY_F9  = 9,  VD_FW_KEY_F10 = 10, VD_FW_KEY_F11 = 11, VD_FW_KEY_F12 = 12,
+    VD_FW_KEY_F13 = 13, VD_FW_KEY_F14 = 14, VD_FW_KEY_F15 = 15, VD_FW_KEY_F16 = 16,
+    VD_FW_KEY_F17 = 17, VD_FW_KEY_F18 = 18, VD_FW_KEY_F19 = 19, VD_FW_KEY_F20 = 20,
+    VD_FW_KEY_F21 = 21, VD_FW_KEY_F22 = 22, VD_FW_KEY_F23 = 23, VD_FW_KEY_F24 = 24,
+    VD_FW_KEY_BACKSPACE     = 25,  
+    VD_FW_KEY_INS = 26, VD_FW_KEY_HOME = 27, VD_FW_KEY_PGUP = 28,
+    VD_FW_KEY_DEL = 29, VD_FW_KEY_END  = 30, VD_FW_KEY_PGDN = 31,
+    VD_FW_KEY_SPACE         = 32,  /* ' ' */
+    VD_FW_KEY_LCONTROL = 33, VD_FW_KEY_RCONTROL = 34,
+    VD_FW_KEY_LALT     = 35, VD_FW_KEY_RALT     = 36,
+    VD_FW_KEY_LSHIFT   = 37, VD_FW_KEY_RSHIFT   = 38,
+    VD_FW_KEY_QUOTE         = 39,  /* '\''*/
+    VD_FW_KEY_ARROW_UP   = 40,
+    VD_FW_KEY_ARROW_LEFT = 41, VD_FW_KEY_ARROW_DOWN = 42, VD_FW_KEY_ARROW_RIGHT = 43,
+    VD_FW_KEY_COMMA         = 44,  /* ','*/
+    VD_FW_KEY_MINUS         = 45,  /* '-' */
+    VD_FW_KEY_DOT           = 46,  /* '.' */
+    VD_FW_KEY_SLASH_FORWARD = 47,  /* '/' */
+    VD_FW_KEY_0 = 48,  /* '0' */ VD_FW_KEY_1 = 49,  /* '1' */
+    VD_FW_KEY_2 = 50,  /* '2' */ VD_FW_KEY_3 = 51,  /* '3' */
+    VD_FW_KEY_4 = 52,  /* '4' */ VD_FW_KEY_5 = 53,  /* '5' */
+    VD_FW_KEY_6 = 54,  /* '6' */ VD_FW_KEY_7 = 55,  /* '7' */
+    VD_FW_KEY_8 = 56,  /* '8' */ VD_FW_KEY_9 = 57,  /* '9' */
+    VD_FW_KEY_ENTER         = 58,
+    VD_FW_KEY_SEMICOLON     = 59,  /* ';' */
+    VD_FW_KEY_TAB           = 60,
+    VD_FW_KEY_EQUALS        = 61,  /* '=' */
+    VD_FW_KEY_CAPITAL       = 62,
+    VD_FW_KEY_ESCAPE        = 63,
+    VD_FW_KEY_RESERVED1     = 64,  /* '@' */
+    VD_FW_KEY_A = 65, VD_FW_KEY_B = 66, VD_FW_KEY_C = 67, VD_FW_KEY_D = 68,
+    VD_FW_KEY_E = 69, VD_FW_KEY_F = 70, VD_FW_KEY_G = 71, VD_FW_KEY_H = 72,
+    VD_FW_KEY_I = 73, VD_FW_KEY_J = 74, VD_FW_KEY_K = 75, VD_FW_KEY_L = 76,
+    VD_FW_KEY_M = 77, VD_FW_KEY_N = 78, VD_FW_KEY_O = 79, VD_FW_KEY_P = 80,
+    VD_FW_KEY_Q = 81, VD_FW_KEY_R = 82, VD_FW_KEY_S = 83, VD_FW_KEY_T = 84,
+    VD_FW_KEY_U = 85, VD_FW_KEY_V = 86, VD_FW_KEY_W = 87, VD_FW_KEY_X = 88,
+    VD_FW_KEY_Y = 89,
+    VD_FW_KEY_Z = 90,
+    VD_FW_KEY_BRACKET_OPEN  = 91,  /* '[' */
+    VD_FW_KEY_SLASH_BACK    = 92,  /* '\\' */
+    VD_FW_KEY_BRACKET_CLOSE = 93,  /* ']' */
+    VD_FW_KEY_MEDIA_NEXT    = 94,  /* Media Next Track */
+    VD_FW_KEY_MEDIA_PREV    = 95,  /* Media Prev Track */
+    VD_FW_KEY_BACKTICK      = 96,  /* '`' */
+    VD_FW_KEY_MEDIA_PLAY    = 97,  /* Media Play/Pause */
+    VD_FW_KEY_NUMPAD_0 = 98,  /* Numpad 0 */ VD_FW_KEY_NUMPAD_1 = 99,  /* Numpad 1 */
+    VD_FW_KEY_NUMPAD_2 = 100, /* Numpad 2 */ VD_FW_KEY_NUMPAD_3 = 101, /* Numpad 3 */
+    VD_FW_KEY_NUMPAD_4 = 102, /* Numpad 4 */ VD_FW_KEY_NUMPAD_5 = 103, /* Numpad 5 */
+    VD_FW_KEY_NUMPAD_6 = 104, /* Numpad 6 */ VD_FW_KEY_NUMPAD_7 = 105, /* Numpad 7 */
+    VD_FW_KEY_NUMPAD_8 = 106, /* Numpad 8 */ VD_FW_KEY_NUMPAD_9 = 107, /* Numpad 9 */
+    VD_FW_KEY_MAX,
+};
+typedef int VdFwKey;
+
 /**
  * @brief Get whether a key was just pressed this frame
  * @param  key The key to check
@@ -702,11 +562,157 @@ VD_FW_API int                vd_fw_get_key_down(int key);
  */
 VD_FW_INL const char*        vd_fw_get_key_name(VdFwKey k);
 
+/* ----GAMEPADS------------------------------------------------------------------------------------------------------ */
+
+enum {
+    // XBox Style Buttons
+    VD_FW_GAMEPAD_UNKNOWN = 0,
+    VD_FW_GAMEPAD_A,
+    VD_FW_GAMEPAD_B,
+    VD_FW_GAMEPAD_X,
+    VD_FW_GAMEPAD_Y,
+    VD_FW_GAMEPAD_DUP,
+    VD_FW_GAMEPAD_DDOWN,
+    VD_FW_GAMEPAD_DLEFT,
+    VD_FW_GAMEPAD_DRIGHT,
+    VD_FW_GAMEPAD_START,
+    VD_FW_GAMEPAD_BACK,
+    VD_FW_GAMEPAD_LEFT_SHOULDER,
+    VD_FW_GAMEPAD_RIGHT_SHOULDER,
+    VD_FW_GAMEPAD_LEFT_STICK,
+    VD_FW_GAMEPAD_RIGHT_STICK,
+    VD_FW_GAMEPAD_BUTTON_MAX,
+
+    // Playstation Style Buttons
+    VD_FW_GAMEPAD_CROSS    = VD_FW_GAMEPAD_A,
+    VD_FW_GAMEPAD_CIRCLE   = VD_FW_GAMEPAD_B,
+    VD_FW_GAMEPAD_SQUARE   = VD_FW_GAMEPAD_X,
+    VD_FW_GAMEPAD_TRIANGLE = VD_FW_GAMEPAD_Y,
+    VD_FW_GAMEPAD_SELECT   = VD_FW_GAMEPAD_BACK,
+    VD_FW_GAMEPAD_L1       = VD_FW_GAMEPAD_LEFT_SHOULDER,
+    VD_FW_GAMEPAD_R1       = VD_FW_GAMEPAD_RIGHT_SHOULDER,
+    VD_FW_GAMEPAD_L3       = VD_FW_GAMEPAD_LEFT_STICK,
+    VD_FW_GAMEPAD_R3       = VD_FW_GAMEPAD_RIGHT_STICK,
+
+    VD_FW_GAMEPAD_H = 0 >> 1,
+    VD_FW_GAMEPAD_V = 2 >> 1,
+    VD_FW_GAMEPAD_L = 0 << 1,
+    VD_FW_GAMEPAD_R = 1 << 1,
+    VD_FW_GAMEPAD_LH = VD_FW_GAMEPAD_L | VD_FW_GAMEPAD_H,
+    VD_FW_GAMEPAD_LV = VD_FW_GAMEPAD_L | VD_FW_GAMEPAD_V,
+    VD_FW_GAMEPAD_RH = VD_FW_GAMEPAD_R | VD_FW_GAMEPAD_H,
+    VD_FW_GAMEPAD_RV = VD_FW_GAMEPAD_R | VD_FW_GAMEPAD_V,
+    VD_FW_GAMEPAD_L2 = 4,
+    VD_FW_GAMEPAD_R2 = 5,
+    VD_FW_GAMEPAD_LT = VD_FW_GAMEPAD_L2,
+    VD_FW_GAMEPAD_RT = VD_FW_GAMEPAD_R2,
+    VD_FW_GAMEPAD_AXIS_MAX,
+};
+typedef int VdFwGamepadInput;
+
+enum {
+    VD_FW_GAMEPAD_FACE_TYPE_NUMBERED    = 0, /* face:numbered */
+    VD_FW_GAMEPAD_FACE_TYPE_XBOX,            /* face:xbox */
+    VD_FW_GAMEPAD_FACE_TYPE_PLAYSTATION,     /* face:playstation */
+    VD_FW_GAMEPAD_FACE_TYPE_NINTENDO,        /* face:nintendo */
+};
+typedef VdFwU8 VdFwGamepadFaceType;
+
+enum {
+    VD_FW_GAMEPAD_INPUT_TYPE_DIGITAL,
+    VD_FW_GAMEPAD_INPUT_TYPE_AXIAL,
+    VD_FW_GAMEPAD_INPUT_TYPE_HAT_SWITCH,
+};
+
+enum {
+    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_NONE = 0,
+    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON = 1,
+    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT = 2,
+    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS = 3,
+    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_MASK = 0b00000011,
+
+    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_BUTTON_TO_AXIS = (1 << 2),
+    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_AXIS_TO_BUTTON = (1 << 3),
+    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_PARTWISE       = (1 << 4),
+    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_SPLIT          = (1 << 5),
+    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_INVERTED       = (1 << 6),
+    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_ZERO_TO_MAX    = (1 << 7),
+
+    VD_FW_GAMEPAD_MAX_MAPPINGS = 48,
+
+    VD_FW_GAMEPAD_RUMBLE_TYPE_NOT_AVAILABLE = 0,
+    // 'w': Writes instantly to file
+    VD_FW_GAMEPAD_RUMBLE_TYPE_RAW           = 1,
+
+    // Used Internally when a gamepad has been correlated to an xinput dwUserIndex
+    VD_FW_GAMEPAD_RUMBLE_TYPE_XINPUT        = 2,
+
+    VD_FW_GAMEPAD_RUMBLE_MAX_PREFIX_BYTES   = 14,
+};
+typedef VdFwU8 VdFwGamepadMappingSourceKind;
+
+typedef struct {
+    VdFwGamepadMappingSourceKind kind;  
+    unsigned char                target;
+    unsigned short               index;
+} VdFwGamepadMapEntry;
+
+typedef union {
+    VdFwU32 whole;
+    struct {
+        VdFwU16 offset;
+        VdFwU16 byte_length;
+    } parts;
+} VdFwGamepadSignificantPacketPosition;
+
+typedef struct {
+    VdFwU8 type;
+    VdFwU8 prefix_len;
+    VdFwU8 prefix[VD_FW_GAMEPAD_RUMBLE_MAX_PREFIX_BYTES];
+    union {
+        struct {
+            VdFwGamepadSignificantPacketPosition    rumble_lo;
+            VdFwGamepadSignificantPacketPosition    rumble_hi;
+        } raw;
+    } dat;
+} VdFwGamepadRumbleConfig;
+
+typedef struct {
+    VdFwGamepadMapEntry     mappings[VD_FW_GAMEPAD_MAX_MAPPINGS];
+    VdFwGamepadRumbleConfig rumble_config;
+} VdFwGamepadMap;
+
+typedef struct {
+    float rumble_lo;
+    float rumble_hi;
+} VdFwGamepadRumbleState;
+
+typedef union {
+    VdFwU8 dat[16];
+    struct {
+        VdFwU16 bus;
+        VdFwU16 crc;
+        VdFwU16 vendor_id;
+        VdFwU16 reserved0;
+        VdFwU16 product_id;
+        VdFwU16 reserved1;
+        VdFwU16 version;
+        VdFwU8  driver_signature;
+        VdFwU8  driver_data;
+    } parts;
+} VdFwGuid;
+
+typedef struct {
+    VdFwGuid        guid;
+    VdFwGamepadMap  map;
+} VdFwGamepadDBEntry;
+
 VD_FW_API int                vd_fw_get_gamepad_count(void);
-VD_FW_API int                vd_fw_get_gamepad_connected(int index);
 VD_FW_API int                vd_fw_get_gamepad_guid(int index);
 VD_FW_API int                vd_fw_get_gamepad_down(int index, int button);
+VD_FW_API int                vd_fw_get_gamepad_pressed(int index, int button);
 VD_FW_API int                vd_fw_get_gamepad_axis(int index, int axis, float *out);
+VD_FW_API 
 
 VD_FW_API void               vd_fw_set_gamepad_rumble(int index, float rumble_lo, float rumble_hi);
 
@@ -4991,7 +4997,6 @@ typedef struct {
     int                         receive_ncmouse_on;
     float                       winthread_mouse_delta[2];
     VdFw__GamepadState          winthread_gamepad_curr_states[VD_FW_GAMEPAD_COUNT_MAX];
-    VdFw__GamepadState          winthread_gamepad_prev_states[VD_FW_GAMEPAD_COUNT_MAX];
     int                         winthread_gamepad_raw_buttons[VD_FW_GAMEPAD_COUNT_MAX];
     int                         winthread_num_gamepads_present;
 
@@ -5853,7 +5858,7 @@ VD_FW_API int vd_fw_running(void)
         EnterCriticalSection(&VD_FW_G.input_critical_section);
         VD_FW_G.num_gamepads_present = VD_FW_G.winthread_num_gamepads_present;
         for (int i = 0; i < VD_FW_G.num_gamepads_present; ++i) {
-            VD_FW_G.gamepad_prev_states[i] = VD_FW_G.winthread_gamepad_prev_states[i];
+            VD_FW_G.gamepad_prev_states[i] = VD_FW_G.gamepad_curr_states[i];
             VD_FW_G.gamepad_curr_states[i] = VD_FW_G.winthread_gamepad_curr_states[i];
             VD_FW_G.gamepad_raw_buttons[i] = VD_FW_G.winthread_gamepad_raw_buttons[i];
         }
@@ -6086,6 +6091,13 @@ VD_FW_API int vd_fw_get_gamepad_count(void)
 VD_FW_API int vd_fw_get_gamepad_down(int index, int button)
 {
     return (VD_FW_G.gamepad_curr_states[index].bits >> button) & 1;
+}
+
+VD_FW_API int vd_fw_get_gamepad_pressed(int index, int button)
+{
+
+    return ((VD_FW_G.gamepad_curr_states[index].bits >> button) & 1) && 
+          !((VD_FW_G.gamepad_prev_states[index].bits >> button) & 1);
 }
 
 VD_FW_API int vd_fw_get_gamepad_axis(int index, int axis, float *out)
@@ -7261,8 +7273,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
                 int index_to_write_to = gamepad_info_index;
                 EnterCriticalSection(&VD_FW_G.input_critical_section);
-                VD_FW_G.winthread_gamepad_prev_states[index_to_write_to].bits = VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].bits;
-
                 VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].guid = gamepad_info->guid;
                 VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].bits = button_states;
 
