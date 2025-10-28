@@ -41,9 +41,10 @@
  * ╚════════════════════════════════════════════════════════════╝
  * 
  * TODO
- * - Define Auxiliary & Paddle buttons (VD_FW_GAMEPAD_AUX<number>, VD_FW_GAMEPAD_<L/R>PADDLE<number> for symmetrical)
- * - Controller mapping & assignment
- *     - Gamepad Face Values
+ * - Gamepads
+ *     - Define Auxiliary & Paddle buttons (VD_FW_GAMEPAD_AUX<number>, VD_FW_GAMEPAD_<L/R>PADDLE<number> for symmetrical)
+ *     - Face Parsing/Heuristics/Reporting
+ *     - Class Parsing/Reporting
  * - D3D11 Sample
  * - Make sure /DUNICODE works for console printing
  * - File dialog
@@ -51,7 +52,6 @@
  * - Make sure we can export functions properly for C++
  * - Expose customizable function pointer if the user needs to do something platform-specific before/after winthread has initialized or before vd_fw_init returns anyways.
  * - Have a way for a user to request OpenGL extensions/versions via a precedence array, and initialize the maximum possible version
- * - L4/R4, L5/R5, and maybe a secondary steam controller axis?
  * - Clipboard
  * - Properly handle vd_fw_set_receive_ncmouse for clicks and scrolls
  * - Set mouse cursor to constants (resize, I, etc...)
@@ -617,6 +617,48 @@ enum {
     VD_FW_GAMEPAD_FACE_TYPE_NINTENDO,        /* face:nintendo */
 };
 typedef VdFwU8 VdFwGamepadFaceType;
+
+// Gamepads are ranked based weighted-importance input capability
+// Generally, higher value -> more important inputs
+// 
+// For Gamepads that have the same amount of buttons but not with the same locality/affordance, Gameplay/Control buttons
+// are deemed more significant.
+// 
+// The names somewhat map to the system/controller, but since those systems may or may not support more/less capable
+// controllers or controller features, it should only be considered a mnemonic, and the GUID should be used instead.
+//
+// Some controllers, for example official controllers for the Playstation 2 system have even more capabilities, like
+// pressure sensitive face buttons. For the purpose of this cross-platform library, they are not considered if they
+// were relatively unpopular in games shipped with that system.
+// 
+// Additionally, controller inputs that do not explicitly indicate analog usage are also ignored (again, like the PS2
+// pressure-sensitive shoulders/triggers).
+enum {
+    VD_FW_GAMEPAD_CLASS_INVALID = 0,
+    // class:nes          | 1 PoV, 2 Control, 2 System
+    VD_FW_GAMEPAD_CLASS_NES,
+    // class:megadrive    | 1 PoV, 3 Control, 1 System
+    VD_FW_GAMEPAD_CLASS_MEGADRIVE,
+    // class:genesis      | 1 PoV, 6 Control, 2 System
+    VD_FW_GAMEPAD_CLASS_GENESIS,
+    // class:snes         | 1 PoV, 4 Control, 2 System, 2 Symmetrical
+    VD_FW_GAMEPAD_CLASS_SNES,
+    // class:ps1          | 1 PoV, 4 Control, 2 System, 4 Symmetrical
+    VD_FW_GAMEPAD_CLASS_PS1,
+    // class:joycon       |        4 Control, 2 System, 2 Symmetrical, 1 Clickable Stick
+    VD_FW_GAMEPAD_CLASS_JOYCON,
+    // class:n64          | 1 PoV, 6 Control, 2 System, 2 Symmetrical, 1 Stick
+    VD_FW_GAMEPAD_CLASS_N64,
+    // class:ps2          | 1 PoV, 4 Control, 2 System, 4 Symmetrical, 2 Clickable Sticks
+    VD_FW_GAMEPAD_CLASS_PS2,
+    // class:xbox         | 1 PoV, 4 Control, 2 System, 2 Symmetrical, 2 Clickable Sticks, 2 Symmetrical Axes
+    VD_FW_GAMEPAD_CLASS_XBOX,
+    // class:ps4          | 1 PoV, 4 Control, 2 System, 2 Symmetrical, 2 Clickable Sticks, 2 Symmetrical Axes, 1 Touchpad
+    VD_FW_GAMEPAD_CLASS_PS4,
+    // class:steamdeck    | 1 PoV, 4 Control, 2 System, 6 Symmetrical, 2 Clickable Sticks, 2 Symmetrical Axes, 2 Touchpads 
+    VD_FW_GAMEPAD_CLASS_STEAMDECK
+};
+typedef VdFwU8 VdFwGamepadClass;
 
 enum {
     VD_FW_GAMEPAD_INPUT_TYPE_DIGITAL,
