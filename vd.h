@@ -803,7 +803,7 @@ typedef struct {
 
 #define VD_DYNARRAY_HEADER(a)                      ((VdDynArrayHeader*)(((Vdu8*)a) - sizeof(VdDynArrayHeader)))
 #define VD_DYNARRAY_INIT(a, arena)                 ((a) = vd__dynarray_grow(a, sizeof(*(a)), 1, 0, arena))
-#define VD_DYNARRAY_INIT_WITH_CAP(a, arena, cap)   ((a) = vd__dynarray_grow(a, sizeof(*(a)), cap, 0, arena))
+#define VD_DYNARRAY_INIT_WITH_CAP(a, arena, cap)   ((a) = vd__dynarray_grow(a, sizeof(*(a)), cap, cap, arena))
 #define VD_DYNARRAY_ADD(a, v)                      (VD_DYNARRAY_CHECKGROW(a, 1), (a)[VD_DYNARRAY_HEADER(a)->len++] = (v))
 #define VD_DYNARRAY_PUSH(a)                        (VD_DYNARRAY_CHECKGROW(a, 1), &((a)[VD_DYNARRAY_HEADER(a)->len++]))
 #define VD_DYNARRAY_ADDN(a, n)                     (VD_DYNARRAY_CHECKGROW(a, n), VD_DYNARRAY_HEADER(a)->len += (n))
@@ -837,14 +837,14 @@ VD_INLINE void *vd__dynarray_grow(void *a, Vdusize tsize, Vdu32 addlen, Vdu32 mi
 
     if (mincap < (2 * VD_DYNARRAY_CAP(a))) {
         mincap = 2 * VD_DYNARRAY_CAP(a);
-    } else {
+    } else if (mincap < 4) {
         mincap = 4;
     }
 
     void *b = vd_arena_resize(arena, 
         a ? VD_DYNARRAY_HEADER(a) : 0,
         VD_DYNARRAY_CAP(a) == 0 ? 0 : tsize * VD_DYNARRAY_CAP(a) + sizeof(VdDynArrayHeader),
-        tsize * mincap * sizeof(VdDynArrayHeader));
+        tsize * mincap + sizeof(VdDynArrayHeader));
 
     b = (Vdu8*)b + sizeof(VdDynArrayHeader);
 
@@ -1560,7 +1560,7 @@ typedef struct __VD_KVMapInitOptions {
 #define VD_KVMAP_DEFAULT_CAP              1024
 #define VD_KVMAP_HEADER(m)                ((Vd__KVMapHeader*)(((Vdu8*)(m)) - sizeof(Vd__KVMapHeader)))
 #define VD_KVMAP_INIT(m, arena, cap, o)   ((m) = (vd__kvmap_init((arena), sizeof(m->k), sizeof(m->v), (cap), (o))))
-#define VD_KVMAP_INIT_DEFAULT(m, arena)   VD_KVMAP_INIT((m), (arena), VD_KVMAP_DEFAULT_CAP)
+#define VD_KVMAP_INIT_DEFAULT(m, arena)   VD_KVMAP_INIT((m), (arena), VD_KVMAP_DEFAULT_CAP, NULL)
 #define VD_KVMAP_SET(m, k, v)             vd__kvmap_set((m), (k), (void*)(v), VD__KVMAP_SET_MODE_NEW_ONLY)
 #define VD_KVMAP_GET(m, k, v)             vd__kvmap_get((m), (k), (void*)(v))
 #define VD_KVMAP_RM(m, k)                 (vd__kvmap_get_bin((m), (k), VD__KVMAP_GET_BIN_FLAGS_SET_UNUSED) != 0)
@@ -1683,7 +1683,10 @@ VD_INLINE Vdcstr vd_dump_file_to_cstr(VdArena *arena, Vdcstr file_path, Vdusize 
     fseek(f, 0, SEEK_SET);
 
     char *result = (char*)vd_arena_alloc(arena, size + 1);
-    fread(result, size, 1, f);
+    if (fread(result, size, 1, f) != 1) {
+        return 0;
+    }
+
     result[size] = 0;
     *len = size;
     return result;
@@ -1695,8 +1698,8 @@ VD_INLINE Vdcstr vd_dump_file_to_cstr(VdArena *arena, Vdcstr file_path, Vdusize 
 #define directory_open                            vd_directory_open
 #define directory_get_file                        vd_directory_get_file
 #define directory_close                           vd_directory_close
-#define dump_file_to_bytes(arena, file_path, len) vd_dump_file_to_bytes(arena, file_path, len);
-#define dump_file_to_cstr(arena, file_path, len)  vd_dump_file_to_cstr(arena, file_path, len);
+#define dump_file_to_bytes(arena, file_path, len) vd_dump_file_to_bytes(arena, file_path, len)
+#define dump_file_to_cstr(arena, file_path, len)  vd_dump_file_to_cstr(arena, file_path, len)
 #endif // VD_MACRO_ABBREVIATIONS
 
 /* ----SCRATCH------------------------------------------------------------------------------------------------------- */
