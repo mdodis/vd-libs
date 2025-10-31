@@ -162,7 +162,7 @@
 #       define VD_FW_LOG(fmt, ...)
 #   else
 #       include <stdio.h>
-#       define VD_FW_LOG(fmt, ...) printf("vd_fw: " fmt "\n", __VA_ARGS__)
+#       define VD_FW_LOG(fmt, ...) printf("vd_fw: " fmt "\n", ## __VA_ARGS__)
 #   endif // VD_FW_NO_CRT
 #endif // !VD_FW_LOG
 
@@ -5790,6 +5790,8 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
                 case VD_FW_GL_VERSION_4_2: major = 4; minor = 2; break;
                 case VD_FW_GL_VERSION_4_3: major = 4; minor = 3; break;
                 case VD_FW_GL_VERSION_4_4: major = 4; minor = 4; break;
+                case VD_FW_GL_VERSION_4_5: major = 4; minor = 5; break;
+                case VD_FW_GL_VERSION_4_6: major = 4; minor = 6; break;
                 default: break;
             }
         }
@@ -9589,7 +9591,7 @@ static void vd_fw__load_opengl(VdFwGlVersion version)
 #define LOAD(p, s) s = (p)vd_fw__gl_get_proc_address(#s)
 /* ----LOADING------------------------------------------------------------------------------------------------------- */
 #define X(retval, name, params) LOAD(VdFwProcGL_##name, name);
-#define V(v) if (version > VD_FW_GL_VERSION_##v) {
+#define V(v) if (version >= VD_FW_GL_VERSION_##v) {
 #define VE() }
 VD_FW_OPENGL_CORE_FUNCTIONS
 #undef X

@@ -40,6 +40,8 @@ typedef Vdi32   VdCgi32;
 #endif // !VD_H
 
 #define VD_CG_PI32           3.14159265359f
+#define VD_CG_FPI            3.14159265359f
+#define VD_CG_FPI2           (2.f * 3.14159265359f)
 #define VD_CG_RAD2DEG_COEFF  ((VdCgf32)180.0f/VD_CG_PI32)
 #define VD_CG_DEG2RAD_COEFF  ((VdCgf32)VD_CG_PI32/180.0f)
 #define VD_CG_FTAU           360.0f
@@ -67,6 +69,8 @@ typedef Vdi32   VdCgi32;
 #define VD_CG_DACOS     acos
 #define VD_CG_FFLOOR    floorf
 #define VD_CG_DFLOOR    floor
+#define VD_CG_FPOW      powf
+#define VD_CG_DPOW      pow
 #define VD_CG_MIN(a, b) ((a) < (b) ? (b) : (a))
 #define VD_CG_MAX(a, b) ((a) > (b) ? (b) : (a))
 #define VD_CG_ABS(a)    ((a) > 0 ? (a) : -(a))
@@ -78,11 +82,13 @@ typedef Vdi32   VdCgi32;
 #define ftan       VD_CG_FTAN
 #define fsqrt      VD_CG_FSQRT
 #define facos      VD_CG_FACOS
+#define fpow       VD_CG_FPOW
 #define dsin       VD_CG_DSIN
 #define dcos       VD_CG_DCOS
 #define dtan       VD_CG_DTAN
 #define dsqrt      VD_CG_DSQRT
 #define dacos      VD_CG_DACOS
+#define dpow       VD_CG_DPOW
 #define vmin(a, b) VD_CG_MIN(a,b)
 #define vmax(a, b) VD_CG_MAX(a,b)
 #endif
@@ -200,6 +206,7 @@ typedef Vdfquat   Vdrquat;
 #define VD_CG_RTAN  VD_CG_FTAN
 #define VD_CG_RSQRT VD_CG_FSQRT
 #define VD_CG_RACOS VD_CG_FACOS
+#define VD_CG_RPOW  VD_CG_FPOW
 #elif VD_CG_DEFAULT_PRECISION_DOUBLE
 typedef VdCgf64   Vdrea;
 typedef Vdd2      Vdr2;
@@ -214,6 +221,7 @@ typedef Vddquat   Vdrquat;
 #define VD_CG_RTAN  VD_CG_DTAN
 #define VD_CG_RSQRT VD_CG_DSQRT
 #define VD_CG_RACOS VD_CG_DACOS
+#define VD_CG_RPOW  VD_CG_DPOW
 #endif // VD_CG_DEFAULT_PRECISION_SINGLE, VD_CG_DEFAULT_PRECISION_DOUBLE
 
 #if VD_MACRO_ABBREVIATIONS
@@ -222,6 +230,7 @@ typedef Vddquat   Vdrquat;
 #define rtan       VD_CG_RTAN
 #define rsqrt      VD_CG_RSQRT
 #define racos      VD_CG_RACOS
+#define rpow       VD_CG_RPOW
 #endif // VD_MACRO_ABBREVIATIONS
 
 /* ----INITIALIZATION------------------------------------------------------------------------------------------------ */
@@ -400,19 +409,22 @@ static VD_INLINE Vdf4x4  vd_fto4x4quat       (Vdfquat q);
 static VD_INLINE Vdfquat vd_feulerquat       (Vdf3 euler);
 
 /* ----COORDINATE SYSTEMS-------------------------------------------------------------------------------------------- */
-static VD_INLINE Vdf4x4  vd_fidentity4x4      (void);
-static VD_INLINE Vdf4x4  vd_fdx_to_vk4x4      (void);
-static VD_INLINE Vdf4x4  vd_fperspective4x4   (VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr, VdCgf32 pfr);
-static VD_INLINE Vdf4x4  vd_fperspective4x4_vk(VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr, VdCgf32 pfr);
-static VD_INLINE Vdf4x4  vd_flookat4x4        (Vdf3 fwd, Vdf3 up, Vdf3 right);
-static VD_INLINE Vdf4x4  vd_ftranslation4x4   (Vdf3 v);
-static VD_INLINE Vdf4x4  vd_ftranslation4x4col(Vdf3 v);
-static VD_INLINE Vdf4x4  vd_frotation_yaw4x4  (VdCgf32 rad);
-static VD_INLINE void    vd_ftranslate4x4     (Vdf4x4 *m, Vdf3 v);
-static VD_INLINE void    vd_ftranslate4x4col  (Vdf4x4 *m, Vdf3 v);
-static VD_INLINE void    vd_frotatequat4x4    (Vdf4x4 *m, Vdfquat quat);
-static VD_INLINE void    vd_frotate_yaw4x4    (Vdf4x4 *m, VdCgf32 rad);
-static VD_INLINE Vdf4x4  vd_fvk_to_dx4x4      (void);
+static VD_INLINE Vdf4x4  vd_fidentity4x4        (void);
+static VD_INLINE Vdf4x4  vd_fdx_to_vk4x4        (void);
+static VD_INLINE Vdf4x4  vd_fperspective4x4     (VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr, VdCgf32 pfr);
+static VD_INLINE Vdf4x4  vd_fperspective4x4_vk  (VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr, VdCgf32 pfr);
+static VD_INLINE Vdf4x4  vd_flookat4x4          (Vdf3 fwd, Vdf3 up, Vdf3 right);
+static VD_INLINE Vdf4x4  vd_ftranslation4x4     (Vdf3 v);
+static VD_INLINE Vdf4x4  vd_ftranslation4x4col  (Vdf3 v);
+static VD_INLINE Vdf4x4  vd_frotation_yaw4x4    (VdCgf32 rad);
+static VD_INLINE Vdf4x4  vd_frotation_quat4x4   (Vdfquat quat);
+static VD_INLINE Vdf4x4  vd_frotation_quat4x4col(Vdfquat quat);
+static VD_INLINE void    vd_ftranslate4x4       (Vdf4x4 *m, Vdf3 v);
+static VD_INLINE void    vd_ftranslate4x4col    (Vdf4x4 *m, Vdf3 v);
+static VD_INLINE void    vd_frotatequat4x4      (Vdf4x4 *m, Vdfquat quat);
+static VD_INLINE void    vd_frotatequat4x4col   (Vdf4x4 *m, Vdfquat quat);
+static VD_INLINE void    vd_frotate_yaw4x4      (Vdf4x4 *m, VdCgf32 rad);
+static VD_INLINE Vdf4x4  vd_fvk_to_dx4x4        (void);
 
 /* ----LOGGING------------------------------------------------------------------------------------------------------- */
 static VD_INLINE void     vd_fprint4x4          (Vdf4x4 *m);
@@ -635,6 +647,36 @@ static VD_INLINE Vdf4x4 vd_frotation_yaw4x4(VdCgf32 rad)
         0.f,             0.f, 0.f,              1.f);
 }
 
+static VD_INLINE Vdf4x4 vd_frotation_quat4x4(Vdfquat quat)
+{
+    VdCgf32 q0   = quat.w;  VdCgf32 q1   = quat.x;  VdCgf32 q2   = quat.y;  VdCgf32 q3   = quat.z;
+    VdCgf32 q0q0 = q0 * q0; VdCgf32 q1q1 = q1 * q1; VdCgf32 q2q2 = q2 * q2; VdCgf32 q3q3 = q3 * q3;
+    VdCgf32 q0q1 = q0 * q1; VdCgf32 q0q2 = q0 * q2; VdCgf32 q0q3 = q0 * q3;
+    VdCgf32 q1q2 = q1 * q2; VdCgf32 q1q3 = q1 * q3;
+    VdCgf32 q2q3 = q2 * q3;
+
+    return vd_fm4x4(
+        2.f * (q0q0 + q1q1) - 1.f, 2.f * (q1q2 - q0q3),       2.f * (q1q3 + q0q2),       0.f,
+        2.f * (q1q2 + q0q3),       2.f * (q0q0 + q2q2) - 1.f, 2.f * (q1q3 + q0q1),       0.f,
+        2.f * (q1q3 - q0q2),       2.f * (q2q3 + q0q1),       2.f * (q0q0 + q3q3) - 1.f, 0.f,
+        0.f,                       0.f,                       0.f,                       1.f);
+}
+
+static VD_INLINE Vdf4x4 vd_frotation_quat4x4col(Vdfquat quat)
+{
+    VdCgf32 q0   = quat.w;  VdCgf32 q1   = quat.x;  VdCgf32 q2   = quat.y;  VdCgf32 q3   = quat.z;
+    VdCgf32 q0q0 = q0 * q0; VdCgf32 q1q1 = q1 * q1; VdCgf32 q2q2 = q2 * q2; VdCgf32 q3q3 = q3 * q3;
+    VdCgf32 q0q1 = q0 * q1; VdCgf32 q0q2 = q0 * q2; VdCgf32 q0q3 = q0 * q3;
+    VdCgf32 q1q2 = q1 * q2; VdCgf32 q1q3 = q1 * q3;
+    VdCgf32 q2q3 = q2 * q3;
+
+    return vd_fm4x4(
+        2.f * (q0q0 + q1q1) - 1.f, 2.f * (q1q2 + q0q3),       2.f * (q1q3 - q0q2),       0.f,
+        2.f * (q1q2 - q0q3),       2.f * (q0q0 + q2q2) - 1.f, 2.f * (q2q3 + q0q1),       0.f,
+        2.f * (q1q3 + q0q2),       2.f * (q1q3 + q0q1),       2.f * (q0q0 + q3q3) - 1.f, 0.f,
+        0.f,                       0.f,                       0.f,                       1.f);
+}
+
 static VD_INLINE void vd_ftranslate4x4(Vdf4x4 *m, Vdf3 v)
 {
     Vdf4x4 t = vd_ftranslation4x4(v);
@@ -651,7 +693,16 @@ static VD_INLINE void vd_ftranslate4x4col(Vdf4x4 *m, Vdf3 v)
 
 static VD_INLINE void vd_frotatequat4x4(Vdf4x4 *m, Vdfquat quat)
 {
+    Vdf4x4 mq = vd_frotation_quat4x4(quat);
+    Vdf4x4 r  = vd_fmul4x4(m, &mq);
+    *m = r;
+}
 
+static VD_INLINE void vd_frotatequat4x4col(Vdf4x4 *m, Vdfquat quat)
+{
+    Vdf4x4 mq = vd_frotation_quat4x4col(quat);
+    Vdf4x4 r  = vd_fmul4x4(m, &mq);
+    *m = r;
 }
 
 static VD_INLINE void vd_frotate_yaw4x4(Vdf4x4 *m, VdCgf32 rad)
@@ -848,8 +899,12 @@ static VD_INLINE void vd_fprint4x4(Vdf4x4 *m)
 #define ftranslation4x4          vd_ftranslation4x4 
 #define ftranslation4x4col       vd_ftranslation4x4col
 #define frotation_yaw4x4         vd_frotation_yaw4x4 
+#define frotation_quat4x4        vd_frotation_quat4x4
+#define frotation_quat4x4col     vd_frotation_quat4x4col
 #define ftranslate4x4            vd_ftranslate4x4 
 #define ftranslate4x4col         vd_ftranslate4x4col
+#define frotatequat4x4           vd_frotatequat4x4
+#define frotatequat4x4col        vd_frotatequat4x4col
 #define frotate_yaw4x4           vd_frotate_yaw4x4 
 #define fvk_to_dx4x4             vd_fvk_to_dx4x4 
 

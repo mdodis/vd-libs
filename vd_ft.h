@@ -35,8 +35,10 @@
 #endif // !VD_FT_API
 
 typedef struct {
-    void *reserved0;
+    void *reserved0; // Win32(HANDLE to font resource)
+    void *reserved1; // Win32(HFONT)
     char *name;
+    int  name_len;
     int  units_per_em;
     int  ascent, descent, linegap;
 } VdFtFont;
@@ -55,6 +57,7 @@ static void  vd_ft__free_mem(void *ptr);
 static int   vd_ft__mac_roman_to_wide(uint8_t *strdata, uint16_t string_length, wchar_t *wbuf, int wbuf_len);
 static int   vd_ft__latin1_to_wide(uint8_t *strdata, uint16_t string_length, wchar_t *wbuf, int wbuf_len);
 static int   vd_ft__wide_to_utf8(wchar_t *wbuf, int wlen, char *buf, int blen);
+static int   vd_ft__utf8_to_wide(char *buf, int blen, wchar_t *wbuf, int wlen);
 
 static uint16_t vd_ft__swapu16(uint16_t i)
 {
@@ -129,7 +132,7 @@ static int vd_ft__read_ptr(void *dst, size_t dst_size, uint8_t *data, int size, 
     return 1;
 }
 
-static int vd_ft__get_ttf_name_records(uint8_t *data, int size, char **out_name)
+static int vd_ft__get_ttf_name_records(uint8_t *data, int size, char **out_name, int *out_name_size)
 {
 #define VD_FT__CHECK_1(expr) if ((expr) != 1) { return 0; }
     size_t offset = 0;
@@ -206,7 +209,7 @@ static int vd_ft__get_ttf_name_records(uint8_t *data, int size, char **out_name)
         }
 
         if (best_name_record == NULL) {
-            return 0;
+            goto CANDIDATE_FAIL_CONTINUE;
         }
 
         // Decode name string to UTF-8
@@ -256,9 +259,15 @@ static int vd_ft__get_ttf_name_records(uint8_t *data, int size, char **out_name)
             int utf8_wrt = vd_ft__wide_to_utf8(wbuf, wlen, utf8, utf8_len);
             utf8[utf8_wrt] = 0;
             *out_name = utf8;
+            *out_name_size = utf8_wrt;
         }
 
+        vd_ft__free_mem(name_records);
         break;
+
+CANDIDATE_FAIL_CONTINUE: 
+        vd_ft__free_mem(name_records);
+        continue;
     }
 #undef VD_FT__CHECK_1
 
@@ -282,19 +291,27 @@ static void vd_ft__win32_init(void);
 
 VD_FT_API int vd_ft_font_load(VdFtFont *font, void *memory, int size, int index)
 {
+    (void)index;
+
     if (!Vd_Ft_G.initialized) {
         vd_ft__win32_init();
         Vd_Ft_G.initialized = 1;
     }
 
-    if (!vd_ft__get_ttf_name_records(memory, size, &font->name)) {
+    if (!vd_ft__get_ttf_name_records(memory, size, &font->name, &font->name_len)) {
         printf("FAILED\n");
     } else {
         printf("SUCCESS\n");
     }
 
     DWORD num_fonts;
-    AddFontMemResourceEx(memory, size, 0, &num_fonts);
+    HANDLE font_mem_handle = AddFontMemResourceEx(memory, size, 0, &num_fonts);
+
+    wchar_t wbuf[512];
+    int wrt = vd_ft__utf8_to_wide(font->name, font->name_len, wbuf, 511);
+    wbuf[wrt] = 0;
+
+    font->reserved0 = (void*)font_mem_handle;
     return 1;
 }
 
@@ -330,6 +347,11 @@ static int vd_ft__latin1_to_wide(uint8_t *strdata, uint16_t string_length, wchar
 static int vd_ft__wide_to_utf8(wchar_t *wbuf, int wlen, char *buf, int blen)
 {
     return WideCharToMultiByte(CP_UTF8, 0, wbuf, wlen, buf, blen, NULL, NULL);
+}
+
+static int vd_ft__utf8_to_wide(char *buf, int blen, wchar_t *wbuf, int wlen)
+{
+    return MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, buf, blen, wbuf, wlen);
 }
 
 #endif // _WIN32
