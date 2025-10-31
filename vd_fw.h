@@ -8381,19 +8381,28 @@ int wWinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPWSTR cmdline, int n
 @end
 
 typedef enum {
-    VD_FW__MAC_MESSAGE_INVALID = 0,
-    VD_FW__MAC_MESSAGE_INIT,
     VD_FW__MAC_FLAGS_WAKE_COND_VAR = 1 << 0,
     VD_FW__MAC_FLAGS_SIZE_CHANGED  = 1 << 1,
+    VD_FW__MAC_FLAGS_REACQUIRE_CONTEXT = 1 << 2,
 
+    VD_FW_MAC_MESSAGE_BUFFER_SIZE = 256,
+
+    VD_FW__MAC_MESSAGE_INVALID = 0,
+    VD_FW__MAC_MESSAGE_MOUSEMOVE,
+    VD_FW__MAC_MESSAGE_MOUSEBTN,
 } VdFw__MacMessageType;
 
 typedef struct {
     VdFw__MacMessageType type;
     union {
         struct {
-            VdFwInitInfo init_info;
-        } init;
+            VdFwI32 mx, my;
+        } mousemove;
+
+        struct {
+            int down;
+            int mask; 
+        } mousebtn;
     } dat;
 } VdFw__MacMessage;
 
@@ -8403,7 +8412,6 @@ typedef struct {
 } VdFw__MacFrame;
 
 typedef struct {
-    VdFwWindow                  *window;
     NSOpenGLContext             *gl_context;
     BOOL                        should_close;
     mach_timebase_info_data_t   time_base;
@@ -8423,7 +8431,6 @@ typedef struct {
     BOOL                        mouse_is_locked;
     NSPoint                     last_mouse;
     NSPoint                     mouse_delta;
-    NSPoint                     mouse_pos_scaled;
     unsigned char               curr_key_states[VD_FW_KEY_MAX];
     unsigned char               prev_key_states[VD_FW_KEY_MAX];
     int                         focus_changed;
@@ -8431,19 +8438,35 @@ typedef struct {
     int                         argc;
     const char                  **argv;
 
-    VdFwInitInfo                c_init_info;
+/* ----WINDOW THREAD ONLY-------------------------------------------------------------------------------------------- */
+    VdFwI32                     mouse[2];
+    VdFwI32                     mouse_state;
 
+/* ----WINDOW THREAD ONLY-------------------------------------------------------------------------------------------- */
+    VdFwInitInfo                c_init_info;
+    VdFwWindow                  *window;
+
+/* ----MAIN - RENDER THREAD DATA------------------------------------------------------------------------------------- */
     int                         w, h;
     VdFw__MacFrame              next_frame;
     VdFw__MacFrame              curr_frame;
 
+    VdFw__MacMessage            msgbuf[VD_FW_MAC_MESSAGE_BUFFER_SIZE];
+    volatile VdFwI32            msgbuf_r;
+    volatile VdFwI32            msgbuf_w;
+
+/* ----MAIN - RENDER THREAD SYNC------------------------------------------------------------------------------------- */
     pthread_t                   main_thread;
     pthread_mutex_t             m_paint;
+    pthread_mutex_t             m_input;
     pthread_cond_t              n_paint;
     sem_t                       *s_main_thread_opened_me;
     sem_t                       *s_main_thread_window_ready;
     sem_t                       *s_main_thread_window_closed;
 } VdFw__MacOsInternalData;
+
+static int vd_fw__msgbuf_r(VdFw__MacMessage *message);
+static int vd_fw__msgbuf_w(VdFw__MacMessage *message);
 
 static VdFw__MacOsInternalData Vd_Fw_Globals;
 
@@ -8769,6 +8792,8 @@ static VdFwWindowDelegate *Vd_Fw_Delegate;
     //
     // So we wait to acquire paint lock here.
     pthread_mutex_lock(&VD_FW_G.m_paint);
+    VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_REACQUIRE_CONTEXT;
+    [VD_FW_G.gl_context makeCurrentContext];
     [VD_FW_G.gl_context update];
     pthread_mutex_unlock(&VD_FW_G.m_paint);
 }
@@ -8859,41 +8884,9 @@ VD_FW_API void vd_fw_get_mouse_delta(float *dx, float *dy)
 
 VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
 {
-    int result = 0;
-
-    @autoreleasepool {
-        if (!VD_FW_G.window) {
-            if (x) *x = 0;
-            if (y) *y = 0;
-            return 0;
-        }
-
-        // // Mouse location in screen coordinates
-        // NSPoint loc = [NSEvent mouseLocation];
-
-        // // Convert to window coordinates
-        // NSPoint window_point = [VD_FW_G.window convertPointFromScreen:loc];
-
-        // // Convert to content view coordinates
-        // NSView *cv = [VD_FW_G.window contentView];
-        // NSPoint view_point = [cv convertPoint:window_point fromView:nil];
-        // NSRect cvf = [cv frame];
-
-        // // Cocoa’s origin is bottom-left, OpenGL expects same
-        // if (x) *x = (view_point.x) * VD_FW_G.scale;
-        // if (y) *y = (cvf.size.height - view_point.y) * VD_FW_G.scale;
-
-        if (x) *x = VD_FW_G.mouse_pos_scaled.x;
-        if (y) *y = VD_FW_G.mouse_pos_scaled.y;
-
-        // Get the mouse state
-        BOOL left_down  = ([NSEvent pressedMouseButtons] & (1 << 0)) != 0;
-        BOOL right_down = ([NSEvent pressedMouseButtons] & (1 << 1)) != 0;
-
-        result |= left_down  ? VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN : 0;
-        result |= right_down ? VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN : 0;
-    }
-
+    int result = VD_FW_G.mouse_state;
+    if (x) *x = VD_FW_G.mouse[0];
+    if (y) *y = VD_FW_G.mouse[1];
     return result;
 }
 
@@ -8953,9 +8946,34 @@ VD_FW_API int vd_fw_running(void)
         VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
     }
 
+    VdFw__MacMessage msg;
+    while (vd_fw__msgbuf_r(&msg)) {
+        switch (msg.type) {
+            case VD_FW__MAC_MESSAGE_MOUSEMOVE: {
+                VD_FW_G.mouse[0] = msg.dat.mousemove.mx;
+                VD_FW_G.mouse[1] = msg.dat.mousemove.my;
+            } break;
+
+            case VD_FW__MAC_MESSAGE_MOUSEBTN: {
+                int state_mask = msg.dat.mousebtn.mask;
+                if (msg.dat.mousebtn.down) {
+                    VD_FW_G.mouse_state |= state_mask;
+                } else {
+                    VD_FW_G.mouse_state &= ~state_mask;
+                }
+            } break;
+
+            default: break;
+        }
+    }
+
     pthread_mutex_lock(&VD_FW_G.m_paint);
     VD_FW_G.curr_frame = VD_FW_G.next_frame;
     VD_FW_G.next_frame.flags = 0;
+    if (VD_FW_G.next_frame.flags & VD_FW__MAC_FLAGS_REACQUIRE_CONTEXT) {
+        [VD_FW_G.gl_context makeCurrentContext];
+        [VD_FW_G.gl_context update];
+    }
     pthread_mutex_unlock(&VD_FW_G.m_paint);
 
     return !VD_FW_G.should_close;
@@ -9126,6 +9144,7 @@ int main(int argc, char const *argv[])
                                                    0644,
                                                    0);
     pthread_mutex_init(&VD_FW_G.m_paint, NULL);
+    pthread_mutex_init(&VD_FW_G.m_input, NULL);
     pthread_cond_init(&VD_FW_G.n_paint, NULL);
     pthread_create(&VD_FW_G.main_thread, NULL, vd_fw__macos__main, NULL);
 
@@ -9265,6 +9284,19 @@ static void vd_fw__mac_init_gl(VdFwInitInfo *info)
     [VD_FW_G.gl_context makeCurrentContext];
 }
 
+static NSPoint vd_fw__mac_mouse_cocoa_to_conventional(NSPoint loc)
+{
+    NSView *cv = [VD_FW_G.window contentView];
+    NSRect cvf = [cv frame];
+    NSPoint loc_top_left_origin = NSMakePoint(loc.x, cvf.size.height - loc.y);
+
+    NSPoint result = NSMakePoint(
+        loc_top_left_origin.x * VD_FW_G.scale,
+        loc_top_left_origin.y * VD_FW_G.scale);
+
+    return result;
+}
+
 static void vd_fw__mac_runloop(int wait)
 {
     @autoreleasepool {
@@ -9347,6 +9379,12 @@ static void vd_fw__mac_runloop(int wait)
                     p.x *= VD_FW_G.scale;
                     p.y *= VD_FW_G.scale;
 
+                    VdFw__MacMessage msg;
+                    msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
+                    msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN;
+                    msg.dat.mousebtn.down = 1;
+                    vd_fw__msgbuf_w(&msg); 
+
                     if (VD_FW_G.draw_decorations) {
                         break;
                     }
@@ -9377,6 +9415,11 @@ static void vd_fw__mac_runloop(int wait)
 
                 case NSEventTypeLeftMouseUp: {
                     VD_FW_G.dragging = FALSE;
+                    VdFw__MacMessage msg;
+                    msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
+                    msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN;
+                    msg.dat.mousebtn.down = 0;
+                    vd_fw__msgbuf_w(&msg); 
                 } break;
 
                 case NSEventTypeMouseMoved: {
@@ -9397,17 +9440,29 @@ static void vd_fw__mac_runloop(int wait)
                     VD_FW_G.mouse_delta.x += delta.x;
                     VD_FW_G.mouse_delta.y += delta.y;
 
-                    VD_FW_G.mouse_pos_scaled = NSMakePoint(
-                        loc_top_left_origin.x * VD_FW_G.scale,
-                        loc_top_left_origin.y * VD_FW_G.scale
-                    );
-
                     VD_FW_G.last_mouse = loc_top_left_origin;
+
+
+                    NSPoint pixel_point = vd_fw__mac_mouse_cocoa_to_conventional(loc);
+                    VdFw__MacMessage msg;
+                    msg.type = VD_FW__MAC_MESSAGE_MOUSEMOVE;
+                    msg.dat.mousemove.mx = pixel_point.x;
+                    msg.dat.mousemove.my = pixel_point.y;
+                    vd_fw__msgbuf_w(&msg); 
+
                 } break;
 
                 case NSEventTypeLeftMouseDragged: {
 
                     NSPoint view_point = [event locationInWindow];
+
+                    NSPoint scaled_pos = vd_fw__mac_mouse_cocoa_to_conventional(view_point);
+
+                    VdFw__MacMessage msg;
+                    msg.type = VD_FW__MAC_MESSAGE_MOUSEMOVE;
+                    msg.dat.mousemove.mx = scaled_pos.x;
+                    msg.dat.mousemove.my = scaled_pos.y;
+                    vd_fw__msgbuf_w(&msg); 
 
                     NSPoint p = [VD_FW_G.window convertPointToScreen: view_point];
 
@@ -9463,6 +9518,41 @@ static void vd_fw__mac_runloop(int wait)
             }
         }
     }
+}
+
+static int vd_fw__msgbuf_r(VdFw__MacMessage *message)
+{
+    VdFwI32 r = VD_FW_G.msgbuf_r;
+    VdFwI32 w;
+    __atomic_load(&VD_FW_G.msgbuf_w, &w, __ATOMIC_SEQ_CST);
+
+    if (r == w) {
+        return 0;
+    }
+
+    *message = VD_FW_G.msgbuf[r];
+
+    VdFwI32 nr = (r + 1) % VD_FW_MAC_MESSAGE_BUFFER_SIZE;
+    __atomic_exchange_n(&VD_FW_G.msgbuf_r, nr, __ATOMIC_SEQ_CST);
+
+    return 1;
+}
+
+static int vd_fw__msgbuf_w(VdFw__MacMessage *message)
+{
+    VdFwI32 w = VD_FW_G.msgbuf_w;
+    VdFwI32 r;
+    __atomic_load(&VD_FW_G.msgbuf_r, &r, __ATOMIC_SEQ_CST);
+
+    if ((w + 1) % VD_FW_MAC_MESSAGE_BUFFER_SIZE == r) {
+        return 0;
+    }
+
+    VD_FW_G.msgbuf[w] = *message;
+    VdFwI32 nw = (w + 1) % VD_FW_MAC_MESSAGE_BUFFER_SIZE;
+    __atomic_exchange_n(&VD_FW_G.msgbuf_w, nw, __ATOMIC_SEQ_CST);
+
+    return 1;
 }
 
 #undef VD_FW_G
