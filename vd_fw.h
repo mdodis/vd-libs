@@ -8442,6 +8442,7 @@ typedef struct {
     pthread_cond_t              n_paint;
     sem_t                       *s_main_thread_opened_me;
     sem_t                       *s_main_thread_window_ready;
+    sem_t                       *s_main_thread_window_closed;
 } VdFw__MacOsInternalData;
 
 static VdFw__MacOsInternalData Vd_Fw_Globals;
@@ -8748,6 +8749,7 @@ static VdFwWindowDelegate *Vd_Fw_Delegate;
 
 - (void)windowWillClose:(NSNotification*)notification {
     VD_FW_G.should_close = YES;
+    sem_post(VD_FW_G.s_main_thread_window_closed);
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
@@ -8758,7 +8760,17 @@ static VdFwWindowDelegate *Vd_Fw_Delegate;
     NSRect rect = [[VD_FW_G.window contentView] frame];
     VD_FW_G.w = (int)rect.size.width * VD_FW_G.scale;
     VD_FW_G.h = (int)rect.size.height * VD_FW_G.scale;
-    // [VD_FW_G.gl_context update];
+
+    // @note(mdodis): Apple States:
+    // > Call this method whenever the receiver’s drawable object changes
+    // > size or location. A multithreaded application must synchronize 
+    // > all threads that access the same drawable object and call update 
+    // > for each thread’s context serially.
+    //
+    // So we wait to acquire paint lock here.
+    pthread_mutex_lock(&VD_FW_G.m_paint);
+    [VD_FW_G.gl_context update];
+    pthread_mutex_unlock(&VD_FW_G.m_paint);
 }
 - (BOOL)acceptsFirstResponder {
     return YES;
@@ -8924,6 +8936,10 @@ VD_FW_API int vd_fw_get_key_down(int key)
 
 VD_FW_API int vd_fw_running(void)
 {
+    if (sem_trywait(VD_FW_G.s_main_thread_window_closed) == 0) {
+        return 0;
+    }
+
     VD_FW_G.wheel_moved = 0;
     VD_FW_G.wheel[0] = 0.f;
     VD_FW_G.wheel[1] = 0.f;
@@ -8949,9 +8965,7 @@ VD_FW_API int vd_fw_swap_buffers(void)
 {
 
     VD_FW_G.last_time = mach_absolute_time();
-    @autoreleasepool {
-        [VD_FW_G.gl_context flushBuffer];
-    }
+    [VD_FW_G.gl_context flushBuffer];
 
     if (VD_FW_G.curr_frame.flags & VD_FW__MAC_FLAGS_WAKE_COND_VAR) {
         pthread_cond_signal(&VD_FW_G.n_paint);
@@ -9106,6 +9120,11 @@ int main(int argc, char const *argv[])
                                                   O_CREAT,
                                                   0644,
                                                   0);
+
+    VD_FW_G.s_main_thread_window_closed = sem_open("/sm-fw-cmtwc",
+                                                   O_CREAT,
+                                                   0644,
+                                                   0);
     pthread_mutex_init(&VD_FW_G.m_paint, NULL);
     pthread_cond_init(&VD_FW_G.n_paint, NULL);
     pthread_create(&VD_FW_G.main_thread, NULL, vd_fw__macos__main, NULL);
@@ -9114,11 +9133,15 @@ int main(int argc, char const *argv[])
 
         sem_wait(VD_FW_G.s_main_thread_opened_me);
         vd_fw__mac_init(&VD_FW_G.c_init_info);
+
         sem_post(VD_FW_G.s_main_thread_window_ready);
 
         vd_fw__mac_runloop(1);
-    }
 
+        if (VD_FW_G.should_close) {
+            break;
+        }
+    }
     return 0;
 }
 #endif // !VD_FW_MACOS_NO_MAIN_OVERRIDE
@@ -9224,6 +9247,8 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
         [VD_FW_G.window setDelegate:delegate];
         [NSApp activateIgnoringOtherApps:YES];
     }
+    VD_FW_G.w = 640 * VD_FW_G.scale;
+    VD_FW_G.h = 480 * VD_FW_G.scale;
 
     VdFwGlVersion version = VD_FW_GL_VERSION_3_3;
     if (info && info->gl.version != 0) {
@@ -9431,6 +9456,10 @@ static void vd_fw__mac_runloop(int wait)
 
             if (!event_handled) {
                 [NSApp sendEvent: event];
+            }
+
+            if (VD_FW_G.should_close) {
+                break;
             }
         }
     }
