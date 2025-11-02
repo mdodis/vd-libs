@@ -62,15 +62,11 @@
  * - vd_fw_get_executable_dir() <-- statically allocated char * of executable directory
  * - vd_fw_get_last_key_pressed
  * - vd_fw_get_last_mouse_button_pressed
- * - MacOS: vd_fw_minimize()
  * - MacOS: vd_fw_maximize()
  * - MacOS: vd_fw_set_app_icon
  * - MacOS: vd_fw_set_fullscreen
  * - When window not focused, or minimize, delay drawing?
  * - Allow to request specific framerate?
- * - MacOS: There's no way to draw while resizing without changing the api?
- * - MacOS APIs can't be used on another thread other than main thread :/
- *   so, just initialize display link and wait on condition variable + mutex when drawing while resizing
  * - On borderless, push mouse event right as we lose focus to a value outside of the window space
  */
 #ifndef VD_FW_H
@@ -8393,6 +8389,7 @@ typedef enum {
     VD_FW__MAC_MESSAGE_MOUSEBTN,
     VD_FW__MAC_MESSAGE_SCROLL,
     VD_FW__MAC_MESSAGE_KEY,
+    VD_FW__MAC_MESSAGE_MINIMIZED,
 } VdFw__MacMessageType;
 
 typedef struct {
@@ -8416,6 +8413,10 @@ typedef struct {
             int down;
             int key;
         } key;
+
+        struct {
+            int on;
+        } minimized;
     } dat;
 } VdFw__MacMessage;
 
@@ -8436,12 +8437,6 @@ typedef struct {
     NSPoint                     drag_start_location;
     NSPoint                     drag_start_pos_window_coords;
     BOOL                        dragging;
-    BOOL                        draw_decorations;
-    int                         ncrect_count;
-    NSRect                      ncrects[VD_FW_NCRECTS_MAX];
-    NSRect                      nccaption;
-    int                         nccaption_set;
-    BOOL                        mouse_is_locked;
     NSPoint                     last_mouse;
     float                       mouse_delta[2];
     unsigned char               curr_key_states[VD_FW_KEY_MAX];
@@ -8453,9 +8448,14 @@ typedef struct {
 
 /* ----RENDER THREAD ONLY-------------------------------------------------------------------------------------------- */
     VdFwI32                     mouse[2];
+    VdFwI32                     prev_mouse_state;
     VdFwI32                     mouse_state;
+    BOOL                        mouse_is_locked;
+    BOOL                        is_minimized;
+    BOOL                        was_minimized_changed;
 
 /* ----WINDOW THREAD ONLY-------------------------------------------------------------------------------------------- */
+    BOOL                        draw_decorations;
     VdFwInitInfo                c_init_info;
     VdFwWindow                  *window;
     int                         context_needs_update;
@@ -8468,6 +8468,10 @@ typedef struct {
     VdFw__MacMessage            msgbuf[VD_FW_MAC_MESSAGE_BUFFER_SIZE];
     volatile VdFwI32            msgbuf_r;
     volatile VdFwI32            msgbuf_w;
+    NSRect                      nccaption;
+    int                         nccaption_set;
+    int                         ncrect_count;
+    NSRect                      ncrects[VD_FW_NCRECTS_MAX];
 
 /* ----MAIN - RENDER THREAD SYNC------------------------------------------------------------------------------------- */
     pthread_t                   main_thread;
@@ -8799,6 +8803,23 @@ static int Update_Context = 0;
 - (void)windowDidResignKey:(NSNotification *)notification {
     VD_FW_G.focus_changed = 1;
     VD_FW_G.focused = 0;
+}
+
+- (void)windowDidMiniaturize:(NSNotification *)notification
+{
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_MINIMIZED;
+    msg.dat.minimized.on = 1;
+    vd_fw__msgbuf_w(&msg); 
+}
+
+- (void)windowDidDeminiaturize:(NSNotification *)notification
+{
+
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_MINIMIZED;
+    msg.dat.minimized.on = 0;
+    vd_fw__msgbuf_w(&msg); 
 }
 
 - (void)windowWillClose:(NSNotification*)notification {
@@ -9180,6 +9201,11 @@ VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
     return result;
 }
 
+VD_FW_API int vd_fw_get_mouse_clicked(int button)
+{
+    return !(VD_FW_G.prev_mouse_state & button) && (VD_FW_G.mouse_state & button);
+}
+
 VD_FW_API void vd_fw_set_mouse_locked(int locked)
 {
     if (VD_FW_G.mouse_is_locked == locked) {
@@ -9234,7 +9260,9 @@ VD_FW_API int vd_fw_running(void)
     VD_FW_G.mouse_delta[1] = 0.f;
 
     VD_FW_G.focus_changed = 0;
+    VD_FW_G.was_minimized_changed = 0;
 
+    VD_FW_G.prev_mouse_state = VD_FW_G.mouse_state;
     for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
         VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
     }
@@ -9267,6 +9295,11 @@ VD_FW_API int vd_fw_running(void)
 
             case VD_FW__MAC_MESSAGE_KEY: {
                 VD_FW_G.curr_key_states[msg.dat.key.key] = msg.dat.key.down;
+            } break;
+
+            case VD_FW__MAC_MESSAGE_MINIMIZED: {
+                VD_FW_G.is_minimized = msg.dat.minimized.on;
+                VD_FW_G.was_minimized_changed = 1;
             } break;
 
             default: break;
@@ -9316,6 +9349,24 @@ VD_FW_API int vd_fw_get_size(int *w, int *h)
     *w = VD_FW_G.curr_frame.w;
     *h = VD_FW_G.curr_frame.h;
     return VD_FW_G.curr_frame.flags & VD_FW__MAC_FLAGS_SIZE_CHANGED;
+}
+
+VD_FW_API int vd_fw_get_minimized(int *minimized)
+{
+    if (minimized) {
+        *minimized = VD_FW_G.is_minimized;
+    }
+    return VD_FW_G.was_minimized_changed;
+}
+
+VD_FW_API void vd_fw_minimize(void)
+{
+    NSWindow *window = VD_FW_G.window;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (![window isMiniaturized]) {
+            [window miniaturize:nil];
+        }
+    });
 }
 
 VD_FW_API void vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4])
