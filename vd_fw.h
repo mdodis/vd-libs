@@ -8796,32 +8796,8 @@ static int Update_Context = 0;
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
-
-    [[NSNotificationCenter defaultCenter] addObserver:Vd_Fw_Delegate
-                     selector:@selector(_surfaceNeedsUpdate:)
-                     name:NSViewGlobalFrameDidChangeNotification
-                     object:Vd_Fw_Delegate];
 }
 
-- (void)_surfaceNeedsUpdate {
-    // @todo(mdodis): handle sync!
-    // pthread_mutex_lock(&VD_FW_G.m_paint);
-
-    // if ((VD_FW_G.w != VD_FW_G.next_frame.w) || (VD_FW_G.h != VD_FW_G.next_frame.h)) {
-    //     VD_FW_G.next_frame.w = VD_FW_G.w;
-    //     VD_FW_G.next_frame.h = VD_FW_G.h;
-    //     VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_SIZE_CHANGED;
-    //     [VD_FW_G.gl_context update];
-    // }
-
-    // VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_WAKE_COND_VAR;
-
-    // pthread_cond_signal(&VD_FW_G.n_paint);
-    // pthread_cond_wait(&VD_FW_G.n_paint, &VD_FW_G.m_paint);
-    // pthread_mutex_unlock(&VD_FW_G.m_paint);
-
-
-}
 - (void)windowDidResize:(NSNotification *)notification {
     NSRect rect = [[VD_FW_G.window contentView] frame];
     VD_FW_G.w = (int)rect.size.width * VD_FW_G.scale;
@@ -8872,6 +8848,40 @@ static int Update_Context = 0;
     if ([VD_FW_G.window isMiniaturized]) {
         [VD_FW_G.window deminiaturize:nil];
     }
+}
+
+
+@end
+
+@implementation VdFwWindow
+
+- (BOOL)_usesCustomDrawing {
+    return YES;
+}
+
+@end
+
+@implementation VdFwContentView
+
+- (void)drawRect:(NSRect)dirtyRect {
+
+    NSRect rect = [[VD_FW_G.window contentView] frame];
+    VD_FW_G.w = (int)rect.size.width * VD_FW_G.scale;
+    VD_FW_G.h = (int)rect.size.height * VD_FW_G.scale;
+
+    pthread_mutex_lock(&VD_FW_G.m_paint);
+
+    if ((VD_FW_G.w != VD_FW_G.next_frame.w) || (VD_FW_G.h != VD_FW_G.next_frame.h)) {
+        VD_FW_G.next_frame.w = VD_FW_G.w;
+        VD_FW_G.next_frame.h = VD_FW_G.h;
+        VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_SIZE_CHANGED;
+    }
+
+    VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_WAKE_COND_VAR;
+
+    // pthread_cond_signal(&VD_FW_G.n_paint);
+    // pthread_cond_wait(&VD_FW_G.n_paint, &VD_FW_G.m_paint);
+    pthread_mutex_unlock(&VD_FW_G.m_paint);
 }
 
 - (void)mouseDown:(NSEvent *)evt
@@ -9001,43 +9011,6 @@ static int Update_Context = 0;
 }
 
 
-@end
-
-@implementation VdFwWindow
-
-- (BOOL)_usesCustomDrawing {
-    return YES;
-}
-
-@end
-
-@implementation VdFwContentView
-
-- (void)drawRect:(NSRect)dirtyRect {
-
-    NSRect rect = [[VD_FW_G.window contentView] frame];
-    VD_FW_G.w = (int)rect.size.width * VD_FW_G.scale;
-    VD_FW_G.h = (int)rect.size.height * VD_FW_G.scale;
-
-    pthread_mutex_lock(&VD_FW_G.m_paint);
-
-    if ((VD_FW_G.w != VD_FW_G.next_frame.w) || (VD_FW_G.h != VD_FW_G.next_frame.h)) {
-        VD_FW_G.next_frame.w = VD_FW_G.w;
-        VD_FW_G.next_frame.h = VD_FW_G.h;
-        VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_SIZE_CHANGED;
-    }
-
-    // CGLContextObj ctx = CGLGetCurrentContext();
-    // CGLLockContext(ctx);
-    // [VD_FW_G.gl_context update];
-    // CGLUnlockContext(ctx);
-
-    // VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_WAKE_COND_VAR;
-
-    // pthread_cond_signal(&VD_FW_G.n_paint);
-    // pthread_cond_wait(&VD_FW_G.n_paint, &VD_FW_G.m_paint);
-    pthread_mutex_unlock(&VD_FW_G.m_paint);
-}
 
 //     if (event.type == NSEventTypeKeyDown) {
 //         // swallow key events you don't want to beep
@@ -9121,6 +9094,7 @@ VD_FW_API int vd_fw_get_key_down(int key)
 
 VD_FW_API int vd_fw_running(void)
 {
+    printf("closed?\n");
     if (sem_trywait(VD_FW_G.s_main_thread_window_closed) == 0) {
         return 0;
     }
@@ -9138,6 +9112,7 @@ VD_FW_API int vd_fw_running(void)
         VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
     }
 
+    printf("msgbuf h\n");
     VdFw__MacMessage msg;
     while (vd_fw__msgbuf_r(&msg)) {
         switch (msg.type) {
@@ -9158,6 +9133,7 @@ VD_FW_API int vd_fw_running(void)
             default: break;
         }
     }
+    printf("msgbuf e\n");
 
     pthread_mutex_lock(&VD_FW_G.m_paint);
     VD_FW_G.curr_frame = VD_FW_G.next_frame;
@@ -9169,7 +9145,16 @@ VD_FW_API int vd_fw_running(void)
 
 VD_FW_API int vd_fw_swap_buffers(void)
 {
+    printf("flush\n");
 
+    VD_FW_G.last_time = mach_absolute_time();
+    [VD_FW_G.gl_context flushBuffer];
+
+    // if (VD_FW_G.curr_frame.flags & VD_FW__MAC_FLAGS_WAKE_COND_VAR) {
+    //     pthread_cond_signal(&VD_FW_G.n_paint);
+    // }
+
+    printf("update\n");
     if (sem_trywait(VD_FW_G.s_main_thread_context_needs_update) == 0) {
         @autoreleasepool {
             // [Vd_Fw_Delegate performSelectorOnMainThread:@selector(updateGLContext)
@@ -9182,16 +9167,6 @@ VD_FW_API int vd_fw_swap_buffers(void)
         }
     }
 
-    VD_FW_G.last_time = mach_absolute_time();
-
-    [VD_FW_G.gl_context flushBuffer];
-
-    if (VD_FW_G.curr_frame.flags & VD_FW__MAC_FLAGS_WAKE_COND_VAR) {
-        pthread_cond_signal(&VD_FW_G.n_paint);
-    }
-
-    CGLContextObj ctx = CGLGetCurrentContext();
-    // CGLUnlockContext(ctx);
     return 1;
 }
 
@@ -9334,20 +9309,24 @@ int main(int argc, char const *argv[])
     VD_FW_G.argc = argc;
     VD_FW_G.argv = argv;
 
+    sem_unlink("/sm-fw-cmtom");
     VD_FW_G.s_main_thread_opened_me = sem_open("/sm-fw-cmtom",
                                                O_CREAT,
                                                0644,
                                                0);
+    sem_unlink("/sm-fw-cmtwr");
     VD_FW_G.s_main_thread_window_ready = sem_open("/sm-fw-cmtwr",
                                                   O_CREAT,
                                                   0644,
                                                   0);
 
+    sem_unlink("/sm-fw-cmtwc");
     VD_FW_G.s_main_thread_window_closed = sem_open("/sm-fw-cmtwc",
                                                    O_CREAT,
                                                    0644,
                                                    0);
 
+    sem_unlink("/sm-fw-cmtcnu");
     VD_FW_G.s_main_thread_context_needs_update = sem_open("/sm-fw-cmtcnu",
                                                           O_CREAT,
                                                           0644,
@@ -9494,7 +9473,9 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
 
         [VD_FW_G.gl_context setView: fw_view];
 
+
         [VD_FW_G.window setDelegate:delegate];
+        [VD_FW_G.window makeFirstResponder: fw_view];
         [VD_FW_G.window setAcceptsMouseMovedEvents: YES];
         [NSApp activateIgnoringOtherApps:YES];
     }
