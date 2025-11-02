@@ -8392,6 +8392,7 @@ typedef enum {
     VD_FW__MAC_MESSAGE_MOUSEMOVE,
     VD_FW__MAC_MESSAGE_MOUSEBTN,
     VD_FW__MAC_MESSAGE_SCROLL,
+    VD_FW__MAC_MESSAGE_KEY,
 } VdFw__MacMessageType;
 
 typedef struct {
@@ -8399,6 +8400,7 @@ typedef struct {
     union {
         struct {
             VdFwI32 mx, my;
+            float   dx, dy;
         } mousemove;
 
         struct {
@@ -8409,6 +8411,11 @@ typedef struct {
         struct {
             float sx, sy;
         } scroll;
+
+        struct {
+            int down;
+            int key;
+        } key;
     } dat;
 } VdFw__MacMessage;
 
@@ -8436,7 +8443,7 @@ typedef struct {
     int                         nccaption_set;
     BOOL                        mouse_is_locked;
     NSPoint                     last_mouse;
-    NSPoint                     mouse_delta;
+    float                       mouse_delta[2];
     unsigned char               curr_key_states[VD_FW_KEY_MAX];
     unsigned char               prev_key_states[VD_FW_KEY_MAX];
     int                         focus_changed;
@@ -8800,6 +8807,7 @@ static int Update_Context = 0;
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
+
 }
 
 - (void)windowDidResize:(NSNotification *)notification {
@@ -8848,6 +8856,13 @@ static int Update_Context = 0;
 }
 
 - (void)applicationDidBecomeActive:(NSNotification *)notification {
+
+    // NSWindow *window = [NSApp mainWindow];
+    // if (window && !window.isKeyWindow) {
+    //     printf("made window key\n");
+    //     [window makeKeyAndOrderFront:nil];
+    // } 
+
     // Restore if minimized
     if ([VD_FW_G.window isMiniaturized]) {
         [VD_FW_G.window deminiaturize:nil];
@@ -8858,7 +8873,6 @@ static int Update_Context = 0;
 @end
 
 @implementation VdFwWindow
-
 - (BOOL)_usesCustomDrawing {
     return YES;
 }
@@ -8886,6 +8900,69 @@ static int Update_Context = 0;
     // pthread_cond_signal(&VD_FW_G.n_paint);
     // pthread_cond_wait(&VD_FW_G.n_paint, &VD_FW_G.m_paint);
     pthread_mutex_unlock(&VD_FW_G.m_paint);
+}
+
+- (void)keyUp:(NSEvent*)evt
+{
+    unsigned short keycode = [evt keyCode];
+    VdFwKey key = vd_fw__translate_mac_keycode(keycode);
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_KEY;
+    msg.dat.key.down = 0;
+    msg.dat.key.key = key;
+    vd_fw__msgbuf_w(&msg); 
+}
+
+- (void)flagsChanged:(NSEvent*)evt
+{
+    NSEventModifierFlags flags = [evt modifierFlags];
+    unsigned short keycode = [evt keyCode];
+
+    unsigned char shift_down = (flags & NSEventModifierFlagShift) ? 1 : 0;
+    unsigned char option_down = (flags & NSEventModifierFlagOption) ? 1 : 0;
+    unsigned char control_down = (flags & NSEventModifierFlagControl) ? 1 : 0;
+
+    switch (keycode) {
+        case 60:
+        case 56: {
+            VdFw__MacMessage msg;
+            msg.type = VD_FW__MAC_MESSAGE_KEY;
+            msg.dat.key.down = shift_down;
+            msg.dat.key.key = VD_FW_KEY_LSHIFT;
+            vd_fw__msgbuf_w(&msg); 
+
+            msg.type = VD_FW__MAC_MESSAGE_KEY;
+            msg.dat.key.down = shift_down;
+            msg.dat.key.key = VD_FW_KEY_RSHIFT;
+            vd_fw__msgbuf_w(&msg); 
+        } break;
+        case 59: {
+            VdFw__MacMessage msg;
+            msg.type = VD_FW__MAC_MESSAGE_KEY;
+            msg.dat.key.down = control_down;
+            msg.dat.key.key = VD_FW_KEY_LCONTROL;
+            vd_fw__msgbuf_w(&msg); 
+        } break;
+        case 61: {
+            VdFw__MacMessage msg;
+            msg.type = VD_FW__MAC_MESSAGE_KEY;
+            msg.dat.key.down = option_down;
+            msg.dat.key.key = VD_FW_KEY_RCONTROL;
+            vd_fw__msgbuf_w(&msg); 
+        } break;
+        default: break;
+    }
+}
+
+- (void)keyDown:(NSEvent*)evt
+{
+    unsigned short keycode = [evt keyCode];
+    VdFwKey key = vd_fw__translate_mac_keycode(keycode);
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_KEY;
+    msg.dat.key.down = 1;
+    msg.dat.key.key = key;
+    vd_fw__msgbuf_w(&msg); 
 }
 
 - (void)mouseDown:(NSEvent *)evt
@@ -8991,17 +9068,37 @@ static int Update_Context = 0;
 
     NSPoint pixel_point = vd_fw__mac_mouse_cocoa_to_conventional(loc);
 
-    NSPoint delta = NSMakePoint(pixel_point.x - VD_FW_G.last_mouse.x,
-                                pixel_point.y - VD_FW_G.last_mouse.y);
-    VD_FW_G.mouse_delta.x += delta.x;
-    VD_FW_G.mouse_delta.y += delta.y;
+    float delta[2] = {
+        [evt deltaX],
+        [evt deltaY],
+       // pixel_point.x - VD_FW_G.last_mouse.x,
+       // pixel_point.y - VD_FW_G.last_mouse.y,
+    };
+
     VD_FW_G.last_mouse = pixel_point;
+    // if (VD_FW_G.mouse_is_locked) {
+    //     NSRect cvf = [VD_FW_G.window frame];
+
+    //     NSPoint screen_loc = [NSEvent mouseLocation];
+
+    //     CGFloat w = NSMaxX(cvf) - NSMinX(cvf);
+    //     CGFloat h = NSMaxY(cvf) - NSMinY(cvf);
+
+    //     if (!NSPointInRect(screen_loc, cvf)) {
+    //         CGWarpMouseCursorPosition(CGPointMake(NSMinX(cvf) + w * .5f, NSMinY(cvf) + h * .5f));
+    //         VD_FW_G.last_mouse.x = w * .5f;
+    //         VD_FW_G.last_mouse.y = h * .5f;
+    //     }
+    // }
 
     VdFw__MacMessage msg;
     msg.type = VD_FW__MAC_MESSAGE_MOUSEMOVE;
     msg.dat.mousemove.mx = pixel_point.x;
     msg.dat.mousemove.my = pixel_point.y;
+    msg.dat.mousemove.dx = delta[0];
+    msg.dat.mousemove.dy = delta[1];
     vd_fw__msgbuf_w(&msg); 
+
 }
 
 - (void)mouseDragged:(NSEvent *)evt
@@ -9071,8 +9168,8 @@ VD_FW_API unsigned long long vd_fw_delta_ns(void)
 
 VD_FW_API void vd_fw_get_mouse_delta(float *dx, float *dy)
 {
-    if (dx) *dx = VD_FW_G.mouse_delta.x; 
-    if (dy) *dy = VD_FW_G.mouse_delta.y;
+    if (dx) *dx = VD_FW_G.mouse_delta[0]; 
+    if (dy) *dy = VD_FW_G.mouse_delta[1];
 }
 
 VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
@@ -9093,8 +9190,11 @@ VD_FW_API void vd_fw_set_mouse_locked(int locked)
 
     if (locked) {
         CGDisplayHideCursor(kCGDirectMainDisplay);
+        CGAssociateMouseAndMouseCursorPosition(false);
+
     } else {
         CGDisplayShowCursor(kCGDirectMainDisplay);
+        CGAssociateMouseAndMouseCursorPosition(true);
     }
 }
 
@@ -9130,8 +9230,8 @@ VD_FW_API int vd_fw_running(void)
     VD_FW_G.wheel[0] = 0.f;
     VD_FW_G.wheel[1] = 0.f;
 
-    VD_FW_G.mouse_delta.x = 0.f;
-    VD_FW_G.mouse_delta.y = 0.f;
+    VD_FW_G.mouse_delta[0] = 0.f;
+    VD_FW_G.mouse_delta[1] = 0.f;
 
     VD_FW_G.focus_changed = 0;
 
@@ -9143,6 +9243,10 @@ VD_FW_API int vd_fw_running(void)
     while (vd_fw__msgbuf_r(&msg)) {
         switch (msg.type) {
             case VD_FW__MAC_MESSAGE_MOUSEMOVE: {
+
+                VD_FW_G.mouse_delta[0] += msg.dat.mousemove.dx * 0.2f;
+                VD_FW_G.mouse_delta[1] += msg.dat.mousemove.dy * 0.2f;
+
                 VD_FW_G.mouse[0] = msg.dat.mousemove.mx;
                 VD_FW_G.mouse[1] = msg.dat.mousemove.my;
             } break;
@@ -9159,6 +9263,10 @@ VD_FW_API int vd_fw_running(void)
             case VD_FW__MAC_MESSAGE_SCROLL: {
                 VD_FW_G.wheel[0] += msg.dat.scroll.sx;
                 VD_FW_G.wheel[1] += msg.dat.scroll.sy;
+            } break;
+
+            case VD_FW__MAC_MESSAGE_KEY: {
+                VD_FW_G.curr_key_states[msg.dat.key.key] = msg.dat.key.down;
             } break;
 
             default: break;
@@ -9445,8 +9553,8 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
         }
 
         [VD_FW_G.window                       setTitle: [NSString stringWithUTF8String: "FW Window"]];
-        [VD_FW_G.window           makeKeyAndOrderFront: VD_FW_G.window];
         [VD_FW_G.window                   setHasShadow: YES];
+        [VD_FW_G.window           makeKeyAndOrderFront: nil];
         // [VD_FW_G.window setAllowsConcurrentViewDrawing: YES];
 
 
@@ -9511,6 +9619,10 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
 
     mach_timebase_info(&VD_FW_G.time_base);
     VD_FW_G.last_time = mach_absolute_time();
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [VD_FW_G.window makeKeyAndOrderFront:nil];
+    });
 }
 
 static void vd_fw__mac_init_gl(VdFwInitInfo *info)
