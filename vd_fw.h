@@ -8466,6 +8466,8 @@ typedef struct {
     sem_t                       *s_main_thread_window_ready;
     sem_t                       *s_main_thread_window_closed;
     sem_t                       *s_main_thread_context_needs_update;
+    BOOL                        f_context_just_updated;
+    int                         context_update_requested;
 } VdFw__MacOsInternalData;
 
 static int vd_fw__msgbuf_r(VdFw__MacMessage *message);
@@ -8775,7 +8777,6 @@ static int Update_Context = 0;
 
 @implementation VdFwWindowDelegate
 - (void)updateGLContext {
-    printf("Update context\n");
     // [VD_FW_G.gl_context update];
 }
 
@@ -8803,8 +8804,6 @@ static int Update_Context = 0;
 }
 
 - (void)_surfaceNeedsUpdate {
-
-    printf("SURFUP\n");
     // @todo(mdodis): handle sync!
     // pthread_mutex_lock(&VD_FW_G.m_paint);
 
@@ -8828,7 +8827,12 @@ static int Update_Context = 0;
     VD_FW_G.w = (int)rect.size.width * VD_FW_G.scale;
     VD_FW_G.h = (int)rect.size.height * VD_FW_G.scale;
 
-    sem_post(VD_FW_G.s_main_thread_context_needs_update);
+    if (!VD_FW_G.context_update_requested) {
+        sem_post(VD_FW_G.s_main_thread_context_needs_update);
+        VD_FW_G.context_update_requested = 1;
+    }
+
+
     // CGLContextObj ctx = CGLGetCurrentContext();
     // CGLLockContext(ctx);
     // [VD_FW_G.gl_context update];
@@ -9159,10 +9163,6 @@ VD_FW_API int vd_fw_running(void)
     VD_FW_G.curr_frame = VD_FW_G.next_frame;
     VD_FW_G.next_frame.flags = 0;
     pthread_mutex_unlock(&VD_FW_G.m_paint);
-    [VD_FW_G.gl_context makeCurrentContext];
-
-    CGLContextObj ctx = CGLGetCurrentContext();
-    // CGLLockContext(ctx);
 
     return !VD_FW_G.should_close;
 }
@@ -9170,23 +9170,24 @@ VD_FW_API int vd_fw_running(void)
 VD_FW_API int vd_fw_swap_buffers(void)
 {
 
-    VD_FW_G.last_time = mach_absolute_time();
-    [VD_FW_G.gl_context flushBuffer];
-
-    if (VD_FW_G.curr_frame.flags & VD_FW__MAC_FLAGS_WAKE_COND_VAR) {
-        pthread_cond_signal(&VD_FW_G.n_paint);
-    }
-
     if (sem_trywait(VD_FW_G.s_main_thread_context_needs_update) == 0) {
         @autoreleasepool {
-            printf("Update\n");
             // [Vd_Fw_Delegate performSelectorOnMainThread:@selector(updateGLContext)
             //                                      withObject:nil
             //                                   waitUntilDone:YES];
             dispatch_sync(dispatch_get_main_queue(), ^(void){
                 [VD_FW_G.gl_context update];
+                VD_FW_G.context_update_requested = 0;
             });
         }
+    }
+
+    VD_FW_G.last_time = mach_absolute_time();
+
+    [VD_FW_G.gl_context flushBuffer];
+
+    if (VD_FW_G.curr_frame.flags & VD_FW__MAC_FLAGS_WAKE_COND_VAR) {
+        pthread_cond_signal(&VD_FW_G.n_paint);
     }
 
     CGLContextObj ctx = CGLGetCurrentContext();
