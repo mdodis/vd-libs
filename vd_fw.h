@@ -8391,6 +8391,7 @@ typedef enum {
     VD_FW__MAC_MESSAGE_INVALID = 0,
     VD_FW__MAC_MESSAGE_MOUSEMOVE,
     VD_FW__MAC_MESSAGE_MOUSEBTN,
+    VD_FW__MAC_MESSAGE_SCROLL,
 } VdFw__MacMessageType;
 
 typedef struct {
@@ -8404,6 +8405,10 @@ typedef struct {
             int down;
             int mask; 
         } mousebtn;
+
+        struct {
+            float sx, sy;
+        } scroll;
     } dat;
 } VdFw__MacMessage;
 
@@ -8466,7 +8471,6 @@ typedef struct {
     sem_t                       *s_main_thread_window_ready;
     sem_t                       *s_main_thread_window_closed;
     sem_t                       *s_main_thread_context_needs_update;
-    BOOL                        f_context_just_updated;
     int                         context_update_requested;
 } VdFw__MacOsInternalData;
 
@@ -8929,12 +8933,32 @@ static int Update_Context = 0;
 
 - (void)rightMouseDown:(NSEvent *)evt
 {
-
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
+    msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN;
+    msg.dat.mousebtn.down = 1;
+    vd_fw__msgbuf_w(&msg); 
 }
 
 - (void)otherMouseDown:(NSEvent *)evt
 {
 
+}
+
+- (void)scrollWheel:(NSEvent *)evt
+{
+
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_SCROLL;
+
+    if ([evt hasPreciseScrollingDeltas]) {
+        msg.dat.scroll.sx = [evt scrollingDeltaX] * 0.05f;
+        msg.dat.scroll.sy = [evt scrollingDeltaY] * 0.05f;
+    } else {
+        msg.dat.scroll.sx = [evt deltaX];
+        msg.dat.scroll.sy = [evt deltaY];
+    }
+    vd_fw__msgbuf_w(&msg); 
 }
 
 - (void)mouseUp:(NSEvent *)evt
@@ -8949,7 +8973,11 @@ static int Update_Context = 0;
 
 - (void)rightMouseUp:(NSEvent *)evt
 {
-
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
+    msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN;
+    msg.dat.mousebtn.down = 0;
+    vd_fw__msgbuf_w(&msg); 
 }
 
 - (void)otherMouseUp:(NSEvent *)evt
@@ -9094,7 +9122,6 @@ VD_FW_API int vd_fw_get_key_down(int key)
 
 VD_FW_API int vd_fw_running(void)
 {
-    printf("closed?\n");
     if (sem_trywait(VD_FW_G.s_main_thread_window_closed) == 0) {
         return 0;
     }
@@ -9112,7 +9139,6 @@ VD_FW_API int vd_fw_running(void)
         VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
     }
 
-    printf("msgbuf h\n");
     VdFw__MacMessage msg;
     while (vd_fw__msgbuf_r(&msg)) {
         switch (msg.type) {
@@ -9130,10 +9156,14 @@ VD_FW_API int vd_fw_running(void)
                 }
             } break;
 
+            case VD_FW__MAC_MESSAGE_SCROLL: {
+                VD_FW_G.wheel[0] += msg.dat.scroll.sx;
+                VD_FW_G.wheel[1] += msg.dat.scroll.sy;
+            } break;
+
             default: break;
         }
     }
-    printf("msgbuf e\n");
 
     pthread_mutex_lock(&VD_FW_G.m_paint);
     VD_FW_G.curr_frame = VD_FW_G.next_frame;
@@ -9145,8 +9175,6 @@ VD_FW_API int vd_fw_running(void)
 
 VD_FW_API int vd_fw_swap_buffers(void)
 {
-    printf("flush\n");
-
     VD_FW_G.last_time = mach_absolute_time();
     [VD_FW_G.gl_context flushBuffer];
 
@@ -9154,7 +9182,6 @@ VD_FW_API int vd_fw_swap_buffers(void)
     //     pthread_cond_signal(&VD_FW_G.n_paint);
     // }
 
-    printf("update\n");
     if (sem_trywait(VD_FW_G.s_main_thread_context_needs_update) == 0) {
         @autoreleasepool {
             // [Vd_Fw_Delegate performSelectorOnMainThread:@selector(updateGLContext)
@@ -9418,7 +9445,7 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
         }
 
         [VD_FW_G.window                       setTitle: [NSString stringWithUTF8String: "FW Window"]];
-        [VD_FW_G.window           makeKeyAndOrderFront: nil];
+        [VD_FW_G.window           makeKeyAndOrderFront: VD_FW_G.window];
         [VD_FW_G.window                   setHasShadow: YES];
         // [VD_FW_G.window setAllowsConcurrentViewDrawing: YES];
 
@@ -9467,7 +9494,6 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
         NSView *fw_view = [[VdFwContentView alloc] initWithFrame:wframe];
         VD_FW_G.content_view = (VdFwContentView*)fw_view;
         [VD_FW_G.window setContentView: fw_view];
-        // NSView *content_view = [VD_FW_G.window contentView];
         [fw_view setWantsLayer: YES];
         // [[fw_view layer] setDrawsAsynchronously: YES];
 
