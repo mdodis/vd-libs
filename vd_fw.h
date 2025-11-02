@@ -8374,6 +8374,7 @@ int wWinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPWSTR cmdline, int n
 #define VD_FW_G Vd_Fw_Globals
 
 @interface VdFwWindowDelegate : NSObject<NSApplicationDelegate, NSWindowDelegate>
+- (void)updateGLContext;
 @end
 @interface VdFwContentView : NSView
 @end
@@ -8438,13 +8439,14 @@ typedef struct {
     int                         argc;
     const char                  **argv;
 
-/* ----WINDOW THREAD ONLY-------------------------------------------------------------------------------------------- */
+/* ----RENDER THREAD ONLY-------------------------------------------------------------------------------------------- */
     VdFwI32                     mouse[2];
     VdFwI32                     mouse_state;
 
 /* ----WINDOW THREAD ONLY-------------------------------------------------------------------------------------------- */
     VdFwInitInfo                c_init_info;
     VdFwWindow                  *window;
+    int                         context_needs_update;
 
 /* ----MAIN - RENDER THREAD DATA------------------------------------------------------------------------------------- */
     int                         w, h;
@@ -8463,6 +8465,7 @@ typedef struct {
     sem_t                       *s_main_thread_opened_me;
     sem_t                       *s_main_thread_window_ready;
     sem_t                       *s_main_thread_window_closed;
+    sem_t                       *s_main_thread_context_needs_update;
 } VdFw__MacOsInternalData;
 
 static int vd_fw__msgbuf_r(VdFw__MacMessage *message);
@@ -8754,11 +8757,27 @@ static VdFwKey vd_fw__translate_mac_keycode(unsigned short keycode)
     }
 }
 
+static NSPoint vd_fw__mac_mouse_cocoa_to_conventional(NSPoint loc)
+{
+    NSView *cv = [VD_FW_G.window contentView];
+    NSRect cvf = [cv frame];
+    NSPoint loc_top_left_origin = NSMakePoint(loc.x, cvf.size.height - loc.y);
+
+    NSPoint result = NSMakePoint(
+        loc_top_left_origin.x * VD_FW_G.scale,
+        loc_top_left_origin.y * VD_FW_G.scale);
+
+    return result;
+}
 
 static VdFwWindowDelegate *Vd_Fw_Delegate;
+static int Update_Context = 0;
 
 @implementation VdFwWindowDelegate
-    NSPoint initialLocation;
+- (void)updateGLContext {
+    printf("Update context\n");
+    // [VD_FW_G.gl_context update];
+}
 
 - (void)windowDidBecomeKey:(NSNotification *)notification {
     VD_FW_G.focus_changed = 1;
@@ -8776,13 +8795,44 @@ static VdFwWindowDelegate *Vd_Fw_Delegate;
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
+
+    [[NSNotificationCenter defaultCenter] addObserver:Vd_Fw_Delegate
+                     selector:@selector(_surfaceNeedsUpdate:)
+                     name:NSViewGlobalFrameDidChangeNotification
+                     object:Vd_Fw_Delegate];
 }
 
-- (void)windowDidResize:(NSNotification *)notification {
+- (void)_surfaceNeedsUpdate {
 
+    printf("SURFUP\n");
+    // @todo(mdodis): handle sync!
+    // pthread_mutex_lock(&VD_FW_G.m_paint);
+
+    // if ((VD_FW_G.w != VD_FW_G.next_frame.w) || (VD_FW_G.h != VD_FW_G.next_frame.h)) {
+    //     VD_FW_G.next_frame.w = VD_FW_G.w;
+    //     VD_FW_G.next_frame.h = VD_FW_G.h;
+    //     VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_SIZE_CHANGED;
+    //     [VD_FW_G.gl_context update];
+    // }
+
+    // VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_WAKE_COND_VAR;
+
+    // pthread_cond_signal(&VD_FW_G.n_paint);
+    // pthread_cond_wait(&VD_FW_G.n_paint, &VD_FW_G.m_paint);
+    // pthread_mutex_unlock(&VD_FW_G.m_paint);
+
+
+}
+- (void)windowDidResize:(NSNotification *)notification {
     NSRect rect = [[VD_FW_G.window contentView] frame];
     VD_FW_G.w = (int)rect.size.width * VD_FW_G.scale;
     VD_FW_G.h = (int)rect.size.height * VD_FW_G.scale;
+
+    sem_post(VD_FW_G.s_main_thread_context_needs_update);
+    // CGLContextObj ctx = CGLGetCurrentContext();
+    // CGLLockContext(ctx);
+    // [VD_FW_G.gl_context update];
+    // CGLUnlockContext(ctx);
 
     // @note(mdodis): Apple States:
     // > Call this method whenever the receiver’s drawable object changes
@@ -8791,11 +8841,11 @@ static VdFwWindowDelegate *Vd_Fw_Delegate;
     // > for each thread’s context serially.
     //
     // So we wait to acquire paint lock here.
-    pthread_mutex_lock(&VD_FW_G.m_paint);
-    VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_REACQUIRE_CONTEXT;
-    [VD_FW_G.gl_context makeCurrentContext];
-    [VD_FW_G.gl_context update];
-    pthread_mutex_unlock(&VD_FW_G.m_paint);
+    // pthread_mutex_lock(&VD_FW_G.m_paint);
+    // VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_REACQUIRE_CONTEXT;
+    // [VD_FW_G.gl_context makeCurrentContext];
+    // [VD_FW_G.gl_context update];
+    // pthread_mutex_unlock(&VD_FW_G.m_paint);
 }
 - (BOOL)acceptsFirstResponder {
     return YES;
@@ -8819,6 +8869,134 @@ static VdFwWindowDelegate *Vd_Fw_Delegate;
         [VD_FW_G.window deminiaturize:nil];
     }
 }
+
+- (void)mouseDown:(NSEvent *)evt
+{
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
+    msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN;
+    msg.dat.mousebtn.down = 1;
+    vd_fw__msgbuf_w(&msg); 
+
+    NSPoint view_point = [evt locationInWindow];
+    NSPoint p = NSMakePoint(view_point.x, view_point.y);
+
+    p.x *= VD_FW_G.scale;
+    p.y *= VD_FW_G.scale;
+
+    int hit_drag_area = 0;
+    if (VD_FW_G.draw_decorations) {
+        return;
+    }
+
+    if (!VD_FW_G.nccaption_set) {
+        hit_drag_area = 1;
+    } else if (NSPointInRect(p, VD_FW_G.nccaption)) {
+        hit_drag_area = 1;
+        for (int ri = 0; ri < VD_FW_G.ncrect_count; ++ri) {
+            if (NSPointInRect(p, VD_FW_G.ncrects[ri])) {
+                hit_drag_area = 0;
+                break;
+            }
+        }
+    }
+
+    if (hit_drag_area) {
+        NSPoint loc = [VD_FW_G.window convertPointToScreen:view_point];
+        NSRect window_frame = [VD_FW_G.window frame];
+
+        loc.x -= window_frame.origin.x;
+        loc.y -= window_frame.origin.y;
+        VD_FW_G.drag_start_location = loc;
+        VD_FW_G.drag_start_pos_window_coords = view_point;
+        VD_FW_G.dragging = TRUE;
+    }
+}
+
+- (void)rightMouseDown:(NSEvent *)evt
+{
+
+}
+
+- (void)otherMouseDown:(NSEvent *)evt
+{
+
+}
+
+- (void)mouseUp:(NSEvent *)evt
+{
+    VD_FW_G.dragging = FALSE;
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
+    msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN;
+    msg.dat.mousebtn.down = 0;
+    vd_fw__msgbuf_w(&msg); 
+}
+
+- (void)rightMouseUp:(NSEvent *)evt
+{
+
+}
+
+- (void)otherMouseUp:(NSEvent *)evt
+{
+
+}
+
+- (void)mouseMoved:(NSEvent *)evt
+{
+    NSPoint loc = [evt locationInWindow];
+
+    NSPoint pixel_point = vd_fw__mac_mouse_cocoa_to_conventional(loc);
+
+    NSPoint delta = NSMakePoint(pixel_point.x - VD_FW_G.last_mouse.x,
+                                pixel_point.y - VD_FW_G.last_mouse.y);
+    VD_FW_G.mouse_delta.x += delta.x;
+    VD_FW_G.mouse_delta.y += delta.y;
+    VD_FW_G.last_mouse = pixel_point;
+
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_MOUSEMOVE;
+    msg.dat.mousemove.mx = pixel_point.x;
+    msg.dat.mousemove.my = pixel_point.y;
+    vd_fw__msgbuf_w(&msg); 
+}
+
+- (void)mouseDragged:(NSEvent *)evt
+{
+
+    NSPoint view_point = [evt locationInWindow];
+
+    NSPoint scaled_pos = vd_fw__mac_mouse_cocoa_to_conventional(view_point);
+
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_MOUSEMOVE;
+    msg.dat.mousemove.mx = scaled_pos.x;
+    msg.dat.mousemove.my = scaled_pos.y;
+    vd_fw__msgbuf_w(&msg); 
+
+    NSPoint p = [VD_FW_G.window convertPointToScreen: view_point];
+
+    if (VD_FW_G.dragging) {
+
+        NSPoint new_pos = NSMakePoint(p.x - VD_FW_G.drag_start_location.x,
+                                      p.y - VD_FW_G.drag_start_location.y);
+
+        [VD_FW_G.window setFrameOrigin: new_pos];
+    }
+}
+
+- (void)rightMouseDragged:(NSEvent *)evt
+{
+
+}
+
+- (void)otherMouseDragged:(NSEvent *)evt
+{
+
+}
+
+
 @end
 
 @implementation VdFwWindow
@@ -8832,6 +9010,11 @@ static VdFwWindowDelegate *Vd_Fw_Delegate;
 @implementation VdFwContentView
 
 - (void)drawRect:(NSRect)dirtyRect {
+
+    NSRect rect = [[VD_FW_G.window contentView] frame];
+    VD_FW_G.w = (int)rect.size.width * VD_FW_G.scale;
+    VD_FW_G.h = (int)rect.size.height * VD_FW_G.scale;
+
     pthread_mutex_lock(&VD_FW_G.m_paint);
 
     if ((VD_FW_G.w != VD_FW_G.next_frame.w) || (VD_FW_G.h != VD_FW_G.next_frame.h)) {
@@ -8840,10 +9023,15 @@ static VdFwWindowDelegate *Vd_Fw_Delegate;
         VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_SIZE_CHANGED;
     }
 
-    VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_WAKE_COND_VAR;
+    // CGLContextObj ctx = CGLGetCurrentContext();
+    // CGLLockContext(ctx);
+    // [VD_FW_G.gl_context update];
+    // CGLUnlockContext(ctx);
 
-    pthread_cond_signal(&VD_FW_G.n_paint);
-    pthread_cond_wait(&VD_FW_G.n_paint, &VD_FW_G.m_paint);
+    // VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_WAKE_COND_VAR;
+
+    // pthread_cond_signal(&VD_FW_G.n_paint);
+    // pthread_cond_wait(&VD_FW_G.n_paint, &VD_FW_G.m_paint);
     pthread_mutex_unlock(&VD_FW_G.m_paint);
 }
 
@@ -8970,11 +9158,11 @@ VD_FW_API int vd_fw_running(void)
     pthread_mutex_lock(&VD_FW_G.m_paint);
     VD_FW_G.curr_frame = VD_FW_G.next_frame;
     VD_FW_G.next_frame.flags = 0;
-    if (VD_FW_G.next_frame.flags & VD_FW__MAC_FLAGS_REACQUIRE_CONTEXT) {
-        [VD_FW_G.gl_context makeCurrentContext];
-        [VD_FW_G.gl_context update];
-    }
     pthread_mutex_unlock(&VD_FW_G.m_paint);
+    [VD_FW_G.gl_context makeCurrentContext];
+
+    CGLContextObj ctx = CGLGetCurrentContext();
+    // CGLLockContext(ctx);
 
     return !VD_FW_G.should_close;
 }
@@ -8988,6 +9176,21 @@ VD_FW_API int vd_fw_swap_buffers(void)
     if (VD_FW_G.curr_frame.flags & VD_FW__MAC_FLAGS_WAKE_COND_VAR) {
         pthread_cond_signal(&VD_FW_G.n_paint);
     }
+
+    if (sem_trywait(VD_FW_G.s_main_thread_context_needs_update) == 0) {
+        @autoreleasepool {
+            printf("Update\n");
+            // [Vd_Fw_Delegate performSelectorOnMainThread:@selector(updateGLContext)
+            //                                      withObject:nil
+            //                                   waitUntilDone:YES];
+            dispatch_sync(dispatch_get_main_queue(), ^(void){
+                [VD_FW_G.gl_context update];
+            });
+        }
+    }
+
+    CGLContextObj ctx = CGLGetCurrentContext();
+    // CGLUnlockContext(ctx);
     return 1;
 }
 
@@ -9143,6 +9346,11 @@ int main(int argc, char const *argv[])
                                                    O_CREAT,
                                                    0644,
                                                    0);
+
+    VD_FW_G.s_main_thread_context_needs_update = sem_open("/sm-fw-cmtcnu",
+                                                          O_CREAT,
+                                                          0644,
+                                                          0);
     pthread_mutex_init(&VD_FW_G.m_paint, NULL);
     pthread_mutex_init(&VD_FW_G.m_input, NULL);
     pthread_cond_init(&VD_FW_G.n_paint, NULL);
@@ -9176,6 +9384,11 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
     [NSApp setActivationPolicy: NSApplicationActivationPolicyRegular];
     [NSEvent setMouseCoalescingEnabled:NO];
 
+    VdFwGlVersion version = VD_FW_GL_VERSION_3_3;
+    if (info && info->gl.version != 0) {
+        version = info->gl.version;
+    }
+
     // @autoreleasepool
     {
         NSScreen *main_screen = [NSScreen mainScreen];
@@ -9208,10 +9421,6 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
                                               NSWindowStyleMaskMiniaturizable |
                                               NSWindowStyleMaskTitled |
                                               NSWindowStyleMaskResizable;
-        // if (!VD_FW_G.draw_decorations) {
-        //     window_style_mask              |= NSWindowStyleMaskFullSizeContentView;
-        // }
-
         VD_FW_G.window = [[VdFwWindow alloc] initWithContentRect: frame
                                                      styleMask: window_style_mask
                                                        backing: NSBackingStoreBuffered
@@ -9226,17 +9435,45 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
             VD_FW_G.window.styleMask |= NSWindowStyleMaskFullSizeContentView;
             [VD_FW_G.window setMovable:NO];
             [VD_FW_G.window setMovableByWindowBackground:NO];
-
         }
+
         [VD_FW_G.window                       setTitle: [NSString stringWithUTF8String: "FW Window"]];
         [VD_FW_G.window           makeKeyAndOrderFront: nil];
         [VD_FW_G.window                   setHasShadow: YES];
-        [VD_FW_G.window setAllowsConcurrentViewDrawing: YES];
+        // [VD_FW_G.window setAllowsConcurrentViewDrawing: YES];
+
+
+        NSOpenGLPixelFormatAttribute nsversion = 0;
+
+        switch (version) {
+            default:
+            case VD_FW_GL_VERSION_BASIC: nsversion = NSOpenGLProfileVersionLegacy; break;
+
+            case VD_FW_GL_VERSION_1_0: nsversion = NSOpenGLProfileVersionLegacy; break;
+            case VD_FW_GL_VERSION_1_1: nsversion = NSOpenGLProfileVersionLegacy; break;
+            case VD_FW_GL_VERSION_1_2: nsversion = NSOpenGLProfileVersionLegacy; break;
+            case VD_FW_GL_VERSION_1_3: nsversion = NSOpenGLProfileVersionLegacy; break;
+            case VD_FW_GL_VERSION_1_4: nsversion = NSOpenGLProfileVersionLegacy; break;
+            case VD_FW_GL_VERSION_1_5: nsversion = NSOpenGLProfileVersionLegacy; break;
+            case VD_FW_GL_VERSION_2_0: nsversion = NSOpenGLProfileVersionLegacy; break;
+            case VD_FW_GL_VERSION_2_1: nsversion = NSOpenGLProfileVersionLegacy; break;
+            case VD_FW_GL_VERSION_3_0: nsversion = NSOpenGLProfileVersionLegacy; break;
+            case VD_FW_GL_VERSION_3_1: nsversion = NSOpenGLProfileVersionLegacy; break;
+            case VD_FW_GL_VERSION_3_2: nsversion = NSOpenGLProfileVersion3_2Core; break;
+            case VD_FW_GL_VERSION_3_3: nsversion = NSOpenGLProfileVersion3_2Core; break;
+            case VD_FW_GL_VERSION_4_0: nsversion = NSOpenGLProfileVersion4_1Core; break;
+            case VD_FW_GL_VERSION_4_1: nsversion = NSOpenGLProfileVersion4_1Core; break;
+            case VD_FW_GL_VERSION_4_2: nsversion = NSOpenGLProfileVersion4_1Core; break;
+            case VD_FW_GL_VERSION_4_3: nsversion = NSOpenGLProfileVersion4_1Core; break;
+            case VD_FW_GL_VERSION_4_4: nsversion = NSOpenGLProfileVersion4_1Core; break;
+            case VD_FW_GL_VERSION_4_5: nsversion = NSOpenGLProfileVersion4_1Core; break;
+            case VD_FW_GL_VERSION_4_6: nsversion = NSOpenGLProfileVersion4_1Core; break;
+        } 
 
         NSOpenGLPixelFormatAttribute attrs[] = {
-            NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersion3_2Core,
+            NSOpenGLPFAOpenGLProfile, nsversion,
             NSOpenGLPFAColorSize, 24,
-            NSOpenGLPFAAlphaSize, 8,
+            NSOpenGLPFAAlphaSize, 0,
             NSOpenGLPFADepthSize, 24,
             NSOpenGLPFADoubleBuffer,
             NSOpenGLPFAAccelerated,
@@ -9253,26 +9490,15 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
         // NSView *content_view = [VD_FW_G.window contentView];
         [fw_view setWantsLayer: YES];
         // [[fw_view layer] setDrawsAsynchronously: YES];
-        [fw_view setAcceptsTouchEvents:YES]; // optional for touch, but ok
-        [fw_view addTrackingArea:[[NSTrackingArea alloc] initWithRect:fw_view.bounds
-                                                             options:NSTrackingMouseMoved |
-                                                                     NSTrackingActiveAlways |
-                                                                     NSTrackingInVisibleRect
-                                                               owner:fw_view
-                                                            userInfo:nil]];
 
         [VD_FW_G.gl_context setView: fw_view];
 
         [VD_FW_G.window setDelegate:delegate];
+        [VD_FW_G.window setAcceptsMouseMovedEvents: YES];
         [NSApp activateIgnoringOtherApps:YES];
     }
     VD_FW_G.w = 640 * VD_FW_G.scale;
     VD_FW_G.h = 480 * VD_FW_G.scale;
-
-    VdFwGlVersion version = VD_FW_GL_VERSION_3_3;
-    if (info && info->gl.version != 0) {
-        version = info->gl.version;
-    }
     vd_fw__load_opengl(version);
 
     mach_timebase_info(&VD_FW_G.time_base);
@@ -9284,240 +9510,239 @@ static void vd_fw__mac_init_gl(VdFwInitInfo *info)
     [VD_FW_G.gl_context makeCurrentContext];
 }
 
-static NSPoint vd_fw__mac_mouse_cocoa_to_conventional(NSPoint loc)
-{
-    NSView *cv = [VD_FW_G.window contentView];
-    NSRect cvf = [cv frame];
-    NSPoint loc_top_left_origin = NSMakePoint(loc.x, cvf.size.height - loc.y);
-
-    NSPoint result = NSMakePoint(
-        loc_top_left_origin.x * VD_FW_G.scale,
-        loc_top_left_origin.y * VD_FW_G.scale);
-
-    return result;
-}
 
 static void vd_fw__mac_runloop(int wait)
 {
-    @autoreleasepool {
-        NSDate *date = [NSDate distantFuture];
-        if (!wait) {
-            date = [NSDate distantPast];
-        }
+    [NSApp run];
+    // @autoreleasepool {
+    //     NSDate *date = [NSDate distantFuture];
+    //     if (!wait) {
+    //         date = [NSDate distantPast];
+    //     }
 
-        NSEvent *event;
-        while ((event = [NSApp nextEventMatchingMask: NSEventMaskAny
-                                           untilDate: date
-                                              inMode: NSDefaultRunLoopMode
-                                             dequeue: YES]))
-        {
-            NSEventType type = [event type];
-            // Handle Cmd+Q manually
-            if (event.type == NSEventTypeKeyDown &&
-                (event.modifierFlags & NSEventModifierFlagCommand) &&
-                [[event charactersIgnoringModifiers].lowercaseString isEqualToString:@"q"])
-            {
-                [NSApp terminate:nil];
-                continue; // skip sending to AppKit
-            }
+    //     NSEvent *event;
+    //     while ((event = [NSApp nextEventMatchingMask: NSEventMaskAny
+    //                                        untilDate: date
+    //                                           inMode: NSDefaultRunLoopMode
+    //                                          dequeue: YES]))
+    //     {
 
-            int event_handled = 1;
+    //         NSEventType type = [event type];
+    //         // Handle Cmd+Q manually
+    //         if (event.type == NSEventTypeKeyDown &&
+    //             (event.modifierFlags & NSEventModifierFlagCommand) &&
+    //             [[event charactersIgnoringModifiers].lowercaseString isEqualToString:@"q"])
+    //         {
+    //             [NSApp terminate:nil];
+    //             continue; // skip sending to AppKit
+    //         }
 
-            switch (type) {
-                case NSEventTypeScrollWheel: {
+    //         int event_handled = 1;
 
-                    if ([event hasPreciseScrollingDeltas]) {
-                        VD_FW_G.wheel[0] += [event scrollingDeltaX] * 0.05f;
-                        VD_FW_G.wheel[1] += [event scrollingDeltaY] * 0.05f;
-                    } else {
-                        VD_FW_G.wheel[0] += [event deltaX];
-                        VD_FW_G.wheel[1] += [event deltaY];
-                    }
+    //         switch (type) {
+    //             case NSEventTypeScrollWheel: {
 
-                    VD_FW_G.wheel_moved = 1;
-                } break;
+    //                 if ([event hasPreciseScrollingDeltas]) {
+    //                     VD_FW_G.wheel[0] += [event scrollingDeltaX] * 0.05f;
+    //                     VD_FW_G.wheel[1] += [event scrollingDeltaY] * 0.05f;
+    //                 } else {
+    //                     VD_FW_G.wheel[0] += [event deltaX];
+    //                     VD_FW_G.wheel[1] += [event deltaY];
+    //                 }
 
-                case NSEventTypeFlagsChanged: {
+    //                 VD_FW_G.wheel_moved = 1;
+    //             } break;
 
-
-                    NSEventModifierFlags flags = [event modifierFlags];
-                    unsigned short keycode = [event keyCode];
-
-                    unsigned char shift_down = (flags & NSEventModifierFlagShift) ? 1 : 0;
-                    unsigned char option_down = (flags & NSEventModifierFlagOption) ? 1 : 0;
-                    unsigned char control_down = (flags & NSEventModifierFlagControl) ? 1 : 0;
-
-                    switch (keycode) {
-                        case 56: VD_FW_G.curr_key_states[VD_FW_KEY_LSHIFT] = shift_down; break;
-                        case 60: VD_FW_G.curr_key_states[VD_FW_KEY_RSHIFT] = shift_down; break;
-                        case 59: VD_FW_G.curr_key_states[VD_FW_KEY_LCONTROL] = control_down; break;
-                        case 61: VD_FW_G.curr_key_states[VD_FW_KEY_RCONTROL] = option_down; break;
-                        default: break;
-                    }
-                } break;
-
-                case NSEventTypeKeyUp:
-                case NSEventTypeKeyDown: {
-                    BOOL is_key_down = [event type] == NSEventTypeKeyDown;
-                    // BOOL is_repeat = [event isARepeat];
-                    unsigned short keycode = [event keyCode];
-
-                    VdFwKey key = vd_fw__translate_mac_keycode(keycode);
-
-                    // VD_FW_G.prev_key_states[key] = VD_FW_G.curr_key_states[key];
-                    VD_FW_G.curr_key_states[key] = (unsigned char)is_key_down;
-
-                } break;
-
-                case NSEventTypeLeftMouseDown: {
-                    NSPoint view_point = [event locationInWindow];
-
-                    NSPoint p = NSMakePoint(view_point.x, view_point.y);
-
-                    int hit_drag_area = 0;
-
-                    p.x *= VD_FW_G.scale;
-                    p.y *= VD_FW_G.scale;
-
-                    VdFw__MacMessage msg;
-                    msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
-                    msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN;
-                    msg.dat.mousebtn.down = 1;
-                    vd_fw__msgbuf_w(&msg); 
-
-                    if (VD_FW_G.draw_decorations) {
-                        break;
-                    }
-
-                    if (!VD_FW_G.nccaption_set) {
-                        hit_drag_area = 1;
-                    } else if (NSPointInRect(p, VD_FW_G.nccaption)) {
-                        hit_drag_area = 1;
-                        for (int ri = 0; ri < VD_FW_G.ncrect_count; ++ri) {
-                            if (NSPointInRect(p, VD_FW_G.ncrects[ri])) {
-                                hit_drag_area = 0;
-                                break;
-                            }
-                        }
-                    }
-
-                    if (hit_drag_area) {
-                        NSPoint loc = [VD_FW_G.window convertPointToScreen:view_point];
-                        NSRect window_frame = [VD_FW_G.window frame];
-
-                        loc.x -= window_frame.origin.x;
-                        loc.y -= window_frame.origin.y;
-                        VD_FW_G.drag_start_location = loc;
-                        VD_FW_G.drag_start_pos_window_coords = view_point;
-                        VD_FW_G.dragging = TRUE;
-                    }
-                } break;
-
-                case NSEventTypeLeftMouseUp: {
-                    VD_FW_G.dragging = FALSE;
-                    VdFw__MacMessage msg;
-                    msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
-                    msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN;
-                    msg.dat.mousebtn.down = 0;
-                    vd_fw__msgbuf_w(&msg); 
-                } break;
-
-                case NSEventTypeMouseMoved: {
-
-                    NSPoint loc = [event locationInWindow];
-
-                    // Convert to content view coordinates
-                    NSView *cv = [VD_FW_G.window contentView];
-                    NSRect cvf = [cv frame];
-
-                    NSPoint loc_top_left_origin = NSMakePoint(loc.x, cvf.size.height - loc.y);
-
-                    NSPoint delta = NSMakePoint(
-                        loc_top_left_origin.x - VD_FW_G.last_mouse.x,
-                        loc_top_left_origin.y - VD_FW_G.last_mouse.y
-                    );
-
-                    VD_FW_G.mouse_delta.x += delta.x;
-                    VD_FW_G.mouse_delta.y += delta.y;
-
-                    VD_FW_G.last_mouse = loc_top_left_origin;
+    //             case NSEventTypeFlagsChanged: {
 
 
-                    NSPoint pixel_point = vd_fw__mac_mouse_cocoa_to_conventional(loc);
-                    VdFw__MacMessage msg;
-                    msg.type = VD_FW__MAC_MESSAGE_MOUSEMOVE;
-                    msg.dat.mousemove.mx = pixel_point.x;
-                    msg.dat.mousemove.my = pixel_point.y;
-                    vd_fw__msgbuf_w(&msg); 
+    //                 NSEventModifierFlags flags = [event modifierFlags];
+    //                 unsigned short keycode = [event keyCode];
 
-                } break;
+    //                 unsigned char shift_down = (flags & NSEventModifierFlagShift) ? 1 : 0;
+    //                 unsigned char option_down = (flags & NSEventModifierFlagOption) ? 1 : 0;
+    //                 unsigned char control_down = (flags & NSEventModifierFlagControl) ? 1 : 0;
 
-                case NSEventTypeLeftMouseDragged: {
+    //                 switch (keycode) {
+    //                     case 56: VD_FW_G.curr_key_states[VD_FW_KEY_LSHIFT] = shift_down; break;
+    //                     case 60: VD_FW_G.curr_key_states[VD_FW_KEY_RSHIFT] = shift_down; break;
+    //                     case 59: VD_FW_G.curr_key_states[VD_FW_KEY_LCONTROL] = control_down; break;
+    //                     case 61: VD_FW_G.curr_key_states[VD_FW_KEY_RCONTROL] = option_down; break;
+    //                     default: break;
+    //                 }
+    //             } break;
 
-                    NSPoint view_point = [event locationInWindow];
+    //             case NSEventTypeKeyUp:
+    //             case NSEventTypeKeyDown: {
+    //                 BOOL is_key_down = [event type] == NSEventTypeKeyDown;
+    //                 // BOOL is_repeat = [event isARepeat];
+    //                 unsigned short keycode = [event keyCode];
 
-                    NSPoint scaled_pos = vd_fw__mac_mouse_cocoa_to_conventional(view_point);
+    //                 VdFwKey key = vd_fw__translate_mac_keycode(keycode);
 
-                    VdFw__MacMessage msg;
-                    msg.type = VD_FW__MAC_MESSAGE_MOUSEMOVE;
-                    msg.dat.mousemove.mx = scaled_pos.x;
-                    msg.dat.mousemove.my = scaled_pos.y;
-                    vd_fw__msgbuf_w(&msg); 
+    //                 // VD_FW_G.prev_key_states[key] = VD_FW_G.curr_key_states[key];
+    //                 VD_FW_G.curr_key_states[key] = (unsigned char)is_key_down;
 
-                    NSPoint p = [VD_FW_G.window convertPointToScreen: view_point];
+    //             } break;
 
-                    if (VD_FW_G.dragging) {
+    //             case NSEventTypeLeftMouseDown: {
+    //                 NSPoint view_point = [event locationInWindow];
 
-                        NSPoint new_pos = NSMakePoint(p.x - VD_FW_G.drag_start_location.x,
-                                                      p.y - VD_FW_G.drag_start_location.y);
+    //                 NSPoint p = NSMakePoint(view_point.x, view_point.y);
 
-                        [VD_FW_G.window setFrameOrigin: new_pos];
-                    }
-                } break;
+    //                 int hit_drag_area = 0;
 
-                default: event_handled = 0; break;
-            }
+    //                 p.x *= VD_FW_G.scale;
+    //                 p.y *= VD_FW_G.scale;
 
-            switch (type) {
-                case NSEventTypeLeftMouseDown:
-                case NSEventTypeLeftMouseUp: {
-                    event_handled = 0;
-                } break;
+    //                 VdFw__MacMessage msg;
+    //                 msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
+    //                 msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN;
+    //                 msg.dat.mousebtn.down = 1;
+    //                 vd_fw__msgbuf_w(&msg); 
 
-                case NSEventTypeLeftMouseDragged:
-                case NSEventTypeRightMouseDragged:
-                case NSEventTypeOtherMouseDragged:
-                case NSEventTypeMouseMoved: {
-                    if (!VD_FW_G.mouse_is_locked) {
-                        break;
-                    }
+    //                 if (VD_FW_G.draw_decorations) {
+    //                     break;
+    //                 }
 
-                    event_handled = 0;
-                    NSRect cvf = [VD_FW_G.window frame];
+    //                 if (!VD_FW_G.nccaption_set) {
+    //                     hit_drag_area = 1;
+    //                 } else if (NSPointInRect(p, VD_FW_G.nccaption)) {
+    //                     hit_drag_area = 1;
+    //                     for (int ri = 0; ri < VD_FW_G.ncrect_count; ++ri) {
+    //                         if (NSPointInRect(p, VD_FW_G.ncrects[ri])) {
+    //                             hit_drag_area = 0;
+    //                             break;
+    //                         }
+    //                     }
+    //                 }
 
-                    NSPoint screen_loc = [NSEvent mouseLocation];
+    //                 if (hit_drag_area) {
+    //                     NSPoint loc = [VD_FW_G.window convertPointToScreen:view_point];
+    //                     NSRect window_frame = [VD_FW_G.window frame];
 
-                    CGFloat w = NSMaxX(cvf) - NSMinX(cvf);
-                    CGFloat h = NSMaxY(cvf) - NSMinY(cvf);
+    //                     loc.x -= window_frame.origin.x;
+    //                     loc.y -= window_frame.origin.y;
+    //                     VD_FW_G.drag_start_location = loc;
+    //                     VD_FW_G.drag_start_pos_window_coords = view_point;
+    //                     VD_FW_G.dragging = TRUE;
+    //                 }
+    //             } break;
 
-                    if (!NSPointInRect(screen_loc, cvf)) {
-                        CGWarpMouseCursorPosition(CGPointMake(NSMinX(cvf) + w * .5f, NSMinY(cvf) + h * .5f));
-                        VD_FW_G.last_mouse.x = w * .5f;
-                        VD_FW_G.last_mouse.y = h * .5f;
-                    }
-                } break;
-                default: break;
-            }
+    //             case NSEventTypeLeftMouseUp: {
+    //                 VD_FW_G.dragging = FALSE;
+    //                 VdFw__MacMessage msg;
+    //                 msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
+    //                 msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN;
+    //                 msg.dat.mousebtn.down = 0;
+    //                 vd_fw__msgbuf_w(&msg); 
+    //             } break;
 
-            if (!event_handled) {
-                [NSApp sendEvent: event];
-            }
+    //             case NSEventTypeRightMouseDown:
+    //             case NSEventTypeRightMouseUp: {
+    //                 VdFw__MacMessage msg;
+    //                 msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
+    //                 msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN;
+    //                 msg.dat.mousebtn.down = type == NSEventTypeRightMouseDown;
+    //                 vd_fw__msgbuf_w(&msg); 
+    //             } break;
 
-            if (VD_FW_G.should_close) {
-                break;
-            }
-        }
-    }
+    //             case NSEventTypeMouseMoved: {
+
+    //                 NSPoint loc = [event locationInWindow];
+
+    //                 // Convert to content view coordinates
+    //                 NSView *cv = [VD_FW_G.window contentView];
+    //                 NSRect cvf = [cv frame];
+
+    //                 NSPoint loc_top_left_origin = NSMakePoint(loc.x, cvf.size.height - loc.y);
+
+    //                 NSPoint delta = NSMakePoint(
+    //                     loc_top_left_origin.x - VD_FW_G.last_mouse.x,
+    //                     loc_top_left_origin.y - VD_FW_G.last_mouse.y
+    //                 );
+
+    //                 VD_FW_G.mouse_delta.x += delta.x;
+    //                 VD_FW_G.mouse_delta.y += delta.y;
+
+    //                 VD_FW_G.last_mouse = loc_top_left_origin;
+
+
+    //                 NSPoint pixel_point = vd_fw__mac_mouse_cocoa_to_conventional(loc);
+    //                 VdFw__MacMessage msg;
+    //                 msg.type = VD_FW__MAC_MESSAGE_MOUSEMOVE;
+    //                 msg.dat.mousemove.mx = pixel_point.x;
+    //                 msg.dat.mousemove.my = pixel_point.y;
+    //                 vd_fw__msgbuf_w(&msg); 
+
+    //             } break;
+
+    //             case NSEventTypeLeftMouseDragged: {
+
+    //                 NSPoint view_point = [event locationInWindow];
+
+    //                 NSPoint scaled_pos = vd_fw__mac_mouse_cocoa_to_conventional(view_point);
+
+    //                 VdFw__MacMessage msg;
+    //                 msg.type = VD_FW__MAC_MESSAGE_MOUSEMOVE;
+    //                 msg.dat.mousemove.mx = scaled_pos.x;
+    //                 msg.dat.mousemove.my = scaled_pos.y;
+    //                 vd_fw__msgbuf_w(&msg); 
+
+    //                 NSPoint p = [VD_FW_G.window convertPointToScreen: view_point];
+
+    //                 if (VD_FW_G.dragging) {
+
+    //                     NSPoint new_pos = NSMakePoint(p.x - VD_FW_G.drag_start_location.x,
+    //                                                   p.y - VD_FW_G.drag_start_location.y);
+
+    //                     [VD_FW_G.window setFrameOrigin: new_pos];
+    //                 }
+    //             } break;
+
+    //             default: event_handled = 0; break;
+    //         }
+
+    //         switch (type) {
+    //             case NSEventTypeLeftMouseDown:
+    //             case NSEventTypeLeftMouseUp: {
+    //                 event_handled = 0;
+    //             } break;
+
+    //             case NSEventTypeLeftMouseDragged:
+    //             case NSEventTypeRightMouseDragged:
+    //             case NSEventTypeOtherMouseDragged:
+    //             case NSEventTypeMouseMoved: {
+    //                 if (!VD_FW_G.mouse_is_locked) {
+    //                     break;
+    //                 }
+
+    //                 event_handled = 0;
+    //                 NSRect cvf = [VD_FW_G.window frame];
+
+    //                 NSPoint screen_loc = [NSEvent mouseLocation];
+
+    //                 CGFloat w = NSMaxX(cvf) - NSMinX(cvf);
+    //                 CGFloat h = NSMaxY(cvf) - NSMinY(cvf);
+
+    //                 if (!NSPointInRect(screen_loc, cvf)) {
+    //                     CGWarpMouseCursorPosition(CGPointMake(NSMinX(cvf) + w * .5f, NSMinY(cvf) + h * .5f));
+    //                     VD_FW_G.last_mouse.x = w * .5f;
+    //                     VD_FW_G.last_mouse.y = h * .5f;
+    //                 }
+    //             } break;
+    //             default: break;
+    //         }
+
+    //         if (!event_handled) {
+    //             [NSApp sendEvent: event];
+    //         }
+
+    //         if (VD_FW_G.should_close) {
+    //             break;
+    //         }
+    //     }
+    // }
 }
 
 static int vd_fw__msgbuf_r(VdFw__MacMessage *message)
