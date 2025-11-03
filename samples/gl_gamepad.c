@@ -1,9 +1,9 @@
 #include "disable_clang_deprecations.h"
 #define VD_FW_NO_CRT 0
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS
-#define VD_FW_GAMEPAD_DB_DEFAULT_EXTERNAL
 #include "vd_fw.h"
 #include "ext/stb_image.h"
+#include "vd_ui.h"
 #include "assert.h"
 
 #define GL_CHECK(expr) do {                                                   \
@@ -57,62 +57,28 @@
 
 static GLuint rect_shader;
 
+typedef struct {
+    int   state;
+    float grad;
+    float pos[2];
+    float dim[2];
+} DigitalInput;
+
+typedef struct {
+    float value;
+    float pos[2];
+    float dim[2];
+} AnalogInput;
+
 /** Controller of 107.32x74.94 (1201x673) */
 typedef struct {
     float controller_pos[2];
     float controller_dim[2];
 
-    int button_a;
-    float button_a_grad;
-    float button_a_pos[2];
-    float button_a_dim[2];
-
-    int button_b;
-    float button_b_grad;
-    float button_b_pos[2];
-    float button_b_dim[2];
-
-    int button_x;
-    float button_x_grad;
-    float button_x_pos[2];
-    float button_x_dim[2];
-
-    int button_y;
-    float button_y_grad;
-    float button_y_pos[2];
-    float button_y_dim[2];
-
-    int button_dup;
-    float button_dup_pos[2];
-    float button_dup_dim[2];
-
-    int button_dright;
-    float button_dright_pos[2];
-    float button_dright_dim[2];
-
-    int button_ddown;
-    float button_ddown_pos[2];
-    float button_ddown_dim[2];
-
-    int button_dleft;
-    float button_dleft_pos[2];
-    float button_dleft_dim[2];
-
-    int button_start;
-    float button_start_pos[2];
-    float button_start_dim[2];
-
-    int button_select;
-    float button_select_pos[2];
-    float button_select_dim[2];
-
-    int button_l1;
-    float button_l1_pos[2];
-    float button_l1_dim[2];
-
-    int button_r1;
-    float button_r1_pos[2];
-    float button_r1_dim[2];
+    DigitalInput a, b, x, y;
+    DigitalInput dup, ddown, dright, dleft;
+    DigitalInput start, select;
+    DigitalInput l1, r1;
 
     float stick_l_base_pos[2];
     float stick_l_base_dim[2];
@@ -168,89 +134,33 @@ ControllerInfo Base_Controller_Info = {
         107.32f, 74.94f,
     },
 
-    .button_a_pos = {
-        77.68f, 24.38f, 
-    },
-    .button_a_dim = {
-        7.61f,  7.61f,
-    },
+    .a = {  .pos = {77.68f, 24.38f, },
+            .dim = {7.61f,  7.61f,  }},
+    .b = {  .pos = {85.08f, 17.44f, },
+            .dim = {7.61f,  7.61f,  }},
+    .x = {  .pos = {70.35f, 16.89f, },
+            .dim = {7.61f,  7.61f,  }},
+    .y = {  .pos = {77.86f, 9.91f,  },
+            .dim = {7.61f,  7.61f,  }},
 
-    .button_b_pos = {
-        85.08f, 17.44f, 
-    },
-    .button_b_dim = {
-        7.61f,  7.61f,
-    },
+    .dup = {    .pos = {36.75f, 29.94f,},
+                .dim = {5.16f, 8.19f,  }},
+    .dright = { .pos = {39.33f, 35.56f,},
+                .dim = {8.19f, 5.16f,  }},
+    .ddown = {  .pos = {36.75f, 38.14f,},
+                .dim = {5.16f, 8.19f,  }},
+    .dleft = {  .pos = {31.14f, 35.56f,},
+                .dim = {8.19f, 5.16f,  }},
 
-    .button_x_pos = {
-        70.35f, 16.89f, 
-    },
-    .button_x_dim = {
-        7.61f,  7.61f,
-    },
+    .start = {  .pos = {59.01f, 18.06f,},
+                .dim = {4.95f, 4.95f,  }},
+    .select = { .pos = {43.15f, 18.06f,},
+                .dim = {4.95f, 4.95f,  }},
 
-    .button_y_pos = {
-        77.86f, 9.91f, 
-    },
-    .button_y_dim = {
-        7.61f,  7.61f,
-    },
-
-    .button_dup_pos = {
-        36.75f, 29.94f,
-    },
-    .button_dup_dim = {
-        5.16f, 8.19f,
-    },
-
-    .button_dright_pos = {
-        39.33f, 35.56f,
-    },
-    .button_dright_dim = {
-        8.19f, 5.16f,
-    },
-
-    .button_ddown_pos = {
-        36.75f, 38.14f,
-    },
-    .button_ddown_dim = {
-        5.16f, 8.19f,
-    },
-
-    .button_dleft_pos = {
-        31.14f, 35.56f,
-    },
-    .button_dleft_dim = {
-        8.19f, 5.16f,
-    },
-
-    .button_select_pos = {
-        43.15f, 18.06f,
-    },
-    .button_select_dim = {
-        4.95f, 4.95f,
-    },
-    .button_start_pos = {
-        59.01f, 18.06f,
-    },
-    .button_start_dim = {
-        4.95f, 4.95f,
-    },
-
-    .button_l1_pos = {
-        16.34f, 0.0f,
-    },
-    .button_l1_dim = {
-        22.34f, 8.53f 
-    },
-
-    .button_r1_pos = {
-        68.56f, 0.0f,
-    },
-    .button_r1_dim = {
-        22.34f, 8.53f 
-    },
-
+    .l1 = { .pos = {16.34f, 0.0f, },
+            .dim = {22.34f, 8.53f }},
+    .r1 = { .pos = {68.56f, 0.0f, },
+            .dim = {22.34f, 8.53f }},
 
     .stick_l_base_pos = {
         18.94f, 13.86f,
@@ -329,6 +239,11 @@ static Color  switch_color_digital(Color c1, Color c2, int p);
 static float  move_grad(float t, float a, int pressed);
 static Color  reveal_color(Color color, float reveal_t);
 
+static void   digital_input_draw(DigitalInput *input, GLuint texture, Color color);
+static void   digital_input_draw_grad(DigitalInput *input, Color color);
+static void   digital_input_transform(DigitalInput *input, DigitalInput *base, float x, float y, float ratio);
+static void   digital_input_update(DigitalInput *input, float t, int index, int button);
+
 int main(int argc, char const *argv[])
 {
     (void)argc;
@@ -336,16 +251,15 @@ int main(int argc, char const *argv[])
 
     vd_fw_init(& (VdFwInitInfo) {
         .gl = {
-            .version = VD_FW_GL_VERSION_3_3,
+            .version = VD_FW_GL_VERSION_4_5,
             .debug_on = 1,
-        },
-        .win32 = {
-            .xinput_disabled = 0,
         },
         .window_options = {
             .borderless = 0,
         }
     });
+
+    vd_ui_init();
     vd_fw_set_vsync_on(1);
     vd_fw_set_title("Gamepad Sample");
 
@@ -397,10 +311,51 @@ int main(int argc, char const *argv[])
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(sizeof(float) * 2));
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
 
     glEnable(GL_BLEND);
-    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-    // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    GLuint ui_vao, ui_vbo;
+    {
+        glGenVertexArrays(1, &ui_vao);
+        glBindVertexArray(ui_vao);
+
+        glGenBuffers(1, &ui_vbo);
+        glBindBuffer(GL_ARRAY_BUFFER, ui_vbo);
+        glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)vd_ui_get_min_vertex_buffer_size(), 0, GL_DYNAMIC_DRAW);
+
+        for (int i = 0; i < vd_ui_gl_get_num_attributes(); ++i) {
+            GLint size;
+            GLenum type;
+            GLboolean normalized;
+            GLsizei stride;
+            void *pointer;
+            GLuint divisor;
+            vd_ui_gl_get_attribute_properties(i, &size, &type, &normalized, &stride, &pointer, &divisor);
+            glEnableVertexAttribArray(i);
+            glVertexAttribPointer(i, size, type, normalized, stride, pointer);
+            glVertexAttribDivisor(i, divisor);
+        }
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+    }
+
+    GLuint ui_program;
+    {
+
+        const char *svsh;
+        const char *sfsh;
+        size_t svsh_len;
+        size_t sfsh_len;
+        vd_ui_gl_get_default_shader_sources(&svsh, &svsh_len, &sfsh, &sfsh_len);
+        GLuint ivsh = vd_fw_compile_shader(GL_VERTEX_SHADER, svsh);
+        GLuint ifsh = vd_fw_compile_shader(GL_FRAGMENT_SHADER, sfsh);
+
+        ui_program = glCreateProgram();
+        glAttachShader(ui_program, ivsh);
+        glAttachShader(ui_program, ifsh);
+        vd_fw_link_program(ui_program);
+    }
 
     ControllerInfo draw_infos[VD_FW_GAMEPAD_COUNT_MAX] = {0};
     while (vd_fw_running()) {
@@ -409,13 +364,18 @@ int main(int argc, char const *argv[])
         vd_fw_get_size(&w, &h);
 
         float t = vd_fw_delta_s();
+        vd_ui_frame_begin(t);
+        vd_ui_event_size((float)w, (float)h);
 
         glViewport(0, 0, w, h);
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         GL_CHECK(glUseProgram(rect_shader));
+        glBindVertexArray(VAO);
 
+        glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+        // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
         {
             float projection[16];
@@ -430,22 +390,18 @@ int main(int argc, char const *argv[])
 
         for (int i = 0; i < num_gamepads; ++i) {
             ControllerInfo *draw_info = &draw_infos[i];
-            draw_info->button_a        = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_A);
-            draw_info->button_a_grad   = move_grad(t * 7.f, draw_info->button_a_grad, draw_info->button_a);
-            draw_info->button_b        = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_B);
-            draw_info->button_b_grad   = move_grad(t * 7.f, draw_info->button_b_grad, draw_info->button_b);
-            draw_info->button_x        = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_X);
-            draw_info->button_x_grad   = move_grad(t * 7.f, draw_info->button_x_grad, draw_info->button_x);
-            draw_info->button_y        = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_Y);
-            draw_info->button_y_grad   = move_grad(t * 7.f, draw_info->button_y_grad, draw_info->button_y);
-            draw_info->button_dup      = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_DUP);
-            draw_info->button_dright   = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_DRIGHT);
-            draw_info->button_ddown    = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_DDOWN);
-            draw_info->button_dleft    = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_DLEFT);
-            draw_info->button_start    = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_START);
-            draw_info->button_select   = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_SELECT);
-            draw_info->button_l1       = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_L1);
-            draw_info->button_r1       = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_R1);
+            digital_input_update(&draw_info->a, t, i, VD_FW_GAMEPAD_A);
+            digital_input_update(&draw_info->b, t, i, VD_FW_GAMEPAD_B);
+            digital_input_update(&draw_info->x, t, i, VD_FW_GAMEPAD_X);
+            digital_input_update(&draw_info->y, t, i, VD_FW_GAMEPAD_Y);
+            digital_input_update(&draw_info->dup,    t, i, VD_FW_GAMEPAD_DUP);
+            digital_input_update(&draw_info->dright, t, i, VD_FW_GAMEPAD_DRIGHT);
+            digital_input_update(&draw_info->ddown,  t, i, VD_FW_GAMEPAD_DDOWN);
+            digital_input_update(&draw_info->dleft,  t, i, VD_FW_GAMEPAD_DLEFT);
+            digital_input_update(&draw_info->start,  t, i, VD_FW_GAMEPAD_START);
+            digital_input_update(&draw_info->select, t, i, VD_FW_GAMEPAD_BACK);
+            digital_input_update(&draw_info->l1, t, i, VD_FW_GAMEPAD_L1);
+            digital_input_update(&draw_info->r1, t, i, VD_FW_GAMEPAD_R1);
             draw_info->button_l3       = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_L3);
             draw_info->button_l3_grad  = move_grad(t * 7.f, draw_info->button_l3_grad, draw_info->button_l3);
             draw_info->button_r3       = vd_fw_get_gamepad_down(i, VD_FW_GAMEPAD_R3);
@@ -516,6 +472,28 @@ int main(int argc, char const *argv[])
                 transform_controller_info(&draw_infos[i], x, y, scaled_w);
                 draw_controller_info(&draw_infos[i], mouse_inside);
 
+                VdUiDiv *div = vd_ui_div_newf(VD_UI_FLAG_FLOAT, "Controller%d", i);
+                div->size[0].mode = VD_UI_SIZE_MODE_ABSOLUTE;
+                div->size[0].value = draw_infos[i].controller_dim[0];
+                div->size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
+                div->size[1].value = draw_infos[i].controller_dim[1];
+                div->comp_pos_rel[0] = draw_infos[i].controller_pos[0];
+                div->comp_pos_rel[1] = draw_infos[i].controller_pos[1];
+
+                vd_ui_parent_push(div);
+                {
+                    VdFwGuid guid = vd_fw_get_gamepad_guid(i);
+                    vd_ui_labelf("GUID: %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+                                 guid.dat[0], guid.dat[1], guid.dat[2], guid.dat[3],
+                                 guid.dat[4], guid.dat[5], guid.dat[6], guid.dat[7],
+                                 guid.dat[8], guid.dat[9], guid.dat[10], guid.dat[11],
+                                 guid.dat[12], guid.dat[13], guid.dat[14], guid.dat[15]);
+                    vd_ui_labelf("Class: %s", vd_fw_get_gamepad_class_name(vd_fw_get_gamepad_class(i)));
+                    vd_ui_labelf("Face: %s", vd_fw_get_gamepad_face_name(vd_fw_get_gamepad_face(i)));
+                    vd_ui_labelf("Rumble: %d", vd_fw_get_gamepad_rumble_support(i));
+                }
+                vd_ui_parent_pop();
+
                 static int change = 0;
                 if (mouse_inside && vd_fw_get_mouse_clicked(VD_FW_MOUSE_BUTTON_LEFT)) {
                     if (change == 0) {
@@ -528,6 +506,121 @@ int main(int argc, char const *argv[])
             }
 
         }
+
+        vd_ui_frame_end();
+        size_t num_updates;
+        VdUiUpdate *updates = vd_ui_frame_get_updates(&num_updates);
+
+        for (size_t i = 0; i < num_updates; ++i) {
+            VdUiUpdate *update = &updates[i];
+            switch (update->type) {
+                case VD_UI_UPDATE_TYPE_NEW_TEXTURE: {
+                    int width                = update->data.new_texture.width;
+                    int height               = update->data.new_texture.height;
+                    void *buffer             = update->data.new_texture.buffer;
+                    size_t buffer_size       = update->data.new_texture.size;
+                    VdUiTextureId *id        = update->data.new_texture.write_id;
+
+                    VD_UNUSED(buffer_size);
+
+                    GLuint texture;
+                    glGenTextures(1, &texture);
+                    glBindTexture(GL_TEXTURE_2D, texture);
+
+                    GLint  level;
+                    GLint  internal_format;
+                    GLint  border;
+                    GLenum format;
+                    GLenum type;
+                    vd_ui_gl_cv_texture_format(
+                        update->data.new_texture.format,
+                        &level,
+                        &internal_format, 
+                        &border, 
+                        &format,
+                        &type);
+
+                    GL_CHECK(glTexImage2D(GL_TEXTURE_2D, level, internal_format, width, height, border, format, type, buffer));
+                    // GL_CHECK(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 4, 4, 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer));
+                    GL_CHECK(glPixelStorei(GL_UNPACK_ALIGNMENT, 1));
+                    GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT));
+                    GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT));
+                    GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST));
+                    GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST));
+                    GL_CHECK(glBindTexture(GL_TEXTURE_2D, 0));
+
+                    id->id = (uintptr_t)texture;
+                } break;
+
+                case VD_UI_UPDATE_TYPE_WRITE_TEXTURE: {
+                    GLuint texture = (GLuint)update->data.write_texture.texture.id;
+
+                    GLint  level;
+                    GLint  internal_format;
+                    GLint  border;
+                    GLenum format;
+                    GLenum type;
+                    vd_ui_gl_cv_texture_format(
+                        update->data.write_texture.format,
+                        &level,
+                        &internal_format, 
+                        &border, 
+                        &format,
+                        &type);
+
+                    glBindTexture(GL_TEXTURE_2D, texture);
+                    glTexSubImage2D(GL_TEXTURE_2D, level, 0, 0, update->data.write_texture.width, update->data.write_texture.height, format, type, update->data.write_texture.buffer);
+                    glBindTexture(GL_TEXTURE_2D, 0);
+                } break;
+
+                default: break;
+            }
+        }
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);  
+        // glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+        // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glUseProgram(ui_program);
+
+        // Get vertex buffer
+        size_t buffer_size;
+        void *buffer = vd_ui_frame_get_vertex_buffer(&buffer_size);
+
+        // Get render passes
+        unsigned int num_passes;
+        VdUiRenderPass *passes = vd_ui_frame_get_render_passes(&num_passes);
+
+        for (unsigned int i = 0; i < num_passes; ++i) {
+            VdUiRenderPass *pass = &passes[i];
+            GLuint texture_id = (GLuint)pass->selected_texture->id;
+            GLint clip_width   = (GLint)pass->clip[2] - (GLint)pass->clip[0];
+            GLint clip_height  = (GLint)pass->clip[3] - (GLint)pass->clip[1];
+            GLint clip_x       = (GLint)pass->clip[0];
+            GLint clip_lower_y = (GLint)h - (GLint)pass->clip[3];
+
+            glScissor(clip_x, clip_lower_y, clip_width, clip_height);
+
+            glUseProgram(ui_program);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, texture_id);
+            glUniform2f(glGetUniformLocation(ui_program, vd_ui_gl_get_uniform_name_resolution()), (float)w, (float)h);
+            glUniform1i(glGetUniformLocation(ui_program, vd_ui_gl_get_uniform_name_texture()), 0);
+            glUniform2f(glGetUniformLocation(ui_program, vd_ui_gl_get_uniform_name_mouse()), 0, 0);
+
+            glBindVertexArray(ui_vao);
+            glBindBuffer(GL_ARRAY_BUFFER, ui_vbo);
+
+            // Update vertex buffer
+            glBindBuffer(GL_ARRAY_BUFFER, ui_vbo);
+            glBufferSubData(GL_ARRAY_BUFFER, 0, pass->instance_count * sizeof(VdUiVertex), (unsigned char*)buffer + pass->first_instance * sizeof(VdUiVertex));
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+            glDrawArraysInstanced(
+                GL_TRIANGLE_STRIP,
+                0,
+                4,
+                pass->instance_count);
+        }
+
 
         vd_fw_swap_buffers();
     }
@@ -575,76 +668,30 @@ static void transform_controller_info(ControllerInfo *info, float x, float y, fl
     info->controller_pos[1] = Base_Controller_Info.controller_pos[1] * ratio + y;
 
     // A
-    info->button_a_dim[0] = Base_Controller_Info.button_a_dim[0] * ratio;
-    info->button_a_dim[1] = Base_Controller_Info.button_a_dim[1] * ratio;
-    info->button_a_pos[0] = Base_Controller_Info.button_a_pos[0] * ratio + x;
-    info->button_a_pos[1] = Base_Controller_Info.button_a_pos[1] * ratio + y;
+    digital_input_transform(&info->a, &Base_Controller_Info.a, x, y, ratio);
 
     // B
-    info->button_b_dim[0] = Base_Controller_Info.button_b_dim[0] * ratio;
-    info->button_b_dim[1] = Base_Controller_Info.button_b_dim[1] * ratio;
-    info->button_b_pos[0] = Base_Controller_Info.button_b_pos[0] * ratio + x;
-    info->button_b_pos[1] = Base_Controller_Info.button_b_pos[1] * ratio + y;
+    digital_input_transform(&info->b, &Base_Controller_Info.b, x, y, ratio);
 
     // X
-    info->button_x_dim[0] = Base_Controller_Info.button_x_dim[0] * ratio;
-    info->button_x_dim[1] = Base_Controller_Info.button_x_dim[1] * ratio;
-    info->button_x_pos[0] = Base_Controller_Info.button_x_pos[0] * ratio + x;
-    info->button_x_pos[1] = Base_Controller_Info.button_x_pos[1] * ratio + y;
+    digital_input_transform(&info->x, &Base_Controller_Info.x, x, y, ratio);
 
     // Y
-    info->button_y_dim[0] = Base_Controller_Info.button_y_dim[0] * ratio;
-    info->button_y_dim[1] = Base_Controller_Info.button_y_dim[1] * ratio;
-    info->button_y_pos[0] = Base_Controller_Info.button_y_pos[0] * ratio + x;
-    info->button_y_pos[1] = Base_Controller_Info.button_y_pos[1] * ratio + y;
+    digital_input_transform(&info->y, &Base_Controller_Info.y, x, y, ratio);
 
-    // DUP
-    info->button_dup_dim[0] = Base_Controller_Info.button_dup_dim[0] * ratio;
-    info->button_dup_dim[1] = Base_Controller_Info.button_dup_dim[1] * ratio;
-    info->button_dup_pos[0] = Base_Controller_Info.button_dup_pos[0] * ratio + x;
-    info->button_dup_pos[1] = Base_Controller_Info.button_dup_pos[1] * ratio + y;
+    // D-Pad
+    digital_input_transform(&info->dup,     &Base_Controller_Info.dup,    x, y, ratio);
+    digital_input_transform(&info->dright,  &Base_Controller_Info.dright, x, y, ratio);
+    digital_input_transform(&info->ddown,   &Base_Controller_Info.ddown,  x, y, ratio);
+    digital_input_transform(&info->dleft,   &Base_Controller_Info.dleft,  x, y, ratio);
 
-    // DRIGHT
-    info->button_dright_dim[0] = Base_Controller_Info.button_dright_dim[0] * ratio;
-    info->button_dright_dim[1] = Base_Controller_Info.button_dright_dim[1] * ratio;
-    info->button_dright_pos[0] = Base_Controller_Info.button_dright_pos[0] * ratio + x;
-    info->button_dright_pos[1] = Base_Controller_Info.button_dright_pos[1] * ratio + y;
+    // Start/Select
+    digital_input_transform(&info->start,   &Base_Controller_Info.start,  x, y, ratio);
+    digital_input_transform(&info->select,  &Base_Controller_Info.select, x, y, ratio);
 
-    // DDOWN
-    info->button_ddown_dim[0] = Base_Controller_Info.button_ddown_dim[0] * ratio;
-    info->button_ddown_dim[1] = Base_Controller_Info.button_ddown_dim[1] * ratio;
-    info->button_ddown_pos[0] = Base_Controller_Info.button_ddown_pos[0] * ratio + x;
-    info->button_ddown_pos[1] = Base_Controller_Info.button_ddown_pos[1] * ratio + y;
-
-    // DLEFT
-    info->button_dleft_dim[0] = Base_Controller_Info.button_dleft_dim[0] * ratio;
-    info->button_dleft_dim[1] = Base_Controller_Info.button_dleft_dim[1] * ratio;
-    info->button_dleft_pos[0] = Base_Controller_Info.button_dleft_pos[0] * ratio + x;
-    info->button_dleft_pos[1] = Base_Controller_Info.button_dleft_pos[1] * ratio + y;
-
-    // START
-    info->button_start_dim[0] = Base_Controller_Info.button_start_dim[0] * ratio;
-    info->button_start_dim[1] = Base_Controller_Info.button_start_dim[1] * ratio;
-    info->button_start_pos[0] = Base_Controller_Info.button_start_pos[0] * ratio + x;
-    info->button_start_pos[1] = Base_Controller_Info.button_start_pos[1] * ratio + y;
-
-    // SELECT
-    info->button_select_dim[0] = Base_Controller_Info.button_select_dim[0] * ratio;
-    info->button_select_dim[1] = Base_Controller_Info.button_select_dim[1] * ratio;
-    info->button_select_pos[0] = Base_Controller_Info.button_select_pos[0] * ratio + x;
-    info->button_select_pos[1] = Base_Controller_Info.button_select_pos[1] * ratio + y;
-
-    // L1
-    info->button_l1_dim[0] = Base_Controller_Info.button_l1_dim[0] * ratio;
-    info->button_l1_dim[1] = Base_Controller_Info.button_l1_dim[1] * ratio;
-    info->button_l1_pos[0] = Base_Controller_Info.button_l1_pos[0] * ratio + x;
-    info->button_l1_pos[1] = Base_Controller_Info.button_l1_pos[1] * ratio + y;
-
-    // R1
-    info->button_r1_dim[0] = Base_Controller_Info.button_r1_dim[0] * ratio;
-    info->button_r1_dim[1] = Base_Controller_Info.button_r1_dim[1] * ratio;
-    info->button_r1_pos[0] = Base_Controller_Info.button_r1_pos[0] * ratio + x;
-    info->button_r1_pos[1] = Base_Controller_Info.button_r1_pos[1] * ratio + y;
+    // L1/R1
+    digital_input_transform(&info->l1,  &Base_Controller_Info.l1, x, y, ratio);
+    digital_input_transform(&info->r1,  &Base_Controller_Info.r1, x, y, ratio);
 
     // LEFT STICK BASE
     info->stick_l_base_dim[0] = Base_Controller_Info.stick_l_base_dim[0] * ratio;
@@ -723,59 +770,34 @@ static void draw_controller_info(ControllerInfo *info, int selected)
                                                        make_color(0.01f, 0.38f, 0.71f, 1.0f),
                                                        selected).e);
 
-    put_button_grad(info->button_a_pos, info->button_a_dim, make_color(0.2f, 0.9f, 0.2f, 0.4f), info->button_a_grad);
-    put_button_grad(info->button_b_pos, info->button_b_dim, make_color(0.9f, 0.2f, 0.2f, 0.4f), info->button_b_grad);
-    put_button_grad(info->button_x_pos, info->button_x_dim, make_color(0.4f, 0.8f, 0.9f, 0.4f), info->button_x_grad);
-    put_button_grad(info->button_y_pos, info->button_y_dim, make_color(0.9f, 0.9f, 0.2f, 0.4f), info->button_y_grad);
+    digital_input_draw_grad(&info->a,       make_color(0.2f, 0.9f, 0.2f, 0.4f));
+    digital_input_draw_grad(&info->b,       make_color(0.9f, 0.2f, 0.2f, 0.4f));
+    digital_input_draw_grad(&info->x,       make_color(0.4f, 0.8f, 0.9f, 0.4f));
+    digital_input_draw_grad(&info->y,       make_color(0.9f, 0.9f, 0.2f, 0.4f));
+    digital_input_draw_grad(&info->dup,     make_color(1.0f, 1.0f, 1.0f, 0.125f));
+    digital_input_draw_grad(&info->dright,  make_color(1.0f, 1.0f, 1.0f, 0.125f));
+    digital_input_draw_grad(&info->ddown,   make_color(1.0f, 1.0f, 1.0f, 0.125f));
+    digital_input_draw_grad(&info->dleft,   make_color(1.0f, 1.0f, 1.0f, 0.125f));
+    digital_input_draw_grad(&info->start,   make_color(1.0f, 1.0f, 1.0f, 0.125f));
+    digital_input_draw_grad(&info->select,  make_color(1.0f, 1.0f, 1.0f, 0.125f));
+    digital_input_draw_grad(&info->l1,      make_color(1.0f, 1.0f, 1.0f, 0.125f));
+    digital_input_draw_grad(&info->r1,      make_color(1.0f, 1.0f, 1.0f, 0.125f));
 
-    put_image(all.tex_button_a,   info->button_a_pos[0], info->button_a_pos[1],
-                                  info->button_a_dim[0], info->button_a_dim[1],
-                                  button_a_color(info->button_a).e);
+    digital_input_draw(&info->a, all.tex_button_a, button_a_color(info->a.state));
+    digital_input_draw(&info->b, all.tex_button_b, button_b_color(info->b.state));
+    digital_input_draw(&info->x, all.tex_button_x, button_x_color(info->x.state));
+    digital_input_draw(&info->y, all.tex_button_y, button_y_color(info->y.state));
 
-    put_image(all.tex_button_b,   info->button_b_pos[0], info->button_b_pos[1],
-                                  info->button_b_dim[0], info->button_b_dim[1],
-                                  button_b_color(info->button_b).e);
+    digital_input_draw(&info->dup, all.tex_button_dup, button_d_color(info->dup.state));
+    digital_input_draw(&info->dright, all.tex_button_dright, button_d_color(info->dright.state));
+    digital_input_draw(&info->ddown, all.tex_button_ddown, button_d_color(info->ddown.state));
+    digital_input_draw(&info->dleft, all.tex_button_dleft, button_d_color(info->dleft.state));
 
-    put_image(all.tex_button_x,   info->button_x_pos[0], info->button_x_pos[1],
-                                  info->button_x_dim[0], info->button_x_dim[1],
-                                  button_x_color(info->button_x).e);
+    digital_input_draw(&info->start, all.tex_button_start, button_d_color(info->start.state));
+    digital_input_draw(&info->select, all.tex_button_select, button_d_color(info->select.state));
 
-    put_image(all.tex_button_y,   info->button_y_pos[0], info->button_y_pos[1],
-                                  info->button_y_dim[0], info->button_y_dim[1],
-                                  button_y_color(info->button_y).e);
-
-    put_image(all.tex_button_dup, info->button_dup_pos[0], info->button_dup_pos[1],
-                                  info->button_dup_dim[0], info->button_dup_dim[1],
-                                  button_d_color(info->button_dup).e);
-
-    put_image(all.tex_button_dright, info->button_dright_pos[0], info->button_dright_pos[1],
-                                  info->button_dright_dim[0], info->button_dright_dim[1],
-                                  button_d_color(info->button_dright).e);
-
-    put_image(all.tex_button_ddown, info->button_ddown_pos[0], info->button_ddown_pos[1],
-                                  info->button_ddown_dim[0], info->button_ddown_dim[1],
-                                  button_d_color(info->button_ddown).e);
-
-    put_image(all.tex_button_dleft, info->button_dleft_pos[0], info->button_dleft_pos[1],
-                                  info->button_dleft_dim[0], info->button_dleft_dim[1],
-                                  button_d_color(info->button_dleft).e);
-
-    put_image(all.tex_button_select, info->button_select_pos[0], info->button_select_pos[1],
-                                  info->button_select_dim[0], info->button_select_dim[1],
-                                  button_d_color(info->button_select).e);
-
-    put_image(all.tex_button_start, info->button_start_pos[0], info->button_start_pos[1],
-                                  info->button_start_dim[0], info->button_start_dim[1],
-                                  button_d_color(info->button_start).e);
-
-    put_image(all.tex_button_l1, info->button_l1_pos[0], info->button_l1_pos[1],
-                                  info->button_l1_dim[0], info->button_l1_dim[1],
-                                  button_bumper_color(info->button_l1).e);
-
-    put_image(all.tex_button_r1, info->button_r1_pos[0], info->button_r1_pos[1],
-                                  info->button_r1_dim[0], info->button_r1_dim[1],
-                                  button_bumper_color(info->button_r1).e);
-
+    digital_input_draw(&info->l1, all.tex_button_l1, button_d_color(info->l1.state));
+    digital_input_draw(&info->r1, all.tex_button_r1, button_d_color(info->r1.state));
     put_image(all.tex_stick_l_base, info->stick_l_base_pos[0], info->stick_l_base_pos[1],
                                     info->stick_l_base_dim[0], info->stick_l_base_dim[1],
                                     stick_base_color().e);
@@ -929,9 +951,50 @@ static Color reveal_color(Color color, float reveal_t)
     return result;
 }
 
+static void digital_input_draw(DigitalInput *input, GLuint texture, Color color)
+{
+    put_image(texture, input->pos[0], input->pos[1],
+                       input->dim[0], input->dim[1],
+                       color.e);
+}
+
+static void digital_input_draw_grad(DigitalInput *input, Color color)
+{
+    float graddim[2] = {
+        input->dim[0], input->dim[1],
+    };
+    graddim[0] *= 4;
+    graddim[1] *= 4;
+
+    float gradpos[2] = {
+        (input->pos[0] + input->dim[0] * 0.5f) - graddim[0] * 0.5f,
+        (input->pos[1] + input->dim[1] * 0.5f) - graddim[1] * 0.5f,
+    };
+    put_image(all.tex_radgrad, gradpos[0], gradpos[1],
+                               graddim[0], graddim[1],
+                               reveal_color(color, input->grad).e);
+}
+
+static void digital_input_transform(DigitalInput *input, DigitalInput *base, float x, float y, float ratio)
+{
+    input->dim[0] = base->dim[0] * ratio;
+    input->dim[1] = base->dim[1] * ratio;
+    input->pos[0] = base->pos[0] * ratio + x;
+    input->pos[1] = base->pos[1] * ratio + y;
+}
+
+static void digital_input_update(DigitalInput *input, float t, int index, int button)
+{
+    input->state = vd_fw_get_gamepad_down(index, button);
+    input->grad  = move_grad(t * 7.f, input->grad, input->state);
+}
+
 #define VD_FW_IMPL
 #include "vd_fw.h"
 #include "disable_clang_deprecations.h"
+
+#define VD_UI_IMPL
+#include "vd_ui.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "ext/stb_image.h"

@@ -449,7 +449,7 @@ static VD_INLINE Vdi64 vd_ipow64(Vdi64 base, Vdu8 exp)
 
 typedef struct __VD_HiTime {
 #if VD_PLATFORM_WINDOWS
-    Vdi64 performance_counter;
+    Vdu64 performance_counter;
 #elif VD_PLATFORM_MACOS
     Vdu64 time;
 #elif VD_PLATFORM_LINUX
@@ -803,7 +803,7 @@ typedef struct {
 
 #define VD_DYNARRAY_HEADER(a)                      ((VdDynArrayHeader*)(((Vdu8*)a) - sizeof(VdDynArrayHeader)))
 #define VD_DYNARRAY_INIT(a, arena)                 ((a) = vd__dynarray_grow(a, sizeof(*(a)), 1, 0, arena))
-#define VD_DYNARRAY_INIT_WITH_CAP(a, arena, cap)   ((a) = vd__dynarray_grow(a, sizeof(*(a)), cap, 0, arena))
+#define VD_DYNARRAY_INIT_WITH_CAP(a, arena, cap)   ((a) = vd__dynarray_grow(a, sizeof(*(a)), cap, cap, arena))
 #define VD_DYNARRAY_ADD(a, v)                      (VD_DYNARRAY_CHECKGROW(a, 1), (a)[VD_DYNARRAY_HEADER(a)->len++] = (v))
 #define VD_DYNARRAY_PUSH(a)                        (VD_DYNARRAY_CHECKGROW(a, 1), &((a)[VD_DYNARRAY_HEADER(a)->len++]))
 #define VD_DYNARRAY_ADDN(a, n)                     (VD_DYNARRAY_CHECKGROW(a, n), VD_DYNARRAY_HEADER(a)->len += (n))
@@ -837,14 +837,14 @@ VD_INLINE void *vd__dynarray_grow(void *a, Vdusize tsize, Vdu32 addlen, Vdu32 mi
 
     if (mincap < (2 * VD_DYNARRAY_CAP(a))) {
         mincap = 2 * VD_DYNARRAY_CAP(a);
-    } else {
+    } else if (mincap < 4) {
         mincap = 4;
     }
 
     void *b = vd_arena_resize(arena, 
         a ? VD_DYNARRAY_HEADER(a) : 0,
         VD_DYNARRAY_CAP(a) == 0 ? 0 : tsize * VD_DYNARRAY_CAP(a) + sizeof(VdDynArrayHeader),
-        tsize * mincap * sizeof(VdDynArrayHeader));
+        tsize * mincap + sizeof(VdDynArrayHeader));
 
     b = (Vdu8*)b + sizeof(VdDynArrayHeader);
 
@@ -1063,8 +1063,13 @@ VD_INLINE Vdcstr vd_cstr_from_str(VdArena *arena, VdStr s)
     return result;
 }
 
+#if VD_CPP
+#define VD_LIT(string)        {(string), (sizeof(string) - 1)}
+#define VD_LIT_INLINE(string) {(string), (sizeof(string) - 1)}
+#else
 #define VD_LIT(string)        (VdStr) { .s = (string), .len = (sizeof(string) - 1), }
 #define VD_LIT_INLINE(string) {(string), (sizeof(string) - 1)}
+#endif
 
 #define VD_STR_EXPAND(string) (int)(string).len, (string).s
 
@@ -1555,7 +1560,7 @@ typedef struct __VD_KVMapInitOptions {
 #define VD_KVMAP_DEFAULT_CAP              1024
 #define VD_KVMAP_HEADER(m)                ((Vd__KVMapHeader*)(((Vdu8*)(m)) - sizeof(Vd__KVMapHeader)))
 #define VD_KVMAP_INIT(m, arena, cap, o)   ((m) = (vd__kvmap_init((arena), sizeof(m->k), sizeof(m->v), (cap), (o))))
-#define VD_KVMAP_INIT_DEFAULT(m, arena)   VD_KVMAP_INIT((m), (arena), VD_KVMAP_DEFAULT_CAP)
+#define VD_KVMAP_INIT_DEFAULT(m, arena)   VD_KVMAP_INIT((m), (arena), VD_KVMAP_DEFAULT_CAP, NULL)
 #define VD_KVMAP_SET(m, k, v)             vd__kvmap_set((m), (k), (void*)(v), VD__KVMAP_SET_MODE_NEW_ONLY)
 #define VD_KVMAP_GET(m, k, v)             vd__kvmap_get((m), (k), (void*)(v))
 #define VD_KVMAP_RM(m, k)                 (vd__kvmap_get_bin((m), (k), VD__KVMAP_GET_BIN_FLAGS_SET_UNUSED) != 0)
@@ -1678,7 +1683,10 @@ VD_INLINE Vdcstr vd_dump_file_to_cstr(VdArena *arena, Vdcstr file_path, Vdusize 
     fseek(f, 0, SEEK_SET);
 
     char *result = (char*)vd_arena_alloc(arena, size + 1);
-    fread(result, size, 1, f);
+    if (fread(result, size, 1, f) != 1) {
+        return 0;
+    }
+
     result[size] = 0;
     *len = size;
     return result;
@@ -1690,8 +1698,8 @@ VD_INLINE Vdcstr vd_dump_file_to_cstr(VdArena *arena, Vdcstr file_path, Vdusize 
 #define directory_open                            vd_directory_open
 #define directory_get_file                        vd_directory_get_file
 #define directory_close                           vd_directory_close
-#define dump_file_to_bytes(arena, file_path, len) vd_dump_file_to_bytes(arena, file_path, len);
-#define dump_file_to_cstr(arena, file_path, len)  vd_dump_file_to_cstr(arena, file_path, len);
+#define dump_file_to_bytes(arena, file_path, len) vd_dump_file_to_bytes(arena, file_path, len)
+#define dump_file_to_cstr(arena, file_path, len)  vd_dump_file_to_cstr(arena, file_path, len)
 #endif // VD_MACRO_ABBREVIATIONS
 
 /* ----SCRATCH------------------------------------------------------------------------------------------------------- */
@@ -1977,6 +1985,8 @@ VD_API void vd_init(VdInitInfo *info) {
 
 static VD_PROC_LOG(vd__default_log)
 {
+    VD_UNUSED(string);
+
     VdStr verbosity_str = vd_log_verbosity_to_str(verbosity);
 #if VD_USE_CRT
     printf("[%.*s]: %s", VD_STR_EXPAND(verbosity_str), string);
@@ -2352,7 +2362,7 @@ VD_API void vd_system_heap_empty(VdSystemHeap *h)
 /* ----ARENA IMPL---------------------------------------------------------------------------------------------------- */
 void vd_arena_init(VdArena *a, void *buf, size_t len)
 {
-    a->buf = buf;
+    a->buf = (Vdu8*)buf;
     a->buf_len = len;
     a->curr_offset = 0;
     a->prev_offset = 0;
@@ -2367,9 +2377,7 @@ void *vd_arena_alloc_align(VdArena *a, size_t size, size_t align)
     if (offset + size <= a->buf_len) {
         void *ptr = 0;
         if (a->flags & VD_ARENA_FLAGS_USE_MALLOC) {
-#if VD_USE_CRT
-            ptr = VD_MALLOC(size);
-#endif // VD_USE_CRT
+            ptr = VD_REALLOC(NULL, 0, size);
         } else {
             ptr = &a->buf[offset];
             a->prev_offset = offset;
@@ -2506,12 +2514,10 @@ Vdb32 vd__arg_advance(VdArg *arg) {
 
 VdArg vd_arg_new(int argc, char **argv)
 {
-    return (VdArg) {
-        .argc    = argc,
-        .argv    = argv,
-        .argi    = 0,
-        .ci      = 0,
-    };
+    VdArg result = {0};
+    result.argc = argc;
+    result.argv = argv;
+    return result;
 }
 
 void vd_arg_skip_program_name(VdArg *arg)
@@ -2627,7 +2633,7 @@ static void vd__strmap_emplace_key(void *map, Vd__StrmapBinPrefix *dst, char *sr
 
             // Allocate an arena big enough so that statistically, we won't have to ever care about
             // this again
-            dst->key_rest = vd_arena_alloc(VD_STRMAP_ARENAP(map), src_key_len * 2);
+            dst->key_rest = (char*)vd_arena_alloc(VD_STRMAP_ARENAP(map), src_key_len * 2);
             dst->key_rest_cap = src_key_len * 2;
         }
 
@@ -2650,7 +2656,7 @@ void* vd__strmap_init(VdArena *arena, Vdu32 tsize, Vdu32 cap, VdStrmapInitOption
     Vd__StrmapHeader *map;
     const Vdu32 bin_size = sizeof(Vd__StrmapBinPrefix) + tsize;
 
-    map = vd_arena_alloc(arena, sizeof(Vd__StrmapHeader) + bin_size * cap);
+    map = (Vd__StrmapHeader*)vd_arena_alloc(arena, sizeof(Vd__StrmapHeader) + bin_size * cap);
 
     Vd__StrmapBinPrefix *bins = (Vd__StrmapBinPrefix*)(((Vdu8ptr)map) + sizeof(Vd__StrmapHeader));
 
@@ -2665,7 +2671,7 @@ void* vd__strmap_init(VdArena *arena, Vdu32 tsize, Vdu32 cap, VdStrmapInitOption
 
     if ((options != 0) && (options->average_key_len > sizeof(((Vd__StrmapBinPrefix*)0)->key_prefix))) {
         for (Vdu32 i = 0; i < map->cap_total; ++i) {
-            bins[i].key_rest = vd_arena_alloc(arena, options->average_key_len);
+            bins[i].key_rest = (char*)vd_arena_alloc(arena, options->average_key_len);
             VD_ASSERT(bins[i].key_rest);
 
             bins[i].key_rest_cap = options->average_key_len;
@@ -2706,7 +2712,7 @@ static void vd__strmap_reinsert_chain(void *map, Vd__StrmapBinPrefix *start)
             Vdusize key_len = q->key_len;
             VdArenaSave save = vd_arena_save(VD_STRMAP_ARENAP(map));
 
-            char *key = vd_arena_alloc(VD_STRMAP_ARENAP(map), key_len);
+            char *key = (char*)vd_arena_alloc(VD_STRMAP_ARENAP(map), key_len);
 
             Vdusize first_copy_size  = key_len <= sizeof(q->key_prefix) ? key_len : sizeof(q->key_prefix);
             Vdusize second_copy_size = key_len <= sizeof(q->key_prefix) ? 0 : key_len - sizeof(q->key_prefix);
@@ -3003,7 +3009,7 @@ void *vd__kvmap_init(VdArena *arena, Vdu32 ksize, Vdu32 vsize, Vdu32 cap, VdKVMa
     Vd__KVMapHeader *map;
     const Vdu32 bin_size = sizeof(Vd__KVMapBinPrefix) + ksize + vsize;    
 
-    map = vd_arena_alloc(arena, sizeof(Vd__KVMapHeader) + bin_size * cap);
+    map = (Vd__KVMapHeader*)vd_arena_alloc(arena, sizeof(Vd__KVMapHeader) + bin_size * cap);
     float address_scale = 0.863f;
     if (options != 0) address_scale = options->address_scale;
 

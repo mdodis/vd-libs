@@ -64,17 +64,17 @@
 #include <stdarg.h>
 
 #ifndef VD_UNUSED
-#define VD_UNUSED(x) ((void)(x))
+#   define VD_UNUSED(x) ((void)(x))
 #endif // !VD_UNUSED
 
 #ifdef VD_UI_STATIC
-#define VD_UI_API static
+#   define VD_UI_API static
 #else
-#define VD_UI_API extern
+#   define VD_UI_API extern
 #endif // VD_UI_STATIC
 
 #ifndef VD_UI_INL
-#define VD_UI_INL static inline
+#   define VD_UI_INL static inline
 #endif // !VD_UI_INL
 
 typedef char VdUiBool;
@@ -84,7 +84,7 @@ typedef char VdUiBool;
  * @see vd_ui_ws_nc_area_mark, vd_ui_ws_nc_area_get
  */
 #ifndef    VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX
-#define    VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX 16
+#   define    VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX 16
 #endif // !VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX
 
 /**
@@ -94,8 +94,42 @@ typedef char VdUiBool;
  * } VdUiTextureId;
  */
 #ifndef VD_UI_TEXTURE_ID_STRUCT_DEFINED
-#define VD_UI_TEXTURE_ID_STRUCT_DEFINED 0
+#   define VD_UI_TEXTURE_ID_STRUCT_DEFINED 0
 #endif // VD_UI_TEXTURE_ID_STRUCT_DEFINED
+
+#ifndef VD_UI_MEMSET
+#   ifdef VD_H
+#       define VD_UI_MEMSET(p,v,s) VD_MEMSET(p,v,s)
+#   else
+#       define VD_UI_MEMSET(p,v,s) vd_ui_memset(p,v,s)
+#   endif
+#endif
+
+#ifndef VD_UI_MEMCPY
+#   ifdef VD_H
+#       define VD_UI_MEMCPY(d,s,c) VD_MEMCPY(d,s,c)
+#   else
+#       define VD_UI_MEMCPY(d,s,c) vd_ui_memcpy(d,s,c)
+#   endif
+#endif // !VD_UI_MEMCPY
+
+#ifndef VD_UI_ASSERT
+#   ifdef VD_H
+#       define VD_UI_ASSERT(x) VD_ASSERT(x)
+#   else
+#       define VD_UI_ASSERT(x) do { if (!(x)) { (*(int*)0) = 'x'; } } while(0)
+#   endif
+#endif // !VD_UI_ASSERT
+
+#ifndef VD_UI_MALLOC
+#   ifdef VD_H
+#       define VD_UI_MALLOC(s) VD_MALLOC(s)
+#   else
+#       define VD_UI_MALLOC(s) malloc(s)
+#   endif
+#endif
+
+#define VD_UI_OFFSET_OF(type, element) ((size_t) & (((type*)0)->element))
 
 /* ----INITIALIZATION------------------------------------------------------------------------------------------------ */
 /**
@@ -313,7 +347,7 @@ struct VdUiDiv {
     VdUiStr     id_str;
 
     /** Size preferences for each axis */
-    VdUiSize        size[VD_UI_AXES];
+    VdUiSize    size[VD_UI_AXES];
 
 
     float       text_size[VD_UI_AXES];
@@ -883,6 +917,13 @@ VD_UI_INL float vd_ui_fremap(float value, float low1, float high1, float low2, f
 /* ------------------------------------------------------------------------------------------------------------------ */
 
 #ifdef VD_UI_IMPL
+
+VD_UI_INL void *vd_ui_memset(void *dst, unsigned char val, size_t num)
+{
+    for (size_t i = 0; i < num; ++i) ((unsigned char *)dst)[i] = val;
+    return dst;
+}
+
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "ext/stb_truetype.h"
 
@@ -1447,10 +1488,50 @@ VD_UI_API void vd_ui_push_rectgrad(float rect[4], float color[16],
 }
 
 /* ----UI IMPL------------------------------------------------------------------------------------------------------- */
+#ifdef VD_H
 static size_t vd_ui__hash(void *begin, int len)
 {
     return vd_dhash64(begin, len);
 }
+#else
+static size_t vd_ui__hash(void *begin, int len)
+{
+    const unsigned int m = 0x5bd1e995;
+    const unsigned int r = 24;
+
+    unsigned long long h = 0x9747b28c ^ len;
+
+    const unsigned char *bytes = (const unsigned char*)begin;
+
+    while (len >= 4)
+    {
+        unsigned int k = *(unsigned int*)bytes;
+
+        k *= m;
+        k ^= k >> r;
+        k *= m;
+
+        h *= m;
+        h ^= k;
+
+        bytes += 4;
+        len -= 4;   
+    }
+
+    switch (len) {
+        case 3: h ^= bytes[2] << 16;
+        case 2: h ^= bytes[1] << 8;
+        case 1: h ^= bytes[0];
+                h *= m;
+    }
+
+    h ^= h >> 13;
+    h *= m;
+    h ^= h >> 15;
+
+    return h;
+}
+#endif // VD_H
 
 VD_UI_API VdUiReply vd_ui_button(VdUiStr str)
 {
@@ -1594,6 +1675,9 @@ VD_UI_API int vd_ui_slider(void *value, void *min_value, void *max_value,
                            VdUiDataType type, VdUiAxis orientation,
                            VdUiStr label)
 {
+    (void)orientation;
+    (void)type;
+
     VdUiDiv *slider_group = vd_ui_div_new(VD_UI_FLAG_FLEX_HORIZONTAL | VD_UI_FLAG_ALIGN_CENTER, label);
     slider_group->size[0].mode = VD_UI_SIZE_MODE_ABSOLUTE;
     slider_group->size[0].value = 120.f;
@@ -1662,6 +1746,8 @@ VD_UI_API int vd_ui_slider(void *value, void *min_value, void *max_value,
 
 VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
 {
+    (void)x;
+
     //
     //   Grip Size := Window / Content                                       *----------------* [-]    Window, Up Button
     //                                                                       | *------------* | | |    Content, Track
@@ -1849,7 +1935,7 @@ VD_UI_API VdUiDiv *vd_ui_div_newf(VdUiFlags flags, const char *fmt, ...)
     int result = vd_ui_vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
 
-    VD_ASSERT(result < sizeof(buf));
+    VD_UI_ASSERT(result < sizeof(buf));
 
     VdUiStr str = {buf, result};
 
@@ -1874,7 +1960,7 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
 
     VdUiDiv *result;
     if (str.l == 0) {
-        VD_ASSERT((ctx->null_divs_len + 1) <= ctx->null_divs_cap);
+        VD_UI_ASSERT((ctx->null_divs_len + 1) <= ctx->null_divs_cap);
         result = &ctx->null_divs[ctx->null_divs_len++];
         result->h = 0;
         result->is_null = 1;
@@ -1909,7 +1995,8 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
                 }
 
                 if (index == 0) {
-                    VD_TODO();
+                    // @todo(mdodis)
+                    VD_UI_ASSERT(0);
                 }
 
                 result = &ctx->divs[index];
@@ -2066,14 +2153,14 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
 VD_UI_API void vd_ui_parent_push(VdUiDiv *div)
 {
     VdUiContext *ctx = vd_ui_context_get();
-    VD_ASSERT(ctx->parents_next != VD_UI_PARENT_STACK_MAX && "Too many pushes to parents!");
+    VD_UI_ASSERT(ctx->parents_next != VD_UI_PARENT_STACK_MAX && "Too many pushes to parents!");
     ctx->parents[ctx->parents_next++] = div;
 }
 
 VD_UI_API void vd_ui_parent_pop(void)
 {
     VdUiContext *ctx = vd_ui_context_get();
-    VD_ASSERT(ctx->parents_next != 0 && "Too many pops to parents!");
+    VD_UI_ASSERT(ctx->parents_next != 0 && "Too many pops to parents!");
     ctx->parents_next--;
 }
 
@@ -2226,7 +2313,8 @@ static void vd_ui__calc_fixed_size(VdUiContext *ctx, VdUiDiv *curr)
         vd_ui__calc_fixed_size(ctx, child);
 
         if (child == child->next) {
-            VD_IMPOSSIBLE();
+            // @impossible
+            VD_UI_ASSERT(0);
         }
         child = child->next;
     }
@@ -2558,10 +2646,10 @@ static VdUiStr vd_ui__strbuf_dup(VdUiContext *ctx, VdUiStr str)
 {
     int total_len = str.l + 3;
 
-    VD_ASSERT((ctx->strbuf_len + total_len) <= ctx->strbuf_cap);
+    VD_UI_ASSERT((ctx->strbuf_len + total_len) <= ctx->strbuf_cap);
 
     char *result = ctx->strbuf + ctx->strbuf_len;
-    VD_MEMCPY(result, str.s, str.l);
+    VD_UI_MEMCPY(result, str.s, str.l);
     ctx->strbuf_len += str.l;
 
     result[str.l + 0] = 0;
@@ -2675,7 +2763,7 @@ VD_UI_API int vd_ui_is_captured(VdUiDiv *div)
 
 static void vd_ui__push_clip(VdUiContext *ctx, float clip[4])
 {
-    VD_ASSERT(ctx->clip_stack_count < VD_UI_CLIP_STACK_MAX);
+    VD_UI_ASSERT(ctx->clip_stack_count < VD_UI_CLIP_STACK_MAX);
     unsigned int new_idx = ctx->clip_stack_count;
     ctx->clip_stack_count++;
 
@@ -2687,13 +2775,13 @@ static void vd_ui__push_clip(VdUiContext *ctx, float clip[4])
 
 static void vd_ui__pop_clip(VdUiContext *ctx)
 {
-    VD_ASSERT(ctx->clip_stack_count > 0);
+    VD_UI_ASSERT(ctx->clip_stack_count > 0);
     ctx->clip_stack_count--;
 }
 
 static void vd_ui__get_clip(VdUiContext *ctx, float *out_clip)
 {
-    VD_ASSERT(ctx->clip_stack_count > 0);
+    VD_UI_ASSERT(ctx->clip_stack_count > 0);
     unsigned int curr = ctx->clip_stack_count - 1;
     out_clip[0] = ctx->clip_stack[curr][0];
     out_clip[1] = ctx->clip_stack[curr][1];
@@ -2718,7 +2806,7 @@ static int vd_ui__is_clipped(VdUiContext *ctx, VdUiDiv *div)
 
 static unsigned int vd_ui__get_clip_index(VdUiContext *ctx)
 {
-    VD_ASSERT(ctx->clip_stack_count > 0);
+    VD_UI_ASSERT(ctx->clip_stack_count > 0);
     return ctx->clip_stack_count - 1;
 }
 
@@ -2787,7 +2875,7 @@ static void vd_ui__push_vertexgrad(VdUiContext *ctx, VdUiTextureId *texture, flo
         vd_ui__push_pass(ctx);
     }
 
-    VD_ASSERT(ctx->vbuf_count < VD_UI_VBUF_COUNT_MAX);
+    VD_UI_ASSERT(ctx->vbuf_count < VD_UI_VBUF_COUNT_MAX);
 
     // Ok so clearly there is an issue when submitting separate passes
     VdUiVertex *v = &ctx->vbuf[ctx->vbuf_count++];
@@ -2817,6 +2905,8 @@ static void vd_ui__push_vertexgrad(VdUiContext *ctx, VdUiTextureId *texture, flo
 
 static void vd_ui__get_transformed_rect(VdUiContext *ctx, VdUiDiv *div, float rect[4])
 {
+    (void)ctx;
+
     float cx = (div->rect[0] + div->rect[2]) * 0.5f;
     float cy = (div->rect[1] + div->rect[3]) * 0.5f;
     float w = (div->rect[2] - div->rect[0]) * div->scale[0];
@@ -2836,7 +2926,7 @@ static void vd_ui__push_pass(VdUiContext *ctx)
     float current_clip[4];
     vd_ui__get_clip(ctx, current_clip);
 
-    VD_ASSERT(ctx->num_passes < VD_UI_RP_COUNT_MAX);
+    VD_UI_ASSERT(ctx->num_passes < VD_UI_RP_COUNT_MAX);
     ctx->num_passes++;
 
     VdUiRenderPass *pass   = &ctx->passes[ctx->num_passes - 1];
@@ -2952,7 +3042,7 @@ static void vd_ui__put_linef(VdUiContext *ctx, float x, float y, const char *fmt
     va_start(args, fmt);
     int result = vd_ui_vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
-    VD_ASSERT(result < sizeof(buf));
+    VD_UI_ASSERT(result < sizeof(buf));
     VdUiStr str = {buf, result};
     vd_ui__put_line(ctx, str, x, y, ctx->def.font_size * ctx->dpi_scale);
 }
@@ -3031,10 +3121,11 @@ VdUiGlyph *vd_ui__push_glyph(VdUiContext *ctx, unsigned int codepoint, float siz
     VD_UI_LOG("Pushed codepoint %c to packed range", (char)codepoint);
 
     if (result == 0) {
-        VD_TODO();
+        // @todo(mdodis)
+        VD_UI_ASSERT(0);
     }
 
-    VD_ASSERT(result != 0);
+    VD_UI_ASSERT(result != 0);
 
     size_t index = vd_ui__hash_glyph(codepoint, size, font_id) % VD_UI_GLYPH_CACHE_COUNT_MAX;
 
@@ -3062,7 +3153,7 @@ VdUiGlyph *vd_ui__push_glyph(VdUiContext *ctx, unsigned int codepoint, float siz
 
         if (cindex == 0) {
             // @todo(mdodis): Page out a glyph (or maybe try to do it earlier?)
-            VD_TODO();
+            VD_UI_ASSERT(0);
         }
 
         glyph = cglyph;
@@ -3087,9 +3178,9 @@ VdUiGlyph *vd_ui__push_glyph(VdUiContext *ctx, unsigned int codepoint, float siz
 
 static size_t vd_ui__hash_glyph(unsigned int codepoint, float size, VdUiFontId font_id)
 {
-    size_t result = vd_dhash64(&codepoint, sizeof(codepoint));
-    result = result ^ vd_dhash64(&font_id, sizeof(font_id));
-    result = result ^ vd_dhash64(&size, sizeof(size));
+    size_t result = vd_ui__hash(&codepoint, sizeof(codepoint));
+    result = result ^ vd_ui__hash(&font_id, sizeof(font_id));
+    result = result ^ vd_ui__hash(&size, sizeof(size));
     return result;
 }
 
@@ -3409,14 +3500,14 @@ typedef struct
 
 VD_UI_API VdUiContext *vd_ui_context_create(VdUiContextCreateInfo *info)
 {
-    VD_UNUSED(info);
-#ifdef VD_H
+    (void)info;
+
     // Context creation
-    VdUiContext *result = VD_MALLOC(sizeof(VdUiContext));
-    VD_MEMSET(result, 0, sizeof(*result));
+    VdUiContext *result = VD_UI_MALLOC(sizeof(VdUiContext));
+    VD_UI_MEMSET(result, 0, sizeof(*result));
 
     // Glyph Cache
-    result->glyph_cache = (VdUiGlyph*)VD_MALLOC(sizeof(VdUiGlyph) * VD_UI_GLYPH_CACHE_COUNT_MAX);
+    result->glyph_cache = (VdUiGlyph*)VD_UI_MALLOC(sizeof(VdUiGlyph) * VD_UI_GLYPH_CACHE_COUNT_MAX);
     for (int i = 0; i < VD_UI_GLYPH_CACHE_COUNT_MAX; ++i) {
         result->glyph_cache[i].codepoint = 0;
         result->glyph_cache[i].texture.id = 0;
@@ -3428,7 +3519,7 @@ VD_UI_API VdUiContext *vd_ui_context_create(VdUiContextCreateInfo *info)
     result->atlas[0] = 512;
     result->atlas[1] = 512;
     result->buffer_size = result->atlas[0] * result->atlas[1];
-    result->buffer = (unsigned char*)VD_MALLOC(result->buffer_size);
+    result->buffer = (unsigned char*)VD_UI_MALLOC(result->buffer_size);
     result->dpi_scale = 1.0f;
 
     stbtt_PackBegin(&result->pack_context, result->buffer,
@@ -3447,25 +3538,21 @@ VD_UI_API VdUiContext *vd_ui_context_create(VdUiContextCreateInfo *info)
     // Divs & Ids
     result->divs_cap       = 1000;
     result->divs_cap_total = 1024;
-    result->divs           = (VdUiDiv*)VD_MALLOC(result->divs_cap_total * sizeof(VdUiDiv));
-    VD_MEMSET(result->divs, 0, result->divs_cap_total * sizeof(VdUiDiv));
+    result->divs           = (VdUiDiv*)VD_UI_MALLOC(result->divs_cap_total * sizeof(VdUiDiv));
+    VD_UI_MEMSET(result->divs, 0, result->divs_cap_total * sizeof(VdUiDiv));
 
     // Null Divs
     result->null_divs_cap = VD_UI_NULL_DIVS_MAX;
     result->null_divs_len = 0;
-    result->null_divs     = (VdUiDiv*)VD_MALLOC(result->null_divs_cap * sizeof(VdUiDiv));
-    VD_MEMSET(result->null_divs, 0, result->null_divs_cap * sizeof(VdUiDiv));
+    result->null_divs     = (VdUiDiv*)VD_UI_MALLOC(result->null_divs_cap * sizeof(VdUiDiv));
+    VD_UI_MEMSET(result->null_divs, 0, result->null_divs_cap * sizeof(VdUiDiv));
 
     // Arena
     result->strbuf_cap  = 1024 * 1024; // 1MB of per frame string storage
-    result->strbuf      = (char*)VD_MALLOC(result->strbuf_cap);
+    result->strbuf      = (char*)VD_UI_MALLOC(result->strbuf_cap);
     result->strbuf_len  = 0;
 
     result->focus = 1;
-
-#else
-#error "todo"
-#endif
     return result;
 }
 VD_UI_API void vd_ui_context_set(VdUiContext *context)
@@ -4187,29 +4274,29 @@ VD_UI_API void vd_ui_gl_get_attribute_properties(int attribute, int *size, unsig
 {
     switch (attribute) {
         //                  GL_FLOAT          GL_FALSE
-        case 0:  *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, p0);                *divisor = 1; break;
+        case 0:  *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*) VD_UI_OFFSET_OF(VdUiVertex, p0);                *divisor = 1; break;
         //                  GL_FLOAT          GL_FALSE
-        case 1:  *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, p1);                *divisor = 1; break;
+        case 1:  *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*) VD_UI_OFFSET_OF(VdUiVertex, p1);                *divisor = 1; break;
         //                  GL_FLOAT          GL_FALSE
-        case 2:  *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, p0u);               *divisor = 1; break;
+        case 2:  *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*) VD_UI_OFFSET_OF(VdUiVertex, p0u);               *divisor = 1; break;
         //                  GL_FLOAT          GL_FALSE
-        case 3:  *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, p1u);               *divisor = 1; break;
+        case 3:  *size = 2; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*) VD_UI_OFFSET_OF(VdUiVertex, p1u);               *divisor = 1; break;
         //                  GL_FLOAT          GL_FALSE
-        case 4:  *size = 4; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, color);             *divisor = 1; break;
+        case 4:  *size = 4; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*) VD_UI_OFFSET_OF(VdUiVertex, color);             *divisor = 1; break;
         //                  GL_FLOAT          GL_FALSE
-        case 5:  *size = 4; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)(VD_OFFSET_OF(VdUiVertex, color) + 16);      *divisor = 1; break;
+        case 5:  *size = 4; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)(VD_UI_OFFSET_OF(VdUiVertex, color) + 16);       *divisor = 1; break;
         //                  GL_FLOAT          GL_FALSE
-        case 6:  *size = 4; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)(VD_OFFSET_OF(VdUiVertex, color) + 32);      *divisor = 1; break;
+        case 6:  *size = 4; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)(VD_UI_OFFSET_OF(VdUiVertex, color) + 32);       *divisor = 1; break;
         //                  GL_FLOAT          GL_FALSE
-        case 7:  *size = 4; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)(VD_OFFSET_OF(VdUiVertex, color) + 48);      *divisor = 1; break;
+        case 7:  *size = 4; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)(VD_UI_OFFSET_OF(VdUiVertex, color) + 48);       *divisor = 1; break;
         //                  GL_FLOAT          GL_FALSE
-        case 8:  *size = 1; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, alpha_mix);         *divisor = 1; break;
+        case 8:  *size = 1; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*) VD_UI_OFFSET_OF(VdUiVertex, alpha_mix);         *divisor = 1; break;
         //                  GL_FLOAT          GL_FALSE
-        case 9:  *size = 1; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, corner_radius);     *divisor = 1; break;
+        case 9:  *size = 1; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*) VD_UI_OFFSET_OF(VdUiVertex, corner_radius);     *divisor = 1; break;
         //                  GL_FLOAT          GL_FALSE
-        case 10: *size = 1; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, edge_softness);     *divisor = 1; break;
+        case 10: *size = 1; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*) VD_UI_OFFSET_OF(VdUiVertex, edge_softness);     *divisor = 1; break;
         //                  GL_FLOAT          GL_FALSE
-        case 11: *size = 1; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*)VD_OFFSET_OF(VdUiVertex, border_thickness);  *divisor = 1; break;
+        case 11: *size = 1; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*) VD_UI_OFFSET_OF(VdUiVertex, border_thickness);  *divisor = 1; break;
         default: break;
     }
 }

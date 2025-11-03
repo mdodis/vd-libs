@@ -90,7 +90,7 @@ int main(int argc, char const *argv[])
     }
     fseek(f, 0, SEEK_SET);
 
-    printf("VdFwGamepadDBEntry Vd_Fw__Gamepad_Db_Entries[%d] = {\n", count);
+    printf("static VdFwGamepadDBEntry Vd_Fw__Gamepad_Db_Entries[%d] = {\n", count);
     while (fgets(buffer, sizeof(buffer), f)) {
         VdFwGamepadDBEntry db_entry = {0};
         VdFwPlatform platform;
@@ -156,6 +156,10 @@ int main(int argc, char const *argv[])
                 is_axis = 0;
             }
 
+            if (entry->kind & VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_BUTTON_TO_AXIS) {
+                is_axis = 1;
+            }
+
             if (is_axis) {
                 switch (entry->target) {
                     case VD_FW_GAMEPAD_LT:     target = "VD_FW_GAMEPAD_LT";     break;
@@ -189,7 +193,7 @@ int main(int argc, char const *argv[])
                     }break;
                 }
             }
-            printf("{0x%04x,%30s,%3d},", entry->kind, target, entry->index);
+            printf("{0x%x,%s,%d},", entry->kind, target, entry->index);
         }
         printf("{0,0,0},");
         printf("},\n");
@@ -209,23 +213,52 @@ int main(int argc, char const *argv[])
 
             if (print_rest_of_rumble) {
                 printf("\t\t\t%d,\n", db_entry.map.rumble_config.prefix_len);
+
+                printf("\t\t\t{");
+                for (int i = 0; i < db_entry.map.rumble_config.prefix_len; ++i) {
+                    printf("0x%02x,", db_entry.map.rumble_config.prefix[i]);
+                }
+                printf("},\n");
+
+                printf("\t\t\t{");
+                {
+                    printf("0x%08x,", db_entry.map.rumble_config.dat.raw.rumble_lo.whole);
+                    printf("0x%08x", db_entry.map.rumble_config.dat.raw.rumble_hi.whole);
+                }
+                printf("},\n");
             }
 
-            printf("\t\t\t{");
-            for (int i = 0; i < db_entry.map.rumble_config.prefix_len; ++i) {
-                printf("0x%02x,", db_entry.map.rumble_config.prefix[i]);
-            }
-            printf("},\n");
-
-            printf("\t\t\t{");
-            {
-                printf("0x%08x,", db_entry.map.rumble_config.dat.raw.rumble_lo.whole);
-                printf("0x%08x", db_entry.map.rumble_config.dat.raw.rumble_hi.whole);
-            }
-            printf("},\n");
         }
-        printf("\t\t}\n");
+        printf("\t\t},\n");
 
+        {
+            switch (db_entry.map.face) {
+                case VD_FW_GAMEPAD_FACE_NUMBERED:      printf("\t\tVD_FW_GAMEPAD_FACE_NUMBERED,\n");    break;
+                case VD_FW_GAMEPAD_FACE_XBOX:          printf("\t\tVD_FW_GAMEPAD_FACE_XBOX,\n");        break;
+                case VD_FW_GAMEPAD_FACE_PLAYSTATION:   printf("\t\tVD_FW_GAMEPAD_FACE_PLAYSTATION,\n"); break;
+                case VD_FW_GAMEPAD_FACE_NINTENDO:      printf("\t\tVD_FW_GAMEPAD_FACE_NINTENDO,\n");    break;
+                default:
+                case VD_FW_GAMEPAD_FACE_UNKNOWN:       printf("\t\tVD_FW_GAMEPAD_FACE_UNKNOWN,\n");     break;
+            }
+        }
+
+        {
+            switch (db_entry.map.klass) {
+                case VD_FW_GAMEPAD_CLASS_NES:       printf("\t\tVD_FW_GAMEPAD_CLASS_NES,\n");       break;
+                case VD_FW_GAMEPAD_CLASS_MEGADRIVE: printf("\t\tVD_FW_GAMEPAD_CLASS_MEGADRIVE,\n"); break;
+                case VD_FW_GAMEPAD_CLASS_GENESIS:   printf("\t\tVD_FW_GAMEPAD_CLASS_GENESIS,\n");   break;
+                case VD_FW_GAMEPAD_CLASS_SNES:      printf("\t\tVD_FW_GAMEPAD_CLASS_SNES,\n");      break;
+                case VD_FW_GAMEPAD_CLASS_PS1:       printf("\t\tVD_FW_GAMEPAD_CLASS_PS1,\n");       break;
+                case VD_FW_GAMEPAD_CLASS_JOYCON:    printf("\t\tVD_FW_GAMEPAD_CLASS_JOYCON,\n");    break;
+                case VD_FW_GAMEPAD_CLASS_N64:       printf("\t\tVD_FW_GAMEPAD_CLASS_N64,\n");       break;
+                case VD_FW_GAMEPAD_CLASS_PS2:       printf("\t\tVD_FW_GAMEPAD_CLASS_PS2,\n");       break;
+                case VD_FW_GAMEPAD_CLASS_XBOX:      printf("\t\tVD_FW_GAMEPAD_CLASS_XBOX,\n");      break;
+                case VD_FW_GAMEPAD_CLASS_PS4:       printf("\t\tVD_FW_GAMEPAD_CLASS_PS4,\n");       break;
+                case VD_FW_GAMEPAD_CLASS_STEAMDECK: printf("\t\tVD_FW_GAMEPAD_CLASS_STEAMDECK,\n"); break;
+                default:
+                case VD_FW_GAMEPAD_CLASS_INVALID:   printf("\t\tVD_FW_GAMEPAD_CLASS_INVALID,\n");   break;
+            }
+        }
         printf("\t}},\n");
 
     }

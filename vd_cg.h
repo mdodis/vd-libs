@@ -40,6 +40,8 @@ typedef Vdi32   VdCgi32;
 #endif // !VD_H
 
 #define VD_CG_PI32           3.14159265359f
+#define VD_CG_FPI            3.14159265359f
+#define VD_CG_FPI2           (2.f * 3.14159265359f)
 #define VD_CG_RAD2DEG_COEFF  ((VdCgf32)180.0f/VD_CG_PI32)
 #define VD_CG_DEG2RAD_COEFF  ((VdCgf32)VD_CG_PI32/180.0f)
 #define VD_CG_FTAU           360.0f
@@ -67,6 +69,8 @@ typedef Vdi32   VdCgi32;
 #define VD_CG_DACOS     acos
 #define VD_CG_FFLOOR    floorf
 #define VD_CG_DFLOOR    floor
+#define VD_CG_FPOW      powf
+#define VD_CG_DPOW      pow
 #define VD_CG_MIN(a, b) ((a) < (b) ? (b) : (a))
 #define VD_CG_MAX(a, b) ((a) > (b) ? (b) : (a))
 #define VD_CG_ABS(a)    ((a) > 0 ? (a) : -(a))
@@ -78,11 +82,13 @@ typedef Vdi32   VdCgi32;
 #define ftan       VD_CG_FTAN
 #define fsqrt      VD_CG_FSQRT
 #define facos      VD_CG_FACOS
+#define fpow       VD_CG_FPOW
 #define dsin       VD_CG_DSIN
 #define dcos       VD_CG_DCOS
 #define dtan       VD_CG_DTAN
 #define dsqrt      VD_CG_DSQRT
 #define dacos      VD_CG_DACOS
+#define dpow       VD_CG_DPOW
 #define vmin(a, b) VD_CG_MIN(a,b)
 #define vmax(a, b) VD_CG_MAX(a,b)
 #endif
@@ -168,6 +174,7 @@ typedef union __VD_CG_d3x3 {
 typedef union __VD_CG_d4x4 {
     VdCgf64 e[4][4];
     Vdd4  c[4];
+    struct { VdCgf64 a0, a1, a2, a3, b0, b1, b2, b3, c0, c1, c2, c3, d0, d1, d2, d3; };
 } Vdd4x4;
 
 typedef union __VD_CG_d4 Vddquat;
@@ -200,6 +207,7 @@ typedef Vdfquat   Vdrquat;
 #define VD_CG_RTAN  VD_CG_FTAN
 #define VD_CG_RSQRT VD_CG_FSQRT
 #define VD_CG_RACOS VD_CG_FACOS
+#define VD_CG_RPOW  VD_CG_FPOW
 #elif VD_CG_DEFAULT_PRECISION_DOUBLE
 typedef VdCgf64   Vdrea;
 typedef Vdd2      Vdr2;
@@ -214,6 +222,7 @@ typedef Vddquat   Vdrquat;
 #define VD_CG_RTAN  VD_CG_DTAN
 #define VD_CG_RSQRT VD_CG_DSQRT
 #define VD_CG_RACOS VD_CG_DACOS
+#define VD_CG_RPOW  VD_CG_DPOW
 #endif // VD_CG_DEFAULT_PRECISION_SINGLE, VD_CG_DEFAULT_PRECISION_DOUBLE
 
 #if VD_MACRO_ABBREVIATIONS
@@ -222,12 +231,13 @@ typedef Vddquat   Vdrquat;
 #define rtan       VD_CG_RTAN
 #define rsqrt      VD_CG_RSQRT
 #define racos      VD_CG_RACOS
+#define rpow       VD_CG_RPOW
 #endif // VD_MACRO_ABBREVIATIONS
 
 /* ----INITIALIZATION------------------------------------------------------------------------------------------------ */
-static VD_INLINE Vdf2    vd_fm2              (VdCgf32 x, VdCgf32 y)                           { return (Vdf2) {.e = {x, y}};       }
-static VD_INLINE Vdd2    vd_dm2              (VdCgf64 x, VdCgf64 y)                           { return (Vdd2) {.e = {x, y}};       }
-static VD_INLINE Vdr2    vd_rm2              (Vdrea x, Vdrea y)                               { return (Vdr2) {.e = {x, y}};       }
+static VD_INLINE Vdf2    vd_fm2              (VdCgf32 x, VdCgf32 y)                           { Vdf2 r; r.x = x; r.y =y; return r; }
+static VD_INLINE Vdd2    vd_dm2              (VdCgf64 x, VdCgf64 y)                           { Vdd2 r; r.x = x; r.y =y; return r; }
+static VD_INLINE Vdr2    vd_rm2              (Vdrea x, Vdrea y)                               { Vdr2 r; r.x = x; r.y =y; return r; }
 static VD_INLINE Vdf2    vd_fall2            (VdCgf32 s)                                      { return vd_fm2(s, s);               }
 static VD_INLINE Vdd2    vd_dall2            (VdCgf64 s)                                      { return vd_dm2(s, s);               }
 static VD_INLINE Vdr2    vd_rall2            (Vdrea s)                                        { return vd_rm2(s, s);               }
@@ -235,9 +245,9 @@ static VD_INLINE Vdf2    vd_fzero2           (void)                             
 static VD_INLINE Vdd2    vd_dzero2           (void)                                           { return vd_dall2(0.f);              }
 static VD_INLINE Vdr2    vd_rzero2           (void)                                           { return vd_rall2(0.f);              }
 
-static VD_INLINE Vdf3    vd_fm3              (VdCgf32 x, VdCgf32 y, VdCgf32 z)                { return (Vdf3) {.e = {x, y, z}};    }
-static VD_INLINE Vdd3    vd_dm3              (VdCgf64 x, VdCgf64 y, VdCgf64 z)                { return (Vdd3) {.e = {x, y, z}};    }
-static VD_INLINE Vdr3    vd_rm3              (Vdrea x, Vdrea y, Vdrea z)                      { return (Vdr3) {.e = {x, y, z}};    }
+static VD_INLINE Vdf3    vd_fm3              (VdCgf32 x, VdCgf32 y, VdCgf32 z)                { Vdf3 r; r.x = x; r.y = y; r.z = z; return r; }
+static VD_INLINE Vdd3    vd_dm3              (VdCgf64 x, VdCgf64 y, VdCgf64 z)                { Vdd3 r; r.x = x; r.y = y; r.z = z; return r; }
+static VD_INLINE Vdr3    vd_rm3              (Vdrea x, Vdrea y, Vdrea z)                      { Vdr3 r; r.x = x; r.y = y; r.z = z; return r; }
 static VD_INLINE Vdf3    vd_fall3            (VdCgf32 s)                                      { return vd_fm3(s, s, s);            }
 static VD_INLINE Vdd3    vd_dall3            (VdCgf64 s)                                      { return vd_dm3(s, s, s);            }
 static VD_INLINE Vdr3    vd_rall3            (Vdrea s)                                        { return vd_rm3(s, s, s);            }
@@ -245,9 +255,9 @@ static VD_INLINE Vdf3    vd_fzero3           (void)                             
 static VD_INLINE Vdd3    vd_dzero3           (void)                                           { return vd_dall3(0.f);              }
 static VD_INLINE Vdr3    vd_rzero3           (void)                                           { return vd_rall3(0.f);              }
 
-static VD_INLINE Vdf4    vd_fm4              (VdCgf32 x, VdCgf32 y, VdCgf32 z, VdCgf32 w)     { return (Vdf4) {.e = {x, y, z, w}}; }
-static VD_INLINE Vdd4    vd_dm4              (VdCgf64 x, VdCgf64 y, VdCgf64 z, VdCgf64 w)     { return (Vdd4) {.e = {x, y, z, w}}; }
-static VD_INLINE Vdr4    vd_rm4              (Vdrea x, Vdrea y, Vdrea z, Vdrea w)             { return (Vdr4) {.e = {x, y, z, w}}; }
+static VD_INLINE Vdf4    vd_fm4              (VdCgf32 x, VdCgf32 y, VdCgf32 z, VdCgf32 w)     { Vdf4 r; r.x = x; r.y = y; r.z = z; r.w = w; return r; }
+static VD_INLINE Vdd4    vd_dm4              (VdCgf64 x, VdCgf64 y, VdCgf64 z, VdCgf64 w)     { Vdd4 r; r.x = x; r.y = y; r.z = z; r.w = w; return r; }
+static VD_INLINE Vdr4    vd_rm4              (Vdrea x, Vdrea y, Vdrea z, Vdrea w)             { Vdr4 r; r.x = x; r.y = y; r.z = z; r.w = w; return r; }
 static VD_INLINE Vdf4    vd_fall4            (VdCgf32 s)                                      { return vd_fm4(s, s, s, s);         }
 static VD_INLINE Vdd4    vd_dall4            (VdCgf64 s)                                      { return vd_dm4(s, s, s, s);         }
 static VD_INLINE Vdr4    vd_rall4            (Vdrea s)                                        { return vd_rm4(s, s, s, s);         }
@@ -258,23 +268,23 @@ static VD_INLINE Vdr4    vd_rzero4           (void)                             
 static VD_INLINE Vdf4x4  vd_fm4x4            (VdCgf32 a0, VdCgf32 a1, VdCgf32 a2, VdCgf32 a3,
                                               VdCgf32 b0, VdCgf32 b1, VdCgf32 b2, VdCgf32 b3,
                                               VdCgf32 c0, VdCgf32 c1, VdCgf32 c2, VdCgf32 c3,
-                                              VdCgf32 d0, VdCgf32 d1, VdCgf32 d2, VdCgf32 d3) { return (Vdf4x4)  {.e = { {a0, a1, a2, a3}, {b0, b1, b2, b3}, {c0, c1, c2, c3}, {d0, d1, d2, d3} } }; }
+                                              VdCgf32 d0, VdCgf32 d1, VdCgf32 d2, VdCgf32 d3) { Vdf4x4 r; r.a0 = a0; r.a1 = a1; r.a2 = a2; r.a3 = a3; r.b0 = b0; r.b1 = b1; r.b2 = b2; r.b3 = b3;   r.c0 = c0; r.c1 = c1; r.c2 = c2; r.c3 = c3; r.d0 = d0; r.d1 = d1; r.d2 = d2; r.d3 = d3;  return r; }
 static VD_INLINE Vdd4x4  vd_dm4x4            (VdCgf64 a0, VdCgf64 a1, VdCgf64 a2, VdCgf64 a3,
                                               VdCgf64 b0, VdCgf64 b1, VdCgf64 b2, VdCgf64 b3,
                                               VdCgf64 c0, VdCgf64 c1, VdCgf64 c2, VdCgf64 c3,
-                                              VdCgf64 d0, VdCgf64 d1, VdCgf64 d2, VdCgf64 d3) { return (Vdd4x4)  {.e = { {a0, a1, a2, a3}, {b0, b1, b2, b3}, {c0, c1, c2, c3}, {d0, d1, d2, d3} } }; }
+                                              VdCgf64 d0, VdCgf64 d1, VdCgf64 d2, VdCgf64 d3) { Vdd4x4 r; r.a0 = a0; r.a1 = a1; r.a2 = a2; r.a3 = a3; r.b0 = b0; r.b1 = b1; r.b2 = b2; r.b3 = b3;   r.c0 = c0; r.c1 = c1; r.c2 = c2; r.c3 = c3; r.d0 = d0; r.d1 = d1; r.d2 = d2; r.d3 = d3;  return r; }
 static VD_INLINE Vdr4x4  vd_rm4x4            (Vdrea a0, Vdrea a1, Vdrea a2, Vdrea a3,
                                               Vdrea b0, Vdrea b1, Vdrea b2, Vdrea b3,
                                               Vdrea c0, Vdrea c1, Vdrea c2, Vdrea c3,
-                                              Vdrea d0, Vdrea d1, Vdrea d2, Vdrea d3)         { return (Vdr4x4)  {.e = { {a0, a1, a2, a3}, {b0, b1, b2, b3}, {c0, c1, c2, c3}, {d0, d1, d2, d3} } }; }
+                                              Vdrea d0, Vdrea d1, Vdrea d2, Vdrea d3)         { Vdr4x4 r; r.a0 = a0; r.a1 = a1; r.a2 = a2; r.a3 = a3; r.b0 = b0; r.b1 = b1; r.b2 = b2; r.b3 = b3;   r.c0 = c0; r.c1 = c1; r.c2 = c2; r.c3 = c3; r.d0 = d0; r.d1 = d1; r.d2 = d2; r.d3 = d3;  return r; }
 
 static VD_INLINE Vdf4x4  vd_fall4x4          (VdCgf32 v)                                      { return vd_fm4x4  (v,v,v,v,v,v,v,v,v,v,v,v,v,v,v,v);                                                  }
 static VD_INLINE Vdd4x4  vd_dall4x4          (VdCgf64 v)                                      { return vd_dm4x4  (v,v,v,v,v,v,v,v,v,v,v,v,v,v,v,v);                                                  }
 static VD_INLINE Vdr4x4  vd_rall4x4          (Vdrea v)                                        { return vd_rm4x4  (v,v,v,v,v,v,v,v,v,v,v,v,v,v,v,v);                                                  }
 
-static VD_INLINE Vdfquat vd_fmquat           (Vdf3 ipart, VdCgf32 rpart)                      { return (Vdfquat) {.e = {ipart.x, ipart.y, ipart.z, rpart}};                                          }
-static VD_INLINE Vddquat vd_dmquat           (Vdd3 ipart, VdCgf64 rpart)                      { return (Vddquat) {.e = {ipart.x, ipart.y, ipart.z, rpart}};                                          }
-static VD_INLINE Vdrquat vd_rmquat           (Vdr3 ipart, Vdrea rpart)                        { return (Vdrquat) {.e = {ipart.x, ipart.y, ipart.z, rpart}};                                          }
+static VD_INLINE Vdfquat vd_fmquat           (Vdf3 ipart, VdCgf32 rpart)                      { Vdfquat r; r.x = ipart.x; r.y = ipart.y; r.z = ipart.z; r.w = rpart; return r; }
+static VD_INLINE Vddquat vd_dmquat           (Vdd3 ipart, VdCgf64 rpart)                      { Vddquat r; r.x = ipart.x; r.y = ipart.y; r.z = ipart.z; r.w = rpart; return r; }
+static VD_INLINE Vdrquat vd_rmquat           (Vdr3 ipart, Vdrea rpart)                        { Vdrquat r; r.x = ipart.x; r.y = ipart.y; r.z = ipart.z; r.w = rpart; return r; }
 
 /* ----VECTOR ALGEBRA------------------------------------------------------------------------------------------------ */
 static VD_INLINE Vdf2    vd_fadd2            (Vdf2 a, Vdf2 b)                                 { return vd_fm2(a.x + b.x, a.y + b.y); }
@@ -400,19 +410,22 @@ static VD_INLINE Vdf4x4  vd_fto4x4quat       (Vdfquat q);
 static VD_INLINE Vdfquat vd_feulerquat       (Vdf3 euler);
 
 /* ----COORDINATE SYSTEMS-------------------------------------------------------------------------------------------- */
-static VD_INLINE Vdf4x4  vd_fidentity4x4      (void);
-static VD_INLINE Vdf4x4  vd_fdx_to_vk4x4      (void);
-static VD_INLINE Vdf4x4  vd_fperspective4x4   (VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr, VdCgf32 pfr);
-static VD_INLINE Vdf4x4  vd_fperspective4x4_vk(VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr, VdCgf32 pfr);
-static VD_INLINE Vdf4x4  vd_flookat4x4        (Vdf3 fwd, Vdf3 up, Vdf3 right);
-static VD_INLINE Vdf4x4  vd_ftranslation4x4   (Vdf3 v);
-static VD_INLINE Vdf4x4  vd_ftranslation4x4col(Vdf3 v);
-static VD_INLINE Vdf4x4  vd_frotation_yaw4x4  (VdCgf32 rad);
-static VD_INLINE void    vd_ftranslate4x4     (Vdf4x4 *m, Vdf3 v);
-static VD_INLINE void    vd_ftranslate4x4col  (Vdf4x4 *m, Vdf3 v);
-static VD_INLINE void    vd_frotatequat4x4    (Vdf4x4 *m, Vdfquat quat);
-static VD_INLINE void    vd_frotate_yaw4x4    (Vdf4x4 *m, VdCgf32 rad);
-static VD_INLINE Vdf4x4  vd_fvk_to_dx4x4      (void);
+static VD_INLINE Vdf4x4  vd_fidentity4x4        (void);
+static VD_INLINE Vdf4x4  vd_fdx_to_vk4x4        (void);
+static VD_INLINE Vdf4x4  vd_fperspective4x4     (VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr, VdCgf32 pfr);
+static VD_INLINE Vdf4x4  vd_fperspective4x4_vk  (VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr, VdCgf32 pfr);
+static VD_INLINE Vdf4x4  vd_flookat4x4          (Vdf3 fwd, Vdf3 up, Vdf3 right);
+static VD_INLINE Vdf4x4  vd_ftranslation4x4     (Vdf3 v);
+static VD_INLINE Vdf4x4  vd_ftranslation4x4col  (Vdf3 v);
+static VD_INLINE Vdf4x4  vd_frotation_yaw4x4    (VdCgf32 rad);
+static VD_INLINE Vdf4x4  vd_frotation_quat4x4   (Vdfquat quat);
+static VD_INLINE Vdf4x4  vd_frotation_quat4x4col(Vdfquat quat);
+static VD_INLINE void    vd_ftranslate4x4       (Vdf4x4 *m, Vdf3 v);
+static VD_INLINE void    vd_ftranslate4x4col    (Vdf4x4 *m, Vdf3 v);
+static VD_INLINE void    vd_frotatequat4x4      (Vdf4x4 *m, Vdfquat quat);
+static VD_INLINE void    vd_frotatequat4x4col   (Vdf4x4 *m, Vdfquat quat);
+static VD_INLINE void    vd_frotate_yaw4x4      (Vdf4x4 *m, VdCgf32 rad);
+static VD_INLINE Vdf4x4  vd_fvk_to_dx4x4        (void);
 
 /* ----LOGGING------------------------------------------------------------------------------------------------------- */
 static VD_INLINE void     vd_fprint4x4          (Vdf4x4 *m);
@@ -420,6 +433,10 @@ static VD_INLINE void     vd_fprint4x4          (Vdf4x4 *m);
 /* ----UTILITY------------------------------------------------------------------------------------------------------- */
 static VD_INLINE VdCgf32  vd_fwrap_degrees      (VdCgf32 d)                                     { return d - VD_CG_FTAU * VD_CG_FFLOOR(d / VD_CG_FTAU);       }
 static VD_INLINE VdCgf32  vd_fclamp             (VdCgf32 min, VdCgf32 x, VdCgf32 max)           { if (x < min) return min; if (x > max) return max; return x; }
+static VD_INLINE VdCgf32  vd_flerp              (VdCgf32 a, VdCgf32 b, VdCgf32 t)               { return a + t * (b - a); }
+
+/* ----COLLISION DETECTION------------------------------------------------------------------------------------------- */
+static VD_INLINE Vdf3     vd_fclosest_point_tri (Vdf3 p, Vdf3 t0, Vdf3 t1, Vdf3 t2);
 
 /* ----VECTOR ALGEBRA IMPL------------------------------------------------------------------------------------------- */
 
@@ -635,6 +652,36 @@ static VD_INLINE Vdf4x4 vd_frotation_yaw4x4(VdCgf32 rad)
         0.f,             0.f, 0.f,              1.f);
 }
 
+static VD_INLINE Vdf4x4 vd_frotation_quat4x4(Vdfquat quat)
+{
+    VdCgf32 q0   = quat.w;  VdCgf32 q1   = quat.x;  VdCgf32 q2   = quat.y;  VdCgf32 q3   = quat.z;
+    VdCgf32 q0q0 = q0 * q0; VdCgf32 q1q1 = q1 * q1; VdCgf32 q2q2 = q2 * q2; VdCgf32 q3q3 = q3 * q3;
+    VdCgf32 q0q1 = q0 * q1; VdCgf32 q0q2 = q0 * q2; VdCgf32 q0q3 = q0 * q3;
+    VdCgf32 q1q2 = q1 * q2; VdCgf32 q1q3 = q1 * q3;
+    VdCgf32 q2q3 = q2 * q3;
+
+    return vd_fm4x4(
+        2.f * (q0q0 + q1q1) - 1.f, 2.f * (q1q2 - q0q3),       2.f * (q1q3 + q0q2),       0.f,
+        2.f * (q1q2 + q0q3),       2.f * (q0q0 + q2q2) - 1.f, 2.f * (q1q3 + q0q1),       0.f,
+        2.f * (q1q3 - q0q2),       2.f * (q2q3 + q0q1),       2.f * (q0q0 + q3q3) - 1.f, 0.f,
+        0.f,                       0.f,                       0.f,                       1.f);
+}
+
+static VD_INLINE Vdf4x4 vd_frotation_quat4x4col(Vdfquat quat)
+{
+    VdCgf32 q0   = quat.w;  VdCgf32 q1   = quat.x;  VdCgf32 q2   = quat.y;  VdCgf32 q3   = quat.z;
+    VdCgf32 q0q0 = q0 * q0; VdCgf32 q1q1 = q1 * q1; VdCgf32 q2q2 = q2 * q2; VdCgf32 q3q3 = q3 * q3;
+    VdCgf32 q0q1 = q0 * q1; VdCgf32 q0q2 = q0 * q2; VdCgf32 q0q3 = q0 * q3;
+    VdCgf32 q1q2 = q1 * q2; VdCgf32 q1q3 = q1 * q3;
+    VdCgf32 q2q3 = q2 * q3;
+
+    return vd_fm4x4(
+        2.f * (q0q0 + q1q1) - 1.f, 2.f * (q1q2 + q0q3),       2.f * (q1q3 - q0q2),       0.f,
+        2.f * (q1q2 - q0q3),       2.f * (q0q0 + q2q2) - 1.f, 2.f * (q2q3 + q0q1),       0.f,
+        2.f * (q1q3 + q0q2),       2.f * (q1q3 + q0q1),       2.f * (q0q0 + q3q3) - 1.f, 0.f,
+        0.f,                       0.f,                       0.f,                       1.f);
+}
+
 static VD_INLINE void vd_ftranslate4x4(Vdf4x4 *m, Vdf3 v)
 {
     Vdf4x4 t = vd_ftranslation4x4(v);
@@ -651,7 +698,16 @@ static VD_INLINE void vd_ftranslate4x4col(Vdf4x4 *m, Vdf3 v)
 
 static VD_INLINE void vd_frotatequat4x4(Vdf4x4 *m, Vdfquat quat)
 {
+    Vdf4x4 mq = vd_frotation_quat4x4(quat);
+    Vdf4x4 r  = vd_fmul4x4(m, &mq);
+    *m = r;
+}
 
+static VD_INLINE void vd_frotatequat4x4col(Vdf4x4 *m, Vdfquat quat)
+{
+    Vdf4x4 mq = vd_frotation_quat4x4col(quat);
+    Vdf4x4 r  = vd_fmul4x4(m, &mq);
+    *m = r;
 }
 
 static VD_INLINE void vd_frotate_yaw4x4(Vdf4x4 *m, VdCgf32 rad)
@@ -677,6 +733,63 @@ static VD_INLINE void vd_fprint4x4(Vdf4x4 *m)
     VD_LOGF("| %04.2f %04.2f %04.2f %04.2f | ", m->b0, m->b1, m->b2, m->b3);
     VD_LOGF("| %04.2f %04.2f %04.2f %04.2f | ", m->c0, m->c1, m->c2, m->c3);
     VD_LOGF("| %04.2f %04.2f %04.2f %04.2f | ", m->d0, m->d1, m->d2, m->d3);
+}
+
+/* ----COLLISION DETECTION------------------------------------------------------------------------------------------- */
+static VD_INLINE Vdf3 vd_fclosest_point_tri(Vdf3 p, Vdf3 t0, Vdf3 t1, Vdf3 t2)
+{
+    Vdf3 a = t0;
+    Vdf3 b = t1;
+    Vdf3 c = t2;
+
+    // Check if P is in vertex regions outside A
+    Vdf3 ab  = vd_fsub3(b, a);
+    Vdf3 ac  = vd_fsub3(c, a);
+    Vdf3 ap  = vd_fsub3(p, a);
+    float d1 = vd_fdot3(ab, ap);
+    float d2 = vd_fdot3(ac, ap);
+    if (d1 <= 0.0f && d2 <= 0.0f) return a;
+
+    // Check vertex region outside B
+    Vdf3 bp  = vd_fsub3(p, b);
+    float d3 = vd_fdot3(ab, bp);
+    float d4 = vd_fdot3(ac, bp);
+    if (d3 >= 0.0f && d4 <= d3) return b;
+
+    // Check edge region of AB
+    float vc = d1 * d4 - d3 * d2;
+    if (vc <= 0.0f && d1 >= 0.0f && d3 <= 0.0f) {
+        float v = d1 / (d1 - d3);
+        return vd_fadd3(a, vd_fscale3(ab, v));
+    }
+
+    // Check vertex region outside C
+    Vdf3 cp  = vd_fsub3(p, c);
+    float d5 = vd_fdot3(ab, cp);
+    float d6 = vd_fdot3(ac, cp);
+    if (d6 >= 0.0f && d5 <= d6) return c;
+
+    // Check edge region of AC
+    float vb = d5 * d2 - d1 * d6;
+    if (vb <= 0.0f && d2 >= 0.0f && d6 <= 0.0f) {
+        float w = d2 / (d2 - d6);
+        return vd_fadd3(a, vd_fscale3(ac, w));
+    }
+
+    // Check edge region of BC
+    float va = d3 * d6 - d5 * d4;
+    if (va <= 0.0f && (d4 - d3) >= 0.0f && (d5 - d6) >= 0.0f) {
+        float w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+        return vd_fadd3(b, vd_fscale3(vd_fsub3(c, b), w));
+    }
+
+    // Inside face region
+    float denom = 1.0f / (va + vb + vc);
+    float v = vb * denom;
+    float w = vc * denom;
+    Vdf3 result = vd_fadd3(a, vd_fscale3(ab, v));
+    result = vd_fadd3(result, vd_fscale3(ac, w));
+    return result;
 }
 
 #if VD_MACRO_ABBREVIATIONS
@@ -848,8 +961,12 @@ static VD_INLINE void vd_fprint4x4(Vdf4x4 *m)
 #define ftranslation4x4          vd_ftranslation4x4 
 #define ftranslation4x4col       vd_ftranslation4x4col
 #define frotation_yaw4x4         vd_frotation_yaw4x4 
+#define frotation_quat4x4        vd_frotation_quat4x4
+#define frotation_quat4x4col     vd_frotation_quat4x4col
 #define ftranslate4x4            vd_ftranslate4x4 
 #define ftranslate4x4col         vd_ftranslate4x4col
+#define frotatequat4x4           vd_frotatequat4x4
+#define frotatequat4x4col        vd_frotatequat4x4col
 #define frotate_yaw4x4           vd_frotate_yaw4x4 
 #define fvk_to_dx4x4             vd_fvk_to_dx4x4 
 
@@ -859,6 +976,7 @@ static VD_INLINE void vd_fprint4x4(Vdf4x4 *m)
 /* ----UTILITY------------------------------------------------------------------------------------------------------- */
 #define fwrap_degrees            vd_fwrap_degrees 
 #define fclamp                   vd_fclamp 
+#define flerp                    vd_flerp
 
 #endif // VD_MACRO_ABBREVIATIONS
 

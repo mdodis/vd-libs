@@ -41,44 +41,48 @@
  * ╚════════════════════════════════════════════════════════════╝
  * 
  * TODO
- * - Controller mapping & assignment
- *     - Gamepad Face Values
+ * - Close/Reopen Window
+ *     - vd_fw_quit()
+ *     - vd_fw_close_requested()
+ * - Gamepads
+ *     - Face Heuristics
+ *     - Class Heuristics
+ * - Win32: Use DeviceIoControl for XBOX controllers until they're correlated to XINPUT
+ * - vd_fw_get_last_key_pressed
+ * - vd_fw_get_last_mouse_button_pressed
+ * - Win32: Allow gamepad input even when window isn't focused?
+ * - Vulkan
+ *     - Win32: Required extensions function
+ *     - Win32: Query queue surface presentation support
+ *     - Win32: Implement vkCreateWin32SurfaceKHR
+ * - raw hat states
  * - D3D11 Sample
- * - Make sure /DUNICODE works for console printing
  * - File dialog
  * - OBS Studio breaks ChoosePixelFormat
  * - Make sure we can export functions properly for C++
  * - Expose customizable function pointer if the user needs to do something platform-specific before/after winthread has initialized or before vd_fw_init returns anyways.
  * - Have a way for a user to request OpenGL extensions/versions via a precedence array, and initialize the maximum possible version
- * - Use bit flags for buttons, an array is a bit overkill
- * - L4/R4, L5/R5, and maybe a secondary steam controller axis?
  * - Clipboard
+ * - Allow the user to switch graphics APIs on the fly? (opengl -> custom -> pixbuff -> custom -> opengl)
  * - Properly handle vd_fw_set_receive_ncmouse for clicks and scrolls
  * - Set mouse cursor to constants (resize, I, etc...)
  * - Have a way to store and load the window placement state (size, position, maximization state)
  * - Should vd_fw_set_receive_ncmouse be default 0 or 1?
  *   - Actually, consider removing it entirely
  * - set window unresizable
- * - vd_fw_get_executable_dir() <-- statically allocated char * of executable directory
- * - vd_fw_get_last_key_pressed
- * - vd_fw_get_last_mouse_button_pressed
- * - MacOS:vd_fw_minimize()
- * - MacOS:vd_fw_maximize()
- * - MacOS: vd_fw_set_app_icon
+ * - MacOS: vd_fw_get_executable_dir()
  * - MacOS: vd_fw_set_fullscreen
- * - MacOS: Use custom preprocessor option to disable OpenGL deprecation warnings
- * - When window not focused, or minimize, delay drawing?
+ * - MacOS: Gamepad Support
+ * - MacOS: Metal Sample
+ * - When window not focused, or minimized, delay drawing?
  * - Allow to request specific framerate?
- * - MacOS: There's no way to draw while resizing without changing the api?
- * - MacOS APIs can't be used on another thread other than main thread :/
- *   so, just initialize display link and wait on condition variable + mutex when drawing while resizing
  * - On borderless, push mouse event right as we lose focus to a value outside of the window space
  */
 #ifndef VD_FW_H
 #define VD_FW_H
 #define VD_FW_VERSION_MAJOR    0
 #define VD_FW_VERSION_MINOR    0
-#define VD_FW_VERSION_PATCH    1
+#define VD_FW_VERSION_PATCH    2
 #define VD_FW_VERSION          ((VD_FW_VERSION_MAJOR << 16) | (VD_FW_VERSION_MINOR << 8) | (VD_FW_VERSION_PATCH))
 
 #ifndef _CRT_SECURE_NO_WARNINGS
@@ -163,7 +167,7 @@
 #       define VD_FW_LOG(fmt, ...)
 #   else
 #       include <stdio.h>
-#       define VD_FW_LOG(fmt, ...) printf("vd_fw: " fmt "\n", __VA_ARGS__)
+#       define VD_FW_LOG(fmt, ...) printf("vd_fw: " fmt "\n", ## __VA_ARGS__)
 #   endif // VD_FW_NO_CRT
 #endif // !VD_FW_LOG
 
@@ -185,19 +189,14 @@
 
 #if !VD_FW_CUSTOM_TYPEDEFS
 #   include <stdint.h>
+#   include <stddef.h>
+#   define VdFwU8   uint8_t
 #   define VdFwU16  uint16_t
-#   define VdFwI32  int32_t
 #   define VdFwU32  uint32_t
+#   define VdFwI32  int32_t
 #   define VdFwSz   size_t
-#   define VdFwByte uint8_t
+#   define VdFwU64  uint64_t
 #endif // !VD_FW_CUSTOM_TYPEDEFS
-
-#define VD_FW_SWAP16(x) ((uint16_t)((x << 8) | (x >> 8)))
-#if VD_FW_ENDIANNESS == VD_FW_ENDIANNESS_LE
-#   define VD_FW_SWAP16LE(x) (x)
-#else
-#   define VD_FW_SWAP16LE(x) VD_FW_SWAP16(x)
-#endif
 
 #ifndef VD_FW_GAMEPAD_COUNT_MAX
 #   define VD_FW_GAMEPAD_COUNT_MAX 16
@@ -206,6 +205,19 @@
 #ifndef VD_FW_GAMEPAD_DB_DEFAULT
 #   define VD_FW_GAMEPAD_DB_DEFAULT 1
 #endif // !VD_FW_GAMEPAD_DB_DEFAULT
+
+#ifndef VD_FW_NCRECTS_MAX
+#   define VD_FW_NCRECTS_MAX 16
+#endif // !VD_FW_NCRECTS_MAX
+
+#define VD_FW_ARRAY_COUNT(x) (sizeof(x)/sizeof(x[0]))
+
+#define VD_FW_SWAP16(x) ((VdFwU16)((x << 8) | (x >> 8)))
+#if VD_FW_ENDIANNESS == VD_FW_ENDIANNESS_LE
+#   define VD_FW_SWAP16LE(x) (x)
+#else
+#   define VD_FW_SWAP16LE(x) VD_FW_SWAP16(x)
+#endif
 
 typedef enum {
     VD_FW_GL_VERSION_BASIC = 0,
@@ -225,224 +237,7 @@ enum /*VdFwPlatformEnum*/ {
     VD_FW_PLATFORM_ANDROID,
     VD_FW_PLATFORM_IOS,
 };
-typedef uint8_t VdFwPlatform;
-
-enum {
-    VD_FW_KEY_UNKNOWN       = 0,
-    VD_FW_KEY_F1  = 1,  VD_FW_KEY_F2  = 2,  VD_FW_KEY_F3  = 3,  VD_FW_KEY_F4  = 4,
-    VD_FW_KEY_F5  = 5,  VD_FW_KEY_F6  = 6,  VD_FW_KEY_F7  = 7,  VD_FW_KEY_F8  = 8,
-    VD_FW_KEY_F9  = 9,  VD_FW_KEY_F10 = 10, VD_FW_KEY_F11 = 11, VD_FW_KEY_F12 = 12,
-    VD_FW_KEY_F13 = 13, VD_FW_KEY_F14 = 14, VD_FW_KEY_F15 = 15, VD_FW_KEY_F16 = 16,
-    VD_FW_KEY_F17 = 17, VD_FW_KEY_F18 = 18, VD_FW_KEY_F19 = 19, VD_FW_KEY_F20 = 20,
-    VD_FW_KEY_F21 = 21, VD_FW_KEY_F22 = 22, VD_FW_KEY_F23 = 23, VD_FW_KEY_F24 = 24,
-    VD_FW_KEY_BACKSPACE     = 25,  
-    VD_FW_KEY_INS = 26, VD_FW_KEY_HOME = 27, VD_FW_KEY_PGUP = 28,
-    VD_FW_KEY_DEL = 29, VD_FW_KEY_END  = 30, VD_FW_KEY_PGDN = 31,
-    VD_FW_KEY_SPACE         = 32,  /* ' ' */
-    VD_FW_KEY_LCONTROL = 33, VD_FW_KEY_RCONTROL = 34,
-    VD_FW_KEY_LALT     = 35, VD_FW_KEY_RALT     = 36,
-    VD_FW_KEY_LSHIFT   = 37, VD_FW_KEY_RSHIFT   = 38,
-    VD_FW_KEY_QUOTE         = 39,  /* '\''*/
-    VD_FW_KEY_ARROW_UP   = 40,
-    VD_FW_KEY_ARROW_LEFT = 41, VD_FW_KEY_ARROW_DOWN = 42, VD_FW_KEY_ARROW_RIGHT = 43,
-    VD_FW_KEY_COMMA         = 44,  /* ','*/
-    VD_FW_KEY_MINUS         = 45,  /* '-' */
-    VD_FW_KEY_DOT           = 46,  /* '.' */
-    VD_FW_KEY_SLASH_FORWARD = 47,  /* '/' */
-    VD_FW_KEY_0             = 48,  /* '0' */
-    VD_FW_KEY_1             = 49,  /* '1' */
-    VD_FW_KEY_2             = 50,  /* '2' */
-    VD_FW_KEY_3             = 51,  /* '3' */
-    VD_FW_KEY_4             = 52,  /* '4' */
-    VD_FW_KEY_5             = 53,  /* '5' */
-    VD_FW_KEY_6             = 54,  /* '6' */
-    VD_FW_KEY_7             = 55,  /* '7' */
-    VD_FW_KEY_8             = 56,  /* '8' */
-    VD_FW_KEY_9             = 57,  /* '9' */
-    VD_FW_KEY_ENTER         = 58,
-    VD_FW_KEY_SEMICOLON     = 59,  /* ';' */
-    VD_FW_KEY_TAB           = 60,
-    VD_FW_KEY_EQUALS        = 61,  /* '=' */
-    VD_FW_KEY_CAPITAL       = 62,
-    VD_FW_KEY_ESCAPE        = 63,
-    VD_FW_KEY_RESERVED1     = 64,  /* '@' */
-    VD_FW_KEY_A = 65, VD_FW_KEY_B = 66, VD_FW_KEY_C = 67, VD_FW_KEY_D = 68,
-    VD_FW_KEY_E = 69, VD_FW_KEY_F = 70, VD_FW_KEY_G = 71, VD_FW_KEY_H = 72,
-    VD_FW_KEY_I = 73, VD_FW_KEY_J = 74, VD_FW_KEY_K = 75, VD_FW_KEY_L = 76,
-    VD_FW_KEY_M = 77, VD_FW_KEY_N = 78, VD_FW_KEY_O = 79, VD_FW_KEY_P = 80,
-    VD_FW_KEY_Q = 81, VD_FW_KEY_R = 82, VD_FW_KEY_S = 83, VD_FW_KEY_T = 84,
-    VD_FW_KEY_U = 85, VD_FW_KEY_V = 86, VD_FW_KEY_W = 87, VD_FW_KEY_X = 88,
-    VD_FW_KEY_Y = 89,
-    VD_FW_KEY_Z = 90,
-    VD_FW_KEY_BRACKET_OPEN  = 91,  /* '[' */
-    VD_FW_KEY_SLASH_BACK    = 92,  /* '\\' */
-    VD_FW_KEY_BRACKET_CLOSE = 93,  /* ']' */
-    VD_FW_KEY_MEDIA_NEXT    = 94,  /* Media Next Track */
-    VD_FW_KEY_MEDIA_PREV    = 95,  /* Media Prev Track */
-    VD_FW_KEY_BACKTICK      = 96,  /* '`' */
-    VD_FW_KEY_MEDIA_PLAY    = 97,  /* Media Play/Pause */
-    VD_FW_KEY_NUMPAD_0      = 98,  /* Numpad 0 */
-    VD_FW_KEY_NUMPAD_1      = 99,  /* Numpad 1 */
-    VD_FW_KEY_NUMPAD_2      = 100, /* Numpad 2 */
-    VD_FW_KEY_NUMPAD_3      = 101, /* Numpad 3 */
-    VD_FW_KEY_NUMPAD_4      = 102, /* Numpad 4 */
-    VD_FW_KEY_NUMPAD_5      = 103, /* Numpad 5 */
-    VD_FW_KEY_NUMPAD_6      = 104, /* Numpad 6 */
-    VD_FW_KEY_NUMPAD_7      = 105, /* Numpad 7 */
-    VD_FW_KEY_NUMPAD_8      = 106, /* Numpad 8 */
-    VD_FW_KEY_NUMPAD_9      = 107, /* Numpad 9 */
-    VD_FW_KEY_MAX,
-};
-typedef int VdFwKey;
-
-enum {
-    VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN   = 1 << 0,
-    VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN  = 1 << 1,
-    VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN = 1 << 2,
-
-    VD_FW_MOUSE_BUTTON_LEFT   = VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN,
-    VD_FW_MOUSE_BUTTON_RIGHT  = VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN,
-    VD_FW_MOUSE_BUTTON_MIDDLE = VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN,
-};
-
-enum {
-    // XBox Style Buttons
-    VD_FW_GAMEPAD_UNKNOWN = 0,
-    VD_FW_GAMEPAD_A,
-    VD_FW_GAMEPAD_B,
-    VD_FW_GAMEPAD_X,
-    VD_FW_GAMEPAD_Y,
-    VD_FW_GAMEPAD_DUP,
-    VD_FW_GAMEPAD_DDOWN,
-    VD_FW_GAMEPAD_DLEFT,
-    VD_FW_GAMEPAD_DRIGHT,
-    VD_FW_GAMEPAD_START,
-    VD_FW_GAMEPAD_BACK,
-    VD_FW_GAMEPAD_LEFT_SHOULDER,
-    VD_FW_GAMEPAD_RIGHT_SHOULDER,
-    VD_FW_GAMEPAD_LEFT_STICK,
-    VD_FW_GAMEPAD_RIGHT_STICK,
-    VD_FW_GAMEPAD_BUTTON_MAX,
-
-    // Playstation Style Buttons
-    VD_FW_GAMEPAD_CROSS    = VD_FW_GAMEPAD_A,
-    VD_FW_GAMEPAD_CIRCLE   = VD_FW_GAMEPAD_B,
-    VD_FW_GAMEPAD_SQUARE   = VD_FW_GAMEPAD_X,
-    VD_FW_GAMEPAD_TRIANGLE = VD_FW_GAMEPAD_Y,
-    VD_FW_GAMEPAD_SELECT   = VD_FW_GAMEPAD_BACK,
-    VD_FW_GAMEPAD_L1       = VD_FW_GAMEPAD_LEFT_SHOULDER,
-    VD_FW_GAMEPAD_R1       = VD_FW_GAMEPAD_RIGHT_SHOULDER,
-    VD_FW_GAMEPAD_L3       = VD_FW_GAMEPAD_LEFT_STICK,
-    VD_FW_GAMEPAD_R3       = VD_FW_GAMEPAD_RIGHT_STICK,
-
-    VD_FW_GAMEPAD_H = 0 >> 1,
-    VD_FW_GAMEPAD_V = 2 >> 1,
-    VD_FW_GAMEPAD_L = 0 << 1,
-    VD_FW_GAMEPAD_R = 1 << 1,
-    VD_FW_GAMEPAD_LH = VD_FW_GAMEPAD_L | VD_FW_GAMEPAD_H,
-    VD_FW_GAMEPAD_LV = VD_FW_GAMEPAD_L | VD_FW_GAMEPAD_V,
-    VD_FW_GAMEPAD_RH = VD_FW_GAMEPAD_R | VD_FW_GAMEPAD_H,
-    VD_FW_GAMEPAD_RV = VD_FW_GAMEPAD_R | VD_FW_GAMEPAD_V,
-    VD_FW_GAMEPAD_L2 = 4,
-    VD_FW_GAMEPAD_R2 = 5,
-    VD_FW_GAMEPAD_LT = VD_FW_GAMEPAD_L2,
-    VD_FW_GAMEPAD_RT = VD_FW_GAMEPAD_R2,
-    VD_FW_GAMEPAD_AXIS_MAX,
-};
-typedef int VdFwGamepadInput;
-
-enum {
-    VD_FW_GAMEPAD_API_UNKNOWN = 0,
-    VD_FW_GAMEPAD_API_RAWINPUT = 1,
-    VD_FW_GAMEPAD_API_XINPUT = 2,
-};
-
-enum {
-    VD_FW_GAMEPAD_INPUT_TYPE_DIGITAL,
-    VD_FW_GAMEPAD_INPUT_TYPE_AXIAL,
-    VD_FW_GAMEPAD_INPUT_TYPE_HAT_SWITCH,
-};
-
-enum {
-    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_NONE = 0,
-    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON = 1,
-    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT = 2,
-    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS = 3,
-    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_MASK = 0b00000011,
-
-    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_BUTTON_TO_AXIS = (1 << 2),
-    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_AXIS_TO_BUTTON = (1 << 3),
-    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_PARTWISE       = (1 << 4),
-    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_SPLIT          = (1 << 5),
-    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_INVERTED       = (1 << 6),
-    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_ZERO_TO_MAX    = (1 << 7),
-
-    VD_FW_GAMEPAD_MAX_MAPPINGS = 48,
-
-    VD_FW_GAMEPAD_RUMBLE_TYPE_NOT_AVAILABLE = 0,
-    // 'w': Writes instantly to file
-    VD_FW_GAMEPAD_RUMBLE_TYPE_RAW           = 1,
-    VD_FW_GAMEPAD_RUMBLE_TYPE_XINPUT        = 2,
-
-    VD_FW_GAMEPAD_RUMBLE_MAX_PREFIX_BYTES   = 14,
-};
-typedef uint8_t VdFwGamepadMappingSourceKind;
-
-typedef struct {
-    VdFwGamepadMappingSourceKind kind;  
-    unsigned char                target;
-    unsigned short               index;
-} VdFwGamepadMapEntry;
-
-typedef union {
-    VdFwU32 whole;
-    struct {
-        VdFwU16 offset;
-        VdFwU16 byte_length;
-    } parts;
-} VdFwGamepadSignificantPacketPosition;
-
-typedef struct {
-    VdFwByte type;
-    VdFwByte prefix_len;
-    VdFwByte prefix[VD_FW_GAMEPAD_RUMBLE_MAX_PREFIX_BYTES];
-    union {
-        struct {
-            VdFwGamepadSignificantPacketPosition    rumble_lo;
-            VdFwGamepadSignificantPacketPosition    rumble_hi;
-        } raw;
-    } dat;
-} VdFwGamepadRumbleConfig;
-
-typedef struct {
-    VdFwGamepadMapEntry     mappings[VD_FW_GAMEPAD_MAX_MAPPINGS];
-    VdFwGamepadRumbleConfig rumble_config;
-} VdFwGamepadMap;
-
-typedef struct {
-    float rumble_lo;
-    float rumble_hi;
-} VdFwGamepadRumbleState;
-
-typedef union {
-    unsigned char dat[16];
-    struct {
-        uint16_t bus;
-        uint16_t crc;
-        uint16_t vendor_id;
-        uint16_t reserved0;
-        uint16_t product_id;
-        uint16_t reserved1;
-        uint16_t version;
-        uint8_t  driver_signature;
-        uint8_t  driver_data;
-    } parts;
-} VdFwGuid;
-
-typedef struct {
-    VdFwGuid        guid;
-    VdFwGamepadMap  map;
-} VdFwGamepadDBEntry;
+typedef VdFwU8 VdFwPlatform;
 
 typedef enum {
     VD_FW_GRAPHICS_API_OPENGL = 0,
@@ -460,10 +255,6 @@ typedef struct {
         /* Whether to enable a debug console to show you errors produced by GL calls */
         int             debug_on;
     } gl;
-
-    struct {
-        int             xinput_disabled;
-    } win32;
 
     struct {
         /* Set to 1 to disable window frame. */
@@ -490,6 +281,13 @@ VD_FW_API int                vd_fw_running(void);
  */
 VD_FW_API int                vd_fw_swap_buffers(void);
 
+/**
+ * @brief Get the current platform.
+ * @return  The current platform.
+ */
+VD_FW_API VdFwPlatform       vd_fw_get_platform(void);
+
+/* ----WINDOW-------------------------------------------------------------------------------------------------------- */
 /**
  * @brief Get the size of the window, in pixels
  * @param  w The width of the window, in pixels
@@ -595,7 +393,7 @@ VD_FW_API void               vd_fw_set_title(const char *title);
 
 /**
  * @brief Set the icon of the window and application
- * @param  pixels A packed A8B8G8R8 pixel buffer
+ * @param  pixels A packed A8R8G8B8 pixel buffer
  * @param  width  The width of the icon, in pixels, must be at least 16px
  * @param  height The height of the icon, in pixels, must be at least 16px
  */
@@ -619,6 +417,28 @@ VD_FW_INL float              vd_fw_delta_s(void);
  * @return 1 if the change was applied successfully
  */
 VD_FW_API int                vd_fw_set_vsync_on(int on);
+
+/**
+ * @brief Get the fully-qualified path to the executable without the last path separator.
+ * @param  len Length of the UTF-8 string, in bytes.
+ * @return     A callee-allocated string. There's no need to free it.
+ */
+VD_FW_API const char*        vd_fw_get_executable_dir(int *len);
+
+/* ----MOUSE--------------------------------------------------------------------------------------------------------- */
+enum {
+    VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN   = 1 << 0,
+    VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN  = 1 << 1,
+    VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN = 1 << 2,
+    VD_FW_MOUSE_STATE_M1_BUTTON_DOWN     = 1 << 3,
+    VD_FW_MOUSE_STATE_M2_BUTTON_DOWN     = 1 << 4,
+
+    VD_FW_MOUSE_BUTTON_LEFT   = VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN,
+    VD_FW_MOUSE_BUTTON_RIGHT  = VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN,
+    VD_FW_MOUSE_BUTTON_MIDDLE = VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN,
+    VD_FW_MOUSE_BUTTON_M1     = VD_FW_MOUSE_STATE_M1_BUTTON_DOWN,
+    VD_FW_MOUSE_BUTTON_M2     = VD_FW_MOUSE_STATE_M2_BUTTON_DOWN,
+};
 
 /**
  * @brief Read the mouse state.
@@ -684,6 +504,65 @@ VD_FW_API int                vd_fw_get_mouse_locked(void);
  */
 VD_FW_API int                vd_fw_get_mouse_wheel(float *dx, float *dy);
 
+/* ----KEYBOARD------------------------------------------------------------------------------------------------------ */
+enum {
+    VD_FW_KEY_UNKNOWN       = 0,
+    VD_FW_KEY_F1  = 1,  VD_FW_KEY_F2  = 2,  VD_FW_KEY_F3  = 3,  VD_FW_KEY_F4  = 4,
+    VD_FW_KEY_F5  = 5,  VD_FW_KEY_F6  = 6,  VD_FW_KEY_F7  = 7,  VD_FW_KEY_F8  = 8,
+    VD_FW_KEY_F9  = 9,  VD_FW_KEY_F10 = 10, VD_FW_KEY_F11 = 11, VD_FW_KEY_F12 = 12,
+    VD_FW_KEY_F13 = 13, VD_FW_KEY_F14 = 14, VD_FW_KEY_F15 = 15, VD_FW_KEY_F16 = 16,
+    VD_FW_KEY_F17 = 17, VD_FW_KEY_F18 = 18, VD_FW_KEY_F19 = 19, VD_FW_KEY_F20 = 20,
+    VD_FW_KEY_F21 = 21, VD_FW_KEY_F22 = 22, VD_FW_KEY_F23 = 23, VD_FW_KEY_F24 = 24,
+    VD_FW_KEY_BACKSPACE     = 25,  
+    VD_FW_KEY_INS = 26, VD_FW_KEY_HOME = 27, VD_FW_KEY_PGUP = 28,
+    VD_FW_KEY_DEL = 29, VD_FW_KEY_END  = 30, VD_FW_KEY_PGDN = 31,
+    VD_FW_KEY_SPACE         = 32,  /* ' ' */
+    VD_FW_KEY_LCONTROL = 33, VD_FW_KEY_RCONTROL = 34,
+    VD_FW_KEY_LALT     = 35, VD_FW_KEY_RALT     = 36,
+    VD_FW_KEY_LSHIFT   = 37, VD_FW_KEY_RSHIFT   = 38,
+    VD_FW_KEY_QUOTE         = 39,  /* '\''*/
+    VD_FW_KEY_ARROW_UP   = 40,
+    VD_FW_KEY_ARROW_LEFT = 41, VD_FW_KEY_ARROW_DOWN = 42, VD_FW_KEY_ARROW_RIGHT = 43,
+    VD_FW_KEY_COMMA         = 44,  /* ','*/
+    VD_FW_KEY_MINUS         = 45,  /* '-' */
+    VD_FW_KEY_DOT           = 46,  /* '.' */
+    VD_FW_KEY_SLASH_FORWARD = 47,  /* '/' */
+    VD_FW_KEY_0 = 48,  /* '0' */ VD_FW_KEY_1 = 49,  /* '1' */
+    VD_FW_KEY_2 = 50,  /* '2' */ VD_FW_KEY_3 = 51,  /* '3' */
+    VD_FW_KEY_4 = 52,  /* '4' */ VD_FW_KEY_5 = 53,  /* '5' */
+    VD_FW_KEY_6 = 54,  /* '6' */ VD_FW_KEY_7 = 55,  /* '7' */
+    VD_FW_KEY_8 = 56,  /* '8' */ VD_FW_KEY_9 = 57,  /* '9' */
+    VD_FW_KEY_ENTER         = 58,
+    VD_FW_KEY_SEMICOLON     = 59,  /* ';' */
+    VD_FW_KEY_TAB           = 60,
+    VD_FW_KEY_EQUALS        = 61,  /* '=' */
+    VD_FW_KEY_CAPITAL       = 62,
+    VD_FW_KEY_ESCAPE        = 63,
+    VD_FW_KEY_RESERVED1     = 64,  /* '@' */
+    VD_FW_KEY_A = 65, VD_FW_KEY_B = 66, VD_FW_KEY_C = 67, VD_FW_KEY_D = 68,
+    VD_FW_KEY_E = 69, VD_FW_KEY_F = 70, VD_FW_KEY_G = 71, VD_FW_KEY_H = 72,
+    VD_FW_KEY_I = 73, VD_FW_KEY_J = 74, VD_FW_KEY_K = 75, VD_FW_KEY_L = 76,
+    VD_FW_KEY_M = 77, VD_FW_KEY_N = 78, VD_FW_KEY_O = 79, VD_FW_KEY_P = 80,
+    VD_FW_KEY_Q = 81, VD_FW_KEY_R = 82, VD_FW_KEY_S = 83, VD_FW_KEY_T = 84,
+    VD_FW_KEY_U = 85, VD_FW_KEY_V = 86, VD_FW_KEY_W = 87, VD_FW_KEY_X = 88,
+    VD_FW_KEY_Y = 89,
+    VD_FW_KEY_Z = 90,
+    VD_FW_KEY_BRACKET_OPEN  = 91,  /* '[' */
+    VD_FW_KEY_SLASH_BACK    = 92,  /* '\\' */
+    VD_FW_KEY_BRACKET_CLOSE = 93,  /* ']' */
+    VD_FW_KEY_MEDIA_NEXT    = 94,  /* Media Next Track */
+    VD_FW_KEY_MEDIA_PREV    = 95,  /* Media Prev Track */
+    VD_FW_KEY_BACKTICK      = 96,  /* '`' */
+    VD_FW_KEY_MEDIA_PLAY    = 97,  /* Media Play/Pause */
+    VD_FW_KEY_NUMPAD_0 = 98,  /* Numpad 0 */ VD_FW_KEY_NUMPAD_1 = 99,  /* Numpad 1 */
+    VD_FW_KEY_NUMPAD_2 = 100, /* Numpad 2 */ VD_FW_KEY_NUMPAD_3 = 101, /* Numpad 3 */
+    VD_FW_KEY_NUMPAD_4 = 102, /* Numpad 4 */ VD_FW_KEY_NUMPAD_5 = 103, /* Numpad 5 */
+    VD_FW_KEY_NUMPAD_6 = 104, /* Numpad 6 */ VD_FW_KEY_NUMPAD_7 = 105, /* Numpad 7 */
+    VD_FW_KEY_NUMPAD_8 = 106, /* Numpad 8 */ VD_FW_KEY_NUMPAD_9 = 107, /* Numpad 9 */
+    VD_FW_KEY_MAX,
+};
+typedef int VdFwKey;
+
 /**
  * @brief Get whether a key was just pressed this frame
  * @param  key The key to check
@@ -705,20 +584,374 @@ VD_FW_API int                vd_fw_get_key_down(int key);
  */
 VD_FW_INL const char*        vd_fw_get_key_name(VdFwKey k);
 
+/* ----GAMEPADS------------------------------------------------------------------------------------------------------ */
+enum {
+    // XBox Style Buttons
+    VD_FW_GAMEPAD_UNKNOWN = 0,
+    VD_FW_GAMEPAD_A,
+    VD_FW_GAMEPAD_B,
+    VD_FW_GAMEPAD_X,
+    VD_FW_GAMEPAD_Y,
+    VD_FW_GAMEPAD_DUP,
+    VD_FW_GAMEPAD_DDOWN,
+    VD_FW_GAMEPAD_DLEFT,
+    VD_FW_GAMEPAD_DRIGHT,
+    VD_FW_GAMEPAD_START,
+    VD_FW_GAMEPAD_BACK,
+    VD_FW_GAMEPAD_LEFT_SHOULDER,
+    VD_FW_GAMEPAD_RIGHT_SHOULDER,
+    VD_FW_GAMEPAD_LEFT_STICK,
+    VD_FW_GAMEPAD_RIGHT_STICK,
+    VD_FW_GAMEPAD_LEFT_PAD0,
+    VD_FW_GAMEPAD_RIGHT_PAD0,
+    VD_FW_GAMEPAD_LEFT_PAD1,
+    VD_FW_GAMEPAD_RIGHT_PAD1,
+    VD_FW_GAMEPAD_LEFT_PAD2,
+    VD_FW_GAMEPAD_RIGHT_PAD2,
+    VD_FW_GAMEPAD_AUX0,
+    VD_FW_GAMEPAD_AUX1,
+    VD_FW_GAMEPAD_AUX2,
+    VD_FW_GAMEPAD_AUX3,
+    VD_FW_GAMEPAD_AUX4,
+    VD_FW_GAMEPAD_AUX5,
+    VD_FW_GAMEPAD_AUX6,
+    VD_FW_GAMEPAD_AUX7,
+    VD_FW_GAMEPAD_AUX8,
+    VD_FW_GAMEPAD_AUX9,
+    VD_FW_GAMEPAD_BUTTON_MAX,
+
+    // Playstation Style Buttons
+    VD_FW_GAMEPAD_CROSS    = VD_FW_GAMEPAD_A,
+    VD_FW_GAMEPAD_CIRCLE   = VD_FW_GAMEPAD_B,
+    VD_FW_GAMEPAD_SQUARE   = VD_FW_GAMEPAD_X,
+    VD_FW_GAMEPAD_TRIANGLE = VD_FW_GAMEPAD_Y,
+    VD_FW_GAMEPAD_SELECT   = VD_FW_GAMEPAD_BACK,
+    VD_FW_GAMEPAD_L1       = VD_FW_GAMEPAD_LEFT_SHOULDER,
+    VD_FW_GAMEPAD_R1       = VD_FW_GAMEPAD_RIGHT_SHOULDER,
+    VD_FW_GAMEPAD_L3       = VD_FW_GAMEPAD_LEFT_STICK,
+    VD_FW_GAMEPAD_R3       = VD_FW_GAMEPAD_RIGHT_STICK,
+
+    VD_FW_GAMEPAD_H = 0 >> 1,
+    VD_FW_GAMEPAD_V = 2 >> 1,
+    VD_FW_GAMEPAD_L = 0 << 1,
+    VD_FW_GAMEPAD_R = 1 << 1,
+    VD_FW_GAMEPAD_LH = VD_FW_GAMEPAD_L | VD_FW_GAMEPAD_H,
+    VD_FW_GAMEPAD_LV = VD_FW_GAMEPAD_L | VD_FW_GAMEPAD_V,
+    VD_FW_GAMEPAD_RH = VD_FW_GAMEPAD_R | VD_FW_GAMEPAD_H,
+    VD_FW_GAMEPAD_RV = VD_FW_GAMEPAD_R | VD_FW_GAMEPAD_V,
+    VD_FW_GAMEPAD_L2 = 4,
+    VD_FW_GAMEPAD_R2 = 5,
+    VD_FW_GAMEPAD_LT = VD_FW_GAMEPAD_L2,
+    VD_FW_GAMEPAD_RT = VD_FW_GAMEPAD_R2,
+    VD_FW_GAMEPAD_AXIS_MAX,
+};
+typedef int VdFwGamepadInput;
+
+enum {
+    VD_FW_GAMEPAD_FACE_UNKNOWN = 0,
+    VD_FW_GAMEPAD_FACE_NUMBERED,    /* face:numbered */
+    VD_FW_GAMEPAD_FACE_XBOX,        /* face:xbox */
+    VD_FW_GAMEPAD_FACE_PLAYSTATION, /* face:playstation */
+    VD_FW_GAMEPAD_FACE_NINTENDO,    /* face:nintendo */
+    VD_FW_GAMEPAD_FACE_MAX,
+};
+typedef VdFwU8 VdFwGamepadFace;
+
+// Gamepads are ranked based weighted-importance input capability
+// Generally, higher value -> more important inputs
+// 
+// For Gamepads that have the same amount of buttons but not with the same locality/affordance, Gameplay/Control buttons
+// are deemed more significant.
+// 
+// The names somewhat map to the system/controller, but since those systems may or may not support more/less capable
+// controllers or controller features, it should only be considered a mnemonic, and the GUID should be used instead.
+//
+// Some controllers, for example official controllers for the Playstation 2 system have even more capabilities, like
+// pressure sensitive face buttons. For the purpose of this cross-platform library, they are not considered if they
+// were relatively unpopular in games shipped with that system.
+// 
+// Additionally, controller inputs that do not explicitly indicate analog usage are also ignored (again, like the PS2
+// pressure-sensitive shoulders/triggers).
+enum {
+    VD_FW_GAMEPAD_CLASS_INVALID = 0,
+    // class:nes          | 1 PoV, 2 Control, 2 System
+    VD_FW_GAMEPAD_CLASS_NES,
+    // class:megadrive    | 1 PoV, 3 Control, 1 System
+    VD_FW_GAMEPAD_CLASS_MEGADRIVE,
+    // class:genesis      | 1 PoV, 6 Control, 2 System
+    VD_FW_GAMEPAD_CLASS_GENESIS,
+    // class:snes         | 1 PoV, 4 Control, 2 System, 2 Symmetrical
+    VD_FW_GAMEPAD_CLASS_SNES,
+    // class:ps1          | 1 PoV, 4 Control, 2 System, 4 Symmetrical
+    VD_FW_GAMEPAD_CLASS_PS1,
+    // class:joycon       |        4 Control, 2 System, 2 Symmetrical, 1 Clickable Stick
+    VD_FW_GAMEPAD_CLASS_JOYCON,
+    // class:n64          | 1 PoV, 6 Control, 2 System, 2 Symmetrical, 1 Stick
+    VD_FW_GAMEPAD_CLASS_N64,
+    // class:ps2          | 1 PoV, 4 Control, 2 System, 4 Symmetrical, 2 Clickable Sticks
+    VD_FW_GAMEPAD_CLASS_PS2,
+    // class:xbox         | 1 PoV, 4 Control, 2 System, 2 Symmetrical, 2 Clickable Sticks, 2 Symmetrical Axes
+    VD_FW_GAMEPAD_CLASS_XBOX,
+    // class:ps4          | 1 PoV, 4 Control, 2 System, 2 Symmetrical, 2 Clickable Sticks, 2 Symmetrical Axes, 1 Touchpad
+    VD_FW_GAMEPAD_CLASS_PS4,
+    // class:steamdeck    | 1 PoV, 4 Control, 2 System, 6 Symmetrical, 2 Clickable Sticks, 2 Symmetrical Axes, 2 Touchpads 
+    VD_FW_GAMEPAD_CLASS_STEAMDECK,
+    VD_FW_GAMEPAD_CLASS_MAX,
+};
+typedef VdFwU8 VdFwGamepadClass;
+
+// ATTENTION
+// Most of the enums regarding gamepad mapping are intended for internal usage
+// But they are present here for future usages/features and to allow you to stack-allocate
+// Gamepad entries, get debugging info and so on.
+enum {
+    VD_FW_GAMEPAD_INPUT_TYPE_DIGITAL,
+    VD_FW_GAMEPAD_INPUT_TYPE_AXIAL,
+    VD_FW_GAMEPAD_INPUT_TYPE_HAT_SWITCH,
+};
+
+enum {
+    // No source kind. Used for the terminating entry.
+    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_NONE = 0,
+    // Digital state input in report.
+    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON = 1,
+    // Directional PoV input in report. Usually 0-7 or 1-8 to indicate NESW direction coming from d-pad
+    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT = 2,
+    // Axial input in report.
+    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS = 3,
+    // Use this to mask a VdFwGamepadMappingSourceKind variable to get the aforementioned source kinds.
+    VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_MASK = 0b00000011,
+
+    // Reinterpret button as axis (On/Off) -> (1.0/0.0).
+    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_BUTTON_TO_AXIS = (1 << 2),
+    // Reinterpret axis as button (+0.1/0.0) -> (On/Off).
+    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_AXIS_TO_BUTTON = (1 << 3),
+    // Reinterpret input axis value as a 2 part vd_fw axis (rarely used).
+    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_PARTWISE       = (1 << 4),
+    // Reserved.
+    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_SPLIT          = (1 << 5),
+    // Invert button or axis values ([0.0, 1.0] -> [1.0, 0.0])
+    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_INVERTED       = (1 << 6),
+    // Combined with other source flags to handle usage value reports that express multiple controller analog inputs.
+    VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_ZERO_TO_MAX    = (1 << 7),
+
+    VD_FW_GAMEPAD_MAX_MAPPINGS = 48,
+
+    // Some Gamepads, while shipping with rumble motors may not support rumble (or the state packets that should be sent
+    // to manipulate the actuators is unknown).
+    // 
+    // Additionally, certain gamepads, like 8BitDo may support rumble based on the mode they're in (e.g.
+    // XInput-Compatible vs. RawInput/DirectInput-Compatible)
+    VD_FW_GAMEPAD_RUMBLE_TYPE_NOT_AVAILABLE = 0,
+
+    // rumble:w<prefix>llhh: Writes instantly to file
+    VD_FW_GAMEPAD_RUMBLE_TYPE_RAW           = 1,
+
+    // Used Internally when a gamepad has been correlated to an xinput dwUserIndex
+    VD_FW_GAMEPAD_RUMBLE_TYPE_XINPUT        = 2,
+
+    VD_FW_GAMEPAD_RUMBLE_MAX_PREFIX_BYTES   = 14,
+};
+typedef VdFwU8 VdFwGamepadMappingSourceKind;
+
+typedef struct {
+    VdFwGamepadMappingSourceKind kind;  
+    unsigned char                target;
+    unsigned short               index;
+} VdFwGamepadMapEntry;
+
+typedef union {
+    VdFwU32 whole;
+    struct {
+        VdFwU16 offset;
+        VdFwU16 byte_length;
+    } parts;
+} VdFwGamepadSignificantPacketPosition;
+
+typedef struct {
+    VdFwU8 type;
+    VdFwU8 prefix_len;
+    VdFwU8 prefix[VD_FW_GAMEPAD_RUMBLE_MAX_PREFIX_BYTES];
+    union {
+        struct {
+            VdFwGamepadSignificantPacketPosition    rumble_lo;
+            VdFwGamepadSignificantPacketPosition    rumble_hi;
+        } raw;
+    } dat;
+} VdFwGamepadRumbleConfig;
+
+typedef struct {
+    VdFwGamepadMapEntry     mappings[VD_FW_GAMEPAD_MAX_MAPPINGS];
+    VdFwGamepadRumbleConfig rumble_config;
+    VdFwGamepadFace         face;
+    VdFwGamepadClass        klass;
+} VdFwGamepadMap;
+
+typedef struct {
+    float rumble_lo;
+    float rumble_hi;
+} VdFwGamepadRumbleState;
+
+typedef union {
+    VdFwU8 dat[16];
+    struct {
+        VdFwU16 bus;
+        VdFwU16 crc;
+        VdFwU16 vendor_id;
+        VdFwU16 reserved0;
+        VdFwU16 product_id;
+        VdFwU16 reserved1;
+        VdFwU16 version;
+        VdFwU8  driver_signature;
+        VdFwU8  driver_data;
+    } parts;
+} VdFwGuid;
+
+typedef struct {
+    VdFwGuid       guid;
+    VdFwGamepadMap map;
+} VdFwGamepadDBEntry;
+
+/**
+ * @brief Gets the number of gamepads currently connected
+ * @return  The number of currently connected gamepads
+ */
 VD_FW_API int                vd_fw_get_gamepad_count(void);
-VD_FW_API int                vd_fw_get_gamepad_connected(int index);
-VD_FW_API int                vd_fw_get_gamepad_guid(int index);
+
+/**
+ * @brief Gets the state of all (digital) buttons on the gamepad
+ * @param  index The gamepad index
+ * @return       The button state bitfield (use (1 << VD_FW_GAMEPAD_A/B/AUX0...) to test)
+ */
+VD_FW_API VdFwU64            vd_fw_get_gamepad_button_state(int index);
+
+/**
+ * @brief Gets the state for a Gamepad button (digital)
+ * @param  index  The gamepad index
+ * @param  button The gamepad button to check
+ * @return 1 for On, 0 for Off
+ */
 VD_FW_API int                vd_fw_get_gamepad_down(int index, int button);
+
+/**
+ * @brief Gets whether the Gamepad button was just pressed this frame
+ * @param  index  The gamepad index
+ * @param  button The gamepad button to check
+ * @return 1 if the button was just pressed this frame, 0 otherwise
+ */
+VD_FW_API int                vd_fw_get_gamepad_pressed(int index, int button);
+
+/** 
+ * @brief Gets the gamepad's axis value 
+ * @param  index The gamepad index
+ * @param  axis  The axis to check
+ * @param  out   The axis value [-1, 1] for directional axes (VD_FW_GAMEPAD_LH, etc..), [0, 1] for triggers
+ * @return (Reserved)
+ */
 VD_FW_API int                vd_fw_get_gamepad_axis(int index, int axis, float *out);
 
+/**
+ * @brief Set the state of a gamepad's force-feedback motors
+ * @param  index     The gamepad index
+ * @param  rumble_lo The value of the small/left motor [0, 1]
+ * @param  rumble_hi The value of the big/right motor [0, 1]
+ */
 VD_FW_API void               vd_fw_set_gamepad_rumble(int index, float rumble_lo, float rumble_hi);
 
-VD_FW_API const char*        vd_fw_get_gamepad_button_name(int button);
+/**
+ * @brief Get the gamepad's GUID
+ * @param  index The gamepad index
+ * @return The guid
+ */
+VD_FW_API VdFwGuid           vd_fw_get_gamepad_guid(int index);
 
-VD_FW_API int                vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepadDBEntry *out,
-                                                          VdFwPlatform *out_platform, const char **out_begin_name);
+/**
+ * @brief Get the detected gamepad's face type (i.e. the symbols shown on the physical controller)
+ * @param  index The gamepad index
+ * @return       The face type
+ */
+VD_FW_API VdFwGamepadFace    vd_fw_get_gamepad_face(int index);
+
+/**
+ * @brief Convert gamepad face type to string
+ * @param  face The face type
+ * @return      The face type as a string
+ */
+VD_FW_API const char*        vd_fw_get_gamepad_face_name(VdFwGamepadFace face);
+
+/**
+ * @brief Get the detected gamepad's classification (i.e. a rough ordered value of the gamepad's capabilities)
+ * @param  index The gamepad index
+ * @return       The class type
+ */
+VD_FW_API VdFwGamepadClass   vd_fw_get_gamepad_class(int index);
+
+/**
+ * @brief Convert gamepad class type to string
+ * @param  klass The class type
+ * @return       The class type as a string
+ */
+VD_FW_API const char*        vd_fw_get_gamepad_class_name(VdFwGamepadClass klass);
+
+/**
+ * @brief Get whether this gamepad supports rumble
+ * @param  index The gamepad index
+ * @return       1 if the gamepad supports rumble, 0 otherwise
+ */
+VD_FW_API int                vd_fw_get_gamepad_rumble_support(int index);
+
+/**
+ * @brief Parse and register gamepad entries from a RGCDB file
+ * @param  text     The text file
+ * @param  text_len The text file length in bytes
+ */
+VD_FW_API void               vd_fw_add_gamepad_rgcdb(const char *text, int text_len);
+
+/**
+ * @brief Parse an RGCDB entry ascii string, can be called without initializing this library
+ * @param  s              The string
+ * @param  s_len          The string's length, in bytes
+ * @param  out            The db entry info
+ * @param  out_platform   The platform for which this entry is valid
+ * @param  out_begin_name The start of the name part of this gamepad (unused in db entries)
+ * @return                1 for Success, 0 otherwise
+ */
+VD_FW_API int                vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepadDBEntry *out, VdFwPlatform *out_platform, const char **out_begin_name);
+
+/**
+ * @brief Check if a map entry is a terminating entry. Use to iterate over vd_fw_parse_gamepad_db_entry results
+ * @param  entry The entry
+ * @return       1 if the entry is a terminating entry
+ */
 VD_FW_API int                vd_fw_gamepad_map_entry_is_none(VdFwGamepadMapEntry *entry);
+
+/**
+ * @brief Add an entry to the runtime gamepad db
+ * @param  entry The entry to add
+ * @return (Reserved)
+ */
 VD_FW_API int                vd_fw_add_gamepad_db_entry(VdFwGamepadDBEntry *entry);
+
+/**
+ * @brief Turn On/Off raw button/axis/hat reports
+ * @param  on Whether to enable this behavior
+ */
+VD_FW_API void               vd_fw_set_gamepad_raw_reports(int on);
+
+/**
+ * @brief Get the raw state of at most 64 buttons on this gamepad
+ * @param  index The gamepad index
+ * @return       A bitmask of states (LSB -> MSB) --> (b0 -> b63)
+ */
+VD_FW_API VdFwU64            vd_fw_get_gamepad_raw_buttons(int index);
+
+/**
+ * @brief Get the raw state of all axes on this gamepad (scaled to [0,1])
+ * @param  index      The gamepad index
+ * @param  count_axes The number of axes
+ * @return            A callee-allocated float array of axis values
+ */
+VD_FW_API float*             vd_fw_get_gamepad_raw_axes(int index, int *count_axes);
 
 /* ----PLATFORM SPECIFIC--------------------------------------------------------------------------------------------- */
 
@@ -946,20 +1179,22 @@ VD_FW_INL void *vd_fw_memset(void *dst, unsigned char val, size_t num)
 }
 
 /* ----INTERNAL API-------------------------------------------------------------------------------------------------- */
-VD_FW_API int             vd_fw__any_time_higher(int num_files, const char **files, unsigned long long *check_against);
-VD_FW_API char*           vd_fw__debug_dump_file_text(const char *path);
-VD_FW_API void*           vd_fw__realloc_mem(void *prev_ptr, size_t size);
-VD_FW_API void            vd_fw__free_mem(void *memory);
-VD_FW_API void*           vd_fw__resize_buffer(void *buffer, size_t element_size, int required_capacity, int *cap);
-VD_FW_API void            vd_fw__def_gamepad(VdFwGamepadMap *map);
-VD_FW_API int             vd_fw__map_gamepad(VdFwGuid guid, VdFwGamepadMap *map);
-VD_FW_API unsigned short  vd_fw__crc16(unsigned short crc, void *data, size_t len);
-VD_FW_API VdFwGuid        vd_fw__make_gamepad_guid(uint16_t bus, uint16_t vendor, uint16_t product, uint16_t version,
-                                                   char *vendor_name, char *product_name,
-                                                   uint8_t driver_signature, uint8_t driver_data);
-VD_FW_INL int             vd_fw__strlen(const char *s);
-VD_FW_INL size_t          vd_fw__strlcpy(char *dst, const char *src, size_t maxlen);
-VD_FW_API char*           vd_fw__utf16_to_utf8(const wchar_t *ws);
+VD_FW_API int      vd_fw__any_time_higher(int num_files, const char **files, unsigned long long *check_against);
+VD_FW_API char*    vd_fw__debug_dump_file_text(const char *path);
+VD_FW_API void*    vd_fw__realloc_mem(void *prev_ptr, size_t size);
+VD_FW_API void     vd_fw__free_mem(void *memory);
+VD_FW_API void*    vd_fw__resize_buffer(void *buffer, size_t element_size, int required_capacity, int *cap);
+VD_FW_API void     vd_fw__def_gamepad(VdFwGamepadMap *map);
+VD_FW_API int      vd_fw__map_gamepad(VdFwGuid guid, VdFwGamepadMap *map);
+VD_FW_API VdFwU16  vd_fw__crc16(unsigned short crc, void *data, VdFwSz len);
+VD_FW_API VdFwGuid vd_fw__make_gamepad_guid(VdFwU16 bus, VdFwU16 vendor, VdFwU16 product, VdFwU16 version,
+                                            char *vendor_name, char *product_name,
+                                            VdFwU8 driver_signature, VdFwU8 driver_data);
+VD_FW_API void     vd_fw__lock_gamepaddb(void);
+VD_FW_API void     vd_fw__unlock_gamepaddb(void);
+VD_FW_API void     vd_fw__notify_gamepaddb_changed(void);
+VD_FW_INL int      vd_fw__strlen(const char *s);
+VD_FW_INL size_t   vd_fw__strlcpy(char *dst, const char *src, size_t maxlen);
 
 VD_FW_INL int vd_fw__strlen(const char *s)
 {
@@ -973,30 +1208,35 @@ VD_FW_INL size_t vd_fw__strlcpy(char *dst, const char *src, size_t maxlen)
     size_t srclen = vd_fw__strlen(src);
     if (maxlen > 0) {
         size_t len = srclen < (maxlen - 1) ? srclen : (maxlen - 1);
-        VD_FW_MEMCPY(dst, src, len);
+        VD_FW_MEMCPY(dst, (void*)src, len);
         dst[len] = '\0';
     }
     return srclen;
 }
 
 #if _WIN32
-#define VD_FW_WIN32_SUBSYSTEM_CONSOLE 1
-#define VD_FW_WIN32_SUBSYSTEM_WINDOWS 2
-
-#ifndef VD_FW_WIN32_SUBSYSTEM
-#define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_CONSOLE
-#endif // !VD_FW_WIN32_SUBSYSTEM
+#   define VD_FW_WIN32_SUBSYSTEM_CONSOLE 1
+#   define VD_FW_WIN32_SUBSYSTEM_WINDOWS 2
+#   ifndef VD_FW_WIN32_SUBSYSTEM
+#       define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_CONSOLE
+#   endif // !VD_FW_WIN32_SUBSYSTEM
 #endif // _WIN32
 
 #ifdef VD_FW_WIN32_NO_LINKER_COMMENTS
-#define VD_FW_WIN32_LINKER_COMMENTS 0
+#   define VD_FW_WIN32_LINKER_COMMENTS 0
 #else
-#define VD_FW_WIN32_LINKER_COMMENTS 1
+#   define VD_FW_WIN32_LINKER_COMMENTS 1
 #endif // !VD_FW_WIN32_NO_LINKER_COMMENTS
 
 #if defined(__APPLE__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+
+#ifndef VD_FW_MACOS_NO_MAIN_OVERRIDE
+#   define main vd_fw__macos_main
+#endif // !VD_FW_MACOS_NO_MAIN_OVERRIDE
+
+#ifndef GL_SILENCE_DEPRECATION
+#   define GL_SILENCE_DEPRECATION
+#endif // !GL_SILENCE_DEPRECATION
 #import <OpenGL/gl3.h>
 #else
 /* ----GL TYPEDEFS--------------------------------------------------------------------------------------------------- */
@@ -3556,7 +3796,6 @@ VD_FW_OPENGL_CORE_FUNCTIONS
 #endif // !defined(__APPLE__)
 
 #if defined(__APPLE__)
-#pragma clang diagnostic pop
 #endif
 #endif // !VD_FW_H
 
@@ -3567,11 +3806,17 @@ VD_FW_OPENGL_CORE_FUNCTIONS
 #ifdef VD_FW_IMPL
 
 typedef unsigned char VdFw__GamepadButtonState;
+typedef VdFwU64 VdFw__GamepadButtonBits;
 
 typedef struct VdFw__GamepadState {
     VdFwGuid                 guid;
-    VdFw__GamepadButtonState buttons[VD_FW_GAMEPAD_BUTTON_MAX];
+    VdFw__GamepadButtonBits  bits;
+    VdFw__GamepadButtonBits  raw_bits;
     float                    axes[6];
+    float                    raw_axes[16];
+    VdFwGamepadFace          face;
+    VdFwGamepadClass         klass;
+    int                      has_rumble;
 } VdFw__GamepadState;
 
 #if defined(__APPLE__)
@@ -4829,6 +5074,8 @@ enum {
     VD_FW_WIN32_SIZEMIN         = VD_FW_WM_USER + 5,
     VD_FW_WIN32_SIZEMAX         = VD_FW_WM_USER + 6,
     VD_FW_WIN32_GAMEPADRMBREQ   = VD_FW_WM_USER + 7,
+    VD_FW_WIN32_GAMEPADDBCH     = VD_FW_WM_USER + 8,
+    VD_FW_WIN32_GAMEPADRAWRQ    = VD_FW_WM_USER + 9,
 
     VD_FW_WIN32_WINDOW_STATE_MINIMIZED = 1 << 0,
     VD_FW_WIN32_WINDOW_STATE_MAXIMIZED = 1 << 1,
@@ -4922,62 +5169,63 @@ typedef struct VdFw__Win32GamepadInfo {
 
 typedef struct {
 /* ----WINDOW THREAD ONLY-------------------------------------------------------------------------------------------- */
-    VdFwGraphicsApi             graphics_api;
-    VdFwHWND                    hwnd;
-    int                         w, h;
-    volatile VdFwBOOL           t_paint_ready;
-    VdFwBOOL                    draw_decorations;
-    VdFwRECT                    rgn;
-    VdFwBOOL                    theme_enabled;
-    VdFwBOOL                    composition_enabled;
-    VdFwDWORD                   main_thread_id;
-    VdFwBOOL                    focus_changed;
-    VdFwBOOL                    focused;
+    VdFwGraphicsApi             graphics_api;           // Currently selected graphics api
+    VdFwHWND                    hwnd;                   // Window handle
+    int                         w, h;                   // Current window dimensions
+    VdFwBOOL                    t_paint_ready;          // One time signal that window thread is paint-ready
+                                                        // (to respond properly to events sent before we enter the
+                                                        // message loop)
+
+    VdFwBOOL                    draw_decorations;       // Draw window frame, or be frame-less
+    VdFwRECT                    rgn;                    // Cached Window Region
+    VdFwBOOL                    theme_enabled;          // Whether theming is enabled
+    VdFwBOOL                    composition_enabled;    // Whether Compositor is enabled
     VdFwRAWINPUT                raw_input_buffer[VD_FW_WIN32_RAW_INPUT_BUFFER_COUNT];
-    VdFwLONG                    last_window_style;
-    VdFwRECT                    windowed_rect;
-    VdFwWINDOWPLACEMENT         last_window_placement;
+    VdFwLONG                    last_window_style;      // Keeps last window style to switch back from fullscreen
+    VdFwWINDOWPLACEMENT         last_window_placement;  // Keeps last window placement to switch back from fullscreen
     VdFw__Win32GamepadInfo      gamepad_infos[VD_FW_GAMEPAD_COUNT_MAX];
-    int                         xinput;
+    int                         xinput;                 // Whether XInput is available
     int                         window_min[2], window_max[2];
     int                         def_window_min[2];
     int                         cap_gamepad_db_entries;
     int                         num_gamepad_db_entries;
     VdFwGamepadDBEntry          *gamepad_db_entries;
-    VdFwUINT_PTR                rumble_timer_handle;
-    VdFwByte                    *report_buffer;
+    VdFwUINT_PTR                rumble_timer_handle;    // Handle to the timer proc that lets us rumble gamepads
+    VdFwU8                      *report_buffer;         // Dynamically sized report buffer, for writing to HIDs
     int                         report_buffer_len;
+    int                         gamepad_raw_reports_on;
 
 /* ----RENDER THREAD ONLY-------------------------------------------------------------------------------------------- */
     // Internal
-    HMODULE                     opengl32;
-    VdFwHANDLE                  win_thread;
-    VdFwDWORD                   win_thread_id;
-    VdFwHDC                     hdc;
+    HMODULE                     opengl32;               // Handle to OpenGL32.dll, used when wglGetProcAddress fails.
+    VdFwHANDLE                  win_thread;             // Handle to the window-thread
+    VdFwDWORD                   win_thread_id;          // Window-thread ID
+    VdFwHDC                     hdc;                    // Device Context
     VdFwHGLRC                   hglrc;
     LARGE_INTEGER               frequency;
     LARGE_INTEGER               performance_counter;
-    VdFwProcwglSwapIntervalExt  *proc_swapInterval;
-    unsigned long long          last_ns;
+    VdFwProcwglSwapIntervalExt  *proc_swapInterval;     // Used for vd_fw_set_vsync
+    unsigned long long          last_ns;                // Cached delta time
     // Mouse
     int                         mouse[2];
     int                         prev_mouse_state;
     int                         mouse_state;
-    VdFwDWORD                   lmousedown;
-    VdFwDWORD                   rmousedown;
-    VdFwDWORD                   mmousedown;
     float                       mouse_delta[2];
     VdFwBOOL                    mouse_is_locked;
     int                         wheel_moved;
     float                       wheel[2];
     // Window
+    VdFwBOOL                    focus_changed;
+    VdFwBOOL                    focused;
     VdFwBOOL                    is_fullscreen;
     int                         window_state;
     int                         window_state_changed;
+    char                        *exedir;
+    int                         exedir_len;
+    int                         exedir_cap;
     // Gamepad
     VdFw__GamepadState          gamepad_curr_states[VD_FW_GAMEPAD_COUNT_MAX];
     VdFw__GamepadState          gamepad_prev_states[VD_FW_GAMEPAD_COUNT_MAX];
-    int                         gamepad_raw_buttons[VD_FW_GAMEPAD_COUNT_MAX];
     int                         num_gamepads_present;
 
 /* ----RENDER THREAD - WINDOW THREAD DATA---------------------------------------------------------------------------- */
@@ -4985,15 +5233,14 @@ typedef struct {
     volatile VdFwLONG           msgbuf_r;
     volatile VdFwLONG           msgbuf_w;
     int                         ncrect_count;
-    int                         ncrects[16][4];
+    int                         ncrects[VD_FW_NCRECTS_MAX][4];
     int                         nccaption[4];
     int                         nccaption_set;
     int                         receive_ncmouse_on;
     float                       winthread_mouse_delta[2];
     VdFw__GamepadState          winthread_gamepad_curr_states[VD_FW_GAMEPAD_COUNT_MAX];
-    VdFw__GamepadState          winthread_gamepad_prev_states[VD_FW_GAMEPAD_COUNT_MAX];
-    int                         winthread_gamepad_raw_buttons[VD_FW_GAMEPAD_COUNT_MAX];
     int                         winthread_num_gamepads_present;
+    int                         has_initialized;
 
     unsigned char               curr_key_states[VD_FW_KEY_MAX];
     unsigned char               prev_key_states[VD_FW_KEY_MAX];
@@ -5007,6 +5254,7 @@ typedef struct {
     volatile VdFwBOOL           t_running;
     CRITICAL_SECTION            critical_section;
     CRITICAL_SECTION            input_critical_section;
+    CRITICAL_SECTION            db_section;
     CONDITION_VARIABLE          cond_var;
     VdFw__Win32Frame            next_frame;
     VdFw__Win32Frame            curr_frame;
@@ -5293,6 +5541,7 @@ static void         vd_fw__gl_debug_message_callback(GLenum source, GLenum type,
                                                      const void *userParam);
 static int          vd_fw__msgbuf_r(VdFw__Win32Message *message);
 static int          vd_fw__msgbuf_w(VdFw__Win32Message *message);
+static char*        vd_fw__utf16_to_utf8(const wchar_t *ws);
 
 #if VD_FW_WIN32_PROFILE
 #define VD_FW_JOIN_(a,b) a##b
@@ -5364,6 +5613,14 @@ static void *vd_fw__gl_get_proc_address(const char *name)
 #include <io.h>
 #include <fcntl.h>
 #endif // !VD_FW_NO_CRT
+
+static SIZE_T vd_fw__tcslen(LPCTSTR s)
+{
+    if (s == NULL) return 0;
+    LPCTSTR p = s;
+    while (*p) ++p;
+    return (SIZE_T)(p - s);
+}
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
@@ -5511,7 +5768,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         }
 
         // XInput.dll
-        if (info && !info->win32.xinput_disabled) {
+        {
             const char* xinput_dll_name[] = {
                 "xinput1_4.dll",   // Windows 8+
                 "xinput1_3.dll",   // DirectX SDK, Windows XP...
@@ -5563,11 +5820,13 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
             AllocConsole();
             AttachConsole(GetCurrentProcessId());
             DWORD written;
-            SetConsoleTitleW(L"DEBUG CONSOLE");
+            SetConsoleTitle(TEXT("DEBUG CONSOLE"));
+            TCHAR *msg = TEXT("Console allocated for debugging\n");
+            SIZE_T len = vd_fw__tcslen(msg);
             WriteConsole(
                 GetStdHandle(STD_OUTPUT_HANDLE),
-                TEXT("Console allocated for debugging\n"),
-                sizeof(TEXT("Console allocated for debugging\n")) - 1,
+                msg,
+                (DWORD)len,
                 &written,
                 0);
 #if !VD_FW_NO_CRT
@@ -5580,9 +5839,32 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 #endif
     }
 
-    VD_FW_G.main_thread_id = GetCurrentThreadId();
+    SetConsoleOutputCP(CP_UTF8);
+
+    {
+
+        TCHAR *buf = (TCHAR*)vd_fw__realloc_mem(NULL, sizeof(TCHAR) * MAX_PATH);
+        DWORD nsize = GetModuleFileName(NULL, buf, MAX_PATH);
+#ifdef UNICODE
+        buf[nsize] = 0;
+        VD_FW_G.exedir = vd_fw__utf16_to_utf8(buf);
+        VD_FW_G.exedir_cap = vd_fw__strlen(VD_FW_G.exedir);
+#else
+        VD_FW_G.exedir = buf;
+        VD_FW_G.exedir_cap = nsize;
+#endif 
+
+        const char *c = VD_FW_G.exedir;
+        for (DWORD i = (VD_FW_G.exedir_cap - 1); i > 0; --i) {
+            if (c[i] == '\\') {
+                VD_FW_G.exedir_len = i;
+                break;
+            }
+        }
+    }
 
     InitializeCriticalSection(&VD_FW_G.critical_section);
+    InitializeCriticalSection(&VD_FW_G.db_section);
     InitializeCriticalSectionAndSpinCount(&VD_FW_G.input_critical_section, 3000);
     InitializeConditionVariable(&VD_FW_G.cond_var);
 
@@ -5602,7 +5884,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         NULL,
         0,
         vd_fw__win_thread_proc,
-        &VD_FW_G.main_thread_id,
+        0,
         0,
         &VD_FW_G.win_thread_id);
     SetThreadDescription(VD_FW_G.win_thread, L"Window Thread");
@@ -5664,6 +5946,8 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
                 case VD_FW_GL_VERSION_4_2: major = 4; minor = 2; break;
                 case VD_FW_GL_VERSION_4_3: major = 4; minor = 3; break;
                 case VD_FW_GL_VERSION_4_4: major = 4; minor = 4; break;
+                case VD_FW_GL_VERSION_4_5: major = 4; minor = 5; break;
+                case VD_FW_GL_VERSION_4_6: major = 4; minor = 6; break;
                 default: break;
             }
         }
@@ -5730,10 +6014,13 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 
             if (glDebugMessageCallback_proc == 0) {
                 DWORD written;
+
+                TCHAR *msg = TEXT("ERROR: Failed to load glDebugMessageCallback!\n");
+                SIZE_T len = vd_fw__tcslen(msg);
                 WriteConsole(
                     GetStdHandle(STD_OUTPUT_HANDLE),
-                    TEXT("ERROR: Failed to load glDebugMessageCallback!"),
-                    sizeof(TEXT("ERROR: Failed to load glDebugMessageCallback!")) - 1,
+                    msg,
+                    (DWORD)len,
                     &written,
                     0);
             } else {
@@ -5744,6 +6031,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     }
 
     QueryPerformanceCounter(&VD_FW_G.performance_counter);
+    VD_FW_G.has_initialized = 1;
     return 1;
 }
 
@@ -5782,9 +6070,11 @@ VD_FW_API int vd_fw_running(void)
                 int state_mask = 0;
 
                 switch (mm.dat.mousebtn.vkbutton) {
-                    case VK_LBUTTON: state_mask = VD_FW_MOUSE_BUTTON_LEFT; break;
-                    case VK_RBUTTON: state_mask = VD_FW_MOUSE_BUTTON_RIGHT; break;
-                    case VK_MBUTTON: state_mask = VD_FW_MOUSE_BUTTON_MIDDLE; break;
+                    case VK_LBUTTON:  state_mask = VD_FW_MOUSE_BUTTON_LEFT; break;
+                    case VK_RBUTTON:  state_mask = VD_FW_MOUSE_BUTTON_RIGHT; break;
+                    case VK_MBUTTON:  state_mask = VD_FW_MOUSE_BUTTON_MIDDLE; break;
+                    case VK_XBUTTON1: state_mask = VD_FW_MOUSE_BUTTON_M1; break;
+                    case VK_XBUTTON2: state_mask = VD_FW_MOUSE_BUTTON_M2; break;
                     default: break;
                 }
 
@@ -5855,9 +6145,8 @@ VD_FW_API int vd_fw_running(void)
         EnterCriticalSection(&VD_FW_G.input_critical_section);
         VD_FW_G.num_gamepads_present = VD_FW_G.winthread_num_gamepads_present;
         for (int i = 0; i < VD_FW_G.num_gamepads_present; ++i) {
-            VD_FW_G.gamepad_prev_states[i] = VD_FW_G.winthread_gamepad_prev_states[i];
+            VD_FW_G.gamepad_prev_states[i] = VD_FW_G.gamepad_curr_states[i];
             VD_FW_G.gamepad_curr_states[i] = VD_FW_G.winthread_gamepad_curr_states[i];
-            VD_FW_G.gamepad_raw_buttons[i] = VD_FW_G.winthread_gamepad_raw_buttons[i];
         }
         LeaveCriticalSection(&VD_FW_G.input_critical_section);
         VD_FW_WIN32_PROFILE_END(read_all_input);
@@ -5917,6 +6206,11 @@ VD_FW_API int vd_fw_swap_buffers(void)
         WakeConditionVariable(&VD_FW_G.cond_var);
     }
     return 1;
+}
+
+VD_FW_API VdFwPlatform vd_fw_get_platform(void)
+{
+    return VD_FW_PLATFORM_WINDOWS;
 }
 
 VD_FW_API int vd_fw_get_size(int *w, int *h)
@@ -6029,8 +6323,8 @@ VD_FW_API void vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4])
 
     VD_FW_G.ncrect_count = count;
     int c = count;
-    if (c > 16) {
-        c = 16;
+    if (c > VD_FW_NCRECTS_MAX) {
+        c = VD_FW_NCRECTS_MAX;
     }
     for (int i = 0; i < c; ++i) {
         VD_FW_G.ncrects[i][0] = rects[i][0];
@@ -6047,9 +6341,18 @@ VD_FW_API void vd_fw_set_receive_ncmouse(int on)
 
 VD_FW_API int vd_fw_set_vsync_on(int on)
 {
-    BOOL result = VD_FW_G.proc_swapInterval(on);
+    if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
+        BOOL result = VD_FW_G.proc_swapInterval(on);
+        return result == TRUE ? on : 0;
+    }
 
-    return result == TRUE ? on : 0;
+    return 0;
+}
+
+VD_FW_API const char *vd_fw_get_executable_dir(int *len)
+{
+    *len = VD_FW_G.exedir_len; 
+    return VD_FW_G.exedir; 
 }
 
 VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
@@ -6085,9 +6388,21 @@ VD_FW_API int vd_fw_get_gamepad_count(void)
     return VD_FW_G.num_gamepads_present;
 }
 
+VD_FW_API VdFwU64 vd_fw_get_gamepad_button_state(int index)
+{
+    return VD_FW_G.gamepad_curr_states[index].bits;
+}
+
 VD_FW_API int vd_fw_get_gamepad_down(int index, int button)
 {
-    return VD_FW_G.gamepad_curr_states[index].buttons[button];
+    return (VD_FW_G.gamepad_curr_states[index].bits >> button) & 1;
+}
+
+VD_FW_API int vd_fw_get_gamepad_pressed(int index, int button)
+{
+
+    return ((VD_FW_G.gamepad_curr_states[index].bits >> button) & 1) && 
+          !((VD_FW_G.gamepad_prev_states[index].bits >> button) & 1);
 }
 
 VD_FW_API int vd_fw_get_gamepad_axis(int index, int axis, float *out)
@@ -6107,6 +6422,47 @@ VD_FW_API void vd_fw_set_gamepad_rumble(int index, float rumble_lo, float rumble
         VD_FW_WIN32_GAMEPADRMBREQ,
         index, /* WPARAM */
         lparam));
+}
+
+VD_FW_API VdFwGuid vd_fw_get_gamepad_guid(int index)
+{
+    return VD_FW_G.gamepad_curr_states[index].guid;
+}
+
+VD_FW_API VdFwGamepadFace vd_fw_get_gamepad_face(int index)
+{
+    return VD_FW_G.gamepad_curr_states[index].face;
+}
+
+VD_FW_API VdFwGamepadClass vd_fw_get_gamepad_class(int index)
+{
+    return VD_FW_G.gamepad_curr_states[index].klass;
+}
+
+
+VD_FW_API int vd_fw_get_gamepad_rumble_support(int index)
+{
+    return VD_FW_G.gamepad_curr_states[index].has_rumble;
+}
+
+VD_FW_API void vd_fw_set_gamepad_raw_reports(int on)
+{
+    VD_FW__CHECK_TRUE(VdFwPostMessage(
+        VD_FW_G.hwnd,
+        VD_FW_WIN32_GAMEPADRAWRQ,
+        on,
+        0));
+}
+
+VD_FW_API VdFwU64 vd_fw_get_gamepad_raw_buttons(int index)
+{
+    return VD_FW_G.gamepad_curr_states[index].raw_bits;
+}
+
+VD_FW_API float *vd_fw_get_gamepad_raw_axes(int index, int *count_axes)
+{
+    *count_axes = 16;
+    return VD_FW_G.gamepad_curr_states[index].raw_axes;
 }
 
 VD_FW_API void vd_fw_set_mouse_capture(int on)
@@ -6336,7 +6692,7 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
 
         rids[1].usUsagePage = 0x01; // Generic desktop controls
         rids[1].usUsage     = 0x05; // Gamepad
-        rids[1].dwFlags     = RIDEV_DEVNOTIFY;
+        rids[1].dwFlags     = RIDEV_DEVNOTIFY | RIDEV_INPUTSINK;
         rids[1].hwndTarget  = VD_FW_G.hwnd;
         VD_FW__CHECK_TRUE(VdFwRegisterRawInputDevices(rids, 2, sizeof(rids[0])));
     }
@@ -6436,6 +6792,25 @@ VD_FW_API void vd_fw__free_mem(void *memory)
     HeapFree(GetProcessHeap(), 0, memory);
 }
 
+VD_FW_API void vd_fw__lock_gamepaddb(void)
+{
+    EnterCriticalSection(&VD_FW_G.db_section);
+}
+
+VD_FW_API void vd_fw__unlock_gamepaddb(void)
+{
+    LeaveCriticalSection(&VD_FW_G.db_section);
+}
+
+VD_FW_API void vd_fw__notify_gamepaddb_changed(void)
+{
+    VD_FW__CHECK_TRUE(VdFwPostMessage(
+        VD_FW_G.hwnd,
+        VD_FW_WIN32_GAMEPADDBCH,
+        0, /* WPARAM */
+        0  /* LPARAM */));
+}
+
 static void vd_fw__gl_debug_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam)
 {
     (void)userParam;
@@ -6445,14 +6820,14 @@ static void vd_fw__gl_debug_message_callback(GLenum source, GLenum type, GLuint 
     (void)source;
 
     DWORD written;
-    WriteConsole(
+    WriteConsoleA(
         GetStdHandle(STD_OUTPUT_HANDLE),
         message,
         length,
         &written,
         0);
 
-    WriteConsole(
+    WriteConsoleA(
         GetStdHandle(STD_OUTPUT_HANDLE),
         "\n",
         1,
@@ -6735,8 +7110,51 @@ static struct {
     int              connected;
 } Vd_Fw__XInput_States[4];
 
+// See: https://learn.microsoft.com/en-us/windows/win32/xinput/directinput-and-xusb-devices
+// 
+// In essence, for legacy reasons some controllers report a single "Generic Z (0x0032)" as a partwise mapping to
+// [LT, 0, RT].
+// By using RAWINPUT/DirectInput it is impossible to distinguish between the left and right triggers being fully
+// depressed or released simultaneously.
+// 
+// However, it is possible to tell if such an HID behaves this way, heuristically. Typically, these are all XInput
+// devices.
+// 
+// So, to handle this issue, SDL correlates mapped gamepad inputs to XInput states to first determine if a controller
+// reported by RAWINPUT/DirectInput actually maps to its assigned dwUserIndex by XInput. This is because XInput 'tries'
+// to bring the same 4-player couch co-op experience supported by the xbox consoles, and as such:
+// - There is a way to determine if a controller is handled by XInput (By checking its path)
+// - But there is no simple way to know which dwUserIndex was assigned to said controller.
+// 
+// As far as I can understand, once a controller is correlated in XInput, SDL will switch to using that API to get
+// buttons, axes and triggers. My tests, however, indicate that there is at least _one_ XInput controller that can
+// report more buttons than those exposed by XInput (including the guide button). So in this function, only the reported
+// trigger values are written if the controller was correlated to an xinput controller.
+// 
+// So... to summarize: Here I check each dwUserIndex controller state and match:
+// - Each button to the raw input mapped ones
+// - The combined Z value to the triggers
+// - (In the future possibly the analog sticks as well)
+// 
+// After that we can safely assume that this dwUserIndex will stay mapped to the corresponding controller.
+// 
+// When any controller is connected/disconnected, the .xinput_index value is reset to -1, and then correlation has to
+// happen again...
+// 
+// This essentially means that for xinput controllers, we'll have to use mmozeiko's 
+// xbox DeviceIoControl (https://gist.github.com/mmozeiko/b8ccc54037a5eaf35432396feabbe435) call to send rumble
+// to the controller, and then once (or if) the controller is correlated use XInputSetState.
+// 
+// https://learn.microsoft.com/en-us/windows/win32/xinput/getting-started-with-xinput#getting-controller-state
+// Microsoft states here:
+// | For performance reasons, don't call XInputGetState for an 'empty' user slot every frame. We recommend that
+// | you space out checks for new controllers every few seconds instead.
+// 
+// This function is only called when a WM_INPUT message arrives, and when that gamepad is determined to be an xinput
+// gamepad. Since XInputGetState is only called on a per-packet basis, this function's performance implications should
+// be relatively small. However, should you get _any_ bottleneck from this function please report it!
 static void vd_fw__win32_correlate_xinput_triggers(VdFw__Win32GamepadInfo *gamepad_info,
-                                                   VdFw__GamepadButtonState *button_states, float *axes,
+                                                   VdFw__GamepadButtonBits button_states, float *axes,
                                                    VdFwULONG z_value)
 {
     int total_xinput_devices_connected = 0;
@@ -6760,18 +7178,18 @@ static void vd_fw__win32_correlate_xinput_triggers(VdFw__Win32GamepadInfo *gamep
                 if (any_xinput_buttons_pressed) {
                     matched = matched || 
                         (
-                            (button_states[VD_FW_GAMEPAD_A]      == ((state->Gamepad.wButtons &               VD_FW_XINPUT_GAMEPAD_A) ? 1 : 0)) &&
-                            (button_states[VD_FW_GAMEPAD_B]      == ((state->Gamepad.wButtons &               VD_FW_XINPUT_GAMEPAD_B) ? 1 : 0)) &&
-                            (button_states[VD_FW_GAMEPAD_X]      == ((state->Gamepad.wButtons &               VD_FW_XINPUT_GAMEPAD_X) ? 1 : 0)) &&
-                            (button_states[VD_FW_GAMEPAD_Y]      == ((state->Gamepad.wButtons &               VD_FW_XINPUT_GAMEPAD_Y) ? 1 : 0)) &&
-                            (button_states[VD_FW_GAMEPAD_DUP]    == ((state->Gamepad.wButtons &         VD_FW_XINPUT_GAMEPAD_DPAD_UP) ? 1 : 0)) &&
-                            (button_states[VD_FW_GAMEPAD_DDOWN]  == ((state->Gamepad.wButtons &       VD_FW_XINPUT_GAMEPAD_DPAD_DOWN) ? 1 : 0)) &&
-                            (button_states[VD_FW_GAMEPAD_DRIGHT] == ((state->Gamepad.wButtons &      VD_FW_XINPUT_GAMEPAD_DPAD_RIGHT) ? 1 : 0)) &&
-                            (button_states[VD_FW_GAMEPAD_DLEFT]  == ((state->Gamepad.wButtons &       VD_FW_XINPUT_GAMEPAD_DPAD_LEFT) ? 1 : 0)) &&
-                            (button_states[VD_FW_GAMEPAD_L1]     == ((state->Gamepad.wButtons &   VD_FW_XINPUT_GAMEPAD_LEFT_SHOULDER) ? 1 : 0)) &&
-                            (button_states[VD_FW_GAMEPAD_R1]     == ((state->Gamepad.wButtons &  VD_FW_XINPUT_GAMEPAD_RIGHT_SHOULDER) ? 1 : 0)) &&
-                            (button_states[VD_FW_GAMEPAD_L3]     == ((state->Gamepad.wButtons &      VD_FW_XINPUT_GAMEPAD_LEFT_THUMB) ? 1 : 0)) &&
-                            (button_states[VD_FW_GAMEPAD_R3]     == ((state->Gamepad.wButtons &     VD_FW_XINPUT_GAMEPAD_RIGHT_THUMB) ? 1 : 0))
+                            (((button_states >> VD_FW_GAMEPAD_A) & 1)      == ((state->Gamepad.wButtons &               VD_FW_XINPUT_GAMEPAD_A) ? 1 : 0)) &&
+                            (((button_states >> VD_FW_GAMEPAD_B) & 1)      == ((state->Gamepad.wButtons &               VD_FW_XINPUT_GAMEPAD_B) ? 1 : 0)) &&
+                            (((button_states >> VD_FW_GAMEPAD_X) & 1)      == ((state->Gamepad.wButtons &               VD_FW_XINPUT_GAMEPAD_X) ? 1 : 0)) &&
+                            (((button_states >> VD_FW_GAMEPAD_Y) & 1)      == ((state->Gamepad.wButtons &               VD_FW_XINPUT_GAMEPAD_Y) ? 1 : 0)) &&
+                            (((button_states >> VD_FW_GAMEPAD_DUP) & 1)    == ((state->Gamepad.wButtons &         VD_FW_XINPUT_GAMEPAD_DPAD_UP) ? 1 : 0)) &&
+                            (((button_states >> VD_FW_GAMEPAD_DDOWN) & 1)  == ((state->Gamepad.wButtons &       VD_FW_XINPUT_GAMEPAD_DPAD_DOWN) ? 1 : 0)) &&
+                            (((button_states >> VD_FW_GAMEPAD_DRIGHT) & 1) == ((state->Gamepad.wButtons &      VD_FW_XINPUT_GAMEPAD_DPAD_RIGHT) ? 1 : 0)) &&
+                            (((button_states >> VD_FW_GAMEPAD_DLEFT) & 1)  == ((state->Gamepad.wButtons &       VD_FW_XINPUT_GAMEPAD_DPAD_LEFT) ? 1 : 0)) &&
+                            (((button_states >> VD_FW_GAMEPAD_L1) & 1)     == ((state->Gamepad.wButtons &   VD_FW_XINPUT_GAMEPAD_LEFT_SHOULDER) ? 1 : 0)) &&
+                            (((button_states >> VD_FW_GAMEPAD_R1) & 1)     == ((state->Gamepad.wButtons &  VD_FW_XINPUT_GAMEPAD_RIGHT_SHOULDER) ? 1 : 0)) &&
+                            (((button_states >> VD_FW_GAMEPAD_L3) & 1)     == ((state->Gamepad.wButtons &      VD_FW_XINPUT_GAMEPAD_LEFT_THUMB) ? 1 : 0)) &&
+                            (((button_states >> VD_FW_GAMEPAD_R3) & 1)     == ((state->Gamepad.wButtons &     VD_FW_XINPUT_GAMEPAD_RIGHT_THUMB) ? 1 : 0))
                         );
                 }
             }
@@ -7110,8 +7528,10 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     break;
                 }
 
-                VdFw__GamepadButtonState button_states[VD_FW_GAMEPAD_BUTTON_MAX] = {0};
+                VdFw__GamepadButtonBits button_states = 0;
+                VdFw__GamepadButtonBits raw_button_states = 0;
                 float axes[6] = {0.f};
+                float axes_raw[16] = {0};
 
                 for (VdFwDWORD ri = 0; ri < raw->data.hid.dwCount; ++ri) {
                     VdFwBYTE *bytes = &raw->data.hid.bRawData[0] + ri * (raw->data.hid.dwSizeHid);
@@ -7124,6 +7544,49 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                                                            (VdFwPCHAR)bytes, raw->data.hid.dwSizeHid);
                     if (status != VD_FW_HIDP_STATUS_SUCCESS) {
                         continue;
+                    }
+
+                    if (VD_FW_G.gamepad_raw_reports_on) {
+                        for (int bdii = 0; bdii < gamepad_info->button_data_indices_len; ++bdii) {
+                            int button_data_index = gamepad_info->button_data_indices[bdii];
+                            VdFwHIDP_DATA *data = 0;
+                            for (VdFwULONG data_index = 0; data_index < data_count; ++data_index) {
+                                if (hidp_data[data_index].DataIndex == button_data_index) {
+                                    data = &hidp_data[data_index];
+                                    break;
+                                }
+                            }
+
+                            if (!data) {
+                                continue;
+                            }
+
+                            if (data->dat.On) {
+                                raw_button_states |= (1ull << bdii);
+                            }
+                        }
+
+                        for (int axii = 0; axii < gamepad_info->axis_data_indices_len; ++axii) {
+                            int axis_data_index = gamepad_info->axis_data_indices[axii].data_index;
+                            int axis_min = gamepad_info->axis_data_indices[axii].min_value;
+                            int axis_max = gamepad_info->axis_data_indices[axii].max_value;
+
+                            VdFwHIDP_DATA *data = 0;
+                            for (VdFwULONG data_index = 0; data_index < data_count; ++data_index) {
+                                if (hidp_data[data_index].DataIndex == axis_data_index) {
+                                    data = &hidp_data[data_index];
+                                    break;
+                                }
+                            }
+
+                            if (!data) {
+                                continue;
+                            }
+
+                            float v01 = ((float)((data->dat.RawValue - axis_min))) / 
+                                        ((float)(axis_max - axis_min));
+                            axes_raw[axii] = v01;
+                        }
                     }
 
                     VdFwULONG z_value = 0;
@@ -7155,7 +7618,11 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                                 }
 
                                 if (data->dat.On) {
-                                    button_states[entry->target] = 1;
+                                    if (entry->kind & VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_BUTTON_TO_AXIS) {
+                                        axes[entry->target] = 1.f;
+                                    } else {
+                                        button_states |= (1ull << ((VdFwU64)entry->target));
+                                    }
                                 }
                             } break;
 
@@ -7202,8 +7669,8 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                             } break;
 
                             case VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT: {
-                                VdFwByte hat_index = (VdFwByte)(entry->index >> 8);
-                                VdFwByte hat_mask  = (VdFwByte)(entry->index & 0xFF);
+                                VdFwU8 hat_index = (VdFwU8)(entry->index >> 8);
+                                VdFwU8 hat_mask  = (VdFwU8)(entry->index & 0xFF);
 
                                 int hat_data_index = gamepad_info->hat_data_indices[hat_index].data_index;
                                 int min_value = gamepad_info->hat_data_indices[hat_index].min_value;
@@ -7223,6 +7690,8 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
                                 VdFwULONG state = data->dat.RawValue;
 
+                                // @note(mdodis): I have found no logical way (as specified by SDL's usage of gamecontrollerdb
+                                // hat mappings) to _really_ use the hat mask. I guess, ranging it to 1-8 would make sense?
                                 if ((min_value == 1) && (max_value == 8)) {
                                     state -= 1;
                                 }
@@ -7241,7 +7710,9 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
                                 if (state < (sizeof(hat_to_mask)/sizeof(hat_to_mask[0]))) {
                                     int mask = hat_to_mask[state];
-                                    button_states[entry->target] = (mask & hat_mask) ? 1 : 0;
+                                    if (mask & hat_mask) {
+                                        button_states |= (1ull << (VdFwU64)entry->target);
+                                    }
                                 }
                             } break;
                         }
@@ -7255,13 +7726,19 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
                 int index_to_write_to = gamepad_info_index;
                 EnterCriticalSection(&VD_FW_G.input_critical_section);
-                VD_FW_MEMCPY(&VD_FW_G.winthread_gamepad_prev_states[index_to_write_to].buttons,
-                             &VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].buttons,
-                             sizeof(VD_FW_G.winthread_gamepad_curr_states[0].buttons));
+                VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].guid       = gamepad_info->guid;
+                VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].bits       = button_states;
+                VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].face       = gamepad_info->map.face;
+                VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].klass      = gamepad_info->map.klass;
+                VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].has_rumble = 
+                    (gamepad_info->map.rumble_config.type != VD_FW_GAMEPAD_RUMBLE_TYPE_NOT_AVAILABLE) ||
+                    ((gamepad_info->flags >> VD_FW__WIN32_GAMEPAD_FLAG_XINPUT) & 1);
 
-                VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].guid = gamepad_info->guid;
-                for (int i = 0; i < VD_FW_GAMEPAD_BUTTON_MAX; ++i) {
-                    VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].buttons[i] = button_states[i];
+                if (VD_FW_G.gamepad_raw_reports_on) {
+                    VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].raw_bits = raw_button_states;
+                    VD_FW_MEMCPY(VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].raw_axes,
+                                 axes_raw,
+                                 16 * sizeof(float));
                 }
 
                 for (int i = 0; i < 6; ++i) {
@@ -7374,9 +7851,9 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 VdFwGuid guid;
                 char *manufacturer_string = 0;
                 char *product_string = 0;
-                uint16_t vendor_id    = (uint16_t)device_info.hid.dwVendorId;
-                uint16_t product_id   = (uint16_t)device_info.hid.dwProductId;
-                uint16_t version      = (uint16_t)device_info.hid.dwVersionNumber;
+                VdFwU16 vendor_id    = (VdFwU16)device_info.hid.dwVendorId;
+                VdFwU16 product_id   = (VdFwU16)device_info.hid.dwProductId;
+                VdFwU16 version      = (VdFwU16)device_info.hid.dwVersionNumber;
 
                 // Get Manufacturer String & Product String
                 {
@@ -7402,41 +7879,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                                                             GENERIC_READ | GENERIC_WRITE,
                                                             FILE_SHARE_READ | FILE_SHARE_WRITE,
                                                             NULL, OPEN_EXISTING, 0, NULL);
-
-                    // TEST TEST Rumble
-                    // if (device_file != INVALID_HANDLE_VALUE) {
-                    //     VdFwByte report[32] = {
-                    //         // 0, 0, 0, 200, 2,
-                    //         0x05, 0xFF, 0x00, 0x00, 0x40, 0x40, 0x00,
-                    //     };
-
-                    //     DWORD num_written = 0;
-                    //     if (!WriteFile(device_file,
-                    //                    report,
-                    //                    sizeof(report),
-                    //                    &num_written,
-                    //                    NULL))
-                    //     {
-                    //         VD_FW_LOG("Failed to send report: %d", GetLastError());
-                    //     }
-
-                    //     // if (!DeviceIoControl(device_file, 0x8000a010, report, sizeof(report), NULL, 0, NULL, NULL)) {
-                    //     //     VD_FW_LOG("Failed to send report: %d", GetLastError());
-                    //     // }
-
-                    //     // if (!VdFwHidD_SetOutputReport(device_file, report, sizeof(report))) {
-                    //     //     VD_FW_LOG("Failed to send report: %d", GetLastError());
-                    //     // } else {
-                    //     //     VD_FW_LOG("Successfully sent report: %d", GetLastError());
-                    //     // }
-
-                    //     // if (!VdFwHidD_SetFeature(device_file, report, sizeof(report))) {
-                    //     //     VD_FW_LOG("Failed to send report: %d", GetLastError());
-                    //     // } else {
-                    //     //     VD_FW_LOG("Successfully sent report: %d", GetLastError());
-                    //     // }
-                    // }
-                    // CloseHandle(device_file);
                 }
                 // Compute GUID
                 guid = vd_fw__make_gamepad_guid(0x03 /* USB Bus */,
@@ -7455,11 +7897,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                         vd_fw__free_mem(product_string);
                     }
                 }
-
-                for (int i = 0; i < 16; ++i) {
-                    printf("%02x", guid.dat[i]);
-                }
-                printf("\n");
 
                 new_gamepad->flags = 0;
                 if (is_xinput_device) {
@@ -7484,8 +7921,9 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
 
                 // Map gamepad
-                VdFwGamepadMap gamepad_map;
-                if (!vd_fw__map_gamepad(guid, &gamepad_map)) {
+                VdFwGamepadMap gamepad_map = {0};
+                int mapped_gamepad = vd_fw__map_gamepad(guid, &gamepad_map);
+                if (!mapped_gamepad) {
                     vd_fw__def_gamepad(&gamepad_map);
                 }
                 new_gamepad->map = gamepad_map;
@@ -7530,14 +7968,14 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     for (int i = 0; i < num_button_caps; ++i) {
                         if (button_caps[i].IsRange) {
 
-                            unsigned short usage_count = 1 + button_caps[i].v.Range.DataIndexMax - button_caps[i].v.Range.DataIndexMin;
-                            for (unsigned short j = 0; j < usage_count; ++j) {
-                                int button_data_index = button_caps[i].v.Range.DataIndexMin + j;
+                            VdFwUSHORT usage_count = 1 + button_caps[i].v.Range.DataIndexMax - button_caps[i].v.Range.DataIndexMin;
+                            for (VdFwUSHORT j = 0; j < usage_count; ++j) {
+                                VdFwUSHORT button_data_index = button_caps[i].v.Range.DataIndexMin + j;
                                 new_gamepad->button_data_indices[count++] = button_data_index;
                             }
                         } else {
-                            unsigned short usage = button_caps[i].v.NotRange.DataIndex;
-                            new_gamepad->button_data_indices[count++] = usage;
+                            VdFwUSHORT data_index = button_caps[i].v.NotRange.DataIndex;
+                            new_gamepad->button_data_indices[count++] = data_index;
                         }
                     }
                 }
@@ -7662,7 +8100,19 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 }
 
 
+                int index_to_write_to = new_gamepad_index;
+                EnterCriticalSection(&VD_FW_G.input_critical_section);
                 VD_FW_G.winthread_num_gamepads_present++;
+                VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].guid  = new_gamepad->guid;
+                VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].bits  = 0;
+                VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].face  = new_gamepad->map.face;
+                VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].klass = new_gamepad->map.klass;
+                VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].has_rumble = 
+                    (new_gamepad->map.rumble_config.type != VD_FW_GAMEPAD_RUMBLE_TYPE_NOT_AVAILABLE) ||
+                    ((new_gamepad->flags >> VD_FW__WIN32_GAMEPAD_FLAG_XINPUT) & 1);
+
+                LeaveCriticalSection(&VD_FW_G.input_critical_section);
+
             } else {
 
                 int disconnected_gamepad_index = -1;
@@ -7734,6 +8184,8 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             vd_fw__msgbuf_w(&m);
         } break;
 
+        case WM_XBUTTONUP:
+        case WM_XBUTTONDOWN:
         case WM_MBUTTONUP:
         case WM_MBUTTONDOWN:
         case WM_RBUTTONUP:
@@ -7742,6 +8194,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         case WM_LBUTTONDOWN: {
             int down = 0;
             DWORD code = 0;
+            DWORD hiword = HIWORD(wparam);
 
             switch (msg) {
 
@@ -7751,6 +8204,8 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 case WM_RBUTTONDOWN:  down = 1; code = VK_RBUTTON; break;
                 case WM_LBUTTONUP:    down = 0; code = VK_LBUTTON; break;
                 case WM_LBUTTONDOWN:  down = 1; code = VK_LBUTTON; break;
+                case WM_XBUTTONUP:    down = 0; code = VK_XBUTTON1 + hiword - 1; break;
+                case WM_XBUTTONDOWN:  down = 1; code = VK_XBUTTON1 + hiword - 1; break;
                 default: break;
             }
 
@@ -7857,7 +8312,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
             if (should_be_fullscreen) {
 
-                VdFwGetWindowRect(VD_FW_G.hwnd, &VD_FW_G.windowed_rect);
                 VdFwGetWindowPlacement(VD_FW_G.hwnd, &VD_FW_G.last_window_placement);
 
                 VdFwHMONITOR monitor = VdFwMonitorFromWindow(VD_FW_G.hwnd, MONITOR_DEFAULTTOPRIMARY);
@@ -7936,13 +8390,24 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
         } break;
 
+        case VD_FW_WIN32_GAMEPADDBCH: {
+            for (int i = 0; i < VD_FW_G.num_gamepads_present; ++i) {
+                VdFw__Win32GamepadInfo *gamepad_info = &VD_FW_G.gamepad_infos[i];
+                vd_fw__map_gamepad(gamepad_info->guid, &gamepad_info->map);
+            }
+        } break;
+
+        case VD_FW_WIN32_GAMEPADRAWRQ: {
+            VD_FW_G.gamepad_raw_reports_on = (int)wparam;
+        } break;
+
         case WM_TIMER: {
             int timer_should_stop = 1;
 
             for (int i = 0; i < VD_FW_G.winthread_num_gamepads_present; ++i) {
                 VdFw__Win32GamepadInfo *gamepad_info = &VD_FW_G.gamepad_infos[i];
                 VdFwGamepadRumbleConfig *rumble_config = &gamepad_info->map.rumble_config;
-                VdFwByte rumble_type = rumble_config->type;
+                VdFwU8 rumble_type = rumble_config->type;
 
                 if (gamepad_info->xinput_index != -1) {
                     // Gamepad is correlated. We switch to XInput
@@ -7951,7 +8416,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
                 switch (rumble_type) {
                     case VD_FW_GAMEPAD_RUMBLE_TYPE_RAW: {
-                        VD_FW_G.report_buffer = (VdFwByte*)vd_fw__resize_buffer(VD_FW_G.report_buffer,
+                        VD_FW_G.report_buffer = (VdFwU8*)vd_fw__resize_buffer(VD_FW_G.report_buffer,
                                                                                 sizeof(VD_FW_G.report_buffer[0]),
                                                                                 gamepad_info->output_report_size,
                                                                                 &VD_FW_G.report_buffer_len);
@@ -7960,8 +8425,8 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                             VD_FW_G.report_buffer[j] = gamepad_info->map.rumble_config.prefix[j];
                         }
 
-                        VD_FW_G.report_buffer[gamepad_info->map.rumble_config.dat.raw.rumble_lo.parts.offset] = (VdFwByte)(gamepad_info->rumble_state.rumble_lo * 255.f);
-                        VD_FW_G.report_buffer[gamepad_info->map.rumble_config.dat.raw.rumble_hi.parts.offset] = (VdFwByte)(gamepad_info->rumble_state.rumble_hi * 255.f);
+                        VD_FW_G.report_buffer[gamepad_info->map.rumble_config.dat.raw.rumble_lo.parts.offset] = (VdFwU8)(gamepad_info->rumble_state.rumble_lo * 255.f);
+                        VD_FW_G.report_buffer[gamepad_info->map.rumble_config.dat.raw.rumble_hi.parts.offset] = (VdFwU8)(gamepad_info->rumble_state.rumble_hi * 255.f);
                         DWORD num_written = 0;
                         if (!WriteFile(gamepad_info->write_handle,
                                        VD_FW_G.report_buffer,
@@ -8076,6 +8541,32 @@ static int vd_fw__msgbuf_w(VdFw__Win32Message *message)
     return 1;
 }
 
+static char *vd_fw__utf16_to_utf8(const wchar_t *ws)
+{
+    int req = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
+                                  ws, -1,
+                                  0, 0,
+                                  NULL, NULL);
+    if (req <= 0) {
+        return 0;
+    }
+
+    char *data = (char*)vd_fw__realloc_mem(0, req + 1);
+
+    int wrt = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
+                                  ws, -1,
+                                  data, req,
+                                  NULL, NULL);
+
+    if (wrt == 0) {
+        vd_fw__free_mem(data);
+        return 0;
+    }
+
+    data[req] = 0;
+    return data;
+}
+
 #if VD_FW_NO_CRT
 #pragma function(memset)
 void *__cdecl memset(void *dest, int value, size_t num)
@@ -8176,7 +8667,6 @@ int wWinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPWSTR cmdline, int n
 }
 #endif // VD_FW_NO_CRT
 
-#undef VD_FW_G
 #elif defined(__APPLE__)
 #import <AppKit/AppKit.h>
 #import <Cocoa/Cocoa.h>
@@ -8192,17 +8682,75 @@ int wWinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPWSTR cmdline, int n
 #import <stdio.h>
 #import <pthread.h>
 #include <semaphore.h>
+#include <stdatomic.h>
+
 #define VD_FW_G Vd_Fw_Globals
 
 @interface VdFwWindowDelegate : NSObject<NSApplicationDelegate, NSWindowDelegate>
+- (void)updateGLContext;
 @end
 @interface VdFwContentView : NSView
 @end
 @interface VdFwWindow : NSWindow
 @end
 
+typedef enum {
+    VD_FW__MAC_FLAGS_WAKE_COND_VAR = 1 << 0,
+    VD_FW__MAC_FLAGS_SIZE_CHANGED  = 1 << 1,
+    VD_FW__MAC_FLAGS_REACQUIRE_CONTEXT = 1 << 2,
+
+    VD_FW_MAC_MESSAGE_BUFFER_SIZE = 256,
+
+    VD_FW__MAC_WINDOW_STATE_MINIMIZED = 1 << 0,
+    VD_FW__MAC_WINDOW_STATE_ZOOMED = 1 << 1,
+
+    VD_FW__MAC_MESSAGE_INVALID = 0,
+    VD_FW__MAC_MESSAGE_MOUSEMOVE,
+    VD_FW__MAC_MESSAGE_MOUSEBTN,
+    VD_FW__MAC_MESSAGE_SCROLL,
+    VD_FW__MAC_MESSAGE_KEY,
+    VD_FW__MAC_MESSAGE_MINIMIZED,
+    VD_FW__MAC_MESSAGE_ZOOMED,
+} VdFw__MacMessageType;
+
 typedef struct {
-    VdFwWindow                  *window;
+    VdFw__MacMessageType type;
+    union {
+        struct {
+            VdFwI32 mx, my;
+            float   dx, dy;
+        } mousemove;
+
+        struct {
+            int down;
+            int mask; 
+        } mousebtn;
+
+        struct {
+            float sx, sy;
+        } scroll;
+
+        struct {
+            int down;
+            int key;
+        } key;
+
+        struct {
+            int on;
+        } minimized;
+
+        struct {
+            int on;
+        } zoomed;
+    } dat;
+} VdFw__MacMessage;
+
+typedef struct {
+    int w, h;
+    int flags;
+} VdFw__MacFrame;
+
+typedef struct {
     NSOpenGLContext             *gl_context;
     BOOL                        should_close;
     mach_timebase_info_data_t   time_base;
@@ -8214,20 +8762,58 @@ typedef struct {
     NSPoint                     drag_start_location;
     NSPoint                     drag_start_pos_window_coords;
     BOOL                        dragging;
-    BOOL                        draw_decorations;
-    int                         ncrect_count;
-    NSRect                      ncrects[16];
-    NSRect                      nccaption;
-    int                         nccaption_set;
-    BOOL                        mouse_is_locked;
     NSPoint                     last_mouse;
-    NSPoint                     mouse_delta;
-    NSPoint                     mouse_pos_scaled;
+    float                       mouse_delta[2];
     unsigned char               curr_key_states[VD_FW_KEY_MAX];
     unsigned char               prev_key_states[VD_FW_KEY_MAX];
     int                         focus_changed;
     int                         focused;
+    int                         argc;
+    const char                  **argv;
+
+/* ----RENDER THREAD ONLY-------------------------------------------------------------------------------------------- */
+    VdFwI32                     mouse[2];
+    VdFwI32                     prev_mouse_state;
+    VdFwI32                     mouse_state;
+    BOOL                        mouse_is_locked;
+    int                         window_state;
+    int                         window_state_changed;
+
+/* ----WINDOW THREAD ONLY-------------------------------------------------------------------------------------------- */
+    BOOL                        draw_decorations;
+    VdFwInitInfo                c_init_info;
+    VdFwWindow                  *window;
+    int                         context_needs_update;
+    BOOL                        is_zoomed;
+
+/* ----MAIN - RENDER THREAD DATA------------------------------------------------------------------------------------- */
+    int                         w, h;
+    VdFw__MacFrame              next_frame;
+    VdFw__MacFrame              curr_frame;
+
+    VdFw__MacMessage            msgbuf[VD_FW_MAC_MESSAGE_BUFFER_SIZE];
+    volatile VdFwI32            msgbuf_r;
+    volatile VdFwI32            msgbuf_w;
+    NSRect                      nccaption;
+    int                         nccaption_set;
+    int                         ncrect_count;
+    NSRect                      ncrects[VD_FW_NCRECTS_MAX];
+    NSImage                     *app_image;
+
+/* ----MAIN - RENDER THREAD SYNC------------------------------------------------------------------------------------- */
+    pthread_t                   main_thread;
+    pthread_mutex_t             m_paint;
+    pthread_mutex_t             m_input;
+    pthread_cond_t              n_paint;
+    sem_t                       *s_main_thread_opened_me;
+    sem_t                       *s_main_thread_window_ready;
+    sem_t                       *s_main_thread_window_closed;
+    sem_t                       *s_main_thread_context_needs_update;
+    int                         context_update_requested;
 } VdFw__MacOsInternalData;
+
+static int vd_fw__msgbuf_r(VdFw__MacMessage *message);
+static int vd_fw__msgbuf_w(VdFw__MacMessage *message);
 
 static VdFw__MacOsInternalData Vd_Fw_Globals;
 
@@ -8515,11 +9101,26 @@ static VdFwKey vd_fw__translate_mac_keycode(unsigned short keycode)
     }
 }
 
+static NSPoint vd_fw__mac_mouse_cocoa_to_conventional(NSPoint loc)
+{
+    NSView *cv = [VD_FW_G.window contentView];
+    NSRect cvf = [cv frame];
+    NSPoint loc_top_left_origin = NSMakePoint(loc.x, cvf.size.height - loc.y);
+
+    NSPoint result = NSMakePoint(
+        loc_top_left_origin.x * VD_FW_G.scale,
+        loc_top_left_origin.y * VD_FW_G.scale);
+
+    return result;
+}
 
 static VdFwWindowDelegate *Vd_Fw_Delegate;
+static int Update_Context = 0;
 
 @implementation VdFwWindowDelegate
-    NSPoint initialLocation;
+- (void)updateGLContext {
+    // [VD_FW_G.gl_context update];
+}
 
 - (void)windowDidBecomeKey:(NSNotification *)notification {
     VD_FW_G.focus_changed = 1;
@@ -8531,16 +9132,69 @@ static VdFwWindowDelegate *Vd_Fw_Delegate;
     VD_FW_G.focused = 0;
 }
 
+- (void)windowDidMiniaturize:(NSNotification *)notification
+{
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_MINIMIZED;
+    msg.dat.minimized.on = 1;
+    vd_fw__msgbuf_w(&msg); 
+}
+
+- (void)windowDidDeminiaturize:(NSNotification *)notification
+{
+
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_MINIMIZED;
+    msg.dat.minimized.on = 0;
+    vd_fw__msgbuf_w(&msg); 
+}
+
 - (void)windowWillClose:(NSNotification*)notification {
     VD_FW_G.should_close = YES;
+    sem_post(VD_FW_G.s_main_thread_window_closed);
+    [NSApp stop:nil];
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
+
 }
 
 - (void)windowDidResize:(NSNotification *)notification {
-    [VD_FW_G.content_view setNeedsDisplay: YES];
-    [VD_FW_G.gl_context update];
+    NSRect rect = [[VD_FW_G.window contentView] frame];
+    VD_FW_G.w = (int)rect.size.width * VD_FW_G.scale;
+    VD_FW_G.h = (int)rect.size.height * VD_FW_G.scale;
+
+    if (!VD_FW_G.context_update_requested) {
+        sem_post(VD_FW_G.s_main_thread_context_needs_update);
+        VD_FW_G.context_update_requested = 1;
+    }
+
+    if (VD_FW_G.is_zoomed != [VD_FW_G.window isZoomed]) {
+        VD_FW_G.is_zoomed = [VD_FW_G.window isZoomed];
+        VdFw__MacMessage msg;
+        msg.type = VD_FW__MAC_MESSAGE_ZOOMED;
+        msg.dat.zoomed.on = VD_FW_G.is_zoomed;
+        vd_fw__msgbuf_w(&msg); 
+    }
+
+
+    // CGLContextObj ctx = CGLGetCurrentContext();
+    // CGLLockContext(ctx);
+    // [VD_FW_G.gl_context update];
+    // CGLUnlockContext(ctx);
+
+    // @note(mdodis): Apple States:
+    // > Call this method whenever the receiver’s drawable object changes
+    // > size or location. A multithreaded application must synchronize 
+    // > all threads that access the same drawable object and call update 
+    // > for each thread’s context serially.
+    //
+    // So we wait to acquire paint lock here.
+    // pthread_mutex_lock(&VD_FW_G.m_paint);
+    // VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_REACQUIRE_CONTEXT;
+    // [VD_FW_G.gl_context makeCurrentContext];
+    // [VD_FW_G.gl_context update];
+    // pthread_mutex_unlock(&VD_FW_G.m_paint);
 }
 - (BOOL)acceptsFirstResponder {
     return YES;
@@ -8559,15 +9213,23 @@ static VdFwWindowDelegate *Vd_Fw_Delegate;
 }
 
 - (void)applicationDidBecomeActive:(NSNotification *)notification {
+
+    // NSWindow *window = [NSApp mainWindow];
+    // if (window && !window.isKeyWindow) {
+    //     printf("made window key\n");
+    //     [window makeKeyAndOrderFront:nil];
+    // } 
+
     // Restore if minimized
     if ([VD_FW_G.window isMiniaturized]) {
         [VD_FW_G.window deminiaturize:nil];
     }
 }
+
+
 @end
 
 @implementation VdFwWindow
-
 - (BOOL)_usesCustomDrawing {
     return YES;
 }
@@ -8576,7 +9238,303 @@ static VdFwWindowDelegate *Vd_Fw_Delegate;
 
 @implementation VdFwContentView
 
-// - (BOOL)performKeyEquivalent:(NSEvent *)event {
+- (void)drawRect:(NSRect)dirtyRect {
+
+    NSRect rect = [[VD_FW_G.window contentView] frame];
+    VD_FW_G.w = (int)rect.size.width * VD_FW_G.scale;
+    VD_FW_G.h = (int)rect.size.height * VD_FW_G.scale;
+
+    pthread_mutex_lock(&VD_FW_G.m_paint);
+
+    if ((VD_FW_G.w != VD_FW_G.next_frame.w) || (VD_FW_G.h != VD_FW_G.next_frame.h)) {
+        VD_FW_G.next_frame.w = VD_FW_G.w;
+        VD_FW_G.next_frame.h = VD_FW_G.h;
+        VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_SIZE_CHANGED;
+    }
+
+    VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_WAKE_COND_VAR;
+
+    // pthread_cond_signal(&VD_FW_G.n_paint);
+    // pthread_cond_wait(&VD_FW_G.n_paint, &VD_FW_G.m_paint);
+    pthread_mutex_unlock(&VD_FW_G.m_paint);
+}
+
+- (void)keyUp:(NSEvent*)evt
+{
+    unsigned short keycode = [evt keyCode];
+    VdFwKey key = vd_fw__translate_mac_keycode(keycode);
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_KEY;
+    msg.dat.key.down = 0;
+    msg.dat.key.key = key;
+    vd_fw__msgbuf_w(&msg); 
+}
+
+- (void)flagsChanged:(NSEvent*)evt
+{
+    NSEventModifierFlags flags = [evt modifierFlags];
+    unsigned short keycode = [evt keyCode];
+
+    unsigned char shift_down = (flags & NSEventModifierFlagShift) ? 1 : 0;
+    unsigned char option_down = (flags & NSEventModifierFlagOption) ? 1 : 0;
+    unsigned char control_down = (flags & NSEventModifierFlagControl) ? 1 : 0;
+
+    switch (keycode) {
+        case 60:
+        case 56: {
+            VdFw__MacMessage msg;
+            msg.type = VD_FW__MAC_MESSAGE_KEY;
+            msg.dat.key.down = shift_down;
+            msg.dat.key.key = VD_FW_KEY_LSHIFT;
+            vd_fw__msgbuf_w(&msg); 
+
+            msg.type = VD_FW__MAC_MESSAGE_KEY;
+            msg.dat.key.down = shift_down;
+            msg.dat.key.key = VD_FW_KEY_RSHIFT;
+            vd_fw__msgbuf_w(&msg); 
+        } break;
+        case 59: {
+            VdFw__MacMessage msg;
+            msg.type = VD_FW__MAC_MESSAGE_KEY;
+            msg.dat.key.down = control_down;
+            msg.dat.key.key = VD_FW_KEY_LCONTROL;
+            vd_fw__msgbuf_w(&msg); 
+        } break;
+        case 61: {
+            VdFw__MacMessage msg;
+            msg.type = VD_FW__MAC_MESSAGE_KEY;
+            msg.dat.key.down = option_down;
+            msg.dat.key.key = VD_FW_KEY_RCONTROL;
+            vd_fw__msgbuf_w(&msg); 
+        } break;
+        default: break;
+    }
+}
+
+- (void)keyDown:(NSEvent*)evt
+{
+    unsigned short keycode = [evt keyCode];
+    VdFwKey key = vd_fw__translate_mac_keycode(keycode);
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_KEY;
+    msg.dat.key.down = 1;
+    msg.dat.key.key = key;
+    vd_fw__msgbuf_w(&msg); 
+}
+
+- (void)mouseDown:(NSEvent *)evt
+{
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
+    msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN;
+    msg.dat.mousebtn.down = 1;
+    vd_fw__msgbuf_w(&msg); 
+
+    NSPoint view_point = [evt locationInWindow];
+    NSPoint p = NSMakePoint(view_point.x, view_point.y);
+
+    p.x *= VD_FW_G.scale;
+    p.y *= VD_FW_G.scale;
+
+    int hit_drag_area = 0;
+    if (VD_FW_G.draw_decorations) {
+        return;
+    }
+
+    if (!VD_FW_G.nccaption_set) {
+        hit_drag_area = 1;
+    } else if (NSPointInRect(p, VD_FW_G.nccaption)) {
+        hit_drag_area = 1;
+        for (int ri = 0; ri < VD_FW_G.ncrect_count; ++ri) {
+            if (NSPointInRect(p, VD_FW_G.ncrects[ri])) {
+                hit_drag_area = 0;
+                break;
+            }
+        }
+    }
+
+    if (hit_drag_area) {
+        NSPoint loc = [VD_FW_G.window convertPointToScreen:view_point];
+        NSRect window_frame = [VD_FW_G.window frame];
+
+        loc.x -= window_frame.origin.x;
+        loc.y -= window_frame.origin.y;
+        VD_FW_G.drag_start_location = loc;
+        VD_FW_G.drag_start_pos_window_coords = view_point;
+        VD_FW_G.dragging = TRUE;
+    }
+}
+
+- (void)rightMouseDown:(NSEvent *)evt
+{
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
+    msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN;
+    msg.dat.mousebtn.down = 1;
+    vd_fw__msgbuf_w(&msg); 
+}
+
+- (void)otherMouseDown:(NSEvent *)evt
+{
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
+    msg.dat.mousebtn.down = 1;
+
+    int send_message = 0;
+    switch ([evt buttonNumber]) {
+        case 2: {
+            send_message = 1;
+            msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN;
+        } break;
+
+        case 3:
+        case 4: {
+            send_message = 1;
+            msg.dat.mousebtn.mask = 1 << [evt buttonNumber];
+        } break;
+    }
+
+    if (send_message) {
+        vd_fw__msgbuf_w(&msg); 
+    }
+}
+
+- (void)scrollWheel:(NSEvent *)evt
+{
+
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_SCROLL;
+
+    if ([evt hasPreciseScrollingDeltas]) {
+        msg.dat.scroll.sx = [evt scrollingDeltaX] * 0.05f;
+        msg.dat.scroll.sy = [evt scrollingDeltaY] * 0.05f;
+    } else {
+        msg.dat.scroll.sx = [evt deltaX];
+        msg.dat.scroll.sy = [evt deltaY];
+    }
+    vd_fw__msgbuf_w(&msg); 
+}
+
+- (void)mouseUp:(NSEvent *)evt
+{
+    VD_FW_G.dragging = FALSE;
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
+    msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN;
+    msg.dat.mousebtn.down = 0;
+    vd_fw__msgbuf_w(&msg); 
+}
+
+- (void)rightMouseUp:(NSEvent *)evt
+{
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
+    msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN;
+    msg.dat.mousebtn.down = 0;
+    vd_fw__msgbuf_w(&msg); 
+}
+
+- (void)otherMouseUp:(NSEvent *)evt
+{
+
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
+    msg.dat.mousebtn.down = 0;
+
+    int send_message = 0;
+    switch ([evt buttonNumber]) {
+        case 2: {
+            send_message = 1;
+            msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN;
+        } break;
+
+        case 3:
+        case 4: {
+            send_message = 1;
+            msg.dat.mousebtn.mask = 1 << [evt buttonNumber];
+        } break;
+    }
+
+    if (send_message) {
+        vd_fw__msgbuf_w(&msg); 
+    }
+}
+
+- (void)mouseMoved:(NSEvent *)evt
+{
+    NSPoint loc = [evt locationInWindow];
+
+    NSPoint pixel_point = vd_fw__mac_mouse_cocoa_to_conventional(loc);
+
+    float delta[2] = {
+        [evt deltaX],
+        [evt deltaY],
+       // pixel_point.x - VD_FW_G.last_mouse.x,
+       // pixel_point.y - VD_FW_G.last_mouse.y,
+    };
+
+    VD_FW_G.last_mouse = pixel_point;
+    // if (VD_FW_G.mouse_is_locked) {
+    //     NSRect cvf = [VD_FW_G.window frame];
+
+    //     NSPoint screen_loc = [NSEvent mouseLocation];
+
+    //     CGFloat w = NSMaxX(cvf) - NSMinX(cvf);
+    //     CGFloat h = NSMaxY(cvf) - NSMinY(cvf);
+
+    //     if (!NSPointInRect(screen_loc, cvf)) {
+    //         CGWarpMouseCursorPosition(CGPointMake(NSMinX(cvf) + w * .5f, NSMinY(cvf) + h * .5f));
+    //         VD_FW_G.last_mouse.x = w * .5f;
+    //         VD_FW_G.last_mouse.y = h * .5f;
+    //     }
+    // }
+
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_MOUSEMOVE;
+    msg.dat.mousemove.mx = pixel_point.x;
+    msg.dat.mousemove.my = pixel_point.y;
+    msg.dat.mousemove.dx = delta[0];
+    msg.dat.mousemove.dy = delta[1];
+    vd_fw__msgbuf_w(&msg); 
+
+}
+
+- (void)mouseDragged:(NSEvent *)evt
+{
+
+    NSPoint view_point = [evt locationInWindow];
+
+    NSPoint scaled_pos = vd_fw__mac_mouse_cocoa_to_conventional(view_point);
+
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_MOUSEMOVE;
+    msg.dat.mousemove.mx = scaled_pos.x;
+    msg.dat.mousemove.my = scaled_pos.y;
+    vd_fw__msgbuf_w(&msg); 
+
+    NSPoint p = [VD_FW_G.window convertPointToScreen: view_point];
+
+    if (VD_FW_G.dragging) {
+
+        NSPoint new_pos = NSMakePoint(p.x - VD_FW_G.drag_start_location.x,
+                                      p.y - VD_FW_G.drag_start_location.y);
+
+        [VD_FW_G.window setFrameOrigin: new_pos];
+    }
+}
+
+- (void)rightMouseDragged:(NSEvent *)evt
+{
+
+}
+
+- (void)otherMouseDragged:(NSEvent *)evt
+{
+
+}
+
+
+
 //     if (event.type == NSEventTypeKeyDown) {
 //         // swallow key events you don't want to beep
 //         return YES;
@@ -8585,117 +9543,16 @@ static VdFwWindowDelegate *Vd_Fw_Delegate;
 // }
 @end
 
+static void vd_fw__mac_init(VdFwInitInfo *info);
+static void vd_fw__mac_init_gl(VdFwInitInfo *info);
+static void vd_fw__mac_runloop(int wait);
+
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
-    VD_FW_G.draw_decorations = 1;
-    if (info) {
-        VD_FW_G.draw_decorations = !info->window_options.borderless;
-    }
-
-    [NSApplication sharedApplication];
-    [NSApp setActivationPolicy: NSApplicationActivationPolicyRegular];
-    [NSEvent setMouseCoalescingEnabled:NO];
-
-    // @autoreleasepool
-    {
-        NSScreen *main_screen = [NSScreen mainScreen];
-        VD_FW_G.scale = [main_screen backingScaleFactor];
-
-        NSRect screen_rect = [main_screen frame];
-
-        VdFwWindowDelegate *delegate = [[VdFwWindowDelegate alloc] init];
-        [NSApp setDelegate: delegate];
-        Vd_Fw_Delegate = delegate;
-
-        // Create a simple menu bar so the app shows in the Dock
-        NSMenu *menubar = [[NSMenu new] autorelease];
-        NSMenuItem *appMenuItem = [[NSMenuItem new] autorelease];
-        [menubar addItem:appMenuItem];
-        [NSApp setMainMenu:menubar];
-        NSMenu *appMenu = [[NSMenu new] initWithTitle:@"Application"];
-        NSMenuItem *quitMenuItem = [[NSMenuItem alloc]
-            initWithTitle:@"Quit"
-                   action:@selector(terminate:)
-            keyEquivalent:@"q"];
-        [appMenu addItem:quitMenuItem];
-        [appMenuItem setSubmenu:appMenu];
-        int w = 640;
-        int h = 480;
-        int x = screen_rect.size.width  * 0.5f - w * 0.5f;
-        int y = screen_rect.size.height * 0.5f - h * 0.5f;
-        NSRect frame = NSMakeRect(x, y, w, h);
-        NSWindowStyleMask window_style_mask = NSWindowStyleMaskClosable |
-                                              NSWindowStyleMaskMiniaturizable |
-                                              NSWindowStyleMaskTitled |
-                                              NSWindowStyleMaskResizable;
-        // if (!VD_FW_G.draw_decorations) {
-        //     window_style_mask              |= NSWindowStyleMaskFullSizeContentView;
-        // }
-
-        VD_FW_G.window = [[VdFwWindow alloc] initWithContentRect: frame
-                                                     styleMask: window_style_mask
-                                                       backing: NSBackingStoreBuffered
-                                                         defer: NO];
-
-        if (!VD_FW_G.draw_decorations) {
-            VD_FW_G.window.titleVisibility = NSWindowTitleHidden;
-            VD_FW_G.window.titlebarAppearsTransparent = YES;
-            [[VD_FW_G.window standardWindowButton:NSWindowCloseButton] setHidden:YES];
-            [[VD_FW_G.window standardWindowButton:NSWindowMiniaturizeButton] setHidden:YES];
-            [[VD_FW_G.window standardWindowButton:NSWindowZoomButton] setHidden:YES];
-            VD_FW_G.window.styleMask |= NSWindowStyleMaskFullSizeContentView;
-            [VD_FW_G.window setMovable:NO];
-            [VD_FW_G.window setMovableByWindowBackground:NO];
-
-        }
-        [VD_FW_G.window                       setTitle: [NSString stringWithUTF8String: "FW Window"]];
-        [VD_FW_G.window           makeKeyAndOrderFront: nil];
-        [VD_FW_G.window                   setHasShadow: YES];
-        [VD_FW_G.window setAllowsConcurrentViewDrawing: YES];
-
-        NSOpenGLPixelFormatAttribute attrs[] = {
-            NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersion3_2Core,
-            NSOpenGLPFAColorSize, 24,
-            NSOpenGLPFAAlphaSize, 8,
-            NSOpenGLPFADepthSize, 24,
-            NSOpenGLPFADoubleBuffer,
-            NSOpenGLPFAAccelerated,
-            0
-        };
-
-        NSOpenGLPixelFormat *pf = [[NSOpenGLPixelFormat alloc] initWithAttributes: attrs];
-        VD_FW_G.gl_context = [[NSOpenGLContext alloc]              initWithFormat: pf
-                                                                     shareContext: nil];
-        NSRect wframe = [[VD_FW_G.window contentView] bounds];
-        NSView *fw_view = [[VdFwContentView alloc] initWithFrame:wframe];
-        VD_FW_G.content_view = (VdFwContentView*)fw_view;
-        [VD_FW_G.window setContentView: fw_view];
-        // NSView *content_view = [VD_FW_G.window contentView];
-        [fw_view setWantsLayer: YES];
-        // [[fw_view layer] setDrawsAsynchronously: YES];
-        [fw_view setAcceptsTouchEvents:YES]; // optional for touch, but ok
-        [fw_view addTrackingArea:[[NSTrackingArea alloc] initWithRect:fw_view.bounds
-                                                             options:NSTrackingMouseMoved |
-                                                                     NSTrackingActiveAlways |
-                                                                     NSTrackingInVisibleRect
-                                                               owner:fw_view
-                                                            userInfo:nil]];
-
-        [VD_FW_G.gl_context setView: fw_view];
-        [VD_FW_G.gl_context makeCurrentContext];
-
-        [VD_FW_G.window setDelegate:delegate];
-        [NSApp activateIgnoringOtherApps:YES];
-    }
-
-    VdFwGlVersion version = VD_FW_GL_VERSION_3_3;
-    if (info && info->gl.version != 0) {
-        version = info->gl.version;
-    }
-    vd_fw__load_opengl(version);
-
-    mach_timebase_info(&VD_FW_G.time_base);
-    VD_FW_G.last_time = mach_absolute_time();
+    VD_FW_G.c_init_info = *info;
+    sem_post(VD_FW_G.s_main_thread_opened_me);
+    sem_wait(VD_FW_G.s_main_thread_window_ready);
+    vd_fw__mac_init_gl(info);
 
     return 1;
 }
@@ -8709,48 +9566,21 @@ VD_FW_API unsigned long long vd_fw_delta_ns(void)
 
 VD_FW_API void vd_fw_get_mouse_delta(float *dx, float *dy)
 {
-    if (dx) *dx = VD_FW_G.mouse_delta.x; 
-    if (dy) *dy = VD_FW_G.mouse_delta.y;
+    if (dx) *dx = VD_FW_G.mouse_delta[0]; 
+    if (dy) *dy = VD_FW_G.mouse_delta[1];
 }
 
 VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
 {
-    int result = 0;
-
-    @autoreleasepool {
-        if (!VD_FW_G.window) {
-            if (x) *x = 0;
-            if (y) *y = 0;
-            return 0;
-        }
-
-        // // Mouse location in screen coordinates
-        // NSPoint loc = [NSEvent mouseLocation];
-
-        // // Convert to window coordinates
-        // NSPoint window_point = [VD_FW_G.window convertPointFromScreen:loc];
-
-        // // Convert to content view coordinates
-        // NSView *cv = [VD_FW_G.window contentView];
-        // NSPoint view_point = [cv convertPoint:window_point fromView:nil];
-        // NSRect cvf = [cv frame];
-
-        // // Cocoa’s origin is bottom-left, OpenGL expects same
-        // if (x) *x = (view_point.x) * VD_FW_G.scale;
-        // if (y) *y = (cvf.size.height - view_point.y) * VD_FW_G.scale;
-
-        if (x) *x = VD_FW_G.mouse_pos_scaled.x;
-        if (y) *y = VD_FW_G.mouse_pos_scaled.y;
-
-        // Get the mouse state
-        BOOL left_down  = ([NSEvent pressedMouseButtons] & (1 << 0)) != 0;
-        BOOL right_down = ([NSEvent pressedMouseButtons] & (1 << 1)) != 0;
-
-        result |= left_down  ? VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN : 0;
-        result |= right_down ? VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN : 0;
-    }
-
+    int result = VD_FW_G.mouse_state;
+    if (x) *x = VD_FW_G.mouse[0];
+    if (y) *y = VD_FW_G.mouse[1];
     return result;
+}
+
+VD_FW_API int vd_fw_get_mouse_clicked(int button)
+{
+    return !(VD_FW_G.prev_mouse_state & button) && (VD_FW_G.mouse_state & button);
 }
 
 VD_FW_API void vd_fw_set_mouse_locked(int locked)
@@ -8763,8 +9593,11 @@ VD_FW_API void vd_fw_set_mouse_locked(int locked)
 
     if (locked) {
         CGDisplayHideCursor(kCGDirectMainDisplay);
+        CGAssociateMouseAndMouseCursorPosition(false);
+
     } else {
         CGDisplayShowCursor(kCGDirectMainDisplay);
+        CGAssociateMouseAndMouseCursorPosition(true);
     }
 }
 
@@ -8792,219 +9625,111 @@ VD_FW_API int vd_fw_get_key_down(int key)
 
 VD_FW_API int vd_fw_running(void)
 {
+    if (sem_trywait(VD_FW_G.s_main_thread_window_closed) == 0) {
+        return 0;
+    }
+
     VD_FW_G.wheel_moved = 0;
     VD_FW_G.wheel[0] = 0.f;
     VD_FW_G.wheel[1] = 0.f;
 
-    VD_FW_G.mouse_delta.x = 0.f;
-    VD_FW_G.mouse_delta.y = 0.f;
+    VD_FW_G.mouse_delta[0] = 0.f;
+    VD_FW_G.mouse_delta[1] = 0.f;
 
     VD_FW_G.focus_changed = 0;
+    VD_FW_G.window_state_changed = 0;
 
+    VD_FW_G.prev_mouse_state = VD_FW_G.mouse_state;
     for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
         VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
     }
 
-    @autoreleasepool {
-        NSEvent *event;
-        while ((event = [NSApp nextEventMatchingMask:NSEventMaskAny
-                                           untilDate:[NSDate distantPast]
-                                              inMode:NSDefaultRunLoopMode
-                                             dequeue:YES]))
-        {
-            NSEventType type = [event type];
+    VdFw__MacMessage msg;
+    while (vd_fw__msgbuf_r(&msg)) {
+        switch (msg.type) {
+            case VD_FW__MAC_MESSAGE_MOUSEMOVE: {
 
-            // Handle Cmd+Q manually
-            if (event.type == NSEventTypeKeyDown &&
-                (event.modifierFlags & NSEventModifierFlagCommand) &&
-                [[event charactersIgnoringModifiers].lowercaseString isEqualToString:@"q"])
-            {
-                [NSApp terminate:nil];
-                continue; // skip sending to AppKit
-            }
+                VD_FW_G.mouse_delta[0] += msg.dat.mousemove.dx * 0.2f;
+                VD_FW_G.mouse_delta[1] += msg.dat.mousemove.dy * 0.2f;
 
-            int event_handled = 1;
+                VD_FW_G.mouse[0] = msg.dat.mousemove.mx;
+                VD_FW_G.mouse[1] = msg.dat.mousemove.my;
+            } break;
 
-            switch (type) {
-                case NSEventTypeScrollWheel: {
+            case VD_FW__MAC_MESSAGE_MOUSEBTN: {
+                int state_mask = msg.dat.mousebtn.mask;
+                if (msg.dat.mousebtn.down) {
+                    VD_FW_G.mouse_state |= state_mask;
+                } else {
+                    VD_FW_G.mouse_state &= ~state_mask;
+                }
+            } break;
 
-                    if ([event hasPreciseScrollingDeltas]) {
-                        VD_FW_G.wheel[0] += [event scrollingDeltaX] * 0.05f;
-                        VD_FW_G.wheel[1] += [event scrollingDeltaY] * 0.05f;
-                    } else {
-                        VD_FW_G.wheel[0] += [event deltaX];
-                        VD_FW_G.wheel[1] += [event deltaY];
-                    }
+            case VD_FW__MAC_MESSAGE_SCROLL: {
+                VD_FW_G.wheel[0] += msg.dat.scroll.sx;
+                VD_FW_G.wheel[1] += msg.dat.scroll.sy;
+            } break;
 
-                    VD_FW_G.wheel_moved = 1;
-                } break;
+            case VD_FW__MAC_MESSAGE_KEY: {
+                VD_FW_G.curr_key_states[msg.dat.key.key] = msg.dat.key.down;
+            } break;
 
-                case NSEventTypeFlagsChanged: {
+            case VD_FW__MAC_MESSAGE_MINIMIZED: {
+                if (msg.dat.minimized.on) {
+                    VD_FW_G.window_state |= VD_FW__MAC_WINDOW_STATE_MINIMIZED;
+                } else {
+                    VD_FW_G.window_state &= ~VD_FW__MAC_WINDOW_STATE_MINIMIZED;
+                }
+                VD_FW_G.window_state_changed = 1;
+            } break;
 
-
-                    NSEventModifierFlags flags = [event modifierFlags];
-                    unsigned short keycode = [event keyCode];
-
-                    unsigned char shift_down = (flags & NSEventModifierFlagShift) ? 1 : 0;
-                    unsigned char option_down = (flags & NSEventModifierFlagOption) ? 1 : 0;
-                    unsigned char control_down = (flags & NSEventModifierFlagControl) ? 1 : 0;
-
-                    switch (keycode) {
-                        case 56: VD_FW_G.curr_key_states[VD_FW_KEY_LSHIFT] = shift_down; break;
-                        case 60: VD_FW_G.curr_key_states[VD_FW_KEY_RSHIFT] = shift_down; break;
-                        case 59: VD_FW_G.curr_key_states[VD_FW_KEY_LCONTROL] = control_down; break;
-                        case 61: VD_FW_G.curr_key_states[VD_FW_KEY_RCONTROL] = option_down; break;
-                        default: break;
-                    }
-                } break;
-
-                case NSEventTypeKeyUp:
-                case NSEventTypeKeyDown: {
-                    BOOL is_key_down = [event type] == NSEventTypeKeyDown;
-                    // BOOL is_repeat = [event isARepeat];
-                    unsigned short keycode = [event keyCode];
-
-                    VdFwKey key = vd_fw__translate_mac_keycode(keycode);
-
-                    // VD_FW_G.prev_key_states[key] = VD_FW_G.curr_key_states[key];
-                    VD_FW_G.curr_key_states[key] = (unsigned char)is_key_down;
-
-                } break;
-
-                case NSEventTypeLeftMouseDown: {
-                    NSPoint view_point = [event locationInWindow];
-
-                    NSPoint p = NSMakePoint(view_point.x, view_point.y);
-
-                    int hit_drag_area = 0;
-
-                    p.x *= VD_FW_G.scale;
-                    p.y *= VD_FW_G.scale;
-
-                    if (VD_FW_G.draw_decorations) {
-                        break;
-                    }
-
-                    if (!VD_FW_G.nccaption_set) {
-                        hit_drag_area = 1;
-                    } else if (NSPointInRect(p, VD_FW_G.nccaption)) {
-                        hit_drag_area = 1;
-                        for (int ri = 0; ri < VD_FW_G.ncrect_count; ++ri) {
-                            if (NSPointInRect(p, VD_FW_G.ncrects[ri])) {
-                                hit_drag_area = 0;
-                                break;
-                            }
-                        }
-                    }
-
-                    if (hit_drag_area) {
-                        NSPoint loc = [VD_FW_G.window convertPointToScreen:view_point];
-                        NSRect window_frame = [VD_FW_G.window frame];
-
-                        loc.x -= window_frame.origin.x;
-                        loc.y -= window_frame.origin.y;
-                        VD_FW_G.drag_start_location = loc;
-                        VD_FW_G.drag_start_pos_window_coords = view_point;
-                        VD_FW_G.dragging = TRUE;
-                    }
-                } break;
-
-                case NSEventTypeLeftMouseUp: {
-                    VD_FW_G.dragging = FALSE;
-                } break;
-
-                case NSEventTypeMouseMoved: {
-
-                    NSPoint loc = [event locationInWindow];
-
-                    // Convert to content view coordinates
-                    NSView *cv = [VD_FW_G.window contentView];
-                    NSRect cvf = [cv frame];
-
-                    NSPoint loc_top_left_origin = NSMakePoint(loc.x, cvf.size.height - loc.y);
-
-                    NSPoint delta = NSMakePoint(
-                        loc_top_left_origin.x - VD_FW_G.last_mouse.x,
-                        loc_top_left_origin.y - VD_FW_G.last_mouse.y
-                    );
-
-                    VD_FW_G.mouse_delta.x += delta.x;
-                    VD_FW_G.mouse_delta.y += delta.y;
-
-                    VD_FW_G.mouse_pos_scaled = NSMakePoint(
-                        loc_top_left_origin.x * VD_FW_G.scale,
-                        loc_top_left_origin.y * VD_FW_G.scale
-                    );
-
-                    VD_FW_G.last_mouse = loc_top_left_origin;
-                } break;
-
-                case NSEventTypeLeftMouseDragged: {
-
-                    NSPoint view_point = [event locationInWindow];
-
-                    NSPoint p = [VD_FW_G.window convertPointToScreen: view_point];
-
-                    if (VD_FW_G.dragging) {
-
-                        NSPoint new_pos = NSMakePoint(p.x - VD_FW_G.drag_start_location.x,
-                                                      p.y - VD_FW_G.drag_start_location.y);
-
-                        [VD_FW_G.window setFrameOrigin: new_pos];
-                    }
-                } break;
-
-                default: event_handled = 0; break;
-            }
-
-            switch (type) {
-                case NSEventTypeLeftMouseDown:
-                case NSEventTypeLeftMouseUp: {
-                    event_handled = 0;
-                } break;
-
-                case NSEventTypeLeftMouseDragged:
-                case NSEventTypeRightMouseDragged:
-                case NSEventTypeOtherMouseDragged:
-                case NSEventTypeMouseMoved: {
-                    if (!VD_FW_G.mouse_is_locked) {
-                        break;
-                    }
-
-                    event_handled = 0;
-                    NSRect cvf = [VD_FW_G.window frame];
-
-                    NSPoint screen_loc = [NSEvent mouseLocation];
-
-                    CGFloat w = NSMaxX(cvf) - NSMinX(cvf);
-                    CGFloat h = NSMaxY(cvf) - NSMinY(cvf);
-
-                    if (!NSPointInRect(screen_loc, cvf)) {
-                        CGWarpMouseCursorPosition(CGPointMake(NSMinX(cvf) + w * .5f, NSMinY(cvf) + h * .5f));
-                        VD_FW_G.last_mouse.x = w * .5f;
-                        VD_FW_G.last_mouse.y = h * .5f;
-                    }
-                } break;
-                default: break;
-            }
-
-            if (!event_handled) {
-                [NSApp sendEvent: event];
-            }
+            case VD_FW__MAC_MESSAGE_ZOOMED: {
+                if (msg.dat.zoomed.on) {
+                    VD_FW_G.window_state |= VD_FW__MAC_WINDOW_STATE_ZOOMED;
+                } else {
+                    VD_FW_G.window_state &= ~VD_FW__MAC_WINDOW_STATE_ZOOMED;
+                }
+                VD_FW_G.window_state_changed = 1;
+            } break;
+            default: break;
         }
     }
+
+    pthread_mutex_lock(&VD_FW_G.m_paint);
+    VD_FW_G.curr_frame = VD_FW_G.next_frame;
+    VD_FW_G.next_frame.flags = 0;
+    pthread_mutex_unlock(&VD_FW_G.m_paint);
 
     return !VD_FW_G.should_close;
 }
 
 VD_FW_API int vd_fw_swap_buffers(void)
 {
-
     VD_FW_G.last_time = mach_absolute_time();
-    @autoreleasepool {
-        [VD_FW_G.gl_context flushBuffer];
+    [VD_FW_G.gl_context flushBuffer];
+
+    // if (VD_FW_G.curr_frame.flags & VD_FW__MAC_FLAGS_WAKE_COND_VAR) {
+    //     pthread_cond_signal(&VD_FW_G.n_paint);
+    // }
+
+    if (sem_trywait(VD_FW_G.s_main_thread_context_needs_update) == 0) {
+        @autoreleasepool {
+            // [Vd_Fw_Delegate performSelectorOnMainThread:@selector(updateGLContext)
+            //                                      withObject:nil
+            //                                   waitUntilDone:YES];
+            dispatch_sync(dispatch_get_main_queue(), ^(void){
+                [VD_FW_G.gl_context update];
+                VD_FW_G.context_update_requested = 0;
+            });
+        }
     }
+
     return 1;
+}
+
+VD_FW_API VdFwPlatform vd_fw_get_platform(void)
+{
+    return VD_FW_PLATFORM_MACOS;
 }
 
 VD_FW_API int vd_fw_get_focused(int *focused)
@@ -9015,10 +9740,66 @@ VD_FW_API int vd_fw_get_focused(int *focused)
 
 VD_FW_API int vd_fw_get_size(int *w, int *h)
 {
-    NSRect rect = [[VD_FW_G.window contentView] frame];
-    if (w) *w = (int)rect.size.width * VD_FW_G.scale;
-    if (h) *h = (int)rect.size.height * VD_FW_G.scale;
-    return 0;
+    *w = VD_FW_G.curr_frame.w;
+    *h = VD_FW_G.curr_frame.h;
+    return VD_FW_G.curr_frame.flags & VD_FW__MAC_FLAGS_SIZE_CHANGED;
+}
+
+VD_FW_API int vd_fw_get_minimized(int *minimized)
+{
+    if (minimized) {
+        *minimized = VD_FW_G.window_state & VD_FW__MAC_WINDOW_STATE_MINIMIZED;
+    }
+    return VD_FW_G.window_state_changed;
+}
+
+VD_FW_API void vd_fw_minimize(void)
+{
+    NSWindow *window = VD_FW_G.window;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (![window isMiniaturized]) {
+            [window miniaturize:nil];
+        }
+    });
+}
+
+VD_FW_API int vd_fw_get_maximized(int *maximized)
+{
+    if (maximized) {
+        *maximized = VD_FW_G.window_state & VD_FW__MAC_WINDOW_STATE_ZOOMED;
+    }
+    return VD_FW_G.window_state_changed;
+}
+
+VD_FW_API void vd_fw_maximize(void)
+{
+    NSWindow *window = VD_FW_G.window;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (![window isZoomed]) {
+            [window zoom:nil];
+        }
+    });
+}
+
+VD_FW_API void vd_fw_normalize(void)
+{
+    NSWindow *window = VD_FW_G.window;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        // If the window is minimized, restore it from the Dock.
+        if ([window isMiniaturized]) {
+            [window deminiaturize:nil];
+            return;
+        }
+
+        // If the window is zoomed (maximized), unzoom it.
+        if ([window isZoomed]) {
+            [window zoom:nil];
+            return;
+        }
+
+        // Otherwise, just bring it to the front in case it’s hidden.
+        [window makeKeyAndOrderFront:nil];
+    });
 }
 
 VD_FW_API void vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4])
@@ -9037,8 +9818,8 @@ VD_FW_API void vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4])
 
     VD_FW_G.ncrect_count = count;
     int c = count;
-    if (c > 16) {
-        c = 16;
+    if (c > VD_FW_NCRECTS_MAX) {
+        c = VD_FW_NCRECTS_MAX;
     }
     for (int i = 0; i < c; ++i) {
 
@@ -9057,6 +9838,49 @@ VD_FW_API float vd_fw_get_scale(void)
 VD_FW_API void vd_fw_set_title(const char *title)
 {
     [VD_FW_G.window setTitle: [NSString stringWithUTF8String: (title)]];
+}
+
+VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
+{
+    VdFwU32 *app_image_data = (VdFwU32*)malloc(sizeof(unsigned int) * width * height);
+    VD_FW_MEMCPY(app_image_data, pixels, sizeof(unsigned int) * width * height);
+
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            VdFwU32 pixel = app_image_data[y * width + x];
+            VdFwU8  alpha = (pixel >> 24) & 0xFF;
+            VdFwU8  red   = (pixel >> 16) & 0xFF;
+            VdFwU8  green = (pixel >>  8) & 0xFF;
+            VdFwU8  blue  = (pixel >>  0) & 0xFF;
+
+            VdFwU32 new_pixel = (red << 24) | (green << 16) | (blue << 8) | alpha;
+            app_image_data[y * width + x] = new_pixel;
+        }
+    }
+
+    NSBitmapImageRep *rep = [[NSBitmapImageRep alloc]
+        initWithBitmapDataPlanes:(unsigned char**)&app_image_data
+                      pixelsWide:width
+                      pixelsHigh:height
+                   bitsPerSample:8
+                 samplesPerPixel:4
+                        hasAlpha:YES
+                        isPlanar:NO
+                  colorSpaceName:NSDeviceRGBColorSpace
+                     bytesPerRow:width * 4
+                    bitsPerPixel:32];
+    NSImage *img = [[NSImage alloc] initWithSize:NSMakeSize(width, height)];
+    [img addRepresentation:rep];
+    dispatch_async(dispatch_get_main_queue(), ^ {
+        NSImage *prev_img = VD_FW_G.app_image;
+        VD_FW_G.app_image = img;
+        [NSApp setApplicationIconImage:img];
+        free(app_image_data);
+
+        if (prev_img) {
+            [prev_img release];
+        }
+    });
 }
 
 VD_FW_API int vd_fw_set_vsync_on(int on)
@@ -9125,7 +9949,254 @@ VD_FW_API void vd_fw__free_mem(void *memory)
     free(memory);
 }
 
-#undef VD_FW_G
+VD_FW_API void *vd_fw__realloc_mem(void *prev_ptr, size_t size)
+{
+    return realloc(prev_ptr, size);
+}
+
+
+#ifndef VD_FW_MACOS_NO_MAIN_OVERRIDE
+#   undef main
+static void *vd_fw__macos__main(void *arg)
+{
+    (void)arg;
+    vd_fw__macos_main(VD_FW_G.argc, VD_FW_G.argv);
+
+    return NULL;
+}
+
+
+int main(int argc, char const *argv[])
+{
+    VD_FW_G.argc = argc;
+    VD_FW_G.argv = argv;
+
+    sem_unlink("/sm-fw-cmtom");
+    VD_FW_G.s_main_thread_opened_me = sem_open("/sm-fw-cmtom",
+                                               O_CREAT,
+                                               0644,
+                                               0);
+    sem_unlink("/sm-fw-cmtwr");
+    VD_FW_G.s_main_thread_window_ready = sem_open("/sm-fw-cmtwr",
+                                                  O_CREAT,
+                                                  0644,
+                                                  0);
+
+    sem_unlink("/sm-fw-cmtwc");
+    VD_FW_G.s_main_thread_window_closed = sem_open("/sm-fw-cmtwc",
+                                                   O_CREAT,
+                                                   0644,
+                                                   0);
+
+    sem_unlink("/sm-fw-cmtcnu");
+    VD_FW_G.s_main_thread_context_needs_update = sem_open("/sm-fw-cmtcnu",
+                                                          O_CREAT,
+                                                          0644,
+                                                          0);
+    pthread_mutex_init(&VD_FW_G.m_paint, NULL);
+    pthread_mutex_init(&VD_FW_G.m_input, NULL);
+    pthread_cond_init(&VD_FW_G.n_paint, NULL);
+    pthread_create(&VD_FW_G.main_thread, NULL, vd_fw__macos__main, NULL);
+
+    while (1) {
+
+        sem_wait(VD_FW_G.s_main_thread_opened_me);
+        vd_fw__mac_init(&VD_FW_G.c_init_info);
+
+        sem_post(VD_FW_G.s_main_thread_window_ready);
+
+        vd_fw__mac_runloop(1);
+
+        if (VD_FW_G.should_close) {
+            break;
+        }
+    }
+    return 0;
+}
+#endif // !VD_FW_MACOS_NO_MAIN_OVERRIDE
+
+static void vd_fw__mac_init(VdFwInitInfo *info)
+{
+    VD_FW_G.draw_decorations = 1;
+    if (info) {
+        VD_FW_G.draw_decorations = !info->window_options.borderless;
+    }
+
+    [NSApplication sharedApplication];
+    [NSApp setActivationPolicy: NSApplicationActivationPolicyRegular];
+    [NSEvent setMouseCoalescingEnabled:NO];
+
+    VdFwGlVersion version = VD_FW_GL_VERSION_3_3;
+    if (info && info->gl.version != 0) {
+        version = info->gl.version;
+    }
+
+    // @autoreleasepool
+    {
+        NSScreen *main_screen = [NSScreen mainScreen];
+        VD_FW_G.scale = [main_screen backingScaleFactor];
+
+        NSRect screen_rect = [main_screen frame];
+
+        VdFwWindowDelegate *delegate = [[VdFwWindowDelegate alloc] init];
+        [NSApp setDelegate: delegate];
+        Vd_Fw_Delegate = delegate;
+
+        // Create a simple menu bar so the app shows in the Dock
+        NSMenu *menubar = [[NSMenu new] autorelease];
+        NSMenuItem *appMenuItem = [[NSMenuItem new] autorelease];
+        [menubar addItem:appMenuItem];
+        [NSApp setMainMenu:menubar];
+        NSMenu *appMenu = [[NSMenu new] initWithTitle:@"Application"];
+        NSMenuItem *quitMenuItem = [[NSMenuItem alloc]
+            initWithTitle:@"Quit"
+                   action:@selector(terminate:)
+            keyEquivalent:@"q"];
+        [appMenu addItem:quitMenuItem];
+        [appMenuItem setSubmenu:appMenu];
+        int w = 640;
+        int h = 480;
+        int x = screen_rect.size.width  * 0.5f - w * 0.5f;
+        int y = screen_rect.size.height * 0.5f - h * 0.5f;
+        NSRect frame = NSMakeRect(x, y, w, h);
+        NSWindowStyleMask window_style_mask = NSWindowStyleMaskClosable |
+                                              NSWindowStyleMaskMiniaturizable |
+                                              NSWindowStyleMaskTitled |
+                                              NSWindowStyleMaskResizable;
+        VD_FW_G.window = [[VdFwWindow alloc] initWithContentRect: frame
+                                                     styleMask: window_style_mask
+                                                       backing: NSBackingStoreBuffered
+                                                         defer: NO];
+
+        if (!VD_FW_G.draw_decorations) {
+            VD_FW_G.window.titleVisibility = NSWindowTitleHidden;
+            VD_FW_G.window.titlebarAppearsTransparent = YES;
+            [[VD_FW_G.window standardWindowButton:NSWindowCloseButton] setHidden:YES];
+            [[VD_FW_G.window standardWindowButton:NSWindowMiniaturizeButton] setHidden:YES];
+            [[VD_FW_G.window standardWindowButton:NSWindowZoomButton] setHidden:YES];
+            VD_FW_G.window.styleMask |= NSWindowStyleMaskFullSizeContentView;
+            [VD_FW_G.window setMovable:NO];
+            [VD_FW_G.window setMovableByWindowBackground:NO];
+        }
+
+        [VD_FW_G.window                       setTitle: [NSString stringWithUTF8String: "FW Window"]];
+        [VD_FW_G.window                   setHasShadow: YES];
+        [VD_FW_G.window           makeKeyAndOrderFront: nil];
+        // [VD_FW_G.window setAllowsConcurrentViewDrawing: YES];
+
+
+        NSOpenGLPixelFormatAttribute nsversion = 0;
+
+        switch (version) {
+            default:
+            case VD_FW_GL_VERSION_BASIC: nsversion = NSOpenGLProfileVersionLegacy; break;
+
+            case VD_FW_GL_VERSION_1_0: nsversion = NSOpenGLProfileVersionLegacy; break;
+            case VD_FW_GL_VERSION_1_1: nsversion = NSOpenGLProfileVersionLegacy; break;
+            case VD_FW_GL_VERSION_1_2: nsversion = NSOpenGLProfileVersionLegacy; break;
+            case VD_FW_GL_VERSION_1_3: nsversion = NSOpenGLProfileVersionLegacy; break;
+            case VD_FW_GL_VERSION_1_4: nsversion = NSOpenGLProfileVersionLegacy; break;
+            case VD_FW_GL_VERSION_1_5: nsversion = NSOpenGLProfileVersionLegacy; break;
+            case VD_FW_GL_VERSION_2_0: nsversion = NSOpenGLProfileVersionLegacy; break;
+            case VD_FW_GL_VERSION_2_1: nsversion = NSOpenGLProfileVersionLegacy; break;
+            case VD_FW_GL_VERSION_3_0: nsversion = NSOpenGLProfileVersionLegacy; break;
+            case VD_FW_GL_VERSION_3_1: nsversion = NSOpenGLProfileVersionLegacy; break;
+            case VD_FW_GL_VERSION_3_2: nsversion = NSOpenGLProfileVersion3_2Core; break;
+            case VD_FW_GL_VERSION_3_3: nsversion = NSOpenGLProfileVersion3_2Core; break;
+            case VD_FW_GL_VERSION_4_0: nsversion = NSOpenGLProfileVersion4_1Core; break;
+            case VD_FW_GL_VERSION_4_1: nsversion = NSOpenGLProfileVersion4_1Core; break;
+            case VD_FW_GL_VERSION_4_2: nsversion = NSOpenGLProfileVersion4_1Core; break;
+            case VD_FW_GL_VERSION_4_3: nsversion = NSOpenGLProfileVersion4_1Core; break;
+            case VD_FW_GL_VERSION_4_4: nsversion = NSOpenGLProfileVersion4_1Core; break;
+            case VD_FW_GL_VERSION_4_5: nsversion = NSOpenGLProfileVersion4_1Core; break;
+            case VD_FW_GL_VERSION_4_6: nsversion = NSOpenGLProfileVersion4_1Core; break;
+        } 
+
+        NSOpenGLPixelFormatAttribute attrs[] = {
+            NSOpenGLPFAOpenGLProfile, nsversion,
+            NSOpenGLPFAColorSize, 24,
+            NSOpenGLPFAAlphaSize, 0,
+            NSOpenGLPFADepthSize, 24,
+            NSOpenGLPFADoubleBuffer,
+            NSOpenGLPFAAccelerated,
+            0
+        };
+
+        NSOpenGLPixelFormat *pf = [[NSOpenGLPixelFormat alloc] initWithAttributes: attrs];
+        VD_FW_G.gl_context = [[NSOpenGLContext alloc]              initWithFormat: pf
+                                                                     shareContext: nil];
+        NSRect wframe = [[VD_FW_G.window contentView] bounds];
+        NSView *fw_view = [[VdFwContentView alloc] initWithFrame:wframe];
+        VD_FW_G.content_view = (VdFwContentView*)fw_view;
+        [VD_FW_G.window setContentView: fw_view];
+        [fw_view setWantsLayer: YES];
+        // [[fw_view layer] setDrawsAsynchronously: YES];
+
+        [VD_FW_G.gl_context setView: fw_view];
+
+
+        [VD_FW_G.window setDelegate:delegate];
+        [VD_FW_G.window makeFirstResponder: fw_view];
+        [VD_FW_G.window setAcceptsMouseMovedEvents: YES];
+        [NSApp activateIgnoringOtherApps:YES];
+    }
+    VD_FW_G.w = 640 * VD_FW_G.scale;
+    VD_FW_G.h = 480 * VD_FW_G.scale;
+    vd_fw__load_opengl(version);
+
+    mach_timebase_info(&VD_FW_G.time_base);
+    VD_FW_G.last_time = mach_absolute_time();
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [VD_FW_G.window makeKeyAndOrderFront:nil];
+    });
+}
+
+static void vd_fw__mac_init_gl(VdFwInitInfo *info)
+{
+    [VD_FW_G.gl_context makeCurrentContext];
+}
+
+
+static void vd_fw__mac_runloop(int wait)
+{
+    [NSApp run];
+}
+
+static int vd_fw__msgbuf_r(VdFw__MacMessage *message)
+{
+    VdFwI32 r = VD_FW_G.msgbuf_r;
+    VdFwI32 w;
+    __atomic_load(&VD_FW_G.msgbuf_w, &w, __ATOMIC_SEQ_CST);
+
+    if (r == w) {
+        return 0;
+    }
+
+    *message = VD_FW_G.msgbuf[r];
+
+    VdFwI32 nr = (r + 1) % VD_FW_MAC_MESSAGE_BUFFER_SIZE;
+    __atomic_exchange_n(&VD_FW_G.msgbuf_r, nr, __ATOMIC_SEQ_CST);
+
+    return 1;
+}
+
+static int vd_fw__msgbuf_w(VdFw__MacMessage *message)
+{
+    VdFwI32 w = VD_FW_G.msgbuf_w;
+    VdFwI32 r;
+    __atomic_load(&VD_FW_G.msgbuf_r, &r, __ATOMIC_SEQ_CST);
+
+    if ((w + 1) % VD_FW_MAC_MESSAGE_BUFFER_SIZE == r) {
+        return 0;
+    }
+
+    VD_FW_G.msgbuf[w] = *message;
+    VdFwI32 nw = (w + 1) % VD_FW_MAC_MESSAGE_BUFFER_SIZE;
+    __atomic_exchange_n(&VD_FW_G.msgbuf_w, nw, __ATOMIC_SEQ_CST);
+
+    return 1;
+}
 
 #elif defined(__linux__)
 #include <X11/Xlib.h>
@@ -9255,7 +10326,6 @@ VD_FW_API void vd_fw__free_mem(void *memory)
 {
     free(memory);
 }
-
 #endif // _WIN32, __APPLE__, __linux__
 
 #if !defined(__APPLE__)
@@ -9281,7 +10351,7 @@ static void vd_fw__load_opengl(VdFwGlVersion version)
 #define LOAD(p, s) s = (p)vd_fw__gl_get_proc_address(#s)
 /* ----LOADING------------------------------------------------------------------------------------------------------- */
 #define X(retval, name, params) LOAD(VdFwProcGL_##name, name);
-#define V(v) if (version > VD_FW_GL_VERSION_##v) {
+#define V(v) if (version >= VD_FW_GL_VERSION_##v) {
 #define VE() }
 VD_FW_OPENGL_CORE_FUNCTIONS
 #undef X
@@ -9467,16 +10537,31 @@ VD_FW_API void vd_fw__def_gamepad(VdFwGamepadMap *map)
     c++;
 
     map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT;
-    map->mappings[c].index  = 0x00;
+    map->mappings[c].index  = 0x01;
     map->mappings[c].target = VD_FW_GAMEPAD_DUP;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT;
+    map->mappings[c].index  = 0x02;
+    map->mappings[c].target = VD_FW_GAMEPAD_DRIGHT;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT;
+    map->mappings[c].index  = 0x04;
+    map->mappings[c].target = VD_FW_GAMEPAD_DDOWN;
+    c++;
+
+    map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_HAT;
+    map->mappings[c].index  = 0x08;
+    map->mappings[c].target = VD_FW_GAMEPAD_DLEFT;
     c++;
 
     map->mappings[c].kind   = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_NONE;
 }
 
-VD_FW_INL uint16_t vd_fw__crc16_byte(unsigned char r)
+VD_FW_INL VdFwU16 vd_fw__crc16_byte(VdFwU8 r)
 {
-    uint16_t result = 0;    
+    VdFwU16 result = 0;
     int i;
 
     for (i = 0; i < 8; ++i) {
@@ -9487,22 +10572,22 @@ VD_FW_INL uint16_t vd_fw__crc16_byte(unsigned char r)
     return result;
 } 
 
-VD_FW_API unsigned short vd_fw__crc16(unsigned short crc, void *data, size_t len)
+VD_FW_API VdFwU16 vd_fw__crc16(VdFwU16 crc, void *data, VdFwSz len)
 {
     size_t i;
     for (i = 0; i < len; ++i) {
-        crc = vd_fw__crc16_byte((uint8_t)crc ^ ((uint8_t*)data)[i]) ^ crc >> 8;
+        crc = vd_fw__crc16_byte((VdFwU8)crc ^ ((VdFwU8*)data)[i]) ^ crc >> 8;
     }
     return crc;
 }
 
-VD_FW_API VdFwGuid vd_fw__make_gamepad_guid(uint16_t bus, uint16_t vendor, uint16_t product, uint16_t version,
+VD_FW_API VdFwGuid vd_fw__make_gamepad_guid(VdFwU16 bus, VdFwU16 vendor, VdFwU16 product, VdFwU16 version,
                                             char *vendor_name, char *product_name,
-                                            uint8_t driver_signature, uint8_t driver_data)
+                                            VdFwU8 driver_signature, VdFwU8 driver_data)
 {
     VdFwGuid result;
-    uint16_t *guid16 = (uint16_t*)result.dat;
-    uint16_t crc = 0;
+    VdFwU16 *guid16 = (VdFwU16*)result.dat;
+    VdFwU16 crc = 0;
 
     VD_FW_MEMSET(&result, 0, sizeof(result));
 
@@ -9542,32 +10627,6 @@ VD_FW_API VdFwGuid vd_fw__make_gamepad_guid(uint16_t bus, uint16_t vendor, uint1
     return result;    
 }
 
-VD_FW_API char *vd_fw__utf16_to_utf8(const wchar_t *ws)
-{
-    int req = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
-                                  ws, -1,
-                                  0, 0,
-                                  NULL, NULL);
-    if (req <= 0) {
-        return 0;
-    }
-
-    char *data = (char*)vd_fw__realloc_mem(0, req + 1);
-
-    int wrt = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
-                                  ws, -1,
-                                  data, req,
-                                  NULL, NULL);
-
-    if (wrt == 0) {
-        vd_fw__free_mem(data);
-        return 0;
-    }
-
-    data[req] = 0;
-    return data;
-}
-
 VD_FW_API void *vd_fw__resize_buffer(void *buffer, size_t element_size, int required_capacity, int *cap)
 {
     if (required_capacity <= *cap) {
@@ -9597,6 +10656,47 @@ VD_FW_INL const char *vd_fw_get_key_name(VdFwKey k)
     return translation_table[k];
 }
 
+VD_FW_API const char *vd_fw_get_gamepad_face_name(VdFwGamepadFace face)
+{
+    if (face >= VD_FW_GAMEPAD_FACE_MAX) {
+        face = 0;
+    }
+
+    static const char *translation_table[VD_FW_GAMEPAD_FACE_MAX] = {
+        "unknown",
+        "numbered",
+        "xbox",
+        "playstation",
+        "nintendo",
+    };
+
+    return translation_table[face];
+}
+
+VD_FW_API const char *vd_fw_get_gamepad_class_name(VdFwGamepadClass klass)
+{
+    if (klass >= VD_FW_GAMEPAD_CLASS_MAX) {
+        klass = 0;
+    }
+
+    static const char *translation_table[VD_FW_GAMEPAD_CLASS_MAX] = {
+        "invalid",
+        "nes",
+        "megadrive",
+        "genesis",
+        "snes",
+        "ps1",
+        "joycon",
+        "n64",
+        "ps2",
+        "xbox",
+        "ps4",
+        "steamdeck",
+    };
+
+    return translation_table[klass];
+}
+
 VD_FW_INL int vd_fw__compare_string(const char *s, int s_len, int i,
                                     const char *t, int t_len)
 {
@@ -9613,6 +10713,99 @@ VD_FW_INL int vd_fw__compare_string(const char *s, int s_len, int i,
 
     return x;
 }
+
+typedef struct {
+    const char          *sym;
+    int                 len;
+    VdFwGamepadFace face;
+} VdFw__GamepadSymbolToFace;
+
+static VdFw__GamepadSymbolToFace Vd_Fw__Gamepad_Symbols_To_Faces[] = {
+#define VD_FW__SYM_LEN(s) s, sizeof(s) - 1
+    {VD_FW__SYM_LEN("numbered"),    VD_FW_GAMEPAD_FACE_NUMBERED},
+    {VD_FW__SYM_LEN("xbox"),        VD_FW_GAMEPAD_FACE_XBOX},
+    {VD_FW__SYM_LEN("playstation"), VD_FW_GAMEPAD_FACE_PLAYSTATION},
+    {VD_FW__SYM_LEN("nintendo"),    VD_FW_GAMEPAD_FACE_NINTENDO},
+#undef VD_FW__SYM_LEN
+};
+
+static int vd_fw__parse_map_face(const char *s, int s_len, VdFwGamepadFace *out)
+{
+    *out = VD_FW_GAMEPAD_FACE_UNKNOWN;
+
+    int map_count = VD_FW_ARRAY_COUNT(Vd_Fw__Gamepad_Symbols_To_Faces);
+
+    for (int map_index = 0; map_index < map_count; ++map_index) {
+        VdFw__GamepadSymbolToFace *check = &Vd_Fw__Gamepad_Symbols_To_Faces[map_index];
+        if (check->len != s_len) {
+            continue;
+        }
+
+        int found = 1;
+        for (int i = 0; i < check->len; ++i) {
+            if (check->sym[i] != s[i]) {
+                found = 0;
+                break;
+            }
+        }
+
+        if (found) {
+            *out = check->face;
+            return check->len;
+        }
+    }
+    return 0;
+}
+
+typedef struct {
+    const char       *sym;
+    int              len;
+    VdFwGamepadClass klass;
+} VdFw__GamepadSymbolToClass;
+static VdFw__GamepadSymbolToClass Vd_Fw__Gamepad_Symbols_To_Classes[] = {
+#define VD_FW__SYM_LEN(s) s, sizeof(s) - 1
+    {VD_FW__SYM_LEN("nes"),       VD_FW_GAMEPAD_CLASS_NES},
+    {VD_FW__SYM_LEN("megadrive"), VD_FW_GAMEPAD_CLASS_MEGADRIVE},
+    {VD_FW__SYM_LEN("genesis"),   VD_FW_GAMEPAD_CLASS_GENESIS},
+    {VD_FW__SYM_LEN("snes"),      VD_FW_GAMEPAD_CLASS_SNES},
+    {VD_FW__SYM_LEN("ps1"),       VD_FW_GAMEPAD_CLASS_PS1},
+    {VD_FW__SYM_LEN("joycon"),    VD_FW_GAMEPAD_CLASS_JOYCON},
+    {VD_FW__SYM_LEN("n64"),       VD_FW_GAMEPAD_CLASS_N64},
+    {VD_FW__SYM_LEN("ps2"),       VD_FW_GAMEPAD_CLASS_PS2},
+    {VD_FW__SYM_LEN("xbox"),      VD_FW_GAMEPAD_CLASS_XBOX},
+    {VD_FW__SYM_LEN("ps4"),       VD_FW_GAMEPAD_CLASS_PS4},
+    {VD_FW__SYM_LEN("steamdeck"), VD_FW_GAMEPAD_CLASS_STEAMDECK},
+#undef VD_FW__SYM_LEN
+};
+
+static int vd_fw__parse_map_class(const char *s, int s_len, VdFwGamepadClass *out)
+{
+    *out = VD_FW_GAMEPAD_CLASS_INVALID;
+
+    int map_count = VD_FW_ARRAY_COUNT(Vd_Fw__Gamepad_Symbols_To_Classes);
+
+    for (int map_index = 0; map_index < map_count; ++map_index) {
+        VdFw__GamepadSymbolToClass *check = &Vd_Fw__Gamepad_Symbols_To_Classes[map_index];
+        if (check->len != s_len) {
+            continue;
+        }
+
+        int found = 1;
+        for (int i = 0; i < check->len; ++i) {
+            if (check->sym[i] != s[i]) {
+                found = 0;
+                break;
+            }
+        }
+
+        if (found) {
+            *out = check->klass;
+            return check->len;
+        }
+    }
+    return 0;
+}
+
 
 static int vd_fw__parse_map_entry(const char *s, int s_len, VdFwGamepadMapEntry *out)
 {
@@ -9746,6 +10939,22 @@ VdFw__GamepadSymbolToTarget Vd_Fw__Gamepad_Symbols_To_Targets[] = {
     {VD_FW__SYM_LEN("lefty"),               VD_FW_GAMEPAD_LV,             1},
     {VD_FW__SYM_LEN("rightx"),              VD_FW_GAMEPAD_RH,             1},
     {VD_FW__SYM_LEN("righty"),              VD_FW_GAMEPAD_RV,             1},
+    {VD_FW__SYM_LEN("lpad0"),               VD_FW_GAMEPAD_LEFT_PAD0,      0},
+    {VD_FW__SYM_LEN("rpad0"),               VD_FW_GAMEPAD_RIGHT_PAD0,     0},
+    {VD_FW__SYM_LEN("lpad1"),               VD_FW_GAMEPAD_LEFT_PAD1,      0},
+    {VD_FW__SYM_LEN("rpad1"),               VD_FW_GAMEPAD_RIGHT_PAD1,     0},
+    {VD_FW__SYM_LEN("lpad2"),               VD_FW_GAMEPAD_LEFT_PAD2,      0},
+    {VD_FW__SYM_LEN("rpad2"),               VD_FW_GAMEPAD_RIGHT_PAD2,     0},
+    {VD_FW__SYM_LEN("aux0"),                VD_FW_GAMEPAD_AUX0,           0},
+    {VD_FW__SYM_LEN("aux1"),                VD_FW_GAMEPAD_AUX1,           0},
+    {VD_FW__SYM_LEN("aux2"),                VD_FW_GAMEPAD_AUX2,           0},
+    {VD_FW__SYM_LEN("aux3"),                VD_FW_GAMEPAD_AUX3,           0},
+    {VD_FW__SYM_LEN("aux4"),                VD_FW_GAMEPAD_AUX4,           0},
+    {VD_FW__SYM_LEN("aux5"),                VD_FW_GAMEPAD_AUX5,           0},
+    {VD_FW__SYM_LEN("aux6"),                VD_FW_GAMEPAD_AUX6,           0},
+    {VD_FW__SYM_LEN("aux7"),                VD_FW_GAMEPAD_AUX7,           0},
+    {VD_FW__SYM_LEN("aux8"),                VD_FW_GAMEPAD_AUX8,           0},
+    {VD_FW__SYM_LEN("aux9"),                VD_FW_GAMEPAD_AUX9,           0},
 #undef VD_FW__SYM_LEN
 };
 
@@ -9775,10 +10984,10 @@ static VdFw__GamepadSymbolToTarget *vd_fw__get_map_from_symbol(const char *s, in
     return 0;
 }
 
-static int vd_fw__parse_hex_byte(const char *s, int i, VdFwByte *out)
+static int vd_fw__parse_hex_byte(const char *s, int i, VdFwU8 *out)
 {
-    VdFwByte hi_nibble;
-    VdFwByte lo_nibble;
+    VdFwU8 hi_nibble;
+    VdFwU8 lo_nibble;
 
     if (s[i] >= '0' && s[i] <= '9') {
         hi_nibble = s[i] - '0';
@@ -9807,6 +11016,69 @@ static int vd_fw__parse_hex_byte(const char *s, int i, VdFwByte *out)
 VD_FW_API int vd_fw_gamepad_map_entry_is_none(VdFwGamepadMapEntry *entry)
 {
     return (entry->kind & VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_MASK) == VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_NONE;    
+}
+
+VD_FW_API int vd_fw_add_gamepad_db_entry(VdFwGamepadDBEntry *entry)
+{
+    int will_resize = 0;
+    int cap = VD_FW_G.cap_gamepad_db_entries;
+    if (cap == 0) {
+        will_resize = 1;
+        cap = 32;
+    }
+
+    if ((VD_FW_G.num_gamepad_db_entries + 1) >= cap) {
+        cap *= 2;
+        will_resize = 1;
+    }
+
+    if (will_resize) {
+        VD_FW_G.gamepad_db_entries = vd_fw__realloc_mem(VD_FW_G.gamepad_db_entries, 
+                                                        sizeof(VD_FW_G.gamepad_db_entries[0]) * cap);
+        VD_FW_G.cap_gamepad_db_entries = cap;
+    }
+
+    if (VD_FW_G.has_initialized) vd_fw__lock_gamepaddb();
+    VD_FW_G.gamepad_db_entries[VD_FW_G.num_gamepad_db_entries++] = *entry;
+    if (VD_FW_G.has_initialized) vd_fw__unlock_gamepaddb();
+    vd_fw__notify_gamepaddb_changed();
+    return 1;
+}
+
+VD_FW_API void vd_fw_add_gamepad_rgcdb(const char *text, int text_len)
+{
+    int i = 0;
+    while (i < text_len) {
+
+        int line_start = i;
+
+        // Read Line
+        while ((i < text_len) && (text[i] != '\r' && text[i] != '\n')) {
+            i++;
+        }
+        int line_end = i;
+
+        const char *entry_to_parse = text + line_start;
+        int entry_to_parse_len = line_end - line_start;
+        VdFwGamepadDBEntry entry;
+        VdFwPlatform platform;
+        const char *name;
+        if (!vd_fw_parse_gamepad_db_entry(entry_to_parse, entry_to_parse_len,
+                                         &entry, &platform, &name))
+        {
+            continue;
+        }
+
+        if (platform != vd_fw_get_platform()) {
+            continue;
+        }
+
+        vd_fw_add_gamepad_db_entry(&entry);
+
+        while ((i < text_len) && (text[i] == '\r' || text[i] == '\n')) {
+            i++;
+        }
+    }
 }
 
 VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepadDBEntry *out,
@@ -9838,7 +11110,7 @@ VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepad
     if (i++ > s_len) return 0;
 
 #define VD_FW_STR_AND_LEN(cs) cs, (sizeof(cs) - 1) 
-#define VD_FW_EXPECT_COLON() do { if (!s[i] == ':') return 0; if (++i >= s_len) return 0; } while(0)
+#define VD_FW_EXPECT_COLON() do { if (s[i] != ':') return 0; if (++i >= s_len) return 0; } while(0)
 
     int mapping_count = 0;
 
@@ -9872,8 +11144,8 @@ VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepad
             VD_FW_EXPECT_COLON();
             int platform_begin = i;
             {
-                while ((i < s_len) && ((s[i] >= 'a') && (s[i] <= 'z') ||
-                                       (s[i] >= 'A') && (s[i] <= 'Z') ||
+                while ((i < s_len) && (((s[i] >= 'a') && (s[i] <= 'z')) ||
+                                       ((s[i] >= 'A') && (s[i] <= 'Z')) ||
                                        (s[i] == ' ')))
                 {
                     i++;
@@ -9903,10 +11175,10 @@ VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepad
                 i++;
             }
 
-            VdFwByte byte_count = 0;
+            VdFwU8 byte_count = 0;
             while ((i + 1) < s_len) {
 
-                VdFwByte byte;
+                VdFwU8 byte;
                 if (!vd_fw__parse_hex_byte(s, i, &byte)) {
                     break;
                 }
@@ -9934,6 +11206,32 @@ VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepad
 
                 break;
             }
+        } else if (vd_fw__compare_string(s, s_len, word_start, VD_FW_STR_AND_LEN("face"))) {
+            VD_FW_EXPECT_COLON();
+            int face_start = i;
+            while ((i < s_len) && vd_fw__is_db_symbol(s[i])) {
+                i++;
+            }
+            int face_end = i;
+
+            int c = vd_fw__parse_map_face(s + face_start, face_end - face_start, &out->map.face);
+
+            if (c == 0) {
+                return 0;
+            }
+        } else if (vd_fw__compare_string(s, s_len, word_start, VD_FW_STR_AND_LEN("class"))) {
+            VD_FW_EXPECT_COLON();
+            int class_start = i;
+            while ((i < s_len) && vd_fw__is_db_symbol(s[i])) {
+                i++;
+            }
+            int class_end = i;
+
+            int c = vd_fw__parse_map_class(s + class_start, class_end - class_start, &out->map.klass);
+
+            if (c == 0) {
+                return 0;
+            }
         } else {
             i++;
         }
@@ -9948,6 +11246,12 @@ VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepad
                 (!sym->is_axis))
             {
                 map_entry.kind |= VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_AXIS_TO_BUTTON;
+            }
+
+            if (((map_entry.kind & VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_MASK) == VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON) &&
+                (sym->is_axis))
+            {
+                map_entry.kind |= VD_FW_GAMEPAD_MAPPING_SOURCE_FLAG_BUTTON_TO_AXIS;
             }
 
             if (partwise_sign == '+') {
@@ -9970,31 +11274,54 @@ VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepad
     return 1;
 }
 
-
-VD_FW_API const char *vd_fw_get_gamepad_button_name(int button)
-{
-    return 0;    
-}
-
+#ifdef __clang__
+#   pragma clang diagnostic push
+#   pragma clang diagnostic ignored "-Wmissing-braces"
+#endif
 #if VD_FW_GAMEPAD_DB_DEFAULT
 #if defined(VD_FW_GAMEPAD_DB_DEFAULT_EXTERNAL)
 #include "builtin.rgcdb.c"
 #else
-VdFwGamepadDBEntry Vd_Fw__Gamepad_Db_Entries[1] = {
-    /*Sony Dualshock 4*/
+VdFwGamepadDBEntry Vd_Fw__Gamepad_Db_Entries[3] = {
+    /*Sony DualShock 4*/
     {{0x03,0x00,0xd0,0x42,0x4c,0x05,0x00,0x00,0xcc,0x09,0x00,0x00,0x00,0x01,0x72,0x00},
     {
-        {{0x0001,               VD_FW_GAMEPAD_A,  0},{0x0001,               VD_FW_GAMEPAD_B,  1},{0x0001,               VD_FW_GAMEPAD_X,  3},{0x0001,               VD_FW_GAMEPAD_Y,  4},{0x0003,              VD_FW_GAMEPAD_LH,  0},{0x0003,              VD_FW_GAMEPAD_LV,  1},{0x0003,              VD_FW_GAMEPAD_RH,  3},{0x0003,              VD_FW_GAMEPAD_RV,  4},{0,0,0},},
+        {{0x1,VD_FW_GAMEPAD_A,1},{0x1,VD_FW_GAMEPAD_B,2},{0x1,VD_FW_GAMEPAD_X,0},{0x1,VD_FW_GAMEPAD_Y,3},{0x3,VD_FW_GAMEPAD_LH,2},{0x3,VD_FW_GAMEPAD_LV,3},{0x3,VD_FW_GAMEPAD_RH,4},{0x3,VD_FW_GAMEPAD_RV,7},{0x3,VD_FW_GAMEPAD_LT,5},{0x3,VD_FW_GAMEPAD_RT,6},{0x1,VD_FW_GAMEPAD_L1,4},{0x1,VD_FW_GAMEPAD_R1,5},{0x1,VD_FW_GAMEPAD_SELECT,8},{0x1,VD_FW_GAMEPAD_START,9},{0x2,VD_FW_GAMEPAD_DUP,1},{0x2,VD_FW_GAMEPAD_DRIGHT,2},{0x2,VD_FW_GAMEPAD_DDOWN,4},{0x2,VD_FW_GAMEPAD_DLEFT,8},{0x1,VD_FW_GAMEPAD_L3,10},{0x1,VD_FW_GAMEPAD_R3,11},{0,0,0},},
         {
             VD_FW_GAMEPAD_RUMBLE_TYPE_RAW,
             4,
             {0x05,0xff,0x00,0x00,},
             {0x00010004,0x00010005},
-        }
+        },
+        VD_FW_GAMEPAD_FACE_PLAYSTATION,
+        VD_FW_GAMEPAD_CLASS_XBOX,
+    }},
+    /*Xbox One Controller for Windows*/
+    {{0x03,0x00,0x93,0x8d,0x5e,0x04,0x00,0x00,0xff,0x02,0x00,0x00,0x00,0x00,0x72,0x00},
+    {
+        {{0x1,VD_FW_GAMEPAD_A,0},{0x1,VD_FW_GAMEPAD_B,1},{0x1,VD_FW_GAMEPAD_X,2},{0x1,VD_FW_GAMEPAD_Y,3},{0x3,VD_FW_GAMEPAD_LH,0},{0x3,VD_FW_GAMEPAD_LV,1},{0x3,VD_FW_GAMEPAD_RH,2},{0x3,VD_FW_GAMEPAD_RV,3},{0x3,VD_FW_GAMEPAD_LT,4},{0x3,VD_FW_GAMEPAD_RT,4},{0x1,VD_FW_GAMEPAD_L1,4},{0x1,VD_FW_GAMEPAD_R1,5},{0x2,VD_FW_GAMEPAD_DUP,1},{0x2,VD_FW_GAMEPAD_DRIGHT,2},{0x2,VD_FW_GAMEPAD_DDOWN,4},{0x2,VD_FW_GAMEPAD_DLEFT,8},{0x1,VD_FW_GAMEPAD_SELECT,6},{0x1,VD_FW_GAMEPAD_START,7},{0x1,VD_FW_GAMEPAD_L3,8},{0x1,VD_FW_GAMEPAD_R3,9},{0,0,0},},
+        {
+            VD_FW_GAMEPAD_RUMBLE_TYPE_NOT_AVAILABLE,
+        },
+        VD_FW_GAMEPAD_FACE_XBOX,
+        VD_FW_GAMEPAD_CLASS_XBOX,
+    }},
+    /*8BitDo Ultimate 2C (Wired) (RawInput)*/
+    {{0x03,0x00,0x39,0x19,0xc8,0x2d,0x00,0x00,0x1d,0x30,0x00,0x00,0x01,0x00,0x72,0x00},
+    {
+        {{0x1,VD_FW_GAMEPAD_A,0},{0x1,VD_FW_GAMEPAD_B,1},{0x1,VD_FW_GAMEPAD_X,3},{0x1,VD_FW_GAMEPAD_Y,4},{0x3,VD_FW_GAMEPAD_LH,1},{0x3,VD_FW_GAMEPAD_LV,2},{0x3,VD_FW_GAMEPAD_RH,3},{0x3,VD_FW_GAMEPAD_RV,4},{0x1,VD_FW_GAMEPAD_L1,6},{0x1,VD_FW_GAMEPAD_R1,7},{0x1,VD_FW_GAMEPAD_SELECT,10},{0x1,VD_FW_GAMEPAD_START,11},{0x5,VD_FW_GAMEPAD_LT,8},{0x5,VD_FW_GAMEPAD_RT,9},{0x2,VD_FW_GAMEPAD_DUP,1},{0x2,VD_FW_GAMEPAD_DRIGHT,2},{0x2,VD_FW_GAMEPAD_DDOWN,4},{0x2,VD_FW_GAMEPAD_DLEFT,8},{0x1,VD_FW_GAMEPAD_L3,13},{0x1,VD_FW_GAMEPAD_R3,14},{0,0,0},},
+        {
+            VD_FW_GAMEPAD_RUMBLE_TYPE_NOT_AVAILABLE,
+        },
+        VD_FW_GAMEPAD_FACE_XBOX,
+        VD_FW_GAMEPAD_CLASS_XBOX,
     }},
 };
 #endif // VD_FW_GAMEPAD_DB_DEFAULT_EXTERNAL
 #endif // VD_FW_GAMEPAD_DB_DEFAULT
+#ifdef __clang__
+#   pragma clang diagnostic pop
+#endif
 
 static int vd_fw__guid_matches(VdFwGuid *detected_guid, VdFwGuid *candidate_guid)
 {
@@ -10006,8 +11333,22 @@ static int vd_fw__guid_matches(VdFwGuid *detected_guid, VdFwGuid *candidate_guid
 VD_FW_API int vd_fw__map_gamepad(VdFwGuid guid, VdFwGamepadMap *map)
 {
     VdFwGamepadDBEntry *db_entry = 0;
+    vd_fw__lock_gamepaddb();
+    for (int i = 0; i < VD_FW_G.num_gamepad_db_entries; ++i) {
+        if (vd_fw__guid_matches(&guid, &VD_FW_G.gamepad_db_entries[i].guid)) {
+            db_entry = &VD_FW_G.gamepad_db_entries[i];
+            break;
+        }
+    }
+    vd_fw__unlock_gamepaddb();
+
+    if (db_entry) {
+        *map = db_entry->map;
+        return 1;
+    }
+
 #if VD_FW_GAMEPAD_DB_DEFAULT
-    size_t default_db_count = sizeof(Vd_Fw__Gamepad_Db_Entries)/sizeof(Vd_Fw__Gamepad_Db_Entries[0]);
+    size_t default_db_count = VD_FW_ARRAY_COUNT(Vd_Fw__Gamepad_Db_Entries);
     for (size_t i = 0; i < default_db_count; ++i) {
         if (vd_fw__guid_matches(&guid, &Vd_Fw__Gamepad_Db_Entries[i].guid)) {
             db_entry = &Vd_Fw__Gamepad_Db_Entries[i];
