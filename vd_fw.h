@@ -44,8 +44,8 @@
  * - Gamepads
  *     - Face Heuristics
  *     - Class Heuristics
- *     - Gamepad DB runtime list and text parsing
  * - Win32: Use DeviceIoControl for XBOX controllers until they're correlated to XINPUT
+ * - raw hat states
  * - D3D11 Sample
  * - File dialog
  * - OBS Studio breaks ChoosePixelFormat
@@ -915,6 +915,27 @@ VD_FW_API int                vd_fw_gamepad_map_entry_is_none(VdFwGamepadMapEntry
  * @return (Reserved)
  */
 VD_FW_API int                vd_fw_add_gamepad_db_entry(VdFwGamepadDBEntry *entry);
+
+/**
+ * @brief Turn On/Off raw button/axis/hat reports
+ * @param  on Whether to enable this behavior
+ */
+VD_FW_API void               vd_fw_set_gamepad_raw_reports(int on);
+
+/**
+ * @brief Get the raw state of at most 64 buttons on this gamepad
+ * @param  index The gamepad index
+ * @return       A bitmask of states (LSB -> MSB) --> (b0 -> b63)
+ */
+VD_FW_API VdFwU64            vd_fw_get_gamepad_raw_buttons(int index);
+
+/**
+ * @brief Get the raw state of all axes on this gamepad (scaled to [0,1])
+ * @param  index      The gamepad index
+ * @param  count_axes The number of axes
+ * @return            A callee-allocated float array of axis values
+ */
+VD_FW_API float*             vd_fw_get_gamepad_raw_axes(int index, int *count_axes);
 
 /* ----PLATFORM SPECIFIC--------------------------------------------------------------------------------------------- */
 
@@ -3774,7 +3795,9 @@ typedef VdFwU64 VdFw__GamepadButtonBits;
 typedef struct VdFw__GamepadState {
     VdFwGuid                 guid;
     VdFw__GamepadButtonBits  bits;
+    VdFw__GamepadButtonBits  raw_bits;
     float                    axes[6];
+    float                    raw_axes[16];
     VdFwGamepadFace          face;
     VdFwGamepadClass         klass;
     int                      has_rumble;
@@ -5036,6 +5059,7 @@ enum {
     VD_FW_WIN32_SIZEMAX         = VD_FW_WM_USER + 6,
     VD_FW_WIN32_GAMEPADRMBREQ   = VD_FW_WM_USER + 7,
     VD_FW_WIN32_GAMEPADDBCH     = VD_FW_WM_USER + 8,
+    VD_FW_WIN32_GAMEPADRAWRQ    = VD_FW_WM_USER + 9,
 
     VD_FW_WIN32_WINDOW_STATE_MINIMIZED = 1 << 0,
     VD_FW_WIN32_WINDOW_STATE_MAXIMIZED = 1 << 1,
@@ -5153,6 +5177,7 @@ typedef struct {
     VdFwUINT_PTR                rumble_timer_handle;    // Handle to the timer proc that lets us rumble gamepads
     VdFwU8                      *report_buffer;         // Dynamically sized report buffer, for writing to HIDs
     int                         report_buffer_len;
+    int                         gamepad_raw_reports_on;
 
 /* ----RENDER THREAD ONLY-------------------------------------------------------------------------------------------- */
     // Internal
@@ -5185,7 +5210,6 @@ typedef struct {
     // Gamepad
     VdFw__GamepadState          gamepad_curr_states[VD_FW_GAMEPAD_COUNT_MAX];
     VdFw__GamepadState          gamepad_prev_states[VD_FW_GAMEPAD_COUNT_MAX];
-    int                         gamepad_raw_buttons[VD_FW_GAMEPAD_COUNT_MAX];
     int                         num_gamepads_present;
 
 /* ----RENDER THREAD - WINDOW THREAD DATA---------------------------------------------------------------------------- */
@@ -5199,7 +5223,6 @@ typedef struct {
     int                         receive_ncmouse_on;
     float                       winthread_mouse_delta[2];
     VdFw__GamepadState          winthread_gamepad_curr_states[VD_FW_GAMEPAD_COUNT_MAX];
-    int                         winthread_gamepad_raw_buttons[VD_FW_GAMEPAD_COUNT_MAX];
     int                         winthread_num_gamepads_present;
     int                         has_initialized;
 
@@ -6108,7 +6131,6 @@ VD_FW_API int vd_fw_running(void)
         for (int i = 0; i < VD_FW_G.num_gamepads_present; ++i) {
             VD_FW_G.gamepad_prev_states[i] = VD_FW_G.gamepad_curr_states[i];
             VD_FW_G.gamepad_curr_states[i] = VD_FW_G.winthread_gamepad_curr_states[i];
-            VD_FW_G.gamepad_raw_buttons[i] = VD_FW_G.winthread_gamepad_raw_buttons[i];
         }
         LeaveCriticalSection(&VD_FW_G.input_critical_section);
         VD_FW_WIN32_PROFILE_END(read_all_input);
@@ -6400,6 +6422,26 @@ VD_FW_API VdFwGamepadClass vd_fw_get_gamepad_class(int index)
 VD_FW_API int vd_fw_get_gamepad_rumble_support(int index)
 {
     return VD_FW_G.gamepad_curr_states[index].has_rumble;
+}
+
+VD_FW_API void vd_fw_set_gamepad_raw_reports(int on)
+{
+    VD_FW__CHECK_TRUE(VdFwPostMessage(
+        VD_FW_G.hwnd,
+        VD_FW_WIN32_GAMEPADRAWRQ,
+        on,
+        0));
+}
+
+VD_FW_API VdFwU64 vd_fw_get_gamepad_raw_buttons(int index)
+{
+    return VD_FW_G.gamepad_curr_states[index].raw_bits;
+}
+
+VD_FW_API float *vd_fw_get_gamepad_raw_axes(int index, int *count_axes)
+{
+    *count_axes = 16;
+    return VD_FW_G.gamepad_curr_states[index].raw_axes;
 }
 
 VD_FW_API void vd_fw_set_mouse_capture(int on)
@@ -7466,7 +7508,9 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 }
 
                 VdFw__GamepadButtonBits button_states = 0;
+                VdFw__GamepadButtonBits raw_button_states = 0;
                 float axes[6] = {0.f};
+                float axes_raw[16] = {0};
 
                 for (VdFwDWORD ri = 0; ri < raw->data.hid.dwCount; ++ri) {
                     VdFwBYTE *bytes = &raw->data.hid.bRawData[0] + ri * (raw->data.hid.dwSizeHid);
@@ -7479,6 +7523,49 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                                                            (VdFwPCHAR)bytes, raw->data.hid.dwSizeHid);
                     if (status != VD_FW_HIDP_STATUS_SUCCESS) {
                         continue;
+                    }
+
+                    if (VD_FW_G.gamepad_raw_reports_on) {
+                        for (int bdii = 0; bdii < gamepad_info->button_data_indices_len; ++bdii) {
+                            int button_data_index = gamepad_info->button_data_indices[bdii];
+                            VdFwHIDP_DATA *data = 0;
+                            for (VdFwULONG data_index = 0; data_index < data_count; ++data_index) {
+                                if (hidp_data[data_index].DataIndex == button_data_index) {
+                                    data = &hidp_data[data_index];
+                                    break;
+                                }
+                            }
+
+                            if (!data) {
+                                continue;
+                            }
+
+                            if (data->dat.On) {
+                                raw_button_states |= (1ull << bdii);
+                            }
+                        }
+
+                        for (int axii = 0; axii < gamepad_info->axis_data_indices_len; ++axii) {
+                            int axis_data_index = gamepad_info->axis_data_indices[axii].data_index;
+                            int axis_min = gamepad_info->axis_data_indices[axii].min_value;
+                            int axis_max = gamepad_info->axis_data_indices[axii].max_value;
+
+                            VdFwHIDP_DATA *data = 0;
+                            for (VdFwULONG data_index = 0; data_index < data_count; ++data_index) {
+                                if (hidp_data[data_index].DataIndex == axis_data_index) {
+                                    data = &hidp_data[data_index];
+                                    break;
+                                }
+                            }
+
+                            if (!data) {
+                                continue;
+                            }
+
+                            float v01 = ((float)((data->dat.RawValue - axis_min))) / 
+                                        ((float)(axis_max - axis_min));
+                            axes_raw[axii] = v01;
+                        }
                     }
 
                     VdFwULONG z_value = 0;
@@ -7625,6 +7712,13 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].has_rumble = 
                     (gamepad_info->map.rumble_config.type != VD_FW_GAMEPAD_RUMBLE_TYPE_NOT_AVAILABLE) ||
                     ((gamepad_info->flags >> VD_FW__WIN32_GAMEPAD_FLAG_XINPUT) & 1);
+
+                if (VD_FW_G.gamepad_raw_reports_on) {
+                    VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].raw_bits = raw_button_states;
+                    VD_FW_MEMCPY(VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].raw_axes,
+                                 axes_raw,
+                                 16 * sizeof(float));
+                }
 
                 for (int i = 0; i < 6; ++i) {
                     VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].axes[i] = axes[i];
@@ -8276,11 +8370,14 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         } break;
 
         case VD_FW_WIN32_GAMEPADDBCH: {
-            // @todo(mdodis): Critical Section on input here to update gamepad class, face, and rumble support names
             for (int i = 0; i < VD_FW_G.num_gamepads_present; ++i) {
                 VdFw__Win32GamepadInfo *gamepad_info = &VD_FW_G.gamepad_infos[i];
                 vd_fw__map_gamepad(gamepad_info->guid, &gamepad_info->map);
             }
+        } break;
+
+        case VD_FW_WIN32_GAMEPADRAWRQ: {
+            VD_FW_G.gamepad_raw_reports_on = (int)wparam;
         } break;
 
         case WM_TIMER: {

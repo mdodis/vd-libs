@@ -1,6 +1,5 @@
 #include "disable_clang_deprecations.h"
 #define VD_FW_NO_CRT 0
-#define VD_FW_GAMEPAD_DB_DEFAULT 0
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS
 #include "vd_fw.h"
 #include "ext/stb_image.h"
@@ -357,7 +356,6 @@ int main(int argc, char const *argv[])
         glAttachShader(ui_program, ifsh);
         vd_fw_link_program(ui_program);
     }
-
 
     ControllerInfo draw_infos[VD_FW_GAMEPAD_COUNT_MAX] = {0};
     while (vd_fw_running()) {
