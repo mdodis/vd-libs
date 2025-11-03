@@ -62,7 +62,6 @@
  * - vd_fw_get_executable_dir() <-- statically allocated char * of executable directory
  * - vd_fw_get_last_key_pressed
  * - vd_fw_get_last_mouse_button_pressed
- * - MacOS: vd_fw_maximize()
  * - MacOS: vd_fw_set_app_icon
  * - MacOS: vd_fw_set_fullscreen
  * - When window not focused, or minimize, delay drawing?
@@ -8384,12 +8383,16 @@ typedef enum {
 
     VD_FW_MAC_MESSAGE_BUFFER_SIZE = 256,
 
+    VD_FW__MAC_WINDOW_STATE_MINIMIZED = 1 << 0,
+    VD_FW__MAC_WINDOW_STATE_ZOOMED = 1 << 1,
+
     VD_FW__MAC_MESSAGE_INVALID = 0,
     VD_FW__MAC_MESSAGE_MOUSEMOVE,
     VD_FW__MAC_MESSAGE_MOUSEBTN,
     VD_FW__MAC_MESSAGE_SCROLL,
     VD_FW__MAC_MESSAGE_KEY,
     VD_FW__MAC_MESSAGE_MINIMIZED,
+    VD_FW__MAC_MESSAGE_ZOOMED,
 } VdFw__MacMessageType;
 
 typedef struct {
@@ -8417,6 +8420,10 @@ typedef struct {
         struct {
             int on;
         } minimized;
+
+        struct {
+            int on;
+        } zoomed;
     } dat;
 } VdFw__MacMessage;
 
@@ -8451,14 +8458,15 @@ typedef struct {
     VdFwI32                     prev_mouse_state;
     VdFwI32                     mouse_state;
     BOOL                        mouse_is_locked;
-    BOOL                        is_minimized;
-    BOOL                        was_minimized_changed;
+    int                         window_state;
+    int                         window_state_changed;
 
 /* ----WINDOW THREAD ONLY-------------------------------------------------------------------------------------------- */
     BOOL                        draw_decorations;
     VdFwInitInfo                c_init_info;
     VdFwWindow                  *window;
     int                         context_needs_update;
+    BOOL                        is_zoomed;
 
 /* ----MAIN - RENDER THREAD DATA------------------------------------------------------------------------------------- */
     int                         w, h;
@@ -8839,6 +8847,14 @@ static int Update_Context = 0;
     if (!VD_FW_G.context_update_requested) {
         sem_post(VD_FW_G.s_main_thread_context_needs_update);
         VD_FW_G.context_update_requested = 1;
+    }
+
+    if (VD_FW_G.is_zoomed != [VD_FW_G.window isZoomed]) {
+        VD_FW_G.is_zoomed = [VD_FW_G.window isZoomed];
+        VdFw__MacMessage msg;
+        msg.type = VD_FW__MAC_MESSAGE_ZOOMED;
+        msg.dat.zoomed.on = VD_FW_G.is_zoomed;
+        vd_fw__msgbuf_w(&msg); 
     }
 
 
@@ -9260,7 +9276,7 @@ VD_FW_API int vd_fw_running(void)
     VD_FW_G.mouse_delta[1] = 0.f;
 
     VD_FW_G.focus_changed = 0;
-    VD_FW_G.was_minimized_changed = 0;
+    VD_FW_G.window_state_changed = 0;
 
     VD_FW_G.prev_mouse_state = VD_FW_G.mouse_state;
     for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
@@ -9298,10 +9314,22 @@ VD_FW_API int vd_fw_running(void)
             } break;
 
             case VD_FW__MAC_MESSAGE_MINIMIZED: {
-                VD_FW_G.is_minimized = msg.dat.minimized.on;
-                VD_FW_G.was_minimized_changed = 1;
+                if (msg.dat.minimized.on) {
+                    VD_FW_G.window_state |= VD_FW__MAC_WINDOW_STATE_MINIMIZED;
+                } else {
+                    VD_FW_G.window_state &= ~VD_FW__MAC_WINDOW_STATE_MINIMIZED;
+                }
+                VD_FW_G.window_state_changed = 1;
             } break;
 
+            case VD_FW__MAC_MESSAGE_ZOOMED: {
+                if (msg.dat.zoomed.on) {
+                    VD_FW_G.window_state |= VD_FW__MAC_WINDOW_STATE_ZOOMED;
+                } else {
+                    VD_FW_G.window_state &= ~VD_FW__MAC_WINDOW_STATE_ZOOMED;
+                }
+                VD_FW_G.window_state_changed = 1;
+            } break;
             default: break;
         }
     }
@@ -9354,9 +9382,9 @@ VD_FW_API int vd_fw_get_size(int *w, int *h)
 VD_FW_API int vd_fw_get_minimized(int *minimized)
 {
     if (minimized) {
-        *minimized = VD_FW_G.is_minimized;
+        *minimized = VD_FW_G.window_state & VD_FW__MAC_WINDOW_STATE_MINIMIZED;
     }
-    return VD_FW_G.was_minimized_changed;
+    return VD_FW_G.window_state_changed;
 }
 
 VD_FW_API void vd_fw_minimize(void)
@@ -9366,6 +9394,45 @@ VD_FW_API void vd_fw_minimize(void)
         if (![window isMiniaturized]) {
             [window miniaturize:nil];
         }
+    });
+}
+
+VD_FW_API int vd_fw_get_maximized(int *maximized)
+{
+    if (maximized) {
+        *maximized = VD_FW_G.window_state & VD_FW__MAC_WINDOW_STATE_ZOOMED;
+    }
+    return VD_FW_G.window_state_changed;
+}
+
+VD_FW_API void vd_fw_maximize(void)
+{
+    NSWindow *window = VD_FW_G.window;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (![window isZoomed]) {
+            [window zoom:nil];
+        }
+    });
+}
+
+VD_FW_API void vd_fw_normalize(void)
+{
+    NSWindow *window = VD_FW_G.window;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        // If the window is minimized, restore it from the Dock.
+        if ([window isMiniaturized]) {
+            [window deminiaturize:nil];
+            return;
+        }
+
+        // If the window is zoomed (maximized), unzoom it.
+        if ([window isZoomed]) {
+            [window zoom:nil];
+            return;
+        }
+
+        // Otherwise, just bring it to the front in case it’s hidden.
+        [window makeKeyAndOrderFront:nil];
     });
 }
 
