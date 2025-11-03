@@ -45,6 +45,12 @@
  *     - Face Heuristics
  *     - Class Heuristics
  * - Win32: Use DeviceIoControl for XBOX controllers until they're correlated to XINPUT
+ * - vd_fw_get_last_key_pressed
+ * - vd_fw_get_last_mouse_button_pressed
+ * - Vulkan
+ *     - Win32: Required extensions function
+ *     - Win32: Query queue surface presentation support
+ *     - Win32: Implement vkCreateWin32SurfaceKHR
  * - raw hat states
  * - D3D11 Sample
  * - File dialog
@@ -59,8 +65,6 @@
  * - Should vd_fw_set_receive_ncmouse be default 0 or 1?
  *   - Actually, consider removing it entirely
  * - set window unresizable
- * - vd_fw_get_last_key_pressed
- * - vd_fw_get_last_mouse_button_pressed
  * - MacOS: vd_fw_get_executable_dir()
  * - MacOS: vd_fw_set_fullscreen
  * - MacOS: Gamepad Support
