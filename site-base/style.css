@@ -9,7 +9,6 @@
 
 body {
     position: relative;
-    padding-top: 50px;
 }
 
 :root {
@@ -107,8 +106,8 @@ section, .apiitem {
     /*right: 8px;*/
     /*width: 20vw;*/
     z-index: 100;
-    /*max-height: calc(100vh - 100px);*/
-    height: 100vh;
+    max-height: calc(100vh - 70px);
+    /*height: 100vh;*/
     overflow-y: auto;
     overflow-x: hidden;
     scrollbar-width: thin;
@@ -148,41 +147,6 @@ section, .apiitem {
         justify-content: center !important;
     }
 }
-
-@media (min-width: 800px) {
-    #toc {
-        right: 2px;
-        width: 25vw;
-    }
-}
-
-@media (min-width: 1200px) {
-    #toc {
-        right: 16px;
-        width: 20vw;
-    }    
-}
-
-@media (min-width: 1600px) {
-    #toc {
-        right: 64px;
-        width: 20vw;
-    }    
-}
-
-@media (min-width: 2400px) {
-    #toc {
-        right: 32px;
-        width: 32vw;
-    }
-}
-
-/*@media (min-width: 2400px) {
-    #toc {
-        width: 40vw;
-    }
-}
-*/
 .nav-item.dropdown:hover .dropdown-menu {
     display: block;
 }
@@ -403,7 +367,7 @@ pre {
 
 .outline-section .nav-link.active {
     color: #ffffffff;
-    transform: translate(-10px);
+    transform: translate(+8px);
 }
 
 

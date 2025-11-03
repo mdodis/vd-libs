@@ -9,7 +9,7 @@
 
 
     para {
-        A <b>header-only</b> library that gets you a semi-customizable window and an OpenGL context, minimizing
+        A <b>header-only</b> library that gets you a semi-customizable window and (optionally) an OpenGL context, minimizing
         dependencies and hiding the complexities of doing proper windowing on each platform.
     }
 
@@ -184,7 +184,7 @@ int main() {
 
             @tr() {
                 @td() { text{<code>#define VD_FW_INL}}
-                @td() { text{Set to change the function signature (useful for precompiling the library).}}
+                @td() { text{Set to change the inline function signature. }}
             }
 
             @tr() {
@@ -1606,6 +1606,78 @@ if (mouse_inside_minimize_button && vd_fw_get_mouse_clicked(VD_FW_MOUSE_BUTTON_L
                     time (especially on gaming laptops with 2 GPUs), will be affected.        
                 </li>
             </ul>
+        }
+    }
+
+    @section("Add Gamepad Support") {
+        para {
+            This library can provide Gamepad input as well as basic rumble for common (lo/hi) motors. In this section,
+            we'll add some basic code to our existing cube program to move the camera using the gamepad.
+        }
+
+        para {
+            Starting from the part where we were getting the Forward and Right input directions:
+        }
+
+        verb```
+float fwdir = (float)(vd_fw_get_key_down('W') - vd_fw_get_key_down('S'));
+float rgdir = (float)(vd_fw_get_key_down('A') - vd_fw_get_key_down('D'));
+float updir = (float)(vd_fw_get_key_down('Q') - vd_fw_get_key_down('E'));
+        ```
+
+        para {
+            Let's modify the code to also get input from the gamepad:
+        }
+
+        verb```
+float fwdir = 0.f;
+float rgdir = 0.f;
+float updir = 0.f;
+
+fwdir = (float)(vd_fw_get_key_down('W') - vd_fw_get_key_down('S'));
+rgdir = (float)(vd_fw_get_key_down('A') - vd_fw_get_key_down('D'));
+updir = (float)(vd_fw_get_key_down('Q') - vd_fw_get_key_down('E'));
+
+if (vd_fw_get_gamepad_count() > 0) {
+
+    float left_stick[2];
+    vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_LV, &left_stick[0]);
+    vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_LH, &left_stick[1]);
+
+    fwdir -= left_stick[0];
+    rgdir -= left_stick[1];
+}
+        ```
+
+        @img(class="rounded img-fluid rmprint"
+             src="./assets/fw/tutorials-gamepad-movement.gif")
+
+        para {
+            And now let's continue with using the right stick to manipulate the look direction:
+        }
+
+        verb```
+// Here we ignore gamepad input if mouse is locked
+if (vd_fw_get_mouse_locked()) {
+    float mouse_delta_x, mouse_delta_y;
+    vd_fw_get_mouse_delta(&mouse_delta_x, &mouse_delta_y);
+
+    camera_yaw   += mouse_delta_x;
+    camera_pitch -= mouse_delta_y;
+} else if (vd_fw_get_gamepad_count() > 0) {
+    float right_stick[2];
+    vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RH, &right_stick[0]);
+    vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RV, &right_stick[1]);
+    camera_yaw   += right_stick[0] * ds * 100.f;
+    camera_pitch -= right_stick[1] * ds * 100.f;
+}
+        ```
+
+        @img(class="rounded img-fluid rmprint"
+             src="./assets/fw/tutorials-gamepad-look.gif")
+
+        para {
+            We could go on with mapping up/down to triggers, but I think you get the idea.
         }
     }
 }

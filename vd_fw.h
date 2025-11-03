@@ -47,6 +47,7 @@
  * - Win32: Use DeviceIoControl for XBOX controllers until they're correlated to XINPUT
  * - vd_fw_get_last_key_pressed
  * - vd_fw_get_last_mouse_button_pressed
+ * - Win32: Allow gamepad input even when window isn't focused?
  * - Vulkan
  *     - Win32: Required extensions function
  *     - Win32: Query queue surface presentation support
@@ -6687,7 +6688,7 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
 
         rids[1].usUsagePage = 0x01; // Generic desktop controls
         rids[1].usUsage     = 0x05; // Gamepad
-        rids[1].dwFlags     = RIDEV_DEVNOTIFY;
+        rids[1].dwFlags     = RIDEV_DEVNOTIFY | RIDEV_INPUTSINK;
         rids[1].hwndTarget  = VD_FW_G.hwnd;
         VD_FW__CHECK_TRUE(VdFwRegisterRawInputDevices(rids, 2, sizeof(rids[0])));
     }
