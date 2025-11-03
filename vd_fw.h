@@ -46,7 +46,6 @@
  *     - Face Heuristics/Reporting
  *     - Class Heuristics/Reporting
  * - D3D11 Sample
- * - Make sure /DUNICODE works for console printing
  * - File dialog
  * - OBS Studio breaks ChoosePixelFormat
  * - Make sure we can export functions properly for C++
@@ -59,10 +58,9 @@
  * - Should vd_fw_set_receive_ncmouse be default 0 or 1?
  *   - Actually, consider removing it entirely
  * - set window unresizable
- * - vd_fw_get_executable_dir() <-- statically allocated char * of executable directory
  * - vd_fw_get_last_key_pressed
  * - vd_fw_get_last_mouse_button_pressed
- * - Win32: M1/M2 buttons
+ * - MacOS: vd_fw_get_executable_dir()
  * - MacOS: vd_fw_set_fullscreen
  * - MacOS: Gamepad Support
  * - MacOS: Metal Sample
@@ -404,6 +402,13 @@ VD_FW_INL float              vd_fw_delta_s(void);
  */
 VD_FW_API int                vd_fw_set_vsync_on(int on);
 
+/**
+ * @brief Get the fully-qualified path to the executable without the last path separator.
+ * @param  len Length of the UTF-8 string, in bytes.
+ * @return     A callee-allocated string. There's no need to free it.
+ */
+VD_FW_API const char*        vd_fw_get_executable_dir(int *len);
+
 /* ----MOUSE--------------------------------------------------------------------------------------------------------- */
 enum {
     VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN   = 1 << 0,
@@ -581,6 +586,22 @@ enum {
     VD_FW_GAMEPAD_RIGHT_SHOULDER,
     VD_FW_GAMEPAD_LEFT_STICK,
     VD_FW_GAMEPAD_RIGHT_STICK,
+    VD_FW_GAMEPAD_LEFT_PAD0,
+    VD_FW_GAMEPAD_RIGHT_PAD0,
+    VD_FW_GAMEPAD_LEFT_PAD1,
+    VD_FW_GAMEPAD_RIGHT_PAD1,
+    VD_FW_GAMEPAD_LEFT_PAD2,
+    VD_FW_GAMEPAD_RIGHT_PAD2,
+    VD_FW_GAMEPAD_AUX0,
+    VD_FW_GAMEPAD_AUX1,
+    VD_FW_GAMEPAD_AUX2,
+    VD_FW_GAMEPAD_AUX3,
+    VD_FW_GAMEPAD_AUX4,
+    VD_FW_GAMEPAD_AUX5,
+    VD_FW_GAMEPAD_AUX6,
+    VD_FW_GAMEPAD_AUX7,
+    VD_FW_GAMEPAD_AUX8,
+    VD_FW_GAMEPAD_AUX9,
     VD_FW_GAMEPAD_BUTTON_MAX,
 
     // Playstation Style Buttons
@@ -5104,6 +5125,9 @@ typedef struct {
     VdFwBOOL                    is_fullscreen;
     int                         window_state;
     int                         window_state_changed;
+    char                        *exedir;
+    int                         exedir_len;
+    int                         exedir_cap;
     // Gamepad
     VdFw__GamepadState          gamepad_curr_states[VD_FW_GAMEPAD_COUNT_MAX];
     VdFw__GamepadState          gamepad_prev_states[VD_FW_GAMEPAD_COUNT_MAX];
@@ -5422,6 +5446,7 @@ static void         vd_fw__gl_debug_message_callback(GLenum source, GLenum type,
                                                      const void *userParam);
 static int          vd_fw__msgbuf_r(VdFw__Win32Message *message);
 static int          vd_fw__msgbuf_w(VdFw__Win32Message *message);
+static char*        vd_fw__utf16_to_utf8(const wchar_t *ws);
 
 #if VD_FW_WIN32_PROFILE
 #define VD_FW_JOIN_(a,b) a##b
@@ -5493,6 +5518,14 @@ static void *vd_fw__gl_get_proc_address(const char *name)
 #include <io.h>
 #include <fcntl.h>
 #endif // !VD_FW_NO_CRT
+
+static SIZE_T vd_fw__tcslen(LPCTSTR s)
+{
+    if (s == NULL) return 0;
+    LPCTSTR p = s;
+    while (*p) ++p;
+    return (SIZE_T)(p - s);
+}
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
@@ -5692,11 +5725,13 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
             AllocConsole();
             AttachConsole(GetCurrentProcessId());
             DWORD written;
-            SetConsoleTitleW(L"DEBUG CONSOLE");
+            SetConsoleTitle(TEXT("DEBUG CONSOLE"));
+            TCHAR *msg = TEXT("Console allocated for debugging\n");
+            SIZE_T len = vd_fw__tcslen(msg);
             WriteConsole(
                 GetStdHandle(STD_OUTPUT_HANDLE),
-                TEXT("Console allocated for debugging\n"),
-                sizeof(TEXT("Console allocated for debugging\n")) - 1,
+                msg,
+                (DWORD)len,
                 &written,
                 0);
 #if !VD_FW_NO_CRT
@@ -5707,6 +5742,29 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 
         }
 #endif
+    }
+
+    SetConsoleOutputCP(CP_UTF8);
+
+    {
+
+        TCHAR *buf = (TCHAR*)vd_fw__realloc_mem(NULL, sizeof(TCHAR) * MAX_PATH);
+        GetModuleFileName(NULL, buf, MAX_PATH);
+#ifdef UNICODE
+        VD_FW_G.exedir = vd_fw__utf16_to_utf8(buf);
+        VD_FW_G.exedir_cap = vd_fw__strlen(VD_FW_G.exedir);
+#else
+        VD_FW_G.exedir = buf;
+        VD_FW_G.exedir_cap = nsize;
+#endif 
+
+        const char *c = VD_FW_G.exedir;
+        for (DWORD i = (VD_FW_G.exedir_cap - 1); i > 0; --i) {
+            if (c[i] == '\\') {
+                VD_FW_G.exedir_len = i;
+                break;
+            }
+        }
     }
 
     InitializeCriticalSection(&VD_FW_G.critical_section);
@@ -5859,10 +5917,13 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 
             if (glDebugMessageCallback_proc == 0) {
                 DWORD written;
+
+                TCHAR *msg = TEXT("ERROR: Failed to load glDebugMessageCallback!\n");
+                SIZE_T len = vd_fw__tcslen(msg);
                 WriteConsole(
                     GetStdHandle(STD_OUTPUT_HANDLE),
-                    TEXT("ERROR: Failed to load glDebugMessageCallback!"),
-                    sizeof(TEXT("ERROR: Failed to load glDebugMessageCallback!")) - 1,
+                    msg,
+                    (DWORD)len,
                     &written,
                     0);
             } else {
@@ -5911,9 +5972,11 @@ VD_FW_API int vd_fw_running(void)
                 int state_mask = 0;
 
                 switch (mm.dat.mousebtn.vkbutton) {
-                    case VK_LBUTTON: state_mask = VD_FW_MOUSE_BUTTON_LEFT; break;
-                    case VK_RBUTTON: state_mask = VD_FW_MOUSE_BUTTON_RIGHT; break;
-                    case VK_MBUTTON: state_mask = VD_FW_MOUSE_BUTTON_MIDDLE; break;
+                    case VK_LBUTTON:  state_mask = VD_FW_MOUSE_BUTTON_LEFT; break;
+                    case VK_RBUTTON:  state_mask = VD_FW_MOUSE_BUTTON_RIGHT; break;
+                    case VK_MBUTTON:  state_mask = VD_FW_MOUSE_BUTTON_MIDDLE; break;
+                    case VK_XBUTTON1: state_mask = VD_FW_MOUSE_BUTTON_M1; break;
+                    case VK_XBUTTON2: state_mask = VD_FW_MOUSE_BUTTON_M2; break;
                     default: break;
                 }
 
@@ -6176,9 +6239,18 @@ VD_FW_API void vd_fw_set_receive_ncmouse(int on)
 
 VD_FW_API int vd_fw_set_vsync_on(int on)
 {
-    BOOL result = VD_FW_G.proc_swapInterval(on);
+    if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
+        BOOL result = VD_FW_G.proc_swapInterval(on);
+        return result == TRUE ? on : 0;
+    }
 
-    return result == TRUE ? on : 0;
+    return 0;
+}
+
+VD_FW_API const char *vd_fw_get_executable_dir(int *len)
+{
+    *len = VD_FW_G.exedir_len; 
+    return VD_FW_G.exedir; 
 }
 
 VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
@@ -6586,14 +6658,14 @@ static void vd_fw__gl_debug_message_callback(GLenum source, GLenum type, GLuint 
     (void)source;
 
     DWORD written;
-    WriteConsole(
+    WriteConsoleA(
         GetStdHandle(STD_OUTPUT_HANDLE),
         message,
         length,
         &written,
         0);
 
-    WriteConsole(
+    WriteConsoleA(
         GetStdHandle(STD_OUTPUT_HANDLE),
         "\n",
         1,
@@ -6984,8 +7056,6 @@ static void vd_fw__win32_correlate_xinput_triggers(VdFw__Win32GamepadInfo *gamep
     }
 
 }
-
-VD_FW_API char* vd_fw__utf16_to_utf8(const wchar_t *ws);
 
 static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam, VdFwLPARAM lparam)
 {
@@ -7887,6 +7957,8 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             vd_fw__msgbuf_w(&m);
         } break;
 
+        case WM_XBUTTONUP:
+        case WM_XBUTTONDOWN:
         case WM_MBUTTONUP:
         case WM_MBUTTONDOWN:
         case WM_RBUTTONUP:
@@ -7895,6 +7967,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         case WM_LBUTTONDOWN: {
             int down = 0;
             DWORD code = 0;
+            DWORD hiword = HIWORD(wparam);
 
             switch (msg) {
 
@@ -7904,6 +7977,8 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 case WM_RBUTTONDOWN:  down = 1; code = VK_RBUTTON; break;
                 case WM_LBUTTONUP:    down = 0; code = VK_LBUTTON; break;
                 case WM_LBUTTONDOWN:  down = 1; code = VK_LBUTTON; break;
+                case WM_XBUTTONUP:    down = 0; code = VK_XBUTTON1 + hiword - 1; break;
+                case WM_XBUTTONDOWN:  down = 1; code = VK_XBUTTON1 + hiword - 1; break;
                 default: break;
             }
 
@@ -8228,7 +8303,7 @@ static int vd_fw__msgbuf_w(VdFw__Win32Message *message)
     return 1;
 }
 
-VD_FW_API char *vd_fw__utf16_to_utf8(const wchar_t *ws)
+static char *vd_fw__utf16_to_utf8(const wchar_t *ws)
 {
     int req = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
                                   ws, -1,
