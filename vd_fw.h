@@ -62,8 +62,9 @@
  * - vd_fw_get_executable_dir() <-- statically allocated char * of executable directory
  * - vd_fw_get_last_key_pressed
  * - vd_fw_get_last_mouse_button_pressed
- * - MacOS: vd_fw_set_app_icon
  * - MacOS: vd_fw_set_fullscreen
+ * - MacOS: Gamepad Support
+ * - MacOS: Metal Sample
  * - When window not focused, or minimize, delay drawing?
  * - Allow to request specific framerate?
  * - On borderless, push mouse event right as we lose focus to a value outside of the window space
@@ -377,7 +378,7 @@ VD_FW_API void               vd_fw_set_title(const char *title);
 
 /**
  * @brief Set the icon of the window and application
- * @param  pixels A packed A8B8G8R8 pixel buffer
+ * @param  pixels A packed A8R8G8B8 pixel buffer
  * @param  width  The width of the icon, in pixels, must be at least 16px
  * @param  height The height of the icon, in pixels, must be at least 16px
  */
@@ -8480,6 +8481,7 @@ typedef struct {
     int                         nccaption_set;
     int                         ncrect_count;
     NSRect                      ncrects[VD_FW_NCRECTS_MAX];
+    NSImage                     *app_image;
 
 /* ----MAIN - RENDER THREAD SYNC------------------------------------------------------------------------------------- */
     pthread_t                   main_thread;
@@ -8833,6 +8835,7 @@ static int Update_Context = 0;
 - (void)windowWillClose:(NSNotification*)notification {
     VD_FW_G.should_close = YES;
     sem_post(VD_FW_G.s_main_thread_window_closed);
+    [NSApp stop:nil];
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
@@ -9472,6 +9475,49 @@ VD_FW_API float vd_fw_get_scale(void)
 VD_FW_API void vd_fw_set_title(const char *title)
 {
     [VD_FW_G.window setTitle: [NSString stringWithUTF8String: (title)]];
+}
+
+VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
+{
+    VdFwU32 *app_image_data = (VdFwU32*)malloc(sizeof(unsigned int) * width * height);
+    VD_FW_MEMCPY(app_image_data, pixels, sizeof(unsigned int) * width * height);
+
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            VdFwU32 pixel = app_image_data[y * width + x];
+            VdFwU8  alpha = (pixel >> 24) & 0xFF;
+            VdFwU8  red   = (pixel >> 16) & 0xFF;
+            VdFwU8  green = (pixel >>  8) & 0xFF;
+            VdFwU8  blue  = (pixel >>  0) & 0xFF;
+
+            VdFwU32 new_pixel = (red << 24) | (green << 16) | (blue << 8) | alpha;
+            app_image_data[y * width + x] = new_pixel;
+        }
+    }
+
+    NSBitmapImageRep *rep = [[NSBitmapImageRep alloc]
+        initWithBitmapDataPlanes:(unsigned char**)&app_image_data
+                      pixelsWide:width
+                      pixelsHigh:height
+                   bitsPerSample:8
+                 samplesPerPixel:4
+                        hasAlpha:YES
+                        isPlanar:NO
+                  colorSpaceName:NSDeviceRGBColorSpace
+                     bytesPerRow:width * 4
+                    bitsPerPixel:32];
+    NSImage *img = [[NSImage alloc] initWithSize:NSMakeSize(width, height)];
+    [img addRepresentation:rep];
+    dispatch_async(dispatch_get_main_queue(), ^ {
+        NSImage *prev_img = VD_FW_G.app_image;
+        VD_FW_G.app_image = img;
+        [NSApp setApplicationIconImage:img];
+        free(app_image_data);
+
+        if (prev_img) {
+            [prev_img release];
+        }
+    });
 }
 
 VD_FW_API int vd_fw_set_vsync_on(int on)
