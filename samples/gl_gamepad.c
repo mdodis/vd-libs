@@ -1,9 +1,10 @@
 #include "disable_clang_deprecations.h"
 #define VD_FW_NO_CRT 0
+#define VD_FW_GAMEPAD_DB_DEFAULT 0
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS
-#define VD_FW_GAMEPAD_DB_DEFAULT_EXTERNAL
 #include "vd_fw.h"
 #include "ext/stb_image.h"
+#include "vd_ui.h"
 #include "assert.h"
 
 #define GL_CHECK(expr) do {                                                   \
@@ -251,13 +252,15 @@ int main(int argc, char const *argv[])
 
     vd_fw_init(& (VdFwInitInfo) {
         .gl = {
-            .version = VD_FW_GL_VERSION_3_3,
+            .version = VD_FW_GL_VERSION_4_5,
             .debug_on = 1,
         },
         .window_options = {
             .borderless = 0,
         }
     });
+
+    vd_ui_init();
     vd_fw_set_vsync_on(1);
     vd_fw_set_title("Gamepad Sample");
 
@@ -309,10 +312,52 @@ int main(int argc, char const *argv[])
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(sizeof(float) * 2));
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
 
     glEnable(GL_BLEND);
-    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-    // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    GLuint ui_vao, ui_vbo;
+    {
+        glGenVertexArrays(1, &ui_vao);
+        glBindVertexArray(ui_vao);
+
+        glGenBuffers(1, &ui_vbo);
+        glBindBuffer(GL_ARRAY_BUFFER, ui_vbo);
+        glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)vd_ui_get_min_vertex_buffer_size(), 0, GL_DYNAMIC_DRAW);
+
+        for (int i = 0; i < vd_ui_gl_get_num_attributes(); ++i) {
+            GLint size;
+            GLenum type;
+            GLboolean normalized;
+            GLsizei stride;
+            void *pointer;
+            GLuint divisor;
+            vd_ui_gl_get_attribute_properties(i, &size, &type, &normalized, &stride, &pointer, &divisor);
+            glEnableVertexAttribArray(i);
+            glVertexAttribPointer(i, size, type, normalized, stride, pointer);
+            glVertexAttribDivisor(i, divisor);
+        }
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+    }
+
+    GLuint ui_program;
+    {
+
+        const char *svsh;
+        const char *sfsh;
+        size_t svsh_len;
+        size_t sfsh_len;
+        vd_ui_gl_get_default_shader_sources(&svsh, &svsh_len, &sfsh, &sfsh_len);
+        GLuint ivsh = vd_fw_compile_shader(GL_VERTEX_SHADER, svsh);
+        GLuint ifsh = vd_fw_compile_shader(GL_FRAGMENT_SHADER, sfsh);
+
+        ui_program = glCreateProgram();
+        glAttachShader(ui_program, ivsh);
+        glAttachShader(ui_program, ifsh);
+        vd_fw_link_program(ui_program);
+    }
+
 
     ControllerInfo draw_infos[VD_FW_GAMEPAD_COUNT_MAX] = {0};
     while (vd_fw_running()) {
@@ -321,13 +366,18 @@ int main(int argc, char const *argv[])
         vd_fw_get_size(&w, &h);
 
         float t = vd_fw_delta_s();
+        vd_ui_frame_begin(t);
+        vd_ui_event_size((float)w, (float)h);
 
         glViewport(0, 0, w, h);
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         GL_CHECK(glUseProgram(rect_shader));
+        glBindVertexArray(VAO);
 
+        glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+        // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
         {
             float projection[16];
@@ -424,6 +474,28 @@ int main(int argc, char const *argv[])
                 transform_controller_info(&draw_infos[i], x, y, scaled_w);
                 draw_controller_info(&draw_infos[i], mouse_inside);
 
+                VdUiDiv *div = vd_ui_div_newf(VD_UI_FLAG_FLOAT, "Controller%d", i);
+                div->size[0].mode = VD_UI_SIZE_MODE_ABSOLUTE;
+                div->size[0].value = draw_infos[i].controller_dim[0];
+                div->size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
+                div->size[1].value = draw_infos[i].controller_dim[1];
+                div->comp_pos_rel[0] = draw_infos[i].controller_pos[0];
+                div->comp_pos_rel[1] = draw_infos[i].controller_pos[1];
+
+                vd_ui_parent_push(div);
+                {
+                    VdFwGuid guid = vd_fw_get_gamepad_guid(i);
+                    vd_ui_labelf("GUID: %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+                                 guid.dat[0], guid.dat[1], guid.dat[2], guid.dat[3],
+                                 guid.dat[4], guid.dat[5], guid.dat[6], guid.dat[7],
+                                 guid.dat[8], guid.dat[9], guid.dat[10], guid.dat[11],
+                                 guid.dat[12], guid.dat[13], guid.dat[14], guid.dat[15]);
+                    vd_ui_labelf("Class: %s", vd_fw_get_gamepad_class_name(vd_fw_get_gamepad_class(i)));
+                    vd_ui_labelf("Face: %s", vd_fw_get_gamepad_face_name(vd_fw_get_gamepad_face(i)));
+                    vd_ui_labelf("Rumble: %d", vd_fw_get_gamepad_rumble_support(i));
+                }
+                vd_ui_parent_pop();
+
                 static int change = 0;
                 if (mouse_inside && vd_fw_get_mouse_clicked(VD_FW_MOUSE_BUTTON_LEFT)) {
                     if (change == 0) {
@@ -436,6 +508,121 @@ int main(int argc, char const *argv[])
             }
 
         }
+
+        vd_ui_frame_end();
+        size_t num_updates;
+        VdUiUpdate *updates = vd_ui_frame_get_updates(&num_updates);
+
+        for (size_t i = 0; i < num_updates; ++i) {
+            VdUiUpdate *update = &updates[i];
+            switch (update->type) {
+                case VD_UI_UPDATE_TYPE_NEW_TEXTURE: {
+                    int width                = update->data.new_texture.width;
+                    int height               = update->data.new_texture.height;
+                    void *buffer             = update->data.new_texture.buffer;
+                    size_t buffer_size       = update->data.new_texture.size;
+                    VdUiTextureId *id        = update->data.new_texture.write_id;
+
+                    VD_UNUSED(buffer_size);
+
+                    GLuint texture;
+                    glGenTextures(1, &texture);
+                    glBindTexture(GL_TEXTURE_2D, texture);
+
+                    GLint  level;
+                    GLint  internal_format;
+                    GLint  border;
+                    GLenum format;
+                    GLenum type;
+                    vd_ui_gl_cv_texture_format(
+                        update->data.new_texture.format,
+                        &level,
+                        &internal_format, 
+                        &border, 
+                        &format,
+                        &type);
+
+                    GL_CHECK(glTexImage2D(GL_TEXTURE_2D, level, internal_format, width, height, border, format, type, buffer));
+                    // GL_CHECK(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 4, 4, 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer));
+                    GL_CHECK(glPixelStorei(GL_UNPACK_ALIGNMENT, 1));
+                    GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT));
+                    GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT));
+                    GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST));
+                    GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST));
+                    GL_CHECK(glBindTexture(GL_TEXTURE_2D, 0));
+
+                    id->id = (uintptr_t)texture;
+                } break;
+
+                case VD_UI_UPDATE_TYPE_WRITE_TEXTURE: {
+                    GLuint texture = (GLuint)update->data.write_texture.texture.id;
+
+                    GLint  level;
+                    GLint  internal_format;
+                    GLint  border;
+                    GLenum format;
+                    GLenum type;
+                    vd_ui_gl_cv_texture_format(
+                        update->data.write_texture.format,
+                        &level,
+                        &internal_format, 
+                        &border, 
+                        &format,
+                        &type);
+
+                    glBindTexture(GL_TEXTURE_2D, texture);
+                    glTexSubImage2D(GL_TEXTURE_2D, level, 0, 0, update->data.write_texture.width, update->data.write_texture.height, format, type, update->data.write_texture.buffer);
+                    glBindTexture(GL_TEXTURE_2D, 0);
+                } break;
+
+                default: break;
+            }
+        }
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);  
+        // glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+        // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glUseProgram(ui_program);
+
+        // Get vertex buffer
+        size_t buffer_size;
+        void *buffer = vd_ui_frame_get_vertex_buffer(&buffer_size);
+
+        // Get render passes
+        unsigned int num_passes;
+        VdUiRenderPass *passes = vd_ui_frame_get_render_passes(&num_passes);
+
+        for (unsigned int i = 0; i < num_passes; ++i) {
+            VdUiRenderPass *pass = &passes[i];
+            GLuint texture_id = (GLuint)pass->selected_texture->id;
+            GLint clip_width   = (GLint)pass->clip[2] - (GLint)pass->clip[0];
+            GLint clip_height  = (GLint)pass->clip[3] - (GLint)pass->clip[1];
+            GLint clip_x       = (GLint)pass->clip[0];
+            GLint clip_lower_y = (GLint)h - (GLint)pass->clip[3];
+
+            glScissor(clip_x, clip_lower_y, clip_width, clip_height);
+
+            glUseProgram(ui_program);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, texture_id);
+            glUniform2f(glGetUniformLocation(ui_program, vd_ui_gl_get_uniform_name_resolution()), (float)w, (float)h);
+            glUniform1i(glGetUniformLocation(ui_program, vd_ui_gl_get_uniform_name_texture()), 0);
+            glUniform2f(glGetUniformLocation(ui_program, vd_ui_gl_get_uniform_name_mouse()), 0, 0);
+
+            glBindVertexArray(ui_vao);
+            glBindBuffer(GL_ARRAY_BUFFER, ui_vbo);
+
+            // Update vertex buffer
+            glBindBuffer(GL_ARRAY_BUFFER, ui_vbo);
+            glBufferSubData(GL_ARRAY_BUFFER, 0, pass->instance_count * sizeof(VdUiVertex), (unsigned char*)buffer + pass->first_instance * sizeof(VdUiVertex));
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+            glDrawArraysInstanced(
+                GL_TRIANGLE_STRIP,
+                0,
+                4,
+                pass->instance_count);
+        }
+
 
         vd_fw_swap_buffers();
     }
@@ -807,6 +994,9 @@ static void digital_input_update(DigitalInput *input, float t, int index, int bu
 #define VD_FW_IMPL
 #include "vd_fw.h"
 #include "disable_clang_deprecations.h"
+
+#define VD_UI_IMPL
+#include "vd_ui.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "ext/stb_image.h"

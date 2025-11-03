@@ -985,7 +985,7 @@ static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
 
             PUT_LINE("<body class=\"d-flex flex-column min-vh-100\" data-bs-spy=\"scroll\" data-bs-target=\"#toc\" data-bs-offset=\"50\" tabindex=\"0\">");
             PUT_LINE("<!-- Begin Navbar -->");
-            PUT_LINE("<nav id=\"mainnav\" class=\"navbar sticky-top navbar-expand-md bg-body-tertiary\">");
+            PUT_LINE("<nav id=\"mainnav\" class=\"navbar fixed-top navbar-expand-md bg-body-tertiary\">");
                 PUT_LINE("<div class=\"container-fluid bg-body-tertiary\">");
                     PUT_LINE("<a class=\"navbar-brand\" href=\"#\">");
                         PUT_LINE("<img    src=\"./assets/vd-logo-p@1x.png\"");
@@ -1038,7 +1038,7 @@ static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
                 PUT_LINE("<div class=\"row justify-content-center\">");
                     PUT_LINE("<div id=\"main-content\" class=\"col-12 col-sm-12 flexijustify-midpoint col-md-8 col-lg-8 text-start mx-auto mx-lg-4\">");
 
-                        PUT_LINE("<nav id=\"toc\" data-toc class=\"toc-outline d-none midpoint-flex flexijustify-grow p-0 nav outline-section flex-column\">");
+                        PUT_LINE("<nav id=\"toc\" data-toc class=\"toc-outline d-none d-md-block d-sm-none flex-grow-1\">");
                         PUT_LINE("</nav>");
 
         } else if (str_eq(section_id, LIT("category"))) {

@@ -23,13 +23,13 @@
         This library can:
 
         <ul>
-            <li>Open a window, handle input from keyboard/mouse/controller</li>
+            <li>Open a window, handle input from keyboard/mouse/gamepad</li>
             <li>Draw while resizing the window</li>
             <li>Disable window decorations, but still be able to tile the window, customize the drag area, etc...</li>
             <li>Load OpenGL (without using a loader library)</li>
+            <li>Or let you use your Graphics API of choice</li>
             <li>Set the window icon</li>
-            <li>All of that, with as minimal dependencies as possible (for example, you don't even need to link to or
-                have the development headers/libraries of X11/OpenGL, etc. on linux)</li>
+            <li>All of that, with as minimal dependencies as possible</li>
         </ul>
     }
 
@@ -341,13 +341,16 @@ int main() {
             libraries this library tries to load during vd_fw_init:
 
             <ol class="list-group">
-                <li class="list-group-item">User32</li>
-                <li class="list-group-item">OpenGL32</li>
-                <li class="list-group-item">Dwmapi</li>
-                <li class="list-group-item">Gdi32</li>
-                <li class="list-group-item">uxtheme</li>
-                <li class="list-group-item">shell32</li>
-                <li class="list-group-item">winmm</li>
+                <li class="list-group-item">User32.dll</li>
+                <li class="list-group-item">OpenGL32.dll</li>
+                <li class="list-group-item">Dwmapi.dll</li>
+                <li class="list-group-item">Gdi32.dll</li>
+                <li class="list-group-item">uxtheme.dll</li>
+                <li class="list-group-item">shell32.dll</li>
+                <li class="list-group-item">winmm.dll</li>
+                <li class="list-group-item">xinput1_4.dll</li>
+                <li class="list-group-item">xinput1_3.dll</li>
+                <li class="list-group-item">xinput9_1_0.dll</li>
             </ol>
             <br>
         }
@@ -540,16 +543,56 @@ freely, subject to the following restrictions:
                     @td(){text{Planned}}
                 }
                 @tr() {
+                    @td(){text{Linux (DRM)}}
+                    @td(){text{Planned}}
+                }
+                @tr() {
                     @td(){text{iOS}}
                     @td(){text{Planned}}
                 }
                 @tr() {
                     @td(){text{Android}}
-                    @td(){text{Not Planned}}
+                    @td(){text{Planned}}
                 }
                 @tr() {
                     @td(){text{Web}}
+                    @td(){text{Planned}}
+                }
+                @tr() {
+                    @td(){text{FreeBSD}}
                     @td(){text{Not Planned}}
+                }
+                @tr() {
+                    @td(){text{OpenBSD}}
+                    @td(){text{Not Planned}}
+                }
+                @tr() {
+                    @td(){text{NetBSD}}
+                    @td(){text{Not Planned}}
+                }
+                @tr() {
+                    @td(){text{Haiku}}
+                    @td(){text{Not Planned}}
+                }
+                @tr() {
+                    @td(){text{MacOS (Legacy/x86_64)}}
+                    @td(){text{Not Planned}}
+                }
+                @tr() {
+                    @td(){text{tvOS}}
+                    @td(){text{Not Planned}}
+                }
+                @tr() {
+                    @td(){text{visionOS}}
+                    @td(){text{Not Planned}}
+                }
+                @tr() {
+                    @td(){text{PlayStation Consoles}}
+                    @td(class="table-danger"){text{NDA}}
+                }
+                @tr() {
+                    @td(){text{Nintendo Consoles}}
+                    @td(class="table-danger"){text{NDA}}
                 }
             }
         }
@@ -648,12 +691,11 @@ freely, subject to the following restrictions:
 
     @section("Main Loop") {
         para {
-
             Let's look at the main loop.
         }
 
         verb```
-#define VD_FW_NO_CRT 0                                       // Disable CRT, this is highly recommended,
+#define VD_FW_NO_CRT 1                                       // Disable CRT, this is highly recommended,
                                                              // if you know what you're doing.
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS  // Disable console (Windows)
 #include "vd_fw.h"
@@ -689,6 +731,13 @@ int main(int argc, char const *argv[])
 
         @img(class="rounded img-fluid rmprint"
              src="./assets/fw/tutorials-main-loop.gif")
+
+        @br()
+        @br()
+
+        para {
+            Note that resizing or moving the window will never pause the render loop, with OpenGL or any other API.
+        }
     }
 
     @section("Choose OpenGL Version") {
