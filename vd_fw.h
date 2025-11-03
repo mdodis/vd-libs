@@ -62,6 +62,7 @@
  * - vd_fw_get_executable_dir() <-- statically allocated char * of executable directory
  * - vd_fw_get_last_key_pressed
  * - vd_fw_get_last_mouse_button_pressed
+ * - Win32: M1/M2 buttons
  * - MacOS: vd_fw_set_fullscreen
  * - MacOS: Gamepad Support
  * - MacOS: Metal Sample
@@ -408,10 +409,14 @@ enum {
     VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN   = 1 << 0,
     VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN  = 1 << 1,
     VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN = 1 << 2,
+    VD_FW_MOUSE_STATE_M1_BUTTON_DOWN     = 1 << 3,
+    VD_FW_MOUSE_STATE_M2_BUTTON_DOWN     = 1 << 4,
 
     VD_FW_MOUSE_BUTTON_LEFT   = VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN,
     VD_FW_MOUSE_BUTTON_RIGHT  = VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN,
     VD_FW_MOUSE_BUTTON_MIDDLE = VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN,
+    VD_FW_MOUSE_BUTTON_M1     = VD_FW_MOUSE_STATE_M1_BUTTON_DOWN,
+    VD_FW_MOUSE_BUTTON_M2     = VD_FW_MOUSE_STATE_M2_BUTTON_DOWN,
 };
 
 /**
@@ -9059,7 +9064,27 @@ static int Update_Context = 0;
 
 - (void)otherMouseDown:(NSEvent *)evt
 {
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
+    msg.dat.mousebtn.down = 1;
 
+    int send_message = 0;
+    switch ([evt buttonNumber]) {
+        case 2: {
+            send_message = 1;
+            msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN;
+        } break;
+
+        case 3:
+        case 4: {
+            send_message = 1;
+            msg.dat.mousebtn.mask = 1 << [evt buttonNumber];
+        } break;
+    }
+
+    if (send_message) {
+        vd_fw__msgbuf_w(&msg); 
+    }
 }
 
 - (void)scrollWheel:(NSEvent *)evt
@@ -9100,6 +9125,27 @@ static int Update_Context = 0;
 - (void)otherMouseUp:(NSEvent *)evt
 {
 
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
+    msg.dat.mousebtn.down = 0;
+
+    int send_message = 0;
+    switch ([evt buttonNumber]) {
+        case 2: {
+            send_message = 1;
+            msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN;
+        } break;
+
+        case 3:
+        case 4: {
+            send_message = 1;
+            msg.dat.mousebtn.mask = 1 << [evt buttonNumber];
+        } break;
+    }
+
+    if (send_message) {
+        vd_fw__msgbuf_w(&msg); 
+    }
 }
 
 - (void)mouseMoved:(NSEvent *)evt
@@ -9798,235 +9844,6 @@ static void vd_fw__mac_init_gl(VdFwInitInfo *info)
 static void vd_fw__mac_runloop(int wait)
 {
     [NSApp run];
-    // @autoreleasepool {
-    //     NSDate *date = [NSDate distantFuture];
-    //     if (!wait) {
-    //         date = [NSDate distantPast];
-    //     }
-
-    //     NSEvent *event;
-    //     while ((event = [NSApp nextEventMatchingMask: NSEventMaskAny
-    //                                        untilDate: date
-    //                                           inMode: NSDefaultRunLoopMode
-    //                                          dequeue: YES]))
-    //     {
-
-    //         NSEventType type = [event type];
-    //         // Handle Cmd+Q manually
-    //         if (event.type == NSEventTypeKeyDown &&
-    //             (event.modifierFlags & NSEventModifierFlagCommand) &&
-    //             [[event charactersIgnoringModifiers].lowercaseString isEqualToString:@"q"])
-    //         {
-    //             [NSApp terminate:nil];
-    //             continue; // skip sending to AppKit
-    //         }
-
-    //         int event_handled = 1;
-
-    //         switch (type) {
-    //             case NSEventTypeScrollWheel: {
-
-    //                 if ([event hasPreciseScrollingDeltas]) {
-    //                     VD_FW_G.wheel[0] += [event scrollingDeltaX] * 0.05f;
-    //                     VD_FW_G.wheel[1] += [event scrollingDeltaY] * 0.05f;
-    //                 } else {
-    //                     VD_FW_G.wheel[0] += [event deltaX];
-    //                     VD_FW_G.wheel[1] += [event deltaY];
-    //                 }
-
-    //                 VD_FW_G.wheel_moved = 1;
-    //             } break;
-
-    //             case NSEventTypeFlagsChanged: {
-
-
-    //                 NSEventModifierFlags flags = [event modifierFlags];
-    //                 unsigned short keycode = [event keyCode];
-
-    //                 unsigned char shift_down = (flags & NSEventModifierFlagShift) ? 1 : 0;
-    //                 unsigned char option_down = (flags & NSEventModifierFlagOption) ? 1 : 0;
-    //                 unsigned char control_down = (flags & NSEventModifierFlagControl) ? 1 : 0;
-
-    //                 switch (keycode) {
-    //                     case 56: VD_FW_G.curr_key_states[VD_FW_KEY_LSHIFT] = shift_down; break;
-    //                     case 60: VD_FW_G.curr_key_states[VD_FW_KEY_RSHIFT] = shift_down; break;
-    //                     case 59: VD_FW_G.curr_key_states[VD_FW_KEY_LCONTROL] = control_down; break;
-    //                     case 61: VD_FW_G.curr_key_states[VD_FW_KEY_RCONTROL] = option_down; break;
-    //                     default: break;
-    //                 }
-    //             } break;
-
-    //             case NSEventTypeKeyUp:
-    //             case NSEventTypeKeyDown: {
-    //                 BOOL is_key_down = [event type] == NSEventTypeKeyDown;
-    //                 // BOOL is_repeat = [event isARepeat];
-    //                 unsigned short keycode = [event keyCode];
-
-    //                 VdFwKey key = vd_fw__translate_mac_keycode(keycode);
-
-    //                 // VD_FW_G.prev_key_states[key] = VD_FW_G.curr_key_states[key];
-    //                 VD_FW_G.curr_key_states[key] = (unsigned char)is_key_down;
-
-    //             } break;
-
-    //             case NSEventTypeLeftMouseDown: {
-    //                 NSPoint view_point = [event locationInWindow];
-
-    //                 NSPoint p = NSMakePoint(view_point.x, view_point.y);
-
-    //                 int hit_drag_area = 0;
-
-    //                 p.x *= VD_FW_G.scale;
-    //                 p.y *= VD_FW_G.scale;
-
-    //                 VdFw__MacMessage msg;
-    //                 msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
-    //                 msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN;
-    //                 msg.dat.mousebtn.down = 1;
-    //                 vd_fw__msgbuf_w(&msg); 
-
-    //                 if (VD_FW_G.draw_decorations) {
-    //                     break;
-    //                 }
-
-    //                 if (!VD_FW_G.nccaption_set) {
-    //                     hit_drag_area = 1;
-    //                 } else if (NSPointInRect(p, VD_FW_G.nccaption)) {
-    //                     hit_drag_area = 1;
-    //                     for (int ri = 0; ri < VD_FW_G.ncrect_count; ++ri) {
-    //                         if (NSPointInRect(p, VD_FW_G.ncrects[ri])) {
-    //                             hit_drag_area = 0;
-    //                             break;
-    //                         }
-    //                     }
-    //                 }
-
-    //                 if (hit_drag_area) {
-    //                     NSPoint loc = [VD_FW_G.window convertPointToScreen:view_point];
-    //                     NSRect window_frame = [VD_FW_G.window frame];
-
-    //                     loc.x -= window_frame.origin.x;
-    //                     loc.y -= window_frame.origin.y;
-    //                     VD_FW_G.drag_start_location = loc;
-    //                     VD_FW_G.drag_start_pos_window_coords = view_point;
-    //                     VD_FW_G.dragging = TRUE;
-    //                 }
-    //             } break;
-
-    //             case NSEventTypeLeftMouseUp: {
-    //                 VD_FW_G.dragging = FALSE;
-    //                 VdFw__MacMessage msg;
-    //                 msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
-    //                 msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN;
-    //                 msg.dat.mousebtn.down = 0;
-    //                 vd_fw__msgbuf_w(&msg); 
-    //             } break;
-
-    //             case NSEventTypeRightMouseDown:
-    //             case NSEventTypeRightMouseUp: {
-    //                 VdFw__MacMessage msg;
-    //                 msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
-    //                 msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN;
-    //                 msg.dat.mousebtn.down = type == NSEventTypeRightMouseDown;
-    //                 vd_fw__msgbuf_w(&msg); 
-    //             } break;
-
-    //             case NSEventTypeMouseMoved: {
-
-    //                 NSPoint loc = [event locationInWindow];
-
-    //                 // Convert to content view coordinates
-    //                 NSView *cv = [VD_FW_G.window contentView];
-    //                 NSRect cvf = [cv frame];
-
-    //                 NSPoint loc_top_left_origin = NSMakePoint(loc.x, cvf.size.height - loc.y);
-
-    //                 NSPoint delta = NSMakePoint(
-    //                     loc_top_left_origin.x - VD_FW_G.last_mouse.x,
-    //                     loc_top_left_origin.y - VD_FW_G.last_mouse.y
-    //                 );
-
-    //                 VD_FW_G.mouse_delta.x += delta.x;
-    //                 VD_FW_G.mouse_delta.y += delta.y;
-
-    //                 VD_FW_G.last_mouse = loc_top_left_origin;
-
-
-    //                 NSPoint pixel_point = vd_fw__mac_mouse_cocoa_to_conventional(loc);
-    //                 VdFw__MacMessage msg;
-    //                 msg.type = VD_FW__MAC_MESSAGE_MOUSEMOVE;
-    //                 msg.dat.mousemove.mx = pixel_point.x;
-    //                 msg.dat.mousemove.my = pixel_point.y;
-    //                 vd_fw__msgbuf_w(&msg); 
-
-    //             } break;
-
-    //             case NSEventTypeLeftMouseDragged: {
-
-    //                 NSPoint view_point = [event locationInWindow];
-
-    //                 NSPoint scaled_pos = vd_fw__mac_mouse_cocoa_to_conventional(view_point);
-
-    //                 VdFw__MacMessage msg;
-    //                 msg.type = VD_FW__MAC_MESSAGE_MOUSEMOVE;
-    //                 msg.dat.mousemove.mx = scaled_pos.x;
-    //                 msg.dat.mousemove.my = scaled_pos.y;
-    //                 vd_fw__msgbuf_w(&msg); 
-
-    //                 NSPoint p = [VD_FW_G.window convertPointToScreen: view_point];
-
-    //                 if (VD_FW_G.dragging) {
-
-    //                     NSPoint new_pos = NSMakePoint(p.x - VD_FW_G.drag_start_location.x,
-    //                                                   p.y - VD_FW_G.drag_start_location.y);
-
-    //                     [VD_FW_G.window setFrameOrigin: new_pos];
-    //                 }
-    //             } break;
-
-    //             default: event_handled = 0; break;
-    //         }
-
-    //         switch (type) {
-    //             case NSEventTypeLeftMouseDown:
-    //             case NSEventTypeLeftMouseUp: {
-    //                 event_handled = 0;
-    //             } break;
-
-    //             case NSEventTypeLeftMouseDragged:
-    //             case NSEventTypeRightMouseDragged:
-    //             case NSEventTypeOtherMouseDragged:
-    //             case NSEventTypeMouseMoved: {
-    //                 if (!VD_FW_G.mouse_is_locked) {
-    //                     break;
-    //                 }
-
-    //                 event_handled = 0;
-    //                 NSRect cvf = [VD_FW_G.window frame];
-
-    //                 NSPoint screen_loc = [NSEvent mouseLocation];
-
-    //                 CGFloat w = NSMaxX(cvf) - NSMinX(cvf);
-    //                 CGFloat h = NSMaxY(cvf) - NSMinY(cvf);
-
-    //                 if (!NSPointInRect(screen_loc, cvf)) {
-    //                     CGWarpMouseCursorPosition(CGPointMake(NSMinX(cvf) + w * .5f, NSMinY(cvf) + h * .5f));
-    //                     VD_FW_G.last_mouse.x = w * .5f;
-    //                     VD_FW_G.last_mouse.y = h * .5f;
-    //                 }
-    //             } break;
-    //             default: break;
-    //         }
-
-    //         if (!event_handled) {
-    //             [NSApp sendEvent: event];
-    //         }
-
-    //         if (VD_FW_G.should_close) {
-    //             break;
-    //         }
-    //     }
-    // }
 }
 
 static int vd_fw__msgbuf_r(VdFw__MacMessage *message)
