@@ -41,6 +41,9 @@
  * ╚════════════════════════════════════════════════════════════╝
  * 
  * TODO
+ * - Close/Reopen Window
+ *     - vd_fw_quit()
+ *     - vd_fw_close_requested()
  * - Gamepads
  *     - Face Heuristics
  *     - Class Heuristics
@@ -60,6 +63,7 @@
  * - Expose customizable function pointer if the user needs to do something platform-specific before/after winthread has initialized or before vd_fw_init returns anyways.
  * - Have a way for a user to request OpenGL extensions/versions via a precedence array, and initialize the maximum possible version
  * - Clipboard
+ * - Allow the user to switch graphics APIs on the fly? (opengl -> custom -> pixbuff -> custom -> opengl)
  * - Properly handle vd_fw_set_receive_ncmouse for clicks and scrolls
  * - Set mouse cursor to constants (resize, I, etc...)
  * - Have a way to store and load the window placement state (size, position, maximization state)
@@ -78,7 +82,7 @@
 #define VD_FW_H
 #define VD_FW_VERSION_MAJOR    0
 #define VD_FW_VERSION_MINOR    0
-#define VD_FW_VERSION_PATCH    1
+#define VD_FW_VERSION_PATCH    2
 #define VD_FW_VERSION          ((VD_FW_VERSION_MAJOR << 16) | (VD_FW_VERSION_MINOR << 8) | (VD_FW_VERSION_PATCH))
 
 #ifndef _CRT_SECURE_NO_WARNINGS
@@ -194,13 +198,6 @@
 #   define VdFwU64  uint64_t
 #endif // !VD_FW_CUSTOM_TYPEDEFS
 
-#define VD_FW_SWAP16(x) ((VdFwU16)((x << 8) | (x >> 8)))
-#if VD_FW_ENDIANNESS == VD_FW_ENDIANNESS_LE
-#   define VD_FW_SWAP16LE(x) (x)
-#else
-#   define VD_FW_SWAP16LE(x) VD_FW_SWAP16(x)
-#endif
-
 #ifndef VD_FW_GAMEPAD_COUNT_MAX
 #   define VD_FW_GAMEPAD_COUNT_MAX 16
 #endif // !VD_FW_GAMEPAD_COUNT_MAX
@@ -214,6 +211,13 @@
 #endif // !VD_FW_NCRECTS_MAX
 
 #define VD_FW_ARRAY_COUNT(x) (sizeof(x)/sizeof(x[0]))
+
+#define VD_FW_SWAP16(x) ((VdFwU16)((x << 8) | (x >> 8)))
+#if VD_FW_ENDIANNESS == VD_FW_ENDIANNESS_LE
+#   define VD_FW_SWAP16LE(x) (x)
+#else
+#   define VD_FW_SWAP16LE(x) VD_FW_SWAP16(x)
+#endif
 
 typedef enum {
     VD_FW_GL_VERSION_BASIC = 0,
@@ -817,7 +821,7 @@ VD_FW_API int                vd_fw_get_gamepad_count(void);
 /**
  * @brief Gets the state of all (digital) buttons on the gamepad
  * @param  index The gamepad index
- * @return       The button state bitfield (use VD_FW_GAMEPAD_A/B/AUX0... to test)
+ * @return       The button state bitfield (use (1 << VD_FW_GAMEPAD_A/B/AUX0...) to test)
  */
 VD_FW_API VdFwU64            vd_fw_get_gamepad_button_state(int index);
 
