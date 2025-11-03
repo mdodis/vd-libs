@@ -810,6 +810,13 @@ typedef struct {
 VD_FW_API int                vd_fw_get_gamepad_count(void);
 
 /**
+ * @brief Gets the state of all (digital) buttons on the gamepad
+ * @param  index The gamepad index
+ * @return       The button state bitfield (use VD_FW_GAMEPAD_A/B/AUX0... to test)
+ */
+VD_FW_API VdFwU64            vd_fw_get_gamepad_button_state(int index);
+
+/**
  * @brief Gets the state for a Gamepad button (digital)
  * @param  index  The gamepad index
  * @param  button The gamepad button to check
@@ -6370,6 +6377,11 @@ VD_FW_API int vd_fw_get_key_down(int key)
 VD_FW_API int vd_fw_get_gamepad_count(void)
 {
     return VD_FW_G.num_gamepads_present;
+}
+
+VD_FW_API VdFwU64 vd_fw_get_gamepad_button_state(int index)
+{
+    return VD_FW_G.gamepad_curr_states[index].bits;
 }
 
 VD_FW_API int vd_fw_get_gamepad_down(int index, int button)
