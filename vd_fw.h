@@ -55,7 +55,6 @@
  *     - Win32: Query queue surface presentation support
  *     - Win32: Implement vkCreateWin32SurfaceKHR
  * - raw hat states
- * - D3D11 Sample
  * - File dialog
  * - OBS Studio breaks ChoosePixelFormat
  * - Make sure we can export functions properly for C++
@@ -11224,8 +11223,8 @@ VD_FW_API int vd_fw_add_gamepad_db_entry(VdFwGamepadDBEntry *entry)
     }
 
     if (will_resize) {
-        VD_FW_G.gamepad_db_entries = vd_fw__realloc_mem(VD_FW_G.gamepad_db_entries, 
-                                                        sizeof(VD_FW_G.gamepad_db_entries[0]) * cap);
+        VD_FW_G.gamepad_db_entries = (VdFwGamepadDBEntry*)vd_fw__realloc_mem(VD_FW_G.gamepad_db_entries, 
+                                                                             sizeof(VD_FW_G.gamepad_db_entries[0]) * cap);
         VD_FW_G.cap_gamepad_db_entries = cap;
     }
 

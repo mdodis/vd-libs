@@ -54,7 +54,7 @@ int main(int argc, char const *argv[])
     DXGI_SWAP_CHAIN_DESC1 swapchain_descriptor = {};
     swapchain_descriptor.Width = width;
     swapchain_descriptor.Height = height;
-    swapchain_descriptor.Format = DXGI_FORMAT::DXGI_FORMAT_B8G8R8A8_UNORM;
+    swapchain_descriptor.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
     swapchain_descriptor.SampleDesc.Count = 1;
     swapchain_descriptor.SampleDesc.Quality = 0;
     swapchain_descriptor.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -84,16 +84,17 @@ int main(int argc, char const *argv[])
         }
 
         int w, h;
-        vd_fw_get_size(&w, &h);
+        if (vd_fw_get_size(&w, &h)) {
+            D_Device_Context->OMSetRenderTargets(0, 0, 0);
+            Render_Target_View->Release();
 
-        int minimized;
-        if (vd_fw_get_minimized(&minimized)) {
-            printf("Minimization Changed: %d\n", minimized);
-        }
+            CHECK_HRESULT(DXGI_Swapchain->ResizeBuffers(0,w,h,DXGI_FORMAT_B8G8R8A8_UNORM, 0));
 
-        int maximized;
-        if (vd_fw_get_maximized(&maximized)) {
-            printf("Maximization Changed: %d\n", maximized);
+            ComPtr<ID3D11Texture2D> backbuffer = nullptr;
+            CHECK_HRESULT(DXGI_Swapchain->GetBuffer(0, IID_PPV_ARGS(&backbuffer)));
+
+            CHECK_HRESULT(D_Device->CreateRenderTargetView(backbuffer.Get(), nullptr, &Render_Target_View));
+
         }
 
         if (vd_fw_get_key_pressed(VD_FW_KEY_F11)) {

@@ -325,7 +325,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>#define VD_FW_GAMEPAD_COUNT_MAX</code>}}
+                @td() { text{<code>#define VD_FW_GAMEPAD_COUNT_MAX 16</code>}}
                 @td() {
                     text {
                         The maximum number of simulataneously connected gamepads that the library will support.
@@ -354,11 +354,21 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>#define VD_FW_NCRECTS_MAX</code>}}
+                @td() { text{<code>#define VD_FW_NCRECTS_MAX 16</code>}}
                 @td() {
                     text {
                         The maximum number of non-client rectangles that will be supported by the library.
                         Defaults to 16.
+                    }
+                }
+            }
+
+            @tr() {
+                @td() { text{<code>#define VD_FW_CODEPOINT_BUFFER_COUNT 8</code>}}
+                @td() {
+                    text {
+                        The size (in characters) of the character input history buffer.
+                        Defaults to 8.
                     }
                 }
             }
