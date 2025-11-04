@@ -360,6 +360,10 @@ int main(int argc, char const *argv[])
     ControllerInfo draw_infos[VD_FW_GAMEPAD_COUNT_MAX] = {0};
     while (vd_fw_running()) {
 
+        if (vd_fw_close_requested()) {
+            vd_fw_quit();
+        }
+
         int w, h;
         vd_fw_get_size(&w, &h);
 

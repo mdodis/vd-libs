@@ -229,6 +229,7 @@ int main(int argc, char const *argv[])
 
     while (vd_fw_running()) {
 
+
         int w, h;
         vd_fw_get_size(&w, &h);
 
@@ -286,6 +287,10 @@ int main(int argc, char const *argv[])
                 button_color[1] = 0.0f;
                 button_color[2] = 0.0f;
                 button_color[3] = 1.0f;
+            }
+
+            if (mouse_inside_close_button && vd_fw_get_mouse_clicked(VD_FW_MOUSE_BUTTON_LEFT)) {
+                vd_fw_quit();
             }
 
             glUniform4f(glGetUniformLocation(program, "rect_color"), button_color[0], button_color[1], button_color[2], button_color[3]);

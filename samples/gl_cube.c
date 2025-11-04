@@ -136,6 +136,10 @@ int main(int argc, char const *argv[])
     glEnable(GL_DEPTH_TEST);
 
     while (vd_fw_running()) {
+        if (vd_fw_close_requested()) {
+            vd_fw_quit();
+        }
+
         float ds = vd_fw_delta_s();
 
         static int w, h;

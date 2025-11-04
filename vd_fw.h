@@ -41,9 +41,9 @@
  * ╚════════════════════════════════════════════════════════════╝
  * 
  * TODO
- * - Close/Reopen Window
- *     - vd_fw_quit()
- *     - vd_fw_close_requested()
+ * - Handle differences between borderless/windowed
+ *     - Alt+F4 Doesn't Close
+ *         - Add option to enable sys keys
  * - Gamepads
  *     - Face Heuristics
  *     - Class Heuristics
@@ -70,6 +70,7 @@
  * - Should vd_fw_set_receive_ncmouse be default 0 or 1?
  *   - Actually, consider removing it entirely
  * - set window unresizable
+ * - MacOS: Close window
  * - MacOS: vd_fw_get_executable_dir()
  * - MacOS: vd_fw_set_fullscreen
  * - MacOS: Gamepad Support
@@ -280,6 +281,17 @@ VD_FW_API int                vd_fw_running(void);
  * @return  (Reserved)
  */
 VD_FW_API int                vd_fw_swap_buffers(void);
+
+/**
+ * @brief Get if the user requested to close the window
+ * @return  Whether the user tried to close the window this frame
+ */
+VD_FW_API int                vd_fw_close_requested(void);
+
+/**
+ * @brief Close the window and end the rendering loop
+ */
+VD_FW_API void               vd_fw_quit(void);
 
 /**
  * @brief Get the current platform.
@@ -5066,6 +5078,7 @@ enum {
     VD_FW_WIN32_MESSAGE_TYPE_CHANGEFOCUS = 13,
     VD_FW_WIN32_MESSAGE_TYPE_KEYSTATE    = 14,
     VD_FW_WIN32_MESSAGE_TYPE_STATECHANGE = 15,
+    VD_FW_WIN32_MESSAGE_TYPE_CLOSERQ     = 16,
 
     VD_FW_WIN32_SHOW_CURSOR     = VD_FW_WM_USER + 1,
     VD_FW_WIN32_UPDATE_TITLE    = VD_FW_WM_USER + 2,
@@ -5076,6 +5089,7 @@ enum {
     VD_FW_WIN32_GAMEPADRMBREQ   = VD_FW_WM_USER + 7,
     VD_FW_WIN32_GAMEPADDBCH     = VD_FW_WM_USER + 8,
     VD_FW_WIN32_GAMEPADRAWRQ    = VD_FW_WM_USER + 9,
+    VD_FW_WIN32_KILL            = VD_FW_WM_USER + 10,
 
     VD_FW_WIN32_WINDOW_STATE_MINIMIZED = 1 << 0,
     VD_FW_WIN32_WINDOW_STATE_MAXIMIZED = 1 << 1,
@@ -5215,6 +5229,7 @@ typedef struct {
     int                         wheel_moved;
     float                       wheel[2];
     // Window
+    int                         close_request;
     VdFwBOOL                    focus_changed;
     VdFwBOOL                    focused;
     VdFwBOOL                    is_fullscreen;
@@ -6048,14 +6063,19 @@ VD_FW_API int vd_fw_running(void)
     VD_FW_G.focus_changed = 0;
     VD_FW_G.window_state_changed = 0;
     VD_FW_G.prev_mouse_state = VD_FW_G.mouse_state;
+    VD_FW_G.close_request = 0;
 
     for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
         VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
     }
-
     VdFw__Win32Message mm;
     while (vd_fw__msgbuf_r(&mm)) {
         switch (mm.msg) {
+
+            case VD_FW_WIN32_MESSAGE_TYPE_CLOSERQ: {
+                VD_FW_G.close_request = 1;
+            } break;
+
             case VD_FW_WIN32_MESSAGE_TYPE_MOUSEMOVE: {
                 VD_FW_G.mouse[0] = mm.dat.mousemove.mx;
                 VD_FW_G.mouse[1] = mm.dat.mousemove.my;
@@ -6206,6 +6226,20 @@ VD_FW_API int vd_fw_swap_buffers(void)
         WakeConditionVariable(&VD_FW_G.cond_var);
     }
     return 1;
+}
+
+VD_FW_API int vd_fw_close_requested(void)
+{
+    return VD_FW_G.close_request;
+}
+
+VD_FW_API void vd_fw_quit(void)
+{
+    VD_FW__CHECK_TRUE(VdFwPostMessage(
+        VD_FW_G.hwnd,
+        VD_FW_WIN32_KILL,
+        0, /* WPARAM */
+        0  /* LPARAM */));
 }
 
 VD_FW_API VdFwPlatform vd_fw_get_platform(void)
@@ -7225,7 +7259,9 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
     switch (msg) {
 
         case WM_CLOSE: {
-            VdFwDestroyWindow(hwnd);
+            VdFw__Win32Message m;
+            m.msg = VD_FW_WIN32_MESSAGE_TYPE_CLOSERQ;
+            vd_fw__msgbuf_w(&m);
         } break;
 
         case WM_DESTROY: {
@@ -8399,6 +8435,10 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
         case VD_FW_WIN32_GAMEPADRAWRQ: {
             VD_FW_G.gamepad_raw_reports_on = (int)wparam;
+        } break;
+
+        case VD_FW_WIN32_KILL: {
+            VdFwDestroyWindow(VD_FW_G.hwnd);
         } break;
 
         case WM_TIMER: {

@@ -79,6 +79,9 @@ int main(int argc, char const *argv[])
     }
 
     while (vd_fw_running()) {
+        if (vd_fw_close_requested()) {
+            vd_fw_quit();
+        }
 
         int w, h;
         vd_fw_get_size(&w, &h);

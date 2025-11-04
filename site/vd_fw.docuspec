@@ -101,6 +101,11 @@
 int main() {
     vd_fw_init(NULL);                                        // Initialize library
     while (vd_fw_running()) {                                // Check if the window is closed & gather events
+
+        if (vd_fw_close_requested()) {
+            vd_fw_quit();
+        }
+
         glClearColor(0.5f, 0.3f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         vd_fw_swap_buffers();                                // Swap buffers
@@ -794,7 +799,11 @@ int main(int argc, char const *argv[])
     vd_fw_init(NULL);                                        // Initialize library
     vd_fw_set_vsync_on(1);                                   // Enable VSYNC
 
-    while (vd_fw_running()) {                                // Check if user closed the window
+    while (vd_fw_running()) {                                // Check if the window is closed
+
+        if (vd_fw_close_requested()) {                       // Close the window if the
+            vd_fw_quit();                                    // user requested it
+        }
 
         int w, h;
         vd_fw_get_size(&w, &h);                              // Get window size, in pixels.
