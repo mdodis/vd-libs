@@ -41,9 +41,7 @@
  * ╚════════════════════════════════════════════════════════════╝
  * 
  * TODO
- * - Handle differences between borderless/windowed
- *     - Alt+F4 Doesn't Close
- *         - Add option to enable sys keys
+ * - Add option to enable sys keys
  * - Gamepads
  *     - Face Heuristics
  *     - Class Heuristics
@@ -51,6 +49,7 @@
  * - vd_fw_get_last_key_pressed
  * - vd_fw_get_last_mouse_button_pressed
  * - Win32: Allow gamepad input even when window isn't focused?
+ *     - Option for that
  * - Vulkan
  *     - Win32: Required extensions function
  *     - Win32: Query queue surface presentation support
@@ -210,6 +209,10 @@
 #ifndef VD_FW_NCRECTS_MAX
 #   define VD_FW_NCRECTS_MAX 16
 #endif // !VD_FW_NCRECTS_MAX
+
+#ifndef VD_FW_CODEPOINT_BUFFER_COUNT
+#   define VD_FW_CODEPOINT_BUFFER_COUNT 8
+#endif // !VD_FW_CODEPOINT_BUFFER_COUNT
 
 #define VD_FW_ARRAY_COUNT(x) (sizeof(x)/sizeof(x[0]))
 
@@ -964,6 +967,20 @@ VD_FW_API VdFwU64            vd_fw_get_gamepad_raw_buttons(int index);
  * @return            A callee-allocated float array of axis values
  */
 VD_FW_API float*             vd_fw_get_gamepad_raw_axes(int index, int *count_axes);
+
+/* ----TEXT INPUT---------------------------------------------------------------------------------------------------- */
+/**
+ * @brief Get the number of characters sent by the user
+ * @return  The count of characters. At most VD_FW_CODEPOINT_BUFFER_COUNT
+ */
+VD_FW_API unsigned short     vd_fw_get_num_codepoints(void);
+
+/**
+ * @brief Get the i'th character as a UTF-32 codepoint
+ * @param  index The character index
+ * @return       The Unicode codepoint
+ */
+VD_FW_API unsigned int       vd_fw_get_codepoint(unsigned short index);
 
 /* ----PLATFORM SPECIFIC--------------------------------------------------------------------------------------------- */
 
@@ -3979,6 +3996,7 @@ VD_FW_DECLARE_HANDLE(VdFwHRGN);
 VD_FW_DECLARE_HANDLE(VdFwHMONITOR);
 VD_FW_DECLARE_HANDLE(VdFwDPI_AWARENESS_CONTEXT);
 VD_FW_DECLARE_HANDLE(VdFwHRAWINPUT);
+VD_FW_DECLARE_HANDLE(VdFwHKL);
 
 typedef enum VdFwDPI_AWARENESS {
     VD_FW_DPI_AWARENESS_INVALID = -1,
@@ -4462,6 +4480,22 @@ static VdFwProcSetTimer *VdFwSetTimer;
 #define VD_FW_PROC_KillTimer(name) VdFwBOOL name(VdFwHWND hWnd, VdFwUINT_PTR uIDEvent)
 typedef VD_FW_PROC_KillTimer(VdFwProcKillTimer);
 static VdFwProcKillTimer *VdFwKillTimer;
+
+#define VD_FW_PROC_GetKeyboardLayout(name) VdFwHKL name(VdFwDWORD idThread)
+typedef VD_FW_PROC_GetKeyboardLayout(VdFwProcGetKeyboardLayout);
+static VdFwProcGetKeyboardLayout *VdFwGetKeyboardLayout;
+
+#define VD_FW_PROC_SetFocus(name) VdFwHWND name(VdFwHWND hWnd)
+typedef VD_FW_PROC_SetFocus(VdFwProcSetFocus);
+static VdFwProcSetFocus *VdFwSetFocus;
+
+#define VD_FW_PROC_SetForegroundWindow(name) VdFwBOOL name(VdFwHWND hWnd)
+typedef VD_FW_PROC_SetForegroundWindow(VdFwProcSetForegroundWindow);
+static VdFwProcSetForegroundWindow *VdFwSetForegroundWindow;
+
+#define VD_FW_PROC_GetKeyState(name) VdFwSHORT name(int nVirtKey)
+typedef VD_FW_PROC_GetKeyState(VdFwProcGetKeyState);
+static VdFwProcGetKeyState *VdFwGetKeyState;
 
 /* ----Shell32.dll--------------------------------------------------------------------------------------------------- */
 #define VD_FW_ABM_GETAUTOHIDEBAREX    0x0000000b
@@ -5079,6 +5113,7 @@ enum {
     VD_FW_WIN32_MESSAGE_TYPE_KEYSTATE    = 14,
     VD_FW_WIN32_MESSAGE_TYPE_STATECHANGE = 15,
     VD_FW_WIN32_MESSAGE_TYPE_CLOSERQ     = 16,
+    VD_FW_WIN32_MESSAGE_TYPE_CHAR        = 17,
 
     VD_FW_WIN32_SHOW_CURSOR     = VD_FW_WM_USER + 1,
     VD_FW_WIN32_UPDATE_TITLE    = VD_FW_WM_USER + 2,
@@ -5129,6 +5164,10 @@ typedef struct {
             int window_state_flag_that_changed;
             int window_state_flag_value;
         } statechange;
+
+        struct {
+            VdFwU32 codepoint;
+        } character;
     } dat;
 } VdFw__Win32Message;
 
@@ -5208,6 +5247,9 @@ typedef struct {
     VdFwU8                      *report_buffer;         // Dynamically sized report buffer, for writing to HIDs
     int                         report_buffer_len;
     int                         gamepad_raw_reports_on;
+    VdFwWCHAR                   char_surrogate_hi;
+    VdFwU32                     kb_codepage;
+
 
 /* ----RENDER THREAD ONLY-------------------------------------------------------------------------------------------- */
     // Internal
@@ -5242,6 +5284,12 @@ typedef struct {
     VdFw__GamepadState          gamepad_curr_states[VD_FW_GAMEPAD_COUNT_MAX];
     VdFw__GamepadState          gamepad_prev_states[VD_FW_GAMEPAD_COUNT_MAX];
     int                         num_gamepads_present;
+    unsigned char               curr_key_states[VD_FW_KEY_MAX];
+    unsigned char               prev_key_states[VD_FW_KEY_MAX];
+    // Character Input
+    VdFwU16                     num_codepoints;
+    VdFwU16                     first_codepoint_index;
+    VdFwU32                     codepoints[VD_FW_CODEPOINT_BUFFER_COUNT];
 
 /* ----RENDER THREAD - WINDOW THREAD DATA---------------------------------------------------------------------------- */
     VdFw__Win32Message          msgbuf[VD_FW_WIN32_MESSAGE_BUFFER_SIZE];
@@ -5257,8 +5305,6 @@ typedef struct {
     int                         winthread_num_gamepads_present;
     int                         has_initialized;
 
-    unsigned char               curr_key_states[VD_FW_KEY_MAX];
-    unsigned char               prev_key_states[VD_FW_KEY_MAX];
     char                        title[128];
     int                         title_len;
     VdFwRTL_OSVERSIONINFOW      os_version;
@@ -5557,6 +5603,7 @@ static void         vd_fw__gl_debug_message_callback(GLenum source, GLenum type,
 static int          vd_fw__msgbuf_r(VdFw__Win32Message *message);
 static int          vd_fw__msgbuf_w(VdFw__Win32Message *message);
 static char*        vd_fw__utf16_to_utf8(const wchar_t *ws);
+static void         vd_fw__update_kb_codepage(void);
 
 #if VD_FW_WIN32_PROFILE
 #define VD_FW_JOIN_(a,b) a##b
@@ -5711,6 +5758,10 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
             VdFwGetRawInputDeviceInfoW        =        (VdFwProcGetRawInputDeviceInfoW*)GetProcAddress(m, "GetRawInputDeviceInfoW");
             VdFwSetTimer                      =                      (VdFwProcSetTimer*)GetProcAddress(m, "SetTimer");
             VdFwKillTimer                     =                     (VdFwProcKillTimer*)GetProcAddress(m, "KillTimer");
+            VdFwGetKeyboardLayout             =             (VdFwProcGetKeyboardLayout*)GetProcAddress(m, "GetKeyboardLayout");
+            VdFwSetFocus                      =                      (VdFwProcSetFocus*)GetProcAddress(m, "SetFocus");
+            VdFwSetForegroundWindow           =           (VdFwProcSetForegroundWindow*)GetProcAddress(m, "SetForegroundWindow");
+            VdFwGetKeyState                   =                   (VdFwProcGetKeyState*)GetProcAddress(m, "GetKeyState");
         }
 
         // Shell32.dll
@@ -5904,6 +5955,8 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         &VD_FW_G.win_thread_id);
     SetThreadDescription(VD_FW_G.win_thread, L"Window Thread");
 
+    vd_fw__update_kb_codepage();
+
     WaitForSingleObject(VD_FW_G.sem_window_ready, INFINITE);
 
 
@@ -6065,12 +6118,19 @@ VD_FW_API int vd_fw_running(void)
     VD_FW_G.prev_mouse_state = VD_FW_G.mouse_state;
     VD_FW_G.close_request = 0;
 
+    VD_FW_G.num_codepoints = 0;
+    VdFwU16 num_codepoints = 0;
+
     for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
         VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
     }
     VdFw__Win32Message mm;
     while (vd_fw__msgbuf_r(&mm)) {
         switch (mm.msg) {
+
+            case VD_FW_WIN32_MESSAGE_TYPE_CHAR: {
+                VD_FW_G.codepoints[(num_codepoints++) % VD_FW_CODEPOINT_BUFFER_COUNT] = mm.dat.character.codepoint;
+            } break;
 
             case VD_FW_WIN32_MESSAGE_TYPE_CLOSERQ: {
                 VD_FW_G.close_request = 1;
@@ -6152,6 +6212,15 @@ VD_FW_API int vd_fw_running(void)
 
             default: break;
         }
+    }
+
+    VD_FW_G.num_codepoints = (num_codepoints < VD_FW_CODEPOINT_BUFFER_COUNT) 
+                             ? num_codepoints
+                             : VD_FW_CODEPOINT_BUFFER_COUNT;
+    if (num_codepoints > 0) {
+        VD_FW_G.first_codepoint_index = (num_codepoints - 1) % VD_FW_CODEPOINT_BUFFER_COUNT;
+    } else {
+        VD_FW_G.first_codepoint_index = 0;
     }
 
     // @note(mdodis): For Raw Input mouse handling, instead of using the message queue
@@ -6499,6 +6568,16 @@ VD_FW_API float *vd_fw_get_gamepad_raw_axes(int index, int *count_axes)
     return VD_FW_G.gamepad_curr_states[index].raw_axes;
 }
 
+VD_FW_API unsigned short vd_fw_get_num_codepoints(void)
+{
+    return VD_FW_G.num_codepoints;    
+}
+
+VD_FW_API unsigned int vd_fw_get_codepoint(unsigned short index)
+{
+    return VD_FW_G.codepoints[(VD_FW_G.first_codepoint_index + index) % VD_FW_CODEPOINT_BUFFER_COUNT];
+}
+
 VD_FW_API void vd_fw_set_mouse_capture(int on)
 {
     if (on) {
@@ -6713,6 +6792,8 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     // SetWindowPos(VD_FW_G.hwnd, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_SHOWWINDOW);
     VdFwShowWindow(VD_FW_G.hwnd, SW_SHOW);
     VD_FW__CHECK_NONZERO(VdFwUpdateWindow(VD_FW_G.hwnd));
+    VD_FW__CHECK_NONZERO(VdFwSetFocus(VD_FW_G.hwnd));
+    VD_FW__CHECK_NONZERO(VdFwSetForegroundWindow(VD_FW_G.hwnd));
 
     VD_FW__CHECK_TRUE(ReleaseSemaphore(VD_FW_G.sem_window_ready, 1, NULL));
 
@@ -6736,7 +6817,9 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
 
     while (VD_FW_G.t_running) {
         VdFwMSG message;
-        while (VdFwGetMessage(&message, VD_FW_G.hwnd, 0, 0)) {
+        // @note(mdodis): https://devblogs.microsoft.com/oldnewthing/20050209-00/?p=36493
+        // We don't filter by window since WM_INPUTLANGCHANGE won't fire instantly
+        while (VdFwGetMessage(&message, NULL, 0, 0)) {
             VdFwTranslateMessage(&message);
             VdFwDispatchMessage(&message);
         }
@@ -7388,6 +7471,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 vd_fw__msgbuf_w(&m);
             }
         } break;
+
         case WM_SYSCOMMAND: {
             if (!VD_FW_G.draw_decorations) {
                 if (wparam == 0x0000F012) {
@@ -8189,8 +8273,22 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
         } break;
 
+        case WM_SYSKEYDOWN: {
+            if (!VD_FW_G.draw_decorations) {
+
+                if (wparam == VK_F4) {
+                    OutputDebugStringA("SYSKEY\n");
+                    VdFwPostMessage(hwnd, WM_CLOSE, 0, 0);
+                }
+            } else {
+                result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
+            }
+
+        } break;
+
         case WM_KEYUP:
         case WM_KEYDOWN: {
+
             WORD vkcode = LOWORD(wparam);
             
             WORD keyflags = HIWORD(lparam);
@@ -8218,6 +8316,50 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             m.dat.mousebtn.down   = is_down;
             m.dat.keystate.vkcode = vkcode;
             vd_fw__msgbuf_w(&m);
+
+            result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
+        } break;
+
+        case WM_UNICHAR: {
+            result = 1;
+            if (wparam == UNICODE_NOCHAR) {
+                break;
+            }
+
+            VdFw__Win32Message m;
+            m.msg = VD_FW_WIN32_MESSAGE_TYPE_CHAR;
+            m.dat.character.codepoint = (VdFwU32)wparam;
+            vd_fw__msgbuf_w(&m);
+        } break;
+
+        case WM_CHAR: {
+            VdFwU32 codepoint = 0;
+            int send_message = 1;
+            if (IS_HIGH_SURROGATE(wparam)) {
+                VD_FW_G.char_surrogate_hi = (VdFwWCHAR)wparam;
+                send_message = 0;
+            } else if (IS_SURROGATE_PAIR(VD_FW_G.char_surrogate_hi, wparam)) {
+                VdFwU32 lo = (VdFwU32)wparam;
+                VdFwU32 hi = (VdFwU32)VD_FW_G.char_surrogate_hi;
+                codepoint = 0x10000 + (((hi - 0xD800) << 10) | (lo - 0xDC00));
+                send_message = 2;
+                VD_FW_G.char_surrogate_hi = 0;
+            } else {
+                codepoint = (VdFwU32)wparam;
+            }
+
+            if (!send_message) {
+                break;
+            }
+
+            VdFw__Win32Message m;
+            m.msg = VD_FW_WIN32_MESSAGE_TYPE_CHAR;
+            m.dat.character.codepoint = codepoint;
+            vd_fw__msgbuf_w(&m);
+        } break;
+
+        case WM_INPUTLANGCHANGE: {
+            vd_fw__update_kb_codepage();
         } break;
 
         case WM_XBUTTONUP:
@@ -8284,7 +8426,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
         } break;
 
-        // @todo(mdodis):
         case WM_SETFOCUS:
         case WM_KILLFOCUS: {
             int got_focus = msg == WM_SETFOCUS;
@@ -8605,6 +8746,16 @@ static char *vd_fw__utf16_to_utf8(const wchar_t *ws)
 
     data[req] = 0;
     return data;
+}
+
+static void vd_fw__update_kb_codepage(void)
+{
+    VdFwHKL keyboard_layout = VdFwGetKeyboardLayout(0);
+
+    LCID keyboard_lcid = MAKELCID(HIWORD(keyboard_layout), SORT_DEFAULT);
+    if (GetLocaleInfoA(keyboard_lcid, (LOCALE_RETURN_NUMBER | LOCALE_IDEFAULTANSICODEPAGE), (LPSTR)&VD_FW_G.kb_codepage, sizeof(VD_FW_G.kb_codepage)) == 0) {
+        VD_FW_G.kb_codepage = CP_ACP;
+    }
 }
 
 #if VD_FW_NO_CRT
