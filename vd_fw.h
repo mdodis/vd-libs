@@ -46,7 +46,6 @@
  *     - Face Heuristics
  *     - Class Heuristics
  * - Win32: Use DeviceIoControl for XBOX controllers until they're correlated to XINPUT
- * - vd_fw_get_last_key_pressed
  * - vd_fw_get_last_mouse_button_pressed
  * - Win32: Allow gamepad input even when window isn't focused?
  *     - Option for that
@@ -68,6 +67,7 @@
  * - Should vd_fw_set_receive_ncmouse be default 0 or 1?
  *   - Actually, consider removing it entirely
  * - set window unresizable
+ * - MacOS: vd_fw_get_last_key_pressed
  * - MacOS: Close window
  * - MacOS: vd_fw_get_executable_dir()
  * - MacOS: vd_fw_set_fullscreen
@@ -590,6 +590,8 @@ VD_FW_API int                vd_fw_get_key_pressed(int key);
  * @return     Whether this key is down currently
  */
 VD_FW_API int                vd_fw_get_key_down(int key);
+
+VD_FW_API int                vd_fw_get_last_key_pressed(void);
 
 /**
  * @brief Convert key to string.
@@ -5289,6 +5291,7 @@ typedef struct {
     VdFwU16                     num_codepoints;
     VdFwU16                     first_codepoint_index;
     VdFwU32                     codepoints[VD_FW_CODEPOINT_BUFFER_COUNT];
+    VdFwKey                     last_key;
 
 /* ----RENDER THREAD - WINDOW THREAD DATA---------------------------------------------------------------------------- */
     VdFw__Win32Message          msgbuf[VD_FW_WIN32_MESSAGE_BUFFER_SIZE];
@@ -6118,6 +6121,7 @@ VD_FW_API int vd_fw_running(void)
     VD_FW_G.close_request = 0;
 
     VD_FW_G.num_codepoints = 0;
+    VD_FW_G.last_key = VD_FW_KEY_UNKNOWN;
     VdFwU16 num_codepoints = 0;
 
     for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
@@ -6175,6 +6179,10 @@ VD_FW_API int vd_fw_running(void)
 
                 int is_down = mm.dat.keystate.down;
                 VdFwKey key = vd_fw___vkcode_to_key(mm.dat.keystate.vkcode);
+
+                if (is_down) {
+                    VD_FW_G.last_key = key;
+                }
 
                 // VD_FW_G.prev_key_states[key] = VD_FW_G.curr_key_states[key];
                 VD_FW_G.curr_key_states[key] = (unsigned char)is_down;
@@ -6483,6 +6491,11 @@ VD_FW_API int vd_fw_get_key_pressed(int key)
 VD_FW_API int vd_fw_get_key_down(int key)
 {
     return VD_FW_G.curr_key_states[key];
+}
+
+VD_FW_API int vd_fw_get_last_key_pressed(void)
+{
+    return VD_FW_G.last_key;
 }
 
 VD_FW_API int vd_fw_get_gamepad_count(void)
