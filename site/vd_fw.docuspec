@@ -975,7 +975,7 @@ glLinkProgram(program);
         }
 
         para {
-            This library provides a convenience function (and more) to do that, and will also log the errors:
+            This library provides a convenience function (and more) to do that, which will also log the errors:
         }
 
         verb ```
@@ -1704,7 +1704,7 @@ if (mouse_inside_minimize_button && vd_fw_get_mouse_clicked(VD_FW_MOUSE_BUTTON_L
                 <li>
                     For GUI applications:<br> 
                     <b>Don't set any GPU preference</b>. These apps are supposed to use few system
-                    resources anyway. This will guarantee that resizing, going fullscreen, etc.. will
+                    resources anyway. This should guarantee that resizing, going fullscreen, etc.. will
                     match the display context to the currently used one by other applications.
                 </li>
                 <li>
@@ -1896,7 +1896,7 @@ if (vd_fw_get_mouse_locked()) {
     @section("Gamepads") {
         para {
             Doing low-level gamepad input is not as easy as one would think (and maybe I should write a separate article
-            detailing my investigation into which APIs this library should user and how), but I will briefly mention the
+            detailing my investigation into which APIs this library should use and how), but I will briefly mention the
             APIs used on a per platform basis:
         }
 

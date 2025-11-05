@@ -60,7 +60,6 @@
  * - Expose customizable function pointer if the user needs to do something platform-specific before/after winthread has initialized or before vd_fw_init returns anyways.
  * - Have a way for a user to request OpenGL extensions/versions via a precedence array, and initialize the maximum possible version
  * - Clipboard
- * - Allow the user to switch graphics APIs on the fly? (opengl -> custom -> pixbuff -> custom -> opengl)
  * - Properly handle vd_fw_set_receive_ncmouse for clicks and scrolls
  * - Set mouse cursor to constants (resize, I, etc...)
  * - Have a way to store and load the window placement state (size, position, maximization state)
@@ -73,6 +72,7 @@
  * - MacOS: vd_fw_set_fullscreen
  * - MacOS: Gamepad Support
  * - MacOS: Metal Sample
+ * - MacOS: Set Graphics API
  * - When window not focused, or minimized, delay drawing?
  * - Allow to request specific framerate?
  * - On borderless, push mouse event right as we lose focus to a value outside of the window space
@@ -246,18 +246,22 @@ typedef enum {
     VD_FW_GRAPHICS_API_OPENGL = 0,
     VD_FW_GRAPHICS_API_CUSTOM,
     VD_FW_GRAPHICS_API_PIXEL_BUFFER,
+    VD_FW_GRAPHICS_API_INVALID = 100,
 } VdFwGraphicsApi;
+
+typedef struct {
+    /* What version of OpenGL you'd like to use. 3.3 and upwards recommended. */
+    VdFwGlVersion version;
+
+    /* Whether to enable a debug console to show you errors produced by GL calls */
+    int           debug_on;
+} VdFwOpenGLOptions;
 
 typedef struct {
     /* The graphics API you're planning to use. Defaulted to OpenGL. */
     VdFwGraphicsApi     api;
-    struct {
-        /* What version of OpenGL you'd like to use. 3.3 and upwards recommended. */
-        VdFwGlVersion   version;
 
-        /* Whether to enable a debug console to show you errors produced by GL calls */
-        int             debug_on;
-    } gl;
+    VdFwOpenGLOptions   gl;
 
     struct {
         /* Set to 1 to disable window frame. */
@@ -300,6 +304,8 @@ VD_FW_API void               vd_fw_quit(void);
  * @return  The current platform.
  */
 VD_FW_API VdFwPlatform       vd_fw_get_platform(void);
+
+VD_FW_API void               vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_options);
 
 /* ----WINDOW-------------------------------------------------------------------------------------------------------- */
 /**
@@ -5310,6 +5316,8 @@ typedef struct {
     char                        title[128];
     int                         title_len;
     VdFwRTL_OSVERSIONINFOW      os_version;
+    int                         next_width, next_height;
+    int                         next_pos_x, next_pos_y;
 
 /* ----RENDER THREAD - WINDOW THREAD SYNC---------------------------------------------------------------------------- */
     VdFwHANDLE                  sem_window_ready;
@@ -5688,11 +5696,11 @@ static SIZE_T vd_fw__tcslen(LPCTSTR s)
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
-    VD_FW_G.graphics_api = VD_FW_GRAPHICS_API_OPENGL;
-
-    if (info != NULL) {
-        VD_FW_G.graphics_api = info->api;
-    }
+    VD_FW_G.graphics_api = VD_FW_GRAPHICS_API_INVALID;
+    VD_FW_G.next_width = 640;
+    VD_FW_G.next_height = 480;
+    VD_FW_G.next_pos_x  = CW_USEDEFAULT;
+    VD_FW_G.next_pos_y  = CW_USEDEFAULT;
 
     // Load Win32 Libraries
     {
@@ -5962,143 +5970,16 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     WaitForSingleObject(VD_FW_G.sem_window_ready, INFINITE);
 
 
-    VD_FW_G.hdc = VdFwGetDC(VD_FW_G.hwnd);
-
-    // Create context
-    if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
-        // Temp context flags
-        VdFwPIXELFORMATDESCRIPTOR pfd = {
-          sizeof(VdFwPIXELFORMATDESCRIPTOR),
-          1,                                // Version Number
-          PFD_DRAW_TO_WINDOW |              // Format Must Support Window
-          PFD_SUPPORT_OPENGL |              // Format Must Support OpenGL
-          PFD_DOUBLEBUFFER,                 // Must Support Double Buffering
-          PFD_TYPE_RGBA,                    // Request An RGBA Format
-          32,                               // Select Our Color Depth
-          0, 0, 0, 0, 0, 0,                 // Color Bits Ignored
-          0,                                // An Alpha Buffer
-          0,                                // Shift Bit Ignored
-          0,                                // No Accumulation Buffer
-          0, 0, 0, 0,                       // Accumulation Bits Ignored
-          24,                               // 16Bit Z-Buffer (Depth Buffer)
-          8,                                // Some Stencil Buffer
-          0,                                // No Auxiliary Buffer
-          PFD_MAIN_PLANE,                   // Main Drawing Layer
-          0,                                // Reserved
-          0, 0, 0                           // Layer Masks Ignored
-        };
-        int pf = VdFwChoosePixelFormat(VD_FW_G.hdc, &pfd);
-        VdFwSetPixelFormat(VD_FW_G.hdc, pf, &pfd);
-
-        VdFwHGLRC temp_context = VdFwwglCreateContext(VD_FW_G.hdc);
-        VD_FW__CHECK_NULL(temp_context);
-        VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(VD_FW_G.hdc, temp_context));
-
-        int major = 3;
-        int minor = 3;
-
-
-        if (info && info->gl.version != VD_FW_GL_VERSION_BASIC) {
-            switch (info->gl.version) {
-                case VD_FW_GL_VERSION_1_0: major = 1; minor = 0; break;
-                case VD_FW_GL_VERSION_1_2: major = 1; minor = 2; break;
-                case VD_FW_GL_VERSION_1_3: major = 1; minor = 3; break;
-                case VD_FW_GL_VERSION_1_4: major = 1; minor = 4; break;
-                case VD_FW_GL_VERSION_1_5: major = 1; minor = 5; break;
-                case VD_FW_GL_VERSION_2_0: major = 2; minor = 0; break;
-                case VD_FW_GL_VERSION_2_1: major = 2; minor = 1; break;
-                case VD_FW_GL_VERSION_3_0: major = 3; minor = 0; break;
-                case VD_FW_GL_VERSION_3_1: major = 3; minor = 1; break;
-                case VD_FW_GL_VERSION_3_2: major = 3; minor = 2; break;
-                case VD_FW_GL_VERSION_3_3: major = 3; minor = 3; break;
-                case VD_FW_GL_VERSION_4_0: major = 4; minor = 0; break;
-                case VD_FW_GL_VERSION_4_1: major = 4; minor = 1; break;
-                case VD_FW_GL_VERSION_4_2: major = 4; minor = 2; break;
-                case VD_FW_GL_VERSION_4_3: major = 4; minor = 3; break;
-                case VD_FW_GL_VERSION_4_4: major = 4; minor = 4; break;
-                case VD_FW_GL_VERSION_4_5: major = 4; minor = 5; break;
-                case VD_FW_GL_VERSION_4_6: major = 4; minor = 6; break;
-                default: break;
-            }
-        }
-
-        // Context attributes
-        int attribs[] = {
-            WGL_CONTEXT_MAJOR_VERSION_ARB, major,
-            WGL_CONTEXT_MINOR_VERSION_ARB, minor,
-            WGL_CONTEXT_PROFILE_MASK_ARB,  WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
-            WGL_CONTEXT_FLAGS_ARB,         WGL_CONTEXT_DEBUG_BIT_ARB,
-            0
-        };
-
-        VdFwProcwglCreateContextAttribsARB *wglCreateContextAttribsARB =
-            (VdFwProcwglCreateContextAttribsARB*) VdFwwglGetProcAddress("wglCreateContextAttribsARB");
-
-        VdFwProcwglChoosePixelFormatARB *wglChoosePixelFormatARB =
-            (VdFwProcwglChoosePixelFormatARB*)VdFwwglGetProcAddress("wglChoosePixelFormatARB");
-
-        int pixel_attribs[] = {
-            WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
-            WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
-            WGL_DOUBLE_BUFFER_ARB,  GL_TRUE,
-            WGL_ACCELERATION_ARB,   WGL_FULL_ACCELERATION_ARB,
-
-            WGL_PIXEL_TYPE_ARB,     WGL_TYPE_RGBA_ARB,
-            WGL_COLOR_BITS_ARB,     24,
-            WGL_ALPHA_BITS_ARB,     8,
-            WGL_DEPTH_BITS_ARB,     24,
-            WGL_STENCIL_BITS_ARB,   8,
-
-            WGL_SAMPLE_BUFFERS_ARB, 1,
-            WGL_SAMPLES_ARB,        4,
-            0,
-        };
-
-        int pixel_format;
-        VdFwUINT num_formats;
-
-        VD_FW__CHECK_TRUE(wglChoosePixelFormatARB(VD_FW_G.hdc, pixel_attribs, NULL, 1, &pixel_format, &num_formats));
-
-        VdFwPIXELFORMATDESCRIPTOR pfdchosen;
-        VdFwDescribePixelFormat(VD_FW_G.hdc, pixel_format, sizeof(pfdchosen), &pfdchosen);
-        VdFwSetPixelFormat(VD_FW_G.hdc, pf, &pfdchosen);
-
-        VD_FW_G.hglrc = wglCreateContextAttribsARB(VD_FW_G.hdc, 0, attribs);
-
-        VdFwwglMakeCurrent(NULL, NULL);
-        VdFwwglDeleteContext(temp_context);
-
-        VD_FW__CHECK_NULL(VD_FW_G.hglrc);
-        VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(VD_FW_G.hdc, VD_FW_G.hglrc));
-
-        VD_FW_G.proc_swapInterval = (VdFwProcwglSwapIntervalExt*)VdFwwglGetProcAddress("wglSwapIntervalEXT");
-
-        VdFwGlVersion version = VD_FW_GL_VERSION_3_3;
-        if (info && info->gl.version != VD_FW_GL_VERSION_BASIC) {
-            version = info->gl.version;
-        }
-        vd_fw__load_opengl(version);
-
-        if (info != 0 && info->gl.debug_on && version > VD_FW_GL_VERSION_3_0) {
-            VdFwProcGL_glDebugMessageCallback glDebugMessageCallback_proc = (VdFwProcGL_glDebugMessageCallback)VdFwwglGetProcAddress("glDebugMessageCallback");
-
-            if (glDebugMessageCallback_proc == 0) {
-                DWORD written;
-
-                TCHAR *msg = TEXT("ERROR: Failed to load glDebugMessageCallback!\n");
-                SIZE_T len = vd_fw__tcslen(msg);
-                WriteConsole(
-                    GetStdHandle(STD_OUTPUT_HANDLE),
-                    msg,
-                    (DWORD)len,
-                    &written,
-                    0);
-            } else {
-                glEnable(0x92E0 /* GL_DEBUG_OUTPUT */);
-                glDebugMessageCallback_proc(vd_fw__gl_debug_message_callback, 0);
-            }
-        }
+    VdFwGraphicsApi api = VD_FW_GRAPHICS_API_OPENGL;
+    if (info) {
+        api = info->api;
     }
+
+    VdFwOpenGLOptions *poptions = NULL;
+    if (info) {
+        poptions = &info->gl; 
+    }
+    vd_fw_set_graphics_api(api, poptions);
 
     QueryPerformanceCounter(&VD_FW_G.performance_counter);
     VD_FW_G.has_initialized = 1;
@@ -6321,6 +6202,219 @@ VD_FW_API void vd_fw_quit(void)
 VD_FW_API VdFwPlatform vd_fw_get_platform(void)
 {
     return VD_FW_PLATFORM_WINDOWS;
+}
+
+VD_FW_API void vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_options)
+{
+
+    WakeConditionVariable(&VD_FW_G.cond_var);
+
+    if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
+        // Destroy OpenGL Context
+        VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(NULL, NULL));
+        VD_FW__CHECK_TRUE(VdFwwglDeleteContext(VD_FW_G.hglrc));
+        VD_FW_G.hglrc = 0;
+        VD_FW__CHECK_NONZERO(VdFwReleaseDC(VD_FW_G.hwnd, VD_FW_G.hdc));
+        VD_FW_G.hdc = 0;
+    }
+
+    if (VD_FW_G.graphics_api != VD_FW_GRAPHICS_API_INVALID) {
+
+        VdFwRECT rect;
+        VdFwGetWindowRect(VD_FW_G.hwnd, &rect);
+
+        VD_FW_G.next_width = rect.right - rect.left;
+        VD_FW_G.next_height = rect.bottom - rect.top;
+        VD_FW_G.next_pos_x = rect.left;
+        VD_FW_G.next_pos_y = rect.top;
+
+        // Wait for thread to close
+        {
+            VD_FW__CHECK_TRUE(VdFwPostMessage(
+                VD_FW_G.hwnd,
+                VD_FW_WIN32_KILL,
+                0, /* WPARAM */
+                0  /* LPARAM */));
+            WaitForSingleObject(VD_FW_G.win_thread, INFINITE);
+        }
+
+        // Reset Semaphores
+        {
+            CloseHandle(VD_FW_G.sem_window_ready);
+            VD_FW_G.sem_window_ready = CreateSemaphoreA(
+                NULL,
+                0,
+                1,
+                NULL);
+
+            CloseHandle(VD_FW_G.sem_closed);
+            VD_FW_G.sem_closed = CreateSemaphoreA(
+                NULL,
+                0,
+                1,
+                NULL);
+        }
+
+
+        // Restart the thread to create the window
+        {
+            VD_FW_G.t_paint_ready = FALSE;
+
+            VD_FW_G.win_thread = CreateThread(
+                NULL,
+                0,
+                vd_fw__win_thread_proc,
+                0,
+                0,
+                &VD_FW_G.win_thread_id);
+            SetThreadDescription(VD_FW_G.win_thread, L"Window Thread");
+            WaitForSingleObject(VD_FW_G.sem_window_ready, INFINITE);
+        }
+    }
+
+    switch (api) {
+        case VD_FW_GRAPHICS_API_OPENGL: {
+
+            VD_FW_G.hdc = VdFwGetDC(VD_FW_G.hwnd);
+
+            // Temp context flags
+            VdFwPIXELFORMATDESCRIPTOR pfd = {
+              sizeof(VdFwPIXELFORMATDESCRIPTOR),
+              1,                                // Version Number
+              PFD_DRAW_TO_WINDOW |              // Format Must Support Window
+              PFD_SUPPORT_OPENGL |              // Format Must Support OpenGL
+              PFD_DOUBLEBUFFER,                 // Must Support Double Buffering
+              PFD_TYPE_RGBA,                    // Request An RGBA Format
+              32,                               // Select Our Color Depth
+              0, 0, 0, 0, 0, 0,                 // Color Bits Ignored
+              0,                                // An Alpha Buffer
+              0,                                // Shift Bit Ignored
+              0,                                // No Accumulation Buffer
+              0, 0, 0, 0,                       // Accumulation Bits Ignored
+              24,                               // 16Bit Z-Buffer (Depth Buffer)
+              8,                                // Some Stencil Buffer
+              0,                                // No Auxiliary Buffer
+              PFD_MAIN_PLANE,                   // Main Drawing Layer
+              0,                                // Reserved
+              0, 0, 0                           // Layer Masks Ignored
+            };
+            int pf = VdFwChoosePixelFormat(VD_FW_G.hdc, &pfd);
+            VD_FW__CHECK_NONZERO(pf);
+            VD_FW__CHECK_TRUE(VdFwSetPixelFormat(VD_FW_G.hdc, pf, &pfd));
+
+            VdFwHGLRC temp_context = VdFwwglCreateContext(VD_FW_G.hdc);
+            VD_FW__CHECK_NULL(temp_context);
+            VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(VD_FW_G.hdc, temp_context));
+
+            int major = 3;
+            int minor = 3;
+
+            if (gl_options && gl_options->version != VD_FW_GL_VERSION_BASIC) {
+                switch (gl_options->version) {
+                    case VD_FW_GL_VERSION_1_0: major = 1; minor = 0; break;
+                    case VD_FW_GL_VERSION_1_2: major = 1; minor = 2; break;
+                    case VD_FW_GL_VERSION_1_3: major = 1; minor = 3; break;
+                    case VD_FW_GL_VERSION_1_4: major = 1; minor = 4; break;
+                    case VD_FW_GL_VERSION_1_5: major = 1; minor = 5; break;
+                    case VD_FW_GL_VERSION_2_0: major = 2; minor = 0; break;
+                    case VD_FW_GL_VERSION_2_1: major = 2; minor = 1; break;
+                    case VD_FW_GL_VERSION_3_0: major = 3; minor = 0; break;
+                    case VD_FW_GL_VERSION_3_1: major = 3; minor = 1; break;
+                    case VD_FW_GL_VERSION_3_2: major = 3; minor = 2; break;
+                    case VD_FW_GL_VERSION_3_3: major = 3; minor = 3; break;
+                    case VD_FW_GL_VERSION_4_0: major = 4; minor = 0; break;
+                    case VD_FW_GL_VERSION_4_1: major = 4; minor = 1; break;
+                    case VD_FW_GL_VERSION_4_2: major = 4; minor = 2; break;
+                    case VD_FW_GL_VERSION_4_3: major = 4; minor = 3; break;
+                    case VD_FW_GL_VERSION_4_4: major = 4; minor = 4; break;
+                    case VD_FW_GL_VERSION_4_5: major = 4; minor = 5; break;
+                    case VD_FW_GL_VERSION_4_6: major = 4; minor = 6; break;
+                    default: break;
+                }
+            }
+
+            // Context attributes
+            int attribs[] = {
+                WGL_CONTEXT_MAJOR_VERSION_ARB, major,
+                WGL_CONTEXT_MINOR_VERSION_ARB, minor,
+                WGL_CONTEXT_PROFILE_MASK_ARB,  WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
+                WGL_CONTEXT_FLAGS_ARB,         WGL_CONTEXT_DEBUG_BIT_ARB,
+                0
+            };
+
+            VdFwProcwglCreateContextAttribsARB *wglCreateContextAttribsARB =
+                (VdFwProcwglCreateContextAttribsARB*) VdFwwglGetProcAddress("wglCreateContextAttribsARB");
+
+            VdFwProcwglChoosePixelFormatARB *wglChoosePixelFormatARB =
+                (VdFwProcwglChoosePixelFormatARB*)VdFwwglGetProcAddress("wglChoosePixelFormatARB");
+
+            int pixel_attribs[] = {
+                WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
+                WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
+                WGL_DOUBLE_BUFFER_ARB,  GL_TRUE,
+                WGL_ACCELERATION_ARB,   WGL_FULL_ACCELERATION_ARB,
+
+                WGL_PIXEL_TYPE_ARB,     WGL_TYPE_RGBA_ARB,
+                WGL_COLOR_BITS_ARB,     24,
+                WGL_ALPHA_BITS_ARB,     8,
+                WGL_DEPTH_BITS_ARB,     24,
+                WGL_STENCIL_BITS_ARB,   8,
+
+                WGL_SAMPLE_BUFFERS_ARB, 1,
+                WGL_SAMPLES_ARB,        4,
+                0,
+            };
+
+            int pixel_format;
+            VdFwUINT num_formats;
+
+            VD_FW__CHECK_TRUE(wglChoosePixelFormatARB(VD_FW_G.hdc, pixel_attribs, NULL, 1, &pixel_format, &num_formats));
+
+            VdFwPIXELFORMATDESCRIPTOR pfdchosen;
+            VD_FW__CHECK_NONZERO(VdFwDescribePixelFormat(VD_FW_G.hdc, pixel_format, sizeof(pfdchosen), &pfdchosen));
+            VD_FW__CHECK_TRUE(VdFwSetPixelFormat(VD_FW_G.hdc, pf, &pfdchosen));
+
+            VD_FW_G.hglrc = wglCreateContextAttribsARB(VD_FW_G.hdc, 0, attribs);
+
+            VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(NULL, NULL));
+            VD_FW__CHECK_TRUE(VdFwwglDeleteContext(temp_context));
+
+            VD_FW__CHECK_NULL(VD_FW_G.hglrc);
+            VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(VD_FW_G.hdc, VD_FW_G.hglrc));
+
+            VD_FW_G.proc_swapInterval = (VdFwProcwglSwapIntervalExt*)VdFwwglGetProcAddress("wglSwapIntervalEXT");
+
+            VdFwGlVersion version = VD_FW_GL_VERSION_3_3;
+            if (gl_options && gl_options->version != VD_FW_GL_VERSION_BASIC) {
+                version = gl_options->version;
+            }
+            vd_fw__load_opengl(version);
+
+            if (gl_options && gl_options->debug_on && version > VD_FW_GL_VERSION_3_0) {
+                VdFwProcGL_glDebugMessageCallback glDebugMessageCallback_proc = (VdFwProcGL_glDebugMessageCallback)VdFwwglGetProcAddress("glDebugMessageCallback");
+
+                if (glDebugMessageCallback_proc == 0) {
+                    DWORD written;
+
+                    TCHAR *msg = TEXT("ERROR: Failed to load glDebugMessageCallback!\n");
+                    SIZE_T len = vd_fw__tcslen(msg);
+                    WriteConsole(
+                        GetStdHandle(STD_OUTPUT_HANDLE),
+                        msg,
+                        (DWORD)len,
+                        &written,
+                        0);
+                } else {
+                    glEnable(0x92E0 /* GL_DEBUG_OUTPUT */);
+                    glDebugMessageCallback_proc(vd_fw__gl_debug_message_callback, 0);
+                }
+            }
+        } break;
+
+        default: break;
+    }
+
+    VD_FW_G.graphics_api = api;
 }
 
 VD_FW_API int vd_fw_get_size(int *w, int *h)
@@ -6725,17 +6819,23 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     VD_FW_G.t_running = TRUE;
     // VD_FW_SANITY_CHECK();
 
-    VdFwWNDCLASSEX wcx;
-    ZeroMemory(&wcx, sizeof(wcx));
-    wcx.cbSize         = sizeof(wcx);
-    wcx.style          = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-    wcx.hInstance      = NULL;
-    wcx.lpfnWndProc    = vd_fw__wndproc;
-    wcx.lpszClassName  = TEXT("FWCLASS");
-    wcx.hbrBackground  = (VdFwHBRUSH)VdFwGetStockObject(BLACK_BRUSH);
-    wcx.hCursor        = VdFwLoadCursor(NULL, IDC_ARROW);
-    if (!VdFwRegisterClassEx(&wcx)) {
-        return 0;
+    static int has_registered_class = 0;
+
+    if (!has_registered_class) {
+        VdFwWNDCLASSEX wcx;
+        ZeroMemory(&wcx, sizeof(wcx));
+        wcx.cbSize         = sizeof(wcx);
+        wcx.style          = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
+        wcx.hInstance      = NULL;
+        wcx.lpfnWndProc    = vd_fw__wndproc;
+        wcx.lpszClassName  = TEXT("FWCLASS");
+        wcx.hbrBackground  = (VdFwHBRUSH)VdFwGetStockObject(BLACK_BRUSH);
+        wcx.hCursor        = VdFwLoadCursor(NULL, IDC_ARROW);
+        if (!VdFwRegisterClassEx(&wcx)) {
+            return 0;
+        }
+
+        has_registered_class = 1;
     }
 
     LONG window_style;
@@ -6763,10 +6863,10 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
         TEXT("FWCLASS"),
         TEXT("FW Window"),
         window_style,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        640,
-        480,
+        VD_FW_G.next_pos_x,
+        VD_FW_G.next_pos_y,
+        VD_FW_G.next_width,
+        VD_FW_G.next_height,
         0 /* hwndParent */,
         0 /* hMenu */,
         0 /* hInstance */,
@@ -6810,19 +6910,17 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     VD_FW__CHECK_TRUE(ReleaseSemaphore(VD_FW_G.sem_window_ready, 1, NULL));
 
     // Register raw input mouse
-    {
-        VdFwRAWINPUTDEVICE rids[2];
-        rids[0].usUsagePage = 0x01; // Generic desktop controls
-        rids[0].usUsage     = 0x02; // Mouse
-        rids[0].dwFlags     = 0x00; // None (NO RIDEV_INPUTSINK)
-        rids[0].hwndTarget  = VD_FW_G.hwnd;
+    VdFwRAWINPUTDEVICE rids[2];
+    rids[0].usUsagePage = 0x01; // Generic desktop controls
+    rids[0].usUsage     = 0x02; // Mouse
+    rids[0].dwFlags     = 0x00; // None (NO RIDEV_INPUTSINK)
+    rids[0].hwndTarget  = VD_FW_G.hwnd;
 
-        rids[1].usUsagePage = 0x01; // Generic desktop controls
-        rids[1].usUsage     = 0x05; // Gamepad
-        rids[1].dwFlags     = RIDEV_DEVNOTIFY | RIDEV_INPUTSINK;
-        rids[1].hwndTarget  = VD_FW_G.hwnd;
-        VD_FW__CHECK_TRUE(VdFwRegisterRawInputDevices(rids, 2, sizeof(rids[0])));
-    }
+    rids[1].usUsagePage = 0x01; // Generic desktop controls
+    rids[1].usUsage     = 0x05; // Gamepad
+    rids[1].dwFlags     = RIDEV_DEVNOTIFY | RIDEV_INPUTSINK;
+    rids[1].hwndTarget  = VD_FW_G.hwnd;
+    VD_FW__CHECK_TRUE(VdFwRegisterRawInputDevices(rids, 2, sizeof(rids[0])));
 
     VD_FW_G.last_window_style = window_style;
     VD_FW_G.t_paint_ready = 1;
@@ -6835,6 +6933,13 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
             VdFwTranslateMessage(&message);
             VdFwDispatchMessage(&message);
         }
+    }
+
+    VD_FW_G.num_gamepads_present = 0;
+    VD_FW_G.winthread_num_gamepads_present = 0;
+    for (int i = 0; i < VD_FW_GAMEPAD_COUNT_MAX; ++i) {
+        VD_FW_G.gamepad_infos[i].connected = 0;
+        VD_FW_G.gamepad_infos[i].handle = NULL;
     }
 
     return 0;
@@ -6897,7 +7002,6 @@ VD_FW_API char *vd_fw__debug_dump_file_text(const char *path)
     char *memory = (char*)HeapAlloc(GetProcessHeap(), 0, sz.QuadPart + 1);
 
     DWORD bytes_read;
-    // @todo(mdodis): if file is > 4GB
     if (!ReadFile(hfile, memory, (DWORD)sz.QuadPart, &bytes_read, 0)) {
         HeapFree(GetProcessHeap(), 0, memory);
         return 0;
