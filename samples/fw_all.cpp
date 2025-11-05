@@ -29,7 +29,7 @@ typedef struct {
     void (*init)(void *internal_window_handle);
     void (*kill)(void);
     void (*resize)(int w, int h);
-    void (*clear_with_color)(float r, float g, float b, float a);
+    void (*draw_with_background_color)(float r, float g, float b, float a);
 } GraphicsBackendImpl;
 
 static VdFwGraphicsApi cv_graphics_backend_to_fw_graphics_api(GraphicsBackend backend)
@@ -115,7 +115,7 @@ int main(int argc, char const *argv[])
             Current_Graphics->resize(w, h);
         }
 
-        Current_Graphics->clear_with_color(0.2f,0.2f,0.2f,1.f);
+        Current_Graphics->draw_with_background_color(0.2f,0.2f,0.2f,1.f);
 
         int will_switch_to_next_backend = 0;
         if (vd_fw_get_key_pressed(VD_FW_KEY_SPACE)) {
@@ -263,7 +263,7 @@ void opengl_resize(int w, int h)
     glViewport(0, 0, w, h);
 }
 
-void opengl_clear_with_color(float r, float g, float b, float a)
+void opengl_draw_with_background_color(float r, float g, float b, float a)
 {
     int _e_ = glGetError();
     if (_e_ != 0) {
@@ -301,7 +301,7 @@ GraphicsBackendImpl OpenGL_Impl = {
     opengl_init,
     opengl_kill,
     opengl_resize,
-    opengl_clear_with_color,
+    opengl_draw_with_background_color,
 };
 
 #ifdef _WIN32
@@ -600,7 +600,7 @@ void d3d11_resize(int w, int h)
     CHECK_HRESULT(D_Device->CreateRenderTargetView(backbuffer.Get(), nullptr, &Render_Target_View));
 }
 
-static void d3d11_clear_with_color(float r, float g, float b, float a)
+static void d3d11_draw_with_background_color(float r, float g, float b, float a)
 {
     int w, h;
     vd_fw_get_size(&w, &h);
@@ -680,7 +680,7 @@ GraphicsBackendImpl D3D11_Impl = {
     d3d11_init,
     d3d11_kill,
     d3d11_resize,
-    d3d11_clear_with_color,
+    d3d11_draw_with_background_color,
 };
 #endif
 
