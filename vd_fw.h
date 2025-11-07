@@ -477,6 +477,13 @@ VD_FW_API int                vd_fw_get_mouse_state(int *x, int *y);
 VD_FW_INL int                vd_fw_get_mouse_statef(float *x, float *y);
 
 /**
+ * @brief Get whether the mouse button is down
+ * @param  button The button
+ * @return        1 if the button is down, 0 otherwise
+ */
+VD_FW_INL int                vd_fw_get_mouse_down(int button);
+
+/**
  * @brief Get if the supplied button was just clicked
  * @param  button The button to check
  * @return        Whether the button was clicked last frame
@@ -1072,6 +1079,11 @@ VD_FW_INL int vd_fw_get_mouse_statef(float *x, float *y)
     if (y) *y = (float)yi;
 
     return result;
+}
+
+VD_FW_INL int vd_fw_get_mouse_down(int button)
+{
+    return (vd_fw_get_mouse_state(NULL, NULL) & button) ? 1 : 0;
 }
 
 VD_FW_INL float vd_fw__fabs(float x)

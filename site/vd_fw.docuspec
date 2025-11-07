@@ -755,6 +755,9 @@ freely, subject to the following restrictions:
                     <a href="https://github.com/TheoBendixson">TheoBendixson</a><br>
                     For his Handmade Mac platform layer
                 </li>
+                <li>
+                    <a href="https://ofekshilon.com/2014/06/19/reading-specific-monitor-dimensions/">Ofek</a><br>
+                    For the display monitor enumeration code sample
             </ul>
         }
     }
