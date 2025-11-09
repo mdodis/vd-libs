@@ -1,11 +1,11 @@
-#version 450 core 
+#version 410 core 
 
 layout (location = 0) in vec3 v_po;
 layout (location = 1) in vec3 v_no;
 
-layout (location = 0) uniform mat4 u_modl;
-layout (location = 1) uniform mat4 u_proj;
-layout (location = 2) uniform mat4 u_view;
+uniform mat4 u_modl;
+uniform mat4 u_proj;
+uniform mat4 u_view;
 
 out vec3 f_no;
 

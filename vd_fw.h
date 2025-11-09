@@ -9104,6 +9104,10 @@ typedef struct {
     VdFwWindow                  *window;
     int                         context_needs_update;
     BOOL                        is_zoomed;
+    int                         cap_gamepad_db_entries;
+    int                         num_gamepad_db_entries;
+    VdFwGamepadDBEntry          *gamepad_db_entries;
+
 
 /* ----MAIN - RENDER THREAD DATA------------------------------------------------------------------------------------- */
     int                         w, h;
@@ -9118,6 +9122,7 @@ typedef struct {
     int                         ncrect_count;
     NSRect                      ncrects[VD_FW_NCRECTS_MAX];
     NSImage                     *app_image;
+    int                         has_initialized;
 
 /* ----MAIN - RENDER THREAD SYNC------------------------------------------------------------------------------------- */
     pthread_t                   main_thread;
@@ -10046,6 +10051,16 @@ VD_FW_API int vd_fw_swap_buffers(void)
     return 1;
 }
 
+VD_FW_API int vd_fw_close_requested(void)
+{
+    return 0;
+}
+
+VD_FW_API void vd_fw_quit(void)
+{
+    return;
+}
+
 VD_FW_API VdFwPlatform vd_fw_get_platform(void)
 {
     return VD_FW_PLATFORM_MACOS;
@@ -10266,6 +10281,21 @@ VD_FW_API char *vd_fw__debug_dump_file_text(const char *path)
 VD_FW_API void vd_fw__free_mem(void *memory)
 {
     free(memory);
+}
+
+VD_FW_API void vd_fw__lock_gamepaddb(void)
+{
+    return;
+}
+
+VD_FW_API void vd_fw__unlock_gamepaddb(void)
+{
+    return;
+}
+
+VD_FW_API void vd_fw__notify_gamepaddb_changed(void)
+{
+    return;
 }
 
 VD_FW_API void *vd_fw__realloc_mem(void *prev_ptr, size_t size)
@@ -10696,6 +10726,9 @@ VD_FW_API unsigned int vd_fw_compile_shader(unsigned int type, const char *sourc
     static char buf[1024];
     GLsizei len;
     glGetShaderInfoLog(shd, sizeof(buf), &len, buf);
+    buf[len] = 0;
+
+    VD_FW_LOG("Shader compilation failed: %s\n", buf);
     return 0;
 }
 

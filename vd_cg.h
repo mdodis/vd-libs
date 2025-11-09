@@ -439,7 +439,7 @@ VD_CG_INL Vdrquat vd_rnozquat         (Vdrquat q)                               
 
 VD_CG_INL Vdfquat vd_fconquat         (Vdfquat q)                                      { q.x = -q.x; q.y = -q.y; q.z = -q.z; return q; }
 
-VD_CG_INL Vdfquat vd_faxis_anglequat  (Vdf3 axis, VdCgf32 angle)                       { return vd_fmquat(vd_fscale3(axis, VD_CG_FSIN(angle * .5f)), 1.f); }
+VD_CG_INL Vdfquat vd_faxis_anglequat  (Vdf3 axis, VdCgf32 angle)                       { return vd_fmquat(vd_fscale3(axis, VD_CG_FSIN(angle * .5f)), VD_CG_FCOS(angle * .5f)); }
 VD_CG_INL Vdfquat vd_fmulquat         (Vdfquat q1, Vdfquat q2);
 VD_CG_INL Vdf3    vd_fmulquat_3       (Vdfquat q, Vdf3 v);
 VD_CG_INL Vdf4x4  vd_fto4x4quat       (Vdfquat q);
@@ -573,12 +573,19 @@ VD_CG_INL Vdfquat vd_fmulquat(Vdfquat q1, Vdfquat q2)
 
 VD_CG_INL Vdf3 vd_fmulquat_3(Vdfquat q, Vdf3 v)
 {
+#if 0
     Vdf3  u = q.xyz;
     VdCgf32 s = q.w;
 
     Vdf3 result = vd_fscale3(u, 2.f * vd_fdot3(u, v));
     result        = vd_fadd3(result, vd_fscale3(v, s * s - vd_fdot3(u, u)));
     result        = vd_fadd3(result, vd_fscale3(vd_fcross3(u, v), 2.f * s));
+#else
+    Vdfquat u = vd_fmquat(v, 0.f);
+    u = vd_fmulquat(q, u);
+    u = vd_fmulquat(u, vd_fconquat(q));
+    Vdf3 result = u.xyz;
+#endif
     return result;
 }
 
