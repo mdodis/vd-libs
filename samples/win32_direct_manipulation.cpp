@@ -45,6 +45,7 @@ static IDirectManipulationManager       *Dm_Manager = 0;
 static IDirectManipulationUpdateManager *Dm_Update_Manager = 0;
 static IDirectManipulationViewport      *Dm_Viewport = 0;
 static int                              Dm_Initialized = 0;
+static int                              Dm_Should_Keep_Updating = 0;
 
 static GLuint Gl_Program = 0;
 static float View_Matrix[3 * 3] = {
@@ -130,8 +131,13 @@ public:
         DIRECTMANIPULATION_STATUS previous) override
     {
         (void)viewport;
-        (void)current;
         (void)previous;
+
+        if ((current >= DIRECTMANIPULATION_RUNNING) && (current <= DIRECTMANIPULATION_INERTIA)) {
+            Dm_Should_Keep_Updating = 1;
+        } else {
+            Dm_Should_Keep_Updating = 0;
+        }
         return S_OK; 
     }
     
@@ -164,8 +170,6 @@ public:
         View_Matrix[0 * 3 + 0] = m00; View_Matrix[0 * 3 + 1] = m01; View_Matrix[0 * 3 + 2] = 0.f;
         View_Matrix[1 * 3 + 0] = m10; View_Matrix[1 * 3 + 1] = m11; View_Matrix[1 * 3 + 2] = 0.f;
         View_Matrix[2 * 3 + 0] = m20; View_Matrix[2 * 3 + 1] = m21; View_Matrix[2 * 3 + 2] = 1.f;
-
-        printf("%f %f\n", m20, m21);
 
         return S_OK;
     }
@@ -214,8 +218,9 @@ int main(int argc, char const *argv[])
 
     while (vd_fw_running()) {
 
-        if (Dm_Initialized) {
+        if (Dm_Initialized && Dm_Should_Keep_Updating) {
             Dm_Update_Manager->Update(nullptr);
+            static int count = 0;
         }
 
         if (vd_fw_close_requested()) {
@@ -262,10 +267,15 @@ static int my_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 #define VD_FW_IMPL
 #include "vd_fw.h"
 
+static void dm_update_content_transform(void)
+{
+
+}
+
 static int my_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
     (void)lparam;
-    
+
     if (!Dm_Initialized)
     {
 
@@ -285,10 +295,12 @@ static int my_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                                                          DIRECTMANIPULATION_CONFIGURATION_TRANSLATION_INERTIA |
                                                          DIRECTMANIPULATION_CONFIGURATION_RAILS_X |
                                                          DIRECTMANIPULATION_CONFIGURATION_RAILS_Y |
-                                                         DIRECTMANIPULATION_CONFIGURATION_SCALING;
+                                                         DIRECTMANIPULATION_CONFIGURATION_SCALING |
+                                                         DIRECTMANIPULATION_CONFIGURATION_SCALING_INERTIA;
 
         CHECK_HRESULT(Dm_Viewport->ActivateConfiguration(configuration));
-        CHECK_HRESULT(Dm_Viewport->SetViewportOptions(DIRECTMANIPULATION_VIEWPORT_OPTIONS_MANUALUPDATE));
+        // CHECK_HRESULT(Dm_Viewport->SetViewportOptions(DIRECTMANIPULATION_VIEWPORT_OPTIONS_MANUALUPDATE));
+        CHECK_HRESULT(Dm_Viewport->SetViewportOptions(DIRECTMANIPULATION_VIEWPORT_OPTIONS_DEFAULT));
         CFWDirectManipulationViewportEventHandler *viewport_event_handler = new CFWDirectManipulationViewportEventHandler();
 
         DWORD viewport_event_handler_cookie = 0;
