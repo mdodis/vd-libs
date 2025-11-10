@@ -1790,6 +1790,75 @@ if (vd_fw_get_mouse_locked()) {
         para {
             We could go on with mapping up/down to triggers, but I think you get the idea.
         }
+
+        para {
+            Of course, some controllers with either stick drift or very sensitive sticks may result in our camera
+            moving even if we're not touching the controller. This is handled by implementing deadzones. This library
+            will not do that for you, as radial input mapping can be very dependent on the use case of the application.
+            But let's go through a simple linear deadzone mapping.
+        }
+
+        para {
+            We will create a function that will map raw stick input to the appropriate value using a deadzone:
+        }
+
+        verb```
+static void map_stick_deadzone(float input[2], float deadzone, float output[2])
+{
+    output[0] = output[1] = 0.f;
+
+    float magnitude = VD_FW_SQRT(input[0] * input[0] + input[1] * input[1]);
+    if ((magnitude <= 0.000001f) || (magnitude < deadzone)) {
+        return;    
+    }
+
+    float norm_x = input[0] / magnitude;
+    float norm_y = input[1] / magnitude;
+
+    float norm_magnitude = (magnitude - deadzone) / (1.f - deadzone);
+    if (norm_magnitude > 1.f) norm_magnitude = 1.f;
+
+    output[0] = norm_x * norm_magnitude;
+    output[1] = norm_y * norm_magnitude;
+}
+        ```
+
+        para {
+            Given a 'deadzone' parameter between 0 and 1, we map the input from [deadzone, 1] to our space, and ignore
+            anything less that the deadzone.
+        }
+
+        para {
+            Let's change the code in our input handling. In our processing of the right stick (camera rotation):
+        }
+
+        verb```
+float right_stick_raw[2];
+float right_stick[2];
+vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RH, &right_stick_raw[0]);
+vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RV, &right_stick_raw[1]);
+
+map_stick_deadzone(right_stick_raw, DEADZONE_STICK, right_stick);
+
+camera_yaw   += right_stick[0] * ds * 100.f;
+camera_pitch -= right_stick[1] * ds * 100.f;
+        ```
+
+        para {
+            And we follow the same pattern for the left stick for camera movement:
+        }
+
+        verb```
+float left_stick_raw[2];
+float left_stick[2];
+vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_LV, &left_stick_raw[0]);
+vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_LH, &left_stick_raw[1]);
+
+map_stick_deadzone(left_stick_raw, DEADZONE_STICK, left_stick);
+
+fwdir -= left_stick[0];
+rgdir -= left_stick[1];
+        ```
     }
 }
 
