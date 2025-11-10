@@ -15,6 +15,7 @@
 
 
 typedef struct {
+    float yaw, pitch;
     f3    pos;
     fquat orient;
 } Camera;
@@ -166,6 +167,7 @@ int main(int argc, char const *argv[])
     glEnable(GL_DEPTH_TEST);
 
     Camera cam = {
+        0.f, 0.f,
         fzero3(),
         fidentityquat(),
     };
@@ -185,21 +187,18 @@ int main(int argc, char const *argv[])
         f2 wheel;
         vd_fw_get_mouse_wheel(&wheel.x, &wheel.y);
 
-        static float zoom = 5.f;
+        if (vd_fw_get_mouse_down(VD_FW_MOUSE_BUTTON_RIGHT)) {
+            vd_fw_set_mouse_locked(1);
 
-        zoom += wheel.y;
+            cam.yaw += mouse.x;
+            cam.pitch += mouse.y;
 
-        static float yaw = 0.f;
-        yaw += mouse.x;
-        cam.orient = feulerquat(fm3(0, fdeg2rad(yaw), 0));
-        if (vd_fw_get_mouse_down(VD_FW_MOUSE_BUTTON_LEFT)) {
+            cam.yaw = fwrap_degrees(cam.yaw);
+            cam.pitch = fclamp(-89.f, cam.pitch, +89.f);
+            cam.orient = feulerquat(fm3(fdeg2rad(cam.pitch), fdeg2rad(cam.yaw), 0.f));
 
-        }
-
-        if (vd_fw_get_key_pressed('1')) {
-
-            printf("P %f %f %f\n", cam.pos.x, cam.pos.y, cam.pos.z);
-            printf("R %f %f %f %f\n", cam.orient.x, cam.orient.y, cam.orient.z, cam.orient.w);
+        } else {
+            vd_fw_set_mouse_locked(0);
         }
 
         static float ey = 0.f;
@@ -209,8 +208,9 @@ int main(int argc, char const *argv[])
         if (vd_fw_get_key_down(VD_FW_KEY_ARROW_DOWN)) {
             ey -= delta_seconds * 2.f;
         }
+
         push_line(fm3(0,ey,0), fm3(0,ey,5), fm4(1,0,0,1));
-        push_line(fm3(0,0,0), fm3(0,5,0), fm4(0.2,0.3,0.5,1));
+        push_line(fm3(0,0,0), fm3(0,5,0), fm4(0.2f,0.3f,0.5f,1));
 
 
         fquat camerarot = camera_get_world_quat(&cam);

@@ -11,6 +11,8 @@ out vec4 f_col;
 
 void main()
 {
+    float line_width = 0.05;
+
     // Transform to view space
     // This will allow us to treat 0,0,0 as camera origin
     vec4 Pv0 = u_view * vec4(v_v0, 1.0);
@@ -40,17 +42,25 @@ void main()
     // This allows us to handle cases where one point starts at 0,0,0 (i.e. the camera)
     vec3 F = normalize(Pv1.xyz - Pv0.xyz);
 
-    vec3 M = normalize(mix(Pv0.xyz, Pv1.xyz, 0.5));
+    // Find closest point on line Pv0-Pv1 to (0,0,0)
+    // 
+    float t = -dot(Pv0.xyz, F) / dot(F, F);
+    vec3 closest = Pv0.xyz + F * t;
+
+    float H = line_width / 2.0;
+
+    vec3 M = normalize(closest);
+    // vec3 M = normalize(mix(Pv0.xyz, Pv1.xyz, 0.5));
+    // vec3 M = normalize(Pv0.xyz);
     vec3 Ur = M;
     // What M represents here is a direction vector that we know if aligns with line
     // the line won't be shown anyway. 
 
-    if (abs(dot(F, Ur)) >= 0.998) {
-        Ur = vec3(1,0,0);
-    }
+    // if (abs(dot(F, Ur)) >= 0.9999) {
+    //     Ur = vec3(1,0,0);
+    // }
     vec3 R = cross(Ur, F);
-    vec3 U = cross(F, R);
-    vec3 vertex = Pv0.xyz + movements[gl_VertexID].x * 0.1 * R + movements[gl_VertexID].y * L * F;
+    vec3 vertex = Pv0.xyz + movements[gl_VertexID].x * H * R + movements[gl_VertexID].y * L * F;
     gl_Position = u_proj * vec4(vertex, 1.0);
     f_col = v_col;
 }
