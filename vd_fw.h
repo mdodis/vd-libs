@@ -5062,6 +5062,15 @@ static VdFwProcXInputSetState *VdFwXInputSetState;
 #undef FIXED
 #endif
 
+#ifdef VD_FW_WIN32_ADDITIONAL_WNDPROC
+#   define VD_FW_WIN32_INVOKE_WNDPROC(hwnd, msg, wparam, lparam) do {                                        \
+        LRESULT _r_ = VD_FW_WIN32_ADDITIONAL_WNDPROC((HWND)hwnd, (UINT)msg, (WPARAM)wparam, (LPARAM)lparam); \
+        if (_r_ == 0) return _r_;                                                                            \
+    } while (0)
+#else
+#   define VD_FW_WIN32_INVOKE_WNDPROC(hwnd, msg, wparam, lparam) do { } while(0)
+#endif // VD_FW_WIN32_ADDITIONAL_WNDPROC
+
 #define WGL_CONTEXT_DEBUG_BIT_ARB                   0x00000001
 #define WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB      0x00000002
 #define WGL_CONTEXT_MAJOR_VERSION_ARB               0x2091
@@ -7466,6 +7475,8 @@ static void vd_fw__win32_correlate_xinput_triggers(VdFw__Win32GamepadInfo *gamep
 
 static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam, VdFwLPARAM lparam)
 {
+    VD_FW_WIN32_INVOKE_WNDPROC(hwnd, msg, wparam, lparam);
+
     VdFwLRESULT result = 0;
     switch (msg) {
 
