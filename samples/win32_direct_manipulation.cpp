@@ -252,7 +252,7 @@ int main(int argc, char const *argv[])
             float r = All_Colors[((i * 3) % COLOR_COUNT) + 0];
             float g = All_Colors[((i * 3) % COLOR_COUNT) + 1];
             float b = All_Colors[((i * 3) % COLOR_COUNT) + 2];
-            put_rect(x, i * PAGE_LENGTH, PAGE_WIDTH, PAGE_LENGTH, r, g, b);
+            put_rect(0.f, i * PAGE_LENGTH, PAGE_WIDTH, PAGE_LENGTH, r, g, b);
         }
 
 
