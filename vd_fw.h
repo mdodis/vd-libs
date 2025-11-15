@@ -67,7 +67,6 @@
  *   - Actually, consider removing it entirely
  * - set window unresizable
  * - MacOS: vd_fw_get_last_key_pressed
- * - MacOS: Close window
  * - MacOS: vd_fw_get_executable_dir()
  * - MacOS: vd_fw_set_fullscreen
  * - MacOS: Gamepad Support
@@ -9041,6 +9040,7 @@ typedef enum {
     VD_FW__MAC_MESSAGE_KEY,
     VD_FW__MAC_MESSAGE_MINIMIZED,
     VD_FW__MAC_MESSAGE_ZOOMED,
+    VD_FW__MAC_MESSAGE_CLOSE_REQUEST,
 } VdFw__MacMessageType;
 
 typedef struct {
@@ -9108,6 +9108,7 @@ typedef struct {
     BOOL                        mouse_is_locked;
     int                         window_state;
     int                         window_state_changed;
+    int                         close_request;
 
 /* ----WINDOW THREAD ONLY-------------------------------------------------------------------------------------------- */
     BOOL                        draw_decorations;
@@ -9492,6 +9493,20 @@ static int Update_Context = 0;
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
 
+}
+
+- (NSApplicationTerminateReply) applicationShouldTerminate:(NSApplication *) sender {
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_CLOSE_REQUEST;
+    vd_fw__msgbuf_w(&msg);
+    return NSTerminateCancel;
+}
+
+- (BOOL)windowShouldClose:(NSWindow *)notification {
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_CLOSE_REQUEST;
+    vd_fw__msgbuf_w(&msg);
+    return FALSE;
 }
 
 - (void)windowDidResize:(NSNotification *)notification {
@@ -9973,6 +9988,7 @@ VD_FW_API int vd_fw_running(void)
 
     VD_FW_G.focus_changed = 0;
     VD_FW_G.window_state_changed = 0;
+    VD_FW_G.close_request = 0;
 
     VD_FW_G.prev_mouse_state = VD_FW_G.mouse_state;
     for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
@@ -10026,6 +10042,11 @@ VD_FW_API int vd_fw_running(void)
                 }
                 VD_FW_G.window_state_changed = 1;
             } break;
+
+            case VD_FW__MAC_MESSAGE_CLOSE_REQUEST: {
+                VD_FW_G.close_request = 1;
+            } break;
+
             default: break;
         }
     }
@@ -10064,11 +10085,14 @@ VD_FW_API int vd_fw_swap_buffers(void)
 
 VD_FW_API int vd_fw_close_requested(void)
 {
-    return 0;
+    return VD_FW_G.close_request;
 }
 
 VD_FW_API void vd_fw_quit(void)
 {
+    dispatch_sync(dispatch_get_main_queue(), ^(void){
+        [VD_FW_G.window close];
+    });
     return;
 }
 
