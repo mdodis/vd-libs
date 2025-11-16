@@ -16,20 +16,20 @@
 
 typedef struct {
     float yaw, pitch;
-    f3    pos;
-    fquat orient;
+    F3    pos;
+    FQuat orient;
 } Camera;
 
-static fquat camera_get_world_quat(Camera *camera)
+static FQuat camera_get_world_quat(Camera *camera)
 {
     return camera->orient;
 }
 
 #pragma pack(push, 1)
 typedef struct {
-    f3 p0;
-    f3 p1;
-    f4 color;
+    F3 p0;
+    F3 p1;
+    F4 color;
 } DebugInput;
 #pragma pack(pop)
 
@@ -40,7 +40,7 @@ static unsigned long long p_debug_prop_time = 0;
 static GLuint vao_debug_prop;
 static GLuint vbo_debug_prop;
 
-static void push_line(f3 from, f3 to, f4 color)
+static void push_line(F3 from, F3 to, F4 color)
 {
     Debug_Inputs[num_debug_props++] = (DebugInput) {
         .p0 = from,
@@ -181,10 +181,10 @@ int main(int argc, char const *argv[])
 
         float delta_seconds = vd_fw_delta_s();
 
-        f2 mouse;
+        F2 mouse;
         vd_fw_get_mouse_delta(&mouse.x, &mouse.y);
 
-        f2 wheel;
+        F2 wheel;
         vd_fw_get_mouse_wheel(&wheel.x, &wheel.y);
 
         if (vd_fw_get_mouse_down(VD_FW_MOUSE_BUTTON_RIGHT)) {
@@ -213,23 +213,29 @@ int main(int argc, char const *argv[])
         push_line(fm3(0,0,0), fm3(0,5,0), fm4(0.2f,0.3f,0.5f,1));
 
 
-        fquat camerarot = camera_get_world_quat(&cam);
+        FQuat camerarot = camera_get_world_quat(&cam);
 
-        f3 forward = fmulquat_3(camerarot, fm3(0,0,1));
+        F3 forward = fmulquat_3(camerarot, fm3(0,0,1));
+        F3 right   = fmulquat_3(camerarot, fm3(1,0,0));
         float FWD = (float)(vd_fw_get_key_down('W') - vd_fw_get_key_down('S'));
         float RGH = (float)(vd_fw_get_key_down('D') - vd_fw_get_key_down('A'));
         float UPW = (float)(vd_fw_get_key_down('Q') - vd_fw_get_key_down('E'));
-        cam.pos = fadd3(cam.pos, fscale3(forward, FWD * 5.f * delta_seconds));
+        F3 direction = fzero3();
+        direction = fadd3(direction, fscale3(forward, FWD));
+        direction = fadd3(direction, fscale3(right, RGH));
+        direction = fnoz3(direction);
+
+        cam.pos = fadd3(cam.pos, fscale3(direction, 5.f * delta_seconds));
 
         int width, height;
         vd_fw_get_size(&width, &height);
 
-        f4x4 projection = fperspective4x4(fdeg2rad(60.f), (float)width / (float)height, 0.001f, 1000.f);
+        F4x4 projection = fperspective4x4(fdeg2rad(60.f), (float)width / (float)height, 0.001f, 1000.f);
 
-        f4x4 view       = flookat4x4(cam.pos, fadd3(cam.pos, forward), fm3(0,1,0));
-        // f4x4 V_P  = ftranslation4x4(fscale3(cam.pos, -1.f));
-        // f4x4 V_R  = fto4x4quat(cam.orient); 
-        // f4x4 view = fmul4x4(&V_R, &V_P);
+        // F4x4 view       = flookat4x4(cam.pos, fadd3(cam.pos, forward), fm3(0,1,0));
+        F4x4 V_P  = ftranslation4x4(fscale3(cam.pos, -1.f));
+        F4x4 V_R  = fto4x4quat(vd_fconquat(cam.orient)); 
+        F4x4 view = fmul4x4(&V_P, &V_R);
 
 
         vd_fw_compile_or_hotload_program(&p_3d, &p_3d_time,
@@ -254,7 +260,7 @@ int main(int argc, char const *argv[])
         GL_CHECK(glBindVertexArray(VAO));
 
         static float T = 0.f;
-        f4x4 model = fidentity4x4();
+        F4x4 model = fidentity4x4();
         frotate_yaw4x4(&model, fdeg2rad(T));
         ftranslate4x4(&model, fm3(0,0,5));
         GL_CHECK(glUniformMatrix4fv(glGetUniformLocation(p_3d, "u_modl"), 1, GL_FALSE, model.p));
