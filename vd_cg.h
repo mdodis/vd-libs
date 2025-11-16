@@ -38,7 +38,7 @@ typedef double       VdCgf64;
 typedef int          VdCgi32;
 typedef unsigned int VdCgu32;
 #else
-typedef VdF32   VdCgf32;
+typedef Vdf32   VdCgf32;
 typedef Vdf64   VdCgf64;
 typedef Vdi32   VdCgi32;
 typedef Vdu32   VdCgu32;
@@ -430,6 +430,8 @@ VD_CG_INL VdF4x4  vd_fmul4x4           (VdF4x4 *a, VdF4x4 *b);
 VD_CG_INL VdF4x4  vd_fmul4x4col        (VdF4x4 *a, VdF4x4 *b);
 VD_CG_INL VdF3    vd_fmul4x4_3         (VdF4x4 *m, VdF3    v);
 VD_CG_INL VdF4    vd_fmul4x4_4         (VdF4x4 *m, VdF4    v);
+VD_CG_INL VdF4x4  vd_finverse4x4       (VdF4x4 *m);
+
 
 /* ----QUATERNION ALGEBRA-------------------------------------------------------------------------------------------- */
 VD_CG_INL VdFQuat vd_fidentityquat    (void)                                           { return vd_fmquat(vd_fzero3(), 1.f); }
@@ -569,6 +571,46 @@ VD_CG_INL VdF4 vd_fmul4x4_4(VdF4x4 *m, VdF4 v)
     result.z = vd_fdot4(r2, v);
     result.w = vd_fdot4(r3, v);
     return result;
+}
+
+VD_CG_INL VdF4x4 vd_finverse4x4(VdF4x4 *m)
+{
+    int i;
+    VdF4x4 minors;
+    VdCgf32 D = 0.f;
+#define _TMP_MAT3_DET(a, b, c, d, e, f, g, h, i) (a*(e*i - f*h) - b*(d*i - f*g) + c*(d*h - e*g))
+    minors.a0 = _TMP_MAT3_DET(m->b1, m->b2, m->b3, m->c1, m->c2, m->c3, m->d1, m->d2, m->d3);
+    minors.a1 = _TMP_MAT3_DET(m->b0, m->b2, m->b3, m->c0, m->c2, m->c3, m->d0, m->d2, m->d3);
+    minors.a2 = _TMP_MAT3_DET(m->b0, m->b1, m->b3, m->c0, m->c1, m->c3, m->d0, m->d1, m->d3);
+    minors.a3 = _TMP_MAT3_DET(m->b0, m->b1, m->b2, m->c0, m->c1, m->c2, m->d0, m->d1, m->d2);
+    minors.b0 = _TMP_MAT3_DET(m->a1, m->a2, m->a3, m->c1, m->c2, m->c3, m->d1, m->d2, m->d3);
+    minors.b1 = _TMP_MAT3_DET(m->a0, m->a2, m->a3, m->c0, m->c2, m->c3, m->d0, m->d2, m->d3);
+    minors.b2 = _TMP_MAT3_DET(m->a0, m->a1, m->a3, m->c0, m->c1, m->c3, m->d0, m->d1, m->d3);
+    minors.b3 = _TMP_MAT3_DET(m->a0, m->a1, m->a2, m->c0, m->c1, m->c2, m->d0, m->d1, m->d2);
+    minors.c0 = _TMP_MAT3_DET(m->a1, m->a2, m->a3, m->b1, m->b2, m->b3, m->d1, m->d2, m->d3);
+    minors.c1 = _TMP_MAT3_DET(m->a0, m->a2, m->a3, m->b0, m->b2, m->b3, m->d0, m->d2, m->d3);
+    minors.c2 = _TMP_MAT3_DET(m->a0, m->a1, m->a3, m->b0, m->b1, m->b3, m->d0, m->d1, m->d3);
+    minors.c3 = _TMP_MAT3_DET(m->a0, m->a1, m->a2, m->b0, m->b1, m->b2, m->d0, m->d1, m->d2);
+    minors.d0 = _TMP_MAT3_DET(m->a1, m->a2, m->a3, m->b1, m->b2, m->b3, m->c1, m->c2, m->c3);
+    minors.d1 = _TMP_MAT3_DET(m->a0, m->a2, m->a3, m->b0, m->b2, m->b3, m->c0, m->c2, m->c3);
+    minors.d2 = _TMP_MAT3_DET(m->a0, m->a1, m->a3, m->b0, m->b1, m->b3, m->c0, m->c1, m->c3);
+    minors.d3 = _TMP_MAT3_DET(m->a0, m->a1, m->a2, m->b0, m->b1, m->b2, m->c0, m->c1, m->c2);
+#undef _TMP_MAT3_DET
+    D = minors.a0 * m->a0 - minors.a1 * m->a1 + minors.a2 * m->a2 - minors.a3 * m->a3;
+
+    if (D == 0.f) return vd_fidentity4x4();
+
+    minors.a0 *= +1.f; minors.a1 *= -1.f; minors.a2 *= +1.f; minors.a3 *= -1.f;
+    minors.b0 *= -1.f; minors.b1 *= +1.f; minors.b2 *= -1.f; minors.b3 *= +1.f;
+    minors.c0 *= +1.f; minors.c1 *= -1.f; minors.c2 *= +1.f; minors.c3 *= -1.f;
+    minors.d0 *= -1.f; minors.d1 *= +1.f; minors.d2 *= -1.f; minors.d3 *= +1.f;
+
+    minors = vd_ftranspose4x4(&minors);
+    for (i = 0; i < 16; i += 1) {
+        minors.p[i] *= 1.f/D;
+    }
+
+    return minors;
 }
 
 /* ----QUATERNION ALGEBRA IMPL--------------------------------------------------------------------------------------- */

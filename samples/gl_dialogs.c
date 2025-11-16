@@ -115,10 +115,16 @@ int main(int argc, char const *argv[])
         app->style.background.normal = vd_ui_gradient1(vd_ui_f4(0.1f, 0.1f, 0.1f, 1.f));
         vd_ui_parent_push(app);
         {
-            if (vd_ui_buttonf("Simple Message").clicked) {
+            if (vd_ui_buttonf("Message Box (Ok)").clicked) {
                 vd_dlg_message_box(CSTR_AND_LEN("<Simple Message Title>"),
                                    CSTR_AND_LEN("This is a simple message with a title, and an OK button."),
-                                   VD_DLG_MESSAGE_BOX_OPTION_OK);
+                                   VD_DLG_MESSAGE_BOX_OPTION_OK | VD_DLG_MESSAGE_BOX_OPTION_INFO);
+            }
+
+            if (vd_ui_buttonf("Message Box (Warning)").clicked) {
+                vd_dlg_message_box(CSTR_AND_LEN("<Simple Message Title>"),
+                                   CSTR_AND_LEN("This is a simple message with a title, and an OK button."),
+                                   VD_DLG_MESSAGE_BOX_OPTION_OK | VD_DLG_MESSAGE_BOX_OPTION_WARNING);
             }
 
             if (vd_ui_buttonf("Open File").clicked) {

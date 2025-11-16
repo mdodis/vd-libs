@@ -48,10 +48,26 @@
 #   define VD_DLG_INL static inline
 #endif // VD_DLG_INL
 
-typedef enum {
-    VD_DLG_MESSAGE_BOX_OPTION_OK     = 0,
-    VD_DLG_MESSAGE_BOX_OPTION_CANCEL = 1 << 1,
-} VdDlgMessageBoxOptions;
+enum {
+    VD_DLG_MESSAGE_BOX_OPTION_BUTTON_MASK   = 0b00000011,
+    VD_DLG_MESSAGE_BOX_OPTION_OK            = 0b00000000,
+    VD_DLG_MESSAGE_BOX_OPTION_YES_NO        = 0b00000001,
+    VD_DLG_MESSAGE_BOX_OPTION_OK_CANCEL     = 0b00000010,
+    VD_DLG_MESSAGE_BOX_OPTION_YES_NO_CANCEL = 0b00000011,
+
+    VD_DLG_MESSAGE_BOX_OPTION_VISUAL_MASK   = 0b11111100,
+    VD_DLG_MESSAGE_BOX_OPTION_INFO          = 0b00000100,
+    VD_DLG_MESSAGE_BOX_OPTION_WARNING       = 0b00001000,
+    VD_DLG_MESSAGE_BOX_OPTION_ERROR         = 0b00001100,
+};
+typedef unsigned char VdDlgMessageBoxOptions;
+
+enum {
+    VD_DLG_MESSAGE_BOX_RESULT_OK     = 0,
+    VD_DLG_MESSAGE_BOX_RESULT_NO     = 1,
+    VD_DLG_MESSAGE_BOX_RESULT_YES    = 2,
+    VD_DLG_MESSAGE_BOX_RESULT_CANCEL = 3,
+};
 
 typedef enum {
     VD_DLG_OPEN_FILE_OPTION_DEFAULT = 0,
@@ -664,12 +680,41 @@ VD_DLG_API int vd_dlg_message_box(int title_len, const char *title, int descript
     vd_dlg__win32_cv_utf8_to_utf16(description, description_len,
                                    &Vd_Dlg__Globals.message_buf, &Vd_Dlg__Globals.message_buf_cap);
 
+    VdDlgMessageBoxOptions button_options = options & VD_DLG_MESSAGE_BOX_OPTION_BUTTON_MASK;
+    VdDlgMessageBoxOptions button_visuals = options & VD_DLG_MESSAGE_BOX_OPTION_VISUAL_MASK;
+
+    VdDlgDWORD flags = 0;
+    switch (button_options) {
+        case VD_DLG_MESSAGE_BOX_OPTION_OK:              flags |= 0x00000000L; break;
+        case VD_DLG_MESSAGE_BOX_OPTION_YES_NO:          flags |= 0x00000004L; break;
+        case VD_DLG_MESSAGE_BOX_OPTION_OK_CANCEL:       flags |= 0x00000001L; break;
+        case VD_DLG_MESSAGE_BOX_OPTION_YES_NO_CANCEL:   flags |= 0x00000003L; break;
+        default: break;
+    }
+
+    switch (button_visuals) {
+        case VD_DLG_MESSAGE_BOX_OPTION_INFO:    flags |= MB_ICONINFORMATION; break;
+        case VD_DLG_MESSAGE_BOX_OPTION_WARNING: flags |= MB_ICONWARNING; break;
+        case VD_DLG_MESSAGE_BOX_OPTION_ERROR:   flags |= MB_ICONERROR; break;
+        default: break;
+    }
+
     int result = VdDlgMessageBoxW(vd_dlg__get_hwnd(),
                                   Vd_Dlg__Globals.message_buf,
                                   Vd_Dlg__Globals.title_buf,
-                                  0x00000000L);
-
-    return 1;
+                                  flags);
+    switch (result) {
+        case /*IDABORT*/     3: return VD_DLG_MESSAGE_BOX_RESULT_OK; break;
+        case /*IDCANCEL*/    2: return VD_DLG_MESSAGE_BOX_RESULT_CANCEL; break;
+        case /*IDCONTINUE*/ 11: return VD_DLG_MESSAGE_BOX_RESULT_OK; break;
+        case /*IDIGNORE*/    5: return VD_DLG_MESSAGE_BOX_RESULT_OK; break;
+        case /*IDNO*/        7: return VD_DLG_MESSAGE_BOX_RESULT_NO; break;
+        case /*IDOK*/        1: return VD_DLG_MESSAGE_BOX_RESULT_OK; break;
+        case /*IDRETRY*/     4: return VD_DLG_MESSAGE_BOX_RESULT_OK; break;
+        case /*IDTRYAGAIN*/ 10: return VD_DLG_MESSAGE_BOX_RESULT_OK; break;
+        case /*IDYES*/       6: return VD_DLG_MESSAGE_BOX_RESULT_YES; break;
+        default: return 0;
+    }
 }
 
 VD_DLG_API VdDlgFileResult vd_dlg_open_file(int title_len, const char *title, int path_len, const char *path, int num_filters, VdDlgFileFilter *filters, int default_filter, VdDlgOpenFileOptions options)
