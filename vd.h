@@ -812,6 +812,7 @@ typedef struct {
 #define VD_DYNARRAY_LAST(a)                        ((a)[VD_DYNARRAY_HEADER(a)->len - 1])
 #define VD_DYNARRAY_LEN(a)                         ((a) ? VD_DYNARRAY_HEADER(a)->len : 0)
 #define VD_DYNARRAY_CAP(a)                         ((a) ? VD_DYNARRAY_HEADER(a)->cap : 0)
+#define VD_DYNARRAY_DEL(a, i)                      do { Vdu32 _i_ = (i); if (_i_ == (VD_DYNARRAY_LEN(a) - 1)) { (VD_DYNARRAY_HEADER(a)->len--); } else {  (a)[_i_] = VD_DYNARRAY_LAST(a); (VD_DYNARRAY_HEADER(a)->len--); } } while (0)
 #define VD_DYNARRAY_ARENAP(a)                      ((a) ? VD_DYNARRAY_HEADER(a)->arena : 0)
 #define VD_DYNARRAY_GROW(a, b, c)                  ((a) = vd__dynarray_grow((a), sizeof(*(a)), (b), (c), VD_DYNARRAY_ARENAP(a)))
 #define VD_DYNARRAY_PTR_CHECKED(a, i)              ((i < VD_DYNARRAY_LEN(a)) ? &(a)[i] : 0)
@@ -868,6 +869,7 @@ VD_INLINE void *vd__dynarray_grow(void *a, Vdusize tsize, Vdu32 addlen, Vdu32 mi
 #define dynarray_last(a)                      VD_DYNARRAY_LAST(a)
 #define dynarray_len(a)                       VD_DYNARRAY_LEN(a)
 #define dynarray_cap(a)                       VD_DYNARRAY_CAP(a)
+#define dynarray_del(a, i)                    VD_DYNARRAY_DEL(a, i)
 #define dynarray_ptr_checked(a, i)            VD_DYNARRAY_PTR_CHECKED(a, i)
 #define dynarray
 #endif
