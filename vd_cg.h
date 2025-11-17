@@ -160,6 +160,11 @@ typedef struct __VD_CG_fline {
     VdF3 a, b;
 } VdFLine;
 
+typedef struct __VD_CG_fray {
+    VdF3 origin;
+    VdF3 direction;
+} VdFRay;
+
 /* ----DOUBLE PRECISION---------------------------------------------------------------------------------------------- */
 typedef union __VD_CG_d2 {
     VdCgf64  e[2];
@@ -208,6 +213,11 @@ typedef struct __VD_CG_dline {
     VdD3 a, b;
 } VdDLine;
 
+typedef struct __VD_CG_dray {
+    VdF3 origin;
+    VdF3 direction;
+} VdDRay;
+
 #pragma pack(pop)
 
 /* ----DEFAULT PRECISION--------------------------------------------------------------------------------------------- */
@@ -233,6 +243,7 @@ typedef VdF3x3    VdR3x3;
 typedef VdF4x4    VdR4x4;
 typedef VdFQuat   VdRQuat;
 typedef VdFLine   VdRLine;
+typedef VdFRay    VdRRay;
 #define VD_CG_RSIN  VD_CG_FSIN
 #define VD_CG_RCOS  VD_CG_FCOS
 #define VD_CG_RTAN  VD_CG_FTAN
@@ -249,6 +260,7 @@ typedef VdD3x3    VdR3x3;
 typedef VdD4x4    VdR4x4;
 typedef VdDQuat   VdRQuat;
 typedef VdDLine   VdRLine;
+typedef VdDRay    VdRRay;
 #define VD_CG_RSIN  VD_CG_DSIN
 #define VD_CG_RCOS  VD_CG_DCOS
 #define VD_CG_RTAN  VD_CG_DTAN
@@ -267,217 +279,222 @@ typedef VdDLine   VdRLine;
 #endif // VD_MACRO_ABBREVIATIONS
 
 /* ----INITIALIZATION------------------------------------------------------------------------------------------------ */
-VD_CG_INL VdF2    vd_fm2              (VdCgf32 x, VdCgf32 y)                           { VdF2 r; r.x = x; r.y =y; return r; }
-VD_CG_INL VdD2    vd_dm2              (VdCgf64 x, VdCgf64 y)                           { VdD2 r; r.x = x; r.y =y; return r; }
-VD_CG_INL VdR2    vd_rm2              (VdRea x, VdRea y)                               { VdR2 r; r.x = x; r.y =y; return r; }
-VD_CG_INL VdF2    vd_fall2            (VdCgf32 s)                                      { return vd_fm2(s, s);               }
-VD_CG_INL VdD2    vd_dall2            (VdCgf64 s)                                      { return vd_dm2(s, s);               }
-VD_CG_INL VdR2    vd_rall2            (VdRea s)                                        { return vd_rm2(s, s);               }
-VD_CG_INL VdF2    vd_fzero2           (void)                                           { return vd_fall2(0.f);              }
-VD_CG_INL VdD2    vd_dzero2           (void)                                           { return vd_dall2(0.f);              }
-VD_CG_INL VdR2    vd_rzero2           (void)                                           { return vd_rall2(0.f);              }
+VD_CG_INL VdF2     vd_fm2              (VdCgf32 x, VdCgf32 y)                           { VdF2 r; r.x = x; r.y =y; return r; }
+VD_CG_INL VdD2     vd_dm2              (VdCgf64 x, VdCgf64 y)                           { VdD2 r; r.x = x; r.y =y; return r; }
+VD_CG_INL VdR2     vd_rm2              (VdRea x, VdRea y)                               { VdR2 r; r.x = x; r.y =y; return r; }
+VD_CG_INL VdF2     vd_fall2            (VdCgf32 s)                                      { return vd_fm2(s, s);               }
+VD_CG_INL VdD2     vd_dall2            (VdCgf64 s)                                      { return vd_dm2(s, s);               }
+VD_CG_INL VdR2     vd_rall2            (VdRea s)                                        { return vd_rm2(s, s);               }
+VD_CG_INL VdF2     vd_fzero2           (void)                                           { return vd_fall2(0.f);              }
+VD_CG_INL VdD2     vd_dzero2           (void)                                           { return vd_dall2(0.f);              }
+VD_CG_INL VdR2     vd_rzero2           (void)                                           { return vd_rall2(0.f);              }
 
-VD_CG_INL VdF3    vd_fm3              (VdCgf32 x, VdCgf32 y, VdCgf32 z)                { VdF3 r; r.x = x; r.y = y; r.z = z; return r; }
-VD_CG_INL VdD3    vd_dm3              (VdCgf64 x, VdCgf64 y, VdCgf64 z)                { VdD3 r; r.x = x; r.y = y; r.z = z; return r; }
-VD_CG_INL VdR3    vd_rm3              (VdRea x, VdRea y, VdRea z)                      { VdR3 r; r.x = x; r.y = y; r.z = z; return r; }
-VD_CG_INL VdF3    vd_fall3            (VdCgf32 s)                                      { return vd_fm3(s, s, s);            }
-VD_CG_INL VdD3    vd_dall3            (VdCgf64 s)                                      { return vd_dm3(s, s, s);            }
-VD_CG_INL VdR3    vd_rall3            (VdRea s)                                        { return vd_rm3(s, s, s);            }
-VD_CG_INL VdF3    vd_fzero3           (void)                                           { return vd_fall3(0.f);              }
-VD_CG_INL VdD3    vd_dzero3           (void)                                           { return vd_dall3(0.f);              }
-VD_CG_INL VdR3    vd_rzero3           (void)                                           { return vd_rall3(0.f);              }
+VD_CG_INL VdF3     vd_fm3              (VdCgf32 x, VdCgf32 y, VdCgf32 z)                { VdF3 r; r.x = x; r.y = y; r.z = z; return r; }
+VD_CG_INL VdD3     vd_dm3              (VdCgf64 x, VdCgf64 y, VdCgf64 z)                { VdD3 r; r.x = x; r.y = y; r.z = z; return r; }
+VD_CG_INL VdR3     vd_rm3              (VdRea x, VdRea y, VdRea z)                      { VdR3 r; r.x = x; r.y = y; r.z = z; return r; }
+VD_CG_INL VdF3     vd_fall3            (VdCgf32 s)                                      { return vd_fm3(s, s, s);            }
+VD_CG_INL VdD3     vd_dall3            (VdCgf64 s)                                      { return vd_dm3(s, s, s);            }
+VD_CG_INL VdR3     vd_rall3            (VdRea s)                                        { return vd_rm3(s, s, s);            }
+VD_CG_INL VdF3     vd_fzero3           (void)                                           { return vd_fall3(0.f);              }
+VD_CG_INL VdD3     vd_dzero3           (void)                                           { return vd_dall3(0.f);              }
+VD_CG_INL VdR3     vd_rzero3           (void)                                           { return vd_rall3(0.f);              }
 
-VD_CG_INL VdF4    vd_fm4              (VdCgf32 x, VdCgf32 y, VdCgf32 z, VdCgf32 w)     { VdF4 r; r.x = x; r.y = y; r.z = z; r.w = w; return r; }
-VD_CG_INL VdD4    vd_dm4              (VdCgf64 x, VdCgf64 y, VdCgf64 z, VdCgf64 w)     { VdD4 r; r.x = x; r.y = y; r.z = z; r.w = w; return r; }
-VD_CG_INL VdR4    vd_rm4              (VdRea x, VdRea y, VdRea z, VdRea w)             { VdR4 r; r.x = x; r.y = y; r.z = z; r.w = w; return r; }
-VD_CG_INL VdF4    vd_fall4            (VdCgf32 s)                                      { return vd_fm4(s, s, s, s);         }
-VD_CG_INL VdD4    vd_dall4            (VdCgf64 s)                                      { return vd_dm4(s, s, s, s);         }
-VD_CG_INL VdR4    vd_rall4            (VdRea s)                                        { return vd_rm4(s, s, s, s);         }
-VD_CG_INL VdF4    vd_fzero4           (void)                                           { return vd_fall4(0.f);              }
-VD_CG_INL VdD4    vd_dzero4           (void)                                           { return vd_dall4(0.f);              }
-VD_CG_INL VdR4    vd_rzero4           (void)                                           { return vd_rall4(0.f);              }
+VD_CG_INL VdF4     vd_fm4              (VdCgf32 x, VdCgf32 y, VdCgf32 z, VdCgf32 w)     { VdF4 r; r.x = x; r.y = y; r.z = z; r.w = w; return r; }
+VD_CG_INL VdD4     vd_dm4              (VdCgf64 x, VdCgf64 y, VdCgf64 z, VdCgf64 w)     { VdD4 r; r.x = x; r.y = y; r.z = z; r.w = w; return r; }
+VD_CG_INL VdR4     vd_rm4              (VdRea x, VdRea y, VdRea z, VdRea w)             { VdR4 r; r.x = x; r.y = y; r.z = z; r.w = w; return r; }
+VD_CG_INL VdF4     vd_fall4            (VdCgf32 s)                                      { return vd_fm4(s, s, s, s);         }
+VD_CG_INL VdD4     vd_dall4            (VdCgf64 s)                                      { return vd_dm4(s, s, s, s);         }
+VD_CG_INL VdR4     vd_rall4            (VdRea s)                                        { return vd_rm4(s, s, s, s);         }
+VD_CG_INL VdF4     vd_fzero4           (void)                                           { return vd_fall4(0.f);              }
+VD_CG_INL VdD4     vd_dzero4           (void)                                           { return vd_dall4(0.f);              }
+VD_CG_INL VdR4     vd_rzero4           (void)                                           { return vd_rall4(0.f);              }
 
-VD_CG_INL VdF4x4  vd_fm4x4            (VdCgf32 a0, VdCgf32 a1, VdCgf32 a2, VdCgf32 a3,
-                                              VdCgf32 b0, VdCgf32 b1, VdCgf32 b2, VdCgf32 b3,
-                                              VdCgf32 c0, VdCgf32 c1, VdCgf32 c2, VdCgf32 c3,
-                                              VdCgf32 d0, VdCgf32 d1, VdCgf32 d2, VdCgf32 d3) { VdF4x4 r; r.a0 = a0; r.a1 = a1; r.a2 = a2; r.a3 = a3; r.b0 = b0; r.b1 = b1; r.b2 = b2; r.b3 = b3;   r.c0 = c0; r.c1 = c1; r.c2 = c2; r.c3 = c3; r.d0 = d0; r.d1 = d1; r.d2 = d2; r.d3 = d3;  return r; }
-VD_CG_INL VdD4x4  vd_dm4x4            (VdCgf64 a0, VdCgf64 a1, VdCgf64 a2, VdCgf64 a3,
-                                              VdCgf64 b0, VdCgf64 b1, VdCgf64 b2, VdCgf64 b3,
-                                              VdCgf64 c0, VdCgf64 c1, VdCgf64 c2, VdCgf64 c3,
-                                              VdCgf64 d0, VdCgf64 d1, VdCgf64 d2, VdCgf64 d3) { VdD4x4 r; r.a0 = a0; r.a1 = a1; r.a2 = a2; r.a3 = a3; r.b0 = b0; r.b1 = b1; r.b2 = b2; r.b3 = b3;   r.c0 = c0; r.c1 = c1; r.c2 = c2; r.c3 = c3; r.d0 = d0; r.d1 = d1; r.d2 = d2; r.d3 = d3;  return r; }
-VD_CG_INL VdR4x4  vd_rm4x4            (VdRea a0, VdRea a1, VdRea a2, VdRea a3,
-                                              VdRea b0, VdRea b1, VdRea b2, VdRea b3,
-                                              VdRea c0, VdRea c1, VdRea c2, VdRea c3,
-                                              VdRea d0, VdRea d1, VdRea d2, VdRea d3)         { VdR4x4 r; r.a0 = a0; r.a1 = a1; r.a2 = a2; r.a3 = a3; r.b0 = b0; r.b1 = b1; r.b2 = b2; r.b3 = b3;   r.c0 = c0; r.c1 = c1; r.c2 = c2; r.c3 = c3; r.d0 = d0; r.d1 = d1; r.d2 = d2; r.d3 = d3;  return r; }
+VD_CG_INL VdF4x4   vd_fm4x4            (VdCgf32 a0, VdCgf32 a1, VdCgf32 a2, VdCgf32 a3,
+                                               VdCgf32 b0, VdCgf32 b1, VdCgf32 b2, VdCgf32 b3,
+                                               VdCgf32 c0, VdCgf32 c1, VdCgf32 c2, VdCgf32 c3,
+                                               VdCgf32 d0, VdCgf32 d1, VdCgf32 d2, VdCgf32 d3) { VdF4x4 r; r.a0 = a0; r.a1 = a1; r.a2 = a2; r.a3 = a3; r.b0 = b0; r.b1 = b1; r.b2 = b2; r.b3 = b3;   r.c0 = c0; r.c1 = c1; r.c2 = c2; r.c3 = c3; r.d0 = d0; r.d1 = d1; r.d2 = d2; r.d3 = d3;  return r; }
+VD_CG_INL VdD4x4   vd_dm4x4            (VdCgf64 a0, VdCgf64 a1, VdCgf64 a2, VdCgf64 a3,
+                                               VdCgf64 b0, VdCgf64 b1, VdCgf64 b2, VdCgf64 b3,
+                                               VdCgf64 c0, VdCgf64 c1, VdCgf64 c2, VdCgf64 c3,
+                                               VdCgf64 d0, VdCgf64 d1, VdCgf64 d2, VdCgf64 d3) { VdD4x4 r; r.a0 = a0; r.a1 = a1; r.a2 = a2; r.a3 = a3; r.b0 = b0; r.b1 = b1; r.b2 = b2; r.b3 = b3;   r.c0 = c0; r.c1 = c1; r.c2 = c2; r.c3 = c3; r.d0 = d0; r.d1 = d1; r.d2 = d2; r.d3 = d3;  return r; }
+VD_CG_INL VdR4x4   vd_rm4x4            (VdRea a0, VdRea a1, VdRea a2, VdRea a3,
+                                               VdRea b0, VdRea b1, VdRea b2, VdRea b3,
+                                               VdRea c0, VdRea c1, VdRea c2, VdRea c3,
+                                               VdRea d0, VdRea d1, VdRea d2, VdRea d3)         { VdR4x4 r; r.a0 = a0; r.a1 = a1; r.a2 = a2; r.a3 = a3; r.b0 = b0; r.b1 = b1; r.b2 = b2; r.b3 = b3;   r.c0 = c0; r.c1 = c1; r.c2 = c2; r.c3 = c3; r.d0 = d0; r.d1 = d1; r.d2 = d2; r.d3 = d3;  return r; }
 
-VD_CG_INL VdF4x4  vd_fall4x4          (VdCgf32 v)                                      { return vd_fm4x4  (v,v,v,v,v,v,v,v,v,v,v,v,v,v,v,v);                                                  }
-VD_CG_INL VdD4x4  vd_dall4x4          (VdCgf64 v)                                      { return vd_dm4x4  (v,v,v,v,v,v,v,v,v,v,v,v,v,v,v,v);                                                  }
-VD_CG_INL VdR4x4  vd_rall4x4          (VdRea v)                                        { return vd_rm4x4  (v,v,v,v,v,v,v,v,v,v,v,v,v,v,v,v);                                                  }
+VD_CG_INL VdF4x4   vd_fall4x4          (VdCgf32 v)                                      { return vd_fm4x4  (v,v,v,v,v,v,v,v,v,v,v,v,v,v,v,v);                                                  }
+VD_CG_INL VdD4x4   vd_dall4x4          (VdCgf64 v)                                      { return vd_dm4x4  (v,v,v,v,v,v,v,v,v,v,v,v,v,v,v,v);                                                  }
+VD_CG_INL VdR4x4   vd_rall4x4          (VdRea v)                                        { return vd_rm4x4  (v,v,v,v,v,v,v,v,v,v,v,v,v,v,v,v);                                                  }
 
-VD_CG_INL VdFQuat vd_fmquat           (VdF3 ipart, VdCgf32 rpart)                      { VdFQuat r; r.x = ipart.x; r.y = ipart.y; r.z = ipart.z; r.w = rpart; return r; }
-VD_CG_INL VdDQuat vd_dmquat           (VdD3 ipart, VdCgf64 rpart)                      { VdDQuat r; r.x = ipart.x; r.y = ipart.y; r.z = ipart.z; r.w = rpart; return r; }
-VD_CG_INL VdRQuat vd_rmquat           (VdR3 ipart, VdRea rpart)                        { VdRQuat r; r.x = ipart.x; r.y = ipart.y; r.z = ipart.z; r.w = rpart; return r; }
+VD_CG_INL VdFQuat  vd_fmquat           (VdF3 ipart, VdCgf32 rpart)                      { VdFQuat r; r.x = ipart.x; r.y = ipart.y; r.z = ipart.z; r.w = rpart; return r; }
+VD_CG_INL VdDQuat  vd_dmquat           (VdD3 ipart, VdCgf64 rpart)                      { VdDQuat r; r.x = ipart.x; r.y = ipart.y; r.z = ipart.z; r.w = rpart; return r; }
+VD_CG_INL VdRQuat  vd_rmquat           (VdR3 ipart, VdRea rpart)                        { VdRQuat r; r.x = ipart.x; r.y = ipart.y; r.z = ipart.z; r.w = rpart; return r; }
+
+VD_CG_INL VdFRay   vd_fmray            (VdF3 origin, VdF3 direction)                    { VdFRay r; r.origin = origin; r.direction = direction; return r; }
 
 /* ----UTILITY------------------------------------------------------------------------------------------------------- */
-VD_CG_INL VdCgf32  vd_fwrap_degrees      (VdCgf32 d)                                     { return d - VD_CG_FTAU * VD_CG_FFLOOR(d / VD_CG_FTAU);       }
-VD_CG_INL VdCgf32  vd_fclamp             (VdCgf32 min, VdCgf32 x, VdCgf32 max)           { if (x < min) return min; if (x > max) return max; return x; }
-VD_CG_INL VdCgf32  vd_flerp              (VdCgf32 a, VdCgf32 b, VdCgf32 t)               { return a + t * (b - a); }
-VD_CG_INL VdCgf32  vd_fabs               (VdCgf32 f)                                     { VdCgu32 a = *((VdCgu32*)(&f)); a &= 0x7FFFFFFF; VdCgf32 *fa = ((VdCgf32*)&a); return *fa;}
-VD_CG_INL int      vd_feq                (VdCgf32 a, VdCgf32 b)                          { return vd_fabs(b - a) <= VD_CG_FEPSILON; }
+VD_CG_INL VdCgf32  vd_fwrap_degrees   (VdCgf32 d)                                      { return d - VD_CG_FTAU * VD_CG_FFLOOR(d / VD_CG_FTAU);       }
+VD_CG_INL VdCgf32  vd_fclamp          (VdCgf32 min, VdCgf32 x, VdCgf32 max)            { if (x < min) return min; if (x > max) return max; return x; }
+VD_CG_INL VdCgf32  vd_flerp           (VdCgf32 a, VdCgf32 b, VdCgf32 t)                { return a + t * (b - a); }
+VD_CG_INL VdCgf32  vd_fabs            (VdCgf32 f)                                      { VdCgu32 a = *((VdCgu32*)(&f)); a &= 0x7FFFFFFF; VdCgf32 *fa = ((VdCgf32*)&a); return *fa;}
+VD_CG_INL int      vd_feq             (VdCgf32 a, VdCgf32 b)                           { return vd_fabs(b - a) <= VD_CG_FEPSILON; }
 
 /* ----VECTOR ALGEBRA------------------------------------------------------------------------------------------------ */
-VD_CG_INL VdF2    vd_fadd2            (VdF2 a, VdF2 b)                                 { return vd_fm2(a.x + b.x, a.y + b.y); }
-VD_CG_INL VdD2    vd_dadd2            (VdD2 a, VdD2 b)                                 { return vd_dm2(a.x + b.x, a.y + b.y); }
-VD_CG_INL VdR2    vd_radd2            (VdR2 a, VdR2 b)                                 { return vd_rm2(a.x + b.x, a.y + b.y); }
+VD_CG_INL VdF2     vd_fadd2            (VdF2 a, VdF2 b)                                 { return vd_fm2(a.x + b.x, a.y + b.y); }
+VD_CG_INL VdD2     vd_dadd2            (VdD2 a, VdD2 b)                                 { return vd_dm2(a.x + b.x, a.y + b.y); }
+VD_CG_INL VdR2     vd_radd2            (VdR2 a, VdR2 b)                                 { return vd_rm2(a.x + b.x, a.y + b.y); }
 
-VD_CG_INL VdF3    vd_fadd3            (VdF3 a, VdF3 b)                                 { return vd_fm3(a.x + b.x, a.y + b.y, a.z + b.z); }
-VD_CG_INL VdD3    vd_dadd3            (VdD3 a, VdD3 b)                                 { return vd_dm3(a.x + b.x, a.y + b.y, a.z + b.z); }
-VD_CG_INL VdR3    vd_radd3            (VdR3 a, VdR3 b)                                 { return vd_rm3(a.x + b.x, a.y + b.y, a.z + b.z); }
+VD_CG_INL VdF3     vd_fadd3            (VdF3 a, VdF3 b)                                 { return vd_fm3(a.x + b.x, a.y + b.y, a.z + b.z); }
+VD_CG_INL VdD3     vd_dadd3            (VdD3 a, VdD3 b)                                 { return vd_dm3(a.x + b.x, a.y + b.y, a.z + b.z); }
+VD_CG_INL VdR3     vd_radd3            (VdR3 a, VdR3 b)                                 { return vd_rm3(a.x + b.x, a.y + b.y, a.z + b.z); }
 
-VD_CG_INL VdF4    vd_fadd4            (VdF4 a, VdF4 b)                                 { return vd_fm4(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w); }
-VD_CG_INL VdD4    vd_dadd4            (VdD4 a, VdD4 b)                                 { return vd_dm4(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w); }
-VD_CG_INL VdR4    vd_radd4            (VdR4 a, VdR4 b)                                 { return vd_rm4(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w); }
+VD_CG_INL VdF4     vd_fadd4            (VdF4 a, VdF4 b)                                 { return vd_fm4(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w); }
+VD_CG_INL VdD4     vd_dadd4            (VdD4 a, VdD4 b)                                 { return vd_dm4(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w); }
+VD_CG_INL VdR4     vd_radd4            (VdR4 a, VdR4 b)                                 { return vd_rm4(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w); }
 
-VD_CG_INL VdF2    vd_fsub2            (VdF2 a, VdF2 b)                                 { return vd_fm2(a.x - b.x, a.y - b.y); }
-VD_CG_INL VdD2    vd_dsub2            (VdD2 a, VdD2 b)                                 { return vd_dm2(a.x - b.x, a.y - b.y); }
-VD_CG_INL VdR2    vd_rsub2            (VdR2 a, VdR2 b)                                 { return vd_rm2(a.x - b.x, a.y - b.y); }
+VD_CG_INL VdF2     vd_fsub2            (VdF2 a, VdF2 b)                                 { return vd_fm2(a.x - b.x, a.y - b.y); }
+VD_CG_INL VdD2     vd_dsub2            (VdD2 a, VdD2 b)                                 { return vd_dm2(a.x - b.x, a.y - b.y); }
+VD_CG_INL VdR2     vd_rsub2            (VdR2 a, VdR2 b)                                 { return vd_rm2(a.x - b.x, a.y - b.y); }
 
-VD_CG_INL VdF3    vd_fsub3            (VdF3 a, VdF3 b)                                 { return vd_fm3(a.x - b.x, a.y - b.y, a.z - b.z); }
-VD_CG_INL VdD3    vd_dsub3            (VdD3 a, VdD3 b)                                 { return vd_dm3(a.x - b.x, a.y - b.y, a.z - b.z); }
-VD_CG_INL VdR3    vd_rsub3            (VdR3 a, VdR3 b)                                 { return vd_rm3(a.x - b.x, a.y - b.y, a.z - b.z); }
+VD_CG_INL VdF3     vd_fsub3            (VdF3 a, VdF3 b)                                 { return vd_fm3(a.x - b.x, a.y - b.y, a.z - b.z); }
+VD_CG_INL VdD3     vd_dsub3            (VdD3 a, VdD3 b)                                 { return vd_dm3(a.x - b.x, a.y - b.y, a.z - b.z); }
+VD_CG_INL VdR3     vd_rsub3            (VdR3 a, VdR3 b)                                 { return vd_rm3(a.x - b.x, a.y - b.y, a.z - b.z); }
 
-VD_CG_INL VdF4    vd_fsub4            (VdF4 a, VdF4 b)                                 { return vd_fm4(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w); }
-VD_CG_INL VdD4    vd_dsub4            (VdD4 a, VdD4 b)                                 { return vd_dm4(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w); }
-VD_CG_INL VdR4    vd_rsub4            (VdR4 a, VdR4 b)                                 { return vd_rm4(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w); }
+VD_CG_INL VdF4     vd_fsub4            (VdF4 a, VdF4 b)                                 { return vd_fm4(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w); }
+VD_CG_INL VdD4     vd_dsub4            (VdD4 a, VdD4 b)                                 { return vd_dm4(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w); }
+VD_CG_INL VdR4     vd_rsub4            (VdR4 a, VdR4 b)                                 { return vd_rm4(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w); }
 
-VD_CG_INL VdF2    vd_fscale2          (VdF2 v, VdCgf32 s)                              { return vd_fm2(v.x * s, v.y * s); }
-VD_CG_INL VdD2    vd_dscale2          (VdD2 v, VdCgf64 s)                              { return vd_dm2(v.x * s, v.y * s); }
-VD_CG_INL VdR2    vd_rscale2          (VdR2 v, VdRea s)                                { return vd_rm2(v.x * s, v.y * s); }
+VD_CG_INL VdF2     vd_fscale2          (VdF2 v, VdCgf32 s)                              { return vd_fm2(v.x * s, v.y * s); }
+VD_CG_INL VdD2     vd_dscale2          (VdD2 v, VdCgf64 s)                              { return vd_dm2(v.x * s, v.y * s); }
+VD_CG_INL VdR2     vd_rscale2          (VdR2 v, VdRea s)                                { return vd_rm2(v.x * s, v.y * s); }
 
-VD_CG_INL VdF3    vd_fscale3          (VdF3 v, VdCgf32 s)                              { return vd_fm3(v.x * s, v.y * s, v.z * s); }
-VD_CG_INL VdD3    vd_dscale3          (VdD3 v, VdCgf64 s)                              { return vd_dm3(v.x * s, v.y * s, v.z * s); }
-VD_CG_INL VdR3    vd_rscale3          (VdR3 v, VdRea s)                                { return vd_rm3(v.x * s, v.y * s, v.z * s); }
+VD_CG_INL VdF3     vd_fscale3          (VdF3 v, VdCgf32 s)                              { return vd_fm3(v.x * s, v.y * s, v.z * s); }
+VD_CG_INL VdD3     vd_dscale3          (VdD3 v, VdCgf64 s)                              { return vd_dm3(v.x * s, v.y * s, v.z * s); }
+VD_CG_INL VdR3     vd_rscale3          (VdR3 v, VdRea s)                                { return vd_rm3(v.x * s, v.y * s, v.z * s); }
 
-VD_CG_INL VdF2    vd_fdiv2            (VdF2 v, VdCgf32 s)                              { return vd_fm2(v.x / s, v.y / s); }
-VD_CG_INL VdD2    vd_ddiv2            (VdD2 v, VdCgf64 s)                              { return vd_dm2(v.x / s, v.y / s); }
-VD_CG_INL VdR2    vd_rdiv2            (VdR2 v, VdRea s)                                { return vd_rm2(v.x / s, v.y / s); }
+VD_CG_INL VdF2     vd_fdiv2            (VdF2 v, VdCgf32 s)                              { return vd_fm2(v.x / s, v.y / s); }
+VD_CG_INL VdD2     vd_ddiv2            (VdD2 v, VdCgf64 s)                              { return vd_dm2(v.x / s, v.y / s); }
+VD_CG_INL VdR2     vd_rdiv2            (VdR2 v, VdRea s)                                { return vd_rm2(v.x / s, v.y / s); }
 
-VD_CG_INL VdF3    vd_fdiv3            (VdF3 v, VdCgf32 s)                              { return vd_fm3(v.x / s, v.y / s, v.z / s); }
-VD_CG_INL VdD3    vd_ddiv3            (VdD3 v, VdCgf64 s)                              { return vd_dm3(v.x / s, v.y / s, v.z / s); }
-VD_CG_INL VdR3    vd_rdiv3            (VdR3 v, VdRea s)                                { return vd_rm3(v.x / s, v.y / s, v.z / s); }
+VD_CG_INL VdF3     vd_fdiv3            (VdF3 v, VdCgf32 s)                              { return vd_fm3(v.x / s, v.y / s, v.z / s); }
+VD_CG_INL VdD3     vd_ddiv3            (VdD3 v, VdCgf64 s)                              { return vd_dm3(v.x / s, v.y / s, v.z / s); }
+VD_CG_INL VdR3     vd_rdiv3            (VdR3 v, VdRea s)                                { return vd_rm3(v.x / s, v.y / s, v.z / s); }
 
-VD_CG_INL VdF4    vd_fdiv4            (VdF4 v, VdCgf32 s)                              { return vd_fm4(v.x / s, v.y / s, v.z / s, v.w / s); }
-VD_CG_INL VdD4    vd_ddiv4            (VdD4 v, VdCgf64 s)                              { return vd_dm4(v.x / s, v.y / s, v.z / s, v.w / s); }
-VD_CG_INL VdR4    vd_rdiv4            (VdR4 v, VdRea s)                                { return vd_rm4(v.x / s, v.y / s, v.z / s, v.w / s); }
+VD_CG_INL VdF4     vd_fdiv4            (VdF4 v, VdCgf32 s)                              { return vd_fm4(v.x / s, v.y / s, v.z / s, v.w / s); }
+VD_CG_INL VdD4     vd_ddiv4            (VdD4 v, VdCgf64 s)                              { return vd_dm4(v.x / s, v.y / s, v.z / s, v.w / s); }
+VD_CG_INL VdR4     vd_rdiv4            (VdR4 v, VdRea s)                                { return vd_rm4(v.x / s, v.y / s, v.z / s, v.w / s); }
 
-VD_CG_INL VdCgf32 vd_fdot2            (VdF2 a, VdF2 b)                                 { return a.x * b.x + a.y * b.y; }
-VD_CG_INL VdCgf64 vd_ddot2            (VdD2 a, VdD2 b)                                 { return a.x * b.x + a.y * b.y; }
-VD_CG_INL VdRea   vd_rdot2            (VdR2 a, VdR2 b)                                 { return a.x * b.x + a.y * b.y; }
+VD_CG_INL VdCgf32  vd_fdot2            (VdF2 a, VdF2 b)                                 { return a.x * b.x + a.y * b.y; }
+VD_CG_INL VdCgf64  vd_ddot2            (VdD2 a, VdD2 b)                                 { return a.x * b.x + a.y * b.y; }
+VD_CG_INL VdRea    vd_rdot2            (VdR2 a, VdR2 b)                                 { return a.x * b.x + a.y * b.y; }
 
-VD_CG_INL VdCgf32 vd_fdot3            (VdF3 a, VdF3 b)                                 { return a.x * b.x + a.y * b.y + a.z * b.z; }
-VD_CG_INL VdCgf64 vd_ddot3            (VdD3 a, VdD3 b)                                 { return a.x * b.x + a.y * b.y + a.z * b.z; }
-VD_CG_INL VdRea   vd_rdot3            (VdR3 a, VdR3 b)                                 { return a.x * b.x + a.y * b.y + a.z * b.z; }
+VD_CG_INL VdCgf32  vd_fdot3            (VdF3 a, VdF3 b)                                 { return a.x * b.x + a.y * b.y + a.z * b.z; }
+VD_CG_INL VdCgf64  vd_ddot3            (VdD3 a, VdD3 b)                                 { return a.x * b.x + a.y * b.y + a.z * b.z; }
+VD_CG_INL VdRea    vd_rdot3            (VdR3 a, VdR3 b)                                 { return a.x * b.x + a.y * b.y + a.z * b.z; }
 
-VD_CG_INL VdCgf32 vd_fdot4            (VdF4 a, VdF4 b)                                 { return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w; }
-VD_CG_INL VdCgf64 vd_ddot4            (VdD4 a, VdD4 b)                                 { return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w; }
-VD_CG_INL VdRea   vd_rdot4            (VdR4 a, VdR4 b)                                 { return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w; }
+VD_CG_INL VdCgf32  vd_fdot4            (VdF4 a, VdF4 b)                                 { return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w; }
+VD_CG_INL VdCgf64  vd_ddot4            (VdD4 a, VdD4 b)                                 { return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w; }
+VD_CG_INL VdRea    vd_rdot4            (VdR4 a, VdR4 b)                                 { return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w; }
 
-VD_CG_INL VdCgf32 vd_flensq2          (VdF2 v)                                         { return vd_fdot2(v, v); }
-VD_CG_INL VdCgf64 vd_dlensq2          (VdD2 v)                                         { return vd_ddot2(v, v); }
-VD_CG_INL VdRea   vd_rlensq2          (VdR2 v)                                         { return vd_rdot2(v, v); }
+VD_CG_INL VdCgf32  vd_flensq2          (VdF2 v)                                         { return vd_fdot2(v, v); }
+VD_CG_INL VdCgf64  vd_dlensq2          (VdD2 v)                                         { return vd_ddot2(v, v); }
+VD_CG_INL VdRea    vd_rlensq2          (VdR2 v)                                         { return vd_rdot2(v, v); }
 
-VD_CG_INL VdCgf32 vd_flensq3          (VdF3 v)                                         { return vd_fdot3(v, v); }
-VD_CG_INL VdCgf64 vd_dlensq3          (VdD3 v)                                         { return vd_ddot3(v, v); }
-VD_CG_INL VdRea   vd_rlensq3          (VdR3 v)                                         { return vd_rdot3(v, v); }
+VD_CG_INL VdCgf32  vd_flensq3          (VdF3 v)                                         { return vd_fdot3(v, v); }
+VD_CG_INL VdCgf64  vd_dlensq3          (VdD3 v)                                         { return vd_ddot3(v, v); }
+VD_CG_INL VdRea    vd_rlensq3          (VdR3 v)                                         { return vd_rdot3(v, v); }
 
-VD_CG_INL VdCgf32 vd_flensq4          (VdF4 v)                                         { return vd_fdot4(v, v); }
-VD_CG_INL VdCgf64 vd_dlensq4          (VdD4 v)                                         { return vd_ddot4(v, v); }
-VD_CG_INL VdRea   vd_rlensq4          (VdR4 v)                                         { return vd_rdot4(v, v); }
+VD_CG_INL VdCgf32  vd_flensq4          (VdF4 v)                                         { return vd_fdot4(v, v); }
+VD_CG_INL VdCgf64  vd_dlensq4          (VdD4 v)                                         { return vd_ddot4(v, v); }
+VD_CG_INL VdRea    vd_rlensq4          (VdR4 v)                                         { return vd_rdot4(v, v); }
 
-VD_CG_INL VdF2    vd_fnormalize2      (VdF2 v)                                         { VdCgf32 l = vd_flensq2(v); return vd_fdiv2(v, VD_CG_FSQRT(l)); }
-VD_CG_INL VdD2    vd_dnormalize2      (VdD2 v)                                         { VdCgf64 l = vd_dlensq2(v); return vd_ddiv2(v, VD_CG_DSQRT(l)); }
-VD_CG_INL VdR2    vd_rnormalize2      (VdR2 v)                                         { VdRea l   = vd_rlensq2(v); return vd_rdiv2(v, VD_CG_RSQRT(l)); }
+VD_CG_INL VdF2     vd_fnormalize2      (VdF2 v)                                         { VdCgf32 l = vd_flensq2(v); return vd_fdiv2(v, VD_CG_FSQRT(l)); }
+VD_CG_INL VdD2     vd_dnormalize2      (VdD2 v)                                         { VdCgf64 l = vd_dlensq2(v); return vd_ddiv2(v, VD_CG_DSQRT(l)); }
+VD_CG_INL VdR2     vd_rnormalize2      (VdR2 v)                                         { VdRea l   = vd_rlensq2(v); return vd_rdiv2(v, VD_CG_RSQRT(l)); }
 
-VD_CG_INL VdF3    vd_fnormalize3      (VdF3 v)                                         { VdCgf32 l = vd_flensq3(v); return vd_fdiv3(v, VD_CG_FSQRT(l)); }
-VD_CG_INL VdD3    vd_dnormalize3      (VdD3 v)                                         { VdCgf64 l = vd_dlensq3(v); return vd_ddiv3(v, VD_CG_DSQRT(l)); }
-VD_CG_INL VdR3    vd_rnormalize3      (VdR3 v)                                         { VdRea l   = vd_rlensq3(v); return vd_rdiv3(v, VD_CG_RSQRT(l)); }
+VD_CG_INL VdF3     vd_fnormalize3      (VdF3 v)                                         { VdCgf32 l = vd_flensq3(v); return vd_fdiv3(v, VD_CG_FSQRT(l)); }
+VD_CG_INL VdD3     vd_dnormalize3      (VdD3 v)                                         { VdCgf64 l = vd_dlensq3(v); return vd_ddiv3(v, VD_CG_DSQRT(l)); }
+VD_CG_INL VdR3     vd_rnormalize3      (VdR3 v)                                         { VdRea l   = vd_rlensq3(v); return vd_rdiv3(v, VD_CG_RSQRT(l)); }
 
-VD_CG_INL VdF4    vd_fnormalize4      (VdF4 v)                                         { VdCgf32 l = vd_flensq4(v); return vd_fdiv4(v, VD_CG_FSQRT(l)); }
-VD_CG_INL VdD4    vd_dnormalize4      (VdD4 v)                                         { VdCgf64 l = vd_dlensq4(v); return vd_ddiv4(v, VD_CG_DSQRT(l)); }
-VD_CG_INL VdR4    vd_rnormalize4      (VdR4 v)                                         { VdRea l   = vd_rlensq4(v); return vd_rdiv4(v, VD_CG_RSQRT(l)); }
+VD_CG_INL VdF4     vd_fnormalize4      (VdF4 v)                                         { VdCgf32 l = vd_flensq4(v); return vd_fdiv4(v, VD_CG_FSQRT(l)); }
+VD_CG_INL VdD4     vd_dnormalize4      (VdD4 v)                                         { VdCgf64 l = vd_dlensq4(v); return vd_ddiv4(v, VD_CG_DSQRT(l)); }
+VD_CG_INL VdR4     vd_rnormalize4      (VdR4 v)                                         { VdRea l   = vd_rlensq4(v); return vd_rdiv4(v, VD_CG_RSQRT(l)); }
 
-VD_CG_INL VdF2    vd_fnoz2            (VdF2 v)                                         { VdCgf32 l = vd_flensq2(v); if (l == 0.f) return vd_fzero2(); else return vd_fdiv2(v, VD_CG_FSQRT(l)); }
-VD_CG_INL VdD2    vd_dnoz2            (VdD2 v)                                         { VdCgf64 l = vd_dlensq2(v); if (l == 0.f) return vd_dzero2(); else return vd_ddiv2(v, VD_CG_DSQRT(l)); }
-VD_CG_INL VdR2    vd_rnoz2            (VdR2 v)                                         { VdRea l   = vd_rlensq2(v); if (l == 0.f) return vd_rzero2(); else return vd_rdiv2(v, VD_CG_RSQRT(l)); }
-VD_CG_INL VdF3    vd_fnoz3            (VdF3 v)                                         { VdCgf32 l = vd_flensq3(v); if (l == 0.f) return vd_fzero3(); else return vd_fdiv3(v, VD_CG_FSQRT(l)); }
-VD_CG_INL VdD3    vd_dnoz3            (VdD3 v)                                         { VdCgf64 l = vd_dlensq3(v); if (l == 0.f) return vd_dzero3(); else return vd_ddiv3(v, VD_CG_DSQRT(l)); }
-VD_CG_INL VdR3    vd_rnoz3            (VdR3 v)                                         { VdRea l   = vd_rlensq3(v); if (l == 0.f) return vd_rzero3(); else return vd_rdiv3(v, VD_CG_RSQRT(l)); }
-VD_CG_INL VdF4    vd_fnoz4            (VdF4 v)                                         { VdCgf32 l = vd_flensq4(v); if (l == 0.f) return vd_fzero4(); else return vd_fdiv4(v, VD_CG_FSQRT(l)); }
-VD_CG_INL VdD4    vd_dnoz4            (VdD4 v)                                         { VdCgf64 l = vd_dlensq4(v); if (l == 0.f) return vd_dzero4(); else return vd_ddiv4(v, VD_CG_DSQRT(l)); }
-VD_CG_INL VdR4    vd_rnoz4            (VdR4 v)                                         { VdRea l   = vd_rlensq4(v); if (l == 0.f) return vd_rzero4(); else return vd_rdiv4(v, VD_CG_RSQRT(l)); }
+VD_CG_INL VdF2     vd_fnoz2            (VdF2 v)                                         { VdCgf32 l = vd_flensq2(v); if (l == 0.f) return vd_fzero2(); else return vd_fdiv2(v, VD_CG_FSQRT(l)); }
+VD_CG_INL VdD2     vd_dnoz2            (VdD2 v)                                         { VdCgf64 l = vd_dlensq2(v); if (l == 0.f) return vd_dzero2(); else return vd_ddiv2(v, VD_CG_DSQRT(l)); }
+VD_CG_INL VdR2     vd_rnoz2            (VdR2 v)                                         { VdRea l   = vd_rlensq2(v); if (l == 0.f) return vd_rzero2(); else return vd_rdiv2(v, VD_CG_RSQRT(l)); }
+VD_CG_INL VdF3     vd_fnoz3            (VdF3 v)                                         { VdCgf32 l = vd_flensq3(v); if (l == 0.f) return vd_fzero3(); else return vd_fdiv3(v, VD_CG_FSQRT(l)); }
+VD_CG_INL VdD3     vd_dnoz3            (VdD3 v)                                         { VdCgf64 l = vd_dlensq3(v); if (l == 0.f) return vd_dzero3(); else return vd_ddiv3(v, VD_CG_DSQRT(l)); }
+VD_CG_INL VdR3     vd_rnoz3            (VdR3 v)                                         { VdRea l   = vd_rlensq3(v); if (l == 0.f) return vd_rzero3(); else return vd_rdiv3(v, VD_CG_RSQRT(l)); }
+VD_CG_INL VdF4     vd_fnoz4            (VdF4 v)                                         { VdCgf32 l = vd_flensq4(v); if (l == 0.f) return vd_fzero4(); else return vd_fdiv4(v, VD_CG_FSQRT(l)); }
+VD_CG_INL VdD4     vd_dnoz4            (VdD4 v)                                         { VdCgf64 l = vd_dlensq4(v); if (l == 0.f) return vd_dzero4(); else return vd_ddiv4(v, VD_CG_DSQRT(l)); }
+VD_CG_INL VdR4     vd_rnoz4            (VdR4 v)                                         { VdRea l   = vd_rlensq4(v); if (l == 0.f) return vd_rzero4(); else return vd_rdiv4(v, VD_CG_RSQRT(l)); }
 
-VD_CG_INL VdF3    vd_fcross3          (VdF3 a, VdF3 b)                                 { return vd_fm3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x); }
-VD_CG_INL VdD3    vd_dcross3          (VdD3 a, VdD3 b)                                 { return vd_dm3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x); }
-VD_CG_INL VdR3    vd_rcross3          (VdR3 a, VdR3 b)                                 { return vd_rm3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x); }
+VD_CG_INL VdF3     vd_fcross3          (VdF3 a, VdF3 b)                                 { return vd_fm3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x); }
+VD_CG_INL VdD3     vd_dcross3          (VdD3 a, VdD3 b)                                 { return vd_dm3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x); }
+VD_CG_INL VdR3     vd_rcross3          (VdR3 a, VdR3 b)                                 { return vd_rm3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x); }
 
-VD_CG_INL int     vd_feq2             (VdF2 a, VdF2 b)                                 { return vd_feq(a.x, b.x) && vd_feq(a.y, b.y); }
-VD_CG_INL int     vd_feq3             (VdF3 a, VdF3 b)                                 { return vd_feq(a.x, b.x) && vd_feq(a.y, b.y) && vd_feq(a.z, b.z); }
-VD_CG_INL int     vd_feq4             (VdF4 a, VdF4 b)                                 { return vd_feq(a.x, b.x) && vd_feq(a.y, b.y) && vd_feq(a.z, b.z) && vd_feq(a.w, b.w); }
+VD_CG_INL int      vd_feq2             (VdF2 a, VdF2 b)                                 { return vd_feq(a.x, b.x) && vd_feq(a.y, b.y); }
+VD_CG_INL int      vd_feq3             (VdF3 a, VdF3 b)                                 { return vd_feq(a.x, b.x) && vd_feq(a.y, b.y) && vd_feq(a.z, b.z); }
+VD_CG_INL int      vd_feq4             (VdF4 a, VdF4 b)                                 { return vd_feq(a.x, b.x) && vd_feq(a.y, b.y) && vd_feq(a.z, b.z) && vd_feq(a.w, b.w); }
 
 /* ----MATRIX ALGEBRA------------------------------------------------------------------------------------------------ */
-VD_CG_INL VdF4x4  vd_ftranspose4x4     (VdF4x4 *m);
-VD_CG_INL VdF4x4  vd_fmul4x4           (VdF4x4 *a, VdF4x4 *b);
-VD_CG_INL VdF4x4  vd_fmul4x4col        (VdF4x4 *a, VdF4x4 *b);
-VD_CG_INL VdF3    vd_fmul4x4_3         (VdF4x4 *m, VdF3    v);
-VD_CG_INL VdF4    vd_fmul4x4_4         (VdF4x4 *m, VdF4    v);
-VD_CG_INL VdF4x4  vd_finverse4x4       (VdF4x4 *m);
+VD_CG_INL VdF4x4   vd_ftranspose4x4    (VdF4x4 *m);
+VD_CG_INL VdF4x4   vd_fmul4x4          (VdF4x4 *a, VdF4x4 *b);
+VD_CG_INL VdF4x4   vd_fmul4x4col       (VdF4x4 *a, VdF4x4 *b);
+VD_CG_INL VdF3     vd_fmul4x4_3        (VdF4x4 *m, VdF3    v);
+VD_CG_INL VdF4     vd_fmul4x4_4        (VdF4x4 *m, VdF4    v);
+VD_CG_INL VdF4x4   vd_finverse4x4      (VdF4x4 *m);
 
 
 /* ----QUATERNION ALGEBRA-------------------------------------------------------------------------------------------- */
-VD_CG_INL VdFQuat vd_fidentityquat    (void)                                           { return vd_fmquat(vd_fzero3(), 1.f); }
-VD_CG_INL VdDQuat vd_didentityquat    (void)                                           { return vd_dmquat(vd_dzero3(), 1.0); }
-VD_CG_INL VdRQuat vd_ridentityquat    (void)                                           { return vd_rmquat(vd_rzero3(), 1.0); }
+VD_CG_INL VdFQuat  vd_fidentityquat    (void)                                           { return vd_fmquat(vd_fzero3(), 1.f); }
+VD_CG_INL VdDQuat  vd_didentityquat    (void)                                           { return vd_dmquat(vd_dzero3(), 1.0); }
+VD_CG_INL VdRQuat  vd_ridentityquat    (void)                                           { return vd_rmquat(vd_rzero3(), 1.0); }
 
-VD_CG_INL VdCgf32 vd_flensqquat       (VdFQuat q)                                      { return q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w; }
-VD_CG_INL VdCgf64 vd_dlensqquat       (VdDQuat q)                                      { return q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w; }
-VD_CG_INL VdRea   vd_rlensqquat       (VdRQuat q)                                      { return q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w; }
+VD_CG_INL VdCgf32  vd_flensqquat       (VdFQuat q)                                      { return q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w; }
+VD_CG_INL VdCgf64  vd_dlensqquat       (VdDQuat q)                                      { return q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w; }
+VD_CG_INL VdRea    vd_rlensqquat       (VdRQuat q)                                      { return q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w; }
 
-VD_CG_INL VdFQuat vd_fnormalizequat   (VdFQuat q)                                      { VdCgf32 l = vd_flensqquat(q); return vd_fdiv4(q, VD_CG_FSQRT(l)); }
-VD_CG_INL VdDQuat vd_dnormalizequat   (VdDQuat q)                                      { VdCgf64 l = vd_dlensqquat(q); return vd_ddiv4(q, VD_CG_DSQRT(l)); }
-VD_CG_INL VdRQuat vd_rnormalizequat   (VdRQuat q)                                      { VdRea l = vd_rlensqquat(q); return vd_rdiv4(q, VD_CG_RSQRT(l)); }
+VD_CG_INL VdFQuat  vd_fnormalizequat   (VdFQuat q)                                      { VdCgf32 l = vd_flensqquat(q); return vd_fdiv4(q, VD_CG_FSQRT(l)); }
+VD_CG_INL VdDQuat  vd_dnormalizequat   (VdDQuat q)                                      { VdCgf64 l = vd_dlensqquat(q); return vd_ddiv4(q, VD_CG_DSQRT(l)); }
+VD_CG_INL VdRQuat  vd_rnormalizequat   (VdRQuat q)                                      { VdRea l = vd_rlensqquat(q); return vd_rdiv4(q, VD_CG_RSQRT(l)); }
 
-VD_CG_INL VdFQuat vd_fnozquat         (VdFQuat q)                                      { VdCgf32 l = vd_flensqquat(q); if (vd_feq(l, 0.f)) return vd_fidentityquat(); else return vd_fdiv4(q, VD_CG_FSQRT(l)); }
-VD_CG_INL VdDQuat vd_dnozquat         (VdDQuat q)                                      { VdCgf64 l = vd_dlensqquat(q); if (l == 0.0) return vd_didentityquat(); else return vd_ddiv4(q, VD_CG_DSQRT(l)); }
-VD_CG_INL VdRQuat vd_rnozquat         (VdRQuat q)                                      { VdRea l = vd_rlensqquat(q); if (l == 0.0) return vd_ridentityquat(); else return vd_rdiv4(q, VD_CG_RSQRT(l)); }
+VD_CG_INL VdFQuat  vd_fnozquat         (VdFQuat q)                                      { VdCgf32 l = vd_flensqquat(q); if (vd_feq(l, 0.f)) return vd_fidentityquat(); else return vd_fdiv4(q, VD_CG_FSQRT(l)); }
+VD_CG_INL VdDQuat  vd_dnozquat         (VdDQuat q)                                      { VdCgf64 l = vd_dlensqquat(q); if (l == 0.0) return vd_didentityquat(); else return vd_ddiv4(q, VD_CG_DSQRT(l)); }
+VD_CG_INL VdRQuat  vd_rnozquat         (VdRQuat q)                                      { VdRea l = vd_rlensqquat(q); if (l == 0.0) return vd_ridentityquat(); else return vd_rdiv4(q, VD_CG_RSQRT(l)); }
 
-VD_CG_INL VdFQuat vd_fconquat         (VdFQuat q)                                      { q.x = -q.x; q.y = -q.y; q.z = -q.z; return q; }
+VD_CG_INL VdFQuat  vd_fconquat         (VdFQuat q)                                      { q.x = -q.x; q.y = -q.y; q.z = -q.z; return q; }
 
-VD_CG_INL VdFQuat vd_faxis_anglequat  (VdF3 axis, VdCgf32 angle)                       { return vd_fmquat(vd_fscale3(axis, VD_CG_FSIN(angle * .5f)), VD_CG_FCOS(angle * .5f)); }
-VD_CG_INL VdFQuat vd_fmulquat         (VdFQuat q1, VdFQuat q2);
-VD_CG_INL VdF3    vd_fmulquat_3       (VdFQuat q, VdF3 v);
-VD_CG_INL VdF4x4  vd_fto4x4quat       (VdFQuat q);
-VD_CG_INL VdFQuat vd_feulerquat       (VdF3 euler);
-VD_CG_INL VdFQuat vd_flookrotquat     (VdF3 fwd, VdF3 updir);
+VD_CG_INL VdFQuat  vd_faxis_anglequat  (VdF3 axis, VdCgf32 angle)                       { return vd_fmquat(vd_fscale3(axis, VD_CG_FSIN(angle * .5f)), VD_CG_FCOS(angle * .5f)); }
+VD_CG_INL VdFQuat  vd_fmulquat         (VdFQuat q1, VdFQuat q2);
+VD_CG_INL VdF3     vd_fmulquat_3       (VdFQuat q, VdF3 v);
+VD_CG_INL VdF4x4   vd_fto4x4quat       (VdFQuat q);
+VD_CG_INL VdFQuat  vd_feulerquat       (VdF3 euler);
+VD_CG_INL VdFQuat  vd_flookrotquat     (VdF3 fwd, VdF3 updir);
+
+/* ----CONVERSIONS--------------------------------------------------------------------------------------------------- */
+VD_CG_INL VdFRay   vd_fline_to_ray     (VdFLine line)                                   { VdFRay r; r.origin = line.a; r.direction = vd_fnoz3(vd_fsub3(line.b, line.a)); return r; }
 
 /* ----COORDINATE SYSTEMS-------------------------------------------------------------------------------------------- */
-VD_CG_INL VdF4x4  vd_fidentity4x4        (void);
-VD_CG_INL VdF4x4  vd_fdx_to_vk4x4        (void);
-VD_CG_INL VdF4x4  vd_fperspective4x4     (VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr, VdCgf32 pfr);
-VD_CG_INL VdF4x4  vd_fperspective4x4_vk  (VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr, VdCgf32 pfr);
-VD_CG_INL VdF4x4  vd_flookat4x4          (VdF3 from, VdF3 to, VdF3 up);
-VD_CG_INL VdF4x4  vd_ftranslation4x4     (VdF3 v);
-VD_CG_INL VdF4x4  vd_ftranslation4x4col  (VdF3 v);
-VD_CG_INL VdF4x4  vd_frotation_pitch4x4  (VdCgf32 rad);
-VD_CG_INL VdF4x4  vd_frotation_yaw4x4    (VdCgf32 rad);
-VD_CG_INL VdF4x4  vd_frotation_roll4x4   (VdCgf32 rad);
-VD_CG_INL VdF4x4  vd_frotation_quat4x4   (VdFQuat quat);
-VD_CG_INL VdF4x4  vd_frotation_quat4x4col(VdFQuat quat);
-VD_CG_INL void    vd_ftranslate4x4       (VdF4x4 *m, VdF3 v);
-VD_CG_INL void    vd_ftranslate4x4col    (VdF4x4 *m, VdF3 v);
-VD_CG_INL void    vd_frotatequat4x4      (VdF4x4 *m, VdFQuat quat);
-VD_CG_INL void    vd_frotatequat4x4col   (VdF4x4 *m, VdFQuat quat);
-VD_CG_INL void    vd_frotate_yaw4x4      (VdF4x4 *m, VdCgf32 rad);
-VD_CG_INL VdF4x4  vd_fvk_to_dx4x4        (void);
+VD_CG_INL VdF4x4   vd_fidentity4x4        (void);
+VD_CG_INL VdF4x4   vd_fdx_to_vk4x4        (void);
+VD_CG_INL VdF4x4   vd_fperspective4x4     (VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr, VdCgf32 pfr);
+VD_CG_INL VdF4x4   vd_fperspective4x4_vk  (VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr, VdCgf32 pfr);
+VD_CG_INL VdF4x4   vd_flookat4x4          (VdF3 from, VdF3 to, VdF3 up);
+VD_CG_INL VdF4x4   vd_ftranslation4x4     (VdF3 v);
+VD_CG_INL VdF4x4   vd_ftranslation4x4col  (VdF3 v);
+VD_CG_INL VdF4x4   vd_frotation_pitch4x4  (VdCgf32 rad);
+VD_CG_INL VdF4x4   vd_frotation_yaw4x4    (VdCgf32 rad);
+VD_CG_INL VdF4x4   vd_frotation_roll4x4   (VdCgf32 rad);
+VD_CG_INL VdF4x4   vd_frotation_quat4x4   (VdFQuat quat);
+VD_CG_INL VdF4x4   vd_frotation_quat4x4col(VdFQuat quat);
+VD_CG_INL void     vd_ftranslate4x4       (VdF4x4 *m, VdF3 v);
+VD_CG_INL void     vd_ftranslate4x4col    (VdF4x4 *m, VdF3 v);
+VD_CG_INL void     vd_frotatequat4x4      (VdF4x4 *m, VdFQuat quat);
+VD_CG_INL void     vd_frotatequat4x4col   (VdF4x4 *m, VdFQuat quat);
+VD_CG_INL void     vd_frotate_yaw4x4      (VdF4x4 *m, VdCgf32 rad);
+VD_CG_INL VdF4x4   vd_fvk_to_dx4x4        (void);
 
 /* ----COLLISION DETECTION------------------------------------------------------------------------------------------- */
 VD_CG_INL VdF3     vd_fclosest_point_tri (VdF3 p, VdF3 t0, VdF3 t1, VdF3 t2);
@@ -984,6 +1001,7 @@ VD_CG_INL VdF3 vd_fclosest_point_tri(VdF3 p, VdF3 t0, VdF3 t1, VdF3 t2)
 #define F4x4                     VdF4x4
 #define FQuat                    VdFQuat
 #define FLine                    VdFLine
+#define FRay                     VdFRay 
 #define D2                       VdD2
 #define D3                       VdD3
 #define D4                       VdD4
@@ -992,6 +1010,7 @@ VD_CG_INL VdF3 vd_fclosest_point_tri(VdF3 p, VdF3 t0, VdF3 t1, VdF3 t2)
 #define D4x4                     VdD4x4
 #define DQuat                    VdDQuat
 #define DLine                    VdDLine
+#define DRay                     VdDRay 
 #define R2                       VdR2
 #define R3                       VdR3
 #define R4                       VdR4
@@ -1000,6 +1019,7 @@ VD_CG_INL VdF3 vd_fclosest_point_tri(VdF3 p, VdF3 t0, VdF3 t1, VdF3 t2)
 #define R4x4                     VdR4x4
 #define RQuat                    VdRQuat
 #define RLine                    VdRLine
+#define RRay                     VdRRay
 
 /* ----INITIALIZATION------------------------------------------------------------------------------------------------ */
 #define dm2                      vd_dm2
@@ -1038,6 +1058,7 @@ VD_CG_INL VdF3 vd_fclosest_point_tri(VdF3 p, VdF3 t0, VdF3 t1, VdF3 t2)
 #define fmquat                   vd_fmquat
 #define dmquat                   vd_dmquat
 #define rmquat                   vd_rmquat
+#define fmray                    vd_fmray
 
 /* ----VECTOR ALGEBRA------------------------------------------------------------------------------------------------ */
 #define fadd2                    vd_fadd2 
@@ -1138,6 +1159,10 @@ VD_CG_INL VdF3 vd_fclosest_point_tri(VdF3 p, VdF3 t0, VdF3 t1, VdF3 t2)
 #define fmulquat_3               vd_fmulquat_3 
 #define fto4x4quat               vd_fto4x4quat 
 #define feulerquat               vd_feulerquat 
+#define flookrotquat             vd_flookrotquat
+
+/* ----CONVERSIONS--------------------------------------------------------------------------------------------------- */
+#define fline_to_ray             vd_fline_to_ray
 
 /* ----COORDINATE SYSTEMS-------------------------------------------------------------------------------------------- */
 #define fidentity4x4             vd_fidentity4x4 
