@@ -143,18 +143,13 @@ int main(int argc, char const *argv[])
         {
             vd_um_event_mouse_position(mouse_pos.e);
 
-            FRay ray;
-            vd_um_get_picking_ray(ray.origin.e, ray.direction.e);
-
             vd_um_grid(fzero3().e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 100.f, fm4(1,1,1,1).e);
             vd_um_segment(fm3(-1,1,1).e, fm3(1,1,1).e, 0.01f, fm4(1,1,0,1).e);
 
-            vd_um_point(fadd3(ray.origin, fscale3(ray.direction, 1)).e, 0.05f, fm4(1,0,1,1).e);
-
             vd_um_point(fm3(0,0,0).e, 0.05f, fm4(1,0,1,1).e);
-            vd_um_cylinder(fzero3().e, flookrotquat(fm3(0,0,1), fm3(0,1,0)).e, 1.f, 0.01f, fm4(0.2f,0.2f,0.7f,1).e);
-            vd_um_cylinder(fzero3().e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 1.f, 0.01f, fm4(0.2f,0.7f,0.2f,1).e);
-            vd_um_cylinder(fzero3().e, flookrotquat(fm3(1,0,0), fm3(0,1,0)).e, 1.f, 0.01f, fm4(0.7f,0.2f,0.2f,1).e);
+            vd_um_i_cylinder(fzero3().e, flookrotquat(fm3(0,0,1), fm3(0,1,0)).e, 1.f, 0.01f, fm4(0.2f,0.2f,0.7f,1).e, fm4(0.2f, 0.7f, 0.7f, 1).e);
+            vd_um_i_cylinder(fzero3().e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 1.f, 0.01f, fm4(0.2f,0.7f,0.2f,1).e, fm4(0.2f, 0.7f, 0.7f, 1).e);
+            vd_um_i_cylinder(fzero3().e, flookrotquat(fm3(1,0,0), fm3(0,1,0)).e, 1.f, 0.01f, fm4(0.7f,0.2f,0.2f,1).e, fm4(0.2f, 0.7f, 0.7f, 1).e);
         }
         vd_um_viewport_end();
         vd_um_frame_end();

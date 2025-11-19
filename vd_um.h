@@ -89,6 +89,7 @@ VD_UM_API void              vd_um_point(float position[3], float size, float col
 VD_UM_API void              vd_um_segment(float start[3], float end[3], float thickness, float color[4]);
 VD_UM_API void              vd_um_grid(float origin[3], float orientation[4], float extent, float color[4]);
 VD_UM_API void              vd_um_cylinder(float base[3], float orientation[4], float height, float radius, float color[4]);
+VD_UM_API void              vd_um_i_cylinder(float base[3], float orientation[4], float height, float radius, float normal_color[4], float hover_color[4]);
 
 VD_UM_API void              vd_um_get_picking_ray(float origin[3], float direction[3]);
 
@@ -184,6 +185,10 @@ VD_UM_INL   void            vd_um__div3(float a[3], float s, float out[3]);
 VD_UM_INL   float           vd_um__lensq3(float a[3]);
 VD_UM_INL   void            vd_um__noz3(float a[3], float out[3]);
 VD_UM_INL   void            vd_um__mul_matrix_point(float matrix[16], float point[4], float out[4]);
+VD_UM_INL   void            vd_um__conjugate(float q[4], float out[4]);
+VD_UM_INL   void            vd_um__mul_quaternion(float q1[4], float q2[4], float out[4]);
+VD_UM_INL   void            vd_um__mul_quaternion_vector(float q1[4], float v[3], float out[3]);
+VD_UM_INL   int             vd_um__line_vs_cylinder(float line_a[3], float line_b[3], float P[3], float Q[3], float R, float *t);
 static      void            vd_um__push_vertex(VdUmContext *ctx, VdUmVertex *vertex);
 static      VdUmRenderPass* vd_um__get_current_pass(VdUmContext *ctx);
 static      void            vd_um__require_render_pass(VdUmContext *ctx, int flags, int vertex_count);
@@ -360,6 +365,45 @@ VD_UM_API void vd_um_cylinder(float base[3], float orientation[4], float height,
     vertex.pos1[0] = radius;
 
     vd_um__push_vertex(ctx, &vertex);
+}
+
+VD_UM_API void vd_um_i_cylinder(float base[3], float orientation[4], float height, float radius, float normal_color[4], float hover_color[4])
+{
+    float cylinder_forward[3];
+    float conventional_normal[3] = {0,0,1};
+    vd_um__mul_quaternion_vector(orientation, conventional_normal, cylinder_forward);
+    float P[3] = { base[0], base[1], base[2] };
+    float Q[3] = {
+        base[0] + cylinder_forward[0] * height,
+        base[1] + cylinder_forward[1] * height,
+        base[2] + cylinder_forward[2] * height,
+    };
+    float R = radius;
+    float ray_length = 100.f;
+    // Get line from ray
+    VdUmContext *ctx = vd_um_context_get();
+    float line_a[3] = { 
+        ctx->mouse_origin[0],
+        ctx->mouse_origin[1],
+        ctx->mouse_origin[2]
+    };
+
+    float line_b[3] = { 
+        ctx->mouse_origin[0] + ctx->mouse_direction[0] * ray_length,
+        ctx->mouse_origin[1] + ctx->mouse_direction[1] * ray_length,
+        ctx->mouse_origin[2] + ctx->mouse_direction[2] * ray_length,
+    };
+    int cylinder_hit = 0;
+    float ray_t = -1.f;
+    cylinder_hit = vd_um__line_vs_cylinder(line_a, line_b, P, Q, R, &ray_t);
+
+    float *color = normal_color;
+    if (cylinder_hit) {
+        color = hover_color;
+    }
+
+    vd_um_cylinder(base, orientation, height, radius, color);
+
 }
 
 VD_UM_API void vd_um_get_picking_ray(float origin[3], float direction[3])
@@ -603,6 +647,120 @@ VD_UM_INL void vd_um__mul_matrix_point(float matrix[16], float point[4], float o
     out[2] = vd_um__dot4(r2, point);
     out[3] = vd_um__dot4(r3, point);
 }
+
+VD_UM_INL void vd_um__mul_quaternion(float q1[4], float q2[4], float out[4])
+{
+    out[0] =  q1[0] * q2[3] + q1[1] * q2[2] - q1[2] * q2[1] + q1[3] * q2[0];
+    out[1] = -q1[0] * q2[2] + q1[1] * q2[3] + q1[2] * q2[0] + q1[3] * q2[1];
+    out[2] =  q1[0] * q2[1] - q1[1] * q2[0] + q1[2] * q2[3] + q1[3] * q2[2];
+    out[3] = -q1[0] * q2[0] - q1[1] * q2[1] - q1[2] * q2[2] + q1[3] * q2[3];
+}
+
+VD_UM_INL void vd_um__mul_quaternion_vector(float q1[4], float v[3], float out[3])
+{
+    float u[4] = { v[0], v[1], v[2], 0.f };
+    float qc[4];
+    vd_um__conjugate(q1, qc);
+
+    float u1[4];
+    vd_um__mul_quaternion(q1, u, u1);
+    float u2[4];
+    vd_um__mul_quaternion(u1, qc, u2);
+
+    out[0] = u2[0];
+    out[1] = u2[1];
+    out[2] = u2[2];
+}
+
+VD_UM_INL int vd_um__line_vs_cylinder(float line_a[3], float line_b[3], float P[3], float Q[3], float R, float *t)
+{
+    float d[3];
+    {
+        float temp[3];
+        vd_um__sub3(Q, P, temp);
+        vd_um__noz3(temp, d);
+    }
+
+    float m[3];
+    vd_um__sub3(line_a, P, m);
+    float n[3];
+    vd_um__sub3(line_b, line_a, n);
+
+    float md = vd_um__dot3(m, d);
+    float nd = vd_um__dot3(n, d);
+    float dd = vd_um__dot3(d, d);
+
+    if ((md < 0.0f) && ((md + nd) < 0.0f)) {
+        return 0;
+    }
+
+    if ((md > dd) && ((md + nd) > dd)) {
+        return 0;
+    }
+
+    float nn = vd_um__dot3(n, n);
+    float mn = vd_um__dot3(m, n);
+    float  a = dd * nn - nd * nd;
+    float  k = vd_um__dot3(m, m) - R * R;
+    float  c = dd * k - md * md;
+
+    if (vd_um__abs(a) < VD_UM_EPSILON) {
+        if (c > 0.f) {
+            return 0;
+        }
+
+        if (md < 0.f) {
+            *t = -mn / nn;
+        } else if (md > dd) {
+            *t = (nd - mn) / nn;
+        } else {
+            *t = 0.f;
+        }
+
+        return 1;
+    }
+
+    float b = dd * mn - nd * md;
+    float discriminant = b * b - a * c;
+    if (discriminant < 0.f) {
+        return 0;
+    }
+
+    *t = (-b - vd_um__sqrt(discriminant)) / a;
+
+    if (((*t) < 0.f) || ((*t) > 1.f)) {
+        return 0;
+    }
+
+    if ((md + (*t) * nd) < 0.f) {
+        if (nd <= 0.f) {
+            return 0;
+        }
+
+        *t = -md / nd;
+
+        return (k + 2.f * (*t) * (mn + (*t) * nn)) <= 0.f;
+    } else if ((md + (*t) * nd) > dd) {
+        if (nd >= 0.f) {
+            return 0;
+        }
+
+        *t = (dd - md) / nd;
+
+        return (k + dd - 2.f * md + (*t) * (2.f * (mn - nd) + (*t) * nn)) <= 0.f;
+    }
+
+    return 1;
+}
+
+VD_UM_INL void vd_um__conjugate(float q[4], float out[4])
+{
+    out[0] = -q[0];
+    out[1] = -q[1];
+    out[2] = -q[2];
+    out[3] = q[3];
+}
+
 
 /* ----INTEGRATION - OPENGL------------------------------------------------------------------------------------------ */
 #define VD_UM_GL_VERTEX_SHADER_SOURCE                                                                                  \
