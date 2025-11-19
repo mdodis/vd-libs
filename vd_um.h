@@ -90,6 +90,8 @@ VD_UM_API void              vd_um_segment(float start[3], float end[3], float th
 VD_UM_API void              vd_um_grid(float origin[3], float orientation[4], float extent, float color[4]);
 VD_UM_API void              vd_um_cylinder(float base[3], float orientation[4], float height, float radius, float color[4]);
 VD_UM_API void              vd_um_i_cylinder(float base[3], float orientation[4], float height, float radius, float normal_color[4], float hover_color[4]);
+// @todo(mdodis): ----- ()-> -----
+VD_UM_API void              vd_um_i_translate_axial(float position[3], float direction[3]);
 
 VD_UM_API void              vd_um_get_picking_ray(float origin[3], float direction[3]);
 
