@@ -10206,7 +10206,13 @@ VD_FW_API float vd_fw_get_scale(void)
 
 VD_FW_API void vd_fw_set_title(const char *title)
 {
-    [VD_FW_G.window setTitle: [NSString stringWithUTF8String: (title)]];
+
+    NSString *s = [NSString stringWithUTF8String: title];
+
+    dispatch_sync(dispatch_get_main_queue(), ^(void){
+        [VD_FW_G.window setTitle: s];
+        [s release];
+    });
 }
 
 VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
