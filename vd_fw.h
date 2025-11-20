@@ -10471,7 +10471,8 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
         VD_FW_G.window = [[VdFwWindow alloc] initWithContentRect: frame
                                                      styleMask: window_style_mask
                                                        backing: NSBackingStoreBuffered
-                                                         defer: NO];
+                                                         defer: NO
+                                                        screen: main_screen];
 
         if (!VD_FW_G.draw_decorations) {
             VD_FW_G.window.titleVisibility = NSWindowTitleHidden;
