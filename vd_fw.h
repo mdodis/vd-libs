@@ -9458,6 +9458,21 @@ static int Update_Context = 0;
     // [VD_FW_G.gl_context update];
 }
 
+- (void)backingChanged:(NSNotification *)note {
+    NSWindow *win = note.object;
+    CGFloat scale = win.backingScaleFactor;
+    VD_FW_G.scale = scale;
+
+    NSRect rect = [[VD_FW_G.window contentView] frame];
+    VD_FW_G.w = (int)rect.size.width * VD_FW_G.scale;
+    VD_FW_G.h = (int)rect.size.height * VD_FW_G.scale;
+
+    if (!VD_FW_G.context_update_requested) {
+        sem_post(VD_FW_G.s_main_thread_context_needs_update);
+        VD_FW_G.context_update_requested = 1;
+    }
+}
+
 - (void)windowDidBecomeKey:(NSNotification *)notification {
     VD_FW_G.focus_changed = 1;
     VD_FW_G.focused = 1;
@@ -10529,6 +10544,11 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
         [VD_FW_G.window makeFirstResponder: fw_view];
         [VD_FW_G.window setAcceptsMouseMovedEvents: YES];
         [NSApp activateIgnoringOtherApps:YES];
+        [[NSNotificationCenter defaultCenter] addObserver: delegate
+                                              selector: @selector(backingChanged:)
+                                              name: NSWindowDidChangeBackingPropertiesNotification
+                                              object: VD_FW_G.window];
+
     }
     VD_FW_G.w = 640 * VD_FW_G.scale;
     VD_FW_G.h = 480 * VD_FW_G.scale;
@@ -10536,6 +10556,7 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
 
     mach_timebase_info(&VD_FW_G.time_base);
     VD_FW_G.last_time = mach_absolute_time();
+
 
     dispatch_async(dispatch_get_main_queue(), ^{
         [VD_FW_G.window makeKeyAndOrderFront:nil];
