@@ -55,6 +55,7 @@
  *     - Win32: Implement vkCreateWin32SurfaceKHR
  * - raw hat states
  * - File dialog
+ * - OpenGL anti-alias setting
  * - OBS Studio breaks ChoosePixelFormat
  * - Make sure we can export functions properly for C++
  * - Expose customizable function pointer if the user needs to do something platform-specific before/after winthread has initialized or before vd_fw_init returns anyways.
@@ -9871,10 +9872,15 @@ static int Update_Context = 0;
 
     NSPoint scaled_pos = vd_fw__mac_mouse_cocoa_to_conventional(view_point);
 
+    float dx = [evt deltaX];
+    float dy = [evt deltaY];
+
     VdFw__MacMessage msg;
     msg.type = VD_FW__MAC_MESSAGE_MOUSEMOVE;
     msg.dat.mousemove.mx = scaled_pos.x;
     msg.dat.mousemove.my = scaled_pos.y;
+    msg.dat.mousemove.dx = dx;
+    msg.dat.mousemove.dy = dy;
     vd_fw__msgbuf_w(&msg); 
 
     NSPoint p = [VD_FW_G.window convertPointToScreen: view_point];
@@ -10525,6 +10531,9 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
             NSOpenGLPFADepthSize, 24,
             NSOpenGLPFADoubleBuffer,
             NSOpenGLPFAAccelerated,
+            // NSOpenGLPFAMultisample,
+            // NSOpenGLPFASampleBuffers, (NSOpenGLPixelFormatAttribute)1,
+            // NSOpenGLPFASamples, (NSOpenGLPixelFormatAttribute)4,
             0
         };
 

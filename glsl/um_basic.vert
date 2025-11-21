@@ -201,11 +201,39 @@ void do_cylinder() {
     f_mode = 3u;
 }
 
+void do_plane() {
+    vec3 origin = vec3(v_v0);
+    vec3 scale = vec3(thickness);
+    vec3 verts[6] = vec3[](
+        vec3(+0.5, +0.5, 0.0),
+        vec3(-0.5, +0.5, 0.0),
+        vec3(+0.5, -0.5, 0.0),
+        vec3(+0.5, -0.5, 0.0),
+        vec3(-0.5, +0.5, 0.0),
+        vec3(-0.5, -0.5, 0.0)
+    );
+    vec2 uvs[6] = vec2[](
+        vec2(1.0, 1.0),   // top-right
+        vec2(0.0, 1.0),   // top-left
+        vec2(1.0, 0.0),   // bottom-right
+        vec2(1.0, 0.0),   // bottom-right
+        vec2(0.0, 1.0),   // top-left
+        vec2(0.0, 0.0)    // bottom-left
+    );
+    vec3 position = origin + quat_rotate(verts[gl_VertexID] * scale, orientation);
+    vec4 view_pos = u_view * vec4(position, 1.0);
+    vec4 clip_pos = u_proj * view_pos;
+    gl_Position = clip_pos;
+    f_col = v_col;
+    f_mode = 3u;
+}
+
 void main() {
     if (mode == 0u) { do_line(); }
     if (mode == 1u) { do_grid(); }
     if (mode == 2u) { do_point(); }
     if (mode == 3u) { do_ring(); }
     if (mode == 4u) { do_cylinder(); }
+    if (mode == 5u) { do_plane(); }
     f_timeout = timeout;
 }

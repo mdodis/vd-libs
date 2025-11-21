@@ -9,14 +9,20 @@ in vec4 f_param;
 
 
 void do_line() {
-    vec2 uv = f_texcoord; // Keep in [0,1] range
-    float dist = abs( uv.x * 2 - 1 );
-    float af = fwidth(dist);          // pixels (approx)
-    // Scale/clip af to avoid extremely tiny AA on single-pixel lines:
-    af = max(af, 0.1);                // tweakable: 0.5-1.5 works well
-    float h = 0.998;
-    float alpha = 1.0 - smoothstep(h - af, h + af, dist);
-    r_col = f_col * vec4(1,1,1,alpha);
+    vec2 uv = f_texcoord * 2.0 - 1.0;
+    float w = 1.0;
+    vec2 centers = vec2(0.5, -0.5);
+    vec2 distances = 0.7 * abs(vec2(uv.x, uv.x) - centers);
+    vec2 widths = vec2(fwidth(distances.x), fwidth(distances.y));
+    vec2 alphas = vec2(
+        1.0 - smoothstep(w - widths.x, w + widths.x, distances.x),
+        1.0 - smoothstep(w - widths.x, w + widths.x, distances.y));
+
+    float alpha = alphas.y * alphas.x;
+    // float alpha = mix(alphas.y, 1.0f, alphas.x);
+
+    // Final color (example: white)
+    r_col = vec4(f_col.rgb, f_col.a * alpha);
 }
 
 float grid(vec2 lineWidth, vec2 texcoord) {
@@ -65,6 +71,9 @@ void do_ring() {
     float a2 = 1.0 - smoothstep(R1 - 0.001, R1, T);
     vec4 color = f_col;
     color.a *= a1 * a2;
+    if (color.a < 0.01) {
+        discard;
+    }
     r_col = color;
 }
 

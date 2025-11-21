@@ -80,6 +80,7 @@ VD_UM_API void              vd_um_frame_begin(float dt);
 VD_UM_API void              vd_um_viewport_begin(float viewport[4], float inv_projection[16], float view[16], float origin[3]);
 VD_UM_API void              vd_um_event_mouse_position(float position[2]);
 VD_UM_API void              vd_um_event_mouse_delta(float delta[2]);
+VD_UM_API void              vd_um_event_mouse_button(int button, int on);
 VD_UM_API void              vd_um_viewport_end(void);
 VD_UM_API void              vd_um_frame_end(void);
 VD_UM_API VdUmRenderPass*   vd_um_frame_get_passes_for_viewport(int viewport_index, int *num_render_passes);
@@ -89,9 +90,11 @@ VD_UM_API void              vd_um_point(float position[3], float size, float col
 VD_UM_API void              vd_um_segment(float start[3], float end[3], float thickness, float color[4]);
 VD_UM_API void              vd_um_grid(float origin[3], float orientation[4], float extent, float color[4]);
 VD_UM_API void              vd_um_cylinder(float base[3], float orientation[4], float height, float radius, float color[4]);
+VD_UM_API void              vd_um_plane(float point[3], float normal[3], float extent, float color[4]);
+VD_UM_API void              vd_um_ring(float center[3], float orientation[4], float radius, float thickness, float color[4]);
 VD_UM_API void              vd_um_i_cylinder(float base[3], float orientation[4], float height, float radius, float normal_color[4], float hover_color[4]);
-// @todo(mdodis): ----- ()-> -----
-VD_UM_API void              vd_um_i_translate_axial(float position[3], float direction[3]);
+VD_UM_API void              vd_um_translate_axial(const char *nameid, float position[3], float direction[3]);
+VD_UM_API void              vd_um_rotate_axial(const char *nameid, float orientation[4], float display_position[3], float axis[3]);
 
 VD_UM_API void              vd_um_get_picking_ray(float origin[3], float direction[3]);
 
@@ -144,6 +147,7 @@ enum {
     VD_UM__VERTEX_MODE_POINT    = 2,
     VD_UM__VERTEX_MODE_RING     = 3,
     VD_UM__VERTEX_MODE_CYLINDER = 4,
+    VD_UM__VERTEX_MODE_QUAD     = 5,
 };
 
 struct VdUmContext {
@@ -155,6 +159,7 @@ struct VdUmContext {
     float mouse_pos_in_viewport[2];
     float mouse_origin[3];
     float mouse_direction[3];
+    int   mouse_left, mouse_left_last;
     float dt;
 
     int        num_vertices;
@@ -172,28 +177,42 @@ struct VdUmContext {
     VdUmU64 *id_stack;
     int     id_stack_count;
     int     id_stack_cap;
+
+    VdUmU64 hot_id;
+    VdUmU64 active_id;
 };
 
 static      void            vd_um__abort(const char *message);
 static      void*           vd_um__alloc_default(void *prev, int prev_size, int new_size);
 static      VdUmU64         vd_um__hash(void *begin, int len);
+static      int             vd_um__strlen(const char *str);
 VD_UM_INL   float           vd_um__sqrt(float x);
 VD_UM_INL   float           vd_um__abs(float x);
 VD_UM_INL   void            vd_um__add3(float a[3], float b[3], float out[3]);
+VD_UM_INL   void            vd_um__add3_scaled_inplace(float result[3], float v[3], float v_scale);
 VD_UM_INL   void            vd_um__sub3(float a[3], float b[3], float out[3]);
 VD_UM_INL   float           vd_um__dot3(float a[3], float b[3]);
+VD_UM_INL   void            vd_um__cross3(float a[3], float b[3], float out[3]);
 VD_UM_INL   float           vd_um__dot4(float a[4], float b[4]);
 VD_UM_INL   void            vd_um__div3(float a[3], float s, float out[3]);
 VD_UM_INL   float           vd_um__lensq3(float a[3]);
 VD_UM_INL   void            vd_um__noz3(float a[3], float out[3]);
+VD_UM_INL   void            vd_um__noz_cross3(float a[3], float b[3], float out[3]);
+VD_UM_INL   void            vd_um__line_closest_plane(float lineo[3], float lined[3], float planep[3], float planen[3], float *t);
+VD_UM_INL   void            vd_um__find_orthogonal_vector(float v[3], float out[3]);
 VD_UM_INL   void            vd_um__mul_matrix_point(float matrix[16], float point[4], float out[4]);
 VD_UM_INL   void            vd_um__conjugate(float q[4], float out[4]);
+VD_UM_INL   void            vd_um__quaternion_from_look_rotation(float fwd[3], float updir[3], float out[4]);
 VD_UM_INL   void            vd_um__mul_quaternion(float q1[4], float q2[4], float out[4]);
 VD_UM_INL   void            vd_um__mul_quaternion_vector(float q1[4], float v[3], float out[3]);
-VD_UM_INL   int             vd_um__line_vs_cylinder(float line_a[3], float line_b[3], float P[3], float Q[3], float R, float *t);
+VD_UM_INL   int             vd_um__segment_vs_cylinder(float line_a[3], float line_b[3], float P[3], float Q[3], float R, float *t);
+VD_UM_INL   int             vd_um__mouse_vs_cylinder(float base[3], float orientation[4], float height, float radius, float *t);
+VD_UM_INL   void            vd_um__closest_point_lines(float line0o[3], float line0d[3], float line1o[3], float line1d[3], float *t0, float *t1);
+VD_UM_INL   VdUmU64         vd_um__compute_id_for_string(VdUmContext *ctx, const char *nameid);
 static      void            vd_um__push_vertex(VdUmContext *ctx, VdUmVertex *vertex);
 static      VdUmRenderPass* vd_um__get_current_pass(VdUmContext *ctx);
 static      void            vd_um__require_render_pass(VdUmContext *ctx, int flags, int vertex_count);
+VD_UM_INL   int             vd_um__mouse_just_clicked(VdUmContext *ctx);
 
 
 #define VD_UM_EPSILON 1.19209290e-07f
@@ -274,8 +293,8 @@ VD_UM_API void vd_um_event_mouse_position(float position[2])
     ctx->mouse_pos[1] = position[1];
 
     float mouse_viewport_space[2] = {
-        + ((ctx->mouse_pos[0] - ctx->viewport[0]) / ctx->viewport[2]) * 2.f - 1.f,
-        - ((ctx->mouse_pos[1] - ctx->viewport[1]) / ctx->viewport[3]) * 2.f + 1.f,
+        + ((ctx->mouse_pos[0] - ctx->viewport[0]) / (ctx->viewport[2] - 1)) * 2.f - 1.f,
+        - ((ctx->mouse_pos[1] - ctx->viewport[1]) / (ctx->viewport[3] - 1)) * 2.f + 1.f,
     };
 
     ctx->mouse_pos_in_viewport[0] = mouse_viewport_space[0];
@@ -307,6 +326,15 @@ VD_UM_API void vd_um_event_mouse_delta(float delta[2])
     VdUmContext *ctx = vd_um_context_get();
     ctx->mouse_delta[0] += delta[0];
     ctx->mouse_delta[1] += delta[1];
+}
+
+VD_UM_API void vd_um_event_mouse_button(int button, int on)
+{
+    VdUmContext *ctx = vd_um_context_get();
+    switch (button) {
+        case 0: ctx->mouse_left_last = ctx->mouse_left; ctx->mouse_left = on;
+        default: break;
+    }
 }
 
 VD_UM_API void vd_um_point(float position[3], float size, float color[4])
@@ -369,6 +397,78 @@ VD_UM_API void vd_um_cylinder(float base[3], float orientation[4], float height,
     vd_um__push_vertex(ctx, &vertex);
 }
 
+VD_UM_API void vd_um_plane(float point[3], float normal[3], float extent, float color[4])
+{
+    VdUmContext *ctx = vd_um_context_get();
+    vd_um__require_render_pass(ctx, -1, 6);
+
+    float orthogonal[3];
+    vd_um__find_orthogonal_vector(normal, orthogonal);
+
+    float orientation[4];
+    vd_um__quaternion_from_look_rotation(normal, orthogonal, orientation);
+
+    VdUmVertex vertex = {};
+
+    for (int i = 0; i < 3; i++) vertex.pos0[i] = point[i];
+    vertex.size = extent <= 0.f ? 1000.f : extent;
+    vertex.mode = VD_UM__VERTEX_MODE_QUAD;
+    for (int i = 0; i < 4; i++) vertex.color[i] = color[i];
+    for (int i = 0; i < 4; i++) vertex.orientation[i] = orientation[i];
+    vd_um__push_vertex(ctx, &vertex);
+
+}
+
+VD_UM_API void vd_um_ring(float center[3], float orientation[4], float radius, float thickness, float color[4])
+{
+    VdUmContext *ctx = vd_um_context_get();
+    vd_um__require_render_pass(ctx, -1, 6);
+    VdUmVertex vertex = {};
+
+    for (int i = 0; i < 3; i++) vertex.pos0[i] = center[i];
+    vertex.size = radius;
+    vertex.mode = VD_UM__VERTEX_MODE_RING;
+    for (int i = 0; i < 4; i++) vertex.color[i] = color[i];
+    for (int i = 0; i < 4; i++) vertex.orientation[i] = orientation[i];
+    vertex.pos1[0] = thickness;
+    vd_um__push_vertex(ctx, &vertex);
+
+    float plane_normal[3];
+    float plane_right[3];
+    float conventional_normal[3] = {0,0,1};
+    float conventional_right[3] = {1,0,0};
+    vd_um__mul_quaternion_vector(orientation, conventional_normal, plane_normal);
+    vd_um__mul_quaternion_vector(orientation, conventional_right, plane_right);
+
+    float denom = vd_um__dot3(plane_normal, ctx->mouse_direction);
+    if (vd_um__abs(denom) > VD_UM_EPSILON) {
+        float ray_to_plane[3];
+        vd_um__sub3(center, ctx->mouse_origin, ray_to_plane);
+
+        float hd = vd_um__dot3(ray_to_plane, plane_normal) / denom;
+        if (hd >= 0) {
+            float point[3] = {
+                ctx->mouse_origin[0] + ctx->mouse_direction[0] * hd,
+                ctx->mouse_origin[1] + ctx->mouse_direction[1] * hd,
+                ctx->mouse_origin[2] + ctx->mouse_direction[2] * hd,
+            };
+
+            float col_[4] = {1,1,1,1};
+
+            float point_to_center[3];
+            vd_um__sub3(point, center, point_to_center);
+            float from_center_direction[3];
+            vd_um__noz3(point_to_center, from_center_direction);
+
+            float point_on_centers_unit_circle[3] = {center[0], center[1], center[2]};
+            vd_um__add3_scaled_inplace(point_on_centers_unit_circle, from_center_direction, 0.5f);
+
+            vd_um_segment(center, point_on_centers_unit_circle, 0.01f, col_);
+            vd_um_point(point_on_centers_unit_circle, 0.01f, col_);
+        }
+    }
+}
+
 VD_UM_API void vd_um_i_cylinder(float base[3], float orientation[4], float height, float radius, float normal_color[4], float hover_color[4])
 {
     float cylinder_forward[3];
@@ -397,7 +497,7 @@ VD_UM_API void vd_um_i_cylinder(float base[3], float orientation[4], float heigh
     };
     int cylinder_hit = 0;
     float ray_t = -1.f;
-    cylinder_hit = vd_um__line_vs_cylinder(line_a, line_b, P, Q, R, &ray_t);
+    cylinder_hit = vd_um__segment_vs_cylinder(line_a, line_b, P, Q, R, &ray_t);
 
     float *color = normal_color;
     if (cylinder_hit) {
@@ -405,6 +505,88 @@ VD_UM_API void vd_um_i_cylinder(float base[3], float orientation[4], float heigh
     }
 
     vd_um_cylinder(base, orientation, height, radius, color);
+
+}
+
+VD_UM_API void vd_um_translate_axial(const char *nameid, float position[3], float direction[3])
+{
+    float height = 1.f;
+    float radius = 0.01f;
+    float normal_color[4] = { direction[0], direction[1], direction[2], 1 };
+    float select_color[4] = { 0.7f, 0.7f, 0.7f, 1.f};
+    float  hover_color[4] = { 0.2f, 0.7f, 0.7f, 1.f};
+    float *color = normal_color;
+
+    VdUmContext *ctx = vd_um_context_get();
+
+    VdUmU64 id = vd_um__compute_id_for_string(ctx, nameid);
+
+    float orthogonal[3];
+    vd_um__find_orthogonal_vector(direction, orthogonal);
+
+    float orientation[4];
+    vd_um__quaternion_from_look_rotation(direction, orthogonal, orientation);
+
+
+    float t;
+    int hit = vd_um__mouse_vs_cylinder(position, orientation, height, radius, &t);
+    float t0, t1;
+    vd_um__closest_point_lines(ctx->mouse_origin, ctx->mouse_direction, position, direction, &t0, &t1);
+
+    if (hit) {
+        ctx->hot_id = id;
+    } else {
+        if (ctx->hot_id == id) ctx->hot_id = 0;
+    }
+
+    static float start_pos[3];
+
+    if (vd_um__mouse_just_clicked(ctx)) {
+        if (hit) {
+            ctx->active_id = id;
+            start_pos[0] = direction[0] * t1;
+            start_pos[1] = direction[1] * t1;
+            start_pos[2] = direction[2] * t1;
+        }
+    } else if (ctx->mouse_left == 0) {
+        if (ctx->active_id == id) ctx->active_id = 0;
+    }
+
+    if (ctx->active_id == id) {
+        color = hover_color;
+    } else if (ctx->hot_id == id) {
+        color = select_color;
+    }
+
+    if (ctx->active_id == id) {
+        color = select_color;
+
+        float delta[3] = {
+            direction[0] * t1 - start_pos[0],
+            direction[1] * t1 - start_pos[1],
+            direction[2] * t1 - start_pos[2],
+        };
+
+        vd_um__add3_scaled_inplace(position, delta, 1);
+
+        // float magnitude = vd_um__sqrt(ctx->mouse_delta[0] * ctx->mouse_delta[0] + ctx->mouse_delta[1] * ctx->mouse_delta[1]);
+        // float magnitude = ctx->mouse_delta[0] - ctx->mouse_delta[1];
+        // vd_um__add3_scaled_inplace(position, direction, magnitude * 0.01f);
+
+        float seg_start[3] = {position[0], position[1], position[2]};
+        float seg_end[3] = {position[0], position[1], position[2]};
+        vd_um__add3_scaled_inplace(seg_start, direction, -100.f);
+        vd_um__add3_scaled_inplace(seg_end, direction, +100.f);
+
+
+        vd_um_segment(seg_start, seg_end, 0.01f, normal_color);
+    }
+
+    vd_um_cylinder(position, orientation, height, radius, color);
+}
+
+VD_UM_API void vd_um_rotate_axial(const char *nameid, float orientation[4], float display_position[3], float axis[3])
+{
 
 }
 
@@ -462,6 +644,11 @@ static void vd_um__require_render_pass(VdUmContext *ctx, int flags, int vertex_c
     new_pass->instance_count = 0;
 }
 
+VD_UM_INL int vd_um__mouse_just_clicked(VdUmContext *ctx)
+{
+    return ctx->mouse_left && !ctx->mouse_left_last;
+}
+
 VdUmContextCreateInfo Vd_Um__Default_Context = {
     vd_um__alloc_default,
 };
@@ -490,9 +677,15 @@ VD_UM_API VdUmContext *vd_um_context_create(VdUmContextCreateInfo *info)
     ctx->mouse_pos[0] = 0.f;
     ctx->mouse_pos[1] = 0.f;
 
+    ctx->mouse_left = 0;
+    ctx->mouse_left_last = 0;
+
     ctx->id_stack_cap = 64;
     ctx->id_stack_count = 0;
     ctx->id_stack = (VdUmU64*)info->alloc(NULL, 0, sizeof(VdUmU64) * ctx->id_stack_cap);
+
+    ctx->hot_id = 0;
+    ctx->active_id = 0;
 
     ctx->vertices = (VdUmVertex*)info->alloc(NULL, 0, sizeof(VdUmVertex) * 64);
 
@@ -575,6 +768,13 @@ static VdUmU64 vd_um__hash(void *begin, int len)
     return h;
 }
 
+static int vd_um__strlen(const char *str)
+{
+    int result = 0;
+    while (*str++) result++;
+    return result;
+}
+
 #if VD_UM_STDLIB
 VD_UM_INL float vd_um__sqrt(float x)
 {
@@ -596,6 +796,13 @@ VD_UM_INL void vd_um__add3(float a[3], float b[3], float out[3])
     out[2] = a[2] + b[2];
 }
 
+VD_UM_INL void vd_um__add3_scaled_inplace(float result[3], float v[3], float v_scale)
+{
+    result[0] += v[0] * v_scale;
+    result[1] += v[1] * v_scale;
+    result[2] += v[2] * v_scale;
+}
+
 VD_UM_INL void vd_um__sub3(float a[3], float b[3], float out[3])
 {
     out[0] = a[0] - b[0];
@@ -606,6 +813,13 @@ VD_UM_INL void vd_um__sub3(float a[3], float b[3], float out[3])
 VD_UM_INL float vd_um__dot3(float a[3], float b[3])
 {
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+VD_UM_INL void vd_um__cross3(float a[3], float b[3], float out[3])
+{
+    out[0] = a[1] * b[2] - a[2] * b[1];
+    out[1] = a[2] * b[0] - a[0] * b[2];
+    out[2] = a[0] * b[1] - a[1] * b[0];
 }
 
 VD_UM_INL void vd_um__div3(float a[3], float s, float out[3])
@@ -635,6 +849,34 @@ VD_UM_INL void vd_um__noz3(float a[3], float out[3])
     } else { 
         vd_um__div3(a, vd_um__sqrt(l), out);
     }
+}
+
+VD_UM_INL void vd_um__noz_cross3(float a[3], float b[3], float out[3])
+{
+    float temp[3];
+    vd_um__cross3(a, b, temp);
+    vd_um__noz3(temp, out);
+}
+
+VD_UM_INL void vd_um__find_orthogonal_vector(float v[3], float out[3])
+{
+    float x[3] = {1, 0, 0};
+    float y[3] = {0, 1, 0};
+    float *t = x;
+
+    if (vd_um__abs(vd_um__dot3(v, x)) >= 0.9999f) {
+        t = y;
+    }
+
+    float temp[3];
+    vd_um__cross3(t, v, temp);
+
+    vd_um__noz3(temp, out);
+}
+
+VD_UM_INL void vd_um__line_closest_plane(float lineo[3], float lined[3], float planep[3], float planen[3], float *t)
+{
+    // Project line on plane
 }
 
 VD_UM_INL void vd_um__mul_matrix_point(float matrix[16], float point[4], float out[4])
@@ -674,7 +916,7 @@ VD_UM_INL void vd_um__mul_quaternion_vector(float q1[4], float v[3], float out[3
     out[2] = u2[2];
 }
 
-VD_UM_INL int vd_um__line_vs_cylinder(float line_a[3], float line_b[3], float P[3], float Q[3], float R, float *t)
+VD_UM_INL int vd_um__segment_vs_cylinder(float line_a[3], float line_b[3], float P[3], float Q[3], float R, float *t)
 {
     float d[3];
     {
@@ -753,6 +995,121 @@ VD_UM_INL int vd_um__line_vs_cylinder(float line_a[3], float line_b[3], float P[
     }
 
     return 1;
+}
+
+VD_UM_INL int vd_um__mouse_vs_cylinder(float base[3], float orientation[4], float height, float radius, float *t)
+{
+    float cylinder_forward[3];
+    float conventional_normal[3] = {0,0,1};
+    vd_um__mul_quaternion_vector(orientation, conventional_normal, cylinder_forward);
+    float P[3] = { base[0], base[1], base[2] };
+    float Q[3] = {
+        base[0] + cylinder_forward[0] * height,
+        base[1] + cylinder_forward[1] * height,
+        base[2] + cylinder_forward[2] * height,
+    };
+    float R = radius;
+    float ray_length = 100.f;
+    // Get line from ray
+    VdUmContext *ctx = vd_um_context_get();
+    float line_a[3] = { 
+        ctx->mouse_origin[0],
+        ctx->mouse_origin[1],
+        ctx->mouse_origin[2]
+    };
+
+    float line_b[3] = { 
+        ctx->mouse_origin[0] + ctx->mouse_direction[0] * ray_length,
+        ctx->mouse_origin[1] + ctx->mouse_direction[1] * ray_length,
+        ctx->mouse_origin[2] + ctx->mouse_direction[2] * ray_length,
+    };
+    int cylinder_hit = 0;
+    float ray_t = -1.f;
+    cylinder_hit = vd_um__segment_vs_cylinder(line_a, line_b, P, Q, R, &ray_t);
+
+    *t = ray_t;
+    return cylinder_hit;
+}
+
+VD_UM_INL void vd_um__closest_point_lines(float line0o[3], float line0d[3], float line1o[3], float line1d[3], float *t0, float *t1)
+{
+    float p[3];
+    vd_um__sub3(line0o, line1o, p);
+    float q = vd_um__dot3(line0d, line1d);
+    float s = vd_um__dot3(line1d, p);
+
+    float d = 1.f - q * q;
+    if (d < VD_UM_EPSILON) {
+        *t0 = 0.f;
+        *t1 = s;
+    } else {
+        float r = vd_um__dot3(line0d, p);
+        *t0 = (q * s - r) / d;
+        *t1 = (s - q * r) / d;
+    }
+}
+
+VD_UM_INL VdUmU64 vd_um__compute_id_for_string(VdUmContext *ctx, const char *nameid)
+{
+    int nameid_len = vd_um__strlen(nameid);
+
+    VdUmU64 id = vd_um__hash((void*)nameid, nameid_len);
+
+    for (int i = 0; i < ctx->id_stack_count; ++i) {
+        id = id ^ ctx->id_stack[i];
+    }
+
+    return id;
+}
+
+VD_UM_INL void vd_um__quaternion_from_look_rotation(float fwd[3], float updir[3], float out[4])
+{
+    float basis_z[3] = {fwd[0], fwd[1], fwd[2]};
+    float basis_x[3];
+    vd_um__noz_cross3(updir, fwd, basis_x);
+    float basis_y[3];
+    vd_um__cross3(fwd, basis_x, basis_y);
+
+    float m00 = basis_x[0];
+    float m01 = basis_y[0];
+    float m02 = basis_z[0];
+
+    float m10 = basis_x[1];
+    float m11 = basis_y[1];
+    float m12 = basis_z[1];
+
+    float m20 = basis_x[2];
+    float m21 = basis_y[2];
+    float m22 = basis_z[2];
+
+    float T = m00 + m11 + m22;
+    if (T > 0.f) {
+        float s = vd_um__sqrt(T + 1.f) * 2.f;
+
+        out[3] = 0.25f * s;
+        out[0] = (m21 - m12) / s;
+        out[1] = (m02 - m20) / s;
+        out[2] = (m10 - m01) / s;
+    } else if ((m00 > m11) && (m00 > m22)) {
+        float s = vd_um__sqrt(1.f + m00 - m11 - m22) * 2.f;
+        out[3] = (m21 - m12) / s;
+        out[0] = 0.25f * s;
+        out[1] = (m01 + m10) / s;
+        out[2] = (m02 + m20) / s;
+    } else if (m11 > m22) {
+        float s = vd_um__sqrt(1.f + m11 - m00 - m22) * 2.f;
+        out[3] = (m02 - m20) / s;
+        out[0] = (m01 + m10) / s;
+        out[1] = 0.25f * s;
+        out[2] = (m12 + m21) / s;
+    } else {
+        float s = vd_um__sqrt(1.f + m22 - m00 - m11) * 2.f;
+        out[3] = (m10 - m01) / s;
+        out[0] = (m02 - m20) / s;
+        out[1] = (m12 + m21) / s;
+        out[2] = 0.25f * s;
+    }
+
 }
 
 VD_UM_INL void vd_um__conjugate(float q[4], float out[4])

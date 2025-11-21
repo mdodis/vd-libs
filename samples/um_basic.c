@@ -66,6 +66,7 @@ int main(int argc, char const *argv[])
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
+    glEnable(GL_MULTISAMPLE);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     F3 camera_origin = fzero3();
@@ -82,7 +83,9 @@ int main(int argc, char const *argv[])
                                          "./glsl/um_basic.vert", "./glsl/um_basic.frag");
 
         F2 mouse_pos;
-        vd_fw_get_mouse_statef(&mouse_pos.x, &mouse_pos.y);
+        int mouse_state = vd_fw_get_mouse_statef(&mouse_pos.x, &mouse_pos.y);
+        float mx, my;
+        vd_fw_get_mouse_delta(&mx, &my);
 
         if (vd_fw_get_key_pressed(VD_FW_KEY_ESCAPE)) {
             vd_fw_set_mouse_locked(!vd_fw_get_mouse_locked());
@@ -91,8 +94,6 @@ int main(int argc, char const *argv[])
         float dt = vd_fw_delta_s();
 
         if (vd_fw_get_mouse_locked()) {
-            float mx, my;
-            vd_fw_get_mouse_delta(&mx, &my);
             heading += mx;
             pitch += my;
 
@@ -142,14 +143,26 @@ int main(int argc, char const *argv[])
 
         {
             vd_um_event_mouse_position(mouse_pos.e);
+            vd_um_event_mouse_button(0, mouse_state & VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN);
+            float mouse_delta[2] = { mx, my };
+            vd_um_event_mouse_delta(mouse_delta);
 
             vd_um_grid(fzero3().e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 100.f, fm4(1,1,1,1).e);
             vd_um_segment(fm3(-1,1,1).e, fm3(1,1,1).e, 0.01f, fm4(1,1,0,1).e);
 
+            vd_um_plane(fm3(0,5,0).e, fm3(0,1,0).e, 5.f, fm4(0.7f, 0.6f, 0.2f, 0.5f).e);
+
             vd_um_point(fm3(0,0,0).e, 0.05f, fm4(1,0,1,1).e);
-            vd_um_i_cylinder(fzero3().e, flookrotquat(fm3(0,0,1), fm3(0,1,0)).e, 1.f, 0.01f, fm4(0.2f,0.2f,0.7f,1).e, fm4(0.2f, 0.7f, 0.7f, 1).e);
-            vd_um_i_cylinder(fzero3().e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 1.f, 0.01f, fm4(0.2f,0.7f,0.2f,1).e, fm4(0.2f, 0.7f, 0.7f, 1).e);
-            vd_um_i_cylinder(fzero3().e, flookrotquat(fm3(1,0,0), fm3(0,1,0)).e, 1.f, 0.01f, fm4(0.7f,0.2f,0.2f,1).e, fm4(0.2f, 0.7f, 0.7f, 1).e);
+            static F3 point = {{0,1,0}};
+            vd_um_translate_axial("Z", point.e, fm3(0,0,1).e);
+            vd_um_translate_axial("Y", point.e, fm3(0,1,0).e);
+            vd_um_translate_axial("X", point.e, fm3(1,0,0).e);
+
+            // vd_um_ring(point.e, flookrotquat(fm3(1,0,0), fm3(0,1,0)).e, 1.f, 0.05f, fm4(0.7f, 0.2f, 0.2f, 1.f).e);
+            vd_um_ring(point.e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 1.f, 0.05f, fm4(0.2f, 0.7f, 0.2f, 1.f).e);
+            // vd_um_i_cylinder(fzero3().e, flookrotquat(fm3(0,0,1), fm3(0,1,0)).e, 1.f, 0.01f, fm4(0.2f,0.2f,0.7f,1).e, fm4(0.2f, 0.7f, 0.7f, 1).e);
+            // vd_um_i_cylinder(fzero3().e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 1.f, 0.01f, fm4(0.2f,0.7f,0.2f,1).e, fm4(0.2f, 0.7f, 0.7f, 1).e);
+            // vd_um_i_cylinder(fzero3().e, flookrotquat(fm3(1,0,0), fm3(0,1,0)).e, 1.f, 0.01f, fm4(0.7f,0.2f,0.2f,1).e, fm4(0.2f, 0.7f, 0.7f, 1).e);
         }
         vd_um_viewport_end();
         vd_um_frame_end();
