@@ -453,18 +453,28 @@ VD_UM_API void vd_um_ring(float center[3], float orientation[4], float radius, f
                 ctx->mouse_origin[2] + ctx->mouse_direction[2] * hd,
             };
 
-            float col_[4] = {1,1,1,1};
 
             float point_to_center[3];
             vd_um__sub3(point, center, point_to_center);
-            float from_center_direction[3];
-            vd_um__noz3(point_to_center, from_center_direction);
 
-            float point_on_centers_unit_circle[3] = {center[0], center[1], center[2]};
-            vd_um__add3_scaled_inplace(point_on_centers_unit_circle, from_center_direction, 0.5f);
+            float lsq = vd_um__lensq3(point_to_center);
+            float ring_out = radius * 0.5f;
+            float ring_inn = ring_out - thickness;
+            float ring_min = ring_inn * ring_inn;
+            float ring_max = ring_out * ring_out;
 
-            vd_um_segment(center, point_on_centers_unit_circle, 0.01f, col_);
-            vd_um_point(point_on_centers_unit_circle, 0.01f, col_);
+            if ((lsq >= ring_min) && (lsq <= ring_max)) {
+                float from_center_direction[3];
+                vd_um__noz3(point_to_center, from_center_direction);
+
+                float point_on_centers_unit_circle[3] = {center[0], center[1], center[2]};
+                vd_um__add3_scaled_inplace(point_on_centers_unit_circle, from_center_direction, 0.5f);
+
+                float col_[4] = {1,1,1,1};
+                vd_um_segment(center, point_on_centers_unit_circle, 0.01f, col_);
+                vd_um_point(point, 0.01f, col_);
+            }
+
         }
     }
 }
