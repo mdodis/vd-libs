@@ -88,6 +88,7 @@ VD_UM_API VdUmVertex*       vd_um_frame_get_vertex_buffer(int *num_vertices);
 
 VD_UM_API void              vd_um_point(float position[3], float size, float color[4]);
 VD_UM_API void              vd_um_segment(float start[3], float end[3], float thickness, float color[4]);
+VD_UM_API void              vd_um_isotri(float base[3], float apex[3], float width, float color[4]);
 VD_UM_API void              vd_um_grid(float origin[3], float orientation[4], float extent, float color[4]);
 VD_UM_API void              vd_um_cylinder(float base[3], float orientation[4], float height, float radius, float color[4]);
 VD_UM_API void              vd_um_plane(float point[3], float normal[3], float extent, float color[4]);
@@ -366,6 +367,11 @@ VD_UM_API void vd_um_segment(float start[3], float end[3], float thickness, floa
     vd_um__push_vertex(ctx, &vertex);
 }
 
+VD_UM_API void vd_um_isotri(float base[3], float apex[3], float width, float color[4])
+{
+
+}
+
 VD_UM_API void vd_um_grid(float origin[3], float orientation[4], float extent, float color[4])
 {
     VdUmContext *ctx = vd_um_context_get();
@@ -431,6 +437,7 @@ VD_UM_API void vd_um_ring(float center[3], float orientation[4], float radius, f
     for (int i = 0; i < 4; i++) vertex.color[i] = color[i];
     for (int i = 0; i < 4; i++) vertex.orientation[i] = orientation[i];
     vertex.pos1[0] = thickness;
+    vertex.pos1[1] = 1.f - 0.1f;
     vd_um__push_vertex(ctx, &vertex);
 
     float plane_normal[3];
@@ -520,14 +527,24 @@ VD_UM_API void vd_um_i_cylinder(float base[3], float orientation[4], float heigh
 
 VD_UM_API void vd_um_translate_axial(const char *nameid, float position[3], float direction[3])
 {
-    float height = 1.f;
-    float radius = 0.01f;
+    float height = 0.3f;
+    float radius = 0.005f;
     float normal_color[4] = { direction[0], direction[1], direction[2], 1 };
     float select_color[4] = { 0.7f, 0.7f, 0.7f, 1.f};
     float  hover_color[4] = { 0.2f, 0.7f, 0.7f, 1.f};
     float *color = normal_color;
-
     VdUmContext *ctx = vd_um_context_get();
+
+    float position_to_origin[3];
+    vd_um__sub3(ctx->mouse_origin, position, position_to_origin);
+    float distance_from_position = vd_um__sqrt(vd_um__dot3(position_to_origin, position_to_origin));
+
+    float scale_factor = distance_from_position * tanf(fdeg2rad(60.f) * 0.5f);
+
+    height *= scale_factor;
+    radius *= scale_factor;
+
+
 
     VdUmU64 id = vd_um__compute_id_for_string(ctx, nameid);
 
@@ -540,6 +557,7 @@ VD_UM_API void vd_um_translate_axial(const char *nameid, float position[3], floa
 
     float t;
     int hit = vd_um__mouse_vs_cylinder(position, orientation, height, radius, &t);
+
     float t0, t1;
     vd_um__closest_point_lines(ctx->mouse_origin, ctx->mouse_direction, position, direction, &t0, &t1);
 
@@ -592,6 +610,10 @@ VD_UM_API void vd_um_translate_axial(const char *nameid, float position[3], floa
         vd_um_segment(seg_start, seg_end, 0.01f, normal_color);
     }
 
+
+    float seg[3] = { position[0], position[1], position[2] };
+    vd_um__add3_scaled_inplace(seg, direction, height);
+    // vd_um_segment(position, seg, radius, color);
     vd_um_cylinder(position, orientation, height, radius, color);
 }
 
@@ -929,11 +951,7 @@ VD_UM_INL void vd_um__mul_quaternion_vector(float q1[4], float v[3], float out[3
 VD_UM_INL int vd_um__segment_vs_cylinder(float line_a[3], float line_b[3], float P[3], float Q[3], float R, float *t)
 {
     float d[3];
-    {
-        float temp[3];
-        vd_um__sub3(Q, P, temp);
-        vd_um__noz3(temp, d);
-    }
+    vd_um__sub3(Q, P, d);
 
     float m[3];
     vd_um__sub3(line_a, P, m);

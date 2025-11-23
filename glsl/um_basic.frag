@@ -59,9 +59,14 @@ void do_grid() {
     r_col = vec4(color, alpha);
     if (alpha < 0.01) discard;
 }
+
+#define PI 3.14159265359
+
 void do_ring() {
     vec2 uv = f_texcoord * 2.0 - 1.0;
     vec2 p = uv;
+    float turn = ((atan(uv.y, uv.x) / PI) + 1.0) / 2.0;
+    float cutoff = step(f_param.y, turn);
     float lsq = length(uv);
     float R1 = 1.0;
     float H = f_param.x;
@@ -70,7 +75,7 @@ void do_ring() {
     float a1 = smoothstep(R2, R2 + 0.001, T);
     float a2 = 1.0 - smoothstep(R1 - 0.001, R1, T);
     vec4 color = f_col;
-    color.a *= a1 * a2;
+    color.a *= a1 * a2 * cutoff;
     if (color.a < 0.01) {
         discard;
     }

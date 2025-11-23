@@ -17,27 +17,24 @@ out vec2 f_texcoord;
 out vec2 f_timeout;
 out vec4 f_param;
 
-vec3 quat_rotate(vec3 v, vec4 q) {
+vec3 quat_rotate(vec3 v, vec4 q)
+{
     return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v);
 }
 
-void do_line()
+vec3 find_orthogonal_vector(vec3 v)
 {
-    float line_width = thickness;
-    // Transform to view space
-    // This will allow us to treat 0,0,0 as camera origin
-    vec4 Pv0 = u_view * vec4(v_v0, 1.0);
-    vec4 Pv1 = u_view * vec4(v_v1, 1.0);
-    // For each of the 6 vertices we do:
-    // V = V0 + Table{ID}x * hL * R + Table{ID}y * L * F
-    // Where:
-    // - V:  The final output vertex
-    // - V0: The starting vertex
-    // - ID: gl_VertexID
-    // - hL: half line width in the direction orthogonal to the normalized line direction
-    // - R:  The right vector. orthogonal to F
-    // - L:  The length of the line in the F direction
-    // - F:  The direction of the line
+    vec3 x = vec3(1,0,0);
+    if (abs(dot(v, x)) >= 0.9999) {
+        x = vec3(0,1,0);
+    }
+    return normalize(cross(x,v));
+}
+
+vec4 pos_viewspace_rectangle_aligned_on_positions(vec3 p0, vec3 p1, float width)
+{
+    vec4 Pv0 = u_view * vec4(p0, 1.0);
+    vec4 Pv1 = u_view * vec4(p1, 1.0);
     vec2 movements[6] = vec2[](
         vec2(+1.0, 1.0),
         vec2(-1.0, 1.0),
@@ -46,42 +43,18 @@ void do_line()
         vec2(-1.0, 1.0),
         vec2(-1.0, 0.0)
     );
-    vec2 uvs[6] = vec2[](
-        vec2(1.0, 1.0),   // top-right
-        vec2(0.0, 1.0),   // top-left
-        vec2(1.0, 0.0),   // bottom-right
-        vec2(1.0, 0.0),   // bottom-right
-        vec2(0.0, 1.0),   // top-left
-        vec2(0.0, 0.0)    // bottom-left
-    );
     float L = distance(Pv1.xyz, Pv0.xyz);
-    // Take the half point between the view relative points
-    // This allows us to handle cases where one point starts at 0,0,0 (i.e. the camera)
     vec3 F = normalize(Pv1.xyz - Pv0.xyz);
-    // Find closest point on line Pv0-Pv1 to (0,0,0)
-    float t = -dot(Pv0.xyz, F) / dot(F, F);
-    vec3 closest = Pv0.xyz + F * t;
-    float H = line_width / 2.0;
+    vec3 closest = Pv0.xyz + F * (-dot(Pv0.xyz, F) / dot(F, F));
+    float H = width / 2.0;
     vec3 M = -normalize(closest);
-    // vec3 M = normalize(mix(Pv0.xyz, Pv1.xyz, 0.5));
-    // vec3 M = normalize(Pv0.xyz);
-    vec3 Ur = M;
-    // What M represents here is a direction vector that we know if aligns with line
-    // the line won't be shown anyway.
-    // if (abs(dot(F, Ur)) >= 0.9999) {
-    //     Ur = vec3(1,0,0);
-    // }
-    vec3 R = cross(Ur, F);
+    vec3 R = cross(M, F);
     vec3 vertex = Pv0.xyz + movements[gl_VertexID].x * H * R + movements[gl_VertexID].y * L * F;
-    gl_Position = u_proj * vec4(vertex, 1.0);
-    f_col = v_col;
-    f_mode = mode;
-    f_texcoord = uvs[gl_VertexID];
+    return u_proj * vec4(vertex, 1.0);
 }
 
-void do_grid() {
-    vec3 origin = vec3(v_v0);
-    vec3 scale = vec3(thickness);
+vec3 pos_worldspace_rectangle(vec3 origin, vec4 orientation, vec3 scale)
+{
     vec3 verts[6] = vec3[](
         vec3(+0.5, +0.5, 0.0),
         vec3(-0.5, +0.5, 0.0),
@@ -90,6 +63,11 @@ void do_grid() {
         vec3(-0.5, +0.5, 0.0),
         vec3(-0.5, -0.5, 0.0)
     );
+    return origin + quat_rotate(verts[gl_VertexID] * scale, orientation);
+}
+
+vec2 uv_rectangle()
+{
     vec2 uvs[6] = vec2[](
         vec2(1.0, 1.0),   // top-right
         vec2(0.0, 1.0),   // top-left
@@ -98,24 +76,34 @@ void do_grid() {
         vec2(0.0, 1.0),   // top-left
         vec2(0.0, 0.0)    // bottom-left
     );
-    vec3 position = origin + quat_rotate(verts[gl_VertexID] * scale, orientation);
-    vec4 view_pos = u_view * vec4(position, 1.0);
-    vec4 clip_pos = u_proj * view_pos;
-    gl_Position = clip_pos;
-    f_col = v_col;
-    vec3 local_x = quat_rotate(vec3(1,0,0), orientation);
-    vec3 local_y = quat_rotate(vec3(0,1,0), orientation);
-    vec3 rel = position - origin;
-    f_texcoord = vec2(dot(rel,local_x),dot(rel, local_y));
-    f_mode = mode;
+
+    return uvs[gl_VertexID];
 }
 
-vec3 find_orthogonal_vector(vec3 v) {
-    vec3 x = vec3(1,0,0);
-    if (abs(dot(v, x)) >= 0.9999) {
-        x = vec3(0,1,0);
-    }
-    return normalize(cross(x,v));
+vec2 uv_worldspace_from_orientation(vec3 worldspace_origin, vec3 vertex_position, vec4 orientation)
+{
+    vec3 local_x = quat_rotate(vec3(1,0,0), orientation);
+    vec3 local_y = quat_rotate(vec3(0,1,0), orientation);
+    vec3 rel = vertex_position - worldspace_origin;
+    return vec2(dot(rel,local_x),dot(rel, local_y));
+}
+
+void do_line()
+{
+    gl_Position = pos_viewspace_rectangle_aligned_on_positions(v_v0, v_v1, thickness);
+    f_col = v_col;
+    f_mode = mode;
+    f_texcoord = uv_rectangle();
+}
+
+void do_grid() {
+    vec3 origin = vec3(v_v0);
+    vec3 scale = vec3(thickness);
+    vec3 position = pos_worldspace_rectangle(v_v0, orientation, vec3(thickness));
+    gl_Position = u_proj * u_view * vec4(position, 1.0);
+    f_texcoord = uv_worldspace_from_orientation(origin, position, orientation);
+    f_col = v_col;
+    f_mode = mode;
 }
 
 void do_point() {
@@ -150,22 +138,14 @@ void do_ring() {
         vec3(-0.5, +0.5, 0.0),
         vec3(-0.5, -0.5, 0.0)
     );
-    vec2 uvs[6] = vec2[](
-        vec2(1.0, 1.0),   // top-right
-        vec2(0.0, 1.0),   // top-left
-        vec2(1.0, 0.0),   // bottom-right
-        vec2(1.0, 0.0),   // bottom-right
-        vec2(0.0, 1.0),   // top-left
-        vec2(0.0, 0.0)    // bottom-left
-    );
     vec3 position = origin + quat_rotate(verts[gl_VertexID] * scale, orientation);
     vec4 view_pos = u_view * vec4(position, 1.0);
     vec4 clip_pos = u_proj * view_pos;
     gl_Position = clip_pos;
     f_col = v_col;
-    f_texcoord = uvs[gl_VertexID];
+    f_texcoord = uv_rectangle();
     f_mode = 2u;
-    f_param = vec4(v_v1.x,0,0,0);
+    f_param = vec4(v_v1.x,v_v1.y,0,0);
 }
 
 #define CYLINDER_SLICES 8
@@ -211,14 +191,6 @@ void do_plane() {
         vec3(+0.5, -0.5, 0.0),
         vec3(-0.5, +0.5, 0.0),
         vec3(-0.5, -0.5, 0.0)
-    );
-    vec2 uvs[6] = vec2[](
-        vec2(1.0, 1.0),   // top-right
-        vec2(0.0, 1.0),   // top-left
-        vec2(1.0, 0.0),   // bottom-right
-        vec2(1.0, 0.0),   // bottom-right
-        vec2(0.0, 1.0),   // top-left
-        vec2(0.0, 0.0)    // bottom-left
     );
     vec3 position = origin + quat_rotate(verts[gl_VertexID] * scale, orientation);
     vec4 view_pos = u_view * vec4(position, 1.0);
