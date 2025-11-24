@@ -129,14 +129,6 @@ void do_color() {
     r_col = f_col;
 }
 
-float sdRoundedBox( in vec2 p, in vec2 b, in vec4 r )
-{
-    r.xy = (p.x>0.0)?r.xy : r.zw;
-    r.x  = (p.y>0.0)?r.x  : r.y;
-    vec2 q = abs(p)-b+r.x;
-    return min(max(q.x,q.y),0.0) + length(max(q,0.0)) - r.x;
-}
-
 float sdf_rounded_rect(vec2 sample_pos, vec2 rect_center, vec2 rect_half_size, float r) {
     vec2 d2 = (abs(rect_center - sample_pos) - rect_half_size + vec2(r, r));
     return min(max(d2.x, d2.y), 0.0) + length(max(d2, 0.0)) - r;
@@ -145,15 +137,21 @@ float sdf_rounded_rect(vec2 sample_pos, vec2 rect_center, vec2 rect_half_size, f
 void do_rounded_rect()
 {
     vec2 uv = (f_texcoord) * f_param.zw;
-    float radius = 0.1;
-    float falloff = 0.001;
+
+    // float radius = 0.1;
+    // float falloff = 0.003;
+    float radius = f_param.x * length(f_param.zw);
+    float falloff = f_param.y;
     vec2 softness = vec2(falloff);
     vec2 softness_padding = vec2(max(0, falloff*2 - 1), max(0, falloff*2 - 1));
-    float dist = sdf_rounded_rect(uv, vec2(0.0), f_param.zw * 0.5 - softness_padding, radius);
+    float dist = sdf_rounded_rect(uv, vec2(0.0), (f_param.zw * 0.980) * 0.5 - softness_padding, radius);
     float sdf_factor = 1.0 - smoothstep(0, 2*falloff, dist);
     float alpha = sdf_factor;
     // r_col = vec4(alpha, 0,0,1);
     r_col = vec4(f_col.xyz, f_col.a * alpha);
+    // float edge = max(abs(dudv.x), abs(dudv.y)) * (sdf_factor);
+
+    // r_col = vec4(edge * 100.0, 0.0, 0.0, 1.0);
 }
 
 void main()

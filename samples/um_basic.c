@@ -175,7 +175,7 @@ int main(int argc, char const *argv[])
             vd_um_translate_planar("YZ", point.e, fm3(0,1,0).e, fm3(0,0,1).e);
             vd_um_translate_planar("XY", point.e, fm3(0,1,0).e, fm3(1,0,0).e);
 
-            vd_um_quad(fm3(0,0,-1).e, fidentityquat().e, fm2(1.f, 2.f).e, 0.4f, 1.f, fm4(1,0,0,0.8f).e);
+            // vd_um_quad(point.e, fidentityquat().e, fm2(1.f, 2.f).e, 0.1f, 0.003f, fm4(1,0,0,0.8f).e);
 
             // vd_um_ring(point.e, flookrotquat(fm3(1,0,0), fm3(0,1,0)).e, 1.f, 0.05f, fm4(0.7f, 0.2f, 0.2f, 1.f).e);
             vd_um_ring(point.e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 1.f, 0.05f, fm4(0.2f, 0.7f, 0.2f, 1.f).e);

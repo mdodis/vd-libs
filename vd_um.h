@@ -667,7 +667,11 @@ VD_UM_API void vd_um_translate_planar(const char *nameid, float position[3], flo
 
     float plane_pos[3] = { position[0], position[1], position[2] };
     vd_um__add3_scaled_inplace(plane_pos, direction, 0.1f * scale_factor);
-    vd_um_plane(plane_pos, plane_normal, 0.05f * scale_factor, color);
+    // vd_um_plane(plane_pos, plane_normal, 0.05f * scale_factor, color);
+    float orientation[4];
+    vd_um__quaternion_from_look_rotation(plane_normal, axis1, orientation);
+    float extents[2] = { 0.05f * scale_factor, 0.05f * scale_factor };
+    vd_um_quad(plane_pos, orientation, extents, 0.1f, 0.003f, color);
 }
 
 VD_UM_API void vd_um_rotate_axial(const char *nameid, float orientation[4], float display_position[3], float axis[3])
