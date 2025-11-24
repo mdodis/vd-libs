@@ -15,6 +15,8 @@ int main(int argc, char const *argv[])
         }
     });
 
+    vd_fw_set_size(1600, 900);
+
     vd_um_init();
 
     vd_fw_set_title("UM Basic");
@@ -69,10 +71,22 @@ int main(int argc, char const *argv[])
     glEnable(GL_MULTISAMPLE);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    F3 camera_origin = fzero3();
-    FQuat camera_orientation = fidentityquat();
+    F3 camera_origin = fm3(2,2,2);
+    FQuat camera_orientation;
     float heading = 0.f;
     float pitch = 0.f;
+
+    {
+
+        F3 forward = fnoz3(fsub3(fzero3(), camera_origin));
+
+        heading = VD_CG_RAD2DEG_COEFF * (float)atan2(forward.x, forward.z);
+        pitch = VD_CG_RAD2DEG_COEFF * (float)asin(-forward.y);
+
+        camera_orientation = feulerquat(fm3(fdeg2rad(pitch),
+                                        fdeg2rad(heading),
+                                        0.f));
+    }
 
     while (vd_fw_running()) {
         if (vd_fw_close_requested()) {
@@ -150,13 +164,18 @@ int main(int argc, char const *argv[])
             vd_um_grid(fzero3().e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 100.f, fm4(1,1,1,1).e);
             vd_um_segment(fm3(-1,1,1).e, fm3(1,1,1).e, 0.01f, fm4(1,1,0,1).e);
 
-            vd_um_plane(fm3(0,5,0).e, fm3(0,1,0).e, 5.f, fm4(0.7f, 0.6f, 0.2f, 0.5f).e);
+            // vd_um_plane(fm3(0,5,0).e, fm3(0,1,0).e, 5.f, fm4(0.7f, 0.6f, 0.2f, 0.5f).e);
 
             vd_um_point(fm3(0,0,0).e, 0.05f, fm4(1,0,1,1).e);
-            static F3 point = {{0,1,0}};
+            static F3 point = {{0,0,0}};
             vd_um_translate_axial("Z", point.e, fm3(0,0,1).e);
             vd_um_translate_axial("Y", point.e, fm3(0,1,0).e);
             vd_um_translate_axial("X", point.e, fm3(1,0,0).e);
+            vd_um_translate_planar("XZ", point.e, fm3(1,0,0).e, fm3(0,0,1).e);
+            vd_um_translate_planar("YZ", point.e, fm3(0,1,0).e, fm3(0,0,1).e);
+            vd_um_translate_planar("XY", point.e, fm3(0,1,0).e, fm3(1,0,0).e);
+
+            vd_um_quad(fm3(0,0,-1).e, fidentityquat().e, fm2(1.f, 2.f).e, 0.4f, 1.f, fm4(1,0,0,0.8f).e);
 
             // vd_um_ring(point.e, flookrotquat(fm3(1,0,0), fm3(0,1,0)).e, 1.f, 0.05f, fm4(0.7f, 0.2f, 0.2f, 1.f).e);
             vd_um_ring(point.e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 1.f, 0.05f, fm4(0.2f, 0.7f, 0.2f, 1.f).e);

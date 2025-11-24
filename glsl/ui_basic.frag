@@ -31,23 +31,21 @@ float radialGlow(vec2 fragPos, vec2 glowCenter, float radius, float intensity) {
 
 void main()
 {
-    // === Tunable parameters ===
-    float softnessScale       = 1.2;    // Multiplier for edge softness padding
-    float glowInnerFactor     = 0.2;    // Inner glow radius relative to rect size
-    float glowOuterFactor     = 0.3;    // Outer glow radius relative to rect size
-    float glowInnerIntensity  = 0.4;    // Strength of inner glow
-    float glowOuterIntensity  = 0.2;    // Strength of outer glow
-    float edgeEnhanceScale    = 0.1;    // Scale for edge distance normalization
-    float edgeEnhanceBoost    = 0.5;    // Boost factor for edge proximity effect
-    float glowColorBlendScale = 0.3;    // How much warm/cool glow mix varies
-    float glowStrength        = 0.08;    // Overall glow strength multiplier
-    float colorTempShift      = 0.2;    // Subtle color temperature mix factor
-    float brightnessBoost     = 0.1;    // Brightness boost based on glow intensity
+    float softnessScale       = 1.2;
+    float glowInnerFactor     = 0.2;
+    float glowOuterFactor     = 0.3;
+    float glowInnerIntensity  = 0.4; 
+    float glowOuterIntensity  = 0.2;
+    float edgeEnhanceScale    = 0.1;
+    float edgeEnhanceBoost    = 0.5;
+    float glowColorBlendScale = 0.3;
+    float glowStrength        = 0.08;
+    float colorTempShift      = 0.2;
+    float brightnessBoost     = 0.1;
 
     vec3 coolGlow = vec3(0.9, 0.95, 1.0);
     vec3 warmGlow = vec3(1.0, 0.9, 0.8);
 
-    // === Rounded rect SDF with edge softness ===
     vec2 softness_padding = vec2(max(0, f_edge_softness * 2 - 1.0));
     float dist = sdf_rounded_rect(f_dp, f_dc, f_dhs - softness_padding, f_corner_radius);
     float border_factor = 1.0;
@@ -71,13 +69,11 @@ void main()
     vec4 mask_color = vec4(f_color.rgb, f_color.a * sample.r);
     vec4 color = mix(normal_color, mask_color, f_amix);
 
-    // === Mouse inside check ===
     vec2 mouseLocal = uMouse - f_dc;
     float insideX = step(abs(mouseLocal.x), f_dhs.x);
     float insideY = step(abs(mouseLocal.y), f_dhs.y);
     float mouseInside = insideX * insideY;
 
-    // === Glow calculations ===
     float glowRadius1 = length(f_dhs) * glowInnerFactor;
     float glowRadius2 = length(f_dhs) * glowOuterFactor;
     float glow1 = radialGlow(f_dp, uMouse, glowRadius1, glowInnerIntensity);

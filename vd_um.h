@@ -88,16 +88,19 @@ VD_UM_API VdUmVertex*       vd_um_frame_get_vertex_buffer(int *num_vertices);
 
 VD_UM_API void              vd_um_point(float position[3], float size, float color[4]);
 VD_UM_API void              vd_um_segment(float start[3], float end[3], float thickness, float color[4]);
-VD_UM_API void              vd_um_isotri(float base[3], float apex[3], float width, float color[4]);
+VD_UM_API void              vd_um_quad(float center[3], float orientation[4], float extents[2], float corner_radius, float falloff, float color[4]);
+VD_UM_API void              vd_um_arrow(float base[3], float apex[3], float width, float color[4]);
 VD_UM_API void              vd_um_grid(float origin[3], float orientation[4], float extent, float color[4]);
 VD_UM_API void              vd_um_cylinder(float base[3], float orientation[4], float height, float radius, float color[4]);
 VD_UM_API void              vd_um_plane(float point[3], float normal[3], float extent, float color[4]);
 VD_UM_API void              vd_um_ring(float center[3], float orientation[4], float radius, float thickness, float color[4]);
 VD_UM_API void              vd_um_i_cylinder(float base[3], float orientation[4], float height, float radius, float normal_color[4], float hover_color[4]);
 VD_UM_API void              vd_um_translate_axial(const char *nameid, float position[3], float direction[3]);
+VD_UM_API void              vd_um_translate_planar(const char *nameid, float position[3], float axis0[3], float axis1[3]);
 VD_UM_API void              vd_um_rotate_axial(const char *nameid, float orientation[4], float display_position[3], float axis[3]);
 
 VD_UM_API void              vd_um_get_picking_ray(float origin[3], float direction[3]);
+VD_UM_API float             vd_um_get_scale_factor(float position[3]);
 
 VD_UM_API void              vd_um_push_depth(int on);
 VD_UM_API void              vd_um_pop_depth(void);
@@ -149,6 +152,7 @@ enum {
     VD_UM__VERTEX_MODE_RING     = 3,
     VD_UM__VERTEX_MODE_CYLINDER = 4,
     VD_UM__VERTEX_MODE_QUAD     = 5,
+    VD_UM__VERTEX_MODE_ARROW    = 6,
 };
 
 struct VdUmContext {
@@ -367,9 +371,35 @@ VD_UM_API void vd_um_segment(float start[3], float end[3], float thickness, floa
     vd_um__push_vertex(ctx, &vertex);
 }
 
-VD_UM_API void vd_um_isotri(float base[3], float apex[3], float width, float color[4])
+VD_UM_API void vd_um_quad(float center[3], float orientation[4], float extents[2], float corner_radius, float falloff, float color[4])
 {
+    VdUmContext *ctx = vd_um_context_get();
+    vd_um__require_render_pass(ctx, -1, 6);
+    VdUmVertex vertex = {};
+    vertex.mode = VD_UM__VERTEX_MODE_QUAD;
+    for (int i = 0; i < 3; i++) vertex.pos0[i] = center[i];
+    for (int i = 0; i < 2; i++) vertex.pos1[i] = extents[i];
+    for (int i = 0; i < 4; i++) vertex.orientation[i] = orientation[i];
+    for (int i = 0; i < 4; i++) vertex.color[i] = color[i];
+    vertex.pos1[2] = falloff; 
+    vertex.size = corner_radius;
 
+    vd_um__push_vertex(ctx, &vertex);
+}
+
+VD_UM_API void vd_um_arrow(float base[3], float apex[3], float width, float color[4])
+{
+    VdUmContext *ctx = vd_um_context_get();
+    vd_um__require_render_pass(ctx, -1, 3);
+    VdUmVertex vertex = {};
+
+    for (int i = 0; i < 3; i++) vertex.pos0[i] = base[i];
+    vertex.size = width;
+    for (int i = 0; i < 3; i++) vertex.pos1[i] = apex[i];
+    vertex.mode = VD_UM__VERTEX_MODE_ARROW;
+    for (int i = 0; i < 4; i++) vertex.color[i] = color[i];
+
+    vd_um__push_vertex(ctx, &vertex);
 }
 
 VD_UM_API void vd_um_grid(float origin[3], float orientation[4], float extent, float color[4])
@@ -527,23 +557,20 @@ VD_UM_API void vd_um_i_cylinder(float base[3], float orientation[4], float heigh
 
 VD_UM_API void vd_um_translate_axial(const char *nameid, float position[3], float direction[3])
 {
-    float height = 0.3f;
-    float radius = 0.005f;
+    float height = 0.30f;
+    float radius = 0.01f;
+    // float height = 0.50f;
+    // float radius = 0.10f;
     float normal_color[4] = { direction[0], direction[1], direction[2], 1 };
     float select_color[4] = { 0.7f, 0.7f, 0.7f, 1.f};
     float  hover_color[4] = { 0.2f, 0.7f, 0.7f, 1.f};
     float *color = normal_color;
     VdUmContext *ctx = vd_um_context_get();
 
-    float position_to_origin[3];
-    vd_um__sub3(ctx->mouse_origin, position, position_to_origin);
-    float distance_from_position = vd_um__sqrt(vd_um__dot3(position_to_origin, position_to_origin));
-
-    float scale_factor = distance_from_position * tanf(fdeg2rad(60.f) * 0.5f);
+    float scale_factor = vd_um_get_scale_factor(position);
 
     height *= scale_factor;
     radius *= scale_factor;
-
 
 
     VdUmU64 id = vd_um__compute_id_for_string(ctx, nameid);
@@ -613,13 +640,38 @@ VD_UM_API void vd_um_translate_axial(const char *nameid, float position[3], floa
 
     float seg[3] = { position[0], position[1], position[2] };
     vd_um__add3_scaled_inplace(seg, direction, height);
-    // vd_um_segment(position, seg, radius, color);
-    vd_um_cylinder(position, orientation, height, radius, color);
+    vd_um_segment(position, seg, radius, color);
+
+    float arrow_apex[3] = { seg[0], seg[1], seg[2] };
+    vd_um__add3_scaled_inplace(arrow_apex, direction, 0.05f * scale_factor);
+    vd_um_arrow(seg, arrow_apex, radius * 4.0f, color);
+    // vd_um_cylinder(position, orientation, height, radius, color);
+}
+
+VD_UM_API void vd_um_translate_planar(const char *nameid, float position[3], float axis0[3], float axis1[3])
+{
+    VdUmContext *ctx = vd_um_context_get();
+    VdUmU64 id = vd_um__compute_id_for_string(ctx, nameid);
+
+    float scale_factor = vd_um_get_scale_factor(position);
+
+    float direction[3] = {
+        axis0[0] + axis1[0],
+        axis0[1] + axis1[1],
+        axis0[2] + axis1[2],
+    };
+
+    float plane_normal[3];
+    vd_um__cross3(axis0, axis1, plane_normal);
+    float color[4] = { vd_um__abs(plane_normal[0]), vd_um__abs(plane_normal[1]), vd_um__abs(plane_normal[2]), 1.f };
+
+    float plane_pos[3] = { position[0], position[1], position[2] };
+    vd_um__add3_scaled_inplace(plane_pos, direction, 0.1f * scale_factor);
+    vd_um_plane(plane_pos, plane_normal, 0.05f * scale_factor, color);
 }
 
 VD_UM_API void vd_um_rotate_axial(const char *nameid, float orientation[4], float display_position[3], float axis[3])
 {
-
 }
 
 VD_UM_API void vd_um_get_picking_ray(float origin[3], float direction[3])
@@ -627,6 +679,16 @@ VD_UM_API void vd_um_get_picking_ray(float origin[3], float direction[3])
     VdUmContext *ctx = vd_um_context_get();
     for (int i = 0; i < 3; ++i) origin[i] = ctx->mouse_origin[i];
     for (int i = 0; i < 3; ++i) direction[i] = ctx->mouse_direction[i];
+}
+
+VD_UM_API float vd_um_get_scale_factor(float position[3])
+{
+    VdUmContext *ctx = vd_um_context_get();
+    float position_to_origin[3];
+    vd_um__sub3(ctx->mouse_origin, position, position_to_origin);
+    float distance_from_position = vd_um__sqrt(vd_um__dot3(position_to_origin, position_to_origin));
+
+    return distance_from_position * tanf(fdeg2rad(60.f) * 0.5f);
 }
 
 static void vd_um__push_vertex(VdUmContext *ctx, VdUmVertex *vertex)

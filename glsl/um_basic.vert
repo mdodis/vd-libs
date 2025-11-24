@@ -15,7 +15,7 @@ out vec4 f_col;
 flat out uint f_mode;
 out vec2 f_texcoord;
 out vec2 f_timeout;
-out vec4 f_param;
+flat out vec4 f_param;
 
 vec3 quat_rotate(vec3 v, vec4 q)
 {
@@ -53,6 +53,25 @@ vec4 pos_viewspace_rectangle_aligned_on_positions(vec3 p0, vec3 p1, float width)
     return u_proj * vec4(vertex, 1.0);
 }
 
+vec4 pos_viewspace_triangle_aligned_to_camera(vec3 base, vec3 apex, float width)
+{
+    vec4 Pv0 = u_view * vec4(base, 1.0);
+    vec4 Pv1 = u_view * vec4(apex, 1.0);
+    const vec2 movements[3] = vec2[](
+        vec2(+0.0, 1.0),
+        vec2(-1.0, 0.0),
+        vec2(+1.0, 0.0)
+    );
+    float L = distance(Pv1.xyz, Pv0.xyz);
+    vec3 F = normalize(Pv1.xyz - Pv0.xyz);
+    vec3 closest = Pv0.xyz + F * (-dot(Pv0.xyz, F) / dot(F,F));
+    float H = width / 2.0;
+    vec3 M = -normalize(closest);
+    vec3 R = cross(F, M);
+    vec3 vertex = Pv0.xyz + movements[gl_VertexID].x * H * R + movements[gl_VertexID].y * L * F;
+    return u_proj * vec4(vertex, 1.0);
+}
+
 vec3 pos_worldspace_rectangle(vec3 origin, vec4 orientation, vec3 scale)
 {
     vec3 verts[6] = vec3[](
@@ -80,6 +99,16 @@ vec2 uv_rectangle()
     return uvs[gl_VertexID];
 }
 
+vec2 uv_triangle()
+{
+    const vec2 uvs[3] = vec2[](
+        vec2(+0.0, 1.0),
+        vec2(+1.0, 0.0),
+        vec2(-1.0, 0.0)
+    );
+    return uvs[gl_VertexID];
+}
+
 vec2 uv_worldspace_from_orientation(vec3 worldspace_origin, vec3 vertex_position, vec4 orientation)
 {
     vec3 local_x = quat_rotate(vec3(1,0,0), orientation);
@@ -94,6 +123,13 @@ void do_line()
     f_col = v_col;
     f_mode = mode;
     f_texcoord = uv_rectangle();
+}
+
+void do_triangle() {
+    gl_Position = pos_viewspace_triangle_aligned_to_camera(v_v0, v_v1, thickness);
+    f_col = v_col;
+    f_mode = 4u;
+    f_texcoord = uv_triangle();
 }
 
 void do_grid() {
@@ -200,12 +236,30 @@ void do_plane() {
     f_mode = 3u;
 }
 
+void do_quad() {
+    vec3 origin = vec3(v_v0);
+    vec3 scale = vec3(v_v1.x, v_v1.y, 1.0);
+    float falloff = v_v1.z;
+    float radius = thickness;
+
+    vec3 position = pos_worldspace_rectangle(origin, orientation, scale);
+    gl_Position = u_proj * u_view * vec4(position, 1.0);
+    f_texcoord = (uv_rectangle() - vec2(0.5)); /* * v_v1.xy; */
+    f_col = v_col;
+    f_param.x = radius;
+    f_param.y = falloff;
+    f_param.z = v_v1.x * 1.0;
+    f_param.w = v_v1.y * 1.0;
+    f_mode = 5u;
+}
+
 void main() {
     if (mode == 0u) { do_line(); }
     if (mode == 1u) { do_grid(); }
     if (mode == 2u) { do_point(); }
     if (mode == 3u) { do_ring(); }
     if (mode == 4u) { do_cylinder(); }
-    if (mode == 5u) { do_plane(); }
+    if (mode == 5u) { do_quad(); }
+    if (mode == 6u) { do_triangle(); }
     f_timeout = timeout;
 }
