@@ -162,12 +162,12 @@ int main(int argc, char const *argv[])
             vd_um_event_mouse_delta(mouse_delta);
 
             vd_um_grid(fzero3().e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 100.f, fm4(1,1,1,1).e);
-            vd_um_segment(fm3(-1,1,1).e, fm3(1,1,1).e, 0.01f, fm4(1,1,0,1).e);
 
-            // vd_um_plane(fm3(0,5,0).e, fm3(0,1,0).e, 5.f, fm4(0.7f, 0.6f, 0.2f, 0.5f).e);
-
-            vd_um_point(fm3(0,0,0).e, 0.05f, fm4(1,0,1,1).e);
             static F3 point = {{0,0,0}};
+            if (vd_fw_get_key_pressed('R')) {
+                point = fzero3();                
+            }
+
             vd_um_translate_axial("Z", point.e, fm3(0,0,1).e);
             vd_um_translate_axial("Y", point.e, fm3(0,1,0).e);
             vd_um_translate_axial("X", point.e, fm3(1,0,0).e);
@@ -179,6 +179,7 @@ int main(int argc, char const *argv[])
 
             // vd_um_ring(point.e, flookrotquat(fm3(1,0,0), fm3(0,1,0)).e, 1.f, 0.05f, fm4(0.7f, 0.2f, 0.2f, 1.f).e);
             vd_um_ring(point.e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 1.f, 0.05f, fm4(0.2f, 0.7f, 0.2f, 1.f).e);
+            vd_um_cylinder(point.e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 0.5f, 0.5f, fm4(0.3f, 0.6f, 0.25f, 1.f).e);
             // vd_um_i_cylinder(fzero3().e, flookrotquat(fm3(0,0,1), fm3(0,1,0)).e, 1.f, 0.01f, fm4(0.2f,0.2f,0.7f,1).e, fm4(0.2f, 0.7f, 0.7f, 1).e);
             // vd_um_i_cylinder(fzero3().e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 1.f, 0.01f, fm4(0.2f,0.7f,0.2f,1).e, fm4(0.2f, 0.7f, 0.7f, 1).e);
             // vd_um_i_cylinder(fzero3().e, flookrotquat(fm3(1,0,0), fm3(0,1,0)).e, 1.f, 0.01f, fm4(0.7f,0.2f,0.2f,1).e, fm4(0.2f, 0.7f, 0.7f, 1).e);
