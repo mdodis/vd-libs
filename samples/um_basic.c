@@ -161,12 +161,15 @@ int main(int argc, char const *argv[])
             float mouse_delta[2] = { mx, my };
             vd_um_event_mouse_delta(mouse_delta);
 
-            vd_um_grid(fzero3().e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 100.f, fm4(1,1,1,1).e);
-
             static F3 point = {{0,0,0}};
             if (vd_fw_get_key_pressed('R')) {
                 point = fzero3();                
             }
+
+            vd_um_push_depth_flags(1,1);
+            vd_um_cylinder(point.e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 0.5f, 0.5f, fm4(0.3f, 0.6f, 0.25f, 1.f).e);
+            vd_um_grid(fzero3().e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 100.f, fm4(1,1,1,1).e);
+            vd_um_pop_depth_flags();
 
             vd_um_translate_axial("Z", point.e, fm3(0,0,1).e);
             vd_um_translate_axial("Y", point.e, fm3(0,1,0).e);
@@ -178,8 +181,7 @@ int main(int argc, char const *argv[])
             // vd_um_quad(point.e, fidentityquat().e, fm2(1.f, 2.f).e, 0.1f, 0.003f, fm4(1,0,0,0.8f).e);
 
             // vd_um_ring(point.e, flookrotquat(fm3(1,0,0), fm3(0,1,0)).e, 1.f, 0.05f, fm4(0.7f, 0.2f, 0.2f, 1.f).e);
-            vd_um_ring(point.e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 1.f, 0.05f, fm4(0.2f, 0.7f, 0.2f, 1.f).e);
-            vd_um_cylinder(point.e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 0.5f, 0.5f, fm4(0.3f, 0.6f, 0.25f, 1.f).e);
+            // vd_um_ring(point.e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 1.f, 0.05f, fm4(0.2f, 0.7f, 0.2f, 1.f).e);
             // vd_um_i_cylinder(fzero3().e, flookrotquat(fm3(0,0,1), fm3(0,1,0)).e, 1.f, 0.01f, fm4(0.2f,0.2f,0.7f,1).e, fm4(0.2f, 0.7f, 0.7f, 1).e);
             // vd_um_i_cylinder(fzero3().e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 1.f, 0.01f, fm4(0.2f,0.7f,0.2f,1).e, fm4(0.2f, 0.7f, 0.7f, 1).e);
             // vd_um_i_cylinder(fzero3().e, flookrotquat(fm3(1,0,0), fm3(0,1,0)).e, 1.f, 0.01f, fm4(0.7f,0.2f,0.2f,1).e, fm4(0.2f, 0.7f, 0.7f, 1).e);
@@ -189,6 +191,7 @@ int main(int argc, char const *argv[])
 
         glViewport(0,0,w,h);
         glClearColor(0.1f, 0.1f, 0.1f, 1.f);
+        glDepthMask(GL_TRUE);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glUseProgram(program);
@@ -202,6 +205,18 @@ int main(int argc, char const *argv[])
         VdUmVertex *vertices = vd_um_frame_get_vertex_buffer(&num_vertices);
         for (int i = 0; i < num_passes; ++i) {
             VdUmRenderPass *pass = &passes[i];
+
+            int depth_test  = pass->flags & VD_UM_RENDER_PASS_FLAG_DEPTH_TEST;
+            int depth_write = pass->flags & VD_UM_RENDER_PASS_FLAG_DEPTH_WRITE;
+
+            if (depth_test) {
+                glDepthFunc(GL_LESS);
+            } else {
+                glDepthFunc(GL_ALWAYS);
+            }
+
+            glDepthMask((GLboolean)depth_write);
+
             size_t start = pass->first_instance * sizeof(VdUmVertex);
             size_t size  = pass->instance_count * sizeof(VdUmVertex);
             glBufferSubData(GL_ARRAY_BUFFER, 0, size, (unsigned char*)vertices + start);

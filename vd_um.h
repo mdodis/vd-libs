@@ -64,7 +64,8 @@ typedef struct {
 #pragma pack(pop)
 
 enum {
-    VD_UM_RENDER_PASS_FLAG_DEPTH_WRITE_AND_TEST = 1 << 0,
+    VD_UM_RENDER_PASS_FLAG_DEPTH_TEST  = 1 << 0,
+    VD_UM_RENDER_PASS_FLAG_DEPTH_WRITE = 1 << 1,
 };
 
 typedef struct {
@@ -102,8 +103,13 @@ VD_UM_API void              vd_um_rotate_axial(const char *nameid, float orienta
 VD_UM_API void              vd_um_get_picking_ray(float origin[3], float direction[3]);
 VD_UM_API float             vd_um_get_scale_factor(float position[3]);
 
-VD_UM_API void              vd_um_push_depth(int on);
-VD_UM_API void              vd_um_pop_depth(void);
+VD_UM_API void              vd_um_push_depth_flags(int depth_test, int depth_write);
+VD_UM_API int               vd_um_get_depth_flags(void);
+VD_UM_API void              vd_um_pop_depth_flags(void);
+
+VD_UM_API void              vd_um_push_vertex_count(int count);
+VD_UM_API int               vd_um_get_vertex_count(void);
+VD_UM_API void              vd_um_pop_vertex_count(void);
 
 VD_UM_API void              vd_um_push_id(const void *str, int len);
 VD_UM_API void              vd_um_pop_id(void);
@@ -138,6 +144,16 @@ VD_UM_API const char*   vd_um_gl_get_uniform_name_view(void);
 #   define VD_UM_VIEWPORT_MAX 4
 #endif // !VD_UM_VIEWPORT_MAX
 
+#define VD_UM__RENDER_PASS_COUNT 16
+
+#ifndef VD_UM_DEPTH_FLAG_STACK_COUNT
+#   define VD_UM_DEPTH_FLAG_STACK_COUNT 16
+#endif // VD_UM_DEPTH_FLAG_STACK_COUNT
+
+#ifndef VD_UM_VERTEX_COUNT_STACK_COUNT
+#   define VD_UM_VERTEX_COUNT_STACK_COUNT 32
+#endif // !VD_UM_VERTEX_COUNT_STACK_COUNT
+
 #ifndef VD_UM_CUSTOM_TYPEDEFS
 #include <stdint.h>
 typedef uint64_t VdUmU64;
@@ -153,6 +169,11 @@ enum {
     VD_UM__VERTEX_MODE_CYLINDER = 4,
     VD_UM__VERTEX_MODE_QUAD     = 5,
     VD_UM__VERTEX_MODE_ARROW    = 6,
+};
+
+enum {
+    VD_UM__DEPTH_TEST  = 1 << 0,
+    VD_UM__DEPTH_WRITE = 1 << 1,
 };
 
 struct VdUmContext {
@@ -171,7 +192,7 @@ struct VdUmContext {
     VdUmVertex *vertices;
 
     int            num_passes;
-    VdUmRenderPass passes[VD_UM_VIEWPORT_MAX];
+    VdUmRenderPass passes[VD_UM__RENDER_PASS_COUNT];
 
     // Per Viewport Data
     float viewport[4];
@@ -183,6 +204,15 @@ struct VdUmContext {
     int     id_stack_count;
     int     id_stack_cap;
 
+    // Depth Flag Stack
+    int     depth_flag_stack[VD_UM_DEPTH_FLAG_STACK_COUNT];
+    int     depth_flag_stack_count;
+
+    // Vertex Count Stack
+    int     vertex_count_stack[VD_UM_VERTEX_COUNT_STACK_COUNT];
+    int     vertex_count_stack_count;
+
+    // Persistent Data
     VdUmU64 hot_id;
     float   selection_t;
     VdUmU64 active_id;
@@ -230,6 +260,7 @@ VD_UM_INL   VdUmU64         vd_um__compute_id_for_string(VdUmContext *ctx, const
 static      void            vd_um__push_vertex(VdUmContext *ctx, VdUmVertex *vertex);
 static      VdUmRenderPass* vd_um__get_current_pass(VdUmContext *ctx);
 static      void            vd_um__require_render_pass(VdUmContext *ctx, int flags, int vertex_count);
+static      VdUmRenderPass* vd_um__push_pass(VdUmContext *ctx);
 VD_UM_INL   int             vd_um__mouse_just_clicked(VdUmContext *ctx);
 VD_UM_INL   int             vd_um__mouse_is_released(VdUmContext *ctx);
 VD_UM_INL   int             vd_um__try_make_hot(VdUmContext *ctx, VdUmU64 id, float t);
@@ -249,6 +280,11 @@ VD_UM_INL   void            vd_um__lose_active(VdUmContext *ctx, VdUmU64 id);
 #ifndef VD_UM_ENABLE_ASSERTIONS
 #   define VD_UM_ENABLE_ASSERTIONS 1
 #endif // !VD_UM_ENABLE_ASSERTIONS
+
+#ifndef VD_UM_MEMSET
+#   include <stdlib.h>
+#   define VD_UM_MEMSET(ptr, val, sz) memset(ptr, val, sz)
+#endif // !VD_UM_MEMSET
 
 #if VD_UM_ENABLE_ASSERTIONS
 #   define VD_UM_ASSERT_1(x) #x
@@ -279,17 +315,14 @@ VD_UM_API void vd_um_viewport_begin(float viewport[4], float inv_projection[16],
     for (int i = 0; i <  4; ++i) ctx->viewport[i] = viewport[i];
     for (int i = 0; i < 16; ++i) ctx->inv_projection[i] = inv_projection[i];
     for (int i = 0; i < 16; ++i) ctx->view[i] = view[i];
-
-    ctx->num_passes++;
-    VdUmRenderPass *pass = vd_um__get_current_pass(ctx);
-    pass->flags = 0;
-    pass->instance_count = 0;
-    pass->first_instance = 0;
-    pass->vertex_count = 6;
+    vd_um_push_depth_flags(0, 0);
+    vd_um_push_vertex_count(6);
 }
 
 VD_UM_API void vd_um_viewport_end(void)
 {
+    vd_um_pop_vertex_count();
+    vd_um_pop_depth_flags();
 }
 
 VD_UM_API void vd_um_frame_end(void)
@@ -365,7 +398,7 @@ VD_UM_API void vd_um_event_mouse_button(int button, int on)
 VD_UM_API void vd_um_point(float position[3], float size, float color[4])
 {
     VdUmContext *ctx = vd_um_context_get();
-    vd_um__require_render_pass(ctx, -1, 6);
+    vd_um_push_vertex_count(6);
     VdUmVertex vertex = {};
 
     for (int i = 0; i < 3; i++) vertex.pos0[i] = position[i];
@@ -374,12 +407,13 @@ VD_UM_API void vd_um_point(float position[3], float size, float color[4])
     for (int i = 0; i < 4; i++) vertex.color[i] = color[i];
 
     vd_um__push_vertex(ctx, &vertex);
+    vd_um_pop_vertex_count();
 }
 
 VD_UM_API void vd_um_segment(float start[3], float end[3], float thickness, float color[4])
 {
     VdUmContext *ctx = vd_um_context_get();
-    vd_um__require_render_pass(ctx, -1, 6);
+    vd_um_push_vertex_count(6);
     VdUmVertex vertex = {};
 
     for (int i = 0; i < 3; i++) vertex.pos0[i] = start[i];
@@ -389,12 +423,13 @@ VD_UM_API void vd_um_segment(float start[3], float end[3], float thickness, floa
     for (int i = 0; i < 4; i++) vertex.color[i] = color[i];
 
     vd_um__push_vertex(ctx, &vertex);
+    vd_um_pop_vertex_count();
 }
 
 VD_UM_API void vd_um_quad(float center[3], float orientation[4], float extents[2], float corner_radius, float falloff, float color[4])
 {
     VdUmContext *ctx = vd_um_context_get();
-    vd_um__require_render_pass(ctx, -1, 6);
+    vd_um_push_vertex_count(6);
     VdUmVertex vertex = {};
     vertex.mode = VD_UM__VERTEX_MODE_QUAD;
     for (int i = 0; i < 3; i++) vertex.pos0[i] = center[i];
@@ -405,12 +440,13 @@ VD_UM_API void vd_um_quad(float center[3], float orientation[4], float extents[2
     vertex.size = corner_radius;
 
     vd_um__push_vertex(ctx, &vertex);
+    vd_um_pop_vertex_count();
 }
 
 VD_UM_API void vd_um_arrow(float base[3], float apex[3], float width, float color[4])
 {
     VdUmContext *ctx = vd_um_context_get();
-    vd_um__require_render_pass(ctx, -1, 3);
+    vd_um_push_vertex_count(3);
     VdUmVertex vertex = {};
 
     for (int i = 0; i < 3; i++) vertex.pos0[i] = base[i];
@@ -420,12 +456,13 @@ VD_UM_API void vd_um_arrow(float base[3], float apex[3], float width, float colo
     for (int i = 0; i < 4; i++) vertex.color[i] = color[i];
 
     vd_um__push_vertex(ctx, &vertex);
+    vd_um_pop_vertex_count();
 }
 
 VD_UM_API void vd_um_grid(float origin[3], float orientation[4], float extent, float color[4])
 {
     VdUmContext *ctx = vd_um_context_get();
-    vd_um__require_render_pass(ctx, -1, 6);
+    vd_um_push_vertex_count(6);
     VdUmVertex vertex = {};
 
     for (int i = 0; i < 3; i++) vertex.pos0[i] = origin[i];
@@ -435,12 +472,13 @@ VD_UM_API void vd_um_grid(float origin[3], float orientation[4], float extent, f
     for (int i = 0; i < 4; i++) vertex.orientation[i] = orientation[i];
 
     vd_um__push_vertex(ctx, &vertex);
+    vd_um_pop_vertex_count();
 }
 
 VD_UM_API void vd_um_cylinder(float base[3], float orientation[4], float height, float radius, float color[4])
 {
     VdUmContext *ctx = vd_um_context_get();
-    vd_um__require_render_pass(ctx, -1, 8 * 6);
+    vd_um_push_vertex_count(8 * 6);
     VdUmVertex vertex = {};
 
     for (int i = 0; i < 3; i++) vertex.pos0[i] = base[i];
@@ -451,6 +489,7 @@ VD_UM_API void vd_um_cylinder(float base[3], float orientation[4], float height,
     vertex.pos1[0] = radius;
 
     vd_um__push_vertex(ctx, &vertex);
+    vd_um_pop_vertex_count();
 }
 
 VD_UM_API void vd_um_plane(float point[3], float normal[3], float extent, float color[4])
@@ -469,7 +508,7 @@ VD_UM_API void vd_um_plane(float point[3], float normal[3], float extent, float 
 VD_UM_API void vd_um_ring(float center[3], float orientation[4], float radius, float thickness, float color[4])
 {
     VdUmContext *ctx = vd_um_context_get();
-    vd_um__require_render_pass(ctx, -1, 6);
+    vd_um_push_vertex_count(6);
     VdUmVertex vertex = {};
 
     for (int i = 0; i < 3; i++) vertex.pos0[i] = center[i];
@@ -525,6 +564,8 @@ VD_UM_API void vd_um_ring(float center[3], float orientation[4], float radius, f
 
         }
     }
+
+    vd_um_pop_vertex_count();
 }
 
 VD_UM_API void vd_um_i_cylinder(float base[3], float orientation[4], float height, float radius, float normal_color[4], float hover_color[4])
@@ -723,12 +764,10 @@ VD_UM_API void vd_um_translate_planar(const char *nameid, float position[3], flo
 
         float seg_end[3];
         vd_um__add3(start_mouse_pos, plane_normal, seg_end);
-        vd_um_segment(start_mouse_pos, seg_end, 0.1f, (float[]) { 1.f, 0.f, 0.f, 1.f});
 
         if (vd_um__mouse_vs_plane(plane_normal, plane_d, &t)) {
             float point[3];
             vd_um__get_mouse_point(ctx, t, point);
-
 
             float delta[3];
             vd_um__sub3(point, start_mouse_pos, delta);
@@ -761,9 +800,102 @@ VD_UM_API float vd_um_get_scale_factor(float position[3])
     return distance_from_position * tanf(fdeg2rad(60.f) * 0.5f);
 }
 
+VD_UM_API void vd_um_push_depth_flags(int depth_test, int depth_write)
+{
+    VdUmContext *ctx = vd_um_context_get();
+    VD_UM_ASSERT(ctx->depth_flag_stack_count < VD_UM_DEPTH_FLAG_STACK_COUNT);
+
+    int depth_mask = 0;
+
+    if (depth_test) {
+        depth_mask |= VD_UM_RENDER_PASS_FLAG_DEPTH_TEST;
+    }
+
+    if (depth_write) {
+        depth_mask |= VD_UM_RENDER_PASS_FLAG_DEPTH_WRITE;
+    }
+
+    ctx->depth_flag_stack[ctx->depth_flag_stack_count++] = depth_mask;
+}
+
+VD_UM_API int vd_um_get_depth_flags(void)
+{
+    VdUmContext *ctx = vd_um_context_get();
+    VD_UM_ASSERT(ctx->depth_flag_stack_count > 0);
+
+    return ctx->depth_flag_stack[ctx->depth_flag_stack_count - 1];
+}
+
+VD_UM_API void vd_um_pop_depth_flags(void)
+{
+    VdUmContext *ctx = vd_um_context_get();
+    VD_UM_ASSERT(ctx->depth_flag_stack_count > 0);
+
+    ctx->depth_flag_stack_count--;
+}
+
+VD_UM_API void vd_um_push_vertex_count(int count)
+{
+    VdUmContext *ctx = vd_um_context_get();
+    VD_UM_ASSERT(ctx->vertex_count_stack_count < VD_UM_VERTEX_COUNT_STACK_COUNT);
+
+    ctx->vertex_count_stack[ctx->vertex_count_stack_count++] = count;
+}
+
+VD_UM_API int vd_um_get_vertex_count(void)
+{
+    VdUmContext *ctx = vd_um_context_get();
+    VD_UM_ASSERT(ctx->vertex_count_stack_count > 0);
+
+    return ctx->vertex_count_stack[ctx->vertex_count_stack_count - 1];
+}
+
+VD_UM_API void vd_um_pop_vertex_count(void)
+{
+    VdUmContext *ctx = vd_um_context_get();
+    VD_UM_ASSERT(ctx->vertex_count_stack_count > 0);
+
+    ctx->vertex_count_stack_count--;
+}
+
 static void vd_um__push_vertex(VdUmContext *ctx, VdUmVertex *vertex)
 {
+    int depth_flags = vd_um_get_depth_flags();
+    int required_flags = depth_flags;
+    int required_vertex_count = vd_um_get_vertex_count();
+
     VdUmRenderPass *pass = vd_um__get_current_pass(ctx);
+    int should_push_new_pass = 0;
+
+    if ((!pass) || (pass->flags != required_flags)) {
+        should_push_new_pass = 1;
+    }
+
+    if ((!pass) || (pass->vertex_count != required_vertex_count)) {
+        should_push_new_pass = 1;
+    }
+
+    int pass_has_no_draws;
+    if (pass) {
+        pass_has_no_draws = pass->instance_count == 0;
+    } else {
+        pass_has_no_draws = 0;
+    }
+
+    if (should_push_new_pass) {
+        int last_pass_first_instance = pass ? pass->first_instance : 0;
+        int last_pass_instance_count = pass ? pass->instance_count : 0;
+
+        if (!pass_has_no_draws) {
+            pass = vd_um__push_pass(ctx);
+        }
+
+        pass->vertex_count = required_vertex_count;
+        pass->flags = required_flags;
+        pass->instance_count = 0;
+        pass->first_instance = last_pass_first_instance + last_pass_instance_count;
+    }
+
     vertex->timeout[0] = vertex->timeout[1] = 1.f;
 
     VdUmVertex *dst = &ctx->vertices[ctx->num_vertices++];
@@ -774,7 +906,25 @@ static void vd_um__push_vertex(VdUmContext *ctx, VdUmVertex *vertex)
 
 static VdUmRenderPass *vd_um__get_current_pass(VdUmContext *ctx)
 {
-    return &ctx->passes[ctx->num_passes - 1];
+    if (ctx->num_passes > 0) {
+        return &ctx->passes[ctx->num_passes - 1];
+    } else {
+        return 0;
+    }
+}
+
+static VdUmRenderPass *vd_um__push_pass(VdUmContext *ctx)
+{
+    VD_UM_ASSERT(ctx->num_passes < VD_UM__RENDER_PASS_COUNT);
+    VdUmRenderPass *pass = vd_um__get_current_pass(ctx);
+    VdUmRenderPass *new_pass = &ctx->passes[ctx->num_passes++];
+    if (pass) {
+        *new_pass = *pass;
+    } else {
+        VD_UM_MEMSET(new_pass, 0, sizeof(*new_pass));
+    }
+
+    return new_pass;
 }
 
 static void vd_um__require_render_pass(VdUmContext *ctx, int flags, int vertex_count)
@@ -793,8 +943,7 @@ static void vd_um__require_render_pass(VdUmContext *ctx, int flags, int vertex_c
         return;
     }
 
-    VdUmRenderPass *new_pass = &ctx->passes[ctx->num_passes++];
-    *new_pass = *pass;
+    VdUmRenderPass *new_pass = vd_um__push_pass(ctx);
 
     if (flags != -1) {
         new_pass->flags = flags;
@@ -905,6 +1054,9 @@ VD_UM_API VdUmContext *vd_um_context_create(VdUmContextCreateInfo *info)
     ctx->id_stack_count = 0;
     ctx->id_stack = (VdUmU64*)info->alloc(NULL, 0, sizeof(VdUmU64) * ctx->id_stack_cap);
 
+    ctx->depth_flag_stack_count = 0;
+    ctx->vertex_count_stack_count = 0;
+
     ctx->hot_id = 0;
     ctx->selection_t = 1000.f;
     ctx->active_id = 0;
@@ -935,6 +1087,7 @@ static void *vd_um__alloc_default(void *prev, int prev_size, int new_size)
 static void vd_um__abort(const char *message)
 {
     fprintf(stderr, "[vd_um] Aborted with message: %s\n", message);
+    abort();
 }
 #else
 static void *vd_um__alloc_default(void *prev, int prev_size, int new_size)
