@@ -162,21 +162,25 @@ int main(int argc, char const *argv[])
             vd_um_event_mouse_delta(mouse_delta);
 
             static F3 point = {{0,0,0}};
+            static FQuat point_orientation = {{0,0,0,1}};
             if (vd_fw_get_key_pressed('R')) {
                 point = fzero3();                
             }
 
             vd_um_push_depth_flags(1,1);
-            vd_um_cylinder(point.e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 0.5f, 0.5f, fm4(0.3f, 0.6f, 0.25f, 1.f).e);
+            vd_um_cylinder(point.e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 0.5f, 0.1f, fm4(0.3f, 0.6f, 0.25f, 1.f).e);
             vd_um_grid(fzero3().e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 100.f, fm4(1,1,1,1).e);
             vd_um_pop_depth_flags();
 
-            vd_um_translate_axial("Z", point.e, fm3(0,0,1).e);
-            vd_um_translate_axial("Y", point.e, fm3(0,1,0).e);
-            vd_um_translate_axial("X", point.e, fm3(1,0,0).e);
-            vd_um_translate_planar("XZ", point.e, fm3(1,0,0).e, fm3(0,0,1).e);
-            vd_um_translate_planar("YZ", point.e, fm3(0,1,0).e, fm3(0,0,1).e);
-            vd_um_translate_planar("XY", point.e, fm3(0,1,0).e, fm3(1,0,0).e);
+            vd_um_translate_axial("tZ", point.e, fm3(0,0,1).e);
+            vd_um_translate_axial("tY", point.e, fm3(0,1,0).e);
+            vd_um_translate_axial("tX", point.e, fm3(1,0,0).e);
+            vd_um_translate_planar("tXZ", point.e, fm3(1,0,0).e, fm3(0,0,1).e);
+            vd_um_translate_planar("tYZ", point.e, fm3(0,1,0).e, fm3(0,0,1).e);
+            vd_um_translate_planar("tXY", point.e, fm3(0,1,0).e, fm3(1,0,0).e);
+            vd_um_rotate_axial("rX", point_orientation.e, point.e, fm3(1,0,0).e);
+            vd_um_rotate_axial("rY", point_orientation.e, point.e, fm3(0,1,0).e);
+            vd_um_rotate_axial("rZ", point_orientation.e, point.e, fm3(0,0,1).e);
 
             // vd_um_quad(point.e, fidentityquat().e, fm2(1.f, 2.f).e, 0.1f, 0.003f, fm4(1,0,0,0.8f).e);
 

@@ -94,7 +94,7 @@ VD_UM_API void              vd_um_arrow(float base[3], float apex[3], float widt
 VD_UM_API void              vd_um_grid(float origin[3], float orientation[4], float extent, float color[4]);
 VD_UM_API void              vd_um_cylinder(float base[3], float orientation[4], float height, float radius, float color[4]);
 VD_UM_API void              vd_um_plane(float point[3], float normal[3], float extent, float color[4]);
-VD_UM_API void              vd_um_ring(float center[3], float orientation[4], float radius, float thickness, float color[4]);
+VD_UM_API void              vd_um_ring(float center[3], float orientation[4], float radius, float thickness, float fill_radius, float color[4]);
 VD_UM_API void              vd_um_i_cylinder(float base[3], float orientation[4], float height, float radius, float normal_color[4], float hover_color[4]);
 VD_UM_API void              vd_um_translate_axial(const char *nameid, float position[3], float direction[3]);
 VD_UM_API void              vd_um_translate_planar(const char *nameid, float position[3], float axis0[3], float axis1[3]);
@@ -153,6 +153,8 @@ VD_UM_API const char*   vd_um_gl_get_uniform_name_view(void);
 #ifndef VD_UM_VERTEX_COUNT_STACK_COUNT
 #   define VD_UM_VERTEX_COUNT_STACK_COUNT 32
 #endif // !VD_UM_VERTEX_COUNT_STACK_COUNT
+
+#define VD_UM__PI 3.14159265359f
 
 #ifndef VD_UM_CUSTOM_TYPEDEFS
 #include <stdint.h>
@@ -223,6 +225,8 @@ static      void*           vd_um__alloc_default(void *prev, int prev_size, int 
 static      VdUmU64         vd_um__hash(void *begin, int len);
 static      int             vd_um__strlen(const char *str);
 VD_UM_INL   float           vd_um__sqrt(float x);
+VD_UM_INL   float           vd_um__sin(float x);
+VD_UM_INL   float           vd_um__cos(float x);
 VD_UM_INL   float           vd_um__abs(float x);
 VD_UM_INL   int             vd_um__sgn(float x);
 VD_UM_INL   int             vd_um__signs_match(float a, float b, float c);
@@ -238,12 +242,15 @@ VD_UM_INL   void            vd_um__div3(float a[3], float s, float out[3]);
 VD_UM_INL   float           vd_um__lensq3(float a[3]);
 VD_UM_INL   void            vd_um__noz3(float a[3], float out[3]);
 VD_UM_INL   void            vd_um__noz_cross3(float a[3], float b[3], float out[3]);
+VD_UM_INL   void            vd_um__project_to_plane3(float v[3], float plane_normal[3], float out[3]);
 VD_UM_INL   void            vd_um__line_closest_plane(float lineo[3], float lined[3], float planep[3], float planen[3], float *t);
 VD_UM_INL   void            vd_um__find_orthogonal_vector(float v[3], float out[3]);
 VD_UM_INL   void            vd_um__mul_matrix_point(float matrix[16], float point[4], float out[4]);
 VD_UM_INL   void            vd_um__conjugate(float q[4], float out[4]);
+VD_UM_INL   void            vd_um__quaternion_from_axis_angle(float axis[3], float angle_radians, float out[4]);
 VD_UM_INL   void            vd_um__quaternion_from_look_rotation(float fwd[3], float updir[3], float out[4]);
 VD_UM_INL   void            vd_um__mul_quaternion(float q1[4], float q2[4], float out[4]);
+VD_UM_INL   void            vd_um__mul_quaternion_in_place(float out[4], float q[4]);
 VD_UM_INL   void            vd_um__mul_quaternion_vector(float q1[4], float v[3], float out[3]);
 VD_UM_INL   void            vd_um__mul_quaternion_vector_in_place(float v[3], float q[4]);
 VD_UM_INL   int             vd_um__segment_vs_triangle(float p[3], float q[3], float a[3], float b[3], float c[3], float *t);
@@ -505,7 +512,7 @@ VD_UM_API void vd_um_plane(float point[3], float normal[3], float extent, float 
     vd_um_quad(point, orientation, extents, 1.f, 0.1f, color);
 }
 
-VD_UM_API void vd_um_ring(float center[3], float orientation[4], float radius, float thickness, float color[4])
+VD_UM_API void vd_um_ring(float center[3], float orientation[4], float radius, float thickness, float fill_radius, float color[4])
 {
     VdUmContext *ctx = vd_um_context_get();
     vd_um_push_vertex_count(6);
@@ -517,7 +524,7 @@ VD_UM_API void vd_um_ring(float center[3], float orientation[4], float radius, f
     for (int i = 0; i < 4; i++) vertex.color[i] = color[i];
     for (int i = 0; i < 4; i++) vertex.orientation[i] = orientation[i];
     vertex.pos1[0] = thickness;
-    vertex.pos1[1] = 1.f - 0.1f;
+    vertex.pos1[1] = 1.f - fill_radius;
     vd_um__push_vertex(ctx, &vertex);
 
     float plane_normal[3];
@@ -781,6 +788,35 @@ VD_UM_API void vd_um_translate_planar(const char *nameid, float position[3], flo
 
 VD_UM_API void vd_um_rotate_axial(const char *nameid, float orientation[4], float display_position[3], float axis[3])
 {
+    VdUmContext *ctx = vd_um_context_get();
+
+    float mouse_direction[3];
+    vd_um__sub3(ctx->mouse_origin, display_position, mouse_direction);
+    float negated_mouse_direction[3];
+    vd_um__noz3(mouse_direction, negated_mouse_direction);
+
+    negated_mouse_direction[0] = negated_mouse_direction[0];
+    negated_mouse_direction[1] = negated_mouse_direction[1];
+    negated_mouse_direction[2] = negated_mouse_direction[2];
+
+    float proj[3];
+    float canonical[3];
+    vd_um__project_to_plane3(negated_mouse_direction, axis, proj);
+    vd_um__noz3(proj, canonical);
+
+    float canonical_orientation[4];
+    vd_um__quaternion_from_look_rotation(canonical, axis, canonical_orientation);
+
+    float rot[4];
+    float ax[3] = {1, 0, 0};
+    vd_um__quaternion_from_axis_angle(ax, VD_UM__PI / 2.f, rot);
+
+    float ring_orientation[4];
+    vd_um__mul_quaternion(canonical_orientation, rot, ring_orientation);
+
+    float ring_pos[3] = { display_position[0], display_position[1], display_position[2] };
+    vd_um__add3_scaled_inplace(ring_pos, negated_mouse_direction, 1.f);
+    vd_um_ring(display_position, ring_orientation, 1.f, 0.1f, 0.5f, (float[]) { 0.f, 1.f, 0.f, 1.f});
 }
 
 VD_UM_API void vd_um_get_picking_ray(float origin[3], float direction[3])
@@ -1155,6 +1191,16 @@ VD_UM_INL float vd_um__sqrt(float x)
 {
     return sqrtf(x);
 }
+
+VD_UM_INL float vd_um__sin(float x)
+{
+    return sinf(x);
+}
+
+VD_UM_INL float vd_um__cos(float x)
+{
+    return cosf(x);
+}
 #else
 #error "Need stdlib for sqrt"
 #endif // !VD_UM_STDLIB
@@ -1288,6 +1334,16 @@ VD_UM_INL void vd_um__noz_cross3(float a[3], float b[3], float out[3])
     vd_um__noz3(temp, out);
 }
 
+VD_UM_INL void vd_um__project_to_plane3(float v[3], float plane_normal[3], float out[3])
+{
+    float d = vd_um__dot3(v, plane_normal);
+    float l = vd_um__lensq3(plane_normal);
+
+    out[0] = v[0] - (d / l) * plane_normal[0];
+    out[1] = v[1] - (d / l) * plane_normal[1];
+    out[2] = v[2] - (d / l) * plane_normal[2];
+}
+
 VD_UM_INL void vd_um__find_orthogonal_vector(float v[3], float out[3])
 {
     float x[3] = {1, 0, 0};
@@ -1328,6 +1384,16 @@ VD_UM_INL void vd_um__mul_quaternion(float q1[4], float q2[4], float out[4])
     out[1] = -q1[0] * q2[2] + q1[1] * q2[3] + q1[2] * q2[0] + q1[3] * q2[1];
     out[2] =  q1[0] * q2[1] - q1[1] * q2[0] + q1[2] * q2[3] + q1[3] * q2[2];
     out[3] = -q1[0] * q2[0] - q1[1] * q2[1] - q1[2] * q2[2] + q1[3] * q2[3];
+}
+
+VD_UM_INL void vd_um__mul_quaternion_in_place(float out[4], float q[4])
+{
+    float temp[4];
+    vd_um__mul_quaternion(out, q, temp);
+    out[0] = temp[0];
+    out[1] = temp[1];
+    out[2] = temp[2];
+    out[3] = temp[3];
 }
 
 VD_UM_INL void vd_um__mul_quaternion_vector(float q1[4], float v[3], float out[3])
@@ -1611,6 +1677,16 @@ VD_UM_INL VdUmU64 vd_um__compute_id_for_string(VdUmContext *ctx, const char *nam
     }
 
     return id;
+}
+
+VD_UM_INL void vd_um__quaternion_from_axis_angle(float axis[3], float angle_radians, float out[4])
+{
+    float s = vd_um__sin(angle_radians * 0.5f);
+    float c = vd_um__cos(angle_radians * 0.5f);
+    out[0] = axis[0] * s;
+    out[1] = axis[1] * s;
+    out[2] = axis[2] * s;
+    out[3] = c;
 }
 
 VD_UM_INL void vd_um__quaternion_from_look_rotation(float fwd[3], float updir[3], float out[4])
