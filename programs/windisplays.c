@@ -37,9 +37,11 @@
 #include <setupapi.h>
 #include <stdint.h>
 #include <assert.h>
+#include <physicalmonitorenumerationapi.h>
 #pragma comment(lib, "User32.lib")
 #pragma comment(lib, "setupapi.lib")
 #pragma comment(lib, "Advapi32.lib")
+#pragma comment(lib, "Dxva2.lib")
 
 #pragma pack(push, 1)
 typedef struct {
@@ -359,14 +361,17 @@ int main(int argc, char const *argv[])
         DISPLAY_DEVICEW display_monitor = {0};
         display_monitor.cb = sizeof(display_monitor);
         if (EnumDisplayDevicesW(display_adapter.DeviceName, 0, &display_monitor, EDD_GET_DEVICE_INTERFACE_NAME)) {
-            printf("%S\n", display_monitor.DeviceID);
+            printf("ID: %S\n", display_monitor.DeviceID);
+            printf("Name: %S\n", display_monitor.DeviceName);
+            printf("String: %S\n", display_monitor.DeviceString);
+            printf("Key: %S\n", display_monitor.DeviceKey);
 
-            DEVMODEW devmode;
-            int graphics_mode_index = 0;
-            while (EnumDisplaySettingsW(display_adapter.DeviceName, graphics_mode_index, &devmode)) {
-                printf("- %dx%d@%d\n", devmode.dmPelsWidth, devmode.dmPelsHeight, devmode.dmDisplayFrequency);
-                graphics_mode_index++;
-            }
+            // DEVMODEW devmode;
+            // int graphics_mode_index = 0;
+            // while (EnumDisplaySettingsW(display_adapter.DeviceName, graphics_mode_index, &devmode)) {
+            //     printf("- %dx%d@%d\n", devmode.dmPelsWidth, devmode.dmPelsHeight, devmode.dmDisplayFrequency);
+            //     graphics_mode_index++;
+            // }
 
             HDEVINFO devinfo = SetupDiGetClassDevsW(&guid_devinterface_monitor, NULL, NULL, DIGCF_DEVICEINTERFACE);
             if (devinfo != INVALID_HANDLE_VALUE) {
@@ -463,5 +468,6 @@ int main(int argc, char const *argv[])
         }
         adapter_index++;
     }
+
     return 0;
 }

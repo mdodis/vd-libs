@@ -437,6 +437,8 @@ int main() {
                 <li class="list-group-item">uxtheme.dll</li>
                 <li class="list-group-item">shell32.dll</li>
                 <li class="list-group-item">winmm.dll</li>
+                <li class="list-group-item">SetupAPI.dll</li>
+                <li class="list-group-item">Advapi32.dll</li>
                 <li class="list-group-item">xinput1_4.dll</li>
                 <li class="list-group-item">xinput1_3.dll</li>
                 <li class="list-group-item">xinput9_1_0.dll</li>
