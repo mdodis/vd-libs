@@ -8862,6 +8862,7 @@ typedef struct {
     int                         window_state;
     int                         window_state_changed;
     int                         close_request;
+    uint64_t                    delta_ns;
 
 /* ----WINDOW THREAD ONLY-------------------------------------------------------------------------------------------- */
     BOOL                        draw_decorations;
@@ -9682,9 +9683,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 
 VD_FW_API unsigned long long vd_fw_delta_ns(void)
 {
-    uint64_t now = mach_absolute_time();
-    uint64_t ns = (now - VD_FW_G.last_time) * VD_FW_G.time_base.numer / VD_FW_G.time_base.denom;
-    return ns;
+    return VD_FW_G.delta_ns;
 }
 
 VD_FW_API void vd_fw_get_mouse_delta(float *dx, float *dy)
@@ -9829,12 +9828,16 @@ VD_FW_API int vd_fw_running(void)
     VD_FW_G.next_frame.flags = 0;
     pthread_mutex_unlock(&VD_FW_G.m_paint);
 
+    uint64_t now = mach_absolute_time();
+    uint64_t ns = (now - VD_FW_G.last_time) * VD_FW_G.time_base.numer / VD_FW_G.time_base.denom;
+    VD_FW_G.delta_ns = ns;
+    VD_FW_G.last_time = now;
+
     return !VD_FW_G.should_close;
 }
 
 VD_FW_API int vd_fw_swap_buffers(void)
 {
-    VD_FW_G.last_time = mach_absolute_time();
     [VD_FW_G.gl_context flushBuffer];
 
     // if (VD_FW_G.curr_frame.flags & VD_FW__MAC_FLAGS_WAKE_COND_VAR) {
@@ -9885,6 +9888,18 @@ VD_FW_API int vd_fw_get_size(int *w, int *h)
     *w = VD_FW_G.curr_frame.w;
     *h = VD_FW_G.curr_frame.h;
     return VD_FW_G.curr_frame.flags & VD_FW__MAC_FLAGS_SIZE_CHANGED;
+}
+
+VD_FW_API void vd_fw_set_size(int w, int h)
+{
+    dispatch_async(dispatch_get_main_queue(), ^(void) {
+        NSRect frame = [VD_FW_G.window frame];
+        frame.origin.y -= frame.size.height;
+        frame.origin.y += h; 
+        frame.size.width = w;
+        frame.size.height = h;
+        [VD_FW_G.window setFrame: frame display: YES animate: NO];
+    });
 }
 
 VD_FW_API int vd_fw_get_minimized(int *minimized)
@@ -10029,6 +10044,11 @@ VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
             [prev_img release];
         }
     });
+}
+
+VD_FW_API void *vd_fw_get_internal_window_handle(void)
+{
+    return (void*)VD_FW_G.window;
 }
 
 VD_FW_API int vd_fw_set_vsync_on(int on)
