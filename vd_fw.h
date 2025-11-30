@@ -8751,6 +8751,8 @@ int wWinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPWSTR cmdline, int n
 
 #elif defined(__APPLE__)
 #import <AppKit/AppKit.h>
+#import <IOKit/IOKitLib.h>
+#import <IOKit/hid/IOHIDManager.h>
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/CAMetalLayer.h>
 #import <QuartzCore/CVDisplayLink.h>
@@ -8904,6 +8906,8 @@ typedef struct {
 
 static int vd_fw__msgbuf_r(VdFw__MacMessage *message);
 static int vd_fw__msgbuf_w(VdFw__MacMessage *message);
+static void vd_fw__mac_hid_device_added_callback(void *context, IOReturn result, void *sender, IOHIDDeviceRef device);
+static void vd_fw__mac_hid_device_removed_callback(void *context, IOReturn result, void *sender, IOHIDDeviceRef device);
 
 static VdFw__MacOsInternalData Vd_Fw_Globals;
 
@@ -10214,7 +10218,7 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
         version = info->gl.version;
     }
 
-    // @autoreleasepool
+    // Window
     {
         NSScreen *main_screen = [NSScreen mainScreen];
         VD_FW_G.scale = [main_screen backingScaleFactor];
@@ -10339,10 +10343,29 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
     mach_timebase_info(&VD_FW_G.time_base);
     VD_FW_G.last_time = mach_absolute_time();
 
-
     dispatch_async(dispatch_get_main_queue(), ^{
         [VD_FW_G.window makeKeyAndOrderFront:nil];
     });
+
+    // IOKit
+    int filter[] = {kHIDPage_GenericDesktop};
+    IOHIDManagerRef hidman = IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDManagerOptionNone);
+
+    CFMutableDictionaryRef match_dictionary = CFDictionaryCreateMutable(kCFAllocatorDefault,
+                                                                        0,
+                                                                        &kCFTypeDictionaryKeyCallBacks,
+                                                                        &kCFTypeDictionaryValueCallBacks);
+    CFDictionarySetValue(match_dictionary,
+                         CFSTR(kIOHIDDeviceUsagePageKey),
+                         CFNumberCreate(kCFAllocatorDefault, kCFNumberIntType, filter));
+    IOHIDManagerSetDeviceMatching(hidman, match_dictionary);
+    IOHIDManagerRegisterDeviceMatchingCallback(hidman, vd_fw__mac_hid_device_added_callback, 0);
+    IOHIDManagerRegisterDeviceRemovalCallback(hidman, vd_fw__mac_hid_device_removed_callback, 0);
+
+    IOHIDManagerScheduleWithRunLoop(hidman, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
+    IOHIDManagerOpen(hidman, kIOHIDOptionsTypeNone);
+    CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, false);
+
 }
 
 static void vd_fw__mac_init_gl(VdFwInitInfo *info)
@@ -10389,6 +10412,29 @@ static int vd_fw__msgbuf_w(VdFw__MacMessage *message)
     __atomic_exchange_n(&VD_FW_G.msgbuf_w, nw, __ATOMIC_SEQ_CST);
 
     return 1;
+}
+
+static void vd_fw__mac_hid_device_added_callback(void *context, IOReturn result, void *sender, IOHIDDeviceRef device)
+{
+    CFTypeRef ref_usage = IOHIDDeviceGetProperty(device, CFSTR(kIOHIDPrimaryUsageKey));
+    int usage = 0;
+    CFNumberGetValue(ref_usage, kCFNumberIntType, (void*)&usage);
+
+    if ((usage != kHIDUsage_GD_Joystick) &&
+        (usage != kHIDUsage_GD_GamePad) &&
+        (usage != kHIDUsage_GD_MultiAxisController))
+    {
+        return;
+    }
+
+    CFStringRef cf_name = IOHIDDeviceGetProperty(device, CFSTR(kIOHIDProductKey));
+    NSString *name = (__bridge NSString *)cf_name;
+    NSLog(@"Device name: %@", name);
+}
+
+static void vd_fw__mac_hid_device_removed_callback(void *context, IOReturn result, void *sender, IOHIDDeviceRef device)
+{
+    printf("HID Device Removed\n");
 }
 
 #elif defined(__linux__)
