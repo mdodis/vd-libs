@@ -49,6 +49,9 @@
  * - vd_fw_get_last_mouse_button_pressed
  * - Win32: Allow gamepad input even when window isn't focused?
  *     - Option for that
+ * - Win32:
+ *     - Filter monitor orientation and other settings in display modes
+ *     - Sort the display modes if not sorted already
  * - Vulkan
  *     - Win32: Required extensions function
  *     - Win32: Query queue surface presentation support
@@ -446,7 +449,21 @@ VD_FW_API int                vd_fw_set_vsync_on(int on);
 VD_FW_API const char*        vd_fw_get_executable_dir(int *len);
 
 /* ----MONITORS------------------------------------------------------------------------------------------------------ */
+typedef struct {
+    int     width;
+    int     height;
+    int     frequency;
+    struct {
+        int numerator;
+        int denominator;
+    } aspect;
+} VdFwDisplayMode;
+
 VD_FW_API int                vd_fw_get_monitor_count(void);
+
+VD_FW_API const char*        vd_fw_get_monitor_name(int index);
+
+VD_FW_API VdFwDisplayMode*   vd_fw_get_monitor_display_modes(int index, int *count);
 
 /* ----MOUSE--------------------------------------------------------------------------------------------------------- */
 enum {
@@ -1230,6 +1247,156 @@ VD_FW_INL void *vd_fw_memset(void *dst, unsigned char val, size_t num)
 }
 
 /* ----INTERNAL API-------------------------------------------------------------------------------------------------- */
+#pragma pack(push, 1)
+typedef struct {
+    VdFwU8                                         horizontal_addressable_pixels;                      // (horizontal_addressable_pixels + 31) * 8 
+    VdFwU8                                         field_refresh_rate : 6;
+    VdFwU8                                         image_aspect_ratio : 2;
+} VdFwEdid1_4StandardTiming;
+
+typedef struct {
+    // Detailed Timing Definitions - Part 1
+    VdFwU16                                        pixel_clock;                                        // pixel_clock * 10000, 0x0000 --> This is a Display Descriptor
+    VdFwU8                                         horizontal_addressable_pixels_lo;
+    VdFwU8                                         horizontal_blanking_pixels_lo;
+    VdFwU8                                         horizontal_addressable_pixels_hi : 4;
+    VdFwU8                                         horizontal_blanking_pixels_hi : 4;
+    VdFwU8                                         vertical_addressable_lines_lo;
+    VdFwU8                                         vertical_blanking_lines_lo;
+    VdFwU8                                         vertical_addressable_lines_hi : 4;
+    VdFwU8                                         vertical_blanking_lines_hi : 4;
+    VdFwU8                                         horizontal_front_porch_pixels_lo;
+    VdFwU8                                         horizontal_sync_pulse_width_pixels_lo;
+    VdFwU8                                         vertical_front_porch_lines_lo : 4;
+    VdFwU8                                         vertical_sync_pulse_width_lines_lo : 4;
+
+    // Bit Definitions
+    VdFwU8                                         horizontal_front_porch_pixels_hi : 2;
+    VdFwU8                                         horizontal_sync_pulse_width_pixels_hi : 2;
+    VdFwU8                                         vertical_front_porch_lines_hi : 2;
+    VdFwU8                                         vertical_sync_pulse_width_lines_hi : 2;
+
+    // Video Image Size & Border Definitions
+    VdFwU8                                         horizontal_addressable_video_image_size_mm_lo;
+    VdFwU8                                         vertical_addressable_video_image_size_mm_lo;
+    VdFwU8                                         horizontal_addressable_video_image_size_mm_hi : 4;
+    VdFwU8                                         vertical_addressable_video_image_size_mm_hi : 4;
+    VdFwU8                                         right_left_horizontal_border_pixels;
+    VdFwU8                                         top_bottom_vertical_border_lines;
+
+    // Detailed Timing Definitions - Part 2
+    VdFwU8                                         signal_interface_type : 1;
+    VdFwU8                                         stereo_viewing_support_hi : 2;
+    VdFwU8                                         a_d_sync_signal_definitions : 4;
+    VdFwU8                                         stereo_viewing_support_lo : 1;
+} VdFwEdid1_4DetailedTiming;
+
+typedef struct {
+    VdFwU8                                         bytes[13];
+} VdFwEdid1_4DisplayDescriptorDataOpaque;
+
+typedef struct {
+    char                                           serial_number[13];
+} VdFwEdid1_4DisplayProductSerialNumber;
+
+typedef struct {
+    char                                           name[13];
+} VdFwEdid1_4DisplayProductName;
+
+typedef union {
+    VdFwEdid1_4DisplayDescriptorDataOpaque         opaque;         // 13 bytes
+    VdFwEdid1_4DisplayProductSerialNumber          serial_number;  // 0xFF
+    VdFwEdid1_4DisplayProductName                  product_name;   // 0xFC
+} VdFwEdid1_4DisplayDescriptorDataBlock;
+
+typedef struct {
+    VdFwU16                                        zeroes;
+    VdFwU8                                         zero;
+    VdFwU8                                         tag;
+    VdFwU8                                         zero_or_display_range_limits_descriptor; 
+    VdFwEdid1_4DisplayDescriptorDataBlock          data_block;
+} VdFwEdid1_4DisplayDescriptor;
+
+typedef union {
+    VdFwEdid1_4DetailedTiming                      detailed_timing;
+    VdFwEdid1_4DisplayDescriptor                   display_descriptor;
+} VdFwEdid1_4DataBlock;
+
+typedef struct {
+    VdFwU8                                         digital_signal_bit : 1;
+    VdFwU8                                         signal_level_standard : 2;
+    VdFwU8                                         video_setup : 1;
+    VdFwU8                                         sync_types : 3;
+    VdFwU8                                         serrations : 1;
+} VdFwEdid1_4AnalogVideoSignalDefinition;
+
+typedef struct {
+    VdFwU8                                         digital_signal_bit : 1;
+    VdFwU8                                         color_bit_depth : 3;
+    VdFwU8                                         video_interface_standard_supported : 4;
+} VdFwEdid1_4DigitalVideoSignalDefinition;
+
+typedef struct {
+    VdFwU8                                         digital_signal_bit : 1;
+    VdFwU8                                         rest : 7;
+} VdFwEdid1_4UndeterminedVideoSignalDefinition;
+
+typedef union {
+    VdFwEdid1_4UndeterminedVideoSignalDefinition    general;
+    VdFwEdid1_4AnalogVideoSignalDefinition          analog;
+    VdFwEdid1_4DigitalVideoSignalDefinition         digital;
+} VdFwEdid1_4VideoInputDefinition;
+
+typedef struct {
+    VdFwU8                                         header[8];                                      // 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00
+
+    // Vendor & Product Identification
+    VdFwU16                                        id_manufacturer_name;                           // Section 3.4.1
+    VdFwU16                                        id_product_code;                                // Section 3.4.2
+    VdFwU32                                        id_serial_number;                               // Section 3.4.3
+    VdFwU8                                         week_of_manufacture;                            // Section 3.4.4
+    VdFwU8                                         year_of_manufacture;                            // Section 3.4.4
+
+    // EDID Structure Version & Revision
+    VdFwU8                                         version;
+    VdFwU8                                         revision;
+
+    // Basic Display Parameters
+    VdFwEdid1_4VideoInputDefinition                video_input_definition;                         // Section 3.6.1
+    VdFwU8                                         horizontal_image_size_or_aspect;                // cm.
+    VdFwU8                                         vertical_image_size_or_aspect;                  // cm.
+    VdFwU8                                         display_transfer_characteristic;                // Gamma
+    VdFwU8                                         feature_support;                                // Section 3.6.4
+
+    // Color Characteristics
+    VdFwU8                                         red_green_low_order_bits;
+    VdFwU8                                         blue_white_low_order_bits;
+    VdFwU8                                         red_x_high_order_bits;
+    VdFwU8                                         red_y_high_order_bits;
+    VdFwU8                                         green_x_high_order_bits;
+    VdFwU8                                         green_y_high_order_bits;
+    VdFwU8                                         blue_x_high_order_bits;
+    VdFwU8                                         blue_y_high_order_bits;
+    VdFwU8                                         white_x_high_order_bits;
+    VdFwU8                                         white_y_high_order_bits;
+
+    // Established Timings
+    VdFwU8                                         established_timings_1;
+    VdFwU8                                         established_timings_2;
+    VdFwU8                                         manufacturer_reserved_timings;
+
+    // Standard Timings: Identification 1 -> 8
+    VdFwEdid1_4StandardTiming                      standard_timings[8];
+    
+    // 18 Byte Data Blocks
+    VdFwEdid1_4DataBlock                           data_blocks[4];
+
+    VdFwU8                                         extension_block_count;
+    VdFwU8                                         checksum;
+
+} VdFwEdid1_4;
+#pragma pack(pop)
+
 VD_FW_API int      vd_fw__any_time_higher(int num_files, const char **files, unsigned long long *check_against);
 VD_FW_API char*    vd_fw__debug_dump_file_text(const char *path);
 VD_FW_API void*    vd_fw__realloc_mem(void *prev_ptr, size_t size);
@@ -1246,6 +1413,9 @@ VD_FW_API void     vd_fw__unlock_gamepaddb(void);
 VD_FW_API void     vd_fw__notify_gamepaddb_changed(void);
 VD_FW_INL int      vd_fw__strlen(const char *s);
 VD_FW_INL size_t   vd_fw__strlcpy(char *dst, const char *src, size_t maxlen);
+VD_FW_INL VdFwU32  vd_fw__gcd(VdFwU32 a, VdFwU32 b);
+
+VD_FW_INL int vd_fw__compare_string_wide_nullsep_case_insensitive(const wchar_t *str1, const wchar_t *str2);
 
 VD_FW_INL int vd_fw__strlen(const char *s)
 {
@@ -1263,6 +1433,53 @@ VD_FW_INL size_t vd_fw__strlcpy(char *dst, const char *src, size_t maxlen)
         dst[len] = '\0';
     }
     return srclen;
+}
+
+VD_FW_INL int vd_fw__compare_string_wide_nullsep_case_insensitive(const wchar_t *str1, const wchar_t *str2)
+{
+    // @todo(mdodis): LCMapStringEx for proper case insensitivity
+
+    while ((*str1) && (*str2)) {
+
+        wchar_t str1_lower, str2_lower;
+        str1_lower = *str1;
+        str2_lower = *str2;
+
+        if ((str1_lower >= L'A') && (str1_lower <= 'Z')) {
+            str1_lower = str1_lower - L'A' + L'a';
+        }
+
+        if ((str2_lower >= L'A') && (str2_lower <= 'Z')) {
+            str2_lower = str2_lower - L'A' + L'a';
+        }
+
+
+        if (str1_lower != str2_lower) {
+            return 0;
+        }
+
+        str1++;
+        str2++;
+    }
+
+    if ((*str1) != (*str2)) {
+        return 0;
+    }
+
+    return 1;
+}
+
+VD_FW_INL VdFwU32 vd_fw__gcd(VdFwU32 a, VdFwU32 b)
+{
+    while (a != b) {
+        if (a > b) {
+            a -= b;
+        } else {
+            b -= a;
+        }
+    }
+
+    return a;
 }
 
 #if _WIN32
@@ -3972,21 +4189,17 @@ typedef struct VdFwtagRECT
 #define VD_FW_LOBYTE(w)           ((VdFwBYTE)(((VdFwDWORD_PTR)(w)) & 0xff))
 #define VD_FW_HIBYTE(w)           ((VdFwBYTE)((((VdFwDWORD_PTR)(w)) >> 8) & 0xff))
 
-#define VD_FW_DELETE                           (0x00010000L)
-#define VD_FW_READ_CONTROL                     (0x00020000L)
-#define VD_FW_WRITE_DAC                        (0x00040000L)
-#define VD_FW_WRITE_OWNER                      (0x00080000L)
-#define VD_FW_SYNCHRONIZE                      (0x00100000L)
-
-#define VD_FW_STANDARD_RIGHTS_REQUIRED         (0x000F0000L)
-
-#define VD_FW_STANDARD_RIGHTS_READ             (VD_FW_READ_CONTROL)
-#define VD_FW_STANDARD_RIGHTS_WRITE            (VD_FW_READ_CONTROL)
-#define VD_FW_STANDARD_RIGHTS_EXECUTE          (VD_FW_READ_CONTROL)
-
-#define VD_FW_STANDARD_RIGHTS_ALL              (0x001F0000L)
-
-#define VD_FW_SPECIFIC_RIGHTS_ALL              (0x0000FFFFL)
+#define VD_FW__WIN32_DELETE                           (0x00010000L)
+#define VD_FW__WIN32_READ_CONTROL                     (0x00020000L)
+#define VD_FW__WIN32_WRITE_DAC                        (0x00040000L)
+#define VD_FW__WIN32_WRITE_OWNER                      (0x00080000L)
+#define VD_FW__WIN32_SYNCHRONIZE                      (0x00100000L)
+#define VD_FW__WIN32_STANDARD_RIGHTS_REQUIRED         (0x000F0000L)
+#define VD_FW__WIN32_STANDARD_RIGHTS_READ             (VD_FW__WIN32_READ_CONTROL)
+#define VD_FW__WIN32_STANDARD_RIGHTS_WRITE            (VD_FW__WIN32_READ_CONTROL)
+#define VD_FW__WIN32_STANDARD_RIGHTS_EXECUTE          (VD_FW__WIN32_READ_CONTROL)
+#define VD_FW__WIN32_STANDARD_RIGHTS_ALL              (0x001F0000L)
+#define VD_FW__WIN32_SPECIFIC_RIGHTS_ALL              (0x0000FFFFL)
 
 /* ----User32.dll---------------------------------------------------------------------------------------------------- */
 #ifdef UNICODE
@@ -4151,6 +4364,11 @@ typedef struct VdFwtagMONITORINFO
     VdFwRECT    rcWork;
     VdFwDWORD   dwFlags;
 } VdFwMONITORINFO, * VdFwLPMONITORINFO;
+
+typedef struct VdFwtagMONITORINFOEXW {
+    VdFwMONITORINFO monitor_info;
+    VdFwWCHAR       szDevice[32];
+} VdFwMONITORINFOEXW, *VdFwLPMONITORINFOEXW;
 
 typedef struct VdFwtagWINDOWPOS {
     VdFwHWND    hwnd;
@@ -4425,7 +4643,72 @@ typedef struct VdFw_DISPLAY_DEVICEA {
   VdFwCHAR  DeviceKey[128];
 } VdFwDISPLAY_DEVICEA, *VdFwPDISPLAY_DEVICEA, *VdFwLPDISPLAY_DEVICEA;
 
+typedef struct VdFw_DISPLAY_DEVICEW {
+  VdFwDWORD cb;
+  VdFwWCHAR DeviceName[32];
+  VdFwWCHAR DeviceString[128];
+  VdFwDWORD StateFlags;
+  VdFwWCHAR DeviceID[128];
+  VdFwWCHAR DeviceKey[128];
+} VdFwDISPLAY_DEVICEW, *VdFwPDISPLAY_DEVICEW, *VdFwLPDISPLAY_DEVICEW;
+
 #define VD_FW__WIN32_EDD_GET_DEVICE_INTERFACE_NAME 0x00000001
+
+typedef struct VdFw_POINTL
+{
+    VdFwLONG  x;
+    VdFwLONG  y;
+} VdFwPOINTL, *VdFwPPOINTL;
+
+typedef struct VdFw_devicemodeW {
+  VdFwWCHAR dmDeviceName[32];
+  VdFwWORD  dmSpecVersion;
+  VdFwWORD  dmDriverVersion;
+  VdFwWORD  dmSize;
+  VdFwWORD  dmDriverExtra;
+  VdFwDWORD dmFields;
+  union {
+    struct {
+      short dmOrientation;
+      short dmPaperSize;
+      short dmPaperLength;
+      short dmPaperWidth;
+      short dmScale;
+      short dmCopies;
+      short dmDefaultSource;
+      short dmPrintQuality;
+    } DUMMYSTRUCTNAME;
+    VdFwPOINTL dmPosition;
+    struct {
+      VdFwPOINTL dmPosition;
+      VdFwDWORD  dmDisplayOrientation;
+      VdFwDWORD  dmDisplayFixedOutput;
+    } DUMMYSTRUCTNAME2;
+  } DUMMYUNIONNAME;
+  short dmColor;
+  short dmDuplex;
+  short dmYResolution;
+  short dmTTOption;
+  short dmCollate;
+  VdFwWCHAR dmFormName[32];
+  VdFwWORD  dmLogPixels;
+  VdFwDWORD dmBitsPerPel;
+  VdFwDWORD dmPelsWidth;
+  VdFwDWORD dmPelsHeight;
+  union {
+    VdFwDWORD dmDisplayFlags;
+    VdFwDWORD dmNup;
+  } DUMMYUNIONNAME2;
+  VdFwDWORD dmDisplayFrequency;
+  VdFwDWORD dmICMMethod;
+  VdFwDWORD dmICMIntent;
+  VdFwDWORD dmMediaType;
+  VdFwDWORD dmDitherType;
+  VdFwDWORD dmReserved1;
+  VdFwDWORD dmReserved2;
+  VdFwDWORD dmPanningWidth;
+  VdFwDWORD dmPanningHeight;
+} VdFwDEVMODEW, *VdFwPDEVMODEW, *VdFwNPDEVMODEW, *VdFwLPDEVMODEW;
 
 /* ----OpenGL32.dll-------------------------------------------------------------------------------------------------- */
 VD_FW_DECLARE_HANDLE(VdFwHGLRC);
@@ -4442,6 +4725,7 @@ typedef VdFwUSHORT                       VdFwUSAGE, * VdFwPUSAGE;
 
 #define VD_FW_HIDP_STATUS_SUCCESS                  (VD_FW_HIDP_ERROR_CODES(0x0,0))
 #define VD_FW_HIDP_STATUS_NULL                     (VD_FW_HIDP_ERROR_CODES(0x8,1))
+
 #define VD_FW_HIDP_STATUS_INVALID_PREPARSED_DATA   (VD_FW_HIDP_ERROR_CODES(0xC,1))
 #define VD_FW_HIDP_STATUS_INVALID_REPORT_TYPE      (VD_FW_HIDP_ERROR_CODES(0xC,2))
 #define VD_FW_HIDP_STATUS_INVALID_REPORT_LENGTH    (VD_FW_HIDP_ERROR_CODES(0xC,3))
@@ -4576,43 +4860,42 @@ typedef struct VdFw_HIDP_DATA {
 typedef VdFwDWORD VdFwACCESS_MASK;
 typedef VdFwACCESS_MASK VdFwREGSAM;
 
-#define VD_FW_KEY_QUERY_VALUE         (0x0001)
-#define VD_FW_KEY_SET_VALUE           (0x0002)
-#define VD_FW_KEY_CREATE_SUB_KEY      (0x0004)
-#define VD_FW_KEY_ENUMERATE_SUB_KEYS  (0x0008)
-#define VD_FW_KEY_NOTIFY              (0x0010)
-#define VD_FW_KEY_CREATE_LINK         (0x0020)
-#define VD_FW_KEY_WOW64_32KEY         (0x0200)
-#define VD_FW_KEY_WOW64_64KEY         (0x0100)
-#define VD_FW_KEY_WOW64_RES           (0x0300)
+#define VD_FW__WIN32_KEY_QUERY_VALUE         (0x0001)
+#define VD_FW__WIN32_KEY_SET_VALUE           (0x0002)
+#define VD_FW__WIN32_KEY_CREATE_SUB_KEY      (0x0004)
+#define VD_FW__WIN32_KEY_ENUMERATE_SUB_KEYS  (0x0008)
+#define VD_FW__WIN32_KEY_NOTIFY              (0x0010)
+#define VD_FW__WIN32_KEY_CREATE_LINK         (0x0020)
+#define VD_FW__WIN32_KEY_WOW64_32KEY         (0x0200)
+#define VD_FW__WIN32_KEY_WOW64_64KEY         (0x0100)
+#define VD_FW__WIN32_KEY_WOW64_RES           (0x0300)
 
-#define VD_FW_KEY_READ          ((VD_FW_STANDARD_RIGHTS_READ       |\
-                                  VD_FW_KEY_QUERY_VALUE            |\
-                                  VD_FW_KEY_ENUMERATE_SUB_KEYS     |\
-                                  VD_FW_KEY_NOTIFY)                 \
-                                  &                           \
-                                 (~VD_FW_SYNCHRONIZE))
+#define VD_FW__WIN32_KEY_READ       ((VD_FW__WIN32_STANDARD_RIGHTS_READ       |\
+                                     VD_FW__WIN32_KEY_QUERY_VALUE             |\
+                                     VD_FW__WIN32_KEY_ENUMERATE_SUB_KEYS      |\
+                                     VD_FW__WIN32_KEY_NOTIFY)                  \
+                                     &                                         \
+                                    (~VD_FW__WIN32_SYNCHRONIZE))
 
+#define VD_FW__WIN32_KEY_WRITE      ((VD_FW__WIN32_STANDARD_RIGHTS_WRITE      |\
+                                     VD_FW__WIN32_KEY_SET_VALUE               |\
+                                     VD_FW__WIN32_KEY_CREATE_SUB_KEY)          \
+                                     &                                         \
+                                    (~VD_FW__WIN32_SYNCHRONIZE))
 
-#define VD_FW_KEY_WRITE         ((VD_FW_STANDARD_RIGHTS_WRITE      |\
-                                  VD_FW_KEY_SET_VALUE              |\
-                                  VD_FW_KEY_CREATE_SUB_KEY)         \
-                                  &                           \
-                                 (~VD_FW_SYNCHRONIZE))
+#define VD_FW__WIN32_KEY_EXECUTE    ((VD_FW__WIN32_KEY_READ)                   \
+                                     &                                         \
+                                    (~VD_FW__WIN32_SYNCHRONIZE))
 
-#define VD_FW_KEY_EXECUTE       ((VD_FW_KEY_READ)                   \
-                                  &                           \
-                                 (~VD_FW_SYNCHRONIZE))
-
-#define VD_FW_KEY_ALL_ACCESS    ((VD_FW_STANDARD_RIGHTS_ALL        |\
-                                  VD_FW_KEY_QUERY_VALUE            |\
-                                  VD_FW_KEY_SET_VALUE              |\
-                                  VD_FW_KEY_CREATE_SUB_KEY         |\
-                                  VD_FW_KEY_ENUMERATE_SUB_KEYS     |\
-                                  VD_FW_KEY_NOTIFY                 |\
-                                  VD_FW_KEY_CREATE_LINK)            \
-                                  &                           \
-                                 (~VD_FW_SYNCHRONIZE))
+#define VD_FW__WIN32_KEY_ALL_ACCESS      ((VD_FW__WIN32_STANDARD_RIGHTS_ALL  |\
+                                    VD_FW__WIN32_KEY_QUERY_VALUE             |\
+                                    VD_FW__WIN32_KEY_SET_VALUE               |\
+                                    VD_FW__WIN32_KEY_CREATE_SUB_KEY          |\
+                                    VD_FW__WIN32_KEY_ENUMERATE_SUB_KEYS      |\
+                                    VD_FW__WIN32_KEY_NOTIFY                  |\
+                                    VD_FW__WIN32_KEY_CREATE_LINK)             \
+                                    &                                         \
+                                    (~VD_FW__WIN32_SYNCHRONIZE))
 
 /* ----SetupAPI.dll-------------------------------------------------------------------------------------------------- */
 typedef VdFwLPVOID VdFwHDEVINFO;
@@ -4634,7 +4917,7 @@ typedef struct VdFw_SP_DEVICE_INTERFACE_DATA {
 
 typedef struct VdFw_SP_DEVICE_INTERFACE_DETAIL_DATA_W {
     VdFwDWORD  cbSize;
-    VdFwWCHAR  DevicePath[1];
+    VdFwWCHAR  DevicePath[2];
 } VdFwSP_DEVICE_INTERFACE_DETAIL_DATA_W, *VdFwPSP_DEVICE_INTERFACE_DETAIL_DATA_W;
 
 typedef struct VdFw_SP_DEVINFO_DATA {
@@ -4650,6 +4933,17 @@ typedef struct VdFw_SP_DEVINFO_DATA {
 #define VD_FW__WIN32_DIREG_DEV       0x00000001
 #define VD_FW__WIN32_DIREG_DRV       0x00000002
 #define VD_FW__WIN32_DIREG_BOTH      0x00000004
+
+#define VD_FW__WIN32_CDS_UPDATEREGISTRY           0x00000001
+#define VD_FW__WIN32_CDS_TEST                     0x00000002
+#define VD_FW__WIN32_CDS_FULLSCREEN               0x00000004
+#define VD_FW__WIN32_CDS_GLOBAL                   0x00000008
+#define VD_FW__WIN32_CDS_SET_PRIMARY              0x00000010
+#define VD_FW__WIN32_CDS_VIDEOPARAMETERS          0x00000020
+#define VD_FW__WIN32_CDS_RESET                    0x40000000
+#define VD_FW__WIN32_CDS_RESET_EX                 0x20000000
+#define VD_FW__WIN32_CDS_NORESET                  0x10000000
+#define VD_FW__WIN32_DISP_CHANGE_SUCCESSFUL       0
 
 /* ----Advapi32.dll-------------------------------------------------------------------------------------------------- */
 typedef VdFwLONG VdFwLSTATUS;
@@ -4755,7 +5049,9 @@ X(VdFwHICON,    CreateIconIndirect, (VdFwPICONINFO piconinfo)) \
 X(VdFwHMONITOR, MonitorFromWindow, (VdFwHWND hwnd, VdFwDWORD dwFlags)) \
 X(VdFwBOOL,     EnumDisplayMonitors, (VdFwHDC hdc, VdFwLPRECT lprcClip, VdFwMONITORENUMPROC lpfnEnum, VdFwLPARAM dwData)) \
 X(VdFwBOOL,     EnumDisplayDevicesA, (VdFwLPCSTR lpDevice, VdFwDWORD iDevNum, VdFwPDISPLAY_DEVICEA lpDisplayDevice, VdFwDWORD dwFlags)) \
-X(VdFwBOOL,     EnumDisplayDevicesW, (VdFwLPCWSTR lpDevice, VdFwDWORD iDevNum, VdFwPDISPLAY_DEVICEA lpDisplayDevice, VdFwDWORD dwFlags)) \
+X(VdFwBOOL,     EnumDisplayDevicesW, (VdFwLPCWSTR lpDevice, VdFwDWORD iDevNum, VdFwPDISPLAY_DEVICEW lpDisplayDevice, VdFwDWORD dwFlags)) \
+X(VdFwBOOL,     EnumDisplaySettingsW, (VdFwLPCSTR lpszDeviceName, VdFwDWORD iModeNum, VdFwDEVMODEW *lpDevMode)) \
+X(VdFwLONG,     ChangeDisplaySettingsW, (VdFwDEVMODEW *lpDevMode, VdFwDWORD dwFlags)) \
 X(VdFwBOOL,     GetMonitorInfoA, (VdFwHMONITOR hMonitor, VdFwLPMONITORINFO lpmi)) \
 X(VdFwBOOL,     GetMonitorInfoW, (VdFwHMONITOR hMonitor, VdFwLPMONITORINFO lpmi)) \
 X(VdFwUINT,     GetDpiForWindow, (VdFwHWND hwnd)) \
@@ -4771,6 +5067,7 @@ X(VdFwHKL,      GetKeyboardLayout, (VdFwDWORD idThread)) \
 X(VdFwHWND,     SetFocus, (VdFwHWND hWnd)) \
 X(VdFwBOOL,     SetForegroundWindow, (VdFwHWND hWnd)) \
 X(VdFwSHORT,    GetKeyState, (int nVirtKey)) \
+X(VdFwBOOL,     GetMonitorInfoW, ( VdFwHMONITOR hMonitor, VdFwLPMONITORINFO lpmi)) \
 VE() \
 V("Shell32.dll") \
 X(VdFwUINT_PTR, SHAppBarMessage, (VdFwDWORD dwMessage, VdFwPAPPBARDATA pData)) \
@@ -5123,6 +5420,22 @@ typedef struct VdFw__Win32GamepadInfo {
 } VdFw__Win32GamepadInfo;
 
 typedef struct {
+    VdFwDWORD width;
+    VdFwDWORD height;
+    VdFwDWORD frequency;
+    VdFwDWORD aspect_numerator;
+    VdFwDWORD aspect_denominator;
+} VdFw__Win32DisplayMode;
+
+typedef struct {
+    VdFwHMONITOR            hmonitor;
+    char                    friendly_name[32];
+    VdFwDisplayMode         *display_modes;
+    int                     display_modes_len;
+    int                     display_modes_cap;
+} VdFw__Win32Monitor;
+
+typedef struct {
 /* ----WINDOW THREAD ONLY-------------------------------------------------------------------------------------------- */
     VdFwGraphicsApi             graphics_api;           // Currently selected graphics api
     VdFwHWND                    hwnd;                   // Window handle
@@ -5151,6 +5464,12 @@ typedef struct {
     int                         gamepad_raw_reports_on;
     VdFwWCHAR                   char_surrogate_hi;
     VdFwU32                     kb_codepage;
+
+    VdFw__Win32Monitor          *monitor_buffer;
+    int                         monitor_buffer_len;
+    int                         monitor_buffer_cap;
+
+    VdFwU32                     monitor_count;
 
 
 /* ----RENDER THREAD ONLY-------------------------------------------------------------------------------------------- */
@@ -5231,7 +5550,7 @@ typedef struct {
 
 VdFwKey vd_fw___vkcode_to_key(WORD vkcode)
 {
-    static VdFwKey translation_table[0xFF] = {
+    static VdFwKey translation_table[256] = {
         VD_FW_KEY_UNKNOWN,       //                                     0x00    Invalid Key
         VD_FW_KEY_UNKNOWN,       // VK_LBUTTON                          0x01    Left mouse button
         VD_FW_KEY_UNKNOWN,       // VK_RBUTTON                          0x02    Right mouse button
@@ -5510,6 +5829,10 @@ static int          vd_fw__msgbuf_r(VdFw__Win32Message *message);
 static int          vd_fw__msgbuf_w(VdFw__Win32Message *message);
 static char*        vd_fw__utf16_to_utf8(const wchar_t *ws);
 static void         vd_fw__update_kb_codepage(void);
+static VdFwBOOL     vd_fw__win32_enum_monitor(VdFwHMONITOR monitor, VdFwHDC hdc, VdFwLPRECT rect, VdFwLPARAM lpparam);
+static VdFwBOOL     vd_fw__win32_enum_monitor_resize_count(VdFwHMONITOR monitor, VdFwHDC hdc, VdFwLPRECT rect, VdFwLPARAM lpparam);
+static void         vd_fw__win32_update_monitor_display_modes(VdFw__Win32Monitor *monitor);
+
 
 #if VD_FW_WIN32_PROFILE
 #define VD_FW_JOIN_(a,b) a##b
@@ -5644,10 +5967,25 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
             }
         }
     }
+
+    // @todo(mdodis): Use different versions of SetProcessDpiAware if not supported
     // SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
     VdFwSetProcessDpiAwarenessContext(VD_FW_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     VdFwtimeBeginPeriod(1);
     QueryPerformanceFrequency(&VD_FW_G.frequency);
+
+    // Monitors
+    {
+        VD_FW_G.monitor_count = 0;
+        VdFwEnumDisplayMonitors(NULL, NULL, vd_fw__win32_enum_monitor_resize_count, (VdFwLPARAM)NULL);
+
+        VD_FW_G.monitor_buffer_len = 0;
+        VD_FW_G.monitor_buffer = vd_fw__resize_buffer(VD_FW_G.monitor_buffer, sizeof(*VD_FW_G.monitor_buffer),
+                                                      VD_FW_G.monitor_count, &VD_FW_G.monitor_buffer_cap);
+
+
+        VdFwEnumDisplayMonitors(NULL, NULL, vd_fw__win32_enum_monitor, (VdFwLPARAM)NULL);
+    }
 
     VD_FW_G.focused = 1;
     VD_FW_G.def_window_min[0] = VdFwGetSystemMetrics(SM_CXMINTRACK);
@@ -6327,6 +6665,29 @@ VD_FW_API const char *vd_fw_get_executable_dir(int *len)
     return VD_FW_G.exedir; 
 }
 
+VD_FW_API int vd_fw_get_monitor_count(void)
+{
+    return VD_FW_G.monitor_count;
+}
+
+VD_FW_API const char *vd_fw_get_monitor_name(int index)
+{
+    return VD_FW_G.monitor_buffer[index].friendly_name;
+}
+
+VD_FW_API VdFwDisplayMode *vd_fw_get_monitor_display_modes(int index, int *count)
+{
+    vd_fw__win32_update_monitor_display_modes(&VD_FW_G.monitor_buffer[index]);
+    *count = VD_FW_G.monitor_buffer[index].display_modes_len;
+
+    return VD_FW_G.monitor_buffer[index].display_modes;
+}
+
+VD_FW_API int vd_fw_get_monitor_display_mode_count(int index)
+{
+    return 0;
+}
+
 VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
 {
     if (x) *x = VD_FW_G.mouse[0];
@@ -6782,9 +7143,9 @@ VD_FW_API char *vd_fw__debug_dump_file_text(const char *path)
 VD_FW_API void *vd_fw__realloc_mem(void *prev_ptr, size_t size)
 {
     if (prev_ptr == 0) {
-        return HeapAlloc(GetProcessHeap(), 0, size);
+        return HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, size);
     } else {
-        return HeapReAlloc(GetProcessHeap(), 0, prev_ptr, size);
+        return HeapReAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, prev_ptr, size);
     }
 }
 
@@ -8646,6 +9007,185 @@ static void vd_fw__update_kb_codepage(void)
     LCID keyboard_lcid = MAKELCID(HIWORD(keyboard_layout), SORT_DEFAULT);
     if (GetLocaleInfoA(keyboard_lcid, (LOCALE_RETURN_NUMBER | LOCALE_IDEFAULTANSICODEPAGE), (LPSTR)&VD_FW_G.kb_codepage, sizeof(VD_FW_G.kb_codepage)) == 0) {
         VD_FW_G.kb_codepage = CP_ACP;
+    }
+}
+
+static VdFwBOOL vd_fw__win32_enum_monitor(VdFwHMONITOR monitor, VdFwHDC hdc, VdFwLPRECT rect, VdFwLPARAM lpparam)
+{
+    (void)lpparam;
+    (void)hdc;
+    (void)rect;
+
+    VdFwMONITORINFOEXW monitor_info = {};
+    monitor_info.monitor_info.cbSize = sizeof(monitor_info);
+    VD_FW__CHECK_TRUE(VdFwGetMonitorInfoW(monitor, (VdFwLPMONITORINFO)&monitor_info));
+
+    VdFwDISPLAY_DEVICEW display_monitor = {0};
+    display_monitor.cb = sizeof(display_monitor);
+    if (!VdFwEnumDisplayDevicesW(monitor_info.szDevice, 0, (VdFwPDISPLAY_DEVICEW)&display_monitor, VD_FW__WIN32_EDD_GET_DEVICE_INTERFACE_NAME)) {
+        return TRUE;
+    }
+
+    static VdFw__Win32GUID guid_devinterface_monitor = { 0xe6f07b5f, 0xee97, 0x4a90, 0xb0, 0x76, 0x33, 0xf5, 0x7b, 0xf4, 0xea, 0xa7 };
+
+    VdFwHDEVINFO devinfo = VdFwSetupDiGetClassDevsW(&guid_devinterface_monitor,
+                                                    NULL, NULL, VD_FW__WIN32_DIGCF_DEVICEINTERFACE);
+    if (devinfo == NULL) {
+        return TRUE;
+    }
+
+    VdFwSP_DEVICE_INTERFACE_DATA di_data = {0};
+    di_data.cbSize = sizeof(di_data);
+    VdFwDWORD di_index = 0;
+    static char di_detail_data_buffer[512] = {0}; 
+    VdFwSP_DEVICE_INTERFACE_DETAIL_DATA_W *pdi_detail_data = (VdFwSP_DEVICE_INTERFACE_DETAIL_DATA_W*)di_detail_data_buffer;
+    pdi_detail_data->cbSize = sizeof(*pdi_detail_data);
+
+    int found = 0;
+
+    while (VdFwSetupDiEnumDeviceInterfaces(devinfo, NULL, &guid_devinterface_monitor, di_index, &di_data)) {
+
+        if (VdFwSetupDiGetDeviceInterfaceDetailW(devinfo, &di_data,
+                                                 pdi_detail_data, 512, // DeviceInterfaceDetailDataSize
+                                                 0, NULL))
+        {
+
+            if (vd_fw__compare_string_wide_nullsep_case_insensitive(pdi_detail_data->DevicePath,
+                                                                    display_monitor.DeviceID))
+            {
+                found = 1;
+                break;
+            }
+        }
+
+        di_index++;
+    }
+
+    if (!found) {
+        return TRUE;
+    }
+
+
+    VdFwSP_DEVINFO_DATA devinfo_data = {0};
+    devinfo_data.cbSize = sizeof(devinfo_data);
+    if (!VdFwSetupDiEnumDeviceInfo(devinfo, di_index, &devinfo_data)) {
+        return TRUE;
+    }
+
+    VdFwHKEY hk = VdFwSetupDiOpenDevRegKey(devinfo, &devinfo_data, 
+                                           VD_FW__WIN32_DICS_FLAG_GLOBAL, 0, VD_FW__WIN32_DIREG_DEV,
+                                           VD_FW__WIN32_KEY_READ);
+    if (hk == NULL) {
+        return TRUE;
+    }
+
+    static VdFwBYTE edid_data[1024];
+    VdFwDWORD edid_data_size = sizeof(edid_data);
+
+    if (VdFwRegQueryValueExW(hk, L"EDID", NULL, NULL, edid_data, &edid_data_size) != 0) {
+        goto WIN32_DISPLAY_MONITOR_EDID_FAIL;
+    }
+
+    if (edid_data_size < sizeof(VdFwEdid1_4)) {
+        goto WIN32_DISPLAY_MONITOR_EDID_FAIL;
+    }
+
+
+    VdFwEdid1_4 *edid = (VdFwEdid1_4*)edid_data;
+    if ((edid->header[0] != 0x00) || (edid->header[1] != 0xFF) ||
+        (edid->header[2] != 0xFF) || (edid->header[3] != 0xFF) ||
+        (edid->header[4] != 0xFF) || (edid->header[5] != 0xFF) ||
+        (edid->header[6] != 0xFF) || (edid->header[7] != 0x00))
+    {
+        goto WIN32_DISPLAY_MONITOR_EDID_FAIL;
+    }
+
+    int display_name_len = sizeof("Generic PnP Monitor") - 1;
+    const char *display_name = "Generic PnP Monitor";
+
+    for (int i = 0; i < 4; ++i) {
+        VdFwEdid1_4DataBlock *data_block = &edid->data_blocks[i];
+        if (data_block->detailed_timing.pixel_clock != 0) {
+            continue;
+        }
+
+        VdFwEdid1_4DisplayDescriptor *display_descriptor = &data_block->display_descriptor;
+
+        if (display_descriptor->tag != 0xFC) {
+            continue;
+        }
+
+        display_name = display_descriptor->data_block.product_name.name;
+
+        int len = 0;
+        const char *c = display_name;
+        while ((len < 13) && (*c != '\r') && (*c != '\n')) {
+            len++;
+            c++;
+        }
+
+        display_name_len = len;
+        break;
+    }
+
+    VdFw__Win32Monitor *mmonitor = &VD_FW_G.monitor_buffer[VD_FW_G.monitor_buffer_len++];
+    VD_FW_MEMCPY(mmonitor->friendly_name, display_name, display_name_len);
+    mmonitor->friendly_name[display_name_len] = 0;
+    mmonitor->hmonitor = monitor;
+    mmonitor->display_modes_len = 0;
+
+WIN32_DISPLAY_MONITOR_EDID_FAIL:
+    VdFwRegCloseKey(hk);
+    return TRUE;
+}
+
+static VdFwBOOL vd_fw__win32_enum_monitor_resize_count(VdFwHMONITOR monitor, VdFwHDC hdc, VdFwLPRECT rect, VdFwLPARAM lpparam)
+{
+    (void)monitor;
+    (void)hdc;
+    (void)rect;
+    (void)lpparam;
+    VD_FW_G.monitor_count++;
+    return TRUE;
+}
+
+static void vd_fw__win32_update_monitor_display_modes(VdFw__Win32Monitor *monitor)
+{
+    if (monitor->display_modes_len != 0) {
+        return;
+    }
+
+    VdFwMONITORINFOEXW monitor_info = {};
+    monitor_info.monitor_info.cbSize = sizeof(monitor_info);
+    VD_FW__CHECK_TRUE(VdFwGetMonitorInfoW(monitor->hmonitor, (VdFwLPMONITORINFO)&monitor_info));
+
+    VdFwDEVMODEW devmode;
+    devmode.dmSize = sizeof(devmode);
+    int graphics_mode_index = 0;
+    while (VdFwEnumDisplaySettingsW((VdFwLPCSTR)monitor_info.szDevice, graphics_mode_index, &devmode)) {
+        graphics_mode_index++;
+    }
+
+    monitor->display_modes = vd_fw__resize_buffer(monitor->display_modes, sizeof(*monitor->display_modes),
+                                                  graphics_mode_index + 1, &monitor->display_modes_cap);
+
+    graphics_mode_index = 0;
+    while (VdFwEnumDisplaySettingsW((VdFwLPCSTR)monitor_info.szDevice, graphics_mode_index, &devmode)) {
+        graphics_mode_index++;
+
+        if (VdFwChangeDisplaySettingsW(&devmode, VD_FW__WIN32_CDS_TEST) != VD_FW__WIN32_DISP_CHANGE_SUCCESSFUL) {
+            continue;
+        }
+
+        VdFwDisplayMode *display_mode = &monitor->display_modes[monitor->display_modes_len++];
+
+        VdFwU32 gcd = vd_fw__gcd(devmode.dmPelsWidth, devmode.dmPelsHeight);
+
+        display_mode->width = devmode.dmPelsWidth;
+        display_mode->height = devmode.dmPelsWidth;
+        display_mode->frequency = devmode.dmDisplayFrequency;
+        display_mode->aspect.numerator = devmode.dmPelsWidth / gcd;
+        display_mode->aspect.denominator = devmode.dmPelsHeight / gcd;
     }
 }
 

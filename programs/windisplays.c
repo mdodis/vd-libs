@@ -360,18 +360,21 @@ int main(int argc, char const *argv[])
     while (EnumDisplayDevicesW(NULL, adapter_index, &display_adapter, 0)) {
         DISPLAY_DEVICEW display_monitor = {0};
         display_monitor.cb = sizeof(display_monitor);
+        printf("::%S::\n", display_adapter.DeviceName);
         if (EnumDisplayDevicesW(display_adapter.DeviceName, 0, &display_monitor, EDD_GET_DEVICE_INTERFACE_NAME)) {
             printf("ID: %S\n", display_monitor.DeviceID);
             printf("Name: %S\n", display_monitor.DeviceName);
             printf("String: %S\n", display_monitor.DeviceString);
             printf("Key: %S\n", display_monitor.DeviceKey);
 
-            // DEVMODEW devmode;
-            // int graphics_mode_index = 0;
-            // while (EnumDisplaySettingsW(display_adapter.DeviceName, graphics_mode_index, &devmode)) {
-            //     printf("- %dx%d@%d\n", devmode.dmPelsWidth, devmode.dmPelsHeight, devmode.dmDisplayFrequency);
-            //     graphics_mode_index++;
-            // }
+            DEVMODEW devmode;
+            int graphics_mode_index = 0;
+            while (EnumDisplaySettingsW(display_adapter.DeviceName, graphics_mode_index, &devmode)) {
+                if (ChangeDisplaySettingsW(&devmode, CDS_TEST) == DISP_CHANGE_SUCCESSFUL) {
+                    printf("- %dx%d@%d\n", devmode.dmPelsWidth, devmode.dmPelsHeight, devmode.dmDisplayFrequency);
+                }
+                graphics_mode_index++;
+            }
 
             HDEVINFO devinfo = SetupDiGetClassDevsW(&guid_devinterface_monitor, NULL, NULL, DIGCF_DEVICEINTERFACE);
             if (devinfo != INVALID_HANDLE_VALUE) {
@@ -392,7 +395,7 @@ int main(int argc, char const *argv[])
                     {
 
                         if (_wcsicmp(pdi_detail_data->DevicePath, display_monitor.DeviceID) == 0) {
-                            printf("\t- %S\n", pdi_detail_data->DevicePath);
+                            printf("\t- %S :: %S\n", pdi_detail_data->DevicePath, display_monitor.DeviceID);
 
                             SP_DEVINFO_DATA devinfo_data = {0};
                             devinfo_data.cbSize = sizeof(devinfo_data);

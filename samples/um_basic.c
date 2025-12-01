@@ -17,6 +17,17 @@ int main(int argc, char const *argv[])
 
     vd_fw_set_size(1600, 900);
 
+    for (int i = 0; i < vd_fw_get_monitor_count(); ++i) {
+        printf("Monitor[%d]: %s\n", i, vd_fw_get_monitor_name(i));
+        int count;
+        VdFwDisplayMode *modes = vd_fw_get_monitor_display_modes(i, &count);
+
+        for (int j = 0; j < count; ++j) {
+            VdFwDisplayMode *mode = &modes[j];
+            printf("\t- %-4dx%4d@%3d [%3d:%3d]\n", mode->width, mode->height, mode->frequency, mode->aspect.numerator, mode->aspect.denominator);
+        }
+    }
+
     vd_um_init();
 
     vd_fw_set_title("UM Basic");
@@ -221,9 +232,9 @@ int main(int argc, char const *argv[])
 
             glDepthMask((GLboolean)depth_write);
 
-            size_t start = pass->first_instance * sizeof(VdUmVertex);
-            size_t size  = pass->instance_count * sizeof(VdUmVertex);
-            glBufferSubData(GL_ARRAY_BUFFER, 0, size, (unsigned char*)vertices + start);
+            GLsizeiptr start = pass->first_instance * sizeof(VdUmVertex);
+            GLsizeiptr size  = pass->instance_count * sizeof(VdUmVertex);
+            glBufferSubData(GL_ARRAY_BUFFER, 0, size, (void*)((unsigned char*)vertices + start));
             glDrawArraysInstanced(GL_TRIANGLES, 0, pass->vertex_count, pass->instance_count);
         }
 
