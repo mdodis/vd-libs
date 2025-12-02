@@ -5089,6 +5089,7 @@ X(VdFwBOOL,     GetClientRect, (VdFwHWND hWnd, VdFwLPRECT lpRect)) \
 X(VdFwBOOL,     GetWindowRect, (VdFwHWND hWnd, VdFwLPRECT lpRect)) \
 X(int,          ShowCursor, (VdFwBOOL bShow)) \
 X(VdFwBOOL,     SetCursorPos, (int X, int Y)) \
+X(VdFwBOOL,     GetCursorPos, (VdFwLPPOINT lpPoint)) \
 X(VdFwBOOL,     ScreenToClient, (VdFwHWND hWnd, VdFwLPPOINT lpPoint)) \
 X(VdFwBOOL,     EqualRect, (const VdFwRECT* lprc1, const VdFwRECT* lprc2)) \
 X(VdFwBOOL,     PtInRect, (const VdFwRECT* lprc, VdFwPOINT pt)) \
@@ -5569,6 +5570,7 @@ typedef struct {
     VdFwKey                     last_key;
     VdFwU8                      *temp_buf;
     int                         temp_buf_cap;
+    int                         last_mouse_before_lock[2];
 
 /* ----RENDER THREAD - WINDOW THREAD DATA---------------------------------------------------------------------------- */
     VdFw__Win32Message          msgbuf[VD_FW_WIN32_MESSAGE_BUFFER_SIZE];
@@ -6893,12 +6895,18 @@ VD_FW_API void vd_fw_set_mouse_locked(int locked)
 
     VD_FW_G.mouse_is_locked = locked;
     if (locked) {
+        VdFwPOINT point;
+        VdFwGetCursorPos(&point);
+        VD_FW_G.last_mouse_before_lock[0] = point.x;
+        VD_FW_G.last_mouse_before_lock[1] = point.y;
         VD_FW__CHECK_TRUE(VdFwPostMessage(
             VD_FW_G.hwnd,
             VD_FW_WIN32_SHOW_CURSOR,
             0, /* WPARAM */
             0  /* LPARAM */));
     } else {
+        VdFwSetCursorPos(VD_FW_G.last_mouse_before_lock[0], VD_FW_G.last_mouse_before_lock[1]);
+
         VD_FW__CHECK_TRUE(VdFwPostMessage(
             VD_FW_G.hwnd,
             VD_FW_WIN32_SHOW_CURSOR,
