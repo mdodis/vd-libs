@@ -370,9 +370,8 @@ int main(int argc, char const *argv[])
             DEVMODEW devmode;
             int graphics_mode_index = 0;
             while (EnumDisplaySettingsW(display_adapter.DeviceName, graphics_mode_index, &devmode)) {
-                if (ChangeDisplaySettingsW(&devmode, CDS_TEST) == DISP_CHANGE_SUCCESSFUL) {
-                    printf("- %dx%d@%d\n", devmode.dmPelsWidth, devmode.dmPelsHeight, devmode.dmDisplayFrequency);
-                }
+                printf("- [%S] V%d:%d %dx%d@%d Orientation: %d BitsPerPel: %d Pos: <%d,%d>\n", devmode.dmDeviceName, devmode.dmSpecVersion, devmode.dmDriverVersion, devmode.dmPelsWidth, devmode.dmPelsHeight, devmode.dmDisplayFrequency, devmode.dmDisplayOrientation, devmode.dmBitsPerPel,
+                    devmode.dmPosition.x, devmode.dmPosition.y);
                 graphics_mode_index++;
             }
 

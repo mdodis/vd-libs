@@ -1417,6 +1417,8 @@ VD_FW_INL VdFwU32  vd_fw__gcd(VdFwU32 a, VdFwU32 b);
 
 VD_FW_INL int vd_fw__compare_string_wide_nullsep_case_insensitive(const wchar_t *str1, const wchar_t *str2);
 
+VD_FW_INL void vd_fw__sort_display_modes(VdFwDisplayMode *modes, int count);
+
 VD_FW_INL int vd_fw__strlen(const char *s)
 {
     int r = 0;
@@ -1480,6 +1482,59 @@ VD_FW_INL VdFwU32 vd_fw__gcd(VdFwU32 a, VdFwU32 b)
     }
 
     return a;
+}
+
+VD_FW_INL int vd_fw__compare_display_mode(VdFwDisplayMode *a, VdFwDisplayMode *b)
+{
+    int a_area = a->width * a->height;
+    int b_area = b->width * b->height;
+    if (a_area > b_area) {
+        return 1;
+    } else if (a_area < b_area) {
+        return -1;
+    }
+
+    if (a->frequency > b->frequency) {
+        return 1;
+    } else if (a->frequency < b->frequency) {
+        return -1;
+    }
+
+    return 0;
+}
+
+VD_FW_INL void vd_fw__sort_display_modes_impl(VdFwDisplayMode *modes, int lo, int hi)
+{
+    if (lo < hi) {
+        int p;
+
+        {
+            VdFwDisplayMode *pivot = &modes[hi];
+            int i = lo - 1;
+
+            for (int j = lo; j <= hi - 1; ++j) {
+                if (vd_fw__compare_display_mode(&modes[j], pivot) < 0) {
+                    i++;
+                    VdFwDisplayMode temp = modes[i];
+                    modes[i] = modes[j];
+                    modes[j] = temp;
+                }
+            }
+
+            VdFwDisplayMode temp = modes[i + 1];
+            modes[i + 1] = modes[hi];
+            modes[hi] = temp;
+            p = i + 1;
+        }
+
+        vd_fw__sort_display_modes_impl(modes, lo, p - 1);
+        vd_fw__sort_display_modes_impl(modes, p + 1, hi);
+    }
+} 
+
+VD_FW_INL void vd_fw__sort_display_modes(VdFwDisplayMode *modes, int count)
+{
+    vd_fw__sort_display_modes_impl(modes, 0, count - 1);
 }
 
 #if _WIN32
@@ -4683,8 +4738,8 @@ typedef struct VdFw_devicemodeW {
       VdFwPOINTL dmPosition;
       VdFwDWORD  dmDisplayOrientation;
       VdFwDWORD  dmDisplayFixedOutput;
-    } DUMMYSTRUCTNAME2;
-  } DUMMYUNIONNAME;
+    } displays;
+  } extra;
   short dmColor;
   short dmDuplex;
   short dmYResolution;
@@ -5512,6 +5567,8 @@ typedef struct {
     VdFwU16                     first_codepoint_index;
     VdFwU32                     codepoints[VD_FW_CODEPOINT_BUFFER_COUNT];
     VdFwKey                     last_key;
+    VdFwU8                      *temp_buf;
+    int                         temp_buf_cap;
 
 /* ----RENDER THREAD - WINDOW THREAD DATA---------------------------------------------------------------------------- */
     VdFw__Win32Message          msgbuf[VD_FW_WIN32_MESSAGE_BUFFER_SIZE];
@@ -8747,16 +8804,29 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 VdFwMONITORINFO monitor_info = {0};
                 monitor_info.cbSize = sizeof(monitor_info);
                 VD_FW__CHECK_NONZERO(VdFwGetMonitorInfo(monitor, &monitor_info));
+                VdFwLONG style;
+                VdFwUINT flags;
 
-                VdFwLONG style = VD_FW_G.last_window_style & ~(WS_OVERLAPPEDWINDOW);
-                style |= WS_VISIBLE;
+                if (VD_FW_G.draw_decorations) {
+                    style = WS_POPUP | WS_VISIBLE;
+                    flags = SWP_FRAMECHANGED;
+                } else {
+                    style = WS_POPUP | WS_VISIBLE;
+                    flags = SWP_FRAMECHANGED;
+                }
 
                 VdFwSetWindowLong(VD_FW_G.hwnd, GWL_STYLE, style);
                 VdFwSetWindowPos(VD_FW_G.hwnd, VD_FW_HWND_TOP,
-                             monitor_info.rcMonitor.left, monitor_info.rcMonitor.top,
+                             monitor_info.rcMonitor.left , monitor_info.rcMonitor.top,
                              monitor_info.rcMonitor.right - monitor_info.rcMonitor.left,
                              monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top,
-                             SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+                             flags);
+
+                if (VD_FW_G.draw_decorations) {
+
+                    VdFwMARGINS m = {-1,-1,-1,-1};
+                    VD_FW__CHECK_HRESULT(VdFwDwmExtendFrameIntoClientArea(VD_FW_G.hwnd, &m));
+                }
             } else {
                 VdFwSetWindowLong(VD_FW_G.hwnd, GWL_STYLE, VD_FW_G.last_window_style);
                 VdFwSetWindowPlacement(VD_FW_G.hwnd, &VD_FW_G.last_window_placement);
@@ -9161,19 +9231,58 @@ static void vd_fw__win32_update_monitor_display_modes(VdFw__Win32Monitor *monito
 
     VdFwDEVMODEW devmode;
     devmode.dmSize = sizeof(devmode);
+    int display_mode_count = 0;
     int graphics_mode_index = 0;
     while (VdFwEnumDisplaySettingsW((VdFwLPCSTR)monitor_info.szDevice, graphics_mode_index, &devmode)) {
         graphics_mode_index++;
+
+        if (devmode.dmBitsPerPel < 15) {
+            continue;
+        }
+
+        if (devmode.extra.displays.dmDisplayOrientation != 0) {
+            continue;
+        }
+
+        display_mode_count++;
     }
 
     monitor->display_modes = vd_fw__resize_buffer(monitor->display_modes, sizeof(*monitor->display_modes),
-                                                  graphics_mode_index + 1, &monitor->display_modes_cap);
+                                                  display_mode_count, &monitor->display_modes_cap);
 
     graphics_mode_index = 0;
     while (VdFwEnumDisplaySettingsW((VdFwLPCSTR)monitor_info.szDevice, graphics_mode_index, &devmode)) {
         graphics_mode_index++;
 
-        if (VdFwChangeDisplaySettingsW(&devmode, VD_FW__WIN32_CDS_TEST) != VD_FW__WIN32_DISP_CHANGE_SUCCESSFUL) {
+        if (devmode.dmBitsPerPel < 15) {
+            continue;
+        }
+
+        if (devmode.extra.displays.dmDisplayOrientation != 0) {
+            continue;
+        }
+
+        VdFwDisplayMode candidate_mode;
+        candidate_mode.width = devmode.dmPelsWidth;
+        candidate_mode.height = devmode.dmPelsHeight;
+        candidate_mode.frequency = devmode.dmDisplayFrequency;
+
+        int skip_mode = 0;
+
+        for (int i = 0; i < monitor->display_modes_len; ++i) {
+
+            VdFwDisplayMode *display_mode = &monitor->display_modes[i];
+
+            if ((display_mode->width == candidate_mode.width) &&
+                (display_mode->height == candidate_mode.height) &&
+                (display_mode->frequency == candidate_mode.frequency))
+            {
+                skip_mode = 1;
+                break;
+            }
+        }
+
+        if (skip_mode) {
             continue;
         }
 
@@ -9182,11 +9291,13 @@ static void vd_fw__win32_update_monitor_display_modes(VdFw__Win32Monitor *monito
         VdFwU32 gcd = vd_fw__gcd(devmode.dmPelsWidth, devmode.dmPelsHeight);
 
         display_mode->width = devmode.dmPelsWidth;
-        display_mode->height = devmode.dmPelsWidth;
+        display_mode->height = devmode.dmPelsHeight;
         display_mode->frequency = devmode.dmDisplayFrequency;
         display_mode->aspect.numerator = devmode.dmPelsWidth / gcd;
         display_mode->aspect.denominator = devmode.dmPelsHeight / gcd;
     }
+
+    vd_fw__sort_display_modes(monitor->display_modes, monitor->display_modes_len);
 }
 
 #if VD_FW_NO_CRT
@@ -12124,8 +12235,6 @@ VD_FW_API int vd_fw__map_gamepad(VdFwGuid guid, VdFwGamepadMap *map)
     *map = db_entry->map;
     return 1;
 }
-
-
 
 #if defined(__APPLE__)
 #pragma clang diagnostic pop

@@ -156,6 +156,8 @@ typedef union __VD_CG_f4x4 {
 
 typedef union __VD_CG_f4 VdFQuat;
 
+typedef union __VD_CG_f4 VdFPlane;
+
 typedef struct __VD_CG_fline {
     VdF3 a, b;
 } VdFLine;
@@ -214,6 +216,7 @@ typedef union __VD_CG_d4x4 {
 } VdD4x4;
 
 typedef union __VD_CG_d4 VdDQuat;
+typedef union __VD_CG_d4 VdDPlane;
 
 typedef struct __VD_CG_dline {
     VdD3 a, b;
@@ -242,7 +245,7 @@ typedef struct __VD_CG_Dcylinder {
 typedef union __VD_CG_i2 {
     VdCgi32  e[2];
     struct { VdCgi32 x, y; };
-} Vds2;
+} VdS2;
 
 /* ----REAL & RX TYPEDEFS-------------------------------------------------------------------------------------------- */
 #if VD_CG_DEFAULT_PRECISION_SINGLE
@@ -254,6 +257,7 @@ typedef VdF2x2      VdR2x2;
 typedef VdF3x3      VdR3x3;
 typedef VdF4x4      VdR4x4;
 typedef VdFQuat     VdRQuat;
+typedef VdFPlane    VdRPlane;
 typedef VdFLine     VdRLine;
 typedef VdFRay      VdRRay;
 typedef VdFCylinder VdRCylinder;
@@ -272,6 +276,7 @@ typedef VdD2x2      VdR2x2;
 typedef VdD3x3      VdR3x3;
 typedef VdD4x4      VdR4x4;
 typedef VdDQuat     VdRQuat;
+typedef VdDPlane    VdRPlane;
 typedef VdDLine     VdRLine;
 typedef VdDRay      VdRRay;
 typedef VdDCylinder VdRCylinder;
@@ -293,15 +298,18 @@ typedef VdDCylinder VdRCylinder;
 #endif // VD_MACRO_ABBREVIATIONS
 
 /* ----INITIALIZATION------------------------------------------------------------------------------------------------ */
-VD_CG_INL VdF2          vd_fm2              (VdCgf32 x, VdCgf32 y)                           { VdF2 r; r.x = x; r.y =y; return r; }
-VD_CG_INL VdD2          vd_dm2              (VdCgf64 x, VdCgf64 y)                           { VdD2 r; r.x = x; r.y =y; return r; }
-VD_CG_INL VdR2          vd_rm2              (VdRea x, VdRea y)                               { VdR2 r; r.x = x; r.y =y; return r; }
+VD_CG_INL VdF2          vd_fm2              (VdCgf32 x, VdCgf32 y)                           { VdF2 r; r.x = x; r.y = y; return r; }
+VD_CG_INL VdD2          vd_dm2              (VdCgf64 x, VdCgf64 y)                           { VdD2 r; r.x = x; r.y = y; return r; }
+VD_CG_INL VdR2          vd_rm2              (VdRea x, VdRea y)                               { VdR2 r; r.x = x; r.y = y; return r; }
+VD_CG_INL VdS2          vd_sm2              (VdCgi32 x, VdCgi32 y)                           { VdS2 r; r.x = x; r.y = y; return r; }
 VD_CG_INL VdF2          vd_fall2            (VdCgf32 s)                                      { return vd_fm2(s, s);               }
 VD_CG_INL VdD2          vd_dall2            (VdCgf64 s)                                      { return vd_dm2(s, s);               }
 VD_CG_INL VdR2          vd_rall2            (VdRea s)                                        { return vd_rm2(s, s);               }
+VD_CG_INL VdS2          vd_sall2            (VdCgi32 s)                                      { return vd_sm2(s, s);               }
 VD_CG_INL VdF2          vd_fzero2           (void)                                           { return vd_fall2(0.f);              }
 VD_CG_INL VdD2          vd_dzero2           (void)                                           { return vd_dall2(0.f);              }
 VD_CG_INL VdR2          vd_rzero2           (void)                                           { return vd_rall2(0.f);              }
+VD_CG_INL VdS2          vd_szero2           (void)                                           { return vd_sall2(0);                }
 
 VD_CG_INL VdF3          vd_fm3              (VdCgf32 x, VdCgf32 y, VdCgf32 z)                { VdF3 r; r.x = x; r.y = y; r.z = z; return r; }
 VD_CG_INL VdD3          vd_dm3              (VdCgf64 x, VdCgf64 y, VdCgf64 z)                { VdD3 r; r.x = x; r.y = y; r.z = z; return r; }
@@ -347,6 +355,12 @@ VD_CG_INL VdRQuat       vd_rmquat           (VdR3 ipart, VdRea rpart)           
 VD_CG_INL VdFRay        vd_fmray            (VdF3 origin, VdF3 direction)                    { VdFRay r; r.origin = origin; r.direction = direction; return r; }
 
 VD_CG_INL VdFCylinder   vd_fmcylinder       (VdF3 p, VdF3 q, VdCgf32 r)                      { VdFCylinder c; c.p = p; c.q = q; c.r = r; return c; }
+
+/* ----FLOATING POINT - INTEGER CONVERSION--------------------------------------------------------------------------- */
+VD_CG_INL VdS2          vd_ftrunc2          (VdF2 v)                                         { VdS2 r; r.x = (VdCgi32)v.x; r.y = (VdCgi32)v.y; return r; }
+
+/* ----INTEGER - FLOATING POINT CONVERSION--------------------------------------------------------------------------- */
+VD_CG_INL VdF2          vd_swiden2f         (VdS2 v)                                         { VdF2 r; r.x = (VdCgf32)v.x; r.y = (VdCgf32)v.y; return r; }
 
 /* ----UTILITY------------------------------------------------------------------------------------------------------- */
 VD_CG_INL VdCgf32       vd_fwrap_degrees   (VdCgf32 d)                                      { return d - VD_CG_FTAU * VD_CG_FFLOOR(d / VD_CG_FTAU);       }
@@ -1092,6 +1106,7 @@ VD_CG_INL int vd_fline_vs_cylinder(VdFLine *line, VdFCylinder *cylinder, VdCgf32
 #define F3x3                     VdF3x3
 #define F4x4                     VdF4x4
 #define FQuat                    VdFQuat
+#define FPlane                   VdFPlane
 #define FLine                    VdFLine
 #define FRay                     VdFRay 
 #define FCylinder                VdFCylinder
@@ -1102,6 +1117,7 @@ VD_CG_INL int vd_fline_vs_cylinder(VdFLine *line, VdFCylinder *cylinder, VdCgf32
 #define D3x3                     VdD3x3
 #define D4x4                     VdD4x4
 #define DQuat                    VdDQuat
+#define DPlane                   VdDPlane
 #define DLine                    VdDLine
 #define DRay                     VdDRay 
 #define DCylinder                VdDCylinder
@@ -1112,20 +1128,26 @@ VD_CG_INL int vd_fline_vs_cylinder(VdFLine *line, VdFCylinder *cylinder, VdCgf32
 #define R3x3                     VdR3x3
 #define R4x4                     VdR4x4
 #define RQuat                    VdRQuat
+#define RPlane                   VdRPlane
 #define RLine                    VdRLine
 #define RRay                     VdRRay
 #define RCylinder                VdRCylinder
+
+#define S2                       VdS2
 
 /* ----INITIALIZATION------------------------------------------------------------------------------------------------ */
 #define dm2                      vd_dm2
 #define rm2                      vd_rm2
 #define fm2                      vd_fm2
+#define sm2                      vd_sm2
 #define fall2                    vd_fall2
 #define dall2                    vd_dall2
 #define rall2                    vd_rall2
+#define sall2                    vd_sall2
 #define fzero2                   vd_fzero2
 #define dzero2                   vd_dzero2
 #define rzero2                   vd_rzero2
+#define szero2                   vd_szero2
 #define fm3                      vd_fm3
 #define dm3                      vd_dm3
 #define rm3                      vd_rm3
@@ -1155,6 +1177,12 @@ VD_CG_INL int vd_fline_vs_cylinder(VdFLine *line, VdFCylinder *cylinder, VdCgf32
 #define rmquat                   vd_rmquat
 #define fmray                    vd_fmray
 #define fmcylinder               vd_fmcylinder
+
+/* ----FLOATING POINT - INTEGER CONVERSION--------------------------------------------------------------------------- */
+#define ftrunc2                  vd_ftrunc2
+
+/* ----INTEGER - FLOATING POINT CONVERSION--------------------------------------------------------------------------- */
+#define swiden2f                 vd_swiden2f
 
 /* ----VECTOR ALGEBRA------------------------------------------------------------------------------------------------ */
 #define fadd2                    vd_fadd2 
