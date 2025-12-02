@@ -6312,13 +6312,7 @@ VD_FW_API int vd_fw_running(void)
     VD_FW_G.performance_counter = now_performance_counter;
 
     if (VD_FW_G.mouse_is_locked && VD_FW_G.focused) {
-        VdFwRECT rect;
-        VdFwGetWindowRect(VD_FW_G.hwnd, &rect);
-
-        VdFwINT center_x = (rect.left + rect.right)  / 2;
-        VdFwINT center_y = (rect.top  + rect.bottom) / 2;
-
-        VdFwSetCursorPos(center_x, center_y);
+        VdFwSetCursorPos(VD_FW_G.last_mouse_before_lock[0], VD_FW_G.last_mouse_before_lock[1]);
     }
 
     return 1;
