@@ -111,6 +111,10 @@ VD_UM_API void              vd_um_push_vertex_count(int count);
 VD_UM_API int               vd_um_get_vertex_count(void);
 VD_UM_API void              vd_um_pop_vertex_count(void);
 
+VD_UM_API void              vd_um_push_timeout(float timeout);
+VD_UM_API float             vd_um_get_timeout(void);
+VD_UM_API void              vd_um_pop_timeout(void);
+
 VD_UM_API void              vd_um_push_id(const void *str, int len);
 VD_UM_API void              vd_um_pop_id(void);
 
@@ -144,7 +148,7 @@ VD_UM_API const char*   vd_um_gl_get_uniform_name_view(void);
 #   define VD_UM_VIEWPORT_MAX 4
 #endif // !VD_UM_VIEWPORT_MAX
 
-#define VD_UM__RENDER_PASS_COUNT 16
+#define VD_UM__RENDER_PASS_COUNT 64
 
 #ifndef VD_UM_DEPTH_FLAG_STACK_COUNT
 #   define VD_UM_DEPTH_FLAG_STACK_COUNT 16
@@ -153,6 +157,10 @@ VD_UM_API const char*   vd_um_gl_get_uniform_name_view(void);
 #ifndef VD_UM_VERTEX_COUNT_STACK_COUNT
 #   define VD_UM_VERTEX_COUNT_STACK_COUNT 32
 #endif // !VD_UM_VERTEX_COUNT_STACK_COUNT
+
+#ifndef VD_UM_TIMEOUT_STACK_COUNT
+#   define VD_UM_TIMEOUT_STACK_COUNT 16
+#endif // !VD_UM_TIMEOUT_STACK_COUNT
 
 #define VD_UM__PI 3.14159265359f
 
@@ -178,46 +186,69 @@ enum {
     VD_UM__DEPTH_WRITE = 1 << 1,
 };
 
+typedef struct {
+    int first_pass_index;
+    int pass_count;
+} VdUm__Viewport;
+
+typedef struct {
+    VdUmVertex vertex;
+    int        viewport;
+    int        vertex_count;
+} VdUm__DeferredVertex;
+
 struct VdUmContext {
-    void* (*alloc)(void *prev, int prev_size, int new_size);
+    void*                   (*alloc)(void *prev, int prev_size, int new_size);
 
     // Per Frame Data
-    float mouse_delta[2];
-    float mouse_pos[2];
-    float mouse_pos_in_viewport[2];
-    float mouse_origin[3];
-    float mouse_direction[3];
-    int   mouse_left, mouse_left_last;
-    float dt;
+    float                   mouse_delta[2];
+    float                   mouse_pos[2];
+    float                   mouse_pos_in_viewport[2];
+    float                   mouse_origin[3];
+    float                   mouse_direction[3];
+    int                     mouse_left, mouse_left_last;
+    float                   dt;
 
-    int        num_vertices;
-    VdUmVertex *vertices;
+    int                     num_vertices;
+    VdUmVertex              *vertices;
 
-    int            num_passes;
-    VdUmRenderPass passes[VD_UM__RENDER_PASS_COUNT];
+    int                     num_passes;
+    VdUmRenderPass          passes[VD_UM__RENDER_PASS_COUNT];
+
+    int                     num_viewports;
+    VdUm__Viewport          viewports[VD_UM_VIEWPORT_MAX];
+    int                     is_pushing_to_viewport;
 
     // Per Viewport Data
-    float viewport[4];
-    float inv_projection[16];
-    float view[16];
+    float                   viewport[4];
+    float                   inv_projection[16];
+    float                   view[16];
 
     // Id Stack
-    VdUmU64 *id_stack;
-    int     id_stack_count;
-    int     id_stack_cap;
+    VdUmU64                 *id_stack;
+    int                     id_stack_count;
+    int                     id_stack_cap;
 
     // Depth Flag Stack
-    int     depth_flag_stack[VD_UM_DEPTH_FLAG_STACK_COUNT];
-    int     depth_flag_stack_count;
+    int                     depth_flag_stack[VD_UM_DEPTH_FLAG_STACK_COUNT];
+    int                     depth_flag_stack_count;
 
     // Vertex Count Stack
-    int     vertex_count_stack[VD_UM_VERTEX_COUNT_STACK_COUNT];
-    int     vertex_count_stack_count;
+    int                     vertex_count_stack[VD_UM_VERTEX_COUNT_STACK_COUNT];
+    int                     vertex_count_stack_count;
+
+    // Timeout Stack
+    float                   timeout_stack[VD_UM_TIMEOUT_STACK_COUNT];
+    int                     timeout_stack_count;
 
     // Persistent Data
-    VdUmU64 hot_id;
-    float   selection_t;
-    VdUmU64 active_id;
+    VdUmU64                 hot_id;
+    float                   selection_t;
+    VdUmU64                 active_id;
+
+    int                     timed_vertices_cap;
+    int                     timed_vertices_len;
+    VdUm__DeferredVertex    *timed_vertices;
 };
 
 static      void            vd_um__abort(const char *message);
@@ -276,6 +307,8 @@ VD_UM_INL   int             vd_um__is_hot(VdUmContext *ctx, VdUmU64 id);
 VD_UM_INL   int             vd_um__take_active(VdUmContext *ctx, VdUmU64 id);
 VD_UM_INL   int             vd_um__is_active(VdUmContext *ctx, VdUmU64 id);
 VD_UM_INL   void            vd_um__lose_active(VdUmContext *ctx, VdUmU64 id);
+VD_UM_INL   int             vd_um__compute_timeout(VdUmVertex *vertex);
+VD_UM_INL   int             vd_um__get_viewport(VdUmContext *ctx);
 
 
 #define VD_UM_EPSILON 1.19209290e-07f
@@ -313,11 +346,21 @@ VD_UM_API void vd_um_frame_begin(float dt)
     ctx->dt = dt;
     ctx->num_vertices = 0;
     ctx->num_passes = 0;
+    ctx->num_viewports = 0;
+    ctx->is_pushing_to_viewport = 0;
 }
 
 VD_UM_API void vd_um_viewport_begin(float viewport[4], float inv_projection[16], float view[16], float origin[3])
 {
     VdUmContext *ctx = vd_um_context_get();
+    VD_UM_ASSERT(!ctx->is_pushing_to_viewport);
+
+    ctx->num_viewports++;
+    ctx->is_pushing_to_viewport =1 ;
+    int viewport_index = ctx->num_viewports - 1;
+    VdUm__Viewport *viewport_info = &ctx->viewports[viewport_index];
+    viewport_info->first_pass_index = ctx->num_passes;
+
     for (int i = 0; i <  3; ++i) ctx->mouse_origin[i] = origin[i];
     for (int i = 0; i <  4; ++i) ctx->viewport[i] = viewport[i];
     for (int i = 0; i < 16; ++i) ctx->inv_projection[i] = inv_projection[i];
@@ -328,6 +371,25 @@ VD_UM_API void vd_um_viewport_begin(float viewport[4], float inv_projection[16],
 
 VD_UM_API void vd_um_viewport_end(void)
 {
+    VdUmContext *ctx = vd_um_context_get();
+    VD_UM_ASSERT(ctx->is_pushing_to_viewport);
+    int viewport_index = ctx->num_viewports - 1;
+
+    for (int i = 0; i < ctx->timed_vertices_len; ++i) {
+        VdUm__DeferredVertex *deferred_vertex = &ctx->timed_vertices[i];
+        if (deferred_vertex->viewport != viewport_index) {
+            continue;
+        }
+
+        vd_um_push_vertex_count(deferred_vertex->vertex_count);
+        vd_um__push_vertex(ctx, &deferred_vertex->vertex);
+        vd_um_pop_vertex_count();
+    }
+
+    ctx->is_pushing_to_viewport = 0;
+    VdUm__Viewport *viewport = &ctx->viewports[viewport_index];
+    viewport->pass_count = ctx->num_passes - viewport->first_pass_index;
+
     vd_um_pop_vertex_count();
     vd_um_pop_depth_flags();
 }
@@ -338,10 +400,13 @@ VD_UM_API void vd_um_frame_end(void)
 
 VD_UM_API VdUmRenderPass *vd_um_frame_get_passes_for_viewport(int viewport_index, int *num_render_passes)
 {
-    VD_UM_ASSERT(viewport_index == 0);
     VdUmContext *ctx = vd_um_context_get();
-    *num_render_passes = ctx->num_passes;
-    return ctx->passes;
+    VD_UM_ASSERT(viewport_index < ctx->num_viewports);
+
+    VdUm__Viewport *viewport = &ctx->viewports[viewport_index];
+    VdUmRenderPass *result = ctx->passes + viewport->first_pass_index;
+    *num_render_passes = viewport->pass_count;
+    return result;
 }
 
 VD_UM_API VdUmVertex *vd_um_frame_get_vertex_buffer(int *num_vertices)
@@ -894,8 +959,43 @@ VD_UM_API void vd_um_pop_vertex_count(void)
     ctx->vertex_count_stack_count--;
 }
 
+VD_UM_API void vd_um_push_timeout(float timeout)
+{
+    VdUmContext *ctx = vd_um_context_get();
+    VD_UM_ASSERT(ctx->timeout_stack_count < VD_UM_TIMEOUT_STACK_COUNT);
+
+    ctx->timeout_stack[ctx->timeout_stack_count++] = timeout;
+}
+
+VD_UM_API float vd_um_get_timeout(void)
+{
+    VdUmContext *ctx = vd_um_context_get();
+
+    if (ctx->timeout_stack_count == 0) {
+        return -1.f;
+    } else {
+        return ctx->timeout_stack[ctx->timeout_stack_count - 1];
+    }
+}
+
+VD_UM_API void vd_um_pop_timeout(void)
+{
+    VdUmContext *ctx = vd_um_context_get();
+    VD_UM_ASSERT(ctx->timeout_stack_count > 0);
+}
+
 static void vd_um__push_vertex(VdUmContext *ctx, VdUmVertex *vertex)
 {
+    if (vd_um__compute_timeout(vertex)) {
+        VdUm__DeferredVertex *deferred_vertex = &ctx->timed_vertices[ctx->timed_vertices_len++];
+        deferred_vertex->vertex         = *vertex;
+        deferred_vertex->viewport       = vd_um__get_viewport(ctx);
+        deferred_vertex->vertex_count   = vd_um_get_vertex_count();
+        vd_um__compute_timeout(&deferred_vertex->vertex);
+
+        return;
+    }
+
     int depth_flags = vd_um_get_depth_flags();
     int required_flags = depth_flags;
     int required_vertex_count = vd_um_get_vertex_count();
@@ -1055,6 +1155,23 @@ VD_UM_INL void vd_um__lose_active(VdUmContext *ctx, VdUmU64 id)
     }
 }
 
+VD_UM_INL int vd_um__compute_timeout(VdUmVertex *vertex)
+{
+    float timeout = vd_um_get_timeout();
+    if (timeout < 0.f) {
+        vertex->timeout[0] = vertex->timeout[1] = 1.f;
+        return 0;
+    } else {
+        vertex->timeout[0] = vertex->timeout[1] = timeout;
+        return 1;
+    }
+}
+
+VD_UM_INL int vd_um__get_viewport(VdUmContext *ctx)
+{
+    return ctx->num_viewports - 1;
+}
+
 VdUmContextCreateInfo Vd_Um__Default_Context = {
     vd_um__alloc_default,
 };
@@ -1092,12 +1209,17 @@ VD_UM_API VdUmContext *vd_um_context_create(VdUmContextCreateInfo *info)
 
     ctx->depth_flag_stack_count = 0;
     ctx->vertex_count_stack_count = 0;
+    ctx->timeout_stack_count = 0;
 
     ctx->hot_id = 0;
     ctx->selection_t = 1000.f;
     ctx->active_id = 0;
 
     ctx->vertices = (VdUmVertex*)info->alloc(NULL, 0, sizeof(VdUmVertex) * 64);
+
+    ctx->timed_vertices_cap = 64;
+    ctx->timed_vertices_len = 0;
+    ctx->timed_vertices = (VdUm__DeferredVertex*)info->alloc(NULL, 0, sizeof(VdUm__DeferredVertex) * ctx->timed_vertices_cap);
 
     return ctx;
 }

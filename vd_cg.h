@@ -511,6 +511,7 @@ VD_CG_INL VdFLine       vd_fray_to_line     (VdFRay *ray, float t)              
 VD_CG_INL VdF4x4        vd_fidentity4x4        (void);
 VD_CG_INL VdF4x4        vd_fdx_to_vk4x4        (void);
 VD_CG_INL VdF4x4        vd_fperspective4x4     (VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr, VdCgf32 pfr);
+VD_CG_INL VdF4x4        vd_foblique4x4         (VdCgf32 left, VdCgf32 right, VdCgf32 bottom, VdCgf32 top, VdCgf32 pnr, VdCgf32 pfr);
 VD_CG_INL VdF4x4        vd_fperspective4x4_vk  (VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr, VdCgf32 pfr);
 VD_CG_INL VdF4x4        vd_flookat4x4          (VdF3 from, VdF3 to, VdF3 up);
 VD_CG_INL VdF4x4        vd_ftranslation4x4     (VdF3 v);
@@ -811,6 +812,24 @@ VD_CG_INL VdF4x4 vd_fperspective4x4(VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr
 
     result.e[2][2] = -result.e[2][2];
     result.e[2][3] = -result.e[2][3];
+    return result;
+}
+
+VD_CG_INL VdF4x4 vd_foblique4x4(VdCgf32 left, VdCgf32 right, VdCgf32 bottom, VdCgf32 top, VdCgf32 pnr, VdCgf32 pfr)
+{
+    VdF4x4 result;
+    VdCgf32 width;
+    VdCgf32 height;
+    VdCgf32 depth;
+
+    width  = right - left;
+    height = top - bottom;
+    depth  = pfr - pnr;
+
+    result = vd_fm4x4(2.f / width,              0.f,                        0.f,                    0.f,
+                      0.f,                      2.f / (height),             0.f,                    0.f,
+                      0.f,                      0.f,                        2.f / depth,            0.f,
+                      - (right + left) / width, - (top + bottom) / height,  - (pfr + pnr) / depth,  1.f);
     return result;
 }
 
@@ -1292,6 +1311,7 @@ VD_CG_INL int vd_fline_vs_cylinder(VdFLine *line, VdFCylinder *cylinder, VdCgf32
 #define fidentity4x4             vd_fidentity4x4 
 #define fdx_to_vk4x4             vd_fdx_to_vk4x4 
 #define fperspective4x4          vd_fperspective4x4 
+#define foblique4x4              vd_foblique4x4
 #define fperspective4x4_vk       vd_fperspective4x4_vk 
 #define flookat4x4               vd_flookat4x4 
 #define ftranslation4x4          vd_ftranslation4x4 
