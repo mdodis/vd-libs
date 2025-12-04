@@ -75,10 +75,16 @@ typedef struct {
     int vertex_count;
 } VdUmRenderPass;
 
+typedef enum {
+    VD_UM_VIEWPORT_TYPE_PERSPECTIVE,
+    VD_UM_VIEWPORT_TYPE_ORTHOGRAPHIC,
+} VdUmViewportType;
+
 VD_UM_API void              vd_um_init(void);
 
 VD_UM_API void              vd_um_frame_begin(float dt);
-VD_UM_API void              vd_um_viewport_begin(float viewport[4], float inv_projection[16], float view[16], float origin[3]);
+VD_UM_API void              vd_um_viewport_begin(VdUmViewportType type, float viewport[4], float inv_projection[16], float view[16], float origin[3]);
+VD_UM_API void              vd_um_viewport_ortho_frustum_size(float width, float height);
 VD_UM_API void              vd_um_event_mouse_position(float position[2]);
 VD_UM_API void              vd_um_event_mouse_delta(float delta[2]);
 VD_UM_API void              vd_um_event_mouse_button(int button, int on);
@@ -137,6 +143,7 @@ VD_UM_API void          vd_um_gl_get_attribute_properties(int attribute, int *si
 
 VD_UM_API const char*   vd_um_gl_get_uniform_name_projection(void);
 VD_UM_API const char*   vd_um_gl_get_uniform_name_view(void);
+VD_UM_API const char*   vd_um_gl_get_uniform_name_resolution(void);
 
 #endif // !VD_UM_H
 
@@ -223,6 +230,9 @@ struct VdUmContext {
     float                   viewport[4];
     float                   inv_projection[16];
     float                   view[16];
+    VdUmViewportType        viewport_type;
+    float                   viewport_ortho_width;
+    float                   viewport_ortho_height;
 
     // Id Stack
     VdUmU64                 *id_stack;
@@ -350,23 +360,120 @@ VD_UM_API void vd_um_frame_begin(float dt)
     ctx->is_pushing_to_viewport = 0;
 }
 
-VD_UM_API void vd_um_viewport_begin(float viewport[4], float inv_projection[16], float view[16], float origin[3])
+VD_UM_API void vd_um_viewport_begin(VdUmViewportType type, float viewport[4], float inv_projection[16], float view[16], float origin[3])
 {
     VdUmContext *ctx = vd_um_context_get();
     VD_UM_ASSERT(!ctx->is_pushing_to_viewport);
 
     ctx->num_viewports++;
-    ctx->is_pushing_to_viewport =1 ;
+    ctx->is_pushing_to_viewport = 1;
     int viewport_index = ctx->num_viewports - 1;
     VdUm__Viewport *viewport_info = &ctx->viewports[viewport_index];
     viewport_info->first_pass_index = ctx->num_passes;
 
+    ctx->viewport_type = type;
     for (int i = 0; i <  3; ++i) ctx->mouse_origin[i] = origin[i];
     for (int i = 0; i <  4; ++i) ctx->viewport[i] = viewport[i];
     for (int i = 0; i < 16; ++i) ctx->inv_projection[i] = inv_projection[i];
     for (int i = 0; i < 16; ++i) ctx->view[i] = view[i];
+
+
+    float mouse_viewport_space[2] = {
+        + ((ctx->mouse_pos[0] - ctx->viewport[0]) / (ctx->viewport[2] - 1)) * 2.f - 1.f,
+        - ((ctx->mouse_pos[1] - ctx->viewport[1]) / (ctx->viewport[3] - 1)) * 2.f + 1.f,
+    };
+
+    ctx->mouse_pos_in_viewport[0] = mouse_viewport_space[0];
+    ctx->mouse_pos_in_viewport[1] = mouse_viewport_space[1];
+
+    switch (ctx->viewport_type) {
+        case VD_UM_VIEWPORT_TYPE_PERSPECTIVE: {
+            float mouse_clip_space[4] = {
+                mouse_viewport_space[0],
+                mouse_viewport_space[1],
+                -1.f,
+                +1.f
+            };
+
+            float mouse_view_space[4];
+            vd_um__mul_matrix_point(ctx->inv_projection, mouse_clip_space, mouse_view_space);
+
+            mouse_view_space[2] = 1.f;
+            mouse_view_space[3] = 0.f;
+
+            float mouse_world_space[4];
+            vd_um__mul_matrix_point(ctx->view, mouse_view_space, mouse_world_space);
+
+            float mouse_world_space3[3] = { mouse_world_space[0], mouse_world_space[1], mouse_world_space[2] };
+
+            vd_um__noz3(mouse_world_space3, ctx->mouse_direction);
+
+        } break;
+
+        case VD_UM_VIEWPORT_TYPE_ORTHOGRAPHIC: {
+
+            float local_up[4];
+            float local_right[4];
+            float local_fwd[4];
+
+            local_right[0] = ctx->view[0 * 4 + 0];
+            local_right[1] = ctx->view[0 * 4 + 1];
+            local_right[2] = ctx->view[0 * 4 + 2];
+
+            local_up[0] = ctx->view[1 * 4 + 0];
+            local_up[1] = ctx->view[1 * 4 + 1];
+            local_up[2] = ctx->view[1 * 4 + 2];
+
+            local_fwd[0] = ctx->view[2 * 4 + 0];
+            local_fwd[1] = ctx->view[2 * 4 + 1];
+            local_fwd[2] = ctx->view[2 * 4 + 2];
+
+            float mouse_clip_space[4] = {
+                mouse_viewport_space[0],
+                mouse_viewport_space[1],
+                -1.f,
+                +1.f
+            };
+            float mouse_view_space[4];
+            vd_um__mul_matrix_point(ctx->inv_projection, mouse_clip_space, mouse_view_space);
+
+            mouse_view_space[2] = 1.f;
+            mouse_view_space[3] = 0.f;
+
+            float mouse_world_space[4];
+            vd_um__mul_matrix_point(ctx->view, mouse_view_space, mouse_world_space);
+
+            ctx->mouse_origin[0] += mouse_world_space[0];
+            ctx->mouse_origin[1] += mouse_world_space[1];
+            ctx->mouse_origin[2] += mouse_world_space[2];
+
+            // vd_um__add3_scaled_inplace(ctx->mouse_origin, local_right, 1.f);
+            // vd_um__add3_scaled_inplace(ctx->mouse_origin, local_up, 1.f);
+
+            // float aspect = ctx->viewport_ortho_width / ctx->viewport_ortho_height;
+            // float ratio_w = (ctx->viewport_ortho_width / 10.f);
+            // float ratio_h = (ctx->viewport_ortho_height / 10.f);
+            // vd_um__add3_scaled_inplace(ctx->mouse_origin, local_right, 0.5f * ratio_w * (ctx->viewport_ortho_width)   * mouse_viewport_space[0]);
+            // vd_um__add3_scaled_inplace(ctx->mouse_origin, local_up,    0.5f * ratio_h * (ctx->viewport_ortho_height)  * mouse_viewport_space[1]);
+            ctx->mouse_direction[0] = local_fwd[0];
+            ctx->mouse_direction[1] = local_fwd[1];
+            ctx->mouse_direction[2] = local_fwd[2];
+        } break;
+    }
+
     vd_um_push_depth_flags(0, 0);
     vd_um_push_vertex_count(6);
+}
+
+VD_UM_API void vd_um_viewport_ortho_frustum_size(float width, float height)
+{
+    VdUmContext *ctx = vd_um_context_get();
+    VD_UM_ASSERT(ctx->is_pushing_to_viewport);
+
+    int viewport_index = ctx->num_viewports - 1;
+    VdUm__Viewport *viewport_info = &ctx->viewports[viewport_index];
+    ctx->viewport_ortho_width  = width;
+    ctx->viewport_ortho_height = height;
 }
 
 VD_UM_API void vd_um_viewport_end(void)
@@ -421,34 +528,6 @@ VD_UM_API void vd_um_event_mouse_position(float position[2])
     VdUmContext *ctx = vd_um_context_get();
     ctx->mouse_pos[0] = position[0];
     ctx->mouse_pos[1] = position[1];
-
-    float mouse_viewport_space[2] = {
-        + ((ctx->mouse_pos[0] - ctx->viewport[0]) / (ctx->viewport[2] - 1)) * 2.f - 1.f,
-        - ((ctx->mouse_pos[1] - ctx->viewport[1]) / (ctx->viewport[3] - 1)) * 2.f + 1.f,
-    };
-
-    ctx->mouse_pos_in_viewport[0] = mouse_viewport_space[0];
-    ctx->mouse_pos_in_viewport[1] = mouse_viewport_space[1];
-
-    float mouse_clip_space[4] = {
-        mouse_viewport_space[0],
-        mouse_viewport_space[1],
-        -1.f,
-        +1.f
-    };
-
-    float mouse_view_space[4];
-    vd_um__mul_matrix_point(ctx->inv_projection, mouse_clip_space, mouse_view_space);
-
-    mouse_view_space[2] = 1.f;
-    mouse_view_space[3] = 0.f;
-
-    float mouse_world_space[4];
-    vd_um__mul_matrix_point(ctx->view, mouse_view_space, mouse_world_space);
-
-    float mouse_world_space3[3] = { mouse_world_space[0], mouse_world_space[1], mouse_world_space[2] };
-
-    vd_um__noz3(mouse_world_space3, ctx->mouse_direction);
 }
 
 VD_UM_API void vd_um_event_mouse_delta(float delta[2])
@@ -731,14 +810,12 @@ VD_UM_API void vd_um_translate_axial(const char *nameid, float position[3], floa
     }
 
     if (vd_um__is_active(ctx, id)) {
-        color = hover_color;
-    } else if (vd_um__is_hot(ctx, id)) {
         color = select_color;
+    } else if (vd_um__is_hot(ctx, id)) {
+        color = hover_color;
     }
 
     if (vd_um__is_active(ctx, id)) {
-        color = select_color;
-
         float delta[3] = {
             direction[0] * t1 - start_pos[0],
             direction[1] * t1 - start_pos[1],
@@ -757,18 +834,19 @@ VD_UM_API void vd_um_translate_axial(const char *nameid, float position[3], floa
         vd_um__add3_scaled_inplace(seg_end, direction, +100.f);
 
 
-        vd_um_segment(seg_start, seg_end, 0.01f, normal_color);
+        vd_um_segment(seg_start, seg_end, 0.01f * scale_factor, normal_color);
     }
 
+    float line_height  = height * 0.8f;
+    float arrow_height = height * 0.2f;
 
     float seg[3] = { position[0], position[1], position[2] };
-    vd_um__add3_scaled_inplace(seg, direction, height);
+    vd_um__add3_scaled_inplace(seg, direction, line_height);
     vd_um_segment(position, seg, radius, color);
 
     float arrow_apex[3] = { seg[0], seg[1], seg[2] };
-    vd_um__add3_scaled_inplace(arrow_apex, direction, 0.05f * scale_factor);
+    vd_um__add3_scaled_inplace(arrow_apex, direction, arrow_height);
     vd_um_arrow(seg, arrow_apex, radius * 4.0f, color);
-    // vd_um_cylinder(position, orientation, height, radius, color);
 }
 
 VD_UM_API void vd_um_translate_planar(const char *nameid, float position[3], float axis0[3], float axis1[3])
@@ -894,11 +972,23 @@ VD_UM_API void vd_um_get_picking_ray(float origin[3], float direction[3])
 VD_UM_API float vd_um_get_scale_factor(float position[3])
 {
     VdUmContext *ctx = vd_um_context_get();
-    float position_to_origin[3];
-    vd_um__sub3(ctx->mouse_origin, position, position_to_origin);
-    float distance_from_position = vd_um__sqrt(vd_um__dot3(position_to_origin, position_to_origin));
+    switch (ctx->viewport_type) {
+        case VD_UM_VIEWPORT_TYPE_PERSPECTIVE: {
+            float position_to_origin[3];
+            vd_um__sub3(ctx->mouse_origin, position, position_to_origin);
+            float distance_from_position = vd_um__sqrt(vd_um__dot3(position_to_origin, position_to_origin));
 
-    return distance_from_position * tanf(fdeg2rad(60.f) * 0.5f);
+            return distance_from_position * tanf(fdeg2rad(60.f) * 0.5f);
+        } break;
+
+        case VD_UM_VIEWPORT_TYPE_ORTHOGRAPHIC: {
+            float w = ctx->viewport_ortho_width;
+            float h = ctx->viewport_ortho_height;
+            return vd_um__sqrt(w * w + h * h) * 0.5f;
+        } break;
+
+        default: return 1.f; break;
+    }
 }
 
 VD_UM_API void vd_um_push_depth_flags(int depth_test, int depth_write)
@@ -2168,5 +2258,9 @@ VD_UM_API const char *vd_um_gl_get_uniform_name_view(void)
     return "u_view";
 }
 
+VD_UM_API const char *vd_um_gl_get_uniform_name_resolution(void)
+{
+    return "u_resolution";
+}
 
 #endif // VD_UM_IMPL
