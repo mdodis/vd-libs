@@ -41,39 +41,41 @@
  * ╚════════════════════════════════════════════════════════════╝
  * 
  * TODO
- * - Close/Reopen Window
- *     - vd_fw_quit()
- *     - vd_fw_close_requested()
+ * - Add option to enable sys keys
  * - Gamepads
  *     - Face Heuristics
  *     - Class Heuristics
  * - Win32: Use DeviceIoControl for XBOX controllers until they're correlated to XINPUT
- * - vd_fw_get_last_key_pressed
  * - vd_fw_get_last_mouse_button_pressed
  * - Win32: Allow gamepad input even when window isn't focused?
+ *     - Option for that
+ * - Win32:
+ *     - Filter monitor orientation and other settings in display modes
+ *     - Sort the display modes if not sorted already
  * - Vulkan
  *     - Win32: Required extensions function
  *     - Win32: Query queue surface presentation support
  *     - Win32: Implement vkCreateWin32SurfaceKHR
  * - raw hat states
- * - D3D11 Sample
  * - File dialog
+ * - OpenGL anti-alias setting
  * - OBS Studio breaks ChoosePixelFormat
  * - Make sure we can export functions properly for C++
  * - Expose customizable function pointer if the user needs to do something platform-specific before/after winthread has initialized or before vd_fw_init returns anyways.
  * - Have a way for a user to request OpenGL extensions/versions via a precedence array, and initialize the maximum possible version
  * - Clipboard
- * - Allow the user to switch graphics APIs on the fly? (opengl -> custom -> pixbuff -> custom -> opengl)
  * - Properly handle vd_fw_set_receive_ncmouse for clicks and scrolls
  * - Set mouse cursor to constants (resize, I, etc...)
  * - Have a way to store and load the window placement state (size, position, maximization state)
  * - Should vd_fw_set_receive_ncmouse be default 0 or 1?
  *   - Actually, consider removing it entirely
  * - set window unresizable
+ * - MacOS: vd_fw_get_last_key_pressed
  * - MacOS: vd_fw_get_executable_dir()
  * - MacOS: vd_fw_set_fullscreen
  * - MacOS: Gamepad Support
  * - MacOS: Metal Sample
+ * - MacOS: Set Graphics API
  * - When window not focused, or minimized, delay drawing?
  * - Allow to request specific framerate?
  * - On borderless, push mouse event right as we lose focus to a value outside of the window space
@@ -210,6 +212,10 @@
 #   define VD_FW_NCRECTS_MAX 16
 #endif // !VD_FW_NCRECTS_MAX
 
+#ifndef VD_FW_CODEPOINT_BUFFER_COUNT
+#   define VD_FW_CODEPOINT_BUFFER_COUNT 8
+#endif // !VD_FW_CODEPOINT_BUFFER_COUNT
+
 #define VD_FW_ARRAY_COUNT(x) (sizeof(x)/sizeof(x[0]))
 
 #define VD_FW_SWAP16(x) ((VdFwU16)((x << 8) | (x >> 8)))
@@ -243,18 +249,22 @@ typedef enum {
     VD_FW_GRAPHICS_API_OPENGL = 0,
     VD_FW_GRAPHICS_API_CUSTOM,
     VD_FW_GRAPHICS_API_PIXEL_BUFFER,
+    VD_FW_GRAPHICS_API_INVALID = 100,
 } VdFwGraphicsApi;
+
+typedef struct {
+    /* What version of OpenGL you'd like to use. 3.3 and upwards recommended. */
+    VdFwGlVersion version;
+
+    /* Whether to enable a debug console to show you errors produced by GL calls */
+    int           debug_on;
+} VdFwOpenGLOptions;
 
 typedef struct {
     /* The graphics API you're planning to use. Defaulted to OpenGL. */
     VdFwGraphicsApi     api;
-    struct {
-        /* What version of OpenGL you'd like to use. 3.3 and upwards recommended. */
-        VdFwGlVersion   version;
 
-        /* Whether to enable a debug console to show you errors produced by GL calls */
-        int             debug_on;
-    } gl;
+    VdFwOpenGLOptions   gl;
 
     struct {
         /* Set to 1 to disable window frame. */
@@ -282,10 +292,23 @@ VD_FW_API int                vd_fw_running(void);
 VD_FW_API int                vd_fw_swap_buffers(void);
 
 /**
+ * @brief Get if the user requested to close the window
+ * @return  Whether the user tried to close the window this frame
+ */
+VD_FW_API int                vd_fw_close_requested(void);
+
+/**
+ * @brief Close the window and end the rendering loop
+ */
+VD_FW_API void               vd_fw_quit(void);
+
+/**
  * @brief Get the current platform.
  * @return  The current platform.
  */
 VD_FW_API VdFwPlatform       vd_fw_get_platform(void);
+
+VD_FW_API void               vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_options);
 
 /* ----WINDOW-------------------------------------------------------------------------------------------------------- */
 /**
@@ -425,6 +448,23 @@ VD_FW_API int                vd_fw_set_vsync_on(int on);
  */
 VD_FW_API const char*        vd_fw_get_executable_dir(int *len);
 
+/* ----MONITORS------------------------------------------------------------------------------------------------------ */
+typedef struct {
+    int     width;
+    int     height;
+    int     frequency;
+    struct {
+        int numerator;
+        int denominator;
+    } aspect;
+} VdFwDisplayMode;
+
+VD_FW_API int                vd_fw_get_monitor_count(void);
+
+VD_FW_API const char*        vd_fw_get_monitor_name(int index);
+
+VD_FW_API VdFwDisplayMode*   vd_fw_get_monitor_display_modes(int index, int *count);
+
 /* ----MOUSE--------------------------------------------------------------------------------------------------------- */
 enum {
     VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN   = 1 << 0,
@@ -455,6 +495,13 @@ VD_FW_API int                vd_fw_get_mouse_state(int *x, int *y);
  * @return   The mouse button state
  */
 VD_FW_INL int                vd_fw_get_mouse_statef(float *x, float *y);
+
+/**
+ * @brief Get whether the mouse button is down
+ * @param  button The button
+ * @return        1 if the button is down, 0 otherwise
+ */
+VD_FW_INL int                vd_fw_get_mouse_down(int button);
 
 /**
  * @brief Get if the supplied button was just clicked
@@ -576,6 +623,8 @@ VD_FW_API int                vd_fw_get_key_pressed(int key);
  * @return     Whether this key is down currently
  */
 VD_FW_API int                vd_fw_get_key_down(int key);
+
+VD_FW_API int                vd_fw_get_last_key_pressed(void);
 
 /**
  * @brief Convert key to string.
@@ -953,6 +1002,20 @@ VD_FW_API VdFwU64            vd_fw_get_gamepad_raw_buttons(int index);
  */
 VD_FW_API float*             vd_fw_get_gamepad_raw_axes(int index, int *count_axes);
 
+/* ----TEXT INPUT---------------------------------------------------------------------------------------------------- */
+/**
+ * @brief Get the number of characters sent by the user
+ * @return  The count of characters. At most VD_FW_CODEPOINT_BUFFER_COUNT
+ */
+VD_FW_API unsigned short     vd_fw_get_num_codepoints(void);
+
+/**
+ * @brief Get the i'th character as a UTF-32 codepoint
+ * @param  index The character index
+ * @return       The Unicode codepoint
+ */
+VD_FW_API unsigned int       vd_fw_get_codepoint(unsigned short index);
+
 /* ----PLATFORM SPECIFIC--------------------------------------------------------------------------------------------- */
 
 /**
@@ -1036,6 +1099,11 @@ VD_FW_INL int vd_fw_get_mouse_statef(float *x, float *y)
     if (y) *y = (float)yi;
 
     return result;
+}
+
+VD_FW_INL int vd_fw_get_mouse_down(int button)
+{
+    return (vd_fw_get_mouse_state(NULL, NULL) & button) ? 1 : 0;
 }
 
 VD_FW_INL float vd_fw__fabs(float x)
@@ -1179,6 +1247,156 @@ VD_FW_INL void *vd_fw_memset(void *dst, unsigned char val, size_t num)
 }
 
 /* ----INTERNAL API-------------------------------------------------------------------------------------------------- */
+#pragma pack(push, 1)
+typedef struct {
+    VdFwU8                                         horizontal_addressable_pixels;                      // (horizontal_addressable_pixels + 31) * 8 
+    VdFwU8                                         field_refresh_rate : 6;
+    VdFwU8                                         image_aspect_ratio : 2;
+} VdFwEdid1_4StandardTiming;
+
+typedef struct {
+    // Detailed Timing Definitions - Part 1
+    VdFwU16                                        pixel_clock;                                        // pixel_clock * 10000, 0x0000 --> This is a Display Descriptor
+    VdFwU8                                         horizontal_addressable_pixels_lo;
+    VdFwU8                                         horizontal_blanking_pixels_lo;
+    VdFwU8                                         horizontal_addressable_pixels_hi : 4;
+    VdFwU8                                         horizontal_blanking_pixels_hi : 4;
+    VdFwU8                                         vertical_addressable_lines_lo;
+    VdFwU8                                         vertical_blanking_lines_lo;
+    VdFwU8                                         vertical_addressable_lines_hi : 4;
+    VdFwU8                                         vertical_blanking_lines_hi : 4;
+    VdFwU8                                         horizontal_front_porch_pixels_lo;
+    VdFwU8                                         horizontal_sync_pulse_width_pixels_lo;
+    VdFwU8                                         vertical_front_porch_lines_lo : 4;
+    VdFwU8                                         vertical_sync_pulse_width_lines_lo : 4;
+
+    // Bit Definitions
+    VdFwU8                                         horizontal_front_porch_pixels_hi : 2;
+    VdFwU8                                         horizontal_sync_pulse_width_pixels_hi : 2;
+    VdFwU8                                         vertical_front_porch_lines_hi : 2;
+    VdFwU8                                         vertical_sync_pulse_width_lines_hi : 2;
+
+    // Video Image Size & Border Definitions
+    VdFwU8                                         horizontal_addressable_video_image_size_mm_lo;
+    VdFwU8                                         vertical_addressable_video_image_size_mm_lo;
+    VdFwU8                                         horizontal_addressable_video_image_size_mm_hi : 4;
+    VdFwU8                                         vertical_addressable_video_image_size_mm_hi : 4;
+    VdFwU8                                         right_left_horizontal_border_pixels;
+    VdFwU8                                         top_bottom_vertical_border_lines;
+
+    // Detailed Timing Definitions - Part 2
+    VdFwU8                                         signal_interface_type : 1;
+    VdFwU8                                         stereo_viewing_support_hi : 2;
+    VdFwU8                                         a_d_sync_signal_definitions : 4;
+    VdFwU8                                         stereo_viewing_support_lo : 1;
+} VdFwEdid1_4DetailedTiming;
+
+typedef struct {
+    VdFwU8                                         bytes[13];
+} VdFwEdid1_4DisplayDescriptorDataOpaque;
+
+typedef struct {
+    char                                           serial_number[13];
+} VdFwEdid1_4DisplayProductSerialNumber;
+
+typedef struct {
+    char                                           name[13];
+} VdFwEdid1_4DisplayProductName;
+
+typedef union {
+    VdFwEdid1_4DisplayDescriptorDataOpaque         opaque;         // 13 bytes
+    VdFwEdid1_4DisplayProductSerialNumber          serial_number;  // 0xFF
+    VdFwEdid1_4DisplayProductName                  product_name;   // 0xFC
+} VdFwEdid1_4DisplayDescriptorDataBlock;
+
+typedef struct {
+    VdFwU16                                        zeroes;
+    VdFwU8                                         zero;
+    VdFwU8                                         tag;
+    VdFwU8                                         zero_or_display_range_limits_descriptor; 
+    VdFwEdid1_4DisplayDescriptorDataBlock          data_block;
+} VdFwEdid1_4DisplayDescriptor;
+
+typedef union {
+    VdFwEdid1_4DetailedTiming                      detailed_timing;
+    VdFwEdid1_4DisplayDescriptor                   display_descriptor;
+} VdFwEdid1_4DataBlock;
+
+typedef struct {
+    VdFwU8                                         digital_signal_bit : 1;
+    VdFwU8                                         signal_level_standard : 2;
+    VdFwU8                                         video_setup : 1;
+    VdFwU8                                         sync_types : 3;
+    VdFwU8                                         serrations : 1;
+} VdFwEdid1_4AnalogVideoSignalDefinition;
+
+typedef struct {
+    VdFwU8                                         digital_signal_bit : 1;
+    VdFwU8                                         color_bit_depth : 3;
+    VdFwU8                                         video_interface_standard_supported : 4;
+} VdFwEdid1_4DigitalVideoSignalDefinition;
+
+typedef struct {
+    VdFwU8                                         digital_signal_bit : 1;
+    VdFwU8                                         rest : 7;
+} VdFwEdid1_4UndeterminedVideoSignalDefinition;
+
+typedef union {
+    VdFwEdid1_4UndeterminedVideoSignalDefinition    general;
+    VdFwEdid1_4AnalogVideoSignalDefinition          analog;
+    VdFwEdid1_4DigitalVideoSignalDefinition         digital;
+} VdFwEdid1_4VideoInputDefinition;
+
+typedef struct {
+    VdFwU8                                         header[8];                                      // 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00
+
+    // Vendor & Product Identification
+    VdFwU16                                        id_manufacturer_name;                           // Section 3.4.1
+    VdFwU16                                        id_product_code;                                // Section 3.4.2
+    VdFwU32                                        id_serial_number;                               // Section 3.4.3
+    VdFwU8                                         week_of_manufacture;                            // Section 3.4.4
+    VdFwU8                                         year_of_manufacture;                            // Section 3.4.4
+
+    // EDID Structure Version & Revision
+    VdFwU8                                         version;
+    VdFwU8                                         revision;
+
+    // Basic Display Parameters
+    VdFwEdid1_4VideoInputDefinition                video_input_definition;                         // Section 3.6.1
+    VdFwU8                                         horizontal_image_size_or_aspect;                // cm.
+    VdFwU8                                         vertical_image_size_or_aspect;                  // cm.
+    VdFwU8                                         display_transfer_characteristic;                // Gamma
+    VdFwU8                                         feature_support;                                // Section 3.6.4
+
+    // Color Characteristics
+    VdFwU8                                         red_green_low_order_bits;
+    VdFwU8                                         blue_white_low_order_bits;
+    VdFwU8                                         red_x_high_order_bits;
+    VdFwU8                                         red_y_high_order_bits;
+    VdFwU8                                         green_x_high_order_bits;
+    VdFwU8                                         green_y_high_order_bits;
+    VdFwU8                                         blue_x_high_order_bits;
+    VdFwU8                                         blue_y_high_order_bits;
+    VdFwU8                                         white_x_high_order_bits;
+    VdFwU8                                         white_y_high_order_bits;
+
+    // Established Timings
+    VdFwU8                                         established_timings_1;
+    VdFwU8                                         established_timings_2;
+    VdFwU8                                         manufacturer_reserved_timings;
+
+    // Standard Timings: Identification 1 -> 8
+    VdFwEdid1_4StandardTiming                      standard_timings[8];
+    
+    // 18 Byte Data Blocks
+    VdFwEdid1_4DataBlock                           data_blocks[4];
+
+    VdFwU8                                         extension_block_count;
+    VdFwU8                                         checksum;
+
+} VdFwEdid1_4;
+#pragma pack(pop)
+
 VD_FW_API int      vd_fw__any_time_higher(int num_files, const char **files, unsigned long long *check_against);
 VD_FW_API char*    vd_fw__debug_dump_file_text(const char *path);
 VD_FW_API void*    vd_fw__realloc_mem(void *prev_ptr, size_t size);
@@ -1195,6 +1413,11 @@ VD_FW_API void     vd_fw__unlock_gamepaddb(void);
 VD_FW_API void     vd_fw__notify_gamepaddb_changed(void);
 VD_FW_INL int      vd_fw__strlen(const char *s);
 VD_FW_INL size_t   vd_fw__strlcpy(char *dst, const char *src, size_t maxlen);
+VD_FW_INL VdFwU32  vd_fw__gcd(VdFwU32 a, VdFwU32 b);
+
+VD_FW_INL int vd_fw__compare_string_wide_nullsep_case_insensitive(const wchar_t *str1, const wchar_t *str2);
+
+VD_FW_INL void vd_fw__sort_display_modes(VdFwDisplayMode *modes, int count);
 
 VD_FW_INL int vd_fw__strlen(const char *s)
 {
@@ -1212,6 +1435,106 @@ VD_FW_INL size_t vd_fw__strlcpy(char *dst, const char *src, size_t maxlen)
         dst[len] = '\0';
     }
     return srclen;
+}
+
+VD_FW_INL int vd_fw__compare_string_wide_nullsep_case_insensitive(const wchar_t *str1, const wchar_t *str2)
+{
+    // @todo(mdodis): LCMapStringEx for proper case insensitivity
+
+    while ((*str1) && (*str2)) {
+
+        wchar_t str1_lower, str2_lower;
+        str1_lower = *str1;
+        str2_lower = *str2;
+
+        if ((str1_lower >= L'A') && (str1_lower <= 'Z')) {
+            str1_lower = str1_lower - L'A' + L'a';
+        }
+
+        if ((str2_lower >= L'A') && (str2_lower <= 'Z')) {
+            str2_lower = str2_lower - L'A' + L'a';
+        }
+
+
+        if (str1_lower != str2_lower) {
+            return 0;
+        }
+
+        str1++;
+        str2++;
+    }
+
+    if ((*str1) != (*str2)) {
+        return 0;
+    }
+
+    return 1;
+}
+
+VD_FW_INL VdFwU32 vd_fw__gcd(VdFwU32 a, VdFwU32 b)
+{
+    while (a != b) {
+        if (a > b) {
+            a -= b;
+        } else {
+            b -= a;
+        }
+    }
+
+    return a;
+}
+
+VD_FW_INL int vd_fw__compare_display_mode(VdFwDisplayMode *a, VdFwDisplayMode *b)
+{
+    int a_area = a->width * a->height;
+    int b_area = b->width * b->height;
+    if (a_area > b_area) {
+        return 1;
+    } else if (a_area < b_area) {
+        return -1;
+    }
+
+    if (a->frequency > b->frequency) {
+        return 1;
+    } else if (a->frequency < b->frequency) {
+        return -1;
+    }
+
+    return 0;
+}
+
+VD_FW_INL void vd_fw__sort_display_modes_impl(VdFwDisplayMode *modes, int lo, int hi)
+{
+    if (lo < hi) {
+        int p;
+
+        {
+            VdFwDisplayMode *pivot = &modes[hi];
+            int i = lo - 1;
+
+            for (int j = lo; j <= hi - 1; ++j) {
+                if (vd_fw__compare_display_mode(&modes[j], pivot) < 0) {
+                    i++;
+                    VdFwDisplayMode temp = modes[i];
+                    modes[i] = modes[j];
+                    modes[j] = temp;
+                }
+            }
+
+            VdFwDisplayMode temp = modes[i + 1];
+            modes[i + 1] = modes[hi];
+            modes[hi] = temp;
+            p = i + 1;
+        }
+
+        vd_fw__sort_display_modes_impl(modes, lo, p - 1);
+        vd_fw__sort_display_modes_impl(modes, p + 1, hi);
+    }
+} 
+
+VD_FW_INL void vd_fw__sort_display_modes(VdFwDisplayMode *modes, int count)
+{
+    vd_fw__sort_display_modes_impl(modes, 0, count - 1);
 }
 
 #if _WIN32
@@ -3915,6 +4238,24 @@ typedef struct VdFwtagRECT
     VdFwLONG    bottom;
 } VdFwRECT, * VdFwPRECT, * VdFwNPRECT, *VdFwLPRECT;
 
+/* ----Winnt.h------------------------------------------------------------------------------------------------------- */
+#define VD_FW_LOWORD(l)           ((VdFwWORD)(((VdFwDWORD_PTR)(l)) & 0xffff))
+#define VD_FW_HIWORD(l)           ((VdFwWORD)((((VdFwDWORD_PTR)(l)) >> 16) & 0xffff))
+#define VD_FW_LOBYTE(w)           ((VdFwBYTE)(((VdFwDWORD_PTR)(w)) & 0xff))
+#define VD_FW_HIBYTE(w)           ((VdFwBYTE)((((VdFwDWORD_PTR)(w)) >> 8) & 0xff))
+
+#define VD_FW__WIN32_DELETE                           (0x00010000L)
+#define VD_FW__WIN32_READ_CONTROL                     (0x00020000L)
+#define VD_FW__WIN32_WRITE_DAC                        (0x00040000L)
+#define VD_FW__WIN32_WRITE_OWNER                      (0x00080000L)
+#define VD_FW__WIN32_SYNCHRONIZE                      (0x00100000L)
+#define VD_FW__WIN32_STANDARD_RIGHTS_REQUIRED         (0x000F0000L)
+#define VD_FW__WIN32_STANDARD_RIGHTS_READ             (VD_FW__WIN32_READ_CONTROL)
+#define VD_FW__WIN32_STANDARD_RIGHTS_WRITE            (VD_FW__WIN32_READ_CONTROL)
+#define VD_FW__WIN32_STANDARD_RIGHTS_EXECUTE          (VD_FW__WIN32_READ_CONTROL)
+#define VD_FW__WIN32_STANDARD_RIGHTS_ALL              (0x001F0000L)
+#define VD_FW__WIN32_SPECIFIC_RIGHTS_ALL              (0x0000FFFFL)
+
 /* ----User32.dll---------------------------------------------------------------------------------------------------- */
 #ifdef UNICODE
 #define VdFwDispatchMessage         VdFwDispatchMessageW
@@ -3967,6 +4308,8 @@ VD_FW_DECLARE_HANDLE(VdFwHRGN);
 VD_FW_DECLARE_HANDLE(VdFwHMONITOR);
 VD_FW_DECLARE_HANDLE(VdFwDPI_AWARENESS_CONTEXT);
 VD_FW_DECLARE_HANDLE(VdFwHRAWINPUT);
+VD_FW_DECLARE_HANDLE(VdFwHKL);
+VD_FW_DECLARE_HANDLE(VdFwHKEY);
 
 typedef enum VdFwDPI_AWARENESS {
     VD_FW_DPI_AWARENESS_INVALID = -1,
@@ -4076,6 +4419,11 @@ typedef struct VdFwtagMONITORINFO
     VdFwRECT    rcWork;
     VdFwDWORD   dwFlags;
 } VdFwMONITORINFO, * VdFwLPMONITORINFO;
+
+typedef struct VdFwtagMONITORINFOEXW {
+    VdFwMONITORINFO monitor_info;
+    VdFwWCHAR       szDevice[32];
+} VdFwMONITORINFOEXW, *VdFwLPMONITORINFOEXW;
 
 typedef struct VdFwtagWINDOWPOS {
     VdFwHWND    hwnd;
@@ -4207,258 +4555,12 @@ typedef struct VdFw_AppBarData
     VdFwLPARAM lParam;
 } VdFwAPPBARDATA, * VdFwPAPPBARDATA;
 
-#define VD_FW_PROC_GetMessageA(name) VdFwBOOL name(VdFwLPMSG lpMsg, VdFwHWND hWnd, VdFwUINT wMsgFilterMin, VdFwUINT wMsgFilterMax)
-typedef VD_FW_PROC_GetMessageA(VdFwProcGetMessageA);
-static VdFwProcGetMessageA *VdFwGetMessageA;
-
-#define VD_FW_PROC_GetMessageW(name) VdFwBOOL name(VdFwLPMSG lpMsg, VdFwHWND hWnd, VdFwUINT wMsgFilterMin, VdFwUINT wMsgFilterMax)
-typedef VD_FW_PROC_GetMessageW(VdFwProcGetMessageW);
-static VdFwProcGetMessageW *VdFwGetMessageW;
-
-#define VD_FW_PROC_TranslateMessage(name) VdFwBOOL name(const VdFwMSG* lpMsg)
-typedef VD_FW_PROC_TranslateMessage(VdFwProcTranslateMessage);
-static VdFwProcTranslateMessage *VdFwTranslateMessage;
-
-#define VD_FW_PROC_DispatchMessageA(name) VdFwLRESULT name(const VdFwMSG* lpMsg)
-typedef VD_FW_PROC_DispatchMessageA(VdFwProcDispatchMessageA);
-static VdFwProcDispatchMessageA *VdFwDispatchMessageA;
-
-#define VD_FW_PROC_DispatchMessageW(name) VdFwLRESULT name(const VdFwMSG* lpMsg)
-typedef VD_FW_PROC_DispatchMessageW(VdFwProcDispatchMessageW);
-static VdFwProcDispatchMessageW *VdFwDispatchMessageW;
-
-#define VD_FW_PROC_PostMessageA(name) VdFwBOOL name(VdFwHWND hWnd, VdFwUINT Msg, VdFwWPARAM wParam, VdFwLPARAM lParam)
-typedef VD_FW_PROC_PostMessageA(VdFwProcPostMessageA);
-static VdFwProcPostMessageA *VdFwPostMessageA;
-
-#define VD_FW_PROC_PostMessageW(name) VdFwBOOL name(VdFwHWND hWnd, VdFwUINT Msg, VdFwWPARAM wParam, VdFwLPARAM lParam)
-typedef VD_FW_PROC_PostMessageW(VdFwProcPostMessageW);
-static VdFwProcPostMessageW *VdFwPostMessageW;
-
-#define VD_FW_PROC_DefWindowProcA(name) VdFwLRESULT name(VdFwHWND hWnd, VdFwUINT Msg, VdFwWPARAM wParam, VdFwLPARAM lParam)
-typedef VD_FW_PROC_DefWindowProcA(VdFwProcDefWindowProcA);
-static VdFwProcDefWindowProcA *VdFwDefWindowProcA;
-
-#define VD_FW_PROC_DefWindowProcW(name) VdFwLRESULT name(VdFwHWND hWnd, VdFwUINT Msg, VdFwWPARAM wParam, VdFwLPARAM lParam)
-typedef VD_FW_PROC_DefWindowProcW(VdFwProcDefWindowProcW);
-static VdFwProcDefWindowProcW *VdFwDefWindowProcW;
-
-#define VD_FW_PROC_PostQuitMessage(name) void name(int nExitCode)
-typedef VD_FW_PROC_PostQuitMessage(VdFwProcPostQuitMessage);
-static VdFwProcPostQuitMessage *VdFwPostQuitMessage;
-
-#define VD_FW_PROC_RegisterClassExA(name) VdFwATOM name(const VdFwWNDCLASSEXA* unnamedParam1)
-typedef VD_FW_PROC_RegisterClassExA(VdFwProcRegisterClassExA);
-static VdFwProcRegisterClassExA *VdFwRegisterClassExA;
-
-#define VD_FW_PROC_RegisterClassExW(name) VdFwATOM name(const VdFwWNDCLASSEXW* unnamedParam1)
-typedef VD_FW_PROC_RegisterClassExW(VdFwProcRegisterClassExW);
-static VdFwProcRegisterClassExW *VdFwRegisterClassExW;
-
-#define VD_FW_PROC_CreateWindowExA(name) VdFwHWND name(VdFwDWORD dwExStyle, VdFwLPCSTR lpClassName, VdFwLPCSTR lpWindowName, VdFwDWORD dwStyle, int X, int Y, int nWidth, int nHeight, VdFwHWND hWndParent, VdFwHMENU hMenu, VdFwHINSTANCE hInstance, VdFwLPVOID lpParam)
-typedef VD_FW_PROC_CreateWindowExA(VdFwProcCreateWindowExA);
-static VdFwProcCreateWindowExA *VdFwCreateWindowExA;
-
-#define VD_FW_PROC_CreateWindowExW(name) VdFwHWND name(VdFwDWORD dwExStyle, VdFwLPCWSTR lpClassName, VdFwLPCWSTR lpWindowName, VdFwDWORD dwStyle, int X, int Y, int nWidth, int nHeight, VdFwHWND hWndParent, VdFwHMENU hMenu, VdFwHINSTANCE hInstance, VdFwLPVOID lpParam)
-typedef VD_FW_PROC_CreateWindowExW(VdFwProcCreateWindowExW);
-static VdFwProcCreateWindowExW *VdFwCreateWindowExW;
-
-#define VD_FW_PROC_DestroyWindow(name) VdFwBOOL name(VdFwHWND hWnd)
-typedef VD_FW_PROC_DestroyWindow(VdFwProcDestroyWindow);
-static VdFwProcDestroyWindow *VdFwDestroyWindow;
-
-#define VD_FW_PROC_ShowWindow(name) VdFwBOOL name(VdFwHWND hWnd, int nCmdShow)
-typedef VD_FW_PROC_ShowWindow(VdFwProcShowWindow);
-static VdFwProcShowWindow *VdFwShowWindow;
-
-#define VD_FW_PROC_SetWindowPos(name) VdFwBOOL name(VdFwHWND hWnd, VdFwHWND hWndInsertAfter, int X, int Y, int cx, int cy, VdFwUINT uFlags)
-typedef VD_FW_PROC_SetWindowPos(VdFwProcSetWindowPos);
-static VdFwProcSetWindowPos *VdFwSetWindowPos;
-
-#define VD_FW_PROC_GetWindowPlacement(name) VdFwBOOL name(VdFwHWND hWnd, VdFwWINDOWPLACEMENT* lpwndpl)
-typedef VD_FW_PROC_GetWindowPlacement(VdFwProcGetWindowPlacement);
-static VdFwProcGetWindowPlacement *VdFwGetWindowPlacement;
-
-#define VD_FW_PROC_SetWindowPlacement(name) VdFwBOOL name(VdFwHWND hWnd, const VdFwWINDOWPLACEMENT* lpwndpl)
-typedef VD_FW_PROC_SetWindowPlacement(VdFwProcSetWindowPlacement);
-static VdFwProcSetWindowPlacement *VdFwSetWindowPlacement;
-
-#define VD_FW_PROC_IsZoomed(name) VdFwBOOL name(VdFwHWND hWnd)
-typedef VD_FW_PROC_IsZoomed(VdFwProcIsZoomed);
-static VdFwProcIsZoomed *VdFwIsZoomed;
-
-#define VD_FW_PROC_MapVirtualKeyA(name) VdFwUINT name(VdFwUINT uCode, VdFwUINT uMapType)
-typedef VD_FW_PROC_MapVirtualKeyA(VdFwProcMapVirtualKeyA);
-static VdFwProcMapVirtualKeyA *VdFwMapVirtualKeyA;
-
-#define VD_FW_PROC_MapVirtualKeyW(name) VdFwUINT name(VdFwUINT uCode, VdFwUINT uMapType)
-typedef VD_FW_PROC_MapVirtualKeyW(VdFwProcMapVirtualKeyW);
-static VdFwProcMapVirtualKeyW *VdFwMapVirtualKeyW;
-
-#define VD_FW_PROC_SetCapture(name) VdFwHWND name(VdFwHWND hWnd)
-typedef VD_FW_PROC_SetCapture(VdFwProcSetCapture);
-static VdFwProcSetCapture* VdFwSetCapture;
-
-#define VD_FW_PROC_ReleaseCapture(name) VdFwBOOL name(void)
-typedef VD_FW_PROC_ReleaseCapture(VdFwProcReleaseCapture);
-static VdFwProcReleaseCapture *VdFwReleaseCapture;
-
-#define VD_FW_PROC_GetSystemMetrics(name) int name(int nIndex)
-typedef VD_FW_PROC_GetSystemMetrics(VdFwProcGetSystemMetrics);
-static VdFwProcGetSystemMetrics *VdFwGetSystemMetrics;
-
-#define VD_FW_PROC_UpdateWindow(name) VdFwBOOL name(VdFwHWND hWnd)
-typedef VD_FW_PROC_UpdateWindow(VdFwProcUpdateWindow);
-static VdFwProcUpdateWindow *VdFwUpdateWindow;
-
-#define VD_FW_PROC_GetDC(name) VdFwHDC name(VdFwHWND hWnd)
-typedef VD_FW_PROC_GetDC(VdFwProcGetDC);
-static VdFwProcGetDC *VdFwGetDC;
-
-#define VD_FW_PROC_ReleaseDC(name) int name(VdFwHWND hWnd, VdFwHDC hDC)
-typedef VD_FW_PROC_ReleaseDC(VdFwProcReleaseDC);
-static VdFwProcReleaseDC *VdFwReleaseDC;
-
-#define VD_FW_PROC_BeginPaint(name) VdFwHDC name(VdFwHWND hWnd, VdFwLPPAINTSTRUCT lpPaint)
-typedef VD_FW_PROC_BeginPaint(VdFwProcBeginPaint);
-static VdFwProcBeginPaint *VdFwBeginPaint;
-
-#define VD_FW_PROC_EndPaint(name) VdFwBOOL name(VdFwHWND hWnd, const VdFwPAINTSTRUCT* lpPaint)
-typedef VD_FW_PROC_EndPaint(VdFwProcEndPaint);
-static VdFwProcEndPaint *VdFwEndPaint;
-
-#define VD_FW_PROC_SetWindowRgn(name) int name(VdFwHWND hWnd, VdFwHRGN hRgn, VdFwBOOL bRedraw)
-typedef VD_FW_PROC_SetWindowRgn(VdFwProcSetWindowRgn);
-static VdFwProcSetWindowRgn *VdFwSetWindowRgn;
-
-#define VD_FW_PROC_SetWindowTextA(name) VdFwBOOL name(VdFwHWND hWnd, VdFwLPCSTR lpString)
-typedef VD_FW_PROC_SetWindowTextA(VdFwProcSetWindowTextA);
-static VdFwProcSetWindowTextA *VdFwSetWindowTextA;
-
-#define VD_FW_PROC_SetWindowTextW(name) VdFwBOOL name(VdFwHWND hWnd, VdFwLPCWSTR lpString)
-typedef VD_FW_PROC_SetWindowTextW(VdFwProcSetWindowTextW);
-static VdFwProcSetWindowTextW *VdFwSetWindowTextW;
-
-#define VD_FW_PROC_GetClientRect(name) VdFwBOOL name(VdFwHWND hWnd, VdFwLPRECT lpRect)
-typedef VD_FW_PROC_GetClientRect(VdFwProcGetClientRect);
-static VdFwProcGetClientRect *VdFwGetClientRect;
-
-#define VD_FW_PROC_GetWindowRect(name) VdFwBOOL name(VdFwHWND hWnd, VdFwLPRECT lpRect)
-typedef VD_FW_PROC_GetWindowRect(VdFwProcGetWindowRect);
-static VdFwProcGetWindowRect* VdFwGetWindowRect;
-
-#define VD_FW_PROC_ShowCursor(name) int name(VdFwBOOL bShow)
-typedef VD_FW_PROC_ShowCursor(VdFwProcShowCursor);
-static VdFwProcShowCursor *VdFwShowCursor;
-
-#define VD_FW_PROC_SetCursorPos(name) VdFwBOOL name(int X, int Y)
-typedef VD_FW_PROC_SetCursorPos(VdFwProcSetCursorPos);
-static VdFwProcSetCursorPos *VdFwSetCursorPos;
-
-#define VD_FW_PROC_ScreenToClient(name) VdFwBOOL name(VdFwHWND hWnd, VdFwLPPOINT lpPoint)
-typedef VD_FW_PROC_ScreenToClient(VdFwProcScreenToClient);
-static VdFwProcScreenToClient *VdFwScreenToClient;
-
-#define VD_FW_PROC_EqualRect(name) VdFwBOOL name(const VdFwRECT* lprc1, const VdFwRECT* lprc2)
-typedef VD_FW_PROC_EqualRect(VdFwProcEqualRect);
-static VdFwProcEqualRect *VdFwEqualRect;
-
-#define VD_FW_PROC_PtInRect(name) VdFwBOOL name(const VdFwRECT* lprc, VdFwPOINT pt)
-typedef VD_FW_PROC_PtInRect(VdFwProcPtInRect);
-static VdFwProcPtInRect *VdFwPtInRect;
-
-#define VD_FW_PROC_SetWindowLongA(name) VdFwLONG name(VdFwHWND hWnd, int nIndex, VdFwLONG dwNewLong)
-typedef VD_FW_PROC_SetWindowLongA(VdFwProcSetWindowLongA);
-static VdFwProcSetWindowLongA *VdFwSetWindowLongA;
-
-#define VD_FW_PROC_SetWindowLongW(name) VdFwLONG name(VdFwHWND hWnd, int nIndex, VdFwLONG dwNewLong)
-typedef VD_FW_PROC_SetWindowLongW(VdFwProcSetWindowLongW);
-static VdFwProcSetWindowLongW *VdFwSetWindowLongW;
-
-#define VD_FW_PROC_GetWindowLongPtrA(name) VdFwLONG_PTR name(VdFwHWND hWnd, int nIndex)
-typedef VD_FW_PROC_GetWindowLongPtrA(VdFwProcGetWindowLongPtrA);
-static VdFwProcGetWindowLongPtrA *VdFwGetWindowLongPtrA;
-
-#define VD_FW_PROC_GetWindowLongPtrW(name) VdFwLONG_PTR name(VdFwHWND hWnd, int nIndex)
-typedef VD_FW_PROC_GetWindowLongPtrW(VdFwProcGetWindowLongPtrW);
-static VdFwProcGetWindowLongPtrW *VdFwGetWindowLongPtrW;
-
-#define VD_FW_PROC_SetWindowLongPtrA(name) VdFwLONG_PTR name(VdFwHWND hWnd, int nIndex, VdFwLONG_PTR dwNewLong)
-typedef VD_FW_PROC_SetWindowLongPtrA(VdFwProcSetWindowLongPtrA);
-static VdFwProcSetWindowLongPtrA *VdFwSetWindowLongPtrA;
-
-#define VD_FW_PROC_SetWindowLongPtrW(name) VdFwLONG_PTR name(VdFwHWND hWnd, int nIndex, VdFwLONG_PTR dwNewLong)
-typedef VD_FW_PROC_SetWindowLongPtrW(VdFwProcSetWindowLongPtrW);
-static VdFwProcSetWindowLongPtrW *VdFwSetWindowLongPtrW;
-
-#define VD_FW_PROC_LoadCursorA(name) VdFwHCURSOR name(VdFwHINSTANCE hInstance, VdFwLPCSTR lpCursorName)
-typedef VD_FW_PROC_LoadCursorA(VdFwProcLoadCursorA);
-static VdFwProcLoadCursorA *VdFwLoadCursorA;
-
-#define VD_FW_PROC_LoadCursorW(name) VdFwHCURSOR name(VdFwHINSTANCE hInstance, VdFwLPCWSTR lpCursorName)
-typedef VD_FW_PROC_LoadCursorW(VdFwProcLoadCursorW);
-static VdFwProcLoadCursorW *VdFwLoadCursorW;
-
-#define VD_FW_PROC_CreateIconIndirect(name) VdFwHICON name(VdFwPICONINFO piconinfo)
-typedef VD_FW_PROC_CreateIconIndirect(VdFwProcCreateIconIndirect);
-static VdFwProcCreateIconIndirect *VdFwCreateIconIndirect;
-
-#define VD_FW_PROC_MonitorFromWindow(name) VdFwHMONITOR name(VdFwHWND hwnd, VdFwDWORD dwFlags)
-typedef VD_FW_PROC_MonitorFromWindow(VdFwProcMonitorFromWindow);
-static VdFwProcMonitorFromWindow *VdFwMonitorFromWindow;
-
-#define VD_FW_PROC_GetMonitorInfoA(name) VdFwBOOL name(VdFwHMONITOR hMonitor, VdFwLPMONITORINFO lpmi)
-typedef VD_FW_PROC_GetMonitorInfoA(VdFwProcGetMonitorInfoA);
-static VdFwProcGetMonitorInfoA *VdFwGetMonitorInfoA;
-
-#define VD_FW_PROC_GetMonitorInfoW(name) VdFwBOOL name(VdFwHMONITOR hMonitor, VdFwLPMONITORINFO lpmi)
-typedef VD_FW_PROC_GetMonitorInfoW(VdFwProcGetMonitorInfoW);
-static VdFwProcGetMonitorInfoW *VdFwGetMonitorInfoW;
-
-#define VD_FW_PROC_GetDpiForWindow(name) VdFwUINT name(VdFwHWND hwnd)
-typedef VD_FW_PROC_GetDpiForWindow(VdFwProcGetDpiForWindow);
-static VdFwProcGetDpiForWindow *VdFwGetDpiForWindow;
-
-#define VD_FW_PROC_SetProcessDpiAwarenessContext(name) VdFwBOOL name(VdFwDPI_AWARENESS_CONTEXT value)
-typedef VD_FW_PROC_SetProcessDpiAwarenessContext(VdFwProcSetProcessDpiAwarenessContext);
-static VdFwProcSetProcessDpiAwarenessContext *VdFwSetProcessDpiAwarenessContext;
-
-#define VD_FW_PROC_GetWindowInfo(name) VdFwBOOL name(VdFwHWND hwnd, VdFwPWINDOWINFO pwi)
-typedef VD_FW_PROC_GetWindowInfo(VdFwProcGetWindowInfo);
-static VdFwProcGetWindowInfo *VdFwGetWindowInfo;
-
-#define VD_FW_PROC_RegisterRawInputDevices(name) VdFwBOOL name(VdFwPCRAWINPUTDEVICE pRawInputDevices, VdFwUINT uiNumDevices, VdFwUINT cbSize)
-typedef VD_FW_PROC_RegisterRawInputDevices(VdFwProcRegisterRawInputDevices);
-static VdFwProcRegisterRawInputDevices *VdFwRegisterRawInputDevices;
-
-#define VD_FW_PROC_GetRawInputData(name) VdFwUINT name(VdFwHRAWINPUT hRawInput, VdFwUINT uiCommand, VdFwLPVOID pData, VdFwPUINT pcbSize, VdFwUINT cbSizeHeader)
-typedef VD_FW_PROC_GetRawInputData(VdFwProcGetRawInputData);
-static VdFwProcGetRawInputData *VdFwGetRawInputData;
-
-#define VD_FW_PROC_GetRawInputDeviceInfoA(name) VdFwUINT name(VdFwHANDLE hDevice, VdFwUINT uiCommand, VdFwLPVOID pData, VdFwPUINT pcbSize)
-typedef VD_FW_PROC_GetRawInputDeviceInfoA(VdFwProcGetRawInputDeviceInfoA);
-static VdFwProcGetRawInputDeviceInfoA *VdFwGetRawInputDeviceInfoA;
-
-#define VD_FW_PROC_GetRawInputDeviceInfoW(name) VdFwUINT name(VdFwHANDLE hDevice, VdFwUINT uiCommand, VdFwLPVOID pData, VdFwPUINT pcbSize)
-typedef VD_FW_PROC_GetRawInputDeviceInfoW(VdFwProcGetRawInputDeviceInfoW);
-static VdFwProcGetRawInputDeviceInfoW *VdFwGetRawInputDeviceInfoW;
-
-#define VD_FW_PROC_SetTimer(name) VdFwUINT_PTR name(VdFwHWND hWnd, VdFwUINT_PTR nIDEvent, VdFwUINT uElapse, VdFwTIMERPROC lpTimerFunc)
-typedef VD_FW_PROC_SetTimer(VdFwProcSetTimer);
-static VdFwProcSetTimer *VdFwSetTimer;
-
-#define VD_FW_PROC_KillTimer(name) VdFwBOOL name(VdFwHWND hWnd, VdFwUINT_PTR uIDEvent)
-typedef VD_FW_PROC_KillTimer(VdFwProcKillTimer);
-static VdFwProcKillTimer *VdFwKillTimer;
+typedef VdFwBOOL (*VdFwMONITORENUMPROC)(VdFwHMONITOR monitor, VdFwHDC hdc, VdFwLPRECT rect, VdFwLPARAM lpparam);
 
 /* ----Shell32.dll--------------------------------------------------------------------------------------------------- */
 #define VD_FW_ABM_GETAUTOHIDEBAREX    0x0000000b
 #define VD_FW_ABM_SETAUTOHIDEBAREX    0x0000000c
 #define VD_FW_ABM_GETAUTOHIDEBAR      0x00000007
-
-#define VD_FW_PROC_SHAppBarMessage(name) VdFwUINT_PTR name(VdFwDWORD dwMessage, VdFwPAPPBARDATA pData)
-typedef VD_FW_PROC_SHAppBarMessage(VdFwProcSHAppBarMessage);
-static VdFwProcSHAppBarMessage *VdFwSHAppBarMessage;
 
 /* ----ntdll.dll----------------------------------------------------------------------------------------------------- */
 typedef struct VdFw_OSVERSIONINFOW {
@@ -4470,16 +4572,8 @@ typedef struct VdFw_OSVERSIONINFOW {
   VdFwWCHAR szCSDVersion[128];
 } VdFwOSVERSIONINFOW, *VdFwPOSVERSIONINFOW, *VdFwLPOSVERSIONINFOW, VdFwRTL_OSVERSIONINFOW, *VdFwPRTL_OSVERSIONINFOW;
 
-#define VD_FW_PROC_RtlGetVersion(name) void name(VdFwPRTL_OSVERSIONINFOW info)
-typedef VD_FW_PROC_RtlGetVersion(VdFwProcRtlGetVersion);
-static VdFwProcRtlGetVersion *VdFwRtlGetVersion;
-
 /* ----Winmm.dll----------------------------------------------------------------------------------------------------- */
 typedef VdFwUINT VdFwMMRESULT;
-
-#define VD_FW_PROC_timeBeginPeriod(name) VdFwMMRESULT name(VdFwUINT uPeriod)
-typedef VD_FW_PROC_timeBeginPeriod(VdFwProctimeBeginPeriod);
-static VdFwProctimeBeginPeriod* VdFwtimeBeginPeriod;
 
 /* ----UxTheme.dll--------------------------------------------------------------------------------------------------- */
 typedef struct VdFw_MARGINS
@@ -4489,10 +4583,6 @@ typedef struct VdFw_MARGINS
     int cyTopHeight;
     int cyBottomHeight;
 } VdFwMARGINS, * VdFwPMARGINS;
-
-#define VD_FW_PROC_IsThemeActive(name) VdFwBOOL name();
-typedef VD_FW_PROC_IsThemeActive(VdFwProcIsThemeActive);
-static VdFwProcIsThemeActive *VdFwIsThemeActive;
 
 /* ----Dwmapi.dll---------------------------------------------------------------------------------------------------- */
 enum VdFwDWMWINDOWATTRIBUTE {
@@ -4539,22 +4629,6 @@ enum VdFwDWMNCRENDERINGPOLICY {
     VD_FW_DWMNCRP_ENABLED,
     VD_FW_DWMNCRP_LAST
 };
-
-#define VD_FW_PROC_DwmExtendFrameIntoClientArea(name) VdFwHRESULT name(VdFwHWND hWnd, const VdFwMARGINS* pMarInset)
-typedef VD_FW_PROC_DwmExtendFrameIntoClientArea(VdFwProcDwmExtendFrameIntoClientArea);
-static VdFwProcDwmExtendFrameIntoClientArea *VdFwDwmExtendFrameIntoClientArea;
-
-#define VD_FW_PROC_DwmIsCompositionEnabled(name) VdFwHRESULT name(VdFwBOOL *pfEnabled)
-typedef VD_FW_PROC_DwmIsCompositionEnabled(VdFwProcDwmIsCompositionEnabled);
-static VdFwProcDwmIsCompositionEnabled *VdFwDwmIsCompositionEnabled;
-
-#define VD_FW_PROC_DwmSetWindowAttribute(name) VdFwHRESULT name(VdFwHWND hwnd, VdFwDWORD dwAttribute, VdFwLPCVOID pvAttribute, VdFwDWORD cbAttribute)
-typedef VD_FW_PROC_DwmSetWindowAttribute(VdFwProcDwmSetWindowAttribute);
-static VdFwProcDwmSetWindowAttribute *VdFwDwmSetWindowAttribute;
-
-#define VD_FW_PROC_DwmFlush(name) VdFwHRESULT name()
-typedef VD_FW_PROC_DwmFlush(VdFwProcDwmFlush);
-static VdFwProcDwmFlush *VdFwDwmFlush;
 
 /* ----Gdi32.dll----------------------------------------------------------------------------------------------------- */
 typedef void* VdFwHGDIOBJ;
@@ -4615,67 +4689,85 @@ typedef struct VdFwtagBITMAPINFO {
     VdFwRGBQUAD             bmiColors[1];
 } VdFwBITMAPINFO, * VdFwLPBITMAPINFO, * VdFwPBITMAPINFO;
 
-#define VD_FW_PROC_ChoosePixelFormat(name) int name(VdFwHDC hdc, const VdFwPIXELFORMATDESCRIPTOR *ppfd)
-typedef VD_FW_PROC_ChoosePixelFormat(VdFwProcChoosePixelFormat);
-static VdFwProcChoosePixelFormat *VdFwChoosePixelFormat;
+typedef struct VdFw_DISPLAY_DEVICEA {
+  VdFwDWORD cb;
+  VdFwCHAR  DeviceName[32];
+  VdFwCHAR  DeviceString[128];
+  VdFwDWORD StateFlags;
+  VdFwCHAR  DeviceID[128];
+  VdFwCHAR  DeviceKey[128];
+} VdFwDISPLAY_DEVICEA, *VdFwPDISPLAY_DEVICEA, *VdFwLPDISPLAY_DEVICEA;
 
-#define VD_FW_PROC_CreateBitmap(name) VdFwHBITMAP name(int nWidth, int nHeight, VdFwUINT nPlanes, VdFwUINT nBitCount, const void* lpBits)
-typedef VD_FW_PROC_CreateBitmap(VdFwProcCreateBitmap);
-static VdFwProcCreateBitmap *VdFwCreateBitmap;
+typedef struct VdFw_DISPLAY_DEVICEW {
+  VdFwDWORD cb;
+  VdFwWCHAR DeviceName[32];
+  VdFwWCHAR DeviceString[128];
+  VdFwDWORD StateFlags;
+  VdFwWCHAR DeviceID[128];
+  VdFwWCHAR DeviceKey[128];
+} VdFwDISPLAY_DEVICEW, *VdFwPDISPLAY_DEVICEW, *VdFwLPDISPLAY_DEVICEW;
 
-#define VD_FW_PROC_CreateRectRgnIndirect(name) VdFwHRGN name(const VdFwRECT *lprect)
-typedef VD_FW_PROC_CreateRectRgnIndirect(VdFwProcCreateRectRgnIndirect);
-static VdFwProcCreateRectRgnIndirect *VdFwCreateRectRgnIndirect;
+#define VD_FW__WIN32_EDD_GET_DEVICE_INTERFACE_NAME 0x00000001
 
-#define VD_FW_PROC_DescribePixelFormat(name) int name(VdFwHDC hdc, int iPixelFormat, VdFwUINT nBytes, VdFwLPPIXELFORMATDESCRIPTOR ppfd)
-typedef VD_FW_PROC_DescribePixelFormat(VdFwProcDescribePixelFormat);
-static VdFwProcDescribePixelFormat *VdFwDescribePixelFormat;
+typedef struct VdFw_POINTL
+{
+    VdFwLONG  x;
+    VdFwLONG  y;
+} VdFwPOINTL, *VdFwPPOINTL;
 
-#define VD_FW_PROC_GetStockObject(name) VdFwHGDIOBJ name(int i)
-typedef VD_FW_PROC_GetStockObject(VdFwProcGetStockObject);
-static VdFwProcGetStockObject *VdFwGetStockObject;
-
-#define VD_FW_PROC_SetPixelFormat(name) VdFwBOOL name(VdFwHDC hdc, int format, const VdFwPIXELFORMATDESCRIPTOR* ppfd)
-typedef VD_FW_PROC_SetPixelFormat(VdFwProcSetPixelFormat);
-static VdFwProcSetPixelFormat *VdFwSetPixelFormat;
-
-#define VD_FW_PROC_CreateDIBSection(name) VdFwHBITMAP name(VdFwHDC hdc, const VdFwBITMAPINFO* pbmi, VdFwUINT usage, void** ppvBits, VdFwHANDLE hSection, VdFwDWORD offset)
-typedef VD_FW_PROC_CreateDIBSection(VdFwProcCreateDIBSection);
-static VdFwProcCreateDIBSection *VdFwCreateDIBSection;
-
-#define VD_FW_PROC_SwapBuffers(name) VdFwBOOL name(VdFwHDC unnamedParam1)
-typedef VD_FW_PROC_SwapBuffers(VdFwProcSwapBuffers);
-static VdFwProcSwapBuffers *VdFwSwapBuffers;
+typedef struct VdFw_devicemodeW {
+  VdFwWCHAR dmDeviceName[32];
+  VdFwWORD  dmSpecVersion;
+  VdFwWORD  dmDriverVersion;
+  VdFwWORD  dmSize;
+  VdFwWORD  dmDriverExtra;
+  VdFwDWORD dmFields;
+  union {
+    struct {
+      short dmOrientation;
+      short dmPaperSize;
+      short dmPaperLength;
+      short dmPaperWidth;
+      short dmScale;
+      short dmCopies;
+      short dmDefaultSource;
+      short dmPrintQuality;
+    } DUMMYSTRUCTNAME;
+    VdFwPOINTL dmPosition;
+    struct {
+      VdFwPOINTL dmPosition;
+      VdFwDWORD  dmDisplayOrientation;
+      VdFwDWORD  dmDisplayFixedOutput;
+    } displays;
+  } extra;
+  short dmColor;
+  short dmDuplex;
+  short dmYResolution;
+  short dmTTOption;
+  short dmCollate;
+  VdFwWCHAR dmFormName[32];
+  VdFwWORD  dmLogPixels;
+  VdFwDWORD dmBitsPerPel;
+  VdFwDWORD dmPelsWidth;
+  VdFwDWORD dmPelsHeight;
+  union {
+    VdFwDWORD dmDisplayFlags;
+    VdFwDWORD dmNup;
+  } DUMMYUNIONNAME2;
+  VdFwDWORD dmDisplayFrequency;
+  VdFwDWORD dmICMMethod;
+  VdFwDWORD dmICMIntent;
+  VdFwDWORD dmMediaType;
+  VdFwDWORD dmDitherType;
+  VdFwDWORD dmReserved1;
+  VdFwDWORD dmReserved2;
+  VdFwDWORD dmPanningWidth;
+  VdFwDWORD dmPanningHeight;
+} VdFwDEVMODEW, *VdFwPDEVMODEW, *VdFwNPDEVMODEW, *VdFwLPDEVMODEW;
 
 /* ----OpenGL32.dll-------------------------------------------------------------------------------------------------- */
 VD_FW_DECLARE_HANDLE(VdFwHGLRC);
-
 typedef VdFwINT_PTR(* VdFwPROC)();
-
-#define VD_FW_PROC_wglCreateContext(name) VdFwHGLRC name(VdFwHDC hDC)
-typedef VD_FW_PROC_wglCreateContext(VdFwProcwglCreateContext);
-static VdFwProcwglCreateContext *VdFwwglCreateContext;
-
-#define VD_FW_PROC_wglMakeCurrent(name) VdFwBOOL name(VdFwHDC hDC, VdFwHGLRC hGLRC)
-typedef VD_FW_PROC_wglMakeCurrent(VdFwProcwglMakeCurrent);
-static VdFwProcwglMakeCurrent *VdFwwglMakeCurrent;
-
-#define VD_FW_PROC_wglDeleteContext(name) VdFwBOOL name(VdFwHGLRC hGLRC)
-typedef VD_FW_PROC_wglDeleteContext(VdFwProcwglDeleteContext);
-static VdFwProcwglDeleteContext *VdFwwglDeleteContext;
-
-#define VD_FW_PROC_wglGetProcAddress(name) VdFwPROC name(VdFwLPCSTR pName)
-typedef VD_FW_PROC_wglGetProcAddress(VdFwProcwglGetProcAddress);
-static VdFwProcwglGetProcAddress *VdFwwglGetProcAddress;
-
-#define VD_FW_PROC_wglSwapIntervalExt(name) VdFwBOOL name(int interval)
-typedef VD_FW_PROC_wglSwapIntervalExt(VdFwProcwglSwapIntervalExt);
-
-#define VD_FW_PROC_wglCreateContextAttribsARB(name) VdFwHGLRC name(VdFwHDC hDC, VdFwHGLRC hShareContext, const int* attribList)
-typedef VD_FW_PROC_wglCreateContextAttribsARB(VdFwProcwglCreateContextAttribsARB);
-
-#define VD_FW_PROC_wglChoosePixelFormatARB(name) VdFwBOOL name(VdFwHDC hdc, const int* piAttribIList, const float* pfAttribFList, VdFwUINT nMaxFormats, int* piFormats, VdFwUINT* nNumFormats)
-typedef VD_FW_PROC_wglChoosePixelFormatARB(VdFwProcwglChoosePixelFormatARB);
 
 /* ----Hid.dll------------------------------------------------------------------------------------------------------- */
 typedef VdFwLONG                         VdFwNTSTATUS;
@@ -4688,6 +4780,7 @@ typedef VdFwUSHORT                       VdFwUSAGE, * VdFwPUSAGE;
 
 #define VD_FW_HIDP_STATUS_SUCCESS                  (VD_FW_HIDP_ERROR_CODES(0x0,0))
 #define VD_FW_HIDP_STATUS_NULL                     (VD_FW_HIDP_ERROR_CODES(0x8,1))
+
 #define VD_FW_HIDP_STATUS_INVALID_PREPARSED_DATA   (VD_FW_HIDP_ERROR_CODES(0xC,1))
 #define VD_FW_HIDP_STATUS_INVALID_REPORT_TYPE      (VD_FW_HIDP_ERROR_CODES(0xC,2))
 #define VD_FW_HIDP_STATUS_INVALID_REPORT_LENGTH    (VD_FW_HIDP_ERROR_CODES(0xC,3))
@@ -4818,53 +4911,97 @@ typedef struct VdFw_HIDP_DATA {
   } dat;
 } VdFwHIDP_DATA, *VdFwPHIDP_DATA;
 
-#define VD_FW_PROC_HidP_GetCaps(name) VdFwNTSTATUS name(VdFwPHIDP_PREPARSED_DATA PreparsedData, VdFwPHIDP_CAPS Capabilities)
-typedef VD_FW_PROC_HidP_GetCaps(VdFwProcHidP_GetCaps);
-static VdFwProcHidP_GetCaps *VdFwHidP_GetCaps;
+/* ----winreg.h------------------------------------------------------------------------------------------------------ */
+typedef VdFwDWORD VdFwACCESS_MASK;
+typedef VdFwACCESS_MASK VdFwREGSAM;
 
-#define VD_FW_PROC_HidP_GetButtonCaps(name) VdFwNTSTATUS name(VdFwHIDP_REPORT_TYPE ReportType, VdFwPHIDP_BUTTON_CAPS ButtonCaps, VdFwPUSHORT ButtonCapsLength, VdFwPHIDP_PREPARSED_DATA PreparsedData)
-typedef VD_FW_PROC_HidP_GetButtonCaps(VdFwProcHidP_GetButtonCaps);
-static VdFwProcHidP_GetButtonCaps *VdFwHidP_GetButtonCaps;
+#define VD_FW__WIN32_KEY_QUERY_VALUE         (0x0001)
+#define VD_FW__WIN32_KEY_SET_VALUE           (0x0002)
+#define VD_FW__WIN32_KEY_CREATE_SUB_KEY      (0x0004)
+#define VD_FW__WIN32_KEY_ENUMERATE_SUB_KEYS  (0x0008)
+#define VD_FW__WIN32_KEY_NOTIFY              (0x0010)
+#define VD_FW__WIN32_KEY_CREATE_LINK         (0x0020)
+#define VD_FW__WIN32_KEY_WOW64_32KEY         (0x0200)
+#define VD_FW__WIN32_KEY_WOW64_64KEY         (0x0100)
+#define VD_FW__WIN32_KEY_WOW64_RES           (0x0300)
 
-#define VD_FW_PROC_HidP_GetValueCaps(name) VdFwNTSTATUS name(VdFwHIDP_REPORT_TYPE ReportType, VdFwPHIDP_VALUE_CAPS ValueCaps, VdFwPUSHORT ValueCapsLength, VdFwPHIDP_PREPARSED_DATA PreparsedData)
-typedef VD_FW_PROC_HidP_GetValueCaps(VdFwProcHidP_GetValueCaps);
-static VdFwProcHidP_GetValueCaps *VdFwHidP_GetValueCaps;
+#define VD_FW__WIN32_KEY_READ       ((VD_FW__WIN32_STANDARD_RIGHTS_READ       |\
+                                     VD_FW__WIN32_KEY_QUERY_VALUE             |\
+                                     VD_FW__WIN32_KEY_ENUMERATE_SUB_KEYS      |\
+                                     VD_FW__WIN32_KEY_NOTIFY)                  \
+                                     &                                         \
+                                    (~VD_FW__WIN32_SYNCHRONIZE))
 
-#define VD_FW_PROC_HidP_GetUsages(name) VdFwNTSTATUS name(VdFwHIDP_REPORT_TYPE ReportType, VdFwUSAGE UsagePage, VdFwUSHORT LinkCollection, VdFwPUSAGE UsageList, VdFwPULONG UsageLength, VdFwPHIDP_PREPARSED_DATA PreparsedData, VdFwPCHAR Report, VdFwULONG ReportLength)
-typedef VD_FW_PROC_HidP_GetUsages(VdFwProcHidP_GetUsages);
-static VdFwProcHidP_GetUsages *VdFwHidP_GetUsages;
+#define VD_FW__WIN32_KEY_WRITE      ((VD_FW__WIN32_STANDARD_RIGHTS_WRITE      |\
+                                     VD_FW__WIN32_KEY_SET_VALUE               |\
+                                     VD_FW__WIN32_KEY_CREATE_SUB_KEY)          \
+                                     &                                         \
+                                    (~VD_FW__WIN32_SYNCHRONIZE))
 
-#define VD_FW_PROC_HidP_GetData(name) VdFwNTSTATUS name(VdFwHIDP_REPORT_TYPE ReportType, VdFwPHIDP_DATA DataList, VdFwPULONG DataLength, VdFwPHIDP_PREPARSED_DATA PreparsedData, VdFwPCHAR Report, VdFwULONG ReportLength)
-typedef VD_FW_PROC_HidP_GetData(VdFwProcHidP_GetData);
-static VdFwProcHidP_GetData *VdFwHidP_GetData;
+#define VD_FW__WIN32_KEY_EXECUTE    ((VD_FW__WIN32_KEY_READ)                   \
+                                     &                                         \
+                                    (~VD_FW__WIN32_SYNCHRONIZE))
 
-#define VD_FW_PROC_HidP_MaxUsageListLength(name) VdFwULONG name(VdFwHIDP_REPORT_TYPE ReportType, VdFwUSAGE UsagePage, VdFwPHIDP_PREPARSED_DATA PreparsedData)
-typedef VD_FW_PROC_HidP_MaxUsageListLength(VdFwProcHidP_MaxUsageListLength);
-VdFwProcHidP_MaxUsageListLength *VdFwHidP_MaxUsageListLength;
+#define VD_FW__WIN32_KEY_ALL_ACCESS      ((VD_FW__WIN32_STANDARD_RIGHTS_ALL  |\
+                                    VD_FW__WIN32_KEY_QUERY_VALUE             |\
+                                    VD_FW__WIN32_KEY_SET_VALUE               |\
+                                    VD_FW__WIN32_KEY_CREATE_SUB_KEY          |\
+                                    VD_FW__WIN32_KEY_ENUMERATE_SUB_KEYS      |\
+                                    VD_FW__WIN32_KEY_NOTIFY                  |\
+                                    VD_FW__WIN32_KEY_CREATE_LINK)             \
+                                    &                                         \
+                                    (~VD_FW__WIN32_SYNCHRONIZE))
 
-#define VD_FW_PROC_HidP_MaxDataListLength(name) VdFwULONG name(VdFwHIDP_REPORT_TYPE ReportType, VdFwPHIDP_PREPARSED_DATA PreparsedData)
-typedef VD_FW_PROC_HidP_MaxDataListLength(VdFwProcHidP_MaxDataListLength);
-static VdFwProcHidP_MaxDataListLength *VdFwHidP_MaxDataListLength;
+/* ----SetupAPI.dll-------------------------------------------------------------------------------------------------- */
+typedef VdFwLPVOID VdFwHDEVINFO;
+typedef struct VdFw_GUID {
+    unsigned long  Data1;
+    unsigned short Data2;
+    unsigned short Data3;
+    unsigned char  Data4[8];
+} VdFw__Win32GUID;
 
-#define VD_FW_PROC_HidP_GetUsageValue(name) VdFwNTSTATUS name(VdFwHIDP_REPORT_TYPE ReportType, VdFwUSAGE UsagePage, VdFwUSHORT LinkCollection, VdFwUSAGE Usage, VdFwPULONG UsageValue, VdFwPHIDP_PREPARSED_DATA PreparsedData, VdFwPCHAR Report, VdFwULONG ReportLength)
-typedef VD_FW_PROC_HidP_GetUsageValue(VdFwProcHidP_GetUsageValue);
-static VdFwProcHidP_GetUsageValue *VdFwHidP_GetUsageValue;
+#define VD_FW__WIN32_DIGCF_DEVICEINTERFACE 0x00000010
 
-#define VD_FW_PROC_HidD_GetManufacturerString(name) VdFwBOOLEAN name(VdFwHANDLE HidDeviceObject, void *Buffer, VdFwULONG BufferLength)
-typedef VD_FW_PROC_HidD_GetManufacturerString(VdFwProcHidD_GetManufacturerString);
-static VdFwProcHidD_GetManufacturerString *VdFwHidD_GetManufacturerString;
+typedef struct VdFw_SP_DEVICE_INTERFACE_DATA {
+    VdFwDWORD cbSize;
+    VdFw__Win32GUID InterfaceClassGuid;
+    VdFwDWORD Flags;
+    VdFwULONG_PTR Reserved;
+} VdFwSP_DEVICE_INTERFACE_DATA, *VdFwPSP_DEVICE_INTERFACE_DATA;
 
-#define VD_FW_PROC_HidD_GetProductString(name) VdFwBOOLEAN name(VdFwHANDLE HidDeviceObject, void *Buffer, VdFwULONG BufferLength)
-typedef VD_FW_PROC_HidD_GetProductString(VdFwProcHidD_GetProductString);
-static VdFwProcHidD_GetProductString *VdFwHidD_GetProductString;
+typedef struct VdFw_SP_DEVICE_INTERFACE_DETAIL_DATA_W {
+    VdFwDWORD  cbSize;
+    VdFwWCHAR  DevicePath[2];
+} VdFwSP_DEVICE_INTERFACE_DETAIL_DATA_W, *VdFwPSP_DEVICE_INTERFACE_DETAIL_DATA_W;
 
-#define VD_FW_PROC_HidD_SetFeature(name) VdFwBOOLEAN name(VdFwHANDLE HidDeviceObject, void *ReportBuffer, VdFwULONG ReportBufferLength)
-typedef VD_FW_PROC_HidD_SetFeature(VdFwProcHidD_SetFeature);
-static VdFwProcHidD_SetFeature *VdFwHidD_SetFeature;
+typedef struct VdFw_SP_DEVINFO_DATA {
+    VdFwDWORD cbSize;
+    VdFw__Win32GUID ClassGuid;
+    VdFwDWORD DevInst;
+    VdFwULONG_PTR Reserved;
+} VdFwSP_DEVINFO_DATA, *VdFwPSP_DEVINFO_DATA;
 
-#define VD_FW_PROC_HidD_SetOutputReport(name) VdFwBOOLEAN name(VdFwHANDLE HidDeviceObject, void *ReportBuffer, VdFwULONG ReportBufferLength)
-typedef VD_FW_PROC_HidD_SetOutputReport(VdFwProcHidD_SetOutputReport);
-static VdFwProcHidD_SetOutputReport *VdFwHidD_SetOutputReport;
+#define VD_FW__WIN32_DICS_FLAG_GLOBAL         0x00000001
+#define VD_FW__WIN32_DICS_FLAG_CONFIGSPECIFIC 0x00000002
+#define VD_FW__WIN32_DICS_FLAG_CONFIGGENERAL  0x00000004
+#define VD_FW__WIN32_DIREG_DEV       0x00000001
+#define VD_FW__WIN32_DIREG_DRV       0x00000002
+#define VD_FW__WIN32_DIREG_BOTH      0x00000004
+
+#define VD_FW__WIN32_CDS_UPDATEREGISTRY           0x00000001
+#define VD_FW__WIN32_CDS_TEST                     0x00000002
+#define VD_FW__WIN32_CDS_FULLSCREEN               0x00000004
+#define VD_FW__WIN32_CDS_GLOBAL                   0x00000008
+#define VD_FW__WIN32_CDS_SET_PRIMARY              0x00000010
+#define VD_FW__WIN32_CDS_VIDEOPARAMETERS          0x00000020
+#define VD_FW__WIN32_CDS_RESET                    0x40000000
+#define VD_FW__WIN32_CDS_RESET_EX                 0x20000000
+#define VD_FW__WIN32_CDS_NORESET                  0x10000000
+#define VD_FW__WIN32_DISP_CHANGE_SUCCESSFUL       0
+
+/* ----Advapi32.dll-------------------------------------------------------------------------------------------------- */
+typedef VdFwLONG VdFwLSTATUS;
 
 /* ----XInput.dll---------------------------------------------------------------------------------------------------- */
 #define VD_FW_XINPUT_GAMEPAD_DPAD_UP          0x0001
@@ -4910,13 +5047,168 @@ static VdFwProcXInputGetState *VdFwXInputGetState;
 #define VD_FW_PROC_XInputSetState(name) VdFwDWORD name(VdFwDWORD dwUserIndex, VdFwXINPUT_VIBRATION* pVibration)
 typedef VD_FW_PROC_XInputSetState(VdFwProcXInputSetState);
 static VdFwProcXInputSetState *VdFwXInputSetState;
-
-/* ----Winnt.h------------------------------------------------------------------------------------------------------- */
-#define VD_FW_LOWORD(l)           ((VdFwWORD)(((VdFwDWORD_PTR)(l)) & 0xffff))
-#define VD_FW_HIWORD(l)           ((VdFwWORD)((((VdFwDWORD_PTR)(l)) >> 16) & 0xffff))
-#define VD_FW_LOBYTE(w)           ((VdFwBYTE)(((VdFwDWORD_PTR)(w)) & 0xff))
-#define VD_FW_HIBYTE(w)           ((VdFwBYTE)((((VdFwDWORD_PTR)(w)) >> 8) & 0xff))
 #pragma pack(pop)
+
+/* ----Win32 Functions----------------------------------------------------------------------------------------------- */
+#define VD_FW__WIN32_FUNCTIONS \
+V("User32.dll") \
+X(VdFwBOOL,     GetMessageA, (VdFwLPMSG lpMsg, VdFwHWND hWnd, VdFwUINT wMsgFilterMin, VdFwUINT wMsgFilterMax)) \
+X(VdFwBOOL,     GetMessageW, (VdFwLPMSG lpMsg, VdFwHWND hWnd, VdFwUINT wMsgFilterMin, VdFwUINT wMsgFilterMax)) \
+X(VdFwBOOL,     TranslateMessage, (const VdFwMSG* lpMsg)) \
+X(VdFwLRESULT,  DispatchMessageA, (const VdFwMSG* lpMsg)) \
+X(VdFwLRESULT,  DispatchMessageW, (const VdFwMSG* lpMsg)) \
+X(VdFwBOOL,     PostMessageA, (VdFwHWND hWnd, VdFwUINT Msg, VdFwWPARAM wParam, VdFwLPARAM lParam)) \
+X(VdFwBOOL,     PostMessageW, (VdFwHWND hWnd, VdFwUINT Msg, VdFwWPARAM wParam, VdFwLPARAM lParam)) \
+X(VdFwLRESULT,  DefWindowProcA, (VdFwHWND hWnd, VdFwUINT Msg, VdFwWPARAM wParam, VdFwLPARAM lParam)) \
+X(VdFwLRESULT,  DefWindowProcW, (VdFwHWND hWnd, VdFwUINT Msg, VdFwWPARAM wParam, VdFwLPARAM lParam)) \
+X(void,         PostQuitMessage, (int nExitCode)) \
+X(VdFwATOM,     RegisterClassExA, (const VdFwWNDCLASSEXA* unnamedParam1)) \
+X(VdFwATOM,     RegisterClassExW, (const VdFwWNDCLASSEXW* unnamedParam1)) \
+X(VdFwHWND,     CreateWindowExA, (VdFwDWORD dwExStyle, VdFwLPCSTR lpClassName, VdFwLPCSTR lpWindowName, VdFwDWORD dwStyle, int X, int Y, int nWidth, int nHeight, VdFwHWND hWndParent, VdFwHMENU hMenu, VdFwHINSTANCE hInstance, VdFwLPVOID lpParam)) \
+X(VdFwHWND,     CreateWindowExW, (VdFwDWORD dwExStyle, VdFwLPCWSTR lpClassName, VdFwLPCWSTR lpWindowName, VdFwDWORD dwStyle, int X, int Y, int nWidth, int nHeight, VdFwHWND hWndParent, VdFwHMENU hMenu, VdFwHINSTANCE hInstance, VdFwLPVOID lpParam)) \
+X(VdFwBOOL,     DestroyWindow, (VdFwHWND hWnd)) \
+X(VdFwBOOL,     ShowWindow, (VdFwHWND hWnd, int nCmdShow)) \
+X(VdFwBOOL,     SetWindowPos, (VdFwHWND hWnd, VdFwHWND hWndInsertAfter, int X, int Y, int cx, int cy, VdFwUINT uFlags)) \
+X(VdFwBOOL,     GetWindowPlacement, (VdFwHWND hWnd, VdFwWINDOWPLACEMENT* lpwndpl)) \
+X(VdFwBOOL,     SetWindowPlacement, (VdFwHWND hWnd, const VdFwWINDOWPLACEMENT* lpwndpl)) \
+X(VdFwBOOL,     IsZoomed, (VdFwHWND hWnd)) \
+X(VdFwUINT,     MapVirtualKeyA, (VdFwUINT uCode, VdFwUINT uMapType)) \
+X(VdFwUINT,     MapVirtualKeyW, (VdFwUINT uCode, VdFwUINT uMapType)) \
+X(VdFwHWND,     SetCapture, (VdFwHWND hWnd)) \
+X(VdFwBOOL,     ReleaseCapture, (void)) \
+X(int,          GetSystemMetrics, (int nIndex)) \
+X(VdFwBOOL,     UpdateWindow, (VdFwHWND hWnd)) \
+X(VdFwHDC,      GetDC, (VdFwHWND hWnd)) \
+X(int,          ReleaseDC, (VdFwHWND hWnd, VdFwHDC hDC)) \
+X(VdFwHDC,      BeginPaint, (VdFwHWND hWnd, VdFwLPPAINTSTRUCT lpPaint)) \
+X(VdFwBOOL,     EndPaint, (VdFwHWND hWnd, const VdFwPAINTSTRUCT* lpPaint)) \
+X(int,          SetWindowRgn, (VdFwHWND hWnd, VdFwHRGN hRgn, VdFwBOOL bRedraw)) \
+X(VdFwBOOL,     SetWindowTextA, (VdFwHWND hWnd, VdFwLPCSTR lpString)) \
+X(VdFwBOOL,     SetWindowTextW, (VdFwHWND hWnd, VdFwLPCWSTR lpString)) \
+X(VdFwBOOL,     GetClientRect, (VdFwHWND hWnd, VdFwLPRECT lpRect)) \
+X(VdFwBOOL,     GetWindowRect, (VdFwHWND hWnd, VdFwLPRECT lpRect)) \
+X(int,          ShowCursor, (VdFwBOOL bShow)) \
+X(VdFwBOOL,     SetCursorPos, (int X, int Y)) \
+X(VdFwBOOL,     GetCursorPos, (VdFwLPPOINT lpPoint)) \
+X(VdFwBOOL,     ScreenToClient, (VdFwHWND hWnd, VdFwLPPOINT lpPoint)) \
+X(VdFwBOOL,     EqualRect, (const VdFwRECT* lprc1, const VdFwRECT* lprc2)) \
+X(VdFwBOOL,     PtInRect, (const VdFwRECT* lprc, VdFwPOINT pt)) \
+X(VdFwLONG,     SetWindowLongA, (VdFwHWND hWnd, int nIndex, VdFwLONG dwNewLong)) \
+X(VdFwLONG,     SetWindowLongW, (VdFwHWND hWnd, int nIndex, VdFwLONG dwNewLong)) \
+X(VdFwLONG_PTR, GetWindowLongPtrA, (VdFwHWND hWnd, int nIndex)) \
+X(VdFwLONG_PTR, GetWindowLongPtrW, (VdFwHWND hWnd, int nIndex)) \
+X(VdFwLONG_PTR, SetWindowLongPtrA, (VdFwHWND hWnd, int nIndex, VdFwLONG_PTR dwNewLong)) \
+X(VdFwLONG_PTR, SetWindowLongPtrW, (VdFwHWND hWnd, int nIndex, VdFwLONG_PTR dwNewLong)) \
+X(VdFwHCURSOR,  LoadCursorA, (VdFwHINSTANCE hInstance, VdFwLPCSTR lpCursorName)) \
+X(VdFwHCURSOR,  LoadCursorW, (VdFwHINSTANCE hInstance, VdFwLPCWSTR lpCursorName)) \
+X(VdFwHICON,    CreateIconIndirect, (VdFwPICONINFO piconinfo)) \
+X(VdFwHMONITOR, MonitorFromWindow, (VdFwHWND hwnd, VdFwDWORD dwFlags)) \
+X(VdFwBOOL,     EnumDisplayMonitors, (VdFwHDC hdc, VdFwLPRECT lprcClip, VdFwMONITORENUMPROC lpfnEnum, VdFwLPARAM dwData)) \
+X(VdFwBOOL,     EnumDisplayDevicesA, (VdFwLPCSTR lpDevice, VdFwDWORD iDevNum, VdFwPDISPLAY_DEVICEA lpDisplayDevice, VdFwDWORD dwFlags)) \
+X(VdFwBOOL,     EnumDisplayDevicesW, (VdFwLPCWSTR lpDevice, VdFwDWORD iDevNum, VdFwPDISPLAY_DEVICEW lpDisplayDevice, VdFwDWORD dwFlags)) \
+X(VdFwBOOL,     EnumDisplaySettingsW, (VdFwLPCSTR lpszDeviceName, VdFwDWORD iModeNum, VdFwDEVMODEW *lpDevMode)) \
+X(VdFwLONG,     ChangeDisplaySettingsW, (VdFwDEVMODEW *lpDevMode, VdFwDWORD dwFlags)) \
+X(VdFwBOOL,     GetMonitorInfoA, (VdFwHMONITOR hMonitor, VdFwLPMONITORINFO lpmi)) \
+X(VdFwBOOL,     GetMonitorInfoW, (VdFwHMONITOR hMonitor, VdFwLPMONITORINFO lpmi)) \
+X(VdFwUINT,     GetDpiForWindow, (VdFwHWND hwnd)) \
+X(VdFwBOOL,     SetProcessDpiAwarenessContext, (VdFwDPI_AWARENESS_CONTEXT value)) \
+X(VdFwBOOL,     GetWindowInfo, (VdFwHWND hwnd, VdFwPWINDOWINFO pwi)) \
+X(VdFwBOOL,     RegisterRawInputDevices, (VdFwPCRAWINPUTDEVICE pRawInputDevices, VdFwUINT uiNumDevices, VdFwUINT cbSize)) \
+X(VdFwUINT,     GetRawInputData, (VdFwHRAWINPUT hRawInput, VdFwUINT uiCommand, VdFwLPVOID pData, VdFwPUINT pcbSize, VdFwUINT cbSizeHeader)) \
+X(VdFwUINT,     GetRawInputDeviceInfoA, (VdFwHANDLE hDevice, VdFwUINT uiCommand, VdFwLPVOID pData, VdFwPUINT pcbSize)) \
+X(VdFwUINT,     GetRawInputDeviceInfoW, (VdFwHANDLE hDevice, VdFwUINT uiCommand, VdFwLPVOID pData, VdFwPUINT pcbSize)) \
+X(VdFwUINT_PTR, SetTimer, (VdFwHWND hWnd, VdFwUINT_PTR nIDEvent, VdFwUINT uElapse, VdFwTIMERPROC lpTimerFunc)) \
+X(VdFwBOOL,     KillTimer, (VdFwHWND hWnd, VdFwUINT_PTR uIDEvent)) \
+X(VdFwHKL,      GetKeyboardLayout, (VdFwDWORD idThread)) \
+X(VdFwHWND,     SetFocus, (VdFwHWND hWnd)) \
+X(VdFwBOOL,     SetForegroundWindow, (VdFwHWND hWnd)) \
+X(VdFwSHORT,    GetKeyState, (int nVirtKey)) \
+X(VdFwBOOL,     GetMonitorInfoW, ( VdFwHMONITOR hMonitor, VdFwLPMONITORINFO lpmi)) \
+VE() \
+V("Shell32.dll") \
+X(VdFwUINT_PTR, SHAppBarMessage, (VdFwDWORD dwMessage, VdFwPAPPBARDATA pData)) \
+VE() \
+V("ntdll.dll") \
+X(void,         RtlGetVersion, (VdFwPRTL_OSVERSIONINFOW info)) \
+VE() \
+V("Winmm.dll") \
+X(VdFwMMRESULT, timeBeginPeriod, (VdFwUINT uPeriod)) \
+VE() \
+V("UxTheme.dll") \
+X(VdFwBOOL,     IsThemeActive, (void)) \
+VE() \
+V("Dwmapi.dll") \
+X(VdFwHRESULT,  DwmExtendFrameIntoClientArea, (VdFwHWND hWnd, const VdFwMARGINS* pMarInset)) \
+X(VdFwHRESULT,  DwmIsCompositionEnabled, (VdFwBOOL *pfEnabled)) \
+X(VdFwHRESULT,  DwmSetWindowAttribute, (VdFwHWND hwnd, VdFwDWORD dwAttribute, VdFwLPCVOID pvAttribute, VdFwDWORD cbAttribute)) \
+X(VdFwHRESULT,  DwmFlush, (void)) \
+VE() \
+V("Gdi32.dll") \
+X(int,          ChoosePixelFormat, (VdFwHDC hdc, const VdFwPIXELFORMATDESCRIPTOR *ppfd)) \
+X(VdFwHBITMAP,  CreateBitmap, (int nWidth, int nHeight, VdFwUINT nPlanes, VdFwUINT nBitCount, const void* lpBits)) \
+X(VdFwHRGN,     CreateRectRgnIndirect, (const VdFwRECT *lprect)) \
+X(int,          DescribePixelFormat, (VdFwHDC hdc, int iPixelFormat, VdFwUINT nBytes, VdFwLPPIXELFORMATDESCRIPTOR ppfd)) \
+X(VdFwHGDIOBJ,  GetStockObject, (int i)) \
+X(VdFwBOOL,     SetPixelFormat, (VdFwHDC hdc, int format, const VdFwPIXELFORMATDESCRIPTOR* ppfd)) \
+X(VdFwHBITMAP,  CreateDIBSection, (VdFwHDC hdc, const VdFwBITMAPINFO* pbmi, VdFwUINT usage, void** ppvBits, VdFwHANDLE hSection, VdFwDWORD offset)) \
+X(VdFwBOOL,     SwapBuffers, (VdFwHDC unnamedParam1)) \
+VE() \
+V("Hid.dll") \
+X(VdFwNTSTATUS, HidP_GetCaps, (VdFwPHIDP_PREPARSED_DATA PreparsedData, VdFwPHIDP_CAPS Capabilities)) \
+X(VdFwNTSTATUS, HidP_GetButtonCaps, (VdFwHIDP_REPORT_TYPE ReportType, VdFwPHIDP_BUTTON_CAPS ButtonCaps, VdFwPUSHORT ButtonCapsLength, VdFwPHIDP_PREPARSED_DATA PreparsedData)) \
+X(VdFwNTSTATUS, HidP_GetValueCaps, (VdFwHIDP_REPORT_TYPE ReportType, VdFwPHIDP_VALUE_CAPS ValueCaps, VdFwPUSHORT ValueCapsLength, VdFwPHIDP_PREPARSED_DATA PreparsedData)) \
+X(VdFwNTSTATUS, HidP_GetUsages, (VdFwHIDP_REPORT_TYPE ReportType, VdFwUSAGE UsagePage, VdFwUSHORT LinkCollection, VdFwPUSAGE UsageList, VdFwPULONG UsageLength, VdFwPHIDP_PREPARSED_DATA PreparsedData, VdFwPCHAR Report, VdFwULONG ReportLength)) \
+X(VdFwNTSTATUS, HidP_GetData, (VdFwHIDP_REPORT_TYPE ReportType, VdFwPHIDP_DATA DataList, VdFwPULONG DataLength, VdFwPHIDP_PREPARSED_DATA PreparsedData, VdFwPCHAR Report, VdFwULONG ReportLength)) \
+X(VdFwULONG,    HidP_MaxUsageListLength, (VdFwHIDP_REPORT_TYPE ReportType, VdFwUSAGE UsagePage, VdFwPHIDP_PREPARSED_DATA PreparsedData)) \
+X(VdFwULONG,    HidP_MaxDataListLength, (VdFwHIDP_REPORT_TYPE ReportType, VdFwPHIDP_PREPARSED_DATA PreparsedData)) \
+X(VdFwNTSTATUS, HidP_GetUsageValue, (VdFwHIDP_REPORT_TYPE ReportType, VdFwUSAGE UsagePage, VdFwUSHORT LinkCollection, VdFwUSAGE Usage, VdFwPULONG UsageValue, VdFwPHIDP_PREPARSED_DATA PreparsedData, VdFwPCHAR Report, VdFwULONG ReportLength)) \
+X(VdFwBOOLEAN,  HidD_GetManufacturerString, (VdFwHANDLE HidDeviceObject, void *Buffer, VdFwULONG BufferLength)) \
+X(VdFwBOOLEAN,  HidD_GetProductString, (VdFwHANDLE HidDeviceObject, void *Buffer, VdFwULONG BufferLength)) \
+X(VdFwBOOLEAN,  HidD_SetFeature, (VdFwHANDLE HidDeviceObject, void *ReportBuffer, VdFwULONG ReportBufferLength)) \
+X(VdFwBOOLEAN,  HidD_SetOutputReport, (VdFwHANDLE HidDeviceObject, void *ReportBuffer, VdFwULONG ReportBufferLength)) \
+VE() \
+V("SetupAPI.dll") \
+X(VdFwHDEVINFO, SetupDiGetClassDevsW, (VdFw__Win32GUID *ClassGuid, VdFwPCWSTR Enumerator, VdFwHWND hwndParent, VdFwDWORD Flags)) \
+X(VdFwBOOL,     SetupDiEnumDeviceInterfaces, (VdFwHDEVINFO DeviceInfoSet, VdFwPSP_DEVINFO_DATA DeviceInfoData, VdFw__Win32GUID *InterfaceClassGuid, VdFwDWORD MemberIndex, VdFwPSP_DEVICE_INTERFACE_DATA DeviceInterfaceData)) \
+X(VdFwBOOL,     SetupDiGetDeviceInterfaceDetailW, (VdFwHDEVINFO DeviceInfoSet, VdFwPSP_DEVICE_INTERFACE_DATA DeviceInterfaceData, VdFwPSP_DEVICE_INTERFACE_DETAIL_DATA_W DeviceInterfaceDetailData, VdFwDWORD DeviceInterfaceDetailDataSize, VdFwPDWORD RequiredSize, VdFwPSP_DEVINFO_DATA DeviceInfoData)) \
+X(VdFwBOOL,     SetupDiEnumDeviceInfo, (VdFwHDEVINFO DeviceInfoSet, VdFwDWORD MemberIndex, VdFwPSP_DEVINFO_DATA DeviceInfoData)) \
+X(VdFwHKEY,     SetupDiOpenDevRegKey, (VdFwHDEVINFO DeviceInfoSet, VdFwPSP_DEVINFO_DATA DeviceInfoData, VdFwDWORD Scope, VdFwDWORD HwProfile, VdFwDWORD KeyType, VdFwREGSAM samDesired)) \
+VE() \
+V("Advapi32.dll") \
+X(VdFwLSTATUS,  RegQueryValueExA, (VdFwHKEY hKey, VdFwLPCSTR lpValueName, VdFwLPDWORD lpReserved, VdFwLPDWORD lpType, VdFwLPBYTE lpData, VdFwLPDWORD lpcbData)) \
+X(VdFwLSTATUS,  RegQueryValueExW, (VdFwHKEY hKey, VdFwLPCWSTR lpValueName, VdFwLPDWORD lpReserved, VdFwLPDWORD lpType, VdFwLPBYTE lpData, VdFwLPDWORD lpcbData)) \
+X(VdFwLSTATUS,  RegCloseKey, (VdFwHKEY hKey)) \
+VE() \
+
+#define X(retval, name, params) typedef retval (*VdFwProc##name)params;
+#define V(dlllpath)
+#define VE()
+VD_FW__WIN32_FUNCTIONS
+#undef X
+#undef V
+#undef VE
+
+#define _X2(s, e) s##e
+#define X(retval, name, params) static _X2(VdFwProc,name) _X2(VdFw,name);
+#define V(dlllpath)
+#define VE()
+VD_FW__WIN32_FUNCTIONS
+#undef X
+#undef _X2
+#undef V
+#undef VE
+
+typedef VdFwHGLRC (*VdFwProcwglCreateContext)(VdFwHDC hDC);
+typedef VdFwBOOL  (*VdFwProcwglMakeCurrent)(VdFwHDC hDC, VdFwHGLRC hGLRC);
+typedef VdFwBOOL  (*VdFwProcwglDeleteContext)(VdFwHGLRC hGLRC);
+typedef VdFwPROC  (*VdFwProcwglGetProcAddress)(VdFwLPCSTR pName);
+static VdFwProcwglCreateContext     VdFwwglCreateContext;
+static VdFwProcwglMakeCurrent       VdFwwglMakeCurrent;
+static VdFwProcwglDeleteContext     VdFwwglDeleteContext;
+static VdFwProcwglGetProcAddress    VdFwwglGetProcAddress;
+typedef VdFwBOOL  (*VdFwProcwglSwapIntervalExt)(int interval);
+typedef VdFwHGLRC (*VdFwProcwglCreateContextAttribsARB)(VdFwHDC hDC, VdFwHGLRC hShareContext, const int* attribList);
+typedef VdFwBOOL  (*VdFwProcwglChoosePixelFormatARB)(VdFwHDC hdc, const int* piAttribIList, const float* pfAttribFList, VdFwUINT nMaxFormats, int* piFormats, VdFwUINT* nNumFormats);
 
 #define WIN32_LEAN_AND_MEAN
 #define NOGDICAPMASKS
@@ -4997,6 +5289,15 @@ static VdFwProcXInputSetState *VdFwXInputSetState;
 #undef FIXED
 #endif
 
+#ifdef VD_FW_WIN32_ADDITIONAL_WNDPROC
+#   define VD_FW_WIN32_INVOKE_WNDPROC(hwnd, msg, wparam, lparam) do {                                        \
+        LRESULT _r_ = VD_FW_WIN32_ADDITIONAL_WNDPROC((HWND)hwnd, (UINT)msg, (WPARAM)wparam, (LPARAM)lparam); \
+        if (_r_ == 0) return _r_;                                                                            \
+    } while (0)
+#else
+#   define VD_FW_WIN32_INVOKE_WNDPROC(hwnd, msg, wparam, lparam) do { } while(0)
+#endif // VD_FW_WIN32_ADDITIONAL_WNDPROC
+
 #define WGL_CONTEXT_DEBUG_BIT_ARB                   0x00000001
 #define WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB      0x00000002
 #define WGL_CONTEXT_MAJOR_VERSION_ARB               0x2091
@@ -5066,6 +5367,8 @@ enum {
     VD_FW_WIN32_MESSAGE_TYPE_CHANGEFOCUS = 13,
     VD_FW_WIN32_MESSAGE_TYPE_KEYSTATE    = 14,
     VD_FW_WIN32_MESSAGE_TYPE_STATECHANGE = 15,
+    VD_FW_WIN32_MESSAGE_TYPE_CLOSERQ     = 16,
+    VD_FW_WIN32_MESSAGE_TYPE_CHAR        = 17,
 
     VD_FW_WIN32_SHOW_CURSOR     = VD_FW_WM_USER + 1,
     VD_FW_WIN32_UPDATE_TITLE    = VD_FW_WM_USER + 2,
@@ -5076,6 +5379,7 @@ enum {
     VD_FW_WIN32_GAMEPADRMBREQ   = VD_FW_WM_USER + 7,
     VD_FW_WIN32_GAMEPADDBCH     = VD_FW_WM_USER + 8,
     VD_FW_WIN32_GAMEPADRAWRQ    = VD_FW_WM_USER + 9,
+    VD_FW_WIN32_KILL            = VD_FW_WM_USER + 10,
 
     VD_FW_WIN32_WINDOW_STATE_MINIMIZED = 1 << 0,
     VD_FW_WIN32_WINDOW_STATE_MAXIMIZED = 1 << 1,
@@ -5115,6 +5419,10 @@ typedef struct {
             int window_state_flag_that_changed;
             int window_state_flag_value;
         } statechange;
+
+        struct {
+            VdFwU32 codepoint;
+        } character;
     } dat;
 } VdFw__Win32Message;
 
@@ -5168,6 +5476,22 @@ typedef struct VdFw__Win32GamepadInfo {
 } VdFw__Win32GamepadInfo;
 
 typedef struct {
+    VdFwDWORD width;
+    VdFwDWORD height;
+    VdFwDWORD frequency;
+    VdFwDWORD aspect_numerator;
+    VdFwDWORD aspect_denominator;
+} VdFw__Win32DisplayMode;
+
+typedef struct {
+    VdFwHMONITOR            hmonitor;
+    char                    friendly_name[32];
+    VdFwDisplayMode         *display_modes;
+    int                     display_modes_len;
+    int                     display_modes_cap;
+} VdFw__Win32Monitor;
+
+typedef struct {
 /* ----WINDOW THREAD ONLY-------------------------------------------------------------------------------------------- */
     VdFwGraphicsApi             graphics_api;           // Currently selected graphics api
     VdFwHWND                    hwnd;                   // Window handle
@@ -5194,6 +5518,15 @@ typedef struct {
     VdFwU8                      *report_buffer;         // Dynamically sized report buffer, for writing to HIDs
     int                         report_buffer_len;
     int                         gamepad_raw_reports_on;
+    VdFwWCHAR                   char_surrogate_hi;
+    VdFwU32                     kb_codepage;
+
+    VdFw__Win32Monitor          *monitor_buffer;
+    int                         monitor_buffer_len;
+    int                         monitor_buffer_cap;
+
+    VdFwU32                     monitor_count;
+
 
 /* ----RENDER THREAD ONLY-------------------------------------------------------------------------------------------- */
     // Internal
@@ -5204,7 +5537,7 @@ typedef struct {
     VdFwHGLRC                   hglrc;
     LARGE_INTEGER               frequency;
     LARGE_INTEGER               performance_counter;
-    VdFwProcwglSwapIntervalExt  *proc_swapInterval;     // Used for vd_fw_set_vsync
+    VdFwProcwglSwapIntervalExt  proc_swapInterval;      // Used for vd_fw_set_vsync
     unsigned long long          last_ns;                // Cached delta time
     // Mouse
     int                         mouse[2];
@@ -5215,6 +5548,7 @@ typedef struct {
     int                         wheel_moved;
     float                       wheel[2];
     // Window
+    int                         close_request;
     VdFwBOOL                    focus_changed;
     VdFwBOOL                    focused;
     VdFwBOOL                    is_fullscreen;
@@ -5227,6 +5561,16 @@ typedef struct {
     VdFw__GamepadState          gamepad_curr_states[VD_FW_GAMEPAD_COUNT_MAX];
     VdFw__GamepadState          gamepad_prev_states[VD_FW_GAMEPAD_COUNT_MAX];
     int                         num_gamepads_present;
+    unsigned char               curr_key_states[VD_FW_KEY_MAX];
+    unsigned char               prev_key_states[VD_FW_KEY_MAX];
+    // Character Input
+    VdFwU16                     num_codepoints;
+    VdFwU16                     first_codepoint_index;
+    VdFwU32                     codepoints[VD_FW_CODEPOINT_BUFFER_COUNT];
+    VdFwKey                     last_key;
+    VdFwU8                      *temp_buf;
+    int                         temp_buf_cap;
+    int                         last_mouse_before_lock[2];
 
 /* ----RENDER THREAD - WINDOW THREAD DATA---------------------------------------------------------------------------- */
     VdFw__Win32Message          msgbuf[VD_FW_WIN32_MESSAGE_BUFFER_SIZE];
@@ -5242,11 +5586,11 @@ typedef struct {
     int                         winthread_num_gamepads_present;
     int                         has_initialized;
 
-    unsigned char               curr_key_states[VD_FW_KEY_MAX];
-    unsigned char               prev_key_states[VD_FW_KEY_MAX];
     char                        title[128];
     int                         title_len;
     VdFwRTL_OSVERSIONINFOW      os_version;
+    int                         next_width, next_height;
+    int                         next_pos_x, next_pos_y;
 
 /* ----RENDER THREAD - WINDOW THREAD SYNC---------------------------------------------------------------------------- */
     VdFwHANDLE                  sem_window_ready;
@@ -5265,7 +5609,7 @@ typedef struct {
 
 VdFwKey vd_fw___vkcode_to_key(WORD vkcode)
 {
-    static VdFwKey translation_table[0xFF] = {
+    static VdFwKey translation_table[256] = {
         VD_FW_KEY_UNKNOWN,       //                                     0x00    Invalid Key
         VD_FW_KEY_UNKNOWN,       // VK_LBUTTON                          0x01    Left mouse button
         VD_FW_KEY_UNKNOWN,       // VK_RBUTTON                          0x02    Right mouse button
@@ -5531,6 +5875,7 @@ static VdFwLRESULT  vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wpara
 static void         vd_fw__composition_changed(void);
 static void         vd_fw__update_region(void);
 static void         vd_fw__theme_changed(void);
+static void         vd_fw__update_monitors(void);
 static VdFwLRESULT  vd_fw__nccalcsize(VdFwWPARAM wparam, VdFwLPARAM lparam);
 static VdFwBOOL     vd_fw__has_autohide_taskbar(VdFwUINT edge, VdFwRECT monitor);
 static void         vd_fw__window_pos_changed(VdFwWINDOWPOS *pos);
@@ -5542,6 +5887,11 @@ static void         vd_fw__gl_debug_message_callback(GLenum source, GLenum type,
 static int          vd_fw__msgbuf_r(VdFw__Win32Message *message);
 static int          vd_fw__msgbuf_w(VdFw__Win32Message *message);
 static char*        vd_fw__utf16_to_utf8(const wchar_t *ws);
+static void         vd_fw__update_kb_codepage(void);
+static VdFwBOOL     vd_fw__win32_enum_monitor(VdFwHMONITOR monitor, VdFwHDC hdc, VdFwLPRECT rect, VdFwLPARAM lpparam);
+static VdFwBOOL     vd_fw__win32_enum_monitor_resize_count(VdFwHMONITOR monitor, VdFwHDC hdc, VdFwLPRECT rect, VdFwLPARAM lpparam);
+static void         vd_fw__win32_update_monitor_display_modes(VdFw__Win32Monitor *monitor);
+
 
 #if VD_FW_WIN32_PROFILE
 #define VD_FW_JOIN_(a,b) a##b
@@ -5624,147 +5974,32 @@ static SIZE_T vd_fw__tcslen(LPCTSTR s)
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
-    VD_FW_G.graphics_api = VD_FW_GRAPHICS_API_OPENGL;
-
-    if (info != NULL) {
-        VD_FW_G.graphics_api = info->api;
-    }
+    VD_FW_G.graphics_api = VD_FW_GRAPHICS_API_INVALID;
+    VD_FW_G.next_width = 640;
+    VD_FW_G.next_height = 480;
+    VD_FW_G.next_pos_x  = CW_USEDEFAULT;
+    VD_FW_G.next_pos_y  = CW_USEDEFAULT;
 
     // Load Win32 Libraries
     {
-        // User32.dll
-        {
-            HMODULE m                         = LoadLibraryA("User32.dll");
-            VdFwGetMessageA                   =                   (VdFwProcGetMessageA*)GetProcAddress(m, "GetMessageA");
-            VdFwGetMessageW                   =                   (VdFwProcGetMessageW*)GetProcAddress(m, "GetMessageW");
-            VdFwTranslateMessage              =              (VdFwProcTranslateMessage*)GetProcAddress(m, "TranslateMessage");
-            VdFwDispatchMessageA              =              (VdFwProcDispatchMessageA*)GetProcAddress(m, "DispatchMessageA");
-            VdFwDispatchMessageW              =              (VdFwProcDispatchMessageW*)GetProcAddress(m, "DispatchMessageW");
-            VdFwPostMessageA                  =                  (VdFwProcPostMessageA*)GetProcAddress(m, "PostMessageA");
-            VdFwPostMessageW                  =                  (VdFwProcPostMessageW*)GetProcAddress(m, "PostMessageW");
-            VdFwDefWindowProcA                =                (VdFwProcDefWindowProcA*)GetProcAddress(m, "DefWindowProcA");
-            VdFwDefWindowProcW                =                (VdFwProcDefWindowProcW*)GetProcAddress(m, "DefWindowProcW");
-            VdFwPostQuitMessage               =               (VdFwProcPostQuitMessage*)GetProcAddress(m, "PostQuitMessage");
-            VdFwRegisterClassExA              =              (VdFwProcRegisterClassExA*)GetProcAddress(m, "RegisterClassExA");
-            VdFwRegisterClassExW              =              (VdFwProcRegisterClassExW*)GetProcAddress(m, "RegisterClassExW");
-            VdFwCreateWindowExA               =               (VdFwProcCreateWindowExA*)GetProcAddress(m, "CreateWindowExA");
-            VdFwCreateWindowExW               =               (VdFwProcCreateWindowExW*)GetProcAddress(m, "CreateWindowExW");
-            VdFwDestroyWindow                 =                 (VdFwProcDestroyWindow*)GetProcAddress(m, "DestroyWindow");
-            VdFwShowWindow                    =                    (VdFwProcShowWindow*)GetProcAddress(m, "ShowWindow");
-            VdFwSetWindowPos                  =                  (VdFwProcSetWindowPos*)GetProcAddress(m, "SetWindowPos");
-            VdFwGetWindowPlacement            =            (VdFwProcGetWindowPlacement*)GetProcAddress(m, "GetWindowPlacement");
-            VdFwSetWindowPlacement            =            (VdFwProcSetWindowPlacement*)GetProcAddress(m, "SetWindowPlacement");
-            VdFwIsZoomed                      =                      (VdFwProcIsZoomed*)GetProcAddress(m, "IsZoomed");
-            VdFwMapVirtualKeyA                =                (VdFwProcMapVirtualKeyA*)GetProcAddress(m, "MapVirtualKeyA");
-            VdFwMapVirtualKeyW                =                (VdFwProcMapVirtualKeyW*)GetProcAddress(m, "MapVirtualKeyW");
-            VdFwSetCapture                    =                    (VdFwProcSetCapture*)GetProcAddress(m, "SetCapture");
-            VdFwReleaseCapture                =                (VdFwProcReleaseCapture*)GetProcAddress(m, "ReleaseCapture");
-            VdFwGetSystemMetrics              =              (VdFwProcGetSystemMetrics*)GetProcAddress(m, "GetSystemMetrics");
-            VdFwUpdateWindow                  =                  (VdFwProcUpdateWindow*)GetProcAddress(m, "UpdateWindow");
-            VdFwGetDC                         =                         (VdFwProcGetDC*)GetProcAddress(m, "GetDC");
-            VdFwReleaseDC                     =                     (VdFwProcReleaseDC*)GetProcAddress(m, "ReleaseDC");
-            VdFwBeginPaint                    =                    (VdFwProcBeginPaint*)GetProcAddress(m, "BeginPaint");
-            VdFwEndPaint                      =                      (VdFwProcEndPaint*)GetProcAddress(m, "EndPaint");
-            VdFwSetWindowRgn                  =                  (VdFwProcSetWindowRgn*)GetProcAddress(m, "SetWindowRgn");
-            VdFwSetWindowTextA                =                (VdFwProcSetWindowTextA*)GetProcAddress(m, "SetWindowTextA");
-            VdFwSetWindowTextW                =                (VdFwProcSetWindowTextW*)GetProcAddress(m, "SetWindowTextW");
-            VdFwGetClientRect                 =                 (VdFwProcGetClientRect*)GetProcAddress(m, "GetClientRect");
-            VdFwGetWindowRect                 =                 (VdFwProcGetWindowRect*)GetProcAddress(m, "GetWindowRect");
-            VdFwShowCursor                    =                    (VdFwProcShowCursor*)GetProcAddress(m, "ShowCursor");
-            VdFwSetCursorPos                  =                  (VdFwProcSetCursorPos*)GetProcAddress(m, "SetCursorPos");
-            VdFwScreenToClient                =                (VdFwProcScreenToClient*)GetProcAddress(m, "ScreenToClient");
-            VdFwEqualRect                     =                     (VdFwProcEqualRect*)GetProcAddress(m, "EqualRect");
-            VdFwPtInRect                      =                      (VdFwProcPtInRect*)GetProcAddress(m, "PtInRect");
-            VdFwSetWindowLongA                =                (VdFwProcSetWindowLongA*)GetProcAddress(m, "SetWindowLongA");
-            VdFwSetWindowLongW                =                (VdFwProcSetWindowLongW*)GetProcAddress(m, "SetWindowLongW");
-            VdFwGetWindowLongPtrA             =             (VdFwProcGetWindowLongPtrA*)GetProcAddress(m, "GetWindowLongPtrA");
-            VdFwGetWindowLongPtrW             =             (VdFwProcGetWindowLongPtrW*)GetProcAddress(m, "GetWindowLongPtrW");
-            VdFwSetWindowLongPtrA             =             (VdFwProcSetWindowLongPtrA*)GetProcAddress(m, "SetWindowLongPtrA");
-            VdFwSetWindowLongPtrW             =             (VdFwProcSetWindowLongPtrW*)GetProcAddress(m, "SetWindowLongPtrW");
-            VdFwLoadCursorA                   =                   (VdFwProcLoadCursorA*)GetProcAddress(m, "LoadCursorA");
-            VdFwLoadCursorW                   =                   (VdFwProcLoadCursorW*)GetProcAddress(m, "LoadCursorW");
-            VdFwCreateIconIndirect            =            (VdFwProcCreateIconIndirect*)GetProcAddress(m, "CreateIconIndirect");
-            VdFwMonitorFromWindow             =             (VdFwProcMonitorFromWindow*)GetProcAddress(m, "MonitorFromWindow");
-            VdFwGetMonitorInfoA               =               (VdFwProcGetMonitorInfoA*)GetProcAddress(m, "GetMonitorInfoA");
-            VdFwGetMonitorInfoW               =               (VdFwProcGetMonitorInfoW*)GetProcAddress(m, "GetMonitorInfoW");
-            VdFwGetDpiForWindow               =               (VdFwProcGetDpiForWindow*)GetProcAddress(m, "GetDpiForWindow");
-            VdFwSetProcessDpiAwarenessContext = (VdFwProcSetProcessDpiAwarenessContext*)GetProcAddress(m, "SetProcessDpiAwarenessContext");
-            VdFwGetWindowInfo                 =                 (VdFwProcGetWindowInfo*)GetProcAddress(m, "GetWindowInfo");
-            VdFwRegisterRawInputDevices       =       (VdFwProcRegisterRawInputDevices*)GetProcAddress(m, "RegisterRawInputDevices");
-            VdFwGetRawInputData               =               (VdFwProcGetRawInputData*)GetProcAddress(m, "GetRawInputData");
-            VdFwGetRawInputDeviceInfoA        =        (VdFwProcGetRawInputDeviceInfoA*)GetProcAddress(m, "GetRawInputDeviceInfoA");
-            VdFwGetRawInputDeviceInfoW        =        (VdFwProcGetRawInputDeviceInfoW*)GetProcAddress(m, "GetRawInputDeviceInfoW");
-            VdFwSetTimer                      =                      (VdFwProcSetTimer*)GetProcAddress(m, "SetTimer");
-            VdFwKillTimer                     =                     (VdFwProcKillTimer*)GetProcAddress(m, "KillTimer");
+#define V(dllpath) { HMODULE m = LoadLibraryA(dllpath);
+#define X(retval, name, params) VdFw##name = (VdFwProc##name)GetProcAddress(m, #name);
+#define VE()       }
+        VD_FW__WIN32_FUNCTIONS
+#undef V
+#undef X
+#undef VE
+
+        if (VdFwRtlGetVersion) {
+            VdFwRtlGetVersion((VdFwPRTL_OSVERSIONINFOW)&VD_FW_G.os_version);
         }
-
-        // Shell32.dll
+        // OpenGL32.dll
         {
-            HMODULE m       = LoadLibraryA("Shell32.dll");
-            VdFwSHAppBarMessage = (VdFwProcSHAppBarMessage*)GetProcAddress(m, "SHAppBarMessage");
-        }
-
-        // Winmm.dll
-        {
-            HMODULE m       = LoadLibraryA("Winmm.dll");
-            VdFwtimeBeginPeriod = (VdFwProctimeBeginPeriod*)GetProcAddress(m, "timeBeginPeriod");
-        }
-
-        // ntdll.dll
-        {
-            HMODULE m = LoadLibraryA("ntdll.dll");
-            VdFwRtlGetVersion = (VdFwProcRtlGetVersion*)GetProcAddress(m, "RtlGetVersion");
-
-            if (VdFwRtlGetVersion) {
-                VdFwRtlGetVersion((VdFwPRTL_OSVERSIONINFOW)&VD_FW_G.os_version);
-            }
-
-            FreeLibrary(m);
-        }
-
-        // UxTheme.dll
-        {
-            HMODULE m     = LoadLibraryA("UxTheme.dll");
-            VdFwIsThemeActive = (VdFwProcIsThemeActive*)GetProcAddress(m, "IsThemeActive");
-        }
-
-        // Dwmapi.dll
-        {
-            HMODULE m                    = LoadLibraryA("Dwmapi.dll");
-            VdFwDwmExtendFrameIntoClientArea = (VdFwProcDwmExtendFrameIntoClientArea*)GetProcAddress(m, "DwmExtendFrameIntoClientArea");
-            VdFwDwmIsCompositionEnabled      =      (VdFwProcDwmIsCompositionEnabled*)GetProcAddress(m, "DwmIsCompositionEnabled");
-            VdFwDwmSetWindowAttribute        =        (VdFwProcDwmSetWindowAttribute*)GetProcAddress(m, "DwmSetWindowAttribute");
-            VdFwDwmFlush                     =                     (VdFwProcDwmFlush*)GetProcAddress(m, "DwmFlush");
-        }
-
-        // Gdi32.dll
-        {
-            HMODULE m             = LoadLibraryA("Gdi32.dll");
-            VdFwChoosePixelFormat     =     (VdFwProcChoosePixelFormat*)GetProcAddress(m, "ChoosePixelFormat");
-            VdFwCreateBitmap          =          (VdFwProcCreateBitmap*)GetProcAddress(m, "CreateBitmap");
-            VdFwCreateRectRgnIndirect = (VdFwProcCreateRectRgnIndirect*)GetProcAddress(m, "CreateRectRgnIndirect");
-            VdFwDescribePixelFormat   =   (VdFwProcDescribePixelFormat*)GetProcAddress(m, "DescribePixelFormat");
-            VdFwGetStockObject        =        (VdFwProcGetStockObject*)GetProcAddress(m, "GetStockObject");
-            VdFwSetPixelFormat        =        (VdFwProcSetPixelFormat*)GetProcAddress(m, "SetPixelFormat");
-            VdFwCreateDIBSection      =      (VdFwProcCreateDIBSection*)GetProcAddress(m, "CreateDIBSection");
-            VdFwSwapBuffers           =           (VdFwProcSwapBuffers*)GetProcAddress(m, "SwapBuffers");
-        }
-
-        // Hid.dll
-        {
-            HMODULE m          = LoadLibraryA("Hid.dll");
-            VdFwHidP_GetCaps               =               (VdFwProcHidP_GetCaps*)GetProcAddress(m, "HidP_GetCaps");
-            VdFwHidP_GetButtonCaps         =         (VdFwProcHidP_GetButtonCaps*)GetProcAddress(m, "HidP_GetButtonCaps");
-            VdFwHidP_GetValueCaps          =          (VdFwProcHidP_GetValueCaps*)GetProcAddress(m, "HidP_GetValueCaps");
-            VdFwHidP_GetUsages             =             (VdFwProcHidP_GetUsages*)GetProcAddress(m, "HidP_GetUsages");
-            VdFwHidP_GetData               =               (VdFwProcHidP_GetData*)GetProcAddress(m, "HidP_GetData");
-            VdFwHidP_MaxUsageListLength    =    (VdFwProcHidP_MaxUsageListLength*)GetProcAddress(m, "HidP_MaxUsageListLength");
-            VdFwHidP_MaxDataListLength     =     (VdFwProcHidP_MaxDataListLength*)GetProcAddress(m, "HidP_MaxDataListLength");
-            VdFwHidP_GetUsageValue         =         (VdFwProcHidP_GetUsageValue*)GetProcAddress(m, "HidP_GetUsageValue");
-            VdFwHidD_GetManufacturerString = (VdFwProcHidD_GetManufacturerString*)GetProcAddress(m, "HidD_GetManufacturerString");
-            VdFwHidD_GetProductString      =      (VdFwProcHidD_GetProductString*)GetProcAddress(m, "HidD_GetProductString");
-            VdFwHidD_SetFeature            =            (VdFwProcHidD_SetFeature*)GetProcAddress(m, "HidD_SetFeature");
-            VdFwHidD_SetOutputReport       =       (VdFwProcHidD_SetOutputReport*)GetProcAddress(m, "HidD_SetOutputReport");
+            VD_FW_G.opengl32 = LoadLibraryA("OpenGL32.dll");
+            VdFwwglCreateContext  =  (VdFwProcwglCreateContext)GetProcAddress(VD_FW_G.opengl32, "wglCreateContext");
+            VdFwwglMakeCurrent    =    (VdFwProcwglMakeCurrent)GetProcAddress(VD_FW_G.opengl32, "wglMakeCurrent");
+            VdFwwglDeleteContext  =  (VdFwProcwglDeleteContext)GetProcAddress(VD_FW_G.opengl32,"wglDeleteContext");
+            VdFwwglGetProcAddress = (VdFwProcwglGetProcAddress)GetProcAddress(VD_FW_G.opengl32, "wglGetProcAddress");
         }
 
         // XInput.dll
@@ -5790,20 +6025,26 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
                 VdFwXInputSetState = (VdFwProcXInputSetState*)GetProcAddress(m, "XInputSetState");
             }
         }
-
-        // OpenGL32.dll
-        {
-            VD_FW_G.opengl32 = LoadLibraryA("OpenGL32.dll");
-            VdFwwglCreateContext  =  (VdFwProcwglCreateContext*)GetProcAddress(VD_FW_G.opengl32, "wglCreateContext");
-            VdFwwglMakeCurrent    =    (VdFwProcwglMakeCurrent*)GetProcAddress(VD_FW_G.opengl32, "wglMakeCurrent");
-            VdFwwglDeleteContext  =  (VdFwProcwglDeleteContext*)GetProcAddress(VD_FW_G.opengl32,"wglDeleteContext");
-            VdFwwglGetProcAddress = (VdFwProcwglGetProcAddress*)GetProcAddress(VD_FW_G.opengl32, "wglGetProcAddress");
-        }
     }
+
+    // @todo(mdodis): Use different versions of SetProcessDpiAware if not supported
     // SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
     VdFwSetProcessDpiAwarenessContext(VD_FW_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     VdFwtimeBeginPeriod(1);
     QueryPerformanceFrequency(&VD_FW_G.frequency);
+
+    // Monitors
+    {
+        VD_FW_G.monitor_count = 0;
+        VdFwEnumDisplayMonitors(NULL, NULL, vd_fw__win32_enum_monitor_resize_count, (VdFwLPARAM)NULL);
+
+        VD_FW_G.monitor_buffer_len = 0;
+        VD_FW_G.monitor_buffer = vd_fw__resize_buffer(VD_FW_G.monitor_buffer, sizeof(*VD_FW_G.monitor_buffer),
+                                                      VD_FW_G.monitor_count, &VD_FW_G.monitor_buffer_cap);
+
+
+        VdFwEnumDisplayMonitors(NULL, NULL, vd_fw__win32_enum_monitor, (VdFwLPARAM)NULL);
+    }
 
     VD_FW_G.focused = 1;
     VD_FW_G.def_window_min[0] = VdFwGetSystemMetrics(SM_CXMINTRACK);
@@ -5889,146 +6130,21 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         &VD_FW_G.win_thread_id);
     SetThreadDescription(VD_FW_G.win_thread, L"Window Thread");
 
+    vd_fw__update_kb_codepage();
+
     WaitForSingleObject(VD_FW_G.sem_window_ready, INFINITE);
 
 
-    VD_FW_G.hdc = VdFwGetDC(VD_FW_G.hwnd);
-
-    // Create context
-    if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
-        // Temp context flags
-        VdFwPIXELFORMATDESCRIPTOR pfd = {
-          sizeof(VdFwPIXELFORMATDESCRIPTOR),
-          1,                                // Version Number
-          PFD_DRAW_TO_WINDOW |              // Format Must Support Window
-          PFD_SUPPORT_OPENGL |              // Format Must Support OpenGL
-          PFD_DOUBLEBUFFER,                 // Must Support Double Buffering
-          PFD_TYPE_RGBA,                    // Request An RGBA Format
-          32,                               // Select Our Color Depth
-          0, 0, 0, 0, 0, 0,                 // Color Bits Ignored
-          0,                                // An Alpha Buffer
-          0,                                // Shift Bit Ignored
-          0,                                // No Accumulation Buffer
-          0, 0, 0, 0,                       // Accumulation Bits Ignored
-          24,                               // 16Bit Z-Buffer (Depth Buffer)
-          8,                                // Some Stencil Buffer
-          0,                                // No Auxiliary Buffer
-          PFD_MAIN_PLANE,                   // Main Drawing Layer
-          0,                                // Reserved
-          0, 0, 0                           // Layer Masks Ignored
-        };
-        int pf = VdFwChoosePixelFormat(VD_FW_G.hdc, &pfd);
-        VdFwSetPixelFormat(VD_FW_G.hdc, pf, &pfd);
-
-        VdFwHGLRC temp_context = VdFwwglCreateContext(VD_FW_G.hdc);
-        VD_FW__CHECK_NULL(temp_context);
-        VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(VD_FW_G.hdc, temp_context));
-
-        int major = 3;
-        int minor = 3;
-
-
-        if (info && info->gl.version != VD_FW_GL_VERSION_BASIC) {
-            switch (info->gl.version) {
-                case VD_FW_GL_VERSION_1_0: major = 1; minor = 0; break;
-                case VD_FW_GL_VERSION_1_2: major = 1; minor = 2; break;
-                case VD_FW_GL_VERSION_1_3: major = 1; minor = 3; break;
-                case VD_FW_GL_VERSION_1_4: major = 1; minor = 4; break;
-                case VD_FW_GL_VERSION_1_5: major = 1; minor = 5; break;
-                case VD_FW_GL_VERSION_2_0: major = 2; minor = 0; break;
-                case VD_FW_GL_VERSION_2_1: major = 2; minor = 1; break;
-                case VD_FW_GL_VERSION_3_0: major = 3; minor = 0; break;
-                case VD_FW_GL_VERSION_3_1: major = 3; minor = 1; break;
-                case VD_FW_GL_VERSION_3_2: major = 3; minor = 2; break;
-                case VD_FW_GL_VERSION_3_3: major = 3; minor = 3; break;
-                case VD_FW_GL_VERSION_4_0: major = 4; minor = 0; break;
-                case VD_FW_GL_VERSION_4_1: major = 4; minor = 1; break;
-                case VD_FW_GL_VERSION_4_2: major = 4; minor = 2; break;
-                case VD_FW_GL_VERSION_4_3: major = 4; minor = 3; break;
-                case VD_FW_GL_VERSION_4_4: major = 4; minor = 4; break;
-                case VD_FW_GL_VERSION_4_5: major = 4; minor = 5; break;
-                case VD_FW_GL_VERSION_4_6: major = 4; minor = 6; break;
-                default: break;
-            }
-        }
-
-        // Context attributes
-        int attribs[] = {
-            WGL_CONTEXT_MAJOR_VERSION_ARB, major,
-            WGL_CONTEXT_MINOR_VERSION_ARB, minor,
-            WGL_CONTEXT_PROFILE_MASK_ARB,  WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
-            WGL_CONTEXT_FLAGS_ARB,         WGL_CONTEXT_DEBUG_BIT_ARB,
-            0
-        };
-
-        VdFwProcwglCreateContextAttribsARB *wglCreateContextAttribsARB =
-            (VdFwProcwglCreateContextAttribsARB*) VdFwwglGetProcAddress("wglCreateContextAttribsARB");
-
-        VdFwProcwglChoosePixelFormatARB *wglChoosePixelFormatARB =
-            (VdFwProcwglChoosePixelFormatARB*)VdFwwglGetProcAddress("wglChoosePixelFormatARB");
-
-        int pixel_attribs[] = {
-            WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
-            WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
-            WGL_DOUBLE_BUFFER_ARB,  GL_TRUE,
-            WGL_ACCELERATION_ARB,   WGL_FULL_ACCELERATION_ARB,
-
-            WGL_PIXEL_TYPE_ARB,     WGL_TYPE_RGBA_ARB,
-            WGL_COLOR_BITS_ARB,     24,
-            WGL_ALPHA_BITS_ARB,     8,
-            WGL_DEPTH_BITS_ARB,     24,
-            WGL_STENCIL_BITS_ARB,   8,
-
-            WGL_SAMPLE_BUFFERS_ARB, 1,
-            WGL_SAMPLES_ARB,        4,
-            0,
-        };
-
-        int pixel_format;
-        VdFwUINT num_formats;
-
-        VD_FW__CHECK_TRUE(wglChoosePixelFormatARB(VD_FW_G.hdc, pixel_attribs, NULL, 1, &pixel_format, &num_formats));
-
-        VdFwPIXELFORMATDESCRIPTOR pfdchosen;
-        VdFwDescribePixelFormat(VD_FW_G.hdc, pixel_format, sizeof(pfdchosen), &pfdchosen);
-        VdFwSetPixelFormat(VD_FW_G.hdc, pf, &pfdchosen);
-
-        VD_FW_G.hglrc = wglCreateContextAttribsARB(VD_FW_G.hdc, 0, attribs);
-
-        VdFwwglMakeCurrent(NULL, NULL);
-        VdFwwglDeleteContext(temp_context);
-
-        VD_FW__CHECK_NULL(VD_FW_G.hglrc);
-        VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(VD_FW_G.hdc, VD_FW_G.hglrc));
-
-        VD_FW_G.proc_swapInterval = (VdFwProcwglSwapIntervalExt*)VdFwwglGetProcAddress("wglSwapIntervalEXT");
-
-        VdFwGlVersion version = VD_FW_GL_VERSION_3_3;
-        if (info && info->gl.version != VD_FW_GL_VERSION_BASIC) {
-            version = info->gl.version;
-        }
-        vd_fw__load_opengl(version);
-
-        if (info != 0 && info->gl.debug_on && version > VD_FW_GL_VERSION_3_0) {
-            VdFwProcGL_glDebugMessageCallback glDebugMessageCallback_proc = (VdFwProcGL_glDebugMessageCallback)VdFwwglGetProcAddress("glDebugMessageCallback");
-
-            if (glDebugMessageCallback_proc == 0) {
-                DWORD written;
-
-                TCHAR *msg = TEXT("ERROR: Failed to load glDebugMessageCallback!\n");
-                SIZE_T len = vd_fw__tcslen(msg);
-                WriteConsole(
-                    GetStdHandle(STD_OUTPUT_HANDLE),
-                    msg,
-                    (DWORD)len,
-                    &written,
-                    0);
-            } else {
-                glEnable(0x92E0 /* GL_DEBUG_OUTPUT */);
-                glDebugMessageCallback_proc(vd_fw__gl_debug_message_callback, 0);
-            }
-        }
+    VdFwGraphicsApi api = VD_FW_GRAPHICS_API_OPENGL;
+    if (info) {
+        api = info->api;
     }
+
+    VdFwOpenGLOptions *poptions = NULL;
+    if (info) {
+        poptions = &info->gl; 
+    }
+    vd_fw_set_graphics_api(api, poptions);
 
     QueryPerformanceCounter(&VD_FW_G.performance_counter);
     VD_FW_G.has_initialized = 1;
@@ -6048,14 +6164,27 @@ VD_FW_API int vd_fw_running(void)
     VD_FW_G.focus_changed = 0;
     VD_FW_G.window_state_changed = 0;
     VD_FW_G.prev_mouse_state = VD_FW_G.mouse_state;
+    VD_FW_G.close_request = 0;
+
+    VD_FW_G.num_codepoints = 0;
+    VD_FW_G.last_key = VD_FW_KEY_UNKNOWN;
+    VdFwU16 num_codepoints = 0;
 
     for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
         VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
     }
-
     VdFw__Win32Message mm;
     while (vd_fw__msgbuf_r(&mm)) {
         switch (mm.msg) {
+
+            case VD_FW_WIN32_MESSAGE_TYPE_CHAR: {
+                VD_FW_G.codepoints[(num_codepoints++) % VD_FW_CODEPOINT_BUFFER_COUNT] = mm.dat.character.codepoint;
+            } break;
+
+            case VD_FW_WIN32_MESSAGE_TYPE_CLOSERQ: {
+                VD_FW_G.close_request = 1;
+            } break;
+
             case VD_FW_WIN32_MESSAGE_TYPE_MOUSEMOVE: {
                 VD_FW_G.mouse[0] = mm.dat.mousemove.mx;
                 VD_FW_G.mouse[1] = mm.dat.mousemove.my;
@@ -6097,6 +6226,10 @@ VD_FW_API int vd_fw_running(void)
                 int is_down = mm.dat.keystate.down;
                 VdFwKey key = vd_fw___vkcode_to_key(mm.dat.keystate.vkcode);
 
+                if (is_down) {
+                    VD_FW_G.last_key = key;
+                }
+
                 // VD_FW_G.prev_key_states[key] = VD_FW_G.curr_key_states[key];
                 VD_FW_G.curr_key_states[key] = (unsigned char)is_down;
 
@@ -6132,6 +6265,15 @@ VD_FW_API int vd_fw_running(void)
 
             default: break;
         }
+    }
+
+    VD_FW_G.num_codepoints = (num_codepoints < VD_FW_CODEPOINT_BUFFER_COUNT) 
+                             ? num_codepoints
+                             : VD_FW_CODEPOINT_BUFFER_COUNT;
+    if (num_codepoints > 0) {
+        VD_FW_G.first_codepoint_index = (num_codepoints - 1) % VD_FW_CODEPOINT_BUFFER_COUNT;
+    } else {
+        VD_FW_G.first_codepoint_index = 0;
     }
 
     // @note(mdodis): For Raw Input mouse handling, instead of using the message queue
@@ -6170,13 +6312,7 @@ VD_FW_API int vd_fw_running(void)
     VD_FW_G.performance_counter = now_performance_counter;
 
     if (VD_FW_G.mouse_is_locked && VD_FW_G.focused) {
-        VdFwRECT rect;
-        VdFwGetWindowRect(VD_FW_G.hwnd, &rect);
-
-        VdFwINT center_x = (rect.left + rect.right)  / 2;
-        VdFwINT center_y = (rect.top  + rect.bottom) / 2;
-
-        VdFwSetCursorPos(center_x, center_y);
+        VdFwSetCursorPos(VD_FW_G.last_mouse_before_lock[0], VD_FW_G.last_mouse_before_lock[1]);
     }
 
     return 1;
@@ -6208,9 +6344,236 @@ VD_FW_API int vd_fw_swap_buffers(void)
     return 1;
 }
 
+VD_FW_API int vd_fw_close_requested(void)
+{
+    return VD_FW_G.close_request;
+}
+
+VD_FW_API void vd_fw_quit(void)
+{
+    VD_FW__CHECK_TRUE(VdFwPostMessage(
+        VD_FW_G.hwnd,
+        VD_FW_WIN32_KILL,
+        0, /* WPARAM */
+        0  /* LPARAM */));
+}
+
 VD_FW_API VdFwPlatform vd_fw_get_platform(void)
 {
     return VD_FW_PLATFORM_WINDOWS;
+}
+
+VD_FW_API void vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_options)
+{
+
+    WakeConditionVariable(&VD_FW_G.cond_var);
+
+    if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
+        // Destroy OpenGL Context
+        VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(NULL, NULL));
+        VD_FW__CHECK_TRUE(VdFwwglDeleteContext(VD_FW_G.hglrc));
+        VD_FW_G.hglrc = 0;
+        VD_FW__CHECK_NONZERO(VdFwReleaseDC(VD_FW_G.hwnd, VD_FW_G.hdc));
+        VD_FW_G.hdc = 0;
+    }
+
+    if (VD_FW_G.graphics_api != VD_FW_GRAPHICS_API_INVALID) {
+
+        VdFwRECT rect;
+        VdFwGetWindowRect(VD_FW_G.hwnd, &rect);
+
+        VD_FW_G.next_width = rect.right - rect.left;
+        VD_FW_G.next_height = rect.bottom - rect.top;
+        VD_FW_G.next_pos_x = rect.left;
+        VD_FW_G.next_pos_y = rect.top;
+
+        // Wait for thread to close
+        {
+            VD_FW__CHECK_TRUE(VdFwPostMessage(
+                VD_FW_G.hwnd,
+                VD_FW_WIN32_KILL,
+                0, /* WPARAM */
+                0  /* LPARAM */));
+            WaitForSingleObject(VD_FW_G.win_thread, INFINITE);
+        }
+
+        // Reset Semaphores
+        {
+            CloseHandle(VD_FW_G.sem_window_ready);
+            VD_FW_G.sem_window_ready = CreateSemaphoreA(
+                NULL,
+                0,
+                1,
+                NULL);
+
+            CloseHandle(VD_FW_G.sem_closed);
+            VD_FW_G.sem_closed = CreateSemaphoreA(
+                NULL,
+                0,
+                1,
+                NULL);
+        }
+
+
+        // Restart the thread to create the window
+        {
+            VD_FW_G.t_paint_ready = FALSE;
+
+            VD_FW_G.win_thread = CreateThread(
+                NULL,
+                0,
+                vd_fw__win_thread_proc,
+                0,
+                0,
+                &VD_FW_G.win_thread_id);
+            SetThreadDescription(VD_FW_G.win_thread, L"Window Thread");
+            WaitForSingleObject(VD_FW_G.sem_window_ready, INFINITE);
+        }
+    }
+
+    switch (api) {
+        case VD_FW_GRAPHICS_API_OPENGL: {
+
+            VD_FW_G.hdc = VdFwGetDC(VD_FW_G.hwnd);
+
+            // Temp context flags
+            VdFwPIXELFORMATDESCRIPTOR pfd = {
+              sizeof(VdFwPIXELFORMATDESCRIPTOR),
+              1,                                // Version Number
+              PFD_DRAW_TO_WINDOW |              // Format Must Support Window
+              PFD_SUPPORT_OPENGL |              // Format Must Support OpenGL
+              PFD_DOUBLEBUFFER,                 // Must Support Double Buffering
+              PFD_TYPE_RGBA,                    // Request An RGBA Format
+              32,                               // Select Our Color Depth
+              0, 0, 0, 0, 0, 0,                 // Color Bits Ignored
+              0,                                // An Alpha Buffer
+              0,                                // Shift Bit Ignored
+              0,                                // No Accumulation Buffer
+              0, 0, 0, 0,                       // Accumulation Bits Ignored
+              24,                               // 16Bit Z-Buffer (Depth Buffer)
+              8,                                // Some Stencil Buffer
+              0,                                // No Auxiliary Buffer
+              PFD_MAIN_PLANE,                   // Main Drawing Layer
+              0,                                // Reserved
+              0, 0, 0                           // Layer Masks Ignored
+            };
+            int pf = VdFwChoosePixelFormat(VD_FW_G.hdc, &pfd);
+            VD_FW__CHECK_NONZERO(pf);
+            VD_FW__CHECK_TRUE(VdFwSetPixelFormat(VD_FW_G.hdc, pf, &pfd));
+
+            VdFwHGLRC temp_context = VdFwwglCreateContext(VD_FW_G.hdc);
+            VD_FW__CHECK_NULL(temp_context);
+            VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(VD_FW_G.hdc, temp_context));
+
+            int major = 3;
+            int minor = 3;
+
+            if (gl_options && gl_options->version != VD_FW_GL_VERSION_BASIC) {
+                switch (gl_options->version) {
+                    case VD_FW_GL_VERSION_1_0: major = 1; minor = 0; break;
+                    case VD_FW_GL_VERSION_1_2: major = 1; minor = 2; break;
+                    case VD_FW_GL_VERSION_1_3: major = 1; minor = 3; break;
+                    case VD_FW_GL_VERSION_1_4: major = 1; minor = 4; break;
+                    case VD_FW_GL_VERSION_1_5: major = 1; minor = 5; break;
+                    case VD_FW_GL_VERSION_2_0: major = 2; minor = 0; break;
+                    case VD_FW_GL_VERSION_2_1: major = 2; minor = 1; break;
+                    case VD_FW_GL_VERSION_3_0: major = 3; minor = 0; break;
+                    case VD_FW_GL_VERSION_3_1: major = 3; minor = 1; break;
+                    case VD_FW_GL_VERSION_3_2: major = 3; minor = 2; break;
+                    case VD_FW_GL_VERSION_3_3: major = 3; minor = 3; break;
+                    case VD_FW_GL_VERSION_4_0: major = 4; minor = 0; break;
+                    case VD_FW_GL_VERSION_4_1: major = 4; minor = 1; break;
+                    case VD_FW_GL_VERSION_4_2: major = 4; minor = 2; break;
+                    case VD_FW_GL_VERSION_4_3: major = 4; minor = 3; break;
+                    case VD_FW_GL_VERSION_4_4: major = 4; minor = 4; break;
+                    case VD_FW_GL_VERSION_4_5: major = 4; minor = 5; break;
+                    case VD_FW_GL_VERSION_4_6: major = 4; minor = 6; break;
+                    default: break;
+                }
+            }
+
+            // Context attributes
+            int attribs[] = {
+                WGL_CONTEXT_MAJOR_VERSION_ARB, major,
+                WGL_CONTEXT_MINOR_VERSION_ARB, minor,
+                WGL_CONTEXT_PROFILE_MASK_ARB,  WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
+                WGL_CONTEXT_FLAGS_ARB,         WGL_CONTEXT_DEBUG_BIT_ARB,
+                0
+            };
+
+            VdFwProcwglCreateContextAttribsARB wglCreateContextAttribsARB =
+                (VdFwProcwglCreateContextAttribsARB) VdFwwglGetProcAddress("wglCreateContextAttribsARB");
+
+            VdFwProcwglChoosePixelFormatARB wglChoosePixelFormatARB =
+                (VdFwProcwglChoosePixelFormatARB)VdFwwglGetProcAddress("wglChoosePixelFormatARB");
+
+            int pixel_attribs[] = {
+                WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
+                WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
+                WGL_DOUBLE_BUFFER_ARB,  GL_TRUE,
+                WGL_ACCELERATION_ARB,   WGL_FULL_ACCELERATION_ARB,
+
+                WGL_PIXEL_TYPE_ARB,     WGL_TYPE_RGBA_ARB,
+                WGL_COLOR_BITS_ARB,     24,
+                WGL_ALPHA_BITS_ARB,     8,
+                WGL_DEPTH_BITS_ARB,     24,
+                WGL_STENCIL_BITS_ARB,   8,
+
+                WGL_SAMPLE_BUFFERS_ARB, 1,
+                WGL_SAMPLES_ARB,        4,
+                0,
+            };
+
+            int pixel_format;
+            VdFwUINT num_formats;
+
+            VD_FW__CHECK_TRUE(wglChoosePixelFormatARB(VD_FW_G.hdc, pixel_attribs, NULL, 1, &pixel_format, &num_formats));
+
+            VdFwPIXELFORMATDESCRIPTOR pfdchosen;
+            VD_FW__CHECK_NONZERO(VdFwDescribePixelFormat(VD_FW_G.hdc, pixel_format, sizeof(pfdchosen), &pfdchosen));
+            VD_FW__CHECK_TRUE(VdFwSetPixelFormat(VD_FW_G.hdc, pf, &pfdchosen));
+
+            VD_FW_G.hglrc = wglCreateContextAttribsARB(VD_FW_G.hdc, 0, attribs);
+
+            VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(NULL, NULL));
+            VD_FW__CHECK_TRUE(VdFwwglDeleteContext(temp_context));
+
+            VD_FW__CHECK_NULL(VD_FW_G.hglrc);
+            VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(VD_FW_G.hdc, VD_FW_G.hglrc));
+
+            VD_FW_G.proc_swapInterval = (VdFwProcwglSwapIntervalExt)VdFwwglGetProcAddress("wglSwapIntervalEXT");
+
+            VdFwGlVersion version = VD_FW_GL_VERSION_3_3;
+            if (gl_options && gl_options->version != VD_FW_GL_VERSION_BASIC) {
+                version = gl_options->version;
+            }
+            vd_fw__load_opengl(version);
+
+            if (gl_options && gl_options->debug_on && version > VD_FW_GL_VERSION_3_0) {
+                VdFwProcGL_glDebugMessageCallback glDebugMessageCallback_proc = (VdFwProcGL_glDebugMessageCallback)VdFwwglGetProcAddress("glDebugMessageCallback");
+
+                if (glDebugMessageCallback_proc == 0) {
+                    DWORD written;
+
+                    TCHAR *msg = TEXT("ERROR: Failed to load glDebugMessageCallback!\n");
+                    SIZE_T len = vd_fw__tcslen(msg);
+                    WriteConsole(
+                        GetStdHandle(STD_OUTPUT_HANDLE),
+                        msg,
+                        (DWORD)len,
+                        &written,
+                        0);
+                } else {
+                    glEnable(0x92E0 /* GL_DEBUG_OUTPUT */);
+                    glDebugMessageCallback_proc(vd_fw__gl_debug_message_callback, 0);
+                }
+            }
+        } break;
+
+        default: break;
+    }
+
+    VD_FW_G.graphics_api = api;
 }
 
 VD_FW_API int vd_fw_get_size(int *w, int *h)
@@ -6355,6 +6718,29 @@ VD_FW_API const char *vd_fw_get_executable_dir(int *len)
     return VD_FW_G.exedir; 
 }
 
+VD_FW_API int vd_fw_get_monitor_count(void)
+{
+    return VD_FW_G.monitor_count;
+}
+
+VD_FW_API const char *vd_fw_get_monitor_name(int index)
+{
+    return VD_FW_G.monitor_buffer[index].friendly_name;
+}
+
+VD_FW_API VdFwDisplayMode *vd_fw_get_monitor_display_modes(int index, int *count)
+{
+    vd_fw__win32_update_monitor_display_modes(&VD_FW_G.monitor_buffer[index]);
+    *count = VD_FW_G.monitor_buffer[index].display_modes_len;
+
+    return VD_FW_G.monitor_buffer[index].display_modes;
+}
+
+VD_FW_API int vd_fw_get_monitor_display_mode_count(int index)
+{
+    return 0;
+}
+
 VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
 {
     if (x) *x = VD_FW_G.mouse[0];
@@ -6381,6 +6767,11 @@ VD_FW_API int vd_fw_get_key_pressed(int key)
 VD_FW_API int vd_fw_get_key_down(int key)
 {
     return VD_FW_G.curr_key_states[key];
+}
+
+VD_FW_API int vd_fw_get_last_key_pressed(void)
+{
+    return VD_FW_G.last_key;
 }
 
 VD_FW_API int vd_fw_get_gamepad_count(void)
@@ -6465,6 +6856,16 @@ VD_FW_API float *vd_fw_get_gamepad_raw_axes(int index, int *count_axes)
     return VD_FW_G.gamepad_curr_states[index].raw_axes;
 }
 
+VD_FW_API unsigned short vd_fw_get_num_codepoints(void)
+{
+    return VD_FW_G.num_codepoints;    
+}
+
+VD_FW_API unsigned int vd_fw_get_codepoint(unsigned short index)
+{
+    return VD_FW_G.codepoints[(VD_FW_G.first_codepoint_index + index) % VD_FW_CODEPOINT_BUFFER_COUNT];
+}
+
 VD_FW_API void vd_fw_set_mouse_capture(int on)
 {
     if (on) {
@@ -6488,12 +6889,18 @@ VD_FW_API void vd_fw_set_mouse_locked(int locked)
 
     VD_FW_G.mouse_is_locked = locked;
     if (locked) {
+        VdFwPOINT point;
+        VdFwGetCursorPos(&point);
+        VD_FW_G.last_mouse_before_lock[0] = point.x;
+        VD_FW_G.last_mouse_before_lock[1] = point.y;
         VD_FW__CHECK_TRUE(VdFwPostMessage(
             VD_FW_G.hwnd,
             VD_FW_WIN32_SHOW_CURSOR,
             0, /* WPARAM */
             0  /* LPARAM */));
     } else {
+        VdFwSetCursorPos(VD_FW_G.last_mouse_before_lock[0], VD_FW_G.last_mouse_before_lock[1]);
+
         VD_FW__CHECK_TRUE(VdFwPostMessage(
             VD_FW_G.hwnd,
             VD_FW_WIN32_SHOW_CURSOR,
@@ -6600,17 +7007,23 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     VD_FW_G.t_running = TRUE;
     // VD_FW_SANITY_CHECK();
 
-    VdFwWNDCLASSEX wcx;
-    ZeroMemory(&wcx, sizeof(wcx));
-    wcx.cbSize         = sizeof(wcx);
-    wcx.style          = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-    wcx.hInstance      = NULL;
-    wcx.lpfnWndProc    = vd_fw__wndproc;
-    wcx.lpszClassName  = TEXT("FWCLASS");
-    wcx.hbrBackground  = (VdFwHBRUSH)VdFwGetStockObject(BLACK_BRUSH);
-    wcx.hCursor        = VdFwLoadCursor(NULL, IDC_ARROW);
-    if (!VdFwRegisterClassEx(&wcx)) {
-        return 0;
+    static int has_registered_class = 0;
+
+    if (!has_registered_class) {
+        VdFwWNDCLASSEX wcx;
+        ZeroMemory(&wcx, sizeof(wcx));
+        wcx.cbSize         = sizeof(wcx);
+        wcx.style          = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
+        wcx.hInstance      = NULL;
+        wcx.lpfnWndProc    = vd_fw__wndproc;
+        wcx.lpszClassName  = TEXT("FWCLASS");
+        wcx.hbrBackground  = (VdFwHBRUSH)VdFwGetStockObject(BLACK_BRUSH);
+        wcx.hCursor        = VdFwLoadCursor(NULL, IDC_ARROW);
+        if (!VdFwRegisterClassEx(&wcx)) {
+            return 0;
+        }
+
+        has_registered_class = 1;
     }
 
     LONG window_style;
@@ -6638,10 +7051,10 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
         TEXT("FWCLASS"),
         TEXT("FW Window"),
         window_style,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        640,
-        480,
+        VD_FW_G.next_pos_x,
+        VD_FW_G.next_pos_y,
+        VD_FW_G.next_width,
+        VD_FW_G.next_height,
         0 /* hwndParent */,
         0 /* hMenu */,
         0 /* hInstance */,
@@ -6679,33 +7092,42 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     // SetWindowPos(VD_FW_G.hwnd, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_SHOWWINDOW);
     VdFwShowWindow(VD_FW_G.hwnd, SW_SHOW);
     VD_FW__CHECK_NONZERO(VdFwUpdateWindow(VD_FW_G.hwnd));
+    VD_FW__CHECK_NONZERO(VdFwSetFocus(VD_FW_G.hwnd));
+    VD_FW__CHECK_NONZERO(VdFwSetForegroundWindow(VD_FW_G.hwnd));
 
     VD_FW__CHECK_TRUE(ReleaseSemaphore(VD_FW_G.sem_window_ready, 1, NULL));
 
     // Register raw input mouse
-    {
-        VdFwRAWINPUTDEVICE rids[2];
-        rids[0].usUsagePage = 0x01; // Generic desktop controls
-        rids[0].usUsage     = 0x02; // Mouse
-        rids[0].dwFlags     = 0x00; // None (NO RIDEV_INPUTSINK)
-        rids[0].hwndTarget  = VD_FW_G.hwnd;
+    VdFwRAWINPUTDEVICE rids[2];
+    rids[0].usUsagePage = 0x01; // Generic desktop controls
+    rids[0].usUsage     = 0x02; // Mouse
+    rids[0].dwFlags     = 0x00; // None (NO RIDEV_INPUTSINK)
+    rids[0].hwndTarget  = VD_FW_G.hwnd;
 
-        rids[1].usUsagePage = 0x01; // Generic desktop controls
-        rids[1].usUsage     = 0x05; // Gamepad
-        rids[1].dwFlags     = RIDEV_DEVNOTIFY | RIDEV_INPUTSINK;
-        rids[1].hwndTarget  = VD_FW_G.hwnd;
-        VD_FW__CHECK_TRUE(VdFwRegisterRawInputDevices(rids, 2, sizeof(rids[0])));
-    }
+    rids[1].usUsagePage = 0x01; // Generic desktop controls
+    rids[1].usUsage     = 0x05; // Gamepad
+    rids[1].dwFlags     = RIDEV_DEVNOTIFY | RIDEV_INPUTSINK;
+    rids[1].hwndTarget  = VD_FW_G.hwnd;
+    VD_FW__CHECK_TRUE(VdFwRegisterRawInputDevices(rids, 2, sizeof(rids[0])));
 
     VD_FW_G.last_window_style = window_style;
     VD_FW_G.t_paint_ready = 1;
 
     while (VD_FW_G.t_running) {
         VdFwMSG message;
-        while (VdFwGetMessage(&message, VD_FW_G.hwnd, 0, 0)) {
+        // @note(mdodis): https://devblogs.microsoft.com/oldnewthing/20050209-00/?p=36493
+        // We don't filter by window since WM_INPUTLANGCHANGE won't fire instantly
+        while (VdFwGetMessage(&message, NULL, 0, 0)) {
             VdFwTranslateMessage(&message);
             VdFwDispatchMessage(&message);
         }
+    }
+
+    VD_FW_G.num_gamepads_present = 0;
+    VD_FW_G.winthread_num_gamepads_present = 0;
+    for (int i = 0; i < VD_FW_GAMEPAD_COUNT_MAX; ++i) {
+        VD_FW_G.gamepad_infos[i].connected = 0;
+        VD_FW_G.gamepad_infos[i].handle = NULL;
     }
 
     return 0;
@@ -6768,7 +7190,6 @@ VD_FW_API char *vd_fw__debug_dump_file_text(const char *path)
     char *memory = (char*)HeapAlloc(GetProcessHeap(), 0, sz.QuadPart + 1);
 
     DWORD bytes_read;
-    // @todo(mdodis): if file is > 4GB
     if (!ReadFile(hfile, memory, (DWORD)sz.QuadPart, &bytes_read, 0)) {
         HeapFree(GetProcessHeap(), 0, memory);
         return 0;
@@ -6781,9 +7202,9 @@ VD_FW_API char *vd_fw__debug_dump_file_text(const char *path)
 VD_FW_API void *vd_fw__realloc_mem(void *prev_ptr, size_t size)
 {
     if (prev_ptr == 0) {
-        return HeapAlloc(GetProcessHeap(), 0, size);
+        return HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, size);
     } else {
-        return HeapReAlloc(GetProcessHeap(), 0, prev_ptr, size);
+        return HeapReAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, prev_ptr, size);
     }
 }
 
@@ -7005,6 +7426,11 @@ static void vd_fw__theme_changed(void)
     VD_FW_G.theme_enabled = VdFwIsThemeActive();
 }
 
+static void vd_fw__update_monitors(void)
+{
+
+}
+
 static LRESULT vd_fw__nccalcsize(WPARAM wparam, LPARAM lparam)
 {
     int borderless = !VD_FW_G.draw_decorations;
@@ -7221,11 +7647,15 @@ static void vd_fw__win32_correlate_xinput_triggers(VdFw__Win32GamepadInfo *gamep
 
 static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam, VdFwLPARAM lparam)
 {
+    VD_FW_WIN32_INVOKE_WNDPROC(hwnd, msg, wparam, lparam);
+
     VdFwLRESULT result = 0;
     switch (msg) {
 
         case WM_CLOSE: {
-            VdFwDestroyWindow(hwnd);
+            VdFw__Win32Message m;
+            m.msg = VD_FW_WIN32_MESSAGE_TYPE_CLOSERQ;
+            vd_fw__msgbuf_w(&m);
         } break;
 
         case WM_DESTROY: {
@@ -7352,6 +7782,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 vd_fw__msgbuf_w(&m);
             }
         } break;
+
         case WM_SYSCOMMAND: {
             if (!VD_FW_G.draw_decorations) {
                 if (wparam == 0x0000F012) {
@@ -8153,8 +8584,22 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
         } break;
 
+        case WM_SYSKEYDOWN: {
+            if (!VD_FW_G.draw_decorations) {
+
+                if (wparam == VK_F4) {
+                    OutputDebugStringA("SYSKEY\n");
+                    VdFwPostMessage(hwnd, WM_CLOSE, 0, 0);
+                }
+            } else {
+                result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
+            }
+
+        } break;
+
         case WM_KEYUP:
         case WM_KEYDOWN: {
+
             WORD vkcode = LOWORD(wparam);
             
             WORD keyflags = HIWORD(lparam);
@@ -8182,6 +8627,50 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             m.dat.mousebtn.down   = is_down;
             m.dat.keystate.vkcode = vkcode;
             vd_fw__msgbuf_w(&m);
+
+            result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
+        } break;
+
+        case WM_UNICHAR: {
+            result = 1;
+            if (wparam == UNICODE_NOCHAR) {
+                break;
+            }
+
+            VdFw__Win32Message m;
+            m.msg = VD_FW_WIN32_MESSAGE_TYPE_CHAR;
+            m.dat.character.codepoint = (VdFwU32)wparam;
+            vd_fw__msgbuf_w(&m);
+        } break;
+
+        case WM_CHAR: {
+            VdFwU32 codepoint = 0;
+            int send_message = 1;
+            if (IS_HIGH_SURROGATE(wparam)) {
+                VD_FW_G.char_surrogate_hi = (VdFwWCHAR)wparam;
+                send_message = 0;
+            } else if (IS_SURROGATE_PAIR(VD_FW_G.char_surrogate_hi, wparam)) {
+                VdFwU32 lo = (VdFwU32)wparam;
+                VdFwU32 hi = (VdFwU32)VD_FW_G.char_surrogate_hi;
+                codepoint = 0x10000 + (((hi - 0xD800) << 10) | (lo - 0xDC00));
+                send_message = 2;
+                VD_FW_G.char_surrogate_hi = 0;
+            } else {
+                codepoint = (VdFwU32)wparam;
+            }
+
+            if (!send_message) {
+                break;
+            }
+
+            VdFw__Win32Message m;
+            m.msg = VD_FW_WIN32_MESSAGE_TYPE_CHAR;
+            m.dat.character.codepoint = codepoint;
+            vd_fw__msgbuf_w(&m);
+        } break;
+
+        case WM_INPUTLANGCHANGE: {
+            vd_fw__update_kb_codepage();
         } break;
 
         case WM_XBUTTONUP:
@@ -8248,7 +8737,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
         } break;
 
-        // @todo(mdodis):
         case WM_SETFOCUS:
         case WM_KILLFOCUS: {
             int got_focus = msg == WM_SETFOCUS;
@@ -8318,16 +8806,29 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 VdFwMONITORINFO monitor_info = {0};
                 monitor_info.cbSize = sizeof(monitor_info);
                 VD_FW__CHECK_NONZERO(VdFwGetMonitorInfo(monitor, &monitor_info));
+                VdFwLONG style;
+                VdFwUINT flags;
 
-                VdFwLONG style = VD_FW_G.last_window_style & ~(WS_OVERLAPPEDWINDOW);
-                style |= WS_VISIBLE;
+                if (VD_FW_G.draw_decorations) {
+                    style = WS_POPUP | WS_VISIBLE;
+                    flags = SWP_FRAMECHANGED;
+                } else {
+                    style = WS_POPUP | WS_VISIBLE;
+                    flags = SWP_FRAMECHANGED;
+                }
 
                 VdFwSetWindowLong(VD_FW_G.hwnd, GWL_STYLE, style);
                 VdFwSetWindowPos(VD_FW_G.hwnd, VD_FW_HWND_TOP,
-                             monitor_info.rcMonitor.left, monitor_info.rcMonitor.top,
+                             monitor_info.rcMonitor.left , monitor_info.rcMonitor.top,
                              monitor_info.rcMonitor.right - monitor_info.rcMonitor.left,
                              monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top,
-                             SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+                             flags);
+
+                if (VD_FW_G.draw_decorations) {
+
+                    VdFwMARGINS m = {-1,-1,-1,-1};
+                    VD_FW__CHECK_HRESULT(VdFwDwmExtendFrameIntoClientArea(VD_FW_G.hwnd, &m));
+                }
             } else {
                 VdFwSetWindowLong(VD_FW_G.hwnd, GWL_STYLE, VD_FW_G.last_window_style);
                 VdFwSetWindowPlacement(VD_FW_G.hwnd, &VD_FW_G.last_window_placement);
@@ -8399,6 +8900,10 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
         case VD_FW_WIN32_GAMEPADRAWRQ: {
             VD_FW_G.gamepad_raw_reports_on = (int)wparam;
+        } break;
+
+        case VD_FW_WIN32_KILL: {
+            VdFwDestroyWindow(VD_FW_G.hwnd);
         } break;
 
         case WM_TIMER: {
@@ -8567,6 +9072,236 @@ static char *vd_fw__utf16_to_utf8(const wchar_t *ws)
     return data;
 }
 
+static void vd_fw__update_kb_codepage(void)
+{
+    VdFwHKL keyboard_layout = VdFwGetKeyboardLayout(0);
+
+    LCID keyboard_lcid = MAKELCID(HIWORD(keyboard_layout), SORT_DEFAULT);
+    if (GetLocaleInfoA(keyboard_lcid, (LOCALE_RETURN_NUMBER | LOCALE_IDEFAULTANSICODEPAGE), (LPSTR)&VD_FW_G.kb_codepage, sizeof(VD_FW_G.kb_codepage)) == 0) {
+        VD_FW_G.kb_codepage = CP_ACP;
+    }
+}
+
+static VdFwBOOL vd_fw__win32_enum_monitor(VdFwHMONITOR monitor, VdFwHDC hdc, VdFwLPRECT rect, VdFwLPARAM lpparam)
+{
+    (void)lpparam;
+    (void)hdc;
+    (void)rect;
+
+    VdFwMONITORINFOEXW monitor_info = {};
+    monitor_info.monitor_info.cbSize = sizeof(monitor_info);
+    VD_FW__CHECK_TRUE(VdFwGetMonitorInfoW(monitor, (VdFwLPMONITORINFO)&monitor_info));
+
+    VdFwDISPLAY_DEVICEW display_monitor = {0};
+    display_monitor.cb = sizeof(display_monitor);
+    if (!VdFwEnumDisplayDevicesW(monitor_info.szDevice, 0, (VdFwPDISPLAY_DEVICEW)&display_monitor, VD_FW__WIN32_EDD_GET_DEVICE_INTERFACE_NAME)) {
+        return TRUE;
+    }
+
+    static VdFw__Win32GUID guid_devinterface_monitor = { 0xe6f07b5f, 0xee97, 0x4a90, 0xb0, 0x76, 0x33, 0xf5, 0x7b, 0xf4, 0xea, 0xa7 };
+
+    VdFwHDEVINFO devinfo = VdFwSetupDiGetClassDevsW(&guid_devinterface_monitor,
+                                                    NULL, NULL, VD_FW__WIN32_DIGCF_DEVICEINTERFACE);
+    if (devinfo == NULL) {
+        return TRUE;
+    }
+
+    VdFwSP_DEVICE_INTERFACE_DATA di_data = {0};
+    di_data.cbSize = sizeof(di_data);
+    VdFwDWORD di_index = 0;
+    static char di_detail_data_buffer[512] = {0}; 
+    VdFwSP_DEVICE_INTERFACE_DETAIL_DATA_W *pdi_detail_data = (VdFwSP_DEVICE_INTERFACE_DETAIL_DATA_W*)di_detail_data_buffer;
+    pdi_detail_data->cbSize = sizeof(*pdi_detail_data);
+
+    int found = 0;
+
+    while (VdFwSetupDiEnumDeviceInterfaces(devinfo, NULL, &guid_devinterface_monitor, di_index, &di_data)) {
+
+        if (VdFwSetupDiGetDeviceInterfaceDetailW(devinfo, &di_data,
+                                                 pdi_detail_data, 512, // DeviceInterfaceDetailDataSize
+                                                 0, NULL))
+        {
+
+            if (vd_fw__compare_string_wide_nullsep_case_insensitive(pdi_detail_data->DevicePath,
+                                                                    display_monitor.DeviceID))
+            {
+                found = 1;
+                break;
+            }
+        }
+
+        di_index++;
+    }
+
+    if (!found) {
+        return TRUE;
+    }
+
+
+    VdFwSP_DEVINFO_DATA devinfo_data = {0};
+    devinfo_data.cbSize = sizeof(devinfo_data);
+    if (!VdFwSetupDiEnumDeviceInfo(devinfo, di_index, &devinfo_data)) {
+        return TRUE;
+    }
+
+    VdFwHKEY hk = VdFwSetupDiOpenDevRegKey(devinfo, &devinfo_data, 
+                                           VD_FW__WIN32_DICS_FLAG_GLOBAL, 0, VD_FW__WIN32_DIREG_DEV,
+                                           VD_FW__WIN32_KEY_READ);
+    if (hk == NULL) {
+        return TRUE;
+    }
+
+    static VdFwBYTE edid_data[1024];
+    VdFwDWORD edid_data_size = sizeof(edid_data);
+
+    if (VdFwRegQueryValueExW(hk, L"EDID", NULL, NULL, edid_data, &edid_data_size) != 0) {
+        goto WIN32_DISPLAY_MONITOR_EDID_FAIL;
+    }
+
+    if (edid_data_size < sizeof(VdFwEdid1_4)) {
+        goto WIN32_DISPLAY_MONITOR_EDID_FAIL;
+    }
+
+
+    VdFwEdid1_4 *edid = (VdFwEdid1_4*)edid_data;
+    if ((edid->header[0] != 0x00) || (edid->header[1] != 0xFF) ||
+        (edid->header[2] != 0xFF) || (edid->header[3] != 0xFF) ||
+        (edid->header[4] != 0xFF) || (edid->header[5] != 0xFF) ||
+        (edid->header[6] != 0xFF) || (edid->header[7] != 0x00))
+    {
+        goto WIN32_DISPLAY_MONITOR_EDID_FAIL;
+    }
+
+    int display_name_len = sizeof("Generic PnP Monitor") - 1;
+    const char *display_name = "Generic PnP Monitor";
+
+    for (int i = 0; i < 4; ++i) {
+        VdFwEdid1_4DataBlock *data_block = &edid->data_blocks[i];
+        if (data_block->detailed_timing.pixel_clock != 0) {
+            continue;
+        }
+
+        VdFwEdid1_4DisplayDescriptor *display_descriptor = &data_block->display_descriptor;
+
+        if (display_descriptor->tag != 0xFC) {
+            continue;
+        }
+
+        display_name = display_descriptor->data_block.product_name.name;
+
+        int len = 0;
+        const char *c = display_name;
+        while ((len < 13) && (*c != '\r') && (*c != '\n')) {
+            len++;
+            c++;
+        }
+
+        display_name_len = len;
+        break;
+    }
+
+    VdFw__Win32Monitor *mmonitor = &VD_FW_G.monitor_buffer[VD_FW_G.monitor_buffer_len++];
+    VD_FW_MEMCPY(mmonitor->friendly_name, display_name, display_name_len);
+    mmonitor->friendly_name[display_name_len] = 0;
+    mmonitor->hmonitor = monitor;
+    mmonitor->display_modes_len = 0;
+
+WIN32_DISPLAY_MONITOR_EDID_FAIL:
+    VdFwRegCloseKey(hk);
+    return TRUE;
+}
+
+static VdFwBOOL vd_fw__win32_enum_monitor_resize_count(VdFwHMONITOR monitor, VdFwHDC hdc, VdFwLPRECT rect, VdFwLPARAM lpparam)
+{
+    (void)monitor;
+    (void)hdc;
+    (void)rect;
+    (void)lpparam;
+    VD_FW_G.monitor_count++;
+    return TRUE;
+}
+
+static void vd_fw__win32_update_monitor_display_modes(VdFw__Win32Monitor *monitor)
+{
+    if (monitor->display_modes_len != 0) {
+        return;
+    }
+
+    VdFwMONITORINFOEXW monitor_info = {};
+    monitor_info.monitor_info.cbSize = sizeof(monitor_info);
+    VD_FW__CHECK_TRUE(VdFwGetMonitorInfoW(monitor->hmonitor, (VdFwLPMONITORINFO)&monitor_info));
+
+    VdFwDEVMODEW devmode;
+    devmode.dmSize = sizeof(devmode);
+    int display_mode_count = 0;
+    int graphics_mode_index = 0;
+    while (VdFwEnumDisplaySettingsW((VdFwLPCSTR)monitor_info.szDevice, graphics_mode_index, &devmode)) {
+        graphics_mode_index++;
+
+        if (devmode.dmBitsPerPel < 15) {
+            continue;
+        }
+
+        if (devmode.extra.displays.dmDisplayOrientation != 0) {
+            continue;
+        }
+
+        display_mode_count++;
+    }
+
+    monitor->display_modes = vd_fw__resize_buffer(monitor->display_modes, sizeof(*monitor->display_modes),
+                                                  display_mode_count, &monitor->display_modes_cap);
+
+    graphics_mode_index = 0;
+    while (VdFwEnumDisplaySettingsW((VdFwLPCSTR)monitor_info.szDevice, graphics_mode_index, &devmode)) {
+        graphics_mode_index++;
+
+        if (devmode.dmBitsPerPel < 15) {
+            continue;
+        }
+
+        if (devmode.extra.displays.dmDisplayOrientation != 0) {
+            continue;
+        }
+
+        VdFwDisplayMode candidate_mode;
+        candidate_mode.width = devmode.dmPelsWidth;
+        candidate_mode.height = devmode.dmPelsHeight;
+        candidate_mode.frequency = devmode.dmDisplayFrequency;
+
+        int skip_mode = 0;
+
+        for (int i = 0; i < monitor->display_modes_len; ++i) {
+
+            VdFwDisplayMode *display_mode = &monitor->display_modes[i];
+
+            if ((display_mode->width == candidate_mode.width) &&
+                (display_mode->height == candidate_mode.height) &&
+                (display_mode->frequency == candidate_mode.frequency))
+            {
+                skip_mode = 1;
+                break;
+            }
+        }
+
+        if (skip_mode) {
+            continue;
+        }
+
+        VdFwDisplayMode *display_mode = &monitor->display_modes[monitor->display_modes_len++];
+
+        VdFwU32 gcd = vd_fw__gcd(devmode.dmPelsWidth, devmode.dmPelsHeight);
+
+        display_mode->width = devmode.dmPelsWidth;
+        display_mode->height = devmode.dmPelsHeight;
+        display_mode->frequency = devmode.dmDisplayFrequency;
+        display_mode->aspect.numerator = devmode.dmPelsWidth / gcd;
+        display_mode->aspect.denominator = devmode.dmPelsHeight / gcd;
+    }
+
+    vd_fw__sort_display_modes(monitor->display_modes, monitor->display_modes_len);
+}
+
 #if VD_FW_NO_CRT
 #pragma function(memset)
 void *__cdecl memset(void *dest, int value, size_t num)
@@ -8669,6 +9404,8 @@ int wWinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPWSTR cmdline, int n
 
 #elif defined(__APPLE__)
 #import <AppKit/AppKit.h>
+#import <IOKit/IOKitLib.h>
+#import <IOKit/hid/IOHIDManager.h>
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/CAMetalLayer.h>
 #import <QuartzCore/CVDisplayLink.h>
@@ -8711,6 +9448,7 @@ typedef enum {
     VD_FW__MAC_MESSAGE_KEY,
     VD_FW__MAC_MESSAGE_MINIMIZED,
     VD_FW__MAC_MESSAGE_ZOOMED,
+    VD_FW__MAC_MESSAGE_CLOSE_REQUEST,
 } VdFw__MacMessageType;
 
 typedef struct {
@@ -8778,6 +9516,8 @@ typedef struct {
     BOOL                        mouse_is_locked;
     int                         window_state;
     int                         window_state_changed;
+    int                         close_request;
+    uint64_t                    delta_ns;
 
 /* ----WINDOW THREAD ONLY-------------------------------------------------------------------------------------------- */
     BOOL                        draw_decorations;
@@ -8785,6 +9525,10 @@ typedef struct {
     VdFwWindow                  *window;
     int                         context_needs_update;
     BOOL                        is_zoomed;
+    int                         cap_gamepad_db_entries;
+    int                         num_gamepad_db_entries;
+    VdFwGamepadDBEntry          *gamepad_db_entries;
+
 
 /* ----MAIN - RENDER THREAD DATA------------------------------------------------------------------------------------- */
     int                         w, h;
@@ -8799,6 +9543,7 @@ typedef struct {
     int                         ncrect_count;
     NSRect                      ncrects[VD_FW_NCRECTS_MAX];
     NSImage                     *app_image;
+    int                         has_initialized;
 
 /* ----MAIN - RENDER THREAD SYNC------------------------------------------------------------------------------------- */
     pthread_t                   main_thread;
@@ -8814,6 +9559,8 @@ typedef struct {
 
 static int vd_fw__msgbuf_r(VdFw__MacMessage *message);
 static int vd_fw__msgbuf_w(VdFw__MacMessage *message);
+static void vd_fw__mac_hid_device_added_callback(void *context, IOReturn result, void *sender, IOHIDDeviceRef device);
+static void vd_fw__mac_hid_device_removed_callback(void *context, IOReturn result, void *sender, IOHIDDeviceRef device);
 
 static VdFw__MacOsInternalData Vd_Fw_Globals;
 
@@ -9122,6 +9869,21 @@ static int Update_Context = 0;
     // [VD_FW_G.gl_context update];
 }
 
+- (void)backingChanged:(NSNotification *)note {
+    NSWindow *win = note.object;
+    CGFloat scale = win.backingScaleFactor;
+    VD_FW_G.scale = scale;
+
+    NSRect rect = [[VD_FW_G.window contentView] frame];
+    VD_FW_G.w = (int)rect.size.width * VD_FW_G.scale;
+    VD_FW_G.h = (int)rect.size.height * VD_FW_G.scale;
+
+    if (!VD_FW_G.context_update_requested) {
+        sem_post(VD_FW_G.s_main_thread_context_needs_update);
+        VD_FW_G.context_update_requested = 1;
+    }
+}
+
 - (void)windowDidBecomeKey:(NSNotification *)notification {
     VD_FW_G.focus_changed = 1;
     VD_FW_G.focused = 1;
@@ -9157,6 +9919,20 @@ static int Update_Context = 0;
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
 
+}
+
+- (NSApplicationTerminateReply) applicationShouldTerminate:(NSApplication *) sender {
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_CLOSE_REQUEST;
+    vd_fw__msgbuf_w(&msg);
+    return NSTerminateCancel;
+}
+
+- (BOOL)windowShouldClose:(NSWindow *)notification {
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_CLOSE_REQUEST;
+    vd_fw__msgbuf_w(&msg);
+    return FALSE;
 }
 
 - (void)windowDidResize:(NSNotification *)notification {
@@ -9506,10 +10282,15 @@ static int Update_Context = 0;
 
     NSPoint scaled_pos = vd_fw__mac_mouse_cocoa_to_conventional(view_point);
 
+    float dx = [evt deltaX];
+    float dy = [evt deltaY];
+
     VdFw__MacMessage msg;
     msg.type = VD_FW__MAC_MESSAGE_MOUSEMOVE;
     msg.dat.mousemove.mx = scaled_pos.x;
     msg.dat.mousemove.my = scaled_pos.y;
+    msg.dat.mousemove.dx = dx;
+    msg.dat.mousemove.dy = dy;
     vd_fw__msgbuf_w(&msg); 
 
     NSPoint p = [VD_FW_G.window convertPointToScreen: view_point];
@@ -9559,9 +10340,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 
 VD_FW_API unsigned long long vd_fw_delta_ns(void)
 {
-    uint64_t now = mach_absolute_time();
-    uint64_t ns = (now - VD_FW_G.last_time) * VD_FW_G.time_base.numer / VD_FW_G.time_base.denom;
-    return ns;
+    return VD_FW_G.delta_ns;
 }
 
 VD_FW_API void vd_fw_get_mouse_delta(float *dx, float *dy)
@@ -9638,6 +10417,7 @@ VD_FW_API int vd_fw_running(void)
 
     VD_FW_G.focus_changed = 0;
     VD_FW_G.window_state_changed = 0;
+    VD_FW_G.close_request = 0;
 
     VD_FW_G.prev_mouse_state = VD_FW_G.mouse_state;
     for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
@@ -9691,6 +10471,11 @@ VD_FW_API int vd_fw_running(void)
                 }
                 VD_FW_G.window_state_changed = 1;
             } break;
+
+            case VD_FW__MAC_MESSAGE_CLOSE_REQUEST: {
+                VD_FW_G.close_request = 1;
+            } break;
+
             default: break;
         }
     }
@@ -9700,12 +10485,16 @@ VD_FW_API int vd_fw_running(void)
     VD_FW_G.next_frame.flags = 0;
     pthread_mutex_unlock(&VD_FW_G.m_paint);
 
+    uint64_t now = mach_absolute_time();
+    uint64_t ns = (now - VD_FW_G.last_time) * VD_FW_G.time_base.numer / VD_FW_G.time_base.denom;
+    VD_FW_G.delta_ns = ns;
+    VD_FW_G.last_time = now;
+
     return !VD_FW_G.should_close;
 }
 
 VD_FW_API int vd_fw_swap_buffers(void)
 {
-    VD_FW_G.last_time = mach_absolute_time();
     [VD_FW_G.gl_context flushBuffer];
 
     // if (VD_FW_G.curr_frame.flags & VD_FW__MAC_FLAGS_WAKE_COND_VAR) {
@@ -9727,6 +10516,19 @@ VD_FW_API int vd_fw_swap_buffers(void)
     return 1;
 }
 
+VD_FW_API int vd_fw_close_requested(void)
+{
+    return VD_FW_G.close_request;
+}
+
+VD_FW_API void vd_fw_quit(void)
+{
+    dispatch_sync(dispatch_get_main_queue(), ^(void){
+        [VD_FW_G.window close];
+    });
+    return;
+}
+
 VD_FW_API VdFwPlatform vd_fw_get_platform(void)
 {
     return VD_FW_PLATFORM_MACOS;
@@ -9743,6 +10545,18 @@ VD_FW_API int vd_fw_get_size(int *w, int *h)
     *w = VD_FW_G.curr_frame.w;
     *h = VD_FW_G.curr_frame.h;
     return VD_FW_G.curr_frame.flags & VD_FW__MAC_FLAGS_SIZE_CHANGED;
+}
+
+VD_FW_API void vd_fw_set_size(int w, int h)
+{
+    dispatch_async(dispatch_get_main_queue(), ^(void) {
+        NSRect frame = [VD_FW_G.window frame];
+        frame.origin.y -= frame.size.height;
+        frame.origin.y += h; 
+        frame.size.width = w;
+        frame.size.height = h;
+        [VD_FW_G.window setFrame: frame display: YES animate: NO];
+    });
 }
 
 VD_FW_API int vd_fw_get_minimized(int *minimized)
@@ -9837,7 +10651,13 @@ VD_FW_API float vd_fw_get_scale(void)
 
 VD_FW_API void vd_fw_set_title(const char *title)
 {
-    [VD_FW_G.window setTitle: [NSString stringWithUTF8String: (title)]];
+
+    NSString *s = [NSString stringWithUTF8String: title];
+
+    dispatch_sync(dispatch_get_main_queue(), ^(void){
+        [VD_FW_G.window setTitle: s];
+        [s release];
+    });
 }
 
 VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
@@ -9881,6 +10701,11 @@ VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
             [prev_img release];
         }
     });
+}
+
+VD_FW_API void *vd_fw_get_internal_window_handle(void)
+{
+    return (void*)VD_FW_G.window;
 }
 
 VD_FW_API int vd_fw_set_vsync_on(int on)
@@ -9947,6 +10772,21 @@ VD_FW_API char *vd_fw__debug_dump_file_text(const char *path)
 VD_FW_API void vd_fw__free_mem(void *memory)
 {
     free(memory);
+}
+
+VD_FW_API void vd_fw__lock_gamepaddb(void)
+{
+    return;
+}
+
+VD_FW_API void vd_fw__unlock_gamepaddb(void)
+{
+    return;
+}
+
+VD_FW_API void vd_fw__notify_gamepaddb_changed(void)
+{
+    return;
 }
 
 VD_FW_API void *vd_fw__realloc_mem(void *prev_ptr, size_t size)
@@ -10031,7 +10871,7 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
         version = info->gl.version;
     }
 
-    // @autoreleasepool
+    // Window
     {
         NSScreen *main_screen = [NSScreen mainScreen];
         VD_FW_G.scale = [main_screen backingScaleFactor];
@@ -10066,7 +10906,8 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
         VD_FW_G.window = [[VdFwWindow alloc] initWithContentRect: frame
                                                      styleMask: window_style_mask
                                                        backing: NSBackingStoreBuffered
-                                                         defer: NO];
+                                                         defer: NO
+                                                        screen: main_screen];
 
         if (!VD_FW_G.draw_decorations) {
             VD_FW_G.window.titleVisibility = NSWindowTitleHidden;
@@ -10119,6 +10960,9 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
             NSOpenGLPFADepthSize, 24,
             NSOpenGLPFADoubleBuffer,
             NSOpenGLPFAAccelerated,
+            // NSOpenGLPFAMultisample,
+            // NSOpenGLPFASampleBuffers, (NSOpenGLPixelFormatAttribute)1,
+            // NSOpenGLPFASamples, (NSOpenGLPixelFormatAttribute)4,
             0
         };
 
@@ -10139,6 +10983,11 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
         [VD_FW_G.window makeFirstResponder: fw_view];
         [VD_FW_G.window setAcceptsMouseMovedEvents: YES];
         [NSApp activateIgnoringOtherApps:YES];
+        [[NSNotificationCenter defaultCenter] addObserver: delegate
+                                              selector: @selector(backingChanged:)
+                                              name: NSWindowDidChangeBackingPropertiesNotification
+                                              object: VD_FW_G.window];
+
     }
     VD_FW_G.w = 640 * VD_FW_G.scale;
     VD_FW_G.h = 480 * VD_FW_G.scale;
@@ -10150,6 +10999,26 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
     dispatch_async(dispatch_get_main_queue(), ^{
         [VD_FW_G.window makeKeyAndOrderFront:nil];
     });
+
+    // IOKit
+    int filter[] = {kHIDPage_GenericDesktop};
+    IOHIDManagerRef hidman = IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDManagerOptionNone);
+
+    CFMutableDictionaryRef match_dictionary = CFDictionaryCreateMutable(kCFAllocatorDefault,
+                                                                        0,
+                                                                        &kCFTypeDictionaryKeyCallBacks,
+                                                                        &kCFTypeDictionaryValueCallBacks);
+    CFDictionarySetValue(match_dictionary,
+                         CFSTR(kIOHIDDeviceUsagePageKey),
+                         CFNumberCreate(kCFAllocatorDefault, kCFNumberIntType, filter));
+    IOHIDManagerSetDeviceMatching(hidman, match_dictionary);
+    IOHIDManagerRegisterDeviceMatchingCallback(hidman, vd_fw__mac_hid_device_added_callback, 0);
+    IOHIDManagerRegisterDeviceRemovalCallback(hidman, vd_fw__mac_hid_device_removed_callback, 0);
+
+    IOHIDManagerScheduleWithRunLoop(hidman, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
+    IOHIDManagerOpen(hidman, kIOHIDOptionsTypeNone);
+    CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, false);
+
 }
 
 static void vd_fw__mac_init_gl(VdFwInitInfo *info)
@@ -10196,6 +11065,29 @@ static int vd_fw__msgbuf_w(VdFw__MacMessage *message)
     __atomic_exchange_n(&VD_FW_G.msgbuf_w, nw, __ATOMIC_SEQ_CST);
 
     return 1;
+}
+
+static void vd_fw__mac_hid_device_added_callback(void *context, IOReturn result, void *sender, IOHIDDeviceRef device)
+{
+    CFTypeRef ref_usage = IOHIDDeviceGetProperty(device, CFSTR(kIOHIDPrimaryUsageKey));
+    int usage = 0;
+    CFNumberGetValue(ref_usage, kCFNumberIntType, (void*)&usage);
+
+    if ((usage != kHIDUsage_GD_Joystick) &&
+        (usage != kHIDUsage_GD_GamePad) &&
+        (usage != kHIDUsage_GD_MultiAxisController))
+    {
+        return;
+    }
+
+    CFStringRef cf_name = IOHIDDeviceGetProperty(device, CFSTR(kIOHIDProductKey));
+    NSString *name = (__bridge NSString *)cf_name;
+    NSLog(@"Device name: %@", name);
+}
+
+static void vd_fw__mac_hid_device_removed_callback(void *context, IOReturn result, void *sender, IOHIDDeviceRef device)
+{
+    printf("HID Device Removed\n");
 }
 
 #elif defined(__linux__)
@@ -10377,6 +11269,9 @@ VD_FW_API unsigned int vd_fw_compile_shader(unsigned int type, const char *sourc
     static char buf[1024];
     GLsizei len;
     glGetShaderInfoLog(shd, sizeof(buf), &len, buf);
+    buf[len] = 0;
+
+    VD_FW_LOG("Shader compilation failed: %s\n", buf);
     return 0;
 }
 
@@ -10763,19 +11658,14 @@ typedef struct {
     VdFwGamepadClass klass;
 } VdFw__GamepadSymbolToClass;
 static VdFw__GamepadSymbolToClass Vd_Fw__Gamepad_Symbols_To_Classes[] = {
-#define VD_FW__SYM_LEN(s) s, sizeof(s) - 1
-    {VD_FW__SYM_LEN("nes"),       VD_FW_GAMEPAD_CLASS_NES},
-    {VD_FW__SYM_LEN("megadrive"), VD_FW_GAMEPAD_CLASS_MEGADRIVE},
-    {VD_FW__SYM_LEN("genesis"),   VD_FW_GAMEPAD_CLASS_GENESIS},
-    {VD_FW__SYM_LEN("snes"),      VD_FW_GAMEPAD_CLASS_SNES},
-    {VD_FW__SYM_LEN("ps1"),       VD_FW_GAMEPAD_CLASS_PS1},
-    {VD_FW__SYM_LEN("joycon"),    VD_FW_GAMEPAD_CLASS_JOYCON},
-    {VD_FW__SYM_LEN("n64"),       VD_FW_GAMEPAD_CLASS_N64},
-    {VD_FW__SYM_LEN("ps2"),       VD_FW_GAMEPAD_CLASS_PS2},
-    {VD_FW__SYM_LEN("xbox"),      VD_FW_GAMEPAD_CLASS_XBOX},
-    {VD_FW__SYM_LEN("ps4"),       VD_FW_GAMEPAD_CLASS_PS4},
-    {VD_FW__SYM_LEN("steamdeck"), VD_FW_GAMEPAD_CLASS_STEAMDECK},
-#undef VD_FW__SYM_LEN
+#define __SYM(s) s, sizeof(s) - 1
+    {__SYM("nes"),       VD_FW_GAMEPAD_CLASS_NES},       {__SYM("megadrive"), VD_FW_GAMEPAD_CLASS_MEGADRIVE},
+    {__SYM("genesis"),   VD_FW_GAMEPAD_CLASS_GENESIS},   {__SYM("snes"),      VD_FW_GAMEPAD_CLASS_SNES},
+    {__SYM("ps1"),       VD_FW_GAMEPAD_CLASS_PS1},       {__SYM("joycon"),    VD_FW_GAMEPAD_CLASS_JOYCON},
+    {__SYM("n64"),       VD_FW_GAMEPAD_CLASS_N64},       {__SYM("ps2"),       VD_FW_GAMEPAD_CLASS_PS2},
+    {__SYM("xbox"),      VD_FW_GAMEPAD_CLASS_XBOX},      {__SYM("ps4"),       VD_FW_GAMEPAD_CLASS_PS4},
+    {__SYM("steamdeck"), VD_FW_GAMEPAD_CLASS_STEAMDECK},
+#undef __SYM
 };
 
 static int vd_fw__parse_map_class(const char *s, int s_len, VdFwGamepadClass *out)
@@ -10918,44 +11808,26 @@ typedef struct {
 } VdFw__GamepadSymbolToTarget;
 
 VdFw__GamepadSymbolToTarget Vd_Fw__Gamepad_Symbols_To_Targets[] = {
-#define VD_FW__SYM_LEN(s) s, sizeof(s) - 1
-    {VD_FW__SYM_LEN("a"),                   VD_FW_GAMEPAD_A,              0},
-    {VD_FW__SYM_LEN("b"),                   VD_FW_GAMEPAD_B,              0},
-    {VD_FW__SYM_LEN("x"),                   VD_FW_GAMEPAD_X,              0},
-    {VD_FW__SYM_LEN("y"),                   VD_FW_GAMEPAD_Y,              0},
-    {VD_FW__SYM_LEN("start"),               VD_FW_GAMEPAD_START,          0},
-    {VD_FW__SYM_LEN("back"),                VD_FW_GAMEPAD_BACK,           0},
-    {VD_FW__SYM_LEN("dpup"),                VD_FW_GAMEPAD_DUP,            0},
-    {VD_FW__SYM_LEN("dpdown"),              VD_FW_GAMEPAD_DDOWN,          0},
-    {VD_FW__SYM_LEN("dpleft"),              VD_FW_GAMEPAD_DLEFT,          0},
-    {VD_FW__SYM_LEN("dpright"),             VD_FW_GAMEPAD_DRIGHT,         0},
-    {VD_FW__SYM_LEN("leftshoulder"),        VD_FW_GAMEPAD_LEFT_SHOULDER,  0},
-    {VD_FW__SYM_LEN("leftstick"),           VD_FW_GAMEPAD_LEFT_STICK,     0},
-    {VD_FW__SYM_LEN("lefttrigger"),         VD_FW_GAMEPAD_LT,             1},
-    {VD_FW__SYM_LEN("rightshoulder"),       VD_FW_GAMEPAD_RIGHT_SHOULDER, 0},
-    {VD_FW__SYM_LEN("rightstick"),          VD_FW_GAMEPAD_RIGHT_STICK,    0},
-    {VD_FW__SYM_LEN("righttrigger"),        VD_FW_GAMEPAD_RT,             1},
-    {VD_FW__SYM_LEN("leftx"),               VD_FW_GAMEPAD_LH,             1},
-    {VD_FW__SYM_LEN("lefty"),               VD_FW_GAMEPAD_LV,             1},
-    {VD_FW__SYM_LEN("rightx"),              VD_FW_GAMEPAD_RH,             1},
-    {VD_FW__SYM_LEN("righty"),              VD_FW_GAMEPAD_RV,             1},
-    {VD_FW__SYM_LEN("lpad0"),               VD_FW_GAMEPAD_LEFT_PAD0,      0},
-    {VD_FW__SYM_LEN("rpad0"),               VD_FW_GAMEPAD_RIGHT_PAD0,     0},
-    {VD_FW__SYM_LEN("lpad1"),               VD_FW_GAMEPAD_LEFT_PAD1,      0},
-    {VD_FW__SYM_LEN("rpad1"),               VD_FW_GAMEPAD_RIGHT_PAD1,     0},
-    {VD_FW__SYM_LEN("lpad2"),               VD_FW_GAMEPAD_LEFT_PAD2,      0},
-    {VD_FW__SYM_LEN("rpad2"),               VD_FW_GAMEPAD_RIGHT_PAD2,     0},
-    {VD_FW__SYM_LEN("aux0"),                VD_FW_GAMEPAD_AUX0,           0},
-    {VD_FW__SYM_LEN("aux1"),                VD_FW_GAMEPAD_AUX1,           0},
-    {VD_FW__SYM_LEN("aux2"),                VD_FW_GAMEPAD_AUX2,           0},
-    {VD_FW__SYM_LEN("aux3"),                VD_FW_GAMEPAD_AUX3,           0},
-    {VD_FW__SYM_LEN("aux4"),                VD_FW_GAMEPAD_AUX4,           0},
-    {VD_FW__SYM_LEN("aux5"),                VD_FW_GAMEPAD_AUX5,           0},
-    {VD_FW__SYM_LEN("aux6"),                VD_FW_GAMEPAD_AUX6,           0},
-    {VD_FW__SYM_LEN("aux7"),                VD_FW_GAMEPAD_AUX7,           0},
-    {VD_FW__SYM_LEN("aux8"),                VD_FW_GAMEPAD_AUX8,           0},
-    {VD_FW__SYM_LEN("aux9"),                VD_FW_GAMEPAD_AUX9,           0},
-#undef VD_FW__SYM_LEN
+#define __SYM(s) s, sizeof(s) - 1
+    {__SYM("a"),             VD_FW_GAMEPAD_A,             0}, {__SYM("b"),             VD_FW_GAMEPAD_B,              0},
+    {__SYM("x"),             VD_FW_GAMEPAD_X,             0}, {__SYM("y"),             VD_FW_GAMEPAD_Y,              0},
+    {__SYM("start"),         VD_FW_GAMEPAD_START,         0}, {__SYM("back"),          VD_FW_GAMEPAD_BACK,           0},
+    {__SYM("dpup"),          VD_FW_GAMEPAD_DUP,           0}, {__SYM("dpdown"),        VD_FW_GAMEPAD_DDOWN,          0},
+    {__SYM("dpleft"),        VD_FW_GAMEPAD_DLEFT,         0}, {__SYM("dpright"),       VD_FW_GAMEPAD_DRIGHT,         0},
+    {__SYM("leftshoulder"),  VD_FW_GAMEPAD_LEFT_SHOULDER, 0}, {__SYM("leftstick"),     VD_FW_GAMEPAD_LEFT_STICK,     0},
+    {__SYM("lefttrigger"),   VD_FW_GAMEPAD_LT,            1}, {__SYM("rightshoulder"), VD_FW_GAMEPAD_RIGHT_SHOULDER, 0},
+    {__SYM("rightstick"),    VD_FW_GAMEPAD_RIGHT_STICK,   0}, {__SYM("righttrigger"),  VD_FW_GAMEPAD_RT,             1},
+    {__SYM("leftx"),         VD_FW_GAMEPAD_LH,            1}, {__SYM("lefty"),         VD_FW_GAMEPAD_LV,             1},
+    {__SYM("rightx"),        VD_FW_GAMEPAD_RH,            1}, {__SYM("righty"),        VD_FW_GAMEPAD_RV,             1},
+    {__SYM("lpad0"),         VD_FW_GAMEPAD_LEFT_PAD0,     0}, {__SYM("rpad0"),         VD_FW_GAMEPAD_RIGHT_PAD0,     0},
+    {__SYM("lpad1"),         VD_FW_GAMEPAD_LEFT_PAD1,     0}, {__SYM("rpad1"),         VD_FW_GAMEPAD_RIGHT_PAD1,     0},
+    {__SYM("lpad2"),         VD_FW_GAMEPAD_LEFT_PAD2,     0}, {__SYM("rpad2"),         VD_FW_GAMEPAD_RIGHT_PAD2,     0},
+    {__SYM("aux0"),          VD_FW_GAMEPAD_AUX0,          0}, {__SYM("aux1"),          VD_FW_GAMEPAD_AUX1,           0},
+    {__SYM("aux2"),          VD_FW_GAMEPAD_AUX2,          0}, {__SYM("aux3"),          VD_FW_GAMEPAD_AUX3,           0},
+    {__SYM("aux4"),          VD_FW_GAMEPAD_AUX4,          0}, {__SYM("aux5"),          VD_FW_GAMEPAD_AUX5,           0},
+    {__SYM("aux6"),          VD_FW_GAMEPAD_AUX6,          0}, {__SYM("aux7"),          VD_FW_GAMEPAD_AUX7,           0},
+    {__SYM("aux8"),          VD_FW_GAMEPAD_AUX8,          0}, {__SYM("aux9"),          VD_FW_GAMEPAD_AUX9,           0},
+#undef __SYM
 };
 
 static VdFw__GamepadSymbolToTarget *vd_fw__get_map_from_symbol(const char *s, int s_len)
@@ -11033,8 +11905,8 @@ VD_FW_API int vd_fw_add_gamepad_db_entry(VdFwGamepadDBEntry *entry)
     }
 
     if (will_resize) {
-        VD_FW_G.gamepad_db_entries = vd_fw__realloc_mem(VD_FW_G.gamepad_db_entries, 
-                                                        sizeof(VD_FW_G.gamepad_db_entries[0]) * cap);
+        VD_FW_G.gamepad_db_entries = (VdFwGamepadDBEntry*)vd_fw__realloc_mem(VD_FW_G.gamepad_db_entries, 
+                                                                             sizeof(VD_FW_G.gamepad_db_entries[0]) * cap);
         VD_FW_G.cap_gamepad_db_entries = cap;
     }
 
@@ -11365,8 +12237,6 @@ VD_FW_API int vd_fw__map_gamepad(VdFwGuid guid, VdFwGamepadMap *map)
     *map = db_entry->map;
     return 1;
 }
-
-
 
 #if defined(__APPLE__)
 #pragma clang diagnostic pop

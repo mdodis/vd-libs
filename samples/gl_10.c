@@ -10,6 +10,10 @@ int main(int argc, char const *argv[]) {
     vd_fw_init(&init_info);
 
     while (vd_fw_running()) {
+        if (vd_fw_close_requested()) {
+            vd_fw_quit();
+        }
+
         glClearColor(0.2f, 0.2f, 0.2f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT);
 

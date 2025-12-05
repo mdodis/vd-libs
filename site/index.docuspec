@@ -50,6 +50,32 @@
                 }
             }
         }
+        @a(class="libcard card text-decoration-none d-flex justify-content-center mt-2 mx-1 flex-grow-1" href="./vd_dlg.html") {
+            @div(class="row g-0") {
+                @div(class="col-md-4 d-flex justify-content-center p-2") {
+                    @img(src="./assets/dlg/vd-dlg-logo@1x.png"
+                         srcset="./assets/dlg/vd-dlg-logo@1x.png 1x, ./assets/dlg/vd-dlg-logo@2x.png 2x"
+                         width="128"
+                         height="106.5"
+                         class="libcardlogo")
+                }
+
+                @div(class="col-md-8") {
+                    @div(class="card-body") {
+                        @h5(class="card-title") {
+                            text {
+                                vd_dlg.h
+                            }
+                        }
+                        @p(class="card-text") {
+                            text {
+                                Common Dialog Library
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 @br()

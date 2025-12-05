@@ -1,0 +1,62 @@
+@title("vd_dlg.h")
+
+@section("Brief") {
+    @img(src="./assets/dlg/vd-dlg-logo@1x.png"
+         srcset="./assets/dlg/vd-dlg-logo@1x.png 1x, ./assets/dlg/vd-dlg-logo@2x.png 2x"
+         width="128"
+         height="106.5"
+         class="span-image")
+
+    para {
+        A <b>header-only</b> library that exposes common file dialogs, message boxes and notifications for 
+        desktop platforms.
+    }
+
+    @div(class="d-flex justify-content-end") {
+        @button(type="button" class="btn ms-2 btn-outline-success" onclick="window.print();") {
+            text {
+                PDF
+            }
+        }
+        @a(type="button" class="btn ms-2 btn-outline-success" href="https://raw.githubusercontent.com/mdodis/vd-libs/main/vd_dlg.h") {
+            text {
+                Download
+            }
+        }
+    }
+    @br()
+}
+
+@section("Linking & Dependencies") {
+    para {
+        This library is distributed as a single, header-only file, thus the following instructions
+        are meant to be considered for your final application/dynamic library.
+        <br> <br>
+
+        In general, I make use of the up-to-date platform specific APIs, that should be available
+        with every distribution of said platform's development environment.
+        <br> <br>
+    }
+
+    @section("Windows") {
+        para {
+            At compile-time this library requires only <b>kernel32.lib</b>. The rest of the functions are loaded dynamically
+            via <code>GetProcAddress</code>. Additionally, this library uses the COM API. For reference, here are the
+            libraries it tries to load:
+
+            <ol class="list-group">
+                <li class="list-group-item">User32.dll</li>
+                <li class="list-group-item">Ole32.dll</li>
+            </ol>
+        }
+
+        @br()
+    }
+}
+
+@section("Reference") {
+
+    @apigen("vd_dlg.h")
+}
+
+@copyright()

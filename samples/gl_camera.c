@@ -149,6 +149,11 @@ int main(int argc, char const *argv[])
     vd_fw_set_title("GL Camera - Left Shift + F1 to toggle mouse, WASDQE to move camera");
 
     while (vd_fw_running()) {
+
+        if (vd_fw_close_requested()) {
+            vd_fw_quit();
+        }
+
         float ds = vd_fw_delta_s();
 
         if (vd_fw_get_key_pressed(VD_FW_KEY_F1) && vd_fw_get_key_down(VD_FW_KEY_LSHIFT)) {

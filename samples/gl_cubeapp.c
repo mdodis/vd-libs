@@ -58,6 +58,27 @@
 "    FragColor = texture(texture1, TexCoord);                                                                      \n" \
 "}                                                                                                                 \n" \
 
+#define DEADZONE_STICK (0.1f)
+
+static void map_stick_deadzone(float input[2], float deadzone, float output[2])
+{
+    output[0] = output[1] = 0.f;
+
+    float magnitude = VD_FW_SQRT(input[0] * input[0] + input[1] * input[1]);
+    if ((magnitude <= 0.000001f) || (magnitude < deadzone)) {
+        return;    
+    }
+
+    float norm_x = input[0] / magnitude;
+    float norm_y = input[1] / magnitude;
+
+    float norm_magnitude = (magnitude - deadzone) / (1.f - deadzone);
+    if (norm_magnitude > 1.f) norm_magnitude = 1.f;
+
+    output[0] = norm_x * norm_magnitude;
+    output[1] = norm_y * norm_magnitude;
+}
+
 int main(int argc, char const *argv[])
 {
     (void)argc;
@@ -229,6 +250,10 @@ int main(int argc, char const *argv[])
 
     while (vd_fw_running()) {
 
+        if (vd_fw_close_requested()) {
+            vd_fw_quit();
+        }
+
         int w, h;
         vd_fw_get_size(&w, &h);
 
@@ -286,6 +311,10 @@ int main(int argc, char const *argv[])
                 button_color[1] = 0.0f;
                 button_color[2] = 0.0f;
                 button_color[3] = 1.0f;
+            }
+
+            if (mouse_inside_close_button && vd_fw_get_mouse_clicked(VD_FW_MOUSE_BUTTON_LEFT)) {
+                vd_fw_quit();
             }
 
             glUniform4f(glGetUniformLocation(program, "rect_color"), button_color[0], button_color[1], button_color[2], button_color[3]);
@@ -366,9 +395,13 @@ int main(int argc, char const *argv[])
                 camera_yaw   += mouse_delta_x;
                 camera_pitch -= mouse_delta_y;
             } else if (vd_fw_get_gamepad_count() > 0) {
+                float right_stick_raw[2];
                 float right_stick[2];
-                vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RH, &right_stick[0]);
-                vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RV, &right_stick[1]);
+                vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RH, &right_stick_raw[0]);
+                vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RV, &right_stick_raw[1]);
+
+                map_stick_deadzone(right_stick_raw, DEADZONE_STICK, right_stick);
+
                 camera_yaw   += right_stick[0] * ds * 100.f;
                 camera_pitch -= right_stick[1] * ds * 100.f;
             }
@@ -420,9 +453,12 @@ int main(int argc, char const *argv[])
 
             if (vd_fw_get_gamepad_count() > 0) {
 
+                float left_stick_raw[2];
                 float left_stick[2];
-                vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_LV, &left_stick[0]);
-                vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_LH, &left_stick[1]);
+                vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_LV, &left_stick_raw[0]);
+                vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_LH, &left_stick_raw[1]);
+
+                map_stick_deadzone(left_stick_raw, DEADZONE_STICK, left_stick);
 
                 fwdir -= left_stick[0];
                 rgdir -= left_stick[1];

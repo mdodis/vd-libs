@@ -101,6 +101,11 @@
 int main() {
     vd_fw_init(NULL);                                        // Initialize library
     while (vd_fw_running()) {                                // Check if the window is closed & gather events
+
+        if (vd_fw_close_requested()) {
+            vd_fw_quit();
+        }
+
         glClearColor(0.5f, 0.3f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         vd_fw_swap_buffers();                                // Swap buffers
@@ -320,7 +325,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>#define VD_FW_GAMEPAD_COUNT_MAX</code>}}
+                @td() { text{<code>#define VD_FW_GAMEPAD_COUNT_MAX 16</code>}}
                 @td() {
                     text {
                         The maximum number of simulataneously connected gamepads that the library will support.
@@ -349,11 +354,21 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>#define VD_FW_NCRECTS_MAX</code>}}
+                @td() { text{<code>#define VD_FW_NCRECTS_MAX 16</code>}}
                 @td() {
                     text {
                         The maximum number of non-client rectangles that will be supported by the library.
                         Defaults to 16.
+                    }
+                }
+            }
+
+            @tr() {
+                @td() { text{<code>#define VD_FW_CODEPOINT_BUFFER_COUNT 8</code>}}
+                @td() {
+                    text {
+                        The size (in characters) of the character input history buffer.
+                        Defaults to 8.
                     }
                 }
             }
@@ -422,6 +437,8 @@ int main() {
                 <li class="list-group-item">uxtheme.dll</li>
                 <li class="list-group-item">shell32.dll</li>
                 <li class="list-group-item">winmm.dll</li>
+                <li class="list-group-item">SetupAPI.dll</li>
+                <li class="list-group-item">Advapi32.dll</li>
                 <li class="list-group-item">xinput1_4.dll</li>
                 <li class="list-group-item">xinput1_3.dll</li>
                 <li class="list-group-item">xinput9_1_0.dll</li>
@@ -740,6 +757,9 @@ freely, subject to the following restrictions:
                     <a href="https://github.com/TheoBendixson">TheoBendixson</a><br>
                     For his Handmade Mac platform layer
                 </li>
+                <li>
+                    <a href="https://ofekshilon.com/2014/06/19/reading-specific-monitor-dimensions/">Ofek</a><br>
+                    For the display monitor enumeration code sample
             </ul>
         }
     }
@@ -794,7 +814,11 @@ int main(int argc, char const *argv[])
     vd_fw_init(NULL);                                        // Initialize library
     vd_fw_set_vsync_on(1);                                   // Enable VSYNC
 
-    while (vd_fw_running()) {                                // Check if user closed the window
+    while (vd_fw_running()) {                                // Check if the window is closed
+
+        if (vd_fw_close_requested()) {                       // Close the window if the
+            vd_fw_quit();                                    // user requested it
+        }
 
         int w, h;
         vd_fw_get_size(&w, &h);                              // Get window size, in pixels.
@@ -956,7 +980,7 @@ glLinkProgram(program);
         }
 
         para {
-            This library provides a convenience function (and more) to do that, and will also log the errors:
+            This library provides a convenience function (and more) to do that, which will also log the errors:
         }
 
         verb ```
@@ -1685,7 +1709,7 @@ if (mouse_inside_minimize_button && vd_fw_get_mouse_clicked(VD_FW_MOUSE_BUTTON_L
                 <li>
                     For GUI applications:<br> 
                     <b>Don't set any GPU preference</b>. These apps are supposed to use few system
-                    resources anyway. This will guarantee that resizing, going fullscreen, etc.. will
+                    resources anyway. This should guarantee that resizing, going fullscreen, etc.. will
                     match the display context to the currently used one by other applications.
                 </li>
                 <li>
@@ -1768,6 +1792,75 @@ if (vd_fw_get_mouse_locked()) {
         para {
             We could go on with mapping up/down to triggers, but I think you get the idea.
         }
+
+        para {
+            Of course, some controllers with either stick drift or very sensitive sticks may result in our camera
+            moving even if we're not touching the controller. This is handled by implementing deadzones. This library
+            will not do that for you, as radial input mapping can be very dependent on the use case of the application.
+            But let's go through a simple linear deadzone mapping.
+        }
+
+        para {
+            We will create a function that will map raw stick input to the appropriate value using a deadzone:
+        }
+
+        verb```
+static void map_stick_deadzone(float input[2], float deadzone, float output[2])
+{
+    output[0] = output[1] = 0.f;
+
+    float magnitude = VD_FW_SQRT(input[0] * input[0] + input[1] * input[1]);
+    if ((magnitude <= 0.000001f) || (magnitude < deadzone)) {
+        return;    
+    }
+
+    float norm_x = input[0] / magnitude;
+    float norm_y = input[1] / magnitude;
+
+    float norm_magnitude = (magnitude - deadzone) / (1.f - deadzone);
+    if (norm_magnitude > 1.f) norm_magnitude = 1.f;
+
+    output[0] = norm_x * norm_magnitude;
+    output[1] = norm_y * norm_magnitude;
+}
+        ```
+
+        para {
+            Given a 'deadzone' parameter between 0 and 1, we map the input from [deadzone, 1] to our space, and ignore
+            anything less that the deadzone.
+        }
+
+        para {
+            Let's change the code in our input handling. In our processing of the right stick (camera rotation):
+        }
+
+        verb```
+float right_stick_raw[2];
+float right_stick[2];
+vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RH, &right_stick_raw[0]);
+vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RV, &right_stick_raw[1]);
+
+map_stick_deadzone(right_stick_raw, DEADZONE_STICK, right_stick);
+
+camera_yaw   += right_stick[0] * ds * 100.f;
+camera_pitch -= right_stick[1] * ds * 100.f;
+        ```
+
+        para {
+            And we follow the same pattern for the left stick for camera movement:
+        }
+
+        verb```
+float left_stick_raw[2];
+float left_stick[2];
+vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_LV, &left_stick_raw[0]);
+vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_LH, &left_stick_raw[1]);
+
+map_stick_deadzone(left_stick_raw, DEADZONE_STICK, left_stick);
+
+fwdir -= left_stick[0];
+rgdir -= left_stick[1];
+        ```
     }
 }
 
@@ -1877,7 +1970,7 @@ if (vd_fw_get_mouse_locked()) {
     @section("Gamepads") {
         para {
             Doing low-level gamepad input is not as easy as one would think (and maybe I should write a separate article
-            detailing my investigation into which APIs this library should user and how), but I will briefly mention the
+            detailing my investigation into which APIs this library should use and how), but I will briefly mention the
             APIs used on a per platform basis:
         }
 
