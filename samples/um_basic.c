@@ -17,17 +17,6 @@ int main(int argc, char const *argv[])
 
     vd_fw_set_size(1600, 900);
 
-    for (int i = 0; i < vd_fw_get_monitor_count(); ++i) {
-        printf("Monitor[%d]: %s\n", i, vd_fw_get_monitor_name(i));
-        int count;
-        VdFwDisplayMode *modes = vd_fw_get_monitor_display_modes(i, &count);
-
-        for (int j = 0; j < count; ++j) {
-            VdFwDisplayMode *mode = &modes[j];
-            printf("\t- %-4dx%4d@%3d [%3d:%3d]\n", mode->width, mode->height, mode->frequency, mode->aspect.numerator, mode->aspect.denominator);
-        }
-    }
-
     vd_um_init();
 
     vd_fw_set_title("UM Basic");
@@ -104,6 +93,10 @@ int main(int argc, char const *argv[])
             vd_fw_quit();
         }
 
+        if (vd_fw_get_key_pressed(VD_FW_KEY_F11)) {
+            vd_fw_set_fullscreen(!vd_fw_get_fullscreen());
+        }
+
         vd_fw_compile_or_hotload_program(&program, &program_time,
                                          "./glsl/um_basic.vert", "./glsl/um_basic.frag");
 
@@ -164,7 +157,7 @@ int main(int argc, char const *argv[])
 
         vd_um_frame_begin(dt);
         float viewport[4] = {0, 0, (float)w, (float)h};
-        vd_um_viewport_begin(viewport, inv_proj.p, view.p, camera_origin.e);
+        vd_um_viewport_begin(VD_UM_VIEWPORT_TYPE_PERSPECTIVE, viewport, inv_proj.p, view.p, camera_origin.e);
 
         {
             vd_um_event_mouse_position(mouse_pos.e);

@@ -24,28 +24,8 @@ float smoothFalloff(float distance, float radius, float softness) {
     return 1.0 - smoothstep(radius - softness, radius + softness, distance);
 }
 
-float radialGlow(vec2 fragPos, vec2 glowCenter, float radius, float intensity) {
-    float dist = length(fragPos - glowCenter);
-    return intensity * exp(-dist * dist / (radius * radius));
-}
-
 void main()
 {
-    float softnessScale       = 1.2;
-    float glowInnerFactor     = 0.2;
-    float glowOuterFactor     = 0.3;
-    float glowInnerIntensity  = 0.4; 
-    float glowOuterIntensity  = 0.2;
-    float edgeEnhanceScale    = 0.1;
-    float edgeEnhanceBoost    = 0.5;
-    float glowColorBlendScale = 0.3;
-    float glowStrength        = 0.08;
-    float colorTempShift      = 0.2;
-    float brightnessBoost     = 0.1;
-
-    vec3 coolGlow = vec3(0.9, 0.95, 1.0);
-    vec3 warmGlow = vec3(1.0, 0.9, 0.8);
-
     vec2 softness_padding = vec2(max(0, f_edge_softness * 2 - 1.0));
     float dist = sdf_rounded_rect(f_dp, f_dc, f_dhs - softness_padding, f_corner_radius);
     float border_factor = 1.0;
@@ -68,34 +48,6 @@ void main()
     vec4 normal_color = sample * f_color;
     vec4 mask_color = vec4(f_color.rgb, f_color.a * sample.r);
     vec4 color = mix(normal_color, mask_color, f_amix);
-
-    vec2 mouseLocal = uMouse - f_dc;
-    float insideX = step(abs(mouseLocal.x), f_dhs.x);
-    float insideY = step(abs(mouseLocal.y), f_dhs.y);
-    float mouseInside = insideX * insideY;
-
-    float glowRadius1 = length(f_dhs) * glowInnerFactor;
-    float glowRadius2 = length(f_dhs) * glowOuterFactor;
-    float glow1 = radialGlow(f_dp, uMouse, glowRadius1, glowInnerIntensity);
-    float glow2 = radialGlow(f_dp, uMouse, glowRadius2, glowOuterIntensity);
-    float combinedGlow = glow1 + glow2;
-
-    float mouseDistance = length(f_dp - uMouse);
-    float maxDistance = length(f_dhs);
-    float proximityFactor = 1.0 - clamp(mouseDistance / maxDistance, 0.0, 1.0);
-
-    float edgeDistance = sdf_rounded_rect(f_dp, f_dc, f_dhs, f_corner_radius);
-    float edgeFactor = 1.0 - clamp(abs(edgeDistance) / (length(f_dhs) * edgeEnhanceScale), 0.0, 1.0);
-
-    float finalGlowIntensity = combinedGlow * proximityFactor * (1.0 + edgeFactor * edgeEnhanceBoost) * 1.f;
-
-    float colorMix = sin(atan(mouseLocal.y, mouseLocal.x) * 2.0) * 0.5 + 0.5;
-    vec3 finalGlowColor = mix(coolGlow, warmGlow, colorMix * glowColorBlendScale);
-
-    // Apply glow and color effects
-    // color.rgb += finalGlowColor * finalGlowIntensity * glowStrength;
-    // color.rgb = mix(color.rgb, color.rgb * vec3(1.05, 1.0, 0.95), finalGlowIntensity * colorTempShift);
-    // color.rgb *= (1.0 + finalGlowIntensity * brightnessBoost);
 
     FragColor = color * sdf * border_factor;
 }
