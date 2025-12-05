@@ -998,7 +998,7 @@ static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
                             PUT_LINE("aria-controls=\"navbarNav\" aria-expanded=\"false\" aria-label=\"Toggle navigation\">");
                         PUT_LINE("<span class=\"navbar-toggler-icon\"></span>");
                     PUT_LINE("</button>");
-                    PUT_LINE("<div class=\"collapse navbar-collapse\" id=\"navbarNav\">");
+                    PUT_LINE("<div class=\"d-md-flex align-items-center collapse navbar-collapse\" id=\"navbarNav\">");
                         PUT_LINE("<ul class=\"navbar-nav\">");
                             PUT_LINE("<li class=\"nav-item\">");
                                 PUT_LINE("<a class=\"nav-link\" aria-current=\"page\" href=\"./index.html\">Home</a>");
@@ -1024,10 +1024,15 @@ static void generate_html_for_tree(VdDspcTree *tree, FILE *out)
                             PUT_LINE("</li>");
                             PUT_LINE("<!--   End Files -->");
                         PUT_LINE("</ul>");
-                        PUT_LINE("<div class=\"search-container ms-auto me-auto me-sm-0\">");
+                        PUT_LINE("<div class=\"search-container mx-auto me-auto me-sm-2\">");
                             PUT_LINE("<input type=\"search\" id=\"searchbox\" class=\"form-control\" placeholder=\"Search\" aria-label=\"Search\" autocomplete=\"off\" autofocus>");
                             PUT_LINE("<ul id=\"search-results\" class=\"list-group position-absolute\" style=\"top:100%%; z-index:1000; display:none;\"></ul>");
                         PUT_LINE("</div>");
+                        PUT_LINE("<a class=\"ghlink\" href=\"https://www.github.com/mdodis/vd-libs/\">");
+                            PUT_LINE("<img class=\"mx-auto d-block\" src=\"./assets/github-mark-white.png\"");
+                            PUT_LINE("width=\"32\"");
+                            PUT_LINE("height=\"32\">");
+                        PUT_LINE("</a>");
 
                     PUT_LINE("</div>");
                 PUT_LINE("</div>");

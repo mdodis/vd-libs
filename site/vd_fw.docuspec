@@ -1862,6 +1862,152 @@ fwdir -= left_stick[0];
 rgdir -= left_stick[1];
         ```
     }
+
+    @section("Switching Graphics APIs") {
+        para {
+            Apart from OpenGL, this library allows you to use other Graphics APIs. This is done by specifying the
+            graphics API <code>VdFwInitInfo::api</code>.
+        }
+
+        para {
+            Options:
+            <ul>
+                <li>OpenGL (default): <code>VD_FW_GRAPHICS_API_OPENGL</code></li>
+                <li>Custom: <code>VD_FW_GRAPHICS_API_CUSTOM</code></li>
+                <li>Software Rendering (in progress): <code>VD_FW_GRAPHICS_API_PIXEL_BUFFER</code></li>
+            </ul>
+        }
+
+        para {
+            Additionally, you can switch graphics APIs at runtime using <code>vd_fw_set_graphics_api</code>:
+        }
+
+        verb```
+vd_fw_set_graphics_api(VD_FW_GRAPHICS_API_CUSTOM, NULL);
+        ```
+
+        para {
+            A sample is provided <a href="https://github.com/mdodis/vd-libs/tree/main/samples/fw_all.cpp">here</a>.
+            Currently it switches between OpenGL and DirectX11 using the spacebar. Each graphics API will then draw a
+            simple texture at the center of the screen to indicate which is the current API it's using:
+        }
+
+        @img(class="rounded img-fluid rmprint"
+             src="./assets/fw/tutorials-switching-graphics-apis.gif")
+
+        para {
+            Following is a basic overview of the code. We start with an interface struct that has function pointers that
+            each graphics backend must support. In a real project, this would either be your RHI definitions, or the
+            functions needed to render your scene.
+        }
+
+        verb```
+typedef struct {
+    GraphicsBackend backend;
+    void (*init)(void *internal_window_handle);
+    void (*kill)(void);
+    void (*resize)(int w, int h);
+    void (*draw_with_background_color)(float r, float g, float b, float a);
+} GraphicsBackendImpl;
+
+static VdFwGraphicsApi cv_graphics_backend_to_fw_graphics_api(GraphicsBackend backend)
+{
+    switch (backend) {
+        case GRAPHICS_BACKEND_OPENGL: return VD_FW_GRAPHICS_API_OPENGL;
+        default: return VD_FW_GRAPHICS_API_CUSTOM;
+    }
+}
+```
+
+        para {
+            Next, each implementation is declared, and an array of graphics backends is written depending on what the
+            build target supports:
+        }
+
+        verb```
+extern GraphicsBackendImpl OpenGL_Impl;
+#ifdef _WIN32
+extern GraphicsBackendImpl D3D11_Impl;
+#endif
+
+static GraphicsBackendImpl* Graphics_Backends[] = {
+    &OpenGL_Impl,
+#ifdef _WIN32
+    &D3D11_Impl,
+#endif
+};
+        ```
+
+        para {
+            Afterwards, we make a function that will destroy the current API's context objects, and initialize the new
+            API: 
+        }
+
+        verb```
+static void switch_to_graphics_backend(GraphicsBackendImpl *impl)
+{
+    if (Current_Graphics != NULL) {
+        printf("Switching from %s to %s\n",
+               graphics_backend_to_string(Current_Graphics->backend),
+               graphics_backend_to_string(impl->backend));
+
+        Current_Graphics->kill();
+    } else {
+        printf("Starting with %s\n",
+               graphics_backend_to_string(impl->backend));
+    }
+
+    Current_Graphics = impl;
+    VdFwOpenGLOptions options;
+    options.version = VD_FW_GL_VERSION_4_5;
+    options.debug_on = 1;
+    vd_fw_set_graphics_api(cv_graphics_backend_to_fw_graphics_api(impl->backend), &options);
+
+    impl->init(vd_fw_get_internal_window_handle());
+}
+        ```
+
+        para {
+            We can set <code>VdFwInitInfo::api</code> to <code>VD_FW_GRAPHICS_API_INVALID</code> so that no
+            initialization is attempted during <code>vd_fw_init</code>, and right after call our function to switch the
+            backend so as to have everything following the same codepath:
+        }
+
+        verb```
+VdFwInitInfo init_info = {};
+init_info.api = VD_FW_GRAPHICS_API_INVALID;
+vd_fw_init(&init_info);
+
+switch_to_graphics_backend(Graphics_Backends[current_backend_index]);
+        ```
+
+        para {
+            In the game loop, we check for the event that will cause the graphics API to change, and <b>after</b>
+            <code>vd_fw_swap_buffers</code>, we switch our graphics context:
+        }
+
+        verb```
+int will_switch_to_next_backend = 0;
+if (vd_fw_get_key_pressed(VD_FW_KEY_SPACE)) {
+    will_switch_to_next_backend = 1;
+}
+
+vd_fw_swap_buffers(); // <--- IMPORTANT: vd_fw_set_graphics_api must not be called between vd_fw_running and vd_fw_swap_buffers.
+
+if (will_switch_to_next_backend) {
+    current_backend_index += 1;
+    if (current_backend_index >= count_backends) {
+        current_backend_index = 0;
+    }
+
+    switch_to_graphics_backend(Graphics_Backends[current_backend_index]);
+}
+        ```
+
+        para {
+            The rest of the code is typical graphics programming stuff (setting up buffers, textures rendering context).
+        }
+    }
 }
 
 @section("Technical Details") {

@@ -308,6 +308,11 @@ VD_FW_API void               vd_fw_quit(void);
  */
 VD_FW_API VdFwPlatform       vd_fw_get_platform(void);
 
+/**
+ * @brief Switch the current graphics API (must not be called between vd_fw_running and vd_fw_swap_buffers)
+ * @param  api        The new API to use
+ * @param  gl_options If api is VD_FW_GRAPHICS_API_OPENGL, the options for OpenGL
+ */
 VD_FW_API void               vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_options);
 
 /* ----WINDOW-------------------------------------------------------------------------------------------------------- */
@@ -442,9 +447,9 @@ VD_FW_INL float              vd_fw_delta_s(void);
 VD_FW_API int                vd_fw_set_vsync_on(int on);
 
 /**
- * @brief Get the fully-qualified path to the executable without the last path separator.
- * @param  len Length of the UTF-8 string, in bytes.
- * @return     A callee-allocated string. There's no need to free it.
+ * @brief Get the fully-qualified path to the executable without the last path separator
+ * @param  len Length of the UTF-8 string, in bytes
+ * @return     A callee-allocated string. There's no need to free it
  */
 VD_FW_API const char*        vd_fw_get_executable_dir(int *len);
 
@@ -459,10 +464,25 @@ typedef struct {
     } aspect;
 } VdFwDisplayMode;
 
+/**
+ * @brief Get the total count of monitors
+ * @return  The count of all the monitors
+ */
 VD_FW_API int                vd_fw_get_monitor_count(void);
 
+/**
+ * @brief Get the monitor's friendly name via EDID
+ * @param  index The monitor index
+ * @return       The monitor name
+ */
 VD_FW_API const char*        vd_fw_get_monitor_name(int index);
 
+/**
+ * @brief (Warning: slow) Get the available display modes of the monitor
+ * @param  index The monitor index
+ * @param  count The total count of display modes
+ * @return       Sorted display modes
+ */
 VD_FW_API VdFwDisplayMode*   vd_fw_get_monitor_display_modes(int index, int *count);
 
 /* ----MOUSE--------------------------------------------------------------------------------------------------------- */
@@ -5123,7 +5143,6 @@ X(VdFwHKL,      GetKeyboardLayout, (VdFwDWORD idThread)) \
 X(VdFwHWND,     SetFocus, (VdFwHWND hWnd)) \
 X(VdFwBOOL,     SetForegroundWindow, (VdFwHWND hWnd)) \
 X(VdFwSHORT,    GetKeyState, (int nVirtKey)) \
-X(VdFwBOOL,     GetMonitorInfoW, ( VdFwHMONITOR hMonitor, VdFwLPMONITORINFO lpmi)) \
 VE() \
 V("Shell32.dll") \
 X(VdFwUINT_PTR, SHAppBarMessage, (VdFwDWORD dwMessage, VdFwPAPPBARDATA pData)) \
@@ -6039,8 +6058,8 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         VdFwEnumDisplayMonitors(NULL, NULL, vd_fw__win32_enum_monitor_resize_count, (VdFwLPARAM)NULL);
 
         VD_FW_G.monitor_buffer_len = 0;
-        VD_FW_G.monitor_buffer = vd_fw__resize_buffer(VD_FW_G.monitor_buffer, sizeof(*VD_FW_G.monitor_buffer),
-                                                      VD_FW_G.monitor_count, &VD_FW_G.monitor_buffer_cap);
+        VD_FW_G.monitor_buffer = (VdFw__Win32Monitor*)vd_fw__resize_buffer(VD_FW_G.monitor_buffer, sizeof(*VD_FW_G.monitor_buffer),
+                                                                           VD_FW_G.monitor_count, &VD_FW_G.monitor_buffer_cap);
 
 
         VdFwEnumDisplayMonitors(NULL, NULL, vd_fw__win32_enum_monitor, (VdFwLPARAM)NULL);
@@ -6734,11 +6753,6 @@ VD_FW_API VdFwDisplayMode *vd_fw_get_monitor_display_modes(int index, int *count
     *count = VD_FW_G.monitor_buffer[index].display_modes_len;
 
     return VD_FW_G.monitor_buffer[index].display_modes;
-}
-
-VD_FW_API int vd_fw_get_monitor_display_mode_count(int index)
-{
-    return 0;
 }
 
 VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
@@ -9249,8 +9263,8 @@ static void vd_fw__win32_update_monitor_display_modes(VdFw__Win32Monitor *monito
         display_mode_count++;
     }
 
-    monitor->display_modes = vd_fw__resize_buffer(monitor->display_modes, sizeof(*monitor->display_modes),
-                                                  display_mode_count, &monitor->display_modes_cap);
+    monitor->display_modes = (VdFwDisplayMode*)vd_fw__resize_buffer(monitor->display_modes, sizeof(*monitor->display_modes),
+                                                                    display_mode_count, &monitor->display_modes_cap);
 
     graphics_mode_index = 0;
     while (VdFwEnumDisplaySettingsW((VdFwLPCSTR)monitor_info.szDevice, graphics_mode_index, &devmode)) {
