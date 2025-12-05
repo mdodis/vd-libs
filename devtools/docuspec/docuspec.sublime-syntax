@@ -1,0 +1,54 @@
+%YAML 1.2
+---
+name: Docuspec
+file_extensions:
+  - docuspec
+scope: source.docuspec
+
+contexts:
+  main:
+    - match: '(@section)\s*\((\".*\")\)'
+      captures:
+        1: keyword.control.annotation.docuspec
+        2: entity.name.section.section.docuspec
+           string.quoted.double.docuspec
+
+    - match: '(@[a-z\-\_0-9]+)\s*'
+      captures:
+        1: keyword.control.annotation.docuspec
+      push: section-args
+    - match: '(text|para)\s*\{'
+      captures:
+        1: keyword.operator.textblock.docuspec
+      push: text-block
+    - match: '(verb)\s*```'
+      captures:
+        1: keyword.operator.codeblock.docuspec
+      push: code-block
+
+  section-args:
+    - meta_scope: meta.annotation.args.docuspec
+    - match: '(\w+)(=)'
+      captures:
+        1: entity.other.attribute-name.docuspec
+        2: punctuation.separator.key-value.docuspec
+    - match: '"'
+      scope: punctuation.definition.string.begin.docuspec
+      push: string
+    - match: '\)'
+      scope: punctuation.section.taglist.end.docuspec
+      pop: true
+  string:
+    - meta_scope: string.quoted.double.docuspec
+    - match: '"'
+      scope: punctuation.definition.string.end.docuspec
+      pop: true
+    - match: '\\.'
+      scope: constant.character.escape.docuspec
+  text-block:
+    - match: '\}'
+      pop: true
+  code-block:
+    - meta_scope: markup.raw.code-block.markdown
+    - match: '```'
+      pop: true
