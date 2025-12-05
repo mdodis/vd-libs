@@ -83,6 +83,13 @@ section, .apiitem {
     width: calc();
 }
 
+.ghlink {
+    height: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
 .page-break {
     min-height: 500px;
 }
