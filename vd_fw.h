@@ -9482,6 +9482,7 @@ typedef enum {
     VD_FW__MAC_MESSAGE_MINIMIZED,
     VD_FW__MAC_MESSAGE_ZOOMED,
     VD_FW__MAC_MESSAGE_CLOSE_REQUEST,
+    VD_FW__MAC_MESSAGE_FULLSCREEN,
 } VdFw__MacMessageType;
 
 typedef struct {
@@ -9513,6 +9514,10 @@ typedef struct {
         struct {
             int on;
         } zoomed;
+
+        struct {
+            int on;
+        } fullscreen;
     } dat;
 } VdFw__MacMessage;
 
@@ -9550,6 +9555,8 @@ typedef struct {
     int                         window_state;
     int                         window_state_changed;
     int                         close_request;
+    int                         is_fullscreen;
+    int                         fullscreen_changed_this_frame;
     uint64_t                    delta_ns;
 
 /* ----WINDOW THREAD ONLY-------------------------------------------------------------------------------------------- */
@@ -9943,6 +9950,23 @@ static int Update_Context = 0;
     msg.dat.minimized.on = 0;
     vd_fw__msgbuf_w(&msg); 
 }
+
+- (void) windowDidEnterFullScreen:(NSNotification *) notification
+{
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_FULLSCREEN;
+    msg.dat.fullscreen.on = 1;
+    vd_fw__msgbuf_w(&msg); 
+}
+
+- (void) windowDidExitFullScreen:(NSNotification *) notification
+{
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_FULLSCREEN;
+    msg.dat.fullscreen.on = 0;
+    vd_fw__msgbuf_w(&msg); 
+}
+
 
 - (void)windowWillClose:(NSNotification*)notification {
     VD_FW_G.should_close = YES;
@@ -10505,6 +10529,10 @@ VD_FW_API int vd_fw_running(void)
                 VD_FW_G.window_state_changed = 1;
             } break;
 
+            case VD_FW__MAC_MESSAGE_FULLSCREEN: {
+                VD_FW_G.is_fullscreen = msg.dat.fullscreen.on;
+            } break;
+
             case VD_FW__MAC_MESSAGE_CLOSE_REQUEST: {
                 VD_FW_G.close_request = 1;
             } break;
@@ -10528,6 +10556,15 @@ VD_FW_API int vd_fw_running(void)
 
 VD_FW_API int vd_fw_swap_buffers(void)
 {
+    if (VD_FW_G.fullscreen_changed_this_frame) {
+        for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
+            VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
+            VD_FW_G.curr_key_states[i] = 0;
+        }
+
+        VD_FW_G.fullscreen_changed_this_frame = 0;
+    }
+
     [VD_FW_G.gl_context flushBuffer];
 
     // if (VD_FW_G.curr_frame.flags & VD_FW__MAC_FLAGS_WAKE_COND_VAR) {
@@ -10647,6 +10684,25 @@ VD_FW_API void vd_fw_normalize(void)
         // Otherwise, just bring it to the front in case it’s hidden.
         [window makeKeyAndOrderFront:nil];
     });
+}
+
+VD_FW_API void vd_fw_set_fullscreen(int on)
+{
+    if (VD_FW_G.is_fullscreen == on) {
+        return;
+    }
+
+    VD_FW_G.fullscreen_changed_this_frame = 1;
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [VD_FW_G.window toggleFullScreen: nil];
+    });
+
+}
+
+VD_FW_API int vd_fw_get_fullscreen(void)
+{
+    return VD_FW_G.is_fullscreen;
 }
 
 VD_FW_API void vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4])
