@@ -320,7 +320,7 @@ VD_FW_API void               vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpe
  * @brief Get the size of the window, in pixels
  * @param  w The width of the window, in pixels
  * @param  h The height of the window, in pixels
- * @return   (Reserved)
+ * @return   1 if the size changed this frame, 0 otherwise
  */
 VD_FW_API int                vd_fw_get_size(int *w, int *h);
 
