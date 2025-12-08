@@ -45,7 +45,7 @@
         <ul>
             <li>Provides custom implementations of several math functions, like sinf</li>
             <li>Doesn't use the standard C library (where possible)</li>
-            <li>Prodives convenience functions that can, for example, construct a perpsective projection matrix for OpenGL</li>
+            <li>Provides convenience functions that can, for example, construct a perpsective projection matrix for OpenGL</li>
             <li>Automatically sets up OpenGL debugging infrastructure</li>
         </ul>
     }

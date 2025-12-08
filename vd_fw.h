@@ -320,7 +320,7 @@ VD_FW_API void               vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpe
  * @brief Get the size of the window, in pixels
  * @param  w The width of the window, in pixels
  * @param  h The height of the window, in pixels
- * @return   (Reserved)
+ * @return   1 if the size changed this frame, 0 otherwise
  */
 VD_FW_API int                vd_fw_get_size(int *w, int *h);
 
@@ -465,7 +465,7 @@ typedef struct {
 } VdFwDisplayMode;
 
 /**
- * @brief Get the total count of monitors
+ * @brief Get the total count of monitors. Monitor 0 is the primary monitor of the display
  * @return  The count of all the monitors
  */
 VD_FW_API int                vd_fw_get_monitor_count(void);
@@ -5123,6 +5123,7 @@ X(VdFwHCURSOR,  LoadCursorA, (VdFwHINSTANCE hInstance, VdFwLPCSTR lpCursorName))
 X(VdFwHCURSOR,  LoadCursorW, (VdFwHINSTANCE hInstance, VdFwLPCWSTR lpCursorName)) \
 X(VdFwHICON,    CreateIconIndirect, (VdFwPICONINFO piconinfo)) \
 X(VdFwHMONITOR, MonitorFromWindow, (VdFwHWND hwnd, VdFwDWORD dwFlags)) \
+X(VdFwHMONITOR, MonitorFromPoint, (VdFwPOINT pt, VdFwDWORD dwFlags)) \
 X(VdFwBOOL,     EnumDisplayMonitors, (VdFwHDC hdc, VdFwLPRECT lprcClip, VdFwMONITORENUMPROC lpfnEnum, VdFwLPARAM dwData)) \
 X(VdFwBOOL,     EnumDisplayDevicesA, (VdFwLPCSTR lpDevice, VdFwDWORD iDevNum, VdFwPDISPLAY_DEVICEA lpDisplayDevice, VdFwDWORD dwFlags)) \
 X(VdFwBOOL,     EnumDisplayDevicesW, (VdFwLPCWSTR lpDevice, VdFwDWORD iDevNum, VdFwPDISPLAY_DEVICEW lpDisplayDevice, VdFwDWORD dwFlags)) \
@@ -5910,7 +5911,7 @@ static void         vd_fw__update_kb_codepage(void);
 static VdFwBOOL     vd_fw__win32_enum_monitor(VdFwHMONITOR monitor, VdFwHDC hdc, VdFwLPRECT rect, VdFwLPARAM lpparam);
 static VdFwBOOL     vd_fw__win32_enum_monitor_resize_count(VdFwHMONITOR monitor, VdFwHDC hdc, VdFwLPRECT rect, VdFwLPARAM lpparam);
 static void         vd_fw__win32_update_monitor_display_modes(VdFw__Win32Monitor *monitor);
-
+static void         vd_fw__win32_update_monitors(void);
 
 #if VD_FW_WIN32_PROFILE
 #define VD_FW_JOIN_(a,b) a##b
@@ -6053,17 +6054,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     QueryPerformanceFrequency(&VD_FW_G.frequency);
 
     // Monitors
-    {
-        VD_FW_G.monitor_count = 0;
-        VdFwEnumDisplayMonitors(NULL, NULL, vd_fw__win32_enum_monitor_resize_count, (VdFwLPARAM)NULL);
-
-        VD_FW_G.monitor_buffer_len = 0;
-        VD_FW_G.monitor_buffer = (VdFw__Win32Monitor*)vd_fw__resize_buffer(VD_FW_G.monitor_buffer, sizeof(*VD_FW_G.monitor_buffer),
-                                                                           VD_FW_G.monitor_count, &VD_FW_G.monitor_buffer_cap);
-
-
-        VdFwEnumDisplayMonitors(NULL, NULL, vd_fw__win32_enum_monitor, (VdFwLPARAM)NULL);
-    }
+    vd_fw__win32_update_monitors();
 
     VD_FW_G.focused = 1;
     VD_FW_G.def_window_min[0] = VdFwGetSystemMetrics(SM_CXMINTRACK);
@@ -9316,6 +9307,34 @@ static void vd_fw__win32_update_monitor_display_modes(VdFw__Win32Monitor *monito
     vd_fw__sort_display_modes(monitor->display_modes, monitor->display_modes_len);
 }
 
+static void vd_fw__win32_update_monitors(void)
+{
+    VD_FW_G.monitor_count = 0;
+    VdFwEnumDisplayMonitors(NULL, NULL, vd_fw__win32_enum_monitor_resize_count, (VdFwLPARAM)NULL);
+
+    VD_FW_G.monitor_buffer_len = 0;
+    VD_FW_G.monitor_buffer = (VdFw__Win32Monitor*)vd_fw__resize_buffer(VD_FW_G.monitor_buffer, sizeof(*VD_FW_G.monitor_buffer),
+                                                                       VD_FW_G.monitor_count, &VD_FW_G.monitor_buffer_cap);
+
+    VdFwEnumDisplayMonitors(NULL, NULL, vd_fw__win32_enum_monitor, (VdFwLPARAM)NULL);
+    VdFwPOINT p = {0, 0};
+    VdFwHMONITOR primary_monitor = VdFwMonitorFromPoint(p, MONITOR_DEFAULTTOPRIMARY);
+
+    int primary_monitor_index = -1;
+    for (int i = 0; i < VD_FW_G.monitor_buffer_len; ++i) {
+        if (VD_FW_G.monitor_buffer[i].hmonitor == primary_monitor) {
+            primary_monitor_index = i;
+            break;
+        }
+    }
+
+    if ((primary_monitor_index != -1) && (primary_monitor_index != 0)) {
+        VdFw__Win32Monitor temp = VD_FW_G.monitor_buffer[0];
+        VD_FW_G.monitor_buffer[0] = VD_FW_G.monitor_buffer[primary_monitor_index];
+        VD_FW_G.monitor_buffer[primary_monitor_index] = temp;
+    }
+}
+
 #if VD_FW_NO_CRT
 #pragma function(memset)
 void *__cdecl memset(void *dest, int value, size_t num)
@@ -9463,6 +9482,7 @@ typedef enum {
     VD_FW__MAC_MESSAGE_MINIMIZED,
     VD_FW__MAC_MESSAGE_ZOOMED,
     VD_FW__MAC_MESSAGE_CLOSE_REQUEST,
+    VD_FW__MAC_MESSAGE_FULLSCREEN,
 } VdFw__MacMessageType;
 
 typedef struct {
@@ -9494,6 +9514,10 @@ typedef struct {
         struct {
             int on;
         } zoomed;
+
+        struct {
+            int on;
+        } fullscreen;
     } dat;
 } VdFw__MacMessage;
 
@@ -9531,6 +9555,8 @@ typedef struct {
     int                         window_state;
     int                         window_state_changed;
     int                         close_request;
+    int                         is_fullscreen;
+    int                         fullscreen_changed_this_frame;
     uint64_t                    delta_ns;
 
 /* ----WINDOW THREAD ONLY-------------------------------------------------------------------------------------------- */
@@ -9924,6 +9950,23 @@ static int Update_Context = 0;
     msg.dat.minimized.on = 0;
     vd_fw__msgbuf_w(&msg); 
 }
+
+- (void) windowDidEnterFullScreen:(NSNotification *) notification
+{
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_FULLSCREEN;
+    msg.dat.fullscreen.on = 1;
+    vd_fw__msgbuf_w(&msg); 
+}
+
+- (void) windowDidExitFullScreen:(NSNotification *) notification
+{
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_FULLSCREEN;
+    msg.dat.fullscreen.on = 0;
+    vd_fw__msgbuf_w(&msg); 
+}
+
 
 - (void)windowWillClose:(NSNotification*)notification {
     VD_FW_G.should_close = YES;
@@ -10486,6 +10529,10 @@ VD_FW_API int vd_fw_running(void)
                 VD_FW_G.window_state_changed = 1;
             } break;
 
+            case VD_FW__MAC_MESSAGE_FULLSCREEN: {
+                VD_FW_G.is_fullscreen = msg.dat.fullscreen.on;
+            } break;
+
             case VD_FW__MAC_MESSAGE_CLOSE_REQUEST: {
                 VD_FW_G.close_request = 1;
             } break;
@@ -10509,6 +10556,15 @@ VD_FW_API int vd_fw_running(void)
 
 VD_FW_API int vd_fw_swap_buffers(void)
 {
+    if (VD_FW_G.fullscreen_changed_this_frame) {
+        for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
+            VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
+            VD_FW_G.curr_key_states[i] = 0;
+        }
+
+        VD_FW_G.fullscreen_changed_this_frame = 0;
+    }
+
     [VD_FW_G.gl_context flushBuffer];
 
     // if (VD_FW_G.curr_frame.flags & VD_FW__MAC_FLAGS_WAKE_COND_VAR) {
@@ -10628,6 +10684,25 @@ VD_FW_API void vd_fw_normalize(void)
         // Otherwise, just bring it to the front in case it’s hidden.
         [window makeKeyAndOrderFront:nil];
     });
+}
+
+VD_FW_API void vd_fw_set_fullscreen(int on)
+{
+    if (VD_FW_G.is_fullscreen == on) {
+        return;
+    }
+
+    VD_FW_G.fullscreen_changed_this_frame = 1;
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [VD_FW_G.window toggleFullScreen: nil];
+    });
+
+}
+
+VD_FW_API int vd_fw_get_fullscreen(void)
+{
+    return VD_FW_G.is_fullscreen;
 }
 
 VD_FW_API void vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4])

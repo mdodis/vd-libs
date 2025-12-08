@@ -1546,6 +1546,8 @@ VD_UI_API VdUiReply vd_ui_button(VdUiStr str)
     div->style.padding[VD_UI_TOP]    = 4.f;
     div->style.padding[VD_UI_RIGHT]  = 4.f;
     div->style.padding[VD_UI_BOTTOM] = 4.f;
+    div->style.corner_radius    = 6.f;
+    div->style.edge_softness    = 0.25f;
     div->style.background.normal = vd_ui_gradient(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f),
                                             vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f));
 
