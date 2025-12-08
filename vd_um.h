@@ -85,6 +85,15 @@ typedef enum {
     VD_UM_MODIFIER_TYPE_SNAP,
 } VdUmModifierType;
 
+typedef struct {
+    VdUmModifierType type;
+    union {
+        struct {
+            float increment;
+        } snap;
+    } data;
+} VdUmModifier;
+
 VD_UM_API void              vd_um_init(void);
 
 VD_UM_API void              vd_um_frame_begin(float dt);
@@ -129,7 +138,8 @@ VD_UM_API void              vd_um_timeout_pop(void);
 VD_UM_API void              vd_um_push_id(const void *str, int len);
 VD_UM_API void              vd_um_pop_id(void);
 
-VD_UM_API void              vd_um_modifier_push(VdUmModifierType type);
+VD_UM_API void              vd_um_modifier_push(VdUmModifier *modifier);
+VD_UM_API VdUmModifier*     vd_um_modifier_find_first(VdUmModifierType type);
 VD_UM_API void              vd_um_modifier_pop(void);
 
 VD_UM_API VdUmContext*      vd_um_context_create(VdUmContextCreateInfo *info);
@@ -216,10 +226,6 @@ typedef struct {
     int        vertex_count;
 } VdUm__DeferredVertex;
 
-typedef struct {
-    VdUmModifierType type;
-} VdUm__Modifier;
-
 struct VdUmContext {
     void*                   (*alloc)(void *prev, int prev_size, int new_size);
 
@@ -268,7 +274,7 @@ struct VdUmContext {
     int                     timeout_stack_count;
 
     // Modifier Stack
-    VdUm__Modifier          modifier_stack[VD_UM_MODIFIER_STACK_COUNT];
+    VdUmModifier            modifier_stack[VD_UM_MODIFIER_STACK_COUNT];
     int                     modifier_stack_count;
 
     // Persistent Data
@@ -290,6 +296,7 @@ VD_UM_INL   float           vd_um__sin(float x);
 VD_UM_INL   float           vd_um__cos(float x);
 VD_UM_INL   float           vd_um__abs(float x);
 VD_UM_INL   int             vd_um__sgn(float x);
+VD_UM_INL   float           vd_um__floorf(float x);
 VD_UM_INL   int             vd_um__signs_match(float a, float b, float c);
 VD_UM_INL   int             vd_um__signs_match_or_are_zero(float a, float b, float c);
 VD_UM_INL   void            vd_um__add3(float a[3], float b[3], float out[3]);
@@ -339,6 +346,10 @@ VD_UM_INL   int             vd_um__is_active(VdUmContext *ctx, VdUmU64 id);
 VD_UM_INL   void            vd_um__lose_active(VdUmContext *ctx, VdUmU64 id);
 VD_UM_INL   int             vd_um__compute_timeout(VdUmVertex *vertex);
 VD_UM_INL   int             vd_um__get_viewport(VdUmContext *ctx);
+VD_UM_INL   float           vd_um__snap1(VdUmContext *ctx, float dist);
+VD_UM_INL   void            vd_um__snap3(VdUmContext *ctx, float v[3], float out[3]);
+VD_UM_INL   void            vd_um__snap3_inplace(VdUmContext *ctx, float v[3]);
+VD_UM_INL   void            vd_um__snap3_plane_inplace(VdUmContext *ctx, float pn[3], float pd, float v[3]);
 
 
 #define VD_UM_EPSILON 1.19209290e-07f
@@ -357,7 +368,8 @@ VD_UM_INL   int             vd_um__get_viewport(VdUmContext *ctx);
 #endif // !VD_UM_MEMSET
 
 #if VD_UM_ENABLE_ASSERTIONS
-#   define VD_UM_ASSERT_1(x) #x
+#   define VD_UM_ASSERT_2(x) #x
+#   define VD_UM_ASSERT_1(x) VD_UM_ASSERT_2(x)
 #   define VD_UM_ASSERT(x) do { if (!(x)) { vd_um__abort("Assertion Failed: " __FILE__ ":" VD_UM_ASSERT_1(__LINE__) " - " #x ); } } while (0)
 #else
 #   define VD_UM_ASSERT(x)
@@ -842,7 +854,10 @@ VD_UM_API void vd_um_translate_axial(const char *nameid, float position[3], floa
             direction[2] * t1 - start_pos[2],
         };
 
-        vd_um__add3_scaled_inplace(position, delta, 1);
+        float dist = vd_um__dot3(delta, direction);
+        dist = vd_um__snap1(ctx, dist);
+
+        vd_um__add3_scaled_inplace(position, direction, dist);
 
         // float magnitude = vd_um__sqrt(ctx->mouse_delta[0] * ctx->mouse_delta[0] + ctx->mouse_delta[1] * ctx->mouse_delta[1]);
         // float magnitude = ctx->mouse_delta[0] - ctx->mouse_delta[1];
@@ -910,7 +925,7 @@ VD_UM_API void vd_um_translate_planar(const char *nameid, float position[3], flo
         vd_um__unmake_hot(ctx, id);
     }
 
-    if (vd_um__mouse_just_clicked(ctx) && hit) {
+    if (vd_um__mouse_just_clicked(ctx) && vd_um__is_hot(ctx, id)) {
         if (vd_um__take_active(ctx, id)) {
             vd_um__get_mouse_point(ctx, t, start_mouse_pos);
             for (int i = 0; i < 3; ++i) start_pos[i] = position[i];
@@ -941,6 +956,9 @@ VD_UM_API void vd_um_translate_planar(const char *nameid, float position[3], flo
 
             float delta[3];
             vd_um__sub3(point, start_mouse_pos, delta);
+
+            vd_um__snap3_plane_inplace(ctx, plane_normal, 0.f, delta);
+
             vd_um__add3(start_pos, delta, position);
         }
 
@@ -1092,20 +1110,40 @@ VD_UM_API void vd_um_timeout_pop(void)
 {
     VdUmContext *ctx = vd_um_context_get();
     VD_UM_ASSERT(ctx->timeout_stack_count > 0);
+    ctx->timeout_stack_count--;
 }
 
-VD_UM_API void vd_um_modifier_push(VdUmModifierType type)
+VD_UM_API void vd_um_modifier_push(VdUmModifier *modifier)
 {
     VdUmContext *ctx = vd_um_context_get();
     VD_UM_ASSERT(ctx->modifier_stack_count < VD_UM_MODIFIER_STACK_COUNT);
-    VdUm__Modifier *mod = &ctx->modifier_stack[ctx->modifier_stack_count++];
-    mod->type = type;
+    VdUmModifier *mod = &ctx->modifier_stack[ctx->modifier_stack_count++];
+    *mod = *modifier;
+}
+
+VD_UM_API VdUmModifier *vd_um_modifier_find_first(VdUmModifierType type)
+{
+    VdUmContext *ctx = vd_um_context_get();
+    int i = ctx->modifier_stack_count - 1;
+    while (i >= 0) {
+        VdUmModifier *mod = &ctx->modifier_stack[i];
+
+        if (mod->type == type) {
+            return mod;
+        }
+
+        --i;
+    }
+
+    return NULL;
 }
 
 VD_UM_API void vd_um_modifier_pop(void)
 {
     VdUmContext *ctx = vd_um_context_get();
     VD_UM_ASSERT(ctx->modifier_stack_count > 0);
+
+    ctx->modifier_stack_count--;
 }
 
 static void vd_um__push_vertex(VdUmContext *ctx, VdUmVertex *vertex)
@@ -1296,6 +1334,96 @@ VD_UM_INL int vd_um__get_viewport(VdUmContext *ctx)
     return ctx->num_viewports - 1;
 }
 
+VD_UM_INL float vd_um__snap1(VdUmContext *ctx, float dist)
+{
+    (void)ctx;
+
+    VdUmModifier *modifier = vd_um_modifier_find_first(VD_UM_MODIFIER_TYPE_SNAP);
+    if (modifier == NULL) {
+        return dist;
+    }
+
+    return vd_um__floorf(dist / modifier->data.snap.increment) * modifier->data.snap.increment;
+}
+
+VD_UM_INL void vd_um__snap3_inplace(VdUmContext *ctx, float v[3])
+{
+    VdUmModifier *modifier = vd_um_modifier_find_first(VD_UM_MODIFIER_TYPE_SNAP);
+    if (modifier == NULL) {
+        return;
+    }
+
+    v[0] = vd_um__floorf(v[0] / modifier->data.snap.increment) * modifier->data.snap.increment;
+    v[1] = vd_um__floorf(v[1] / modifier->data.snap.increment) * modifier->data.snap.increment;
+    v[2] = vd_um__floorf(v[2] / modifier->data.snap.increment) * modifier->data.snap.increment;
+}
+
+VD_UM_INL void vd_um__snap3_plane_inplace(VdUmContext *ctx, float pn[3], float pd, float v[3])
+{
+    VdUmModifier *modifier = vd_um_modifier_find_first(VD_UM_MODIFIER_TYPE_SNAP);
+    if (modifier == NULL) {
+        return;
+    }
+
+    float ortho[3];
+    vd_um__find_orthogonal_vector(pn, ortho);
+
+    float right[3];
+    vd_um__cross3(pn, ortho, right);
+
+    float top[3];
+    vd_um__cross3(pn, right, top);
+
+    float v_right[3] = {
+        right[0] * vd_um__dot3(v, right),
+        right[1] * vd_um__dot3(v, right),
+        right[2] * vd_um__dot3(v, right),
+    };
+
+    float v_top[3] = {
+        top[0] * vd_um__dot3(v, top),
+        top[1] * vd_um__dot3(v, top),
+        top[2] * vd_um__dot3(v, top),
+    };
+
+    float r_len = vd_um__sqrt(vd_um__lensq3(v_right));
+    float t_len = vd_um__sqrt(vd_um__lensq3(v_top));
+
+    if ((r_len < VD_UM_EPSILON) || (t_len < VD_UM_EPSILON)) {
+        return;
+    }
+
+    v_right[0] = v_right[0] / r_len;
+    v_right[1] = v_right[1] / r_len;
+    v_right[2] = v_right[2] / r_len;
+
+    r_len = vd_um__floorf(r_len / modifier->data.snap.increment) * modifier->data.snap.increment;
+
+    v_right[0] = v_right[0] * r_len;
+    v_right[1] = v_right[1] * r_len;
+    v_right[2] = v_right[2] * r_len;
+
+    v_top[0] = v_top[0] / t_len;
+    v_top[1] = v_top[1] / t_len;
+    v_top[2] = v_top[2] / t_len;
+
+    t_len = vd_um__floorf(t_len / modifier->data.snap.increment) * modifier->data.snap.increment;
+
+    v_top[0] = v_top[0] * t_len;
+    v_top[1] = v_top[1] * t_len;
+    v_top[2] = v_top[2] * t_len;
+
+    vd_um__add3(v_right, v_top, v);
+}
+
+VD_UM_INL void vd_um__snap3(VdUmContext *ctx, float v[3], float out[3])
+{
+    out[0] = v[0];
+    out[1] = v[1];
+    out[2] = v[2];
+    vd_um__snap3_inplace(ctx, out);
+}
+
 VdUmContextCreateInfo Vd_Um__Default_Context = {
     vd_um__alloc_default,
 };
@@ -1334,6 +1462,7 @@ VD_UM_API VdUmContext *vd_um_context_create(VdUmContextCreateInfo *info)
     ctx->depth_flag_stack_count = 0;
     ctx->vertex_count_stack_count = 0;
     ctx->timeout_stack_count = 0;
+    ctx->modifier_stack_count = 0;
 
     ctx->hot_id = 0;
     ctx->selection_t = 1000.f;
@@ -1360,6 +1489,7 @@ VD_UM_API VdUmContext *vd_um_context_get(void)
 
 #if VD_UM_STDLIB
 #include <stdlib.h>
+#include <math.h>
 static void *vd_um__alloc_default(void *prev, int prev_size, int new_size)
 {
     (void)prev_size;
@@ -1463,6 +1593,11 @@ VD_UM_INL int vd_um__sgn(float x)
     } else {
         return x > 0.f ? 1 : -1;
     }
+}
+
+VD_UM_INL float vd_um__floorf(float x)
+{
+    return floorf(x);
 }
 
 VD_UM_INL int vd_um__signs_match(float a, float b, float c)

@@ -3186,12 +3186,12 @@ static size_t vd_ui__hash_glyph(unsigned int codepoint, float size, VdUiFontId f
     return result;
 }
 
-VD_UI_API void             vd_ui_get_glyph_metrics(VdUiFontId id, unsigned int codepoint, float size,
-                                                   float *rx, float *ry,
-                                                   float *x0, float *y0,
-                                                   float *x1, float *y1,
-                                                   float *s0, float *t0,
-                                                   float *s1, float *t1)
+VD_UI_API void vd_ui_get_glyph_metrics(VdUiFontId id, unsigned int codepoint, float size,
+                                       float *rx, float *ry,
+                                       float *x0, float *y0,
+                                       float *x1, float *y1,
+                                       float *s0, float *t0,
+                                       float *s1, float *t1)
 {
     VdUiContext *ctx = vd_ui_context_get();
     vd_ui__get_glyph_quad(ctx, codepoint, size, id,
