@@ -535,6 +535,11 @@ VD_UI_API VdUiDiv*         vd_ui_parent_get(int i);
 VD_UI_API void             vd_ui_set_scale(float s);
 VD_UI_API float            vd_ui_get_scale(void);
 
+/* ----STYLE STACKS-------------------------------------------------------------------------------------------------- */
+VD_UI_API void             vd_ui_style_size_push(VdUiAxis axis, VdUiSizeMode mode, float value, float niceness);
+VD_UI_API VdUiSize*        vd_ui_style_size_get(VdUiAxis axis);
+VD_UI_API void             vd_ui_style_size_pop(VdUiAxis axis);
+
 /* ----RENDERING----------------------------------------------------------------------------------------------------- */
 enum {
     VD_UI_VERTEX_FLAG_TEXTURE_IS_ALPHA_BUFFER = 1 << 0,
@@ -1176,9 +1181,6 @@ struct VdUiContext {
     unsigned int            num_fonts;                                             // Fonts. Holds all font data
     VdUiFont                fonts[VD_UI_FONT_COUNT_MAX];
 
-    unsigned int            clip_stack_count;                                      // Clip stack
-    float                   clip_stack[VD_UI_CLIP_STACK_MAX][4];
-
     VdUiDiv                 *divs;                                                 // The actual divs hashmap
     unsigned int            divs_cap;
     unsigned int            divs_cap_total;
@@ -1236,6 +1238,16 @@ struct VdUiContext {
     char                    *strbuf;
     size_t                  strbuf_cap;
     size_t                  strbuf_len;
+
+    // Stacks
+    unsigned int            clip_stack_count;                                      // Clip stack
+    float                   clip_stack[VD_UI_CLIP_STACK_MAX][4];
+
+    unsigned int            size_h_stack_count;
+    VdUiSize                size_h_stack[VD_UI_STYLE_SIZE_STACK_COUNT];            // Horizontal Size Stack
+
+    unsigned int            size_v_stack_count;
+    VdUiSize                size_v_stack[VD_UI_STYLE_SIZE_STACK_COUNT];            // Horizontal Size Stack
 
     // Stored to differentiate between passes
     VdUiTextureId          *current_texture_id;
@@ -1305,12 +1317,16 @@ VD_UI_API void vd_ui_frame_begin(float delta_seconds)
         ctx->frame_index = 1;
     }
 
+    vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f);
+    vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_TEXT_CONTENT, 0.f, 0.f);
 }
 
 VD_UI_API void vd_ui_frame_end(void)
 {
     VdUiContext *ctx = vd_ui_context_get();
     vd_ui_parent_pop();
+    vd_ui_style_size_pop(VD_UI_AXISH);
+    vd_ui_style_size_pop(VD_UI_AXISV);
 
     // Zero immediate mode stuff
     ctx->vbuf_count = 0;
@@ -1335,6 +1351,8 @@ VD_UI_API void vd_ui_frame_end(void)
     ctx->root.style.size[1].value    = ctx->window[1];
     ctx->root.style.size[1].niceness = 0.f;
     ctx->clip_stack_count = 0;
+    ctx->size_h_stack_count = 0;
+    ctx->size_v_stack_count = 0;
 
     // Layout UI
     vd_ui__layout(ctx);
@@ -2076,6 +2094,9 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
         parent->last = result;
     }
 
+    // Resolve styles
+    result->style.size[VD_UI_AXISH] = *vd_ui_style_size_get(VD_UI_AXISH);
+    result->style.size[VD_UI_AXISV] = *vd_ui_style_size_get(VD_UI_AXISV);
     return result;
 }
 
@@ -2186,6 +2207,61 @@ VD_UI_API float vd_ui_get_scale(void)
 {
     VdUiContext *ctx = vd_ui_context_get();
     return ctx->dpi_scale;
+}
+
+/* ----STYLE STACKS-------------------------------------------------------------------------------------------------- */
+VD_UI_API void vd_ui_style_size_push(VdUiAxis axis, VdUiSizeMode mode, float value, float niceness)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    VdUiSize *stack = ctx->size_h_stack;
+    unsigned int *stack_count = &ctx->size_h_stack_count;
+
+    if (axis == VD_UI_AXISV) {
+        stack = ctx->size_v_stack;
+        stack_count = &ctx->size_v_stack_count;
+    }
+
+    VD_UI_ASSERT((*stack_count) < VD_UI_STYLE_SIZE_STACK_COUNT);
+
+    VdUiSize *size = &stack[*stack_count];
+    (*stack_count)++;
+    size->mode = mode;
+    size->value = value;
+    size->niceness = niceness;
+}
+
+VD_UI_API VdUiSize *vd_ui_style_size_get(VdUiAxis axis)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    VdUiSize *stack = ctx->size_h_stack;
+    unsigned int *stack_count = &ctx->size_h_stack_count;
+
+    if (axis == VD_UI_AXISV) {
+        stack = ctx->size_v_stack;
+        stack_count = &ctx->size_v_stack_count;
+    }
+
+    if ((*stack_count) > 0) {
+        return &stack[(*stack_count) - 1];
+    } else {
+        return 0;
+    }
+}
+
+VD_UI_API void vd_ui_style_size_pop(VdUiAxis axis)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    VdUiSize *stack = ctx->size_h_stack;
+    unsigned int *stack_count = &ctx->size_h_stack_count;
+
+    if (axis == VD_UI_AXISV) {
+        stack = ctx->size_v_stack;
+        stack_count = &ctx->size_v_stack_count;
+    }
+
+    VD_UI_ASSERT((*stack_count) > 0);
+
+    (*stack_count)--;
 }
 
 VD_UI_API int vd_ui_demo(void)
