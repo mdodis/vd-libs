@@ -27,10 +27,14 @@
  * For more information, please refer to <https://unlicense.org/>
  * ---------------------------------------------------------------------------------------------------------------------
  */
+#define VD_USE_CRT 1
+#define VD_INCLUDE_TESTS 1
+#include "vd.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <intrin.h>
 #include <string.h>
+#include <math.h>
 
 static const uint64_t DOUBLE_POW5_INV_SPLIT[342][2] = {
     {                    1u, 2305843009213693952u }, { 11068046444225730970u, 1844674407370955161u }, {  5165088340638674453u, 1475739525896764129u }, {  7821419487252849886u, 1180591620717411303u },
@@ -269,7 +273,8 @@ static inline uint32_t log10pow5(const int32_t e)
 
 static inline int32_t pow5bit(const int32_t e)
 {
-  return (int32_t) (((((uint32_t) e) * 1217359) >> 19) + 1);
+    // return (uint32_t) (((e * 163391164108059ull) >> 46) + 1);
+    return (int32_t) (((((uint32_t) e) * 1217359) >> 19) + 1);
 }
 
 static inline uint64_t mul_shift_all64(uint64_t m, const uint64_t* const mul, const int32_t j,
@@ -318,11 +323,11 @@ void cv_double_to_decimal(int sign, uint64_t mantissa, uint32_t exponent, uint64
         e2 = 1 - 1023 - 52 - 2;
         m2 = mantissa;
     } else {
-        e2 = (int32_t)(exponent) - 1023 - 52 - 2;
+        e2 = ((int32_t)exponent) - 1023 - 52 - 2;
         m2 = (1ull << 52) | mantissa;
     }
 
-    int even = (m2 & 1) == 0;
+    int even = ((m2 & 1) == 0) ? 1 : 0;
     int bounds = even;
 
     // Step 2: Determine the interval of valid decimal representations.
@@ -336,7 +341,7 @@ void cv_double_to_decimal(int sign, uint64_t mantissa, uint32_t exponent, uint64
     int vr_trailing_zeroes = 0;
 
     if (e2 >= 0) {
-        uint32_t q = ((((uint32_t) e2) * 78913) >> 18) - (e2 > 3);
+        uint32_t q = ((((uint32_t) e2) * 78913) >> 18) - ((e2 > 3) ? 1 : 0);
         e10 = (int32_t)q;
         int32_t k = 125 + pow5bit((int32_t)q) - 1;
         int32_t i = -e2 + (int32_t)q + k;
@@ -354,7 +359,7 @@ void cv_double_to_decimal(int sign, uint64_t mantissa, uint32_t exponent, uint64
             }
         }
     } else {
-        uint32_t q = log10pow5(-e2) - ((-e2 == 1));
+        uint32_t q = log10pow5(-e2) - ((-e2 > 1));
         e10 = (int32_t)q + e2;
         int32_t i = -e2 - (int32_t)q;
         int32_t k = pow5bit(i) - 125;
@@ -433,7 +438,7 @@ void cv_double_to_decimal(int sign, uint64_t mantissa, uint32_t exponent, uint64
         uint64_t vm_div100 = div100(vm);
 
         if (vp_div100 > vm_div100) {
-            uint64_t vr_div100 = div10(vr);
+            uint64_t vr_div100 = div100(vr);
             uint32_t vr_mod100 = ((uint32_t)vr) - 100 * ((uint32_t)vr_div100);
 
             round_up = vr_mod100 >= 50;
@@ -483,7 +488,7 @@ int cv_double_to_str(double x, char *result, int mode)
 
     if (exponent == ((1u << 11) - 1u) || (exponent == 0 && mantissa == 0)) {
         if (mantissa) {
-            memcpy(result, "nan", 4);
+            memcpy(result, "nan", 3);
             return 3;
         }
 
@@ -492,13 +497,17 @@ int cv_double_to_str(double x, char *result, int mode)
         }
 
         if (exponent) {
-            memcpy(result + sign, "inf", 4);
+            memcpy(result + sign, "inf", 3);
             return sign + 3;
         }
 
-        memcpy(result + sign, "0.00000000000000000", 19);
-
-        return sign + 18;
+        if (mode == DOUBLE_TO_STR_MODE_FIXED_POINT) {
+            memcpy(result + sign, "0.0", 19);
+            return sign + 19;
+        } else if (mode == DOUBLE_TO_STR_MODE_SCIENTIFIC) {
+            memcpy(result + sign, "0e0", 3);
+            return 3;
+        }
     }
 
     int d_sign = sign;
@@ -612,36 +621,7 @@ int cv_double_to_str(double x, char *result, int mode)
         }
 
         return index;
-
-
-        // if (pos <= 0) {
-        //     result[index++] = '0';
-        //     result[index++] = '.';
-
-        //     for (int i = 0; i < -pos; ++i) {
-        //         result[index++] = '0';
-        //     }
-        //     memcpy(result + index, digits, digit_len);
-
-        //     index += digit_len;
-        // } else if (pos >= digit_len) {
-        //     memcpy(result + index, digits, digit_len);
-        //     index += digit_len;
-
-        //     for (int i = 0; i < (pos - digit_len); ++i) {
-        //         result[index++] = '0'; 
-        //     }
-        // } else {
-        //     memcpy(result + index, digits, pos);
-        //     index += pos;
-        //     result[index++] = '.';
-        //     memcpy(result + index, digits + pos, digit_len - pos);
-        //     index += digit_len - pos;
-        // }
-
-        // return index;
     }
-
 
     uint64_t output = d_mantissa;
     uint32_t output_len = 1;
@@ -727,7 +707,7 @@ int cv_double_to_str(double x, char *result, int mode)
         index++;
     }
 
-    result[index++] = 'E';
+    result[index++] = 'e';
 
     int32_t exp = d_exponent + (int32_t)output_len - 1;
     if (exp < 0) {
@@ -750,11 +730,11 @@ int cv_double_to_str(double x, char *result, int mode)
     return index;
 }
 
-void test_float(float x) {
+void test_float(double x) {
     char buf[46];
-    int l = cv_double_to_str(x, buf, DOUBLE_TO_STR_MODE_FIXED_POINT);
+    int l = cv_double_to_str(x, buf, DOUBLE_TO_STR_MODE_SCIENTIFIC);
 
-    printf("|%-25.17f|%-25.*s|\n", x, l, buf);
+    printf("|%-25.17e|%-25.*s|\n", x, l, buf);
 }
 
 int main(int argc, char const *argv[])
@@ -770,13 +750,283 @@ int main(int argc, char const *argv[])
     test_float(*((float*)(&inf)));
     test_float(*((float*)(&minf)));
     test_float(*((float*)(&nan)));
-    test_float(0.f);
-    test_float(-0.f);
-    test_float(10.f);
-    test_float(12.f);
-    test_float(123.f);
-    test_float(0.456f);
-    test_float(-0.156f);
+    test_float(0.0);
+    test_float(-0.0);
+    test_float(10.0);
+    test_float(12.0);
+    test_float(123.0);
+    test_float(0.456);
+    test_float(-0.156);
+
+    vd_test_main();
 
     return 0;
 }
+
+#if VD_INCLUDE_TESTS
+
+static int compare_double(double x, const char *string, int mode) {
+    char buf[46];
+    int l = cv_double_to_str(x, buf, mode);
+
+    const char *c = string;
+    int count = 0;
+
+    int i = 0;
+    while ((*c) && (i < l)) {
+        if ((*c) != buf[i]) {
+            return 0;
+        }
+
+        count++;
+        c++;
+        i++;
+    }
+
+    if (count != l) {
+        return 0;
+    }
+
+    return 1;
+}
+
+#define COMPARE_DOUBLE(x, string, mode) do { \
+        int _r = compare_double(x, string, mode); \
+        if (!_r) { \
+            VD_TEST_ERR(#x " != " string); \
+        } \
+    } while (0)
+
+static double double_from_u64(uint64_t d)
+{
+    return *((double*)&d);
+}
+
+static double double_from_components(uint32_t sign, uint32_t exp, uint64_t mantissa) {
+    return double_from_u64(((uint64_t)sign << 63) | ((uint64_t)exp << 52) | mantissa);
+}
+
+
+VD_TEST("ryu - basic") {
+
+    COMPARE_DOUBLE(0.0,         "0e0", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(-0.0,        "-0e0", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0,         "1e0", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(-1.0,        "-1e0", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(NAN,         "nan", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(INFINITY,    "inf", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(-INFINITY,   "-inf", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+
+    VD_TEST_OK();
+}
+
+VD_TEST("ryu - switch subnormal") {
+    COMPARE_DOUBLE(2.2250738585072014e-308, "2.2250738585072014e-308", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    VD_TEST_OK();
+}
+
+VD_TEST("ryu - minmax") {
+    COMPARE_DOUBLE(double_from_u64(0x7fefffffffffffff), "1.7976931348623157e308", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(double_from_u64(1), "5e-324", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    VD_TEST_OK();
+}
+
+VD_TEST("ryu - lots of trailing zeroes") {
+    COMPARE_DOUBLE(2.98023223876953125E-8, "2.9802322387695312e-8", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    VD_TEST_OK();
+}
+
+VD_TEST("ryu - regression") {
+    COMPARE_DOUBLE(-2.109808898695963E16, "-2.109808898695963e16", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(4.940656E-318,         "4.940656e-318", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.18575755E-316,       "1.18575755e-316", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(2.989102097996E-312,   "2.989102097996e-312", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(9.0608011534336E15,    "9.0608011534336e15", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(4.708356024711512E18,  "4.708356024711512e18", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(9.409340012568248E18,  "9.409340012568248e18", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.2345678,             "1.2345678e0", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    VD_TEST_OK();
+}
+
+VD_TEST("ryu - like pow5") {
+    COMPARE_DOUBLE(double_from_u64(0x4830F0CF064DD592), "5.764607523034235e39", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(double_from_u64(0x4840F0CF064DD592), "1.152921504606847e40", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(double_from_u64(0x4850F0CF064DD592), "2.305843009213694e40", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    VD_TEST_OK();
+}
+
+VD_TEST("ryu - output length") {
+    COMPARE_DOUBLE(1.2, "1.2e0", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.23, "1.23e0", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.234, "1.234e0", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.2345, "1.2345e0", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.23456, "1.23456e0", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.234567, "1.234567e0", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.2345678, "1.2345678e0", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.23456789, "1.23456789e0", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.234567895, "1.234567895e0", DOUBLE_TO_STR_MODE_SCIENTIFIC); // 1.234567890 would be trimmed
+    COMPARE_DOUBLE(1.2345678901, "1.2345678901e0", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.23456789012, "1.23456789012e0", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.234567890123, "1.234567890123e0", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.2345678901234, "1.2345678901234e0", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.23456789012345, "1.23456789012345e0", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.234567890123456, "1.234567890123456e0", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.2345678901234567, "1.2345678901234567e0", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(4.294967294, "4.294967294e0", DOUBLE_TO_STR_MODE_SCIENTIFIC); // 2^32 - 2
+    COMPARE_DOUBLE(4.294967295, "4.294967295e0", DOUBLE_TO_STR_MODE_SCIENTIFIC); // 2^32 - 1
+    COMPARE_DOUBLE(4.294967296, "4.294967296e0", DOUBLE_TO_STR_MODE_SCIENTIFIC); // 2^32
+    COMPARE_DOUBLE(4.294967297, "4.294967297e0", DOUBLE_TO_STR_MODE_SCIENTIFIC); // 2^32 + 1
+    COMPARE_DOUBLE(4.294967298, "4.294967298e0", DOUBLE_TO_STR_MODE_SCIENTIFIC); // 2^32 + 2
+    VD_TEST_OK();
+}
+
+VD_TEST("ryu - minmax shift") {
+    const uint64_t max_mantissa = ((uint64_t)1 << 53) - 1;
+
+    // 32-bit opt-size=0:  49 <= dist <= 50
+    // 32-bit opt-size=1:  30 <= dist <= 50
+    // 64-bit opt-size=0:  50 <= dist <= 50
+    // 64-bit opt-size=1:  30 <= dist <= 50
+    COMPARE_DOUBLE(double_from_components(0, 4, 0), "1.7800590868057611e-307", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    // 32-bit opt-size=0:  49 <= dist <= 49
+    // 32-bit opt-size=1:  28 <= dist <= 49
+    // 64-bit opt-size=0:  50 <= dist <= 50
+    // 64-bit opt-size=1:  28 <= dist <= 50
+    COMPARE_DOUBLE(double_from_components(0, 6, max_mantissa), "2.8480945388892175e-306", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    // 32-bit opt-size=0:  52 <= dist <= 53
+    // 32-bit opt-size=1:   2 <= dist <= 53
+    // 64-bit opt-size=0:  53 <= dist <= 53
+    // 64-bit opt-size=1:   2 <= dist <= 53
+    COMPARE_DOUBLE(double_from_components(0, 41, 0), "2.446494580089078e-296", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    // 32-bit opt-size=0:  52 <= dist <= 52
+    // 32-bit opt-size=1:   2 <= dist <= 52
+    // 64-bit opt-size=0:  53 <= dist <= 53
+    // 64-bit opt-size=1:   2 <= dist <= 53
+    COMPARE_DOUBLE(double_from_components(0, 40, max_mantissa), "4.8929891601781557e-296", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+
+    // 32-bit opt-size=0:  57 <= dist <= 58
+    // 32-bit opt-size=1:  57 <= dist <= 58
+    // 64-bit opt-size=0:  58 <= dist <= 58
+    // 64-bit opt-size=1:  58 <= dist <= 58
+    COMPARE_DOUBLE(double_from_components(0, 1077, 0), "1.8014398509481984e16", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    // 32-bit opt-size=0:  57 <= dist <= 57
+    // 32-bit opt-size=1:  57 <= dist <= 57
+    // 64-bit opt-size=0:  58 <= dist <= 58
+    // 64-bit opt-size=1:  58 <= dist <= 58
+    COMPARE_DOUBLE(double_from_components(0, 1076, max_mantissa), "3.6028797018963964e16", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    // 32-bit opt-size=0:  51 <= dist <= 52
+    // 32-bit opt-size=1:  51 <= dist <= 59
+    // 64-bit opt-size=0:  52 <= dist <= 52
+    // 64-bit opt-size=1:  52 <= dist <= 59
+    COMPARE_DOUBLE(double_from_components(0, 307, 0), "2.900835519859558e-216", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    // 32-bit opt-size=0:  51 <= dist <= 51
+    // 32-bit opt-size=1:  51 <= dist <= 59
+    // 64-bit opt-size=0:  52 <= dist <= 52
+    // 64-bit opt-size=1:  52 <= dist <= 59
+    COMPARE_DOUBLE(double_from_components(0, 306, max_mantissa), "5.801671039719115e-216", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+
+    // 32-bit opt-size=0:  49 <= dist <= 49
+    // 32-bit opt-size=1:  44 <= dist <= 49
+    // 64-bit opt-size=0:  50 <= dist <= 50
+    // 64-bit opt-size=1:  44 <= dist <= 50
+    COMPARE_DOUBLE(double_from_components(0, 934, 0x000FA7161A4D6E0Cu), "3.196104012172126e-27", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    VD_TEST_OK();
+}
+
+VD_TEST("ryu - small ints") {
+    COMPARE_DOUBLE(9007199254740991.0, "9.007199254740991e15", DOUBLE_TO_STR_MODE_SCIENTIFIC); // 2^53-1
+    COMPARE_DOUBLE(9007199254740992.0, "9.007199254740992e15", DOUBLE_TO_STR_MODE_SCIENTIFIC); // 2^53
+
+    COMPARE_DOUBLE( 1.0e+0, "1e0", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE( 1.2e+1, "1.2e1", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE( 1.23e+2, "1.23e2", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE( 1.234e+3, "1.234e3", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE( 1.2345e+4, "1.2345e4", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE( 1.23456e+5, "1.23456e5", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE( 1.234567e+6, "1.234567e6", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE( 1.2345678e+7, "1.2345678e7", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE( 1.23456789e+8, "1.23456789e8", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE( 1.23456789e+9, "1.23456789e9", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE( 1.234567895e+9, "1.234567895e9", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE( 1.2345678901e+10, "1.2345678901e10", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE( 1.23456789012e+11, "1.23456789012e11", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE( 1.234567890123e+12, "1.234567890123e12", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE( 1.2345678901234e+13, "1.2345678901234e13", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE( 1.23456789012345e+14, "1.23456789012345e14", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE( 1.234567890123456e+15, "1.234567890123456e15", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+
+    // 10^i
+    COMPARE_DOUBLE(1.0e+0, "1e0", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+1, "1e1", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+2, "1e2", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+3, "1e3", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+4, "1e4", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+5, "1e5", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+6, "1e6", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+7, "1e7", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+8, "1e8", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+9, "1e9", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+10, "1e10", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+11, "1e11", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+12, "1e12", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+13, "1e13", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+14, "1e14", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+15, "1e15", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+
+    // 10^15 + 10^i
+    COMPARE_DOUBLE(1.0e+15 + 1.0e+0, "1.000000000000001e15", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+15 + 1.0e+1, "1.00000000000001e15", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+15 + 1.0e+2, "1.0000000000001e15", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+15 + 1.0e+3, "1.000000000001e15", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+15 + 1.0e+4, "1.00000000001e15", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+15 + 1.0e+5, "1.0000000001e15", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+15 + 1.0e+6, "1.000000001e15", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+15 + 1.0e+7, "1.00000001e15", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+15 + 1.0e+8, "1.0000001e15", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+15 + 1.0e+9, "1.000001e15", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+15 + 1.0e+10, "1.00001e15", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+15 + 1.0e+11, "1.0001e15", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+15 + 1.0e+12, "1.001e15", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+15 + 1.0e+13, "1.01e15", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(1.0e+15 + 1.0e+14, "1.1e15", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+
+    // Largest power of 2 <= 10^(i+1)
+    COMPARE_DOUBLE(8.0, "8e0", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(64.0, "6.4e1", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(512.0, "5.12e2", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(8192.0, "8.192e3", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(65536.0, "6.5536e4", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(524288.0, "5.24288e5", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(8388608.0, "8.388608e6", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(67108864.0, "6.7108864e7", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(536870912.0, "5.36870912e8", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(8589934592.0, "8.589934592e9", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(68719476736.0, "6.8719476736e10", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(549755813888.0, "5.49755813888e11", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(8796093022208.0, "8.796093022208e12", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(70368744177664.0, "7.0368744177664e13", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(562949953421312.0, "5.62949953421312e14", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(9007199254740992.0, "9.007199254740992e15", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+
+    // 1000 * (Largest power of 2 <= 10^(i+1))
+    COMPARE_DOUBLE(8.0e+3, "8e3", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(64.0e+3, "6.4e4", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(512.0e+3, "5.12e5", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(8192.0e+3, "8.192e6", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(65536.0e+3, "6.5536e7", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(524288.0e+3, "5.24288e8", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(8388608.0e+3, "8.388608e9", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(67108864.0e+3, "6.7108864e10", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(536870912.0e+3, "5.36870912e11", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(8589934592.0e+3, "8.589934592e12", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(68719476736.0e+3, "6.8719476736e13", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(549755813888.0e+3, "5.49755813888e14", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    COMPARE_DOUBLE(8796093022208.0e+3, "8.796093022208e15", DOUBLE_TO_STR_MODE_SCIENTIFIC);
+
+    VD_TEST_OK();
+}
+
+#endif
+
+#define VD_IMPL
+#include "vd.h"

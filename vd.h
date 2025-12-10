@@ -1990,6 +1990,8 @@ static VD_PROC_LOG(vd__default_log)
     VD_UNUSED(string);
 
     VdStr verbosity_str = vd_log_verbosity_to_str(verbosity);
+    (void)verbosity_str;
+
 #if VD_USE_CRT
     printf("[%.*s]: %s", VD_STR_EXPAND(verbosity_str), string);
 #endif
@@ -2274,7 +2276,7 @@ void vd_vm_release(void *addr, Vdusize len)
 #endif // VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
 
 /* ----SYSTEM ALLOCATOR IMPL----------------------------------------------------------------------------------------- */
-#define VD_SYSTEM_HEAP_RESERVE_PAGE_COUNT 16000
+#define VD_SYSTEM_HEAP_RESERVE_PAGE_COUNT 32000
 
 static VdSystemHeap Vd_System_Heap_Global = {0};
 
