@@ -32,7 +32,6 @@
 #include "vd.h"
 #include <stdio.h>
 #include <stdint.h>
-#include <intrin.h>
 #include <string.h>
 #include <math.h>
 
@@ -218,36 +217,42 @@ static const char DIGIT_TABLE[200] = {
     '8','0','8','1','8','2','8','3','8','4','8','5','8','6','8','7','8','8','8','9', '9','0','9','1','9','2','9','3','9','4','9','5','9','6','9','7','9','8','9','9'
 };
 
-static inline uint64_t umul128(const uint64_t a, const uint64_t b, uint64_t* const p_hi)
+static inline uint64_t umul128(const uint64_t a, const uint64_t b, uint64_t* const productHi)
 {
-    return _umul128(a, b, p_hi);
+    const uint32_t aLo = (uint32_t)a;
+    const uint32_t aHi = (uint32_t)(a >> 32);
+    const uint32_t bLo = (uint32_t)b;
+    const uint32_t bHi = (uint32_t)(b >> 32);
+
+    const uint64_t b00 = (uint64_t)aLo * bLo;
+    const uint64_t b01 = (uint64_t)aLo * bHi;
+    const uint64_t b10 = (uint64_t)aHi * bLo;
+    const uint64_t b11 = (uint64_t)aHi * bHi;
+
+    const uint32_t b00Lo = (uint32_t)b00;
+    const uint32_t b00Hi = (uint32_t)(b00 >> 32);
+
+    const uint64_t mid1 = b10 + b00Hi;
+    const uint32_t mid1Lo = (uint32_t)(mid1);
+    const uint32_t mid1Hi = (uint32_t)(mid1 >> 32);
+
+    const uint64_t mid2 = b01 + mid1Lo;
+    const uint32_t mid2Lo = (uint32_t)(mid2);
+    const uint32_t mid2Hi = (uint32_t)(mid2 >> 32);
+
+    const uint64_t pHi = b11 + mid1Hi + mid2Hi;
+    const uint64_t pLo = ((uint64_t)mid2Lo << 32) | b00Lo;
+
+    *productHi = pHi;
+    return pLo;
 }
 
 static inline uint64_t shiftright128(const uint64_t lo, const uint64_t hi, const uint32_t dist) {
-    return __shiftright128(lo, hi, (unsigned char) dist);
+    return (hi << (64 - dist)) | (lo >> dist);
 }
 
-static inline uint64_t div5(const uint64_t x)
+static inline int multiple_of_pow5(uint64_t value, const uint32_t p)
 {
-    return x / 5;
-}
-
-static inline uint64_t div10(const uint64_t x)
-{
-    return x / 10;
-}
-
-static inline uint64_t div100(const uint64_t x)
-{
-    return x / 100;
-}
-
-static inline uint64_t div1e8(const uint64_t x)
-{
-    return x / 100000000;
-}
-
-static inline uint32_t pow5factor(uint64_t value) {
     const uint64_t m_inv_5 = 14757395258967641293u; // 5 * m_inv_5 = 1 (mod 2^64)
     const uint64_t n_div_5 = 3689348814741910323u;  // #{ n | n = 0 (mod 2^64) } = 2^64 / 5
     uint32_t count = 0;
@@ -258,17 +263,7 @@ static inline uint32_t pow5factor(uint64_t value) {
         }
         ++count;
     }
-    return count;
-}
-
-static inline int multiple_of_pow5(const uint64_t value, const uint32_t p)
-{
-  return pow5factor(value) >= p;
-}
-
-static inline uint32_t log10pow5(const int32_t e)
-{
-    return (((uint32_t) e) * 732923) >> 20;
+    return count >= p;
 }
 
 static inline int32_t pow5bit(const int32_t e)
@@ -310,168 +305,6 @@ static inline uint64_t mul_shift_all64(uint64_t m, const uint64_t* const mul, co
     return shiftright128(mid, hi, (uint32_t) (j - 64 - 1));
 }
 
-void cv_double_to_decimal(int sign, uint64_t mantissa, uint32_t exponent, uint64_t *d_mantissa, int32_t *d_exponent, int *d_sign)
-{
-    *d_sign = sign;
-
-    // Step 1. Decode floating point number & unify normalized and subnormal cases.
-    int32_t e2;
-    uint64_t m2;
-
-    if (exponent == 0) {
-        // Subtract 2 so that bounds computation has 2 additional bits
-        e2 = 1 - 1023 - 52 - 2;
-        m2 = mantissa;
-    } else {
-        e2 = ((int32_t)exponent) - 1023 - 52 - 2;
-        m2 = (1ull << 52) | mantissa;
-    }
-
-    int even = ((m2 & 1) == 0) ? 1 : 0;
-    int bounds = even;
-
-    // Step 2: Determine the interval of valid decimal representations.
-    uint64_t mv = 4 * m2;
-    uint32_t msh = (mantissa != 0) || (exponent <= 1);
-
-    // Step 3: Convert to a decimal power base using 128-bit arithmetic.
-    uint64_t vr, vp, vm;
-    int32_t e10;
-    int vm_trailing_zeroes = 0;
-    int vr_trailing_zeroes = 0;
-
-    if (e2 >= 0) {
-        uint32_t q = ((((uint32_t) e2) * 78913) >> 18) - ((e2 > 3) ? 1 : 0);
-        e10 = (int32_t)q;
-        int32_t k = 125 + pow5bit((int32_t)q) - 1;
-        int32_t i = -e2 + (int32_t)q + k;
-        vr = mul_shift_all64(m2, DOUBLE_POW5_INV_SPLIT[q], i, &vp, &vm, msh);
-
-        if (q <= 21) {
-            uint32_t mv_mod5 = ((uint32_t)mv) - 5 * ((uint32_t)div5(mv));
-
-            if (mv_mod5 == 0) {
-                vr_trailing_zeroes = multiple_of_pow5(mv, q);
-            } else if (bounds) {
-                vm_trailing_zeroes = multiple_of_pow5(mv - 1 - msh, q);
-            } else {
-                vp -= multiple_of_pow5(mv + 2, q);
-            }
-        }
-    } else {
-        uint32_t q = log10pow5(-e2) - ((-e2 > 1));
-        e10 = (int32_t)q + e2;
-        int32_t i = -e2 - (int32_t)q;
-        int32_t k = pow5bit(i) - 125;
-        int32_t j = (int32_t)q - k;
-        vr = mul_shift_all64(m2, DOUBLE_POW5_SPLIT[i], j, &vp, &vm, msh);
-
-        if (q <= 1) {
-            vr_trailing_zeroes = 1;
-
-            if (bounds) {
-                vm_trailing_zeroes = msh == 1;
-            } else {
-                vp--;
-            }
-        } else if (q < 63) {
-            vr_trailing_zeroes = (((uint64_t)mv) & ((1ull << q) - 1)) == 0;
-        }
-    }
-
-    // Step 4: Find the shortest decimal representation in the interval of valid representations.
-    int32_t removed = 0;
-    uint8_t last_removed_digit = 0;
-    uint64_t output;
-
-    if (vm_trailing_zeroes || vr_trailing_zeroes) {
-        while (1) {
-            uint64_t vp_div10 = div10(vp);
-            uint64_t vm_div10 = div10(vm);
-
-            if (vp_div10 <= vm_div10) {
-                break;
-            }
-
-            uint32_t vm_mod10 = ((uint32_t)vm) - 10 * ((uint32_t)vm_div10);
-            uint64_t vr_div10 = div10(vr);
-            uint32_t vr_mod10 = ((uint32_t)vr) - 10 * ((uint32_t)vr_div10);
-
-            vm_trailing_zeroes &= vm_mod10 == 0;
-            vr_trailing_zeroes &= last_removed_digit == 0;
-            last_removed_digit = (uint8_t)vr_mod10;
-            vr = vr_div10;
-            vp = vp_div10;
-            vm = vm_div10;
-            ++removed;
-        }
-
-        if (vm_trailing_zeroes) {
-            while (1) {
-                uint64_t vm_div10 = div10(vm);
-                uint32_t vm_mod10 = ((uint32_t)vm) - 10 * ((uint32_t)vm_div10);
-
-                if (vm_mod10 != 0) {
-                    break;
-                }
-
-                uint64_t vp_div10 = div10(vp);
-                uint64_t vr_div10 = div10(vr);
-                uint32_t vr_mod10 = ((uint32_t)vr) - 10 * ((uint32_t)vr_div10);
-                vr_trailing_zeroes &= last_removed_digit == 0;
-                last_removed_digit = (uint8_t)vr_mod10;
-                vr = vr_div10;
-                vp = vp_div10;
-                vm = vm_div10;
-                ++removed;
-            }
-        }
-
-        if (vr_trailing_zeroes && (last_removed_digit == 5) && ((vr % 2) == 0)) {
-            last_removed_digit = 4;
-        }
-
-        output = vr + (((vr == vm) && (!bounds || !vm_trailing_zeroes)) || (last_removed_digit >= 5));
-    } else {
-        int round_up = 0;
-        uint64_t vp_div100 = div100(vp);
-        uint64_t vm_div100 = div100(vm);
-
-        if (vp_div100 > vm_div100) {
-            uint64_t vr_div100 = div100(vr);
-            uint32_t vr_mod100 = ((uint32_t)vr) - 100 * ((uint32_t)vr_div100);
-
-            round_up = vr_mod100 >= 50;
-            vr = vr_div100;
-            vp = vp_div100;
-            vm = vm_div100;
-            removed += 2;
-        }
-
-        while (1) {
-            uint64_t vp_div10 = div10(vp);
-            uint64_t vm_div10 = div10(vm);
-
-            if (vp_div10 <= vm_div10) {
-                break;
-            }
-
-            uint64_t vr_div10 = div10(vr);
-            uint32_t vr_mod10 = ((uint32_t)vr) - 10 * ((uint32_t)vr_div10);
-            round_up = vr_mod10 >= 5;
-            vr = vr_div10;
-            vp = vp_div10;
-            vm = vm_div10;
-            ++removed;
-        }
-
-        output = vr + ((vr == vm) || round_up);
-    }
-
-    *d_exponent = e10 + removed;
-    *d_mantissa = output;
-}
-
 enum {
     DOUBLE_TO_STR_MODE_AUTO = 0,
     DOUBLE_TO_STR_MODE_SCIENTIFIC = 1,
@@ -480,6 +313,7 @@ enum {
 
 int cv_double_to_str(double x, char *result, int mode, int auto_min_exp, int auto_max_exp)
 {
+#define RYU_MEMCPY(d, s, n) memcpy(d, s, n)
     uint64_t bits = *((uint64_t*)&x);
 
     int sign          = ((bits >> (52 + 11)) & 1) != 0;
@@ -488,7 +322,7 @@ int cv_double_to_str(double x, char *result, int mode, int auto_min_exp, int aut
 
     if (exponent == ((1u << 11) - 1u) || (exponent == 0 && mantissa == 0)) {
         if (mantissa) {
-            memcpy(result, "nan", 3);
+            RYU_MEMCPY(result, "nan", 3);
             return 3;
         }
 
@@ -497,20 +331,19 @@ int cv_double_to_str(double x, char *result, int mode, int auto_min_exp, int aut
         }
 
         if (exponent) {
-            memcpy(result + sign, "inf", 3);
+            RYU_MEMCPY(result + sign, "inf", 3);
             return sign + 3;
         }
 
         if (mode == DOUBLE_TO_STR_MODE_FIXED_POINT) {
-            memcpy(result + sign, "0.0", 3);
+            RYU_MEMCPY(result + sign, "0.0", 3);
             return sign + 3;
         } else if (mode == DOUBLE_TO_STR_MODE_SCIENTIFIC) {
-            memcpy(result + sign, "0e0", 3);
+            RYU_MEMCPY(result + sign, "0e0", 3);
             return 3;
         }
     }
 
-    int d_sign = sign;
     uint64_t d_mantissa = 0;
     int32_t d_exponent = 0;
     int is_small_int = 0;
@@ -539,7 +372,7 @@ int cv_double_to_str(double x, char *result, int mode, int auto_min_exp, int aut
 
     if (is_small_int) {
         while (1) {
-            uint64_t q = div10(d_mantissa);
+            uint64_t q = d_mantissa / 10;
             uint32_t r = ((uint32_t)d_mantissa) - 10 * ((uint32_t)q);
 
             if (r != 0) {
@@ -550,7 +383,162 @@ int cv_double_to_str(double x, char *result, int mode, int auto_min_exp, int aut
             d_exponent++;
         }
     } else {
-        cv_double_to_decimal(sign, mantissa, exponent, &d_mantissa, &d_exponent, &d_sign);
+        // Step 1. Decode floating point number & unify normalized and subnormal cases.
+        int32_t e2;
+        uint64_t m2;
+
+        if (exponent == 0) {
+            // Subtract 2 so that bounds computation has 2 additional bits
+            e2 = 1 - 1023 - 52 - 2;
+            m2 = mantissa;
+        } else {
+            e2 = ((int32_t)exponent) - 1023 - 52 - 2;
+            m2 = (1ull << 52) | mantissa;
+        }
+
+        int even = ((m2 & 1) == 0) ? 1 : 0;
+        int bounds = even;
+
+        // Step 2: Determine the interval of valid decimal representations.
+        uint64_t mv = 4 * m2;
+        uint32_t msh = (mantissa != 0) || (exponent <= 1);
+
+        // Step 3: Convert to a decimal power base using 128-bit arithmetic.
+        uint64_t vr, vp, vm;
+        int32_t e10;
+        int vm_trailing_zeroes = 0;
+        int vr_trailing_zeroes = 0;
+
+        if (e2 >= 0) {
+            uint32_t q = ((((uint32_t) e2) * 78913) >> 18) - ((e2 > 3) ? 1 : 0);
+            e10 = (int32_t)q;
+            int32_t k = 125 + pow5bit((int32_t)q) - 1;
+            int32_t i = -e2 + (int32_t)q + k;
+            vr = mul_shift_all64(m2, DOUBLE_POW5_INV_SPLIT[q], i, &vp, &vm, msh);
+
+            if (q <= 21) {
+                uint32_t mv_mod5 = ((uint32_t)mv) - 5 * ((uint32_t)(mv / 5));
+
+                if (mv_mod5 == 0) {
+                    vr_trailing_zeroes = multiple_of_pow5(mv, q);
+                } else if (bounds) {
+                    vm_trailing_zeroes = multiple_of_pow5(mv - 1 - msh, q);
+                } else {
+                    vp -= multiple_of_pow5(mv + 2, q);
+                }
+            }
+        } else {
+            uint32_t q = ((((uint32_t) (-e2)) * 732923) >> 20) - ((-e2 > 1));
+            e10 = (int32_t)q + e2;
+            int32_t i = -e2 - (int32_t)q;
+            int32_t k = pow5bit(i) - 125;
+            int32_t j = (int32_t)q - k;
+            vr = mul_shift_all64(m2, DOUBLE_POW5_SPLIT[i], j, &vp, &vm, msh);
+
+            if (q <= 1) {
+                vr_trailing_zeroes = 1;
+
+                if (bounds) {
+                    vm_trailing_zeroes = msh == 1;
+                } else {
+                    vp--;
+                }
+            } else if (q < 63) {
+                vr_trailing_zeroes = (((uint64_t)mv) & ((1ull << q) - 1)) == 0;
+            }
+        }
+
+        // Step 4: Find the shortest decimal representation in the interval of valid representations.
+        int32_t removed = 0;
+        uint8_t last_removed_digit = 0;
+        uint64_t output;
+
+        if (vm_trailing_zeroes || vr_trailing_zeroes) {
+            while (1) {
+                uint64_t vp_div10 = vp / 10;
+                uint64_t vm_div10 = vm / 10;
+
+                if (vp_div10 <= vm_div10) {
+                    break;
+                }
+
+                uint32_t vm_mod10 = ((uint32_t)vm) - 10 * ((uint32_t)vm_div10);
+                uint64_t vr_div10 = vr / 10;
+                uint32_t vr_mod10 = ((uint32_t)vr) - 10 * ((uint32_t)vr_div10);
+
+                vm_trailing_zeroes &= vm_mod10 == 0;
+                vr_trailing_zeroes &= last_removed_digit == 0;
+                last_removed_digit = (uint8_t)vr_mod10;
+                vr = vr_div10;
+                vp = vp_div10;
+                vm = vm_div10;
+                ++removed;
+            }
+
+            if (vm_trailing_zeroes) {
+                while (1) {
+                    uint64_t vm_div10 = vm / 10;
+                    uint32_t vm_mod10 = ((uint32_t)vm) - 10 * ((uint32_t)vm_div10);
+
+                    if (vm_mod10 != 0) {
+                        break;
+                    }
+
+                    uint64_t vp_div10 = vp / 10;
+                    uint64_t vr_div10 = vr / 10;
+                    uint32_t vr_mod10 = ((uint32_t)vr) - 10 * ((uint32_t)vr_div10);
+                    vr_trailing_zeroes &= last_removed_digit == 0;
+                    last_removed_digit = (uint8_t)vr_mod10;
+                    vr = vr_div10;
+                    vp = vp_div10;
+                    vm = vm_div10;
+                    ++removed;
+                }
+            }
+
+            if (vr_trailing_zeroes && (last_removed_digit == 5) && ((vr % 2) == 0)) {
+                last_removed_digit = 4;
+            }
+
+            output = vr + (((vr == vm) && (!bounds || !vm_trailing_zeroes)) || (last_removed_digit >= 5));
+        } else {
+            int round_up = 0;
+            uint64_t vp_div100 = vp / 100;
+            uint64_t vm_div100 = vm / 100;
+
+            if (vp_div100 > vm_div100) {
+                uint64_t vr_div100 = vr / 100;
+                uint32_t vr_mod100 = ((uint32_t)vr) - 100 * ((uint32_t)vr_div100);
+
+                round_up = vr_mod100 >= 50;
+                vr = vr_div100;
+                vp = vp_div100;
+                vm = vm_div100;
+                removed += 2;
+            }
+
+            while (1) {
+                uint64_t vp_div10 = vp / 10;
+                uint64_t vm_div10 = vm / 10;
+
+                if (vp_div10 <= vm_div10) {
+                    break;
+                }
+
+                uint64_t vr_div10 = vr / 10;
+                uint32_t vr_mod10 = ((uint32_t)vr) - 10 * ((uint32_t)vr_div10);
+                round_up = vr_mod10 >= 5;
+                vr = vr_div10;
+                vp = vp_div10;
+                vm = vm_div10;
+                ++removed;
+            }
+
+            output = vr + ((vr == vm) || round_up);
+        }
+
+        d_exponent = e10 + removed;
+        d_mantissa = output;
     }
 
     int index = 0;
@@ -591,7 +579,7 @@ int cv_double_to_str(double x, char *result, int mode, int auto_min_exp, int aut
             result[index++] = '0';
         } else {
             int copy_len = (pos > digit_len) ? digit_len : pos;
-            memcpy(result + index, digits, copy_len);
+            RYU_MEMCPY(result + index, digits, copy_len);
             index += copy_len;
 
             // if pos > digit_len, pad trailing zeros
@@ -609,11 +597,11 @@ int cv_double_to_str(double x, char *result, int mode, int auto_min_exp, int aut
                 frac[f_len++] = '0';
             }
 
-            memcpy(frac + f_len, digits, digit_len);
+            RYU_MEMCPY(frac + f_len, digits, digit_len);
             f_len += digit_len;
         } else if (pos < digit_len) {
             // digits after decimal point
-            memcpy(frac, digits + pos, digit_len - pos);
+            RYU_MEMCPY(frac, digits + pos, digit_len - pos);
             f_len = digit_len - pos;
         } else {
             // no fractional digits
@@ -623,7 +611,7 @@ int cv_double_to_str(double x, char *result, int mode, int auto_min_exp, int aut
         // Emit decimal + fractional part
         if (f_len > 0) {
             result[index++] = '.';
-            memcpy(result + index, frac, f_len);
+            RYU_MEMCPY(result + index, frac, f_len);
             index += f_len;
         }
 
@@ -649,11 +637,10 @@ int cv_double_to_str(double x, char *result, int mode, int auto_min_exp, int aut
     else if (output >= 100L) { output_len = 3; }
     else if (output >= 10L) { output_len = 2; }
 
-
     uint32_t i = 0;
 
     if ((output >> 32) != 0) {
-        uint64_t q = div1e8(output);
+        uint64_t q = output / 100000000;
         uint32_t output2 = ((uint32_t)output) - 100000000 * ((uint32_t)q);
         output = q;
 
@@ -666,10 +653,10 @@ int cv_double_to_str(double x, char *result, int mode, int auto_min_exp, int aut
         uint32_t d0 = (d % 100) << 1;
         uint32_t d1 = (d / 100) << 1;
 
-        memcpy(result + index + output_len - 1, DIGIT_TABLE + c0, 2);
-        memcpy(result + index + output_len - 3, DIGIT_TABLE + c1, 2);
-        memcpy(result + index + output_len - 5, DIGIT_TABLE + d0, 2);
-        memcpy(result + index + output_len - 7, DIGIT_TABLE + d1, 2);
+        RYU_MEMCPY(result + index + output_len - 1, DIGIT_TABLE + c0, 2);
+        RYU_MEMCPY(result + index + output_len - 3, DIGIT_TABLE + c1, 2);
+        RYU_MEMCPY(result + index + output_len - 5, DIGIT_TABLE + d0, 2);
+        RYU_MEMCPY(result + index + output_len - 7, DIGIT_TABLE + d1, 2);
 
         i += 8;
     }
@@ -686,8 +673,8 @@ int cv_double_to_str(double x, char *result, int mode, int auto_min_exp, int aut
         uint32_t c0 = (c % 100) << 1;
         uint32_t c1 = (c / 100) << 1;
 
-        memcpy(result + index + output_len - i - 1, DIGIT_TABLE + c0, 2);
-        memcpy(result + index + output_len - i - 3, DIGIT_TABLE + c1, 2);
+        RYU_MEMCPY(result + index + output_len - i - 1, DIGIT_TABLE + c0, 2);
+        RYU_MEMCPY(result + index + output_len - i - 3, DIGIT_TABLE + c1, 2);
 
         i += 4;
     }
@@ -695,7 +682,7 @@ int cv_double_to_str(double x, char *result, int mode, int auto_min_exp, int aut
     if (output2 >= 100) {
         uint32_t c = (output2 % 100) << 1;
         output2 /= 100;
-        memcpy(result + index + output_len - i - 1, DIGIT_TABLE + c, 2);
+        RYU_MEMCPY(result + index + output_len - i - 1, DIGIT_TABLE + c, 2);
         i += 2;
     }
 
@@ -724,17 +711,18 @@ int cv_double_to_str(double x, char *result, int mode, int auto_min_exp, int aut
 
     if (exp >= 100) {
         int32_t c = exp % 10;
-        memcpy(result + index, DIGIT_TABLE + 2 * (exp / 10), 2);
+        RYU_MEMCPY(result + index, DIGIT_TABLE + 2 * (exp / 10), 2);
         result[index + 2] = (char)('0' + c);
         index += 3;
     } else if (exp >= 10) {
-        memcpy(result + index, DIGIT_TABLE + 2 * exp, 2);
+        RYU_MEMCPY(result + index, DIGIT_TABLE + 2 * exp, 2);
         index += 2;
     } else {
         result[index++] = (char)('0' + exp);
     }
 
     return index;
+#undef RYU_MEMCPY
 }
 
 void test_float(double x) {
