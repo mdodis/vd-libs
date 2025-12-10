@@ -478,7 +478,7 @@ enum {
     DOUBLE_TO_STR_MODE_FIXED_POINT = 2,
 };
 
-int cv_double_to_str(double x, char *result, int mode)
+int cv_double_to_str(double x, char *result, int mode, int auto_min_exp, int auto_max_exp)
 {
     uint64_t bits = *((uint64_t*)&x);
 
@@ -502,8 +502,8 @@ int cv_double_to_str(double x, char *result, int mode)
         }
 
         if (mode == DOUBLE_TO_STR_MODE_FIXED_POINT) {
-            memcpy(result + sign, "0.0", 19);
-            return sign + 19;
+            memcpy(result + sign, "0.0", 3);
+            return sign + 3;
         } else if (mode == DOUBLE_TO_STR_MODE_SCIENTIFIC) {
             memcpy(result + sign, "0e0", 3);
             return 3;
@@ -554,6 +554,14 @@ int cv_double_to_str(double x, char *result, int mode)
     }
 
     int index = 0;
+
+    if (mode == DOUBLE_TO_STR_MODE_AUTO) {
+        if ((d_exponent >= auto_min_exp) && (d_exponent <= auto_max_exp)) {
+            mode = DOUBLE_TO_STR_MODE_SCIENTIFIC;
+        } else {
+            mode = DOUBLE_TO_STR_MODE_FIXED_POINT;
+        }
+    }
 
     if (sign) {
         result[index++] = '-';
@@ -609,8 +617,7 @@ int cv_double_to_str(double x, char *result, int mode)
             f_len = digit_len - pos;
         } else {
             // no fractional digits
-            int zeros = 17;
-            for (int i = 0; i < zeros; ++i) frac[f_len++] = '0';
+            f_len = 0;
         }
 
         // Emit decimal + fractional part
@@ -732,7 +739,7 @@ int cv_double_to_str(double x, char *result, int mode)
 
 void test_float(double x) {
     char buf[46];
-    int l = cv_double_to_str(x, buf, DOUBLE_TO_STR_MODE_SCIENTIFIC);
+    int l = cv_double_to_str(x, buf, DOUBLE_TO_STR_MODE_FIXED_POINT, 0, 0);
 
     printf("|%-25.17e|%-25.*s|\n", x, l, buf);
 }
@@ -767,7 +774,7 @@ int main(int argc, char const *argv[])
 
 static int compare_double(double x, const char *string, int mode) {
     char buf[46];
-    int l = cv_double_to_str(x, buf, mode);
+    int l = cv_double_to_str(x, buf, mode, 0, 0);
 
     const char *c = string;
     int count = 0;
