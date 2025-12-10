@@ -30,11 +30,6 @@
  * |                                       |                                                                    |   |
  * 
  * @todo(mdodis):
- * - VdUiStyle & VdUiFlags rework for visuals
- *   > Move everying into
- *   >   - VdUiStyle::text       (VD_UI_FLAG_TEXT)         }
- *   >   - VdUiStyle::background (VD_UI_FLAG_BACKGROUND)   } -> All of these are of same type: VdUiStyleVisual
- *   >   - VdUiStyle::border     (VD_UI_FLAG_BORDER)       }
  * - Sliders
  * - Introduce Tree concept
  *   > Right now, the whole UI system is done in one VdUiContext
@@ -82,8 +77,8 @@ typedef char VdUiBool;
  * Override to change the max rectangles that will be used to compute non-client area
  * @see vd_ui_ws_nc_area_mark, vd_ui_ws_nc_area_get
  */
-#ifndef    VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX
-#   define    VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX 16
+#ifndef VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX
+#   define VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX 16
 #endif // !VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX
 
 /**
@@ -287,36 +282,41 @@ typedef struct VdUiStyleBox {
     VdUiGradient active;
 } VdUiStyleBox;
 
-typedef struct VdUiStyle {
-    /** Padding to put around text */
-    float           padding[4];
-
-    VdUiStyleBox    background;
-    VdUiStyleBox    border;
-    struct {
-        VdUiGradient normal;
-        VdUiGradient hot;
-        VdUiGradient active;
-    } text;
-
-    float           corner_radius;
-
-    float           edge_softness;
+typedef struct VdUiStyleText {
+    VdUiGradient    normal;
+    VdUiGradient    hot;
+    VdUiGradient    active;
 
     /** The font size to use for the text & symbol, in pixels. */
-    float           text_font_size;
+    float           font_size;
 
     /** The visibility of the text */
-    VdUiVisibility  text_visibility;
-
-    VdUiTextHAlign  text_halign;
-    VdUiTextVAlign  text_valign;
+    VdUiVisibility  visibility;
+    VdUiTextHAlign  halign;
+    VdUiTextVAlign  valign;
 
     /** The symbol to prefix the text with */
     VdUiSymbol      symbol;
 
     /** The visibility of the symbol */
     VdUiVisibility  symbol_visibility;
+} VdUiStyleText;
+
+typedef struct VdUiStyle {
+    /** Size preferences for each axis */
+    VdUiSize        size[VD_UI_AXES];
+
+    /** Padding to put around text */
+    float           padding[4];
+
+    /** Background styling */
+    VdUiStyleBox    background;
+
+    /** Border styling */
+    VdUiStyleBox    border;
+
+    /** Text styling */
+    VdUiStyleText   text;
 } VdUiStyle;
 
 typedef struct VdUiDiv VdUiDiv;
@@ -344,9 +344,6 @@ struct VdUiDiv {
 
     VdUiStr     content_str;
     VdUiStr     id_str;
-
-    /** Size preferences for each axis */
-    VdUiSize    size[VD_UI_AXES];
 
 
     float       text_size[VD_UI_AXES];
@@ -394,7 +391,7 @@ extern char Vd_Ui_CharBuf[VD_UI_CHAR_BUF_COUNT];
 VD_UI_API int              vd_ui_div_is_active(VdUiDiv *div);
 
 /* ----DEMOS--------------------------------------------------------------------------------------------------------- */
-VD_UI_API void             vd_ui_demo(void);
+VD_UI_API int              vd_ui_demo(void);
 
 /* ----BASIC WIDGETS------------------------------------------------------------------------------------------------- */
 /**
@@ -1029,21 +1026,25 @@ enum {
 static unsigned char Vd_Ui_Public_Sans_Regular[84836];
 static unsigned char Vd_Ui_Default_Icons_Font[7840];
 
-#define VD_UI_LAYERS_MAX            8
-#define VD_UI_CHANNELS_MAX          24
-#define VD_UI_VERTICES_PER_CHANNEL  256
-#define VD_UI_VERTICES_MAX          (VD_UI_LAYERS_MAX * VD_UI_CHANNELS_MAX * VD_UI_VERTICES_PER_CHANNEL)
-#define VD_UI_RENDER_PASSES_MAX     (VD_UI_LAYERS_MAX * VD_UI_CHANNELS_MAX)
+#define VD_UI_LAYERS_MAX                    8
+#define VD_UI_CHANNELS_MAX                  24
+#define VD_UI_VERTICES_PER_CHANNEL          256
+#define VD_UI_VERTICES_MAX                  (VD_UI_LAYERS_MAX * VD_UI_CHANNELS_MAX * VD_UI_VERTICES_PER_CHANNEL)
+#define VD_UI_RENDER_PASSES_MAX             (VD_UI_LAYERS_MAX * VD_UI_CHANNELS_MAX)
 
-#define VD_UI_PARENT_STACK_MAX      256
-#define VD_UI_VBUF_COUNT_MAX        4096
-#define VD_UI_RP_COUNT_MAX          128
-#define VD_UI_FONT_COUNT_MAX        4
-#define VD_UI_UPDATE_COUNT_MAX      2
-#define VD_UI_GLYPH_CACHE_COUNT_MAX 2048
-#define VD_UI_FBUF_MAX              1024
-#define VD_UI_CLIP_STACK_MAX        64
-#define VD_UI_NULL_DIVS_MAX         64
+#define VD_UI_PARENT_STACK_MAX              256
+#define VD_UI_VBUF_COUNT_MAX                4096
+#define VD_UI_RP_COUNT_MAX                  128
+#define VD_UI_FONT_COUNT_MAX                4
+#define VD_UI_UPDATE_COUNT_MAX              2
+#define VD_UI_GLYPH_CACHE_COUNT_MAX         2048
+#define VD_UI_FBUF_MAX                      1024
+#define VD_UI_CLIP_STACK_MAX                64
+#define VD_UI_NULL_DIVS_MAX                 64
+
+#ifndef VD_UI_STYLE_SIZE_STACK_COUNT
+#   define VD_UI_STYLE_SIZE_STACK_COUNT     32
+#endif // !VD_UI_STYLE_SIZE_STACK_COUNT
 
 #ifndef VD_UI_LOG_ENABLE
 #define VD_UI_LOG_ENABLE 0
@@ -1145,6 +1146,7 @@ static float        vd_ui__lerp(float a, float b, float t);
 static int          vd_ui__float_eq(float a, float b);
 static VdUiF4       vd_ui__lerp4(VdUiF4 a, VdUiF4 b, float t);
 static VdUiGradient vd_ui__lerpgrad(VdUiGradient a, VdUiGradient b, float t);
+static float        vd_ui__lerp_normal_hot_active1(float normal, float active, float hot, float hot_t, float active_t);
 static int          vd_ui__utf8decs(VdUiStr *str, unsigned int *out);
 
 static void         vd_ui__do_inspector(VdUiContext *ctx);
@@ -1326,12 +1328,12 @@ VD_UI_API void vd_ui_frame_end(void)
     ctx->root.comp_size[0] = ctx->window[0];
     ctx->root.comp_size[1] = ctx->window[1];
 
-    ctx->root.size[0].mode     = VD_UI_SIZE_MODE_ABSOLUTE;
-    ctx->root.size[0].value    = ctx->window[0];
-    ctx->root.size[0].niceness = 0.f;
-    ctx->root.size[1].mode     = VD_UI_SIZE_MODE_ABSOLUTE;
-    ctx->root.size[1].value    = ctx->window[1];
-    ctx->root.size[1].niceness = 0.f;
+    ctx->root.style.size[0].mode     = VD_UI_SIZE_MODE_ABSOLUTE;
+    ctx->root.style.size[0].value    = ctx->window[0];
+    ctx->root.style.size[0].niceness = 0.f;
+    ctx->root.style.size[1].mode     = VD_UI_SIZE_MODE_ABSOLUTE;
+    ctx->root.style.size[1].value    = ctx->window[1];
+    ctx->root.style.size[1].niceness = 0.f;
     ctx->clip_stack_count = 0;
 
     // Layout UI
@@ -1541,14 +1543,14 @@ VD_UI_API VdUiReply vd_ui_button(VdUiStr str)
                                  VD_UI_FLAG_CLICKABLE,
                                  str);
 
-    div->size[0].mode  = VD_UI_SIZE_MODE_TEXT_CONTENT;
-    div->size[1].mode  = VD_UI_SIZE_MODE_TEXT_CONTENT;
+    div->style.size[0].mode  = VD_UI_SIZE_MODE_TEXT_CONTENT;
+    div->style.size[1].mode  = VD_UI_SIZE_MODE_TEXT_CONTENT;
     div->style.padding[VD_UI_LEFT]   = 4.f;
     div->style.padding[VD_UI_TOP]    = 4.f;
     div->style.padding[VD_UI_RIGHT]  = 4.f;
     div->style.padding[VD_UI_BOTTOM] = 4.f;
-    div->style.corner_radius    = 6.f;
-    div->style.edge_softness    = 0.25f;
+    div->style.background.corner_radius    = 6.f;
+    div->style.background.edge_softness    = 0.25f;
     div->style.background.normal = vd_ui_gradient(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f),
                                             vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f));
 
@@ -1564,8 +1566,8 @@ VD_UI_API void vd_ui_label(VdUiStr str)
 {
     VdUiDiv *div = vd_ui_div_new(VD_UI_FLAG_TEXT,
                                  str);
-    div->size[0].mode = VD_UI_SIZE_MODE_TEXT_CONTENT;
-    div->size[1].mode = VD_UI_SIZE_MODE_TEXT_CONTENT;
+    div->style.size[0].mode = VD_UI_SIZE_MODE_TEXT_CONTENT;
+    div->style.size[1].mode = VD_UI_SIZE_MODE_TEXT_CONTENT;
 }
 
 VD_UI_API VdUiReply vd_ui_checkbox(int *b, VdUiStr str)
@@ -1573,15 +1575,15 @@ VD_UI_API VdUiReply vd_ui_checkbox(int *b, VdUiStr str)
     VdUiContext *ctx = vd_ui_context_get();
 
     VdUiDiv *div = vd_ui_div_new(VD_UI_FLAG_FLEX_HORIZONTAL | VD_UI_FLAG_ALIGN_CENTER, str);
-    div->size[0].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
-    div->size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
+    div->style.size[0].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
+    div->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
     vd_ui_parent_push(div);
 
     VdUiDiv *ckbx = vd_ui_div_newf(VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_CLICKABLE, "##ckbx");
-    ckbx->size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
-    ckbx->size[0].value = ctx->def.font_size * vd_ui_get_scale();
-    ckbx->size[1].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
-    ckbx->size[1].value = ctx->def.font_size * vd_ui_get_scale();
+    ckbx->style.size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
+    ckbx->style.size[0].value = ctx->def.font_size * vd_ui_get_scale();
+    ckbx->style.size[1].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
+    ckbx->style.size[1].value = ctx->def.font_size * vd_ui_get_scale();
     ckbx->style.background.normal = vd_ui_gradient(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f),
                                             vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f));
 
@@ -1591,11 +1593,11 @@ VD_UI_API VdUiReply vd_ui_checkbox(int *b, VdUiStr str)
     ckbx->style.background.active = vd_ui_gradient(vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f),
                                             vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f));
 
-    ckbx->style.text_valign = VD_UI_TEXT_VALIGN_MIDDLE;
-    ckbx->style.text_halign = VD_UI_TEXT_HALIGN_CENTER;
-    ckbx->style.symbol = ctx->def.checkmark;
-    ckbx->style.text_visibility = VD_UI_VISIBILITY_OMIT;
-    ckbx->style.symbol_visibility = (*b) ? 0 : VD_UI_VISBILITY_DONT_DISPLAY;
+    ckbx->style.text.valign = VD_UI_TEXT_VALIGN_MIDDLE;
+    ckbx->style.text.halign = VD_UI_TEXT_HALIGN_CENTER;
+    ckbx->style.text.symbol = ctx->def.checkmark;
+    ckbx->style.text.visibility = VD_UI_VISIBILITY_OMIT;
+    ckbx->style.text.symbol_visibility = (*b) ? 0 : VD_UI_VISBILITY_DONT_DISPLAY;
 
     // @todo(mdodis): Figure out why putting in 4 everywhere doesn't work
     ckbx->style.padding[VD_UI_LEFT] = 2.f;
@@ -1626,38 +1628,38 @@ VD_UI_API void vd_ui_spacer(VdUiAxis axis)
         case VD_UI_AXISV: daxis = 1; faxis = 0; break;
     }
 
-    spacer->size[daxis].mode       = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
-    spacer->size[daxis].value      = 1.f;
-    spacer->size[daxis].niceness   = 1000.f;
-    spacer->size[faxis].mode       = VD_UI_SIZE_MODE_ABSOLUTE;
-    spacer->size[faxis].value      = 0.f;
-    spacer->size[faxis].niceness   = 0.f;
+    spacer->style.size[daxis].mode       = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+    spacer->style.size[daxis].value      = 1.f;
+    spacer->style.size[daxis].niceness   = 1000.f;
+    spacer->style.size[faxis].mode       = VD_UI_SIZE_MODE_ABSOLUTE;
+    spacer->style.size[faxis].value      = 0.f;
+    spacer->style.size[faxis].niceness   = 0.f;
 }
 
 VD_UI_API void vd_ui_icon(VdUiSymbol symbol, VdUiStr str)
 {
     VdUiDiv *div = vd_ui_div_new(VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND,
                                  str);
-    div->size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
-    div->size[0].value = 32.f * vd_ui_get_scale();
-    div->size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
-    div->size[1].value = 32.f * vd_ui_get_scale();
-    div->style.text_valign = VD_UI_TEXT_VALIGN_MIDDLE;
-    div->style.text_halign = VD_UI_TEXT_HALIGN_CENTER;
-    div->style.symbol = symbol;
+    div->style.size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
+    div->style.size[0].value = 32.f * vd_ui_get_scale();
+    div->style.size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
+    div->style.size[1].value = 32.f * vd_ui_get_scale();
+    div->style.text.valign = VD_UI_TEXT_VALIGN_MIDDLE;
+    div->style.text.halign = VD_UI_TEXT_HALIGN_CENTER;
+    div->style.text.symbol = symbol;
 }
 
 VD_UI_API VdUiReply vd_ui_icon_button(VdUiSymbol symbol, VdUiStr str)
 {
     VdUiDiv *div = vd_ui_div_new(VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_CLICKABLE,
                                  str);
-    div->size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
-    div->size[0].value = 32.f * vd_ui_get_scale();
-    div->size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
-    div->size[1].value = 32.f * vd_ui_get_scale();
-    div->style.text_valign = VD_UI_TEXT_VALIGN_MIDDLE;
-    div->style.text_halign = VD_UI_TEXT_HALIGN_CENTER;
-    div->style.symbol = symbol;
+    div->style.size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
+    div->style.size[0].value = 32.f * vd_ui_get_scale();
+    div->style.size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
+    div->style.size[1].value = 32.f * vd_ui_get_scale();
+    div->style.text.valign = VD_UI_TEXT_VALIGN_MIDDLE;
+    div->style.text.halign = VD_UI_TEXT_HALIGN_CENTER;
+    div->style.text.symbol = symbol;
     div->style.background.normal = vd_ui_gradient(vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f),
                                             vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f));
 
@@ -1682,22 +1684,22 @@ VD_UI_API int vd_ui_slider(void *value, void *min_value, void *max_value,
     (void)type;
 
     VdUiDiv *slider_group = vd_ui_div_new(VD_UI_FLAG_FLEX_HORIZONTAL | VD_UI_FLAG_ALIGN_CENTER, label);
-    slider_group->size[0].mode = VD_UI_SIZE_MODE_ABSOLUTE;
-    slider_group->size[0].value = 120.f;
-    slider_group->size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
-    slider_group->size[1].value = 16.f;
+    slider_group->style.size[0].mode = VD_UI_SIZE_MODE_ABSOLUTE;
+    slider_group->style.size[0].value = 120.f;
+    slider_group->style.size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
+    slider_group->style.size[1].value = 16.f;
 
     vd_ui_parent_push(slider_group);
     {
         VdUiDiv *track = vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("##track"));
-        track->size[0].mode     = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
-        track->size[0].value    = 1.f;
-        track->size[0].niceness = 0.f;
-        track->size[1].mode     = VD_UI_SIZE_MODE_ABSOLUTE;
-        track->size[1].value    = 4.f;
-        track->size[1].niceness = 0.f;
-        track->style.corner_radius    = 2.f;
-        track->style.edge_softness    = 0.25f;
+        track->style.size[0].mode     = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+        track->style.size[0].value    = 1.f;
+        track->style.size[0].niceness = 0.f;
+        track->style.size[1].mode     = VD_UI_SIZE_MODE_ABSOLUTE;
+        track->style.size[1].value    = 4.f;
+        track->style.size[1].niceness = 0.f;
+        track->style.background.corner_radius    = 2.f;
+        track->style.background.edge_softness    = 0.25f;
         track->style.background.normal      = vd_ui_gradient1(vd_ui_f4(0.4f, 0.4f, 0.4f, 1.f));
 
         VdUiDiv *grip  = vd_ui_div_new(VD_UI_FLAG_BACKGROUND      |
@@ -1706,12 +1708,12 @@ VD_UI_API int vd_ui_slider(void *value, void *min_value, void *max_value,
                                        VD_UI_FLAG_CAPTURES_MOUSE,
                                        VD_UI_LIT("##grip"));
 
-        grip->size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
-        grip->size[0].value = 16.f;
-        grip->size[1].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
-        grip->size[1].value = 16.f;
-        grip->style.corner_radius = 8.f;
-        grip->style.edge_softness = 0.8f;
+        grip->style.size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
+        grip->style.size[0].value = 16.f;
+        grip->style.size[1].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
+        grip->style.size[1].value = 16.f;
+        grip->style.background.corner_radius = 8.f;
+        grip->style.background.edge_softness = 0.8f;
         grip->style.background.normal   = vd_ui_gradient1(vd_ui_f4(0.294f, 0.71f, 0.925f, 1.f));
         grip->style.background.hot      = vd_ui_gradient1(vd_ui_f4(0.294f, 0.71f, 0.925f, 1.f));
         grip->style.background.active   = vd_ui_gradient1(vd_ui_f4(0.294f, 0.71f, 0.925f, 1.f));
@@ -1723,22 +1725,18 @@ VD_UI_API int vd_ui_slider(void *value, void *min_value, void *max_value,
 
         float track_size = track->rect[2] - track->rect[0];
 
-        if ((track_size > 0.0001f) &&
-            (vd_ui_div_is_active(grip)) && 
-            (grip_reply.mouse[0] >= track->rect[0]) &&
-            (grip_reply.mouse[0]) <= track->rect[2])
-        {
+        if ((track_size > 0.0001f) && (vd_ui_div_is_active(grip))) {
 
             float v = vd_ui_fremap(grip_reply.mouse[0], track->rect[0], track->rect[2], *((float*)min_value), *((float*)max_value));
             *((float*)value) = v;
-
         }
+
         *((float*)value) = vd_ui__clampf(*((float*)value), *((float*)min_value), *((float*)max_value));
 
         float value_mapped_to_position_on_track = vd_ui_fremap(
             *((float*)value), *((float*)min_value), *((float*)max_value),
             0.f, track_size);
-        grip->comp_pos_rel[0] = value_mapped_to_position_on_track - grip->size[0].value * 0.5f;
+        grip->comp_pos_rel[0] = value_mapped_to_position_on_track - grip->style.size[0].value * 0.5f;
         grip->comp_pos_rel[1] = 0.f;
 
     }
@@ -1777,12 +1775,12 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
     // scroll_view->size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
     // scroll_view->size[0].value = 300.0f;
     // scroll_view->size[0].niceness = 0.0f;
-    scroll_view->size[0].mode  = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
-    scroll_view->size[0].value = 1.0f;
-    scroll_view->size[0].niceness = 100.0f;
-    scroll_view->size[1].mode  = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
-    scroll_view->size[1].value = 1.0f;
-    scroll_view->size[1].niceness = 100.0f;
+    scroll_view->style.size[0].mode  = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+    scroll_view->style.size[0].value = 1.0f;
+    scroll_view->style.size[0].niceness = 100.0f;
+    scroll_view->style.size[1].mode  = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+    scroll_view->style.size[1].value = 1.0f;
+    scroll_view->style.size[1].niceness = 100.0f;
     // scroll_view->size[1].mode  = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
     // scroll_view->size[1].value = 1.0f;
     // scroll_view->size[1].niceness = 0.0f;
@@ -1800,21 +1798,21 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
     // scroll_container->size[1].value    = 1.f;
     // scroll_container->size[1].niceness = 0.f;
 
-    scroll_container->size[0].mode     = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
-    scroll_container->size[0].value    = 1.f;
-    scroll_container->size[0].niceness = 1.f;
+    scroll_container->style.size[0].mode     = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+    scroll_container->style.size[0].value    = 1.f;
+    scroll_container->style.size[0].niceness = 1.f;
 
-    scroll_container->size[1].mode     = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
-    scroll_container->size[1].value    = 1.f;
-    scroll_container->size[1].niceness = 0.f;
+    scroll_container->style.size[1].mode     = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
+    scroll_container->style.size[1].value    = 1.f;
+    scroll_container->style.size[1].niceness = 0.f;
 
     VdUiDiv *scroll_section = vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("##scroll_section"));
-    scroll_section->size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
-    scroll_section->size[0].value = 32.f * vd_ui_get_scale();
-    scroll_section->size[0].niceness = 0.f;
-    scroll_section->size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
-    scroll_section->size[1].value = 1.f;
-    scroll_section->size[1].niceness = 0.f;
+    scroll_section->style.size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
+    scroll_section->style.size[0].value = 32.f * vd_ui_get_scale();
+    scroll_section->style.size[0].niceness = 0.f;
+    scroll_section->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
+    scroll_section->style.size[1].value = 1.f;
+    scroll_section->style.size[1].niceness = 0.f;
     vd_ui_parent_push(scroll_section);
     {
         VdUiContext *ctx = vd_ui_context_get();
@@ -1825,12 +1823,12 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
                                                    vd_ui_f4(0.7f, 0.f, 0.2f, 0.f), vd_ui_f4(0.2f, 0.f, 0.2f, 0.0f));
         hspace->style.background.hot    = hspace->style.background.normal;
         hspace->style.background.active = hspace->style.background.normal;
-        hspace->size[0].mode     = VD_UI_SIZE_MODE_ABSOLUTE;
-        hspace->size[0].value    = 32.f * vd_ui_get_scale();
+        hspace->style.size[0].mode     = VD_UI_SIZE_MODE_ABSOLUTE;
+        hspace->style.size[0].value    = 32.f * vd_ui_get_scale();
 
-        hspace->size[1].mode     = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
-        hspace->size[1].value    = 1.f;
-        hspace->size[1].niceness = 1.f;
+        hspace->style.size[1].mode     = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+        hspace->style.size[1].value    = 1.f;
+        hspace->style.size[1].niceness = 1.f;
 
         float track_size                  = hspace->comp_size[1];
         float window_size                 = scroll_view->comp_size[1];
@@ -1879,11 +1877,11 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y)
         {
             VdUiDiv *grip = vd_ui_div_new(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_CLICKABLE | VD_UI_FLAG_FLOAT | VD_UI_FLAG_CAPTURES_MOUSE,
                                           VD_UI_LIT("##grip"));
-            grip->size[0].mode = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
-            grip->size[0].value = 1.f;
+            grip->style.size[0].mode = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+            grip->style.size[0].value = 1.f;
 
-            grip->size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
-            grip->size[1].value = grip_size;
+            grip->style.size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
+            grip->style.size[1].value = grip_size;
             grip->style.background.normal = vd_ui_gradient(vd_ui_f4(0.3f, 0.3f, 0.3f, 0.8f), vd_ui_f4(0.3f, 0.3f, 0.3f, 0.8f),
                                                      vd_ui_f4(0.3f, 0.3f, 0.3f, 0.8f), vd_ui_f4(0.3f, 0.3f, 0.3f, 0.8f));
             grip->style.background.hot    = vd_ui_gradient(vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f),
@@ -2055,7 +2053,7 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     result->style.padding[1] = 0.f;
     result->style.padding[2] = 0.f;
     result->style.padding[3] = 0.f;
-    result->style.text_font_size = ctx->def.font_size * ctx->dpi_scale;
+    result->style.text.font_size = ctx->def.font_size * ctx->dpi_scale;
     result->zoffset = 0;
 
     if (result->is_null) {
@@ -2190,13 +2188,14 @@ VD_UI_API float vd_ui_get_scale(void)
     return ctx->dpi_scale;
 }
 
-VD_UI_API void vd_ui_demo(void)
+VD_UI_API int vd_ui_demo(void)
 {
+    int result = 0;
     VdUiDiv *app = vd_ui_div_new(0, VD_UI_LIT("##app"));
-    app->size[0].mode = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
-    app->size[0].value = 1.f;
-    app->size[1].mode = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
-    app->size[1].value = 1.f;
+    app->style.size[0].mode = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+    app->style.size[0].value = 1.f;
+    app->style.size[1].mode = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+    app->style.size[1].value = 1.f;
 
     static int num_items = 100;
 
@@ -2206,8 +2205,8 @@ VD_UI_API void vd_ui_demo(void)
             VdUiDiv *decorations = vd_ui_div_newf(VD_UI_FLAG_FLEX_HORIZONTAL | VD_UI_FLAG_ALIGN_CENTER | VD_UI_FLAG_BACKGROUND, "##decorations");
             vd_ui_ws_nc_area_mark(decorations);
 
-            decorations->size[0].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
-            decorations->size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
+            decorations->style.size[0].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
+            decorations->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
             decorations->style.background.normal = vd_ui_gradient(vd_ui_f4(0.13f, 0.13f, 0.13f, 1.f), vd_ui_f4(0.23f, 0.23f, 0.23f, 1.f),
                                                             vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f),    vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f));
             decorations->style.background.hot    = vd_ui_gradient(vd_ui_f4(0.13f, 0.13f, 0.13f, 1.f), vd_ui_f4(0.23f, 0.23f, 0.23f, 1.f),
@@ -2236,9 +2235,17 @@ VD_UI_API void vd_ui_demo(void)
 
                 vd_ui_spacer(VD_UI_AXISH);
 
-                vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_WINDOW_MINIMIZE), "##minimize");
-                vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_WINDOW_MAXIMIZE), "##maximize");
-                vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_CANCEL), "##close");
+                if (vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_WINDOW_MINIMIZE), "##minimize").clicked) {
+                    result = -1;
+                }
+
+                if (vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_WINDOW_MAXIMIZE), "##maximize").clicked) {
+                    result = -2;
+                }
+
+                if (vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_CANCEL), "##close").clicked) {
+                    result = -3;
+                }
             }
             vd_ui_parent_pop();
         }
@@ -2248,8 +2255,8 @@ VD_UI_API void vd_ui_demo(void)
         vd_ui_scroll_begin(VD_UI_LIT("##main-scroll-view"), &scrollx, &scrolly);
         {
             VdUiDiv *button_example = vd_ui_div_newf(VD_UI_FLAG_FLEX_HORIZONTAL, "##button-example");
-            button_example->size[0].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
-            button_example->size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
+            button_example->style.size[0].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
+            button_example->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
 
             vd_ui_parent_push(button_example);
             // @todo(mdodis): Fix AXISV spacing not working
@@ -2287,6 +2294,8 @@ VD_UI_API void vd_ui_demo(void)
         vd_ui_scroll_end();
     }
     vd_ui_parent_pop();
+
+    return result;
 }
 
 static void vd_ui__get_axes_for_div(VdUiDiv *div, int *daxis, int *faxis, int *daxisf, int *faxisf)
@@ -2330,15 +2339,15 @@ static void vd_ui__calc_fixed_size(VdUiContext *ctx, VdUiDiv *curr)
     VdUiFontId font_id = {0};
     float text_sizes[VD_UI_AXES] = {0.f, 0.f};
 
-    if ((curr->content_str.l > 0) && (curr->style.text_visibility & VD_UI_VISBILITY_DONT_MEASURE) == 0) {
-        vd_ui_measure_text_size(font_id, curr->content_str, curr->style.text_font_size, &text_sizes[0], &text_sizes[1]);
+    if ((curr->content_str.l > 0) && (curr->style.text.visibility & VD_UI_VISBILITY_DONT_MEASURE) == 0) {
+        vd_ui_measure_text_size(font_id, curr->content_str, curr->style.text.font_size, &text_sizes[0], &text_sizes[1]);
     }
 
-    if (vd_ui_symbol_valid(curr->style.symbol) && (curr->style.symbol_visibility & VD_UI_VISBILITY_DONT_MEASURE) == 0) {
+    if (vd_ui_symbol_valid(curr->style.text.symbol) && (curr->style.text.symbol_visibility & VD_UI_VISBILITY_DONT_MEASURE) == 0) {
 
         float rx = 0.f, ry = 0.f;
         float x0, y0, x1, y1, s0, t0, s1, t1;
-        vd_ui_get_glyph_metrics(curr->style.symbol.font, curr->style.symbol.codepoint, curr->style.text_font_size,
+        vd_ui_get_glyph_metrics(curr->style.text.symbol.font, curr->style.text.symbol.codepoint, curr->style.text.font_size,
                                 &rx, &ry,
                                 &x0, &y0,
                                 &x1, &y1,
@@ -2356,13 +2365,13 @@ static void vd_ui__calc_fixed_size(VdUiContext *ctx, VdUiDiv *curr)
     for (int i = 0; i < VD_UI_AXES; ++i) {
 
         float new_comp_size = 0.f;
-        switch (curr->size[i].mode) {
-            case VD_UI_SIZE_MODE_ABSOLUTE:     new_comp_size = curr->size[i].value; break;
+        switch (curr->style.size[i].mode) {
+            case VD_UI_SIZE_MODE_ABSOLUTE:     new_comp_size = curr->style.size[i].value; break;
             case VD_UI_SIZE_MODE_TEXT_CONTENT: new_comp_size = text_sizes[i];             break;
             default: break;
         }
 
-        switch (curr->size[i].mode) {
+        switch (curr->style.size[i].mode) {
             case VD_UI_SIZE_MODE_ABSOLUTE:
             case VD_UI_SIZE_MODE_TEXT_CONTENT: {
                 if (i == VD_UI_AXISH) {
@@ -2390,11 +2399,11 @@ static void vd_ui__calc_dyn_size_up(VdUiContext *ctx, VdUiDiv *curr)
     }
 
     for (int i = 0; i < VD_UI_AXES; ++i) {
-        switch (curr->size[i].mode) {
+        switch (curr->style.size[i].mode) {
             case VD_UI_SIZE_MODE_PERCENT_OF_PARENT: {
                 if (!curr->parent) break;
 
-                float new_comp_size = curr->size[i].value * curr->parent->comp_size[i];
+                float new_comp_size = curr->style.size[i].value * curr->parent->comp_size[i];
                 if (curr->is_null || !vd_ui__float_eq(new_comp_size, curr->comp_size[i])) {
                     vd_ui__size_changed(ctx, curr);
                     // printf("up size changed for %.*s\n", curr->id_str.l, curr->id_str.s);
@@ -2444,7 +2453,7 @@ static void vd_ui__calc_dyn_size_down(VdUiContext *ctx, VdUiDiv *curr)
 
 
     for (int i = 0; i < VD_UI_AXES; ++i) {
-        switch (curr->size[i].mode) {
+        switch (curr->style.size[i].mode) {
 
             case VD_UI_SIZE_MODE_CONTAIN_CHILDREN: {
 
@@ -2500,7 +2509,7 @@ static void vd_ui__calc_oversizes(VdUiContext *ctx, VdUiDiv *curr)
 
         float oversize_amount = 0.f;
 
-        if (curr->size[i].mode == VD_UI_SIZE_MODE_CONTAIN_CHILDREN) {
+        if (curr->style.size[i].mode == VD_UI_SIZE_MODE_CONTAIN_CHILDREN) {
 
             if (child_sizes < curr->parent->comp_size[i]) {
                 continue;
@@ -2522,7 +2531,7 @@ static void vd_ui__calc_oversizes(VdUiContext *ctx, VdUiDiv *curr)
         while (child != 0) {
 
             if ((child->flags & VD_UI_FLAG_FLOAT) == 0) {
-                overall_niceness += child->size[i].niceness;
+                overall_niceness += child->style.size[i].niceness;
             }
 
             child = child->next;
@@ -2536,7 +2545,7 @@ static void vd_ui__calc_oversizes(VdUiContext *ctx, VdUiDiv *curr)
         child = curr->first;
         while (child != 0) {
             if ((child->flags & VD_UI_FLAG_FLOAT) == 0) {
-                float proportional_niceness = child->size[i].niceness / overall_niceness;
+                float proportional_niceness = child->style.size[i].niceness / overall_niceness;
                 if (proportional_niceness != 0.f) {
                     child->comp_size[i] = child->comp_size[i] - oversize_amount * proportional_niceness;
                 }
@@ -2547,7 +2556,7 @@ static void vd_ui__calc_oversizes(VdUiContext *ctx, VdUiDiv *curr)
 
         child_sizes -= oversize_amount;
 
-        if (curr->size[i].mode == VD_UI_SIZE_MODE_CONTAIN_CHILDREN) {
+        if (curr->style.size[i].mode == VD_UI_SIZE_MODE_CONTAIN_CHILDREN) {
             curr->comp_size[i] = child_sizes;
         }
     }
@@ -3244,20 +3253,20 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
             VdUiGradient grad = vd_ui__lerpgrad(curr->style.background.normal, curr->style.background.hot, curr->hot_t);
             grad = vd_ui__lerpgrad(grad, curr->style.background.active, curr->active_t);
 
-            vd_ui__push_rectgrad(ctx, rect, grad.e, curr->style.corner_radius, curr->style.edge_softness, 0.f);
+            vd_ui__push_rectgrad(ctx, rect, grad.e, curr->style.background.corner_radius, curr->style.background.edge_softness, 0.f);
         }
 
         if (curr->flags & VD_UI_FLAG_TEXT) {
             VdUiFont *font = &ctx->fonts[ctx->def.font.id];
 
-            float pixel_size = (float)curr->style.text_font_size;
+            float pixel_size = (float)curr->style.text.font_size;
             float size_scaled = stbtt_ScaleForPixelHeight(&font->font_info, pixel_size);
 
             float ydown = (-font->descent) * size_scaled;
             float x = 0.f;
             float y = 0.f;
 
-            switch (curr->style.text_halign) {
+            switch (curr->style.text.halign) {
                 case VD_UI_TEXT_HALIGN_LEFT: {
                     x = rect[0] + curr->style.padding[VD_UI_LEFT];
                 } break;
@@ -3282,7 +3291,7 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
                 default: break;
             }
 
-            switch (curr->style.text_valign) {
+            switch (curr->style.text.valign) {
                 case VD_UI_TEXT_VALIGN_BASELINE: {
                     y = rect[1] + curr->style.padding[1];
                     y += ydown;
@@ -3304,12 +3313,12 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
                 default: break;
             }
 
-            if (vd_ui_symbol_valid(curr->style.symbol) && (curr->style.symbol_visibility & VD_UI_VISBILITY_DONT_DISPLAY) == 0) {
-                vd_ui__put_symbol(ctx, curr->style.symbol, &x, y, curr->style.text_font_size);
+            if (vd_ui_symbol_valid(curr->style.text.symbol) && (curr->style.text.symbol_visibility & VD_UI_VISBILITY_DONT_DISPLAY) == 0) {
+                vd_ui__put_symbol(ctx, curr->style.text.symbol, &x, y, curr->style.text.font_size);
             }
 
-            if ((curr->style.text_visibility & VD_UI_VISBILITY_DONT_DISPLAY) == 0) {
-                vd_ui__put_line(ctx, curr->content_str, x, y, curr->style.text_font_size);
+            if ((curr->style.text.visibility & VD_UI_VISBILITY_DONT_DISPLAY) == 0) {
+                vd_ui__put_line(ctx, curr->content_str, x, y, curr->style.text.font_size);
             }
 
         }
@@ -3410,6 +3419,11 @@ static VdUiGradient vd_ui__lerpgrad(VdUiGradient a, VdUiGradient b, float t)
 {
     return vd_ui_gradient(vd_ui__lerp4(a.vectors[0], b.vectors[0], t), vd_ui__lerp4(a.vectors[1], b.vectors[1], t),
                           vd_ui__lerp4(a.vectors[2], b.vectors[2], t), vd_ui__lerp4(a.vectors[3], b.vectors[3], t));
+}
+
+static float vd_ui__lerp_normal_hot_active1(float normal, float active, float hot, float hot_t, float active_t)
+{
+    return vd_ui__lerp(vd_ui__lerp(normal, hot, hot_t), active, active_t);
 }
 
 // static const char *vd_ui__utf8next(const char *p)
@@ -4687,8 +4701,8 @@ static void vd_ui__inspector_do_hierarchy(VdUiContext *ctx, VdUiDiv *curr, float
         vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + yincrease * 2.f, "RPos: %d %d", (int)curr->comp_pos_rel[0], (int)curr->comp_pos_rel[1]);
         vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + yincrease * 3.f, "Text Background Clickable ClipContent FlexHorizontal");
         vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + yincrease * 4.f, "%d    %d         %d         %d", vd_ui_div_has_flag(curr, VD_UI_FLAG_TEXT), vd_ui_div_has_flag(curr, VD_UI_FLAG_BACKGROUND), vd_ui_div_has_flag(curr, VD_UI_FLAG_CLICKABLE), vd_ui_div_has_flag(curr, VD_UI_FLAG_CLIP_CONTENT), vd_ui_div_has_flag(curr, VD_UI_FLAG_FLEX_HORIZONTAL));
-        vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + yincrease * 5.f, "Size[0] %s, %f, %f", vd_ui_size_mode_to_str(curr->size[0].mode), curr->size[0].value, curr->size[0].niceness);
-        vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + yincrease * 6.f, "Size[1] %s, %f, %f", vd_ui_size_mode_to_str(curr->size[1].mode), curr->size[1].value, curr->size[1].niceness);
+        vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + yincrease * 5.f, "Size[0] %s, %f, %f", vd_ui_size_mode_to_str(curr->style.size[0].mode), curr->style.size[0].value, curr->style.size[0].niceness);
+        vd_ui__put_linef(ctx, description_pos[0], description_pos[1] + 8.f + yincrease * 6.f, "Size[1] %s, %f, %f", vd_ui_size_mode_to_str(curr->style.size[1].mode), curr->style.size[1].value, curr->style.size[1].niceness);
 
         VdUiGradient redgrad = vd_ui_gradient1(vd_ui_f4(1.f, 0.f, 0.f, 0.7f));
         vd_ui__push_rectgrad(ctx, curr->rect, redgrad.e,

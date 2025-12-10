@@ -107,7 +107,11 @@ int main(int argc, char const *argv[])
         vd_ui_event_mouse_wheel(wx, wy);
 
 
-        vd_ui_demo();
+        int window_buttons = vd_ui_demo();
+
+        if (window_buttons == -3) {
+            vd_fw_quit();
+        }
 
         vd_ui_frame_end();
 
