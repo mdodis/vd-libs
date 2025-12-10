@@ -46,7 +46,6 @@
  * - Text Input
  * - Images
  * - Support more of printf
- * - Proper standalone floating point printing implementation
  * - Cache div full size and compare to stop doing size_changed for VD_UI_SIZE_MODE_CONTAIN_CHILDREN
  * - New and improved render pass api using texture id + scissor + layer id as keys
  *
@@ -391,6 +390,8 @@ typedef struct {
 
 
 extern char Vd_Ui_CharBuf[VD_UI_CHAR_BUF_COUNT];
+
+VD_UI_API int              vd_ui_div_is_active(VdUiDiv *div);
 
 /* ----DEMOS--------------------------------------------------------------------------------------------------------- */
 VD_UI_API void             vd_ui_demo(void);
@@ -1723,7 +1724,7 @@ VD_UI_API int vd_ui_slider(void *value, void *min_value, void *max_value,
         float track_size = track->rect[2] - track->rect[0];
 
         if ((track_size > 0.0001f) &&
-            (grip_reply.pressed) && 
+            (vd_ui_div_is_active(grip)) && 
             (grip_reply.mouse[0] >= track->rect[0]) &&
             (grip_reply.mouse[0]) <= track->rect[2])
         {
@@ -2116,13 +2117,12 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
             }
         }
 
-        if (released && (ctx->active == div->h) && hovered) {
-            reply.clicked = 1;
+        if (released && (ctx->active == div->h) ) {
+            if (hovered) {
+                reply.clicked = 1;
+            }
             div->timeout_t = 1.f;
             ctx->active = 0;
-        }
-
-        if (released && (ctx->active == div->h) && captured) {
             if (div->flags & VD_UI_FLAG_CAPTURES_MOUSE) {
                 vd_ui_set_capture(0);
             }
@@ -2279,7 +2279,9 @@ VD_UI_API void vd_ui_demo(void)
             vd_ui_sliderf_float(&slider_value, 0.f, 100.f, VD_UI_AXISH, "A slider");
 
             for (int i = 0; i < num_items; ++i) {
-                vd_ui_buttonf("Button %d", i);
+                if (vd_ui_buttonf("Button %d", i).clicked) {
+                    printf("Button %d clicked\n", i);
+                }
             }
         }
         vd_ui_scroll_end();
@@ -3568,6 +3570,12 @@ VD_UI_API VdUiContext* vd_ui_context_get(void)
 }
 
 /* ----HELPERS IMPL-------------------------------------------------------------------------------------------------- */
+VD_UI_API int vd_ui_div_is_active(VdUiDiv *div)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    return ctx->active == div->h;
+}
+
 static void vd_ui__putc(char **buf, size_t *rm, int c, int *count) {
     if (*rm > 1) {
         **buf = (char)c;
