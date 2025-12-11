@@ -107,11 +107,15 @@ typedef char VdUiBool;
 #   endif
 #endif // !VD_UI_MEMCPY
 
+#ifndef VD_UI_ABORT
+#   define VD_UI_ABORT(msg) do { (*(int*)0) = msg; } while (0)
+#endif // !VD_UI_ABORT
+
 #ifndef VD_UI_ASSERT
 #   ifdef VD_H
 #       define VD_UI_ASSERT(x) VD_ASSERT(x)
 #   else
-#       define VD_UI_ASSERT(x) do { if (!(x)) { (*(int*)0) = 'x'; } } while(0)
+#       define VD_UI_ASSERT(x) do { if (!(x)) { VD_UI_ABORT(#x); } } while(0)
 #   endif
 #endif // !VD_UI_ASSERT
 
@@ -223,6 +227,9 @@ enum {
     VD_UI_TOP  = 1,
     VD_UI_RIGHT = 2,
     VD_UI_BOTTOM = 3,
+
+    // Coloring
+    VD_UI_ALL_SHAPES = VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_BORDER,
 };
 typedef int VdUiFlags;
 
@@ -272,6 +279,12 @@ enum {
     VD_UI_TEXT_VALIGN_MIDDLE   = 1,
 };
 typedef int VdUiTextVAlign;
+
+typedef struct {
+    VdUiGradient normal;
+    VdUiGradient hot;
+    VdUiGradient active;
+} VdUiColoring;
 
 typedef struct VdUiStyleBox {
     float        corner_radius;
@@ -539,6 +552,25 @@ VD_UI_API float            vd_ui_get_scale(void);
 VD_UI_API void             vd_ui_style_size_push(VdUiAxis axis, VdUiSizeMode mode, float value, float niceness);
 VD_UI_API VdUiSize*        vd_ui_style_size_get(VdUiAxis axis);
 VD_UI_API void             vd_ui_style_size_pop(VdUiAxis axis);
+
+VD_UI_INL void             vd_ui_style_size_push_all(VdUiSizeMode mode, float value, float niceness);
+VD_UI_INL void             vd_ui_style_size_pop_all(void);
+
+VD_UI_API void             vd_ui_style_coloring_push(VdUiFlags mask, VdUiColoring *coloring);
+VD_UI_API VdUiColoring*    vd_ui_style_coloring_get(VdUiFlags mask);
+VD_UI_API void             vd_ui_style_coloring_pop(VdUiFlags mask);
+
+VD_UI_INL void vd_ui_style_size_push_all(VdUiSizeMode mode, float value, float niceness)
+{
+    vd_ui_style_size_push(VD_UI_AXISH, mode, value, niceness);
+    vd_ui_style_size_push(VD_UI_AXISV, mode, value, niceness);
+}
+
+VD_UI_INL void vd_ui_style_size_pop_all(void)
+{
+    vd_ui_style_size_pop(VD_UI_AXISH);
+    vd_ui_style_size_pop(VD_UI_AXISV);
+}
 
 /* ----RENDERING----------------------------------------------------------------------------------------------------- */
 enum {
@@ -1051,6 +1083,10 @@ static unsigned char Vd_Ui_Default_Icons_Font[7840];
 #   define VD_UI_STYLE_SIZE_STACK_COUNT     32
 #endif // !VD_UI_STYLE_SIZE_STACK_COUNT
 
+#ifndef VD_UI_STYLE_COLORING_STACK_COUNT
+#   define VD_UI_STYLE_COLORING_STACK_COUNT 32
+#endif // !VD_UI_STYLE_COLORING_STACK_COUNT
+
 #ifndef VD_UI_LOG_ENABLE
 #define VD_UI_LOG_ENABLE 0
 #endif // !VD_UI_LOG_ENABLE
@@ -1249,6 +1285,15 @@ struct VdUiContext {
     unsigned int            size_v_stack_count;
     VdUiSize                size_v_stack[VD_UI_STYLE_SIZE_STACK_COUNT];            // Horizontal Size Stack
 
+    unsigned int            coloring_bg_stack_count;
+    VdUiColoring            coloring_bg_stack[VD_UI_STYLE_COLORING_STACK_COUNT];   // Background Coloring
+
+    unsigned int            coloring_bd_stack_count;
+    VdUiColoring            coloring_bd_stack[VD_UI_STYLE_COLORING_STACK_COUNT];   // Border Coloring
+
+    unsigned int            coloring_tx_stack_count;
+    VdUiColoring            coloring_tx_stack[VD_UI_STYLE_COLORING_STACK_COUNT];   // Text Coloring
+
     // Stored to differentiate between passes
     VdUiTextureId          *current_texture_id;
 
@@ -1313,10 +1358,6 @@ VD_UI_API void vd_ui_frame_begin(float delta_seconds)
     ctx->last_frame_index = ctx->frame_index;
     ctx->frame_index++;
 
-    if (ctx->frame_index == 0) {
-        ctx->frame_index = 1;
-    }
-
     vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f);
     vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_TEXT_CONTENT, 0.f, 0.f);
 }
@@ -1353,6 +1394,9 @@ VD_UI_API void vd_ui_frame_end(void)
     ctx->clip_stack_count = 0;
     ctx->size_h_stack_count = 0;
     ctx->size_v_stack_count = 0;
+    ctx->coloring_bg_stack_count = 0;
+    ctx->coloring_bd_stack_count = 0;
+    ctx->coloring_tx_stack_count = 0;
 
     // Layout UI
     vd_ui__layout(ctx);
@@ -2008,14 +2052,35 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
             if (curr->h != h) {
                 // Otherwise, we need to allocate a new div
                 index = ctx->divs_cap_total - 1;
+                size_t index_of_farthest_time = ctx->divs_cap_total;
+                size_t frame_of_farthest_index = 0;
 
-                while ((index > 0) && (ctx->divs[index].h != 0)) {
+                while ((index > 0)) {
+
+                    if (ctx->divs[index].h == 0) {
+                        break;
+                    }
+
+                    size_t frame_distance = ctx->frame_index - ctx->divs[index].last_frame_touched;
+
+                    if (frame_distance > 2) {
+                        if (frame_distance > frame_of_farthest_index) {
+                            index_of_farthest_time = index;
+                            frame_of_farthest_index = frame_distance;
+                        }
+                    }
+
                     index--;
                 }
 
                 if (index == 0) {
-                    // @todo(mdodis)
-                    VD_UI_ASSERT(0);
+
+                    if (index_of_farthest_time < ctx->divs_cap_total) {
+                        index = index_of_farthest_time;
+                    } else {
+                        // @todo(mdodis)
+                        VD_UI_ASSERT(0);
+                    }
                 }
 
                 result = &ctx->divs[index];
@@ -2097,6 +2162,15 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     // Resolve styles
     result->style.size[VD_UI_AXISH] = *vd_ui_style_size_get(VD_UI_AXISH);
     result->style.size[VD_UI_AXISV] = *vd_ui_style_size_get(VD_UI_AXISV);
+    result->style.background.normal = vd_ui_style_coloring_get(VD_UI_FLAG_BACKGROUND)->normal;
+    result->style.background.hot    = vd_ui_style_coloring_get(VD_UI_FLAG_BACKGROUND)->hot;
+    result->style.background.active = vd_ui_style_coloring_get(VD_UI_FLAG_BACKGROUND)->active;
+    result->style.border.normal     = vd_ui_style_coloring_get(VD_UI_FLAG_BORDER)->normal;
+    result->style.border.hot        = vd_ui_style_coloring_get(VD_UI_FLAG_BORDER)->hot;
+    result->style.border.active     = vd_ui_style_coloring_get(VD_UI_FLAG_BORDER)->active;
+    result->style.text.normal       = vd_ui_style_coloring_get(VD_UI_FLAG_TEXT)->normal;
+    result->style.text.hot          = vd_ui_style_coloring_get(VD_UI_FLAG_TEXT)->hot;
+    result->style.text.active       = vd_ui_style_coloring_get(VD_UI_FLAG_TEXT)->active;
     return result;
 }
 
@@ -2262,6 +2336,84 @@ VD_UI_API void vd_ui_style_size_pop(VdUiAxis axis)
     VD_UI_ASSERT((*stack_count) > 0);
 
     (*stack_count)--;
+}
+
+VD_UI_API void vd_ui_style_coloring_push(VdUiFlags mask, VdUiColoring *coloring)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+
+    if (mask & VD_UI_FLAG_BACKGROUND) {
+        VD_UI_ASSERT(ctx->coloring_bg_stack_count < VD_UI_STYLE_COLORING_STACK_COUNT);
+        ctx->coloring_bg_stack[ctx->coloring_bg_stack_count++] = *coloring;
+    }
+
+    if (mask & VD_UI_FLAG_BORDER) {
+        VD_UI_ASSERT(ctx->coloring_bd_stack_count < VD_UI_STYLE_COLORING_STACK_COUNT);
+        ctx->coloring_bd_stack[ctx->coloring_bd_stack_count++] = *coloring;
+    }
+
+    if (mask & VD_UI_FLAG_TEXT) {
+        VD_UI_ASSERT(ctx->coloring_tx_stack_count < VD_UI_STYLE_COLORING_STACK_COUNT);
+        ctx->coloring_tx_stack[ctx->coloring_tx_stack_count++] = *coloring;
+    }
+}
+
+VD_UI_API VdUiColoring *vd_ui_style_coloring_get(VdUiFlags mask)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+
+    static VdUiColoring default_coloring = {1.f};
+
+    switch (mask) {
+        case VD_UI_FLAG_BACKGROUND: {
+            if (ctx->coloring_bg_stack_count > 0) {
+                return &ctx->coloring_bg_stack[ctx->coloring_bg_stack_count - 1];
+            } else {
+                return &default_coloring;
+            }
+        } break;
+
+        case VD_UI_FLAG_BORDER: {
+            if (ctx->coloring_bd_stack_count > 0) {
+                return &ctx->coloring_bd_stack[ctx->coloring_bd_stack_count - 1];
+            } else {
+                return &default_coloring;
+            }
+        } break;
+
+        case VD_UI_FLAG_TEXT: {
+            if (ctx->coloring_tx_stack_count > 0) {
+                return &ctx->coloring_tx_stack[ctx->coloring_tx_stack_count - 1];
+            } else {
+                return &default_coloring;
+            }
+        } break;
+
+        default: {
+            VD_UI_ASSERT(!mask && "Can't get coloring for multiple shapes!");
+            return 0;
+        } break;
+    }    
+}
+
+VD_UI_API void vd_ui_style_coloring_pop(VdUiFlags mask)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+
+    if (mask & VD_UI_FLAG_BACKGROUND) {
+        VD_UI_ASSERT(ctx->coloring_bg_stack_count > 0);
+        ctx->coloring_bg_stack_count--;
+    }
+
+    if (mask & VD_UI_FLAG_BORDER) {
+        VD_UI_ASSERT(ctx->coloring_bd_stack_count > 0);
+        ctx->coloring_bd_stack_count--;
+    }
+
+    if (mask & VD_UI_FLAG_TEXT) {
+        VD_UI_ASSERT(ctx->coloring_tx_stack_count > 0);
+        ctx->coloring_tx_stack_count--;
+    }
 }
 
 VD_UI_API int vd_ui_demo(void)
