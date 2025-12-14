@@ -52,6 +52,9 @@
  * - Win32:
  *     - Filter monitor orientation and other settings in display modes
  *     - Sort the display modes if not sorted already
+ * - Win32:
+ *     - Extern declare the Kernel32.dll functions and just pointer to _RTL_CRITICAL_SECTION CRITICAL_SECTION instead of
+ *       including windows.h
  * - Vulkan
  *     - Win32: Required extensions function
  *     - Win32: Query queue surface presentation support

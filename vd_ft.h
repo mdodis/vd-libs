@@ -25,6 +25,10 @@
  */
 #ifndef VD_FT_H
 #define VD_FT_H
+#define VD_FT_VERSION_MAJOR    0
+#define VD_FT_VERSION_MINOR    0
+#define VD_FT_VERSION_PATCH    1
+#define VD_FT_VERSION          ((VD_FT_VERSION_MAJOR << 16) | (VD_FT_VERSION_MINOR << 8) | (VD_FT_VERSION_PATCH))
 
 #ifndef VD_FT_API
 #   ifdef VD_FT_STATIC
@@ -33,6 +37,10 @@
 #       define VD_FT_API extern
 #   endif // VD_FT_STATIC
 #endif // !VD_FT_API
+
+#ifndef VD_FT_INL
+#   define VD_FT_INL static inline
+#endif // !VD_FT_INL
 
 typedef struct {
     void *reserved0; // Win32(HANDLE to font resource)
@@ -43,7 +51,8 @@ typedef struct {
     int  ascent, descent, linegap;
 } VdFtFont;
 
-VD_FT_API int vd_ft_font_load(VdFtFont *font, void *memory, int size, int index);
+VD_FT_API int       vd_ft_font_load(VdFtFont *font, void *memory, int size, int index);
+VD_FT_API VdFtFont* vd_ft_get_system_fonts(int *count);
 
 #endif // !VD_FT_H
 
@@ -276,13 +285,402 @@ CANDIDATE_FAIL_CONTINUE:
 
 #ifdef _WIN32
 
-#include <Windows.h>
+#pragma pack(push, 1)
+/* ----WIN32 BASE---------------------------------------------------------------------------------------------------- */
+#ifndef _MINWINDEF_
+#define VD_FT_DECLARE_HANDLE(name) struct name##__{int unused;}; typedef struct name##__ *name
 
-#pragma comment(lib, "Gdi32.lib")
+typedef unsigned long        VdFtDWORD;
+typedef int                  VdFtBOOL;
+typedef unsigned char        VdFtBYTE;
+typedef unsigned short       VdFtWORD;
+typedef float                VdFtFLOAT;
+typedef VdFtFLOAT*          VdFtPFLOAT;
+typedef VdFtBOOL*           VdFtPBOOL;
+typedef VdFtBOOL*           VdFtLPBOOL;
+typedef VdFtBYTE*           VdFtPBYTE;
+typedef VdFtBYTE*           VdFtLPBYTE;
+typedef int*                 VdFtPINT;
+typedef int*                 VdFtLPINT;
+typedef VdFtWORD*           VdFtPWORD;
+typedef VdFtWORD*           VdFtLPWORD;
+typedef long*                VdFtLPLONG;
+typedef VdFtDWORD*          VdFtPDWORD;
+typedef VdFtDWORD*          VdFtLPDWORD;
+typedef void*                VdFtLPVOID;
+typedef const void*          VdFtLPCVOID;
+typedef int                  VdFtINT;
+typedef unsigned int         VdFtUINT;
+typedef unsigned int*        VdFtPUINT;
+typedef uint32_t            VdFtUINT32;
+typedef uint16_t            VdFtUINT16;
+typedef void*               VdFtHANDLE;
+typedef VdFtHANDLE*         VdFtPHANDLE;
+typedef char                VdFtCHAR;
+typedef const VdFtCHAR*     VdFtLPCSTR, *VdFtPCSTR;
+typedef VdFtCHAR*           VdFtLPSTR;
+typedef long                VdFtLONG;
+typedef unsigned long       VdFtULONG;
+typedef VdFtULONG*          VdFtPULONG;
+typedef unsigned short      VdFtUSHORT;
+typedef VdFtUSHORT*         VdFtPUSHORT;
+typedef unsigned char       VdFtUCHAR;
+typedef VdFtUCHAR*          VdFtPUCHAR;
+typedef VdFtBYTE            VdFtBOOLEAN;
+typedef VdFtCHAR*           VdFtPCHAR, * VdFtLPCH, * VdFtPCH;
+typedef long                VdFtHRESULT;
+typedef __int64             VdFtLONGLONG;
+typedef unsigned __int64    VdFtULONGLONG;
+typedef VdFtULONGLONG       VdFtDWORDLONG;
+typedef VdFtDWORDLONG*      VdFtPDWORDLONG;
+typedef __int64             VdFtINT_PTR, * VdFtPINT_PTR;
+typedef unsigned __int64    VdFtUINT_PTR, * VdFtPUINT_PTR;
+typedef __int64             VdFtLONG_PTR, * VdFtPLONG_PTR;
+typedef unsigned __int64    VdFtULONG_PTR, * VdFtPULONG_PTR;
+typedef VdFtUINT_PTR        VdFtWPARAM;
+typedef VdFtLONG_PTR        VdFtLPARAM;
+typedef VdFtLONG_PTR        VdFtLRESULT;
+typedef wchar_t             VdFtWCHAR;
+typedef const VdFtWCHAR*    VdFtLPCWSTR, * VdFtPCWSTR;
+typedef VdFtWCHAR*          VdFtLPWSTR;
+typedef VdFtWORD            VdFtATOM;
+typedef VdFtULONG_PTR       VdFtDWORD_PTR, * VdFtPDWORD_PTR;
+typedef VdFtULONG_PTR       VdFtSIZE_T;
+typedef short               VdFtSHORT;
+
+VD_FT_DECLARE_HANDLE(VdFtHWND);
+VD_FT_DECLARE_HANDLE(VdFtHINSTANCE);
+VD_FT_DECLARE_HANDLE(VdFtHDC);
+VD_FT_DECLARE_HANDLE(VdFtHMONITOR);
+typedef VdFtHINSTANCE VdFtHMODULE;
+
+extern VdFtHMODULE LoadLibraryA(VdFtLPCSTR path);
+extern void*       HeapAlloc(VdFtHANDLE hHeap, VdFtDWORD dwFlags, VdFtSIZE_T dwBytes);
+extern VdFtHANDLE  GetProcessHeap();
+extern void*       HeapReAlloc(VdFtHANDLE hHeap, VdFtDWORD dwFlags, void *lpMem, VdFtSIZE_T dwBytes);
+extern VdFtBOOL    HeapFree(VdFtHANDLE hHeap, VdFtDWORD dwFlags, void *lpMem);
+extern int         MultiByteToWideChar(VdFtUINT CodePage, VdFtDWORD dwFlags, VdFtLPCSTR lpMultiByteStr, int cbMultiByte, VdFtLPWSTR lpWideCharStr, int cchWideChar);
+extern int         WideCharToMultiByte(VdFtUINT CodePage, VdFtDWORD dwFlags, VdFtLPCWSTR lpWideCharStr, int cchWideChar, VdFtLPSTR lpMultiByteStr, int cbMultiByte, VdFtLPSTR lpDefaultChar, VdFtBOOL *lpUsedDefaultChar);
+extern void*       GetProcAddress(VdFtHMODULE hModule, VdFtLPCSTR lpProcName);
+
+#else
+typedef HWND      VdFtHWND;
+typedef DWORD     VdFtDWORD;
+typedef WORD      VdFtWORD;
+typedef LPWSTR    VdFtLPWSTR;
+typedef LPCWSTR   VdFtLPCWSTR;
+typedef LPCSTR    VdFtLPCSTR;
+typedef DWORD     VdFtDWORD;
+typedef UINT      VdFtUINT;
+typedef UINT32    VdFtUINT32;
+typedef UINT16    VdFtUINT16;
+typedef HMODULE   VdFtHMODULE;
+typedef HRESULT   VdFtHRESULT;
+typedef ULONG     VdFtULONG;
+typedef HDC       VdFtHDC;
+typedef HMONITOR  VdFtHMONITOR;
+typedef HANDLE    VdFtHANDLE;
+typedef LPARAM    VdFtLPARAM;
+typedef BOOL      VdFtPBOOL;
+typedef LONG      VdFtLONG;
+typedef BYTE      VdFtBYTE;
+typedef WCHAR     VdFtWCHAR;
+typedef BOOL      VdFtBOOL;
+typedef FLOAT     VdFtFLOAT;
+#endif // !_MINWINDEF_
+
+typedef struct VdFttagLOGFONTW {
+    VdFtLONG  lfHeight;
+    VdFtLONG  lfWidth;
+    VdFtLONG  lfEscapement;
+    VdFtLONG  lfOrientation;
+    VdFtLONG  lfWeight;
+    VdFtBYTE  lfItalic;
+    VdFtBYTE  lfUnderline;
+    VdFtBYTE  lfStrikeOut;
+    VdFtBYTE  lfCharSet;
+    VdFtBYTE  lfOutPrecision;
+    VdFtBYTE  lfClipPrecision;
+    VdFtBYTE  lfQuality;
+    VdFtBYTE  lfPitchAndFamily;
+    VdFtWCHAR lfFaceName[32];
+} VdFtLOGFONTW, *VdFtPLOGFONTW, *VdFtNPLOGFONTW, *VdFtLPLOGFONTW;
+
+typedef struct VdFttagTEXTMETRICW {
+    VdFtLONG  tmHeight;
+    VdFtLONG  tmAscent;
+    VdFtLONG  tmDescent;
+    VdFtLONG  tmInternalLeading;
+    VdFtLONG  tmExternalLeading;
+    VdFtLONG  tmAveCharWidth;
+    VdFtLONG  tmMaxCharWidth;
+    VdFtLONG  tmWeight;
+    VdFtLONG  tmOverhang;
+    VdFtLONG  tmDigitizedAspectX;
+    VdFtLONG  tmDigitizedAspectY;
+    VdFtWCHAR tmFirstChar;
+    VdFtWCHAR tmLastChar;
+    VdFtWCHAR tmDefaultChar;
+    VdFtWCHAR tmBreakChar;
+    VdFtBYTE  tmItalic;
+    VdFtBYTE  tmUnderlined;
+    VdFtBYTE  tmStruckOut;
+    VdFtBYTE  tmPitchAndFamily;
+    VdFtBYTE  tmCharSet;
+} VdFtTEXTMETRICW, *VdFtPTEXTMETRICW, *VdFtNPTEXTMETRICW, *VdFtLPTEXTMETRICW;
+
+typedef struct VdFt_GUID {
+    unsigned long  Data1;
+    unsigned short Data2;
+    unsigned short Data3;
+    unsigned char  Data4[ 8 ];
+} VdFtGUID;
+
+typedef struct VdFt_FILETIME {
+  VdFtDWORD dwLowDateTime;
+  VdFtDWORD dwHighDateTime;
+} VdFtFILETIME, *VdFtPFILETIME, *VdFtLPFILETIME;
+
+VD_FT_INL int vd_ft__guid_compare(const VdFtGUID *a, const VdFtGUID *b)
+{
+    return (a->Data1 == b->Data1)       && (a->Data2 == b->Data2)       && (a->Data3 == b->Data3) &&
+           (a->Data4[0] == b->Data4[0]) && (a->Data4[1] == b->Data4[1]) &&
+           (a->Data4[2] == b->Data4[2]) && (a->Data4[3] == b->Data4[3]) &&
+           (a->Data4[4] == b->Data4[4]) && (a->Data4[5] == b->Data4[5]) &&
+           (a->Data4[6] == b->Data4[6]) && (a->Data4[7] == b->Data4[7]);
+}
+
+typedef VdFtGUID            VdFtIID;
+typedef VdFtGUID*           VdFtREFGUID;
+#define VdFtREFCLSID        const VdFtIID *
+typedef VdFtIID*            VdFtREFIID;
+typedef struct VdFtIUnknown VdFtIUnknown;
+typedef VdFtIUnknown*       VdFtLPUNKNOWN;
+typedef VdFtULONG           VdFtSFGAOF;
+typedef VdFtDWORD           VdFtSICHINTF;
+
+typedef struct VdFtIDWriteFactory VdFtIDWriteFactory;
+typedef struct VdFtIDWriteFactory1 VdFtIDWriteFactory1;
+
+typedef enum {
+    VD_FT_DWRITE_FACTORY_TYPE_SHARED,
+    VD_FT_DWRITE_FACTORY_TYPE_ISOLATED
+} VdFtDWRITE_FACTORY_TYPE;
+
+typedef enum {
+    VD_FT_DWRITE_FONT_FACE_TYPE_CFF,
+    VD_FT_DWRITE_FONT_FACE_TYPE_TRUETYPE,
+    VD_FT_DWRITE_FONT_FACE_TYPE_OPENTYPE_COLLECTION,
+    VD_FT_DWRITE_FONT_FACE_TYPE_TYPE1,
+    VD_FT_DWRITE_FONT_FACE_TYPE_VECTOR,
+    VD_FT_DWRITE_FONT_FACE_TYPE_BITMAP,
+    VD_FT_DWRITE_FONT_FACE_TYPE_UNKNOWN,
+    VD_FT_DWRITE_FONT_FACE_TYPE_RAW_CFF,
+    VD_FT_DWRITE_FONT_FACE_TYPE_TRUETYPE_COLLECTION = VD_FT_DWRITE_FONT_FACE_TYPE_OPENTYPE_COLLECTION,
+} VdFtDWRITE_FONT_FACE_TYPE;
+
+typedef enum {
+    VD_FT_DWRITE_FONT_SIMULATIONS_NONE    = 0x0000,
+    VD_FT_DWRITE_FONT_SIMULATIONS_BOLD    = 0x0001,
+    VD_FT_DWRITE_FONT_SIMULATIONS_OBLIQUE = 0x0002
+} VdFtDWRITE_FONT_SIMULATIONS;
+
+typedef enum {
+    VD_FT_DWRITE_PIXEL_GEOMETRY_FLAT,
+    VD_FT_DWRITE_PIXEL_GEOMETRY_RGB,
+    VD_FT_DWRITE_PIXEL_GEOMETRY_BGR
+} VdFtDWRITE_PIXEL_GEOMETRY;
+
+typedef enum {
+    VD_FT_DWRITE_RENDERING_MODE_DEFAULT,
+    VD_FT_DWRITE_RENDERING_MODE_ALIASED,
+    VD_FT_DWRITE_RENDERING_MODE_GDI_CLASSIC,
+    VD_FT_DWRITE_RENDERING_MODE_GDI_NATURAL,
+    VD_FT_DWRITE_RENDERING_MODE_NATURAL,
+    VD_FT_DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC,
+    VD_FT_DWRITE_RENDERING_MODE_OUTLINE,
+    VD_FT_DWRITE_RENDERING_MODE_CLEARTYPE_GDI_CLASSIC         = VD_FT_DWRITE_RENDERING_MODE_GDI_CLASSIC,
+    VD_FT_DWRITE_RENDERING_MODE_CLEARTYPE_GDI_NATURAL         = VD_FT_DWRITE_RENDERING_MODE_GDI_NATURAL,
+    VD_FT_DWRITE_RENDERING_MODE_CLEARTYPE_NATURAL             = VD_FT_DWRITE_RENDERING_MODE_NATURAL,
+    VD_FT_DWRITE_RENDERING_MODE_CLEARTYPE_NATURAL_SYMMETRIC   = VD_FT_DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC
+} VdFtDWRITE_RENDERING_MODE;
+
+typedef enum {
+    VD_FT_DWRITE_FONT_WEIGHT_THIN = 100,
+    VD_FT_DWRITE_FONT_WEIGHT_EXTRA_LIGHT = 200,
+    VD_FT_DWRITE_FONT_WEIGHT_ULTRA_LIGHT = 200,
+    VD_FT_DWRITE_FONT_WEIGHT_LIGHT = 300,
+    VD_FT_DWRITE_FONT_WEIGHT_SEMI_LIGHT = 350,
+    VD_FT_DWRITE_FONT_WEIGHT_NORMAL = 400,
+    VD_FT_DWRITE_FONT_WEIGHT_REGULAR = 400,
+    VD_FT_DWRITE_FONT_WEIGHT_MEDIUM = 500,
+    VD_FT_DWRITE_FONT_WEIGHT_DEMI_BOLD = 600,
+    VD_FT_DWRITE_FONT_WEIGHT_SEMI_BOLD = 600,
+    VD_FT_DWRITE_FONT_WEIGHT_BOLD = 700,
+    VD_FT_DWRITE_FONT_WEIGHT_EXTRA_BOLD = 800,
+    VD_FT_DWRITE_FONT_WEIGHT_ULTRA_BOLD = 800,
+    VD_FT_DWRITE_FONT_WEIGHT_BLACK = 900,
+    VD_FT_DWRITE_FONT_WEIGHT_HEAVY = 900,
+    VD_FT_DWRITE_FONT_WEIGHT_EXTRA_BLACK = 950,
+    VD_FT_DWRITE_FONT_WEIGHT_ULTRA_BLACK = 950
+} VdFtDWRITE_FONT_WEIGHT;
+
+typedef enum {
+    VD_FT_DWRITE_FONT_STRETCH_UNDEFINED = 0,
+    VD_FT_DWRITE_FONT_STRETCH_ULTRA_CONDENSED = 1,
+    VD_FT_DWRITE_FONT_STRETCH_EXTRA_CONDENSED = 2,
+    VD_FT_DWRITE_FONT_STRETCH_CONDENSED = 3,
+    VD_FT_DWRITE_FONT_STRETCH_SEMI_CONDENSED = 4,
+    VD_FT_DWRITE_FONT_STRETCH_NORMAL = 5,
+    VD_FT_DWRITE_FONT_STRETCH_MEDIUM = 5,
+    VD_FT_DWRITE_FONT_STRETCH_SEMI_EXPANDED = 6,
+    VD_FT_DWRITE_FONT_STRETCH_EXPANDED = 7,
+    VD_FT_DWRITE_FONT_STRETCH_EXTRA_EXPANDED = 8,
+    VD_FT_DWRITE_FONT_STRETCH_ULTRA_EXPANDED = 9
+} VdFtDWRITE_FONT_STRETCH;
+
+typedef enum {
+    VD_FT_DWRITE_FONT_STYLE_NORMAL,
+    VD_FT_DWRITE_FONT_STYLE_OBLIQUE,
+    VD_FT_DWRITE_FONT_STYLE_ITALIC
+} VdFtDWRITE_FONT_STYLE;
+
+typedef enum {
+    VD_FT_DWRITE_NUMBER_SUBSTITUTION_METHOD_FROM_CULTURE,
+    VD_FT_DWRITE_NUMBER_SUBSTITUTION_METHOD_CONTEXTUAL,
+    VD_FT_DWRITE_NUMBER_SUBSTITUTION_METHOD_NONE,
+    VD_FT_DWRITE_NUMBER_SUBSTITUTION_METHOD_NATIONAL,
+    VD_FT_DWRITE_NUMBER_SUBSTITUTION_METHOD_TRADITIONAL
+} VdFtDWRITE_NUMBER_SUBSTITUTION_METHOD;
+
+typedef enum {
+    VD_FT_DWRITE_MEASURING_MODE_NATURAL = 0,
+    VD_FT_DWRITE_MEASURING_MODE_GDI_CLASSIC = 1,
+    VD_FT_DWRITE_MEASURING_MODE_GDI_NATURAL = 2
+} VdFtDWRITE_MEASURING_MODE;
+
+typedef struct {
+    VdFtFLOAT m11;
+    VdFtFLOAT m12;
+    VdFtFLOAT m21;
+    VdFtFLOAT m22;
+    VdFtFLOAT dx;
+    VdFtFLOAT dy;
+} VdFtDWRITE_MATRIX;
+
+typedef struct {
+    VdFtFLOAT advanceOffset;
+    VdFtFLOAT ascenderOffset;
+} VdFtDWRITE_GLYPH_OFFSET;
+
+typedef struct {
+    VdFtIUnknown /* IDWriteFontFace */ * fontFace;
+    VdFtFLOAT fontEmSize;
+    VdFtUINT32 glyphCount;
+    VdFtUINT16 const* glyphIndices;
+    VdFtFLOAT const* glyphAdvances;
+    VdFtDWRITE_GLYPH_OFFSET const* glyphOffsets;
+    VdFtBOOL isSideways;
+    VdFtUINT32 bidiLevel;
+} VdFtDWRITE_GLYPH_RUN;
+
+#pragma pack(pop)
+
+typedef int (VdFtFONTENUMPROCW)(const VdFtLOGFONTW *lpelfe, const VdFtTEXTMETRICW *lpntme, VdFtDWORD FontType, VdFtLPARAM lParam);
+typedef int (*VdFt__ProcEnumFontFamiliesExW)(VdFtHDC hdc, VdFtLPLOGFONTW lpLogfont, VdFtFONTENUMPROCW lpProc, VdFtLPARAM lParam, VdFtDWORD dwFlags);
+typedef VdFtHANDLE (*VdFt__ProcAddFontMemResourceEx)(void *pFileView, VdFtDWORD cjSize, void *pvReserved, VdFtDWORD *pNumFonts);
+typedef VdFtHDC (*VdFt__ProcCreateCompatibleDC)(VdFtHDC hdc);
+
+static VdFt__ProcAddFontMemResourceEx VdFt__AddFontMemResourceEx;
+static VdFt__ProcEnumFontFamiliesExW  VdFt__EnumFontFamiliesExW;
+static VdFt__ProcCreateCompatibleDC VdFt__CreateCompatibleDC;
+
+typedef struct {
+    VdFtHRESULT (__stdcall *QueryInterface)(VdFtIUnknown *This, VdFtREFIID riid, void **ppvObject);
+    VdFtULONG   (__stdcall *AddRef)(VdFtIUnknown *This);
+    VdFtULONG   (__stdcall *Release)(VdFtIUnknown *This);
+} VdFtIUnknownVtbl;
+struct VdFtIUnknown { const VdFtIUnknownVtbl *lpVtbl; };
+
+#define VD_FT_DEFINE_GUID(name, l, w1, w2, b1, b2, b3, b4, b5, b6, b7, b8) VdFtGUID name = { l, w1, w2, { b1, b2,  b3,  b4,  b5,  b6,  b7,  b8 } }
+
+VD_FT_DEFINE_GUID(VD_FT_IID_IDWriteFactory,  0xb859ee5a, 0xd838, 0x4b5b, 0xa2, 0xe8, 0x1a, 0xdc, 0x7d, 0x93, 0xdb, 0x48);
+typedef struct {
+    /* IUnknown */
+    VdFtHRESULT (__stdcall *QueryInterface)(VdFtIUnknown *This, VdFtREFIID riid, void **ppvObject);
+    VdFtULONG   (__stdcall *AddRef)(VdFtIUnknown *This);
+    VdFtULONG   (__stdcall *Release)(VdFtIUnknown *This);
+
+    /* IDWriteFactory */
+    VdFtHRESULT (__stdcall *GetSystemFontCollection)(VdFtIUnknown** /*IDWriteFontCollection*/ fontCollection, VdFtBOOL checkForUpdates);
+    VdFtHRESULT (__stdcall *CreateCustomFontCollection)(VdFtIUnknown* /*IDWriteFontCollectionLoader*/, void const *collectionKey, VdFtUINT32 collectionKeySize, VdFtIUnknown** /*IDWriteFontCollection*/ fontCollection);
+    VdFtHRESULT (__stdcall *RegisterFontCollectionLoader)(VdFtIUnknown* /*IDWriteFontCollectionLoader*/ fontCollectionLoader);
+    VdFtHRESULT (__stdcall *UnregisterFontCollectionLoader)(VdFtIUnknown* /*IDWriteFontCollectionLoader*/ fontCollectionLoader);
+    VdFtHRESULT (__stdcall *CreateFontFileReference)(VdFtWCHAR const* filePath, VdFtFILETIME const* lastWriteTime, VdFtIUnknown /*IDWriteFontFile*/ ** fontFile);
+    VdFtHRESULT (__stdcall *CreateCustomFontFileReference)(void const* fontFileReferenceKey, VdFtUINT32 fontFileReferenceKeySize, VdFtIUnknown /* IDWriteFontFileLoader */ * fontFileLoader, VdFtIUnknown /* IDWriteFontFile */ ** fontFile);
+    VdFtHRESULT (__stdcall *CreateFontFace)(VdFtDWRITE_FONT_FACE_TYPE fontFaceType, VdFtUINT32 numberOfFiles, VdFtIUnknown /*IDWriteFontFile*/ * const* fontFiles, VdFtUINT32 faceIndex, VdFtDWRITE_FONT_SIMULATIONS fontFaceSimulationFlags, VdFtIUnknown /* IDWriteFontFace */ ** fontFace);
+    VdFtHRESULT (__stdcall *CreateRenderingParams)(VdFtIUnknown /* IDWriteRenderingParams */ ** renderingParams);
+    VdFtHRESULT (__stdcall *CreateMonitorRenderingParams)(VdFtHMONITOR monitor, VdFtIUnknown /* IDWriteRenderingParams */ ** renderingParams);
+    VdFtHRESULT (__stdcall *CreateCustomRenderingParams)(VdFtFLOAT gamma, VdFtFLOAT enhancedContrast, VdFtFLOAT clearTypeLevel, VdFtDWRITE_PIXEL_GEOMETRY pixelGeometry, VdFtDWRITE_RENDERING_MODE renderingMode, VdFtIUnknown /* IDWriteRenderingParams */ ** renderingParams);
+    VdFtHRESULT (__stdcall *RegisterFontFileLoader)(VdFtIUnknown /* IDWriteFontFileLoader */ * fontFileLoader);
+    VdFtHRESULT (__stdcall *UnregisterFontFileLoader)(VdFtIUnknown /* IDWriteFontFileLoader */ * fontFileLoader);
+    VdFtHRESULT (__stdcall *CreateTextFormat)(VdFtWCHAR const* fontFamilyName, VdFtIUnknown /* IDWriteFontCollection */ * fontCollection, VdFtDWRITE_FONT_WEIGHT fontWeight, VdFtDWRITE_FONT_STYLE fontStyle, VdFtDWRITE_FONT_STRETCH fontStretch, VdFtFLOAT fontSize, VdFtWCHAR const* localeName, VdFtIUnknown /* IDWriteTextFormat */ ** textFormat);
+    VdFtHRESULT (__stdcall *CreateTypography)(VdFtIUnknown /* IDWriteTypography */ ** typography);
+    VdFtHRESULT (__stdcall *GetGdiInterop)(VdFtIUnknown /* IDWriteGdiInterop */ ** gdiInterop);
+    VdFtHRESULT (__stdcall *CreateTextLayout)(VdFtWCHAR const* string, VdFtUINT32 stringLength, VdFtIUnknown /* IDWriteTextFormat */ * textFormat, VdFtFLOAT maxWidth, VdFtFLOAT maxHeight, VdFtIUnknown /* IDWriteTextLayout */ ** textLayout);
+    VdFtHRESULT (__stdcall *CreateGdiCompatibleTextLayout)(VdFtWCHAR const* string, VdFtUINT32 stringLength, VdFtIUnknown /* IDWriteTextFormat */ * textFormat, VdFtFLOAT layoutWidth, VdFtFLOAT layoutHeight, VdFtFLOAT pixelsPerDip, VdFtDWRITE_MATRIX const* transform, VdFtBOOL useGdiNatural, VdFtIUnknown /* IDWriteTextLayout */ ** textLayout);
+    VdFtHRESULT (__stdcall *CreateEllipsisTrimmingSign)(VdFtIUnknown /* IDWriteTextFormat */ * textFormat, VdFtIUnknown /* IDWriteInlineObject */ ** trimmingSign);
+    VdFtHRESULT (__stdcall *CreateTextAnalyzer)(VdFtIUnknown /* IDWriteTextAnalyzer */ ** textAnalyzer);
+    VdFtHRESULT (__stdcall *CreateNumberSubstitution)(VdFtDWRITE_NUMBER_SUBSTITUTION_METHOD substitutionMethod, VdFtWCHAR const* localeName, VdFtBOOL ignoreUserOverride, VdFtIUnknown /* IDWriteNumberSubstitution */ ** numberSubstitution);
+    VdFtHRESULT (__stdcall *CreateGlyphRunAnalysis)(VdFtDWRITE_GLYPH_RUN const* glyphRun, VdFtFLOAT pixelsPerDip, VdFtDWRITE_MATRIX const* transform, VdFtDWRITE_RENDERING_MODE renderingMode, VdFtDWRITE_MEASURING_MODE measuringMode, VdFtFLOAT baselineOriginX, VdFtFLOAT baselineOriginY, VdFtIUnknown /* IDWriteGlyphRunAnalysis */ ** glyphRunAnalysis);
+
+    // @todo(mdodis): IDWriteFactory rest (dwrite.h)
+} VdFtIDWriteFactoryVtbl;
+struct VdFtIDWriteFactory { const VdFtIDWriteFactoryVtbl *lpVtbl; };
+
+
+VD_FT_DEFINE_GUID(VD_FT_IID_IDWriteFactory1, 0x30572f99, 0xdac6, 0x41db, 0xa1, 0x6e, 0x04, 0x86, 0x30, 0x7e, 0x60, 0x6a);
+typedef struct {
+    /* IUnknown */
+    VdFtHRESULT (__stdcall *QueryInterface)(VdFtIUnknown *This, VdFtREFIID riid, void **ppvObject);
+    VdFtULONG   (__stdcall *AddRef)(VdFtIUnknown *This);
+    VdFtULONG   (__stdcall *Release)(VdFtIUnknown *This);
+
+    /* IDWriteFactory */
+    VdFtHRESULT (__stdcall *GetSystemFontCollection)(VdFtIUnknown** /*IDWriteFontCollection*/ fontCollection, VdFtBOOL checkForUpdates);
+    VdFtHRESULT (__stdcall *CreateCustomFontCollection)(VdFtIUnknown* /*IDWriteFontCollectionLoader*/, void const *collectionKey, VdFtUINT32 collectionKeySize, VdFtIUnknown** /*IDWriteFontCollection*/ fontCollection);
+    VdFtHRESULT (__stdcall *RegisterFontCollectionLoader)(VdFtIUnknown* /*IDWriteFontCollectionLoader*/ fontCollectionLoader);
+    VdFtHRESULT (__stdcall *UnregisterFontCollectionLoader)(VdFtIUnknown* /*IDWriteFontCollectionLoader*/ fontCollectionLoader);
+    VdFtHRESULT (__stdcall *CreateFontFileReference)(VdFtWCHAR const* filePath, VdFtFILETIME const* lastWriteTime, VdFtIUnknown /*IDWriteFontFile*/ ** fontFile);
+    VdFtHRESULT (__stdcall *CreateCustomFontFileReference)(void const* fontFileReferenceKey, VdFtUINT32 fontFileReferenceKeySize, VdFtIUnknown /* IDWriteFontFileLoader */ * fontFileLoader, VdFtIUnknown /* IDWriteFontFile */ ** fontFile);
+    VdFtHRESULT (__stdcall *CreateFontFace)(VdFtDWRITE_FONT_FACE_TYPE fontFaceType, VdFtUINT32 numberOfFiles, VdFtIUnknown /*IDWriteFontFile*/ * const* fontFiles, VdFtUINT32 faceIndex, VdFtDWRITE_FONT_SIMULATIONS fontFaceSimulationFlags, VdFtIUnknown /* IDWriteFontFace */ ** fontFace);
+    VdFtHRESULT (__stdcall *CreateRenderingParams)(VdFtIUnknown /* IDWriteRenderingParams */ ** renderingParams);
+    VdFtHRESULT (__stdcall *CreateMonitorRenderingParams)(VdFtHMONITOR monitor, VdFtIUnknown /* IDWriteRenderingParams */ ** renderingParams);
+    VdFtHRESULT (__stdcall *CreateCustomRenderingParams)(VdFtFLOAT gamma, VdFtFLOAT enhancedContrast, VdFtFLOAT clearTypeLevel, VdFtDWRITE_PIXEL_GEOMETRY pixelGeometry, VdFtDWRITE_RENDERING_MODE renderingMode, VdFtIUnknown /* IDWriteRenderingParams */ ** renderingParams);
+    VdFtHRESULT (__stdcall *RegisterFontFileLoader)(VdFtIUnknown /* IDWriteFontFileLoader */ * fontFileLoader);
+    VdFtHRESULT (__stdcall *UnregisterFontFileLoader)(VdFtIUnknown /* IDWriteFontFileLoader */ * fontFileLoader);
+    VdFtHRESULT (__stdcall *CreateTextFormat)(VdFtWCHAR const* fontFamilyName, VdFtIUnknown /* IDWriteFontCollection */ * fontCollection, VdFtDWRITE_FONT_WEIGHT fontWeight, VdFtDWRITE_FONT_STYLE fontStyle, VdFtDWRITE_FONT_STRETCH fontStretch, VdFtFLOAT fontSize, VdFtWCHAR const* localeName, VdFtIUnknown /* IDWriteTextFormat */ ** textFormat);
+    VdFtHRESULT (__stdcall *CreateTypography)(VdFtIUnknown /* IDWriteTypography */ ** typography);
+    VdFtHRESULT (__stdcall *GetGdiInterop)(VdFtIUnknown /* IDWriteGdiInterop */ ** gdiInterop);
+    VdFtHRESULT (__stdcall *CreateTextLayout)(VdFtWCHAR const* string, VdFtUINT32 stringLength, VdFtIUnknown /* IDWriteTextFormat */ * textFormat, VdFtFLOAT maxWidth, VdFtFLOAT maxHeight, VdFtIUnknown /* IDWriteTextLayout */ ** textLayout);
+    VdFtHRESULT (__stdcall *CreateGdiCompatibleTextLayout)(VdFtWCHAR const* string, VdFtUINT32 stringLength, VdFtIUnknown /* IDWriteTextFormat */ * textFormat, VdFtFLOAT layoutWidth, VdFtFLOAT layoutHeight, VdFtFLOAT pixelsPerDip, VdFtDWRITE_MATRIX const* transform, VdFtBOOL useGdiNatural, VdFtIUnknown /* IDWriteTextLayout */ ** textLayout);
+    VdFtHRESULT (__stdcall *CreateEllipsisTrimmingSign)(VdFtIUnknown /* IDWriteTextFormat */ * textFormat, VdFtIUnknown /* IDWriteInlineObject */ ** trimmingSign);
+    VdFtHRESULT (__stdcall *CreateTextAnalyzer)(VdFtIUnknown /* IDWriteTextAnalyzer */ ** textAnalyzer);
+    VdFtHRESULT (__stdcall *CreateNumberSubstitution)(VdFtDWRITE_NUMBER_SUBSTITUTION_METHOD substitutionMethod, VdFtWCHAR const* localeName, VdFtBOOL ignoreUserOverride, VdFtIUnknown /* IDWriteNumberSubstitution */ ** numberSubstitution);
+    VdFtHRESULT (__stdcall *CreateGlyphRunAnalysis)(VdFtDWRITE_GLYPH_RUN const* glyphRun, VdFtFLOAT pixelsPerDip, VdFtDWRITE_MATRIX const* transform, VdFtDWRITE_RENDERING_MODE renderingMode, VdFtDWRITE_MEASURING_MODE measuringMode, VdFtFLOAT baselineOriginX, VdFtFLOAT baselineOriginY, VdFtIUnknown /* IDWriteGlyphRunAnalysis */ ** glyphRunAnalysis);
+
+    /* IDWriteFactory1 */
+    VdFtHRESULT (__stdcall *GetEudcFontCollection)(VdFtIUnknown /* IDWriteFontCollection */ ** fontCollection, VdFtBOOL checkForUpdates /*= FALSE*/);
+    VdFtHRESULT (__stdcall *CreateCustomRenderingParams_1)(VdFtFLOAT gamma, VdFtFLOAT enhancedContrast, VdFtFLOAT enhancedContrastGrayscale, VdFtFLOAT clearTypeLevel, VdFtDWRITE_PIXEL_GEOMETRY pixelGeometry, VdFtDWRITE_RENDERING_MODE renderingMode, VdFtIUnknown /* IDWriteRenderingParams1 */ ** renderingParams);
+} VdFtIDWriteFactory1Vtbl;
+struct VdFtIDWriteFactory1 { const VdFtIDWriteFactory1Vtbl *lpVtbl; };
+
+typedef VdFtHRESULT (*VdFt__ProcDWriteCreateFactory)(VdFtDWRITE_FACTORY_TYPE factoryType, VdFtREFIID iid, VdFtIUnknown **factory);
+static VdFt__ProcDWriteCreateFactory VdFt__DWriteCreateFactory;
 
 typedef struct {
     int initialized;
-    HDC dc;
+    VdFtHDC dc;
 } Vd_Ft__Win32InternalData;
 
 Vd_Ft__Win32InternalData Vd_Ft_G = {0};
@@ -293,10 +691,7 @@ VD_FT_API int vd_ft_font_load(VdFtFont *font, void *memory, int size, int index)
 {
     (void)index;
 
-    if (!Vd_Ft_G.initialized) {
-        vd_ft__win32_init();
-        Vd_Ft_G.initialized = 1;
-    }
+    vd_ft__win32_init();
 
     if (!vd_ft__get_ttf_name_records(memory, size, &font->name, &font->name_len)) {
         printf("FAILED\n");
@@ -304,8 +699,8 @@ VD_FT_API int vd_ft_font_load(VdFtFont *font, void *memory, int size, int index)
         printf("SUCCESS\n");
     }
 
-    DWORD num_fonts;
-    HANDLE font_mem_handle = AddFontMemResourceEx(memory, size, 0, &num_fonts);
+    VdFtDWORD num_fonts;
+    VdFtHANDLE font_mem_handle = VdFt__AddFontMemResourceEx(memory, size, 0, &num_fonts);
 
     wchar_t wbuf[512];
     int wrt = vd_ft__utf8_to_wide(font->name, font->name_len, wbuf, 511);
@@ -315,9 +710,54 @@ VD_FT_API int vd_ft_font_load(VdFtFont *font, void *memory, int size, int index)
     return 1;
 }
 
+int EnumFontFamExProc(const VdFtLOGFONTW *lpelfe, const VdFtTEXTMETRICW *lpntme, VdFtDWORD FontType, VdFtLPARAM lParam)
+{
+    (void)lParam;
+    (void)FontType;
+    (void)lpntme;
+
+    if (lpelfe->lfFaceName[0] == L'@') {
+        return 1;
+    }
+
+    printf("%S %d C%d I%d\n", lpelfe->lfFaceName, lpelfe->lfWeight, lpelfe->lfCharSet, lpelfe->lfItalic);
+    return 1;
+}
+
+VD_FT_API VdFtFont* vd_ft_get_system_fonts(int *count)
+{
+    (void)count;
+
+    vd_ft__win32_init();
+    VdFtLOGFONTW lf = {0};
+    lf.lfCharSet = 0;
+    VdFt__EnumFontFamiliesExW(Vd_Ft_G.dc, &lf, EnumFontFamExProc, 0, 0);
+    return 0;
+}
+
 static void vd_ft__win32_init(void)
 {
-    Vd_Ft_G.dc = CreateCompatibleDC(NULL);
+    if (Vd_Ft_G.initialized) {
+        return;
+    }
+
+
+    {
+        VdFtHMODULE mod = LoadLibraryA("Gdi32.dll");
+        VdFt__CreateCompatibleDC = (VdFt__ProcCreateCompatibleDC)GetProcAddress(mod, "CreateCompatibleDC");
+        VdFt__EnumFontFamiliesExW = (VdFt__ProcEnumFontFamiliesExW)GetProcAddress(mod, "EnumFontFamiliesExW");
+        VdFt__AddFontMemResourceEx = (VdFt__ProcAddFontMemResourceEx)GetProcAddress(mod, "AddFontMemResourceEx");
+    }
+
+    {
+        VdFtHMODULE mod = LoadLibraryA("DWrite.dll");
+        VdFt__DWriteCreateFactory = (VdFt__ProcDWriteCreateFactory)GetProcAddress(mod, "DWriteCreateFactory");
+    }
+
+    Vd_Ft_G.dc = VdFt__CreateCompatibleDC(NULL);
+
+
+    Vd_Ft_G.initialized = 1;
 }
 
 static void *vd_ft__realloc_mem(void *prev_ptr, size_t size)
@@ -336,22 +776,22 @@ static void vd_ft__free_mem(void *memory)
 
 static int vd_ft__mac_roman_to_wide(uint8_t *strdata, uint16_t string_length, wchar_t *wbuf, int wbuf_len)
 {
-    return MultiByteToWideChar(10000, 0, (LPCSTR)strdata, string_length, wbuf, wbuf_len);
+    return MultiByteToWideChar(10000, 0, (VdFtLPCSTR)strdata, string_length, wbuf, wbuf_len);
 }
 
 static int vd_ft__latin1_to_wide(uint8_t *strdata, uint16_t string_length, wchar_t *wbuf, int wbuf_len)
 {
-    return MultiByteToWideChar(28591, 0, (LPCSTR)strdata, string_length, wbuf, wbuf_len);
+    return MultiByteToWideChar(28591, 0, (VdFtLPCSTR)strdata, string_length, wbuf, wbuf_len);
 }
 
 static int vd_ft__wide_to_utf8(wchar_t *wbuf, int wlen, char *buf, int blen)
 {
-    return WideCharToMultiByte(CP_UTF8, 0, wbuf, wlen, buf, blen, NULL, NULL);
+    return WideCharToMultiByte(65001, 0, wbuf, wlen, buf, blen, NULL, NULL);
 }
 
 static int vd_ft__utf8_to_wide(char *buf, int blen, wchar_t *wbuf, int wlen)
 {
-    return MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, buf, blen, wbuf, wlen);
+    return MultiByteToWideChar(65001, 8, buf, blen, wbuf, wlen);
 }
 
 #endif // _WIN32
