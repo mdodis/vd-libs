@@ -687,6 +687,7 @@ VD_UI_API void             vd_ui_push_rectgrad(float rect[4], float color[16],
 
 /* ----FONTS--------------------------------------------------------------------------------------------------------- */
 VD_UI_API VdUiFontId       vd_ui_font_add_ttf(void *buffer, size_t size);
+VD_UI_API void*            vd_ui_font_default(size_t *size);
 
 /* ----INPUT--------------------------------------------------------------------------------------------------------- */
 VD_UI_API void             vd_ui_event_size(float width, float height);
@@ -1473,7 +1474,8 @@ VD_UI_API void vd_ui_frame_end(void)
         ctx->nc_area.changed = changed;
     }
 
-    vd_ui__push_clip(ctx, (float[]){0.f, 0.f, ctx->window[0], ctx->window[1]});
+
+    vd_ui__push_clip(ctx, vd_ui_f4(0.f, 0.f, ctx->window[0], ctx->window[1]).e);
 
     // Render
     {
@@ -1487,8 +1489,8 @@ VD_UI_API void vd_ui_frame_end(void)
 
     if (ctx->debug.custom_cursor_on) {
         vd_ui__push_rect(ctx,
-            (float[]) {ctx->mouse[0], ctx->mouse[1], ctx->mouse[0] + 16.f, ctx->mouse[1] + 16.f},
-            (float[]) {1.f, 1.f, 1.f , 1.f});
+            vd_ui_f4(ctx->mouse[0], ctx->mouse[1], ctx->mouse[0] + 16.f, ctx->mouse[1] + 16.f).e,
+            vd_ui_f4(1.f, 1.f, 1.f , 1.f).e);
     }
 
     if (ctx->debug.inspector_on) {
@@ -2918,6 +2920,12 @@ VD_UI_API VdUiFontId vd_ui_font_add_ttf(void *buffer, size_t size)
     VdUiFontId result;
     result.id = ctx->num_fonts - 1;
     return result;
+}
+
+VD_UI_API void *vd_ui_font_default(size_t *size)
+{
+    *size = sizeof(Vd_Ui_Public_Sans_Regular);
+    return (void*)Vd_Ui_Public_Sans_Regular;
 }
 
 /* ----INPUT IMPL---------------------------------------------------------------------------------------------------- */

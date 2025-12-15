@@ -40,6 +40,11 @@ int main(int argc, char const *argv[])
 
     vd_ui_set_scale(vd_fw_get_scale());
 
+    void    *font_memory;
+    size_t  font_size;
+    font_memory = vd_ui_font_default(&font_size);
+
+    VdFtFontId font_id = vd_ft_font_load(font_memory, (int)font_size);
     vd_ft_get_system_fonts(0);
 
     GLuint program = 0;
