@@ -8,6 +8,7 @@
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS
 #include "vd_fw.h"
 #include "vd.h"
+#include "stb_image_write.h"
 #include "vd_ft.h"
 
 #include "vd_ui.h"
@@ -44,8 +45,29 @@ int main(int argc, char const *argv[])
     size_t  font_size;
     font_memory = vd_ui_font_default(&font_size);
 
-    VdFtFontId font_id = vd_ft_font_load(font_memory, (int)font_size);
-    vd_ft_get_system_fonts(0);
+    VdFtFontId font_id = vd_ft_create_font_from_memory(font_memory, (int)font_size);
+    uint32_t codepoint = (uint32_t)'A';
+
+    uint16_t glyph_indices;
+    vd_ft_font_get_glyph_indices(font_id, &codepoint, 1, &glyph_indices);
+
+    int aw, ah;
+    vd_ft_font_get_glyph_bounds(font_id, glyph_indices, &aw, &ah);
+
+    VdFtBitmapRegion region = vd_ft_font_raster(font_id, &glyph_indices, 1);
+
+    uint32_t *memory = malloc(region.w * region.h * 4);
+
+    for (unsigned int y = 0; y < region.h; ++y) {
+        for (unsigned int x = 0; x < region.w; ++x) {
+            uint8_t *line = ((uint8_t*)region.memory) + region.pitch * (region.y + y) + (region.x + x) * region.stride;
+            uint8_t pixel = *line;
+
+            uint32_t cv_pixel = 0x00FFFFFF | (pixel << 24);
+            memory[y * region.w + x] = cv_pixel;
+        }
+    }
+    stbi_write_png("./test.png", region.w, region.h, 4, memory, 4 * region.w);
 
     GLuint program = 0;
     unsigned long long program_time = 0;
@@ -257,6 +279,8 @@ int main(int argc, char const *argv[])
 #define VD_IMPL
 #include "vd.h"
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 
 #if defined(__clang__)
 #pragma clang diagnostic pop
