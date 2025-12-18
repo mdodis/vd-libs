@@ -45,16 +45,24 @@ int main(int argc, char const *argv[])
     size_t  font_size;
     font_memory = vd_ui_font_default(&font_size);
 
+
     VdFtFontId font_id = vd_ft_create_font_from_memory(font_memory, (int)font_size);
     uint32_t codepoint = (uint32_t)'A';
+
+
+    #define TX L"Hello, world!"
+    const wchar_t *s = TX;
+    size_t s_len = sizeof(TX) - 1;
+    vd_ft_font_analyze_utf16(font_id, 16.f, s, s_len);
+
 
     uint16_t glyph_indices;
     vd_ft_font_get_glyph_indices(font_id, &codepoint, 1, &glyph_indices);
 
     int aw, ah;
-    vd_ft_font_get_glyph_bounds(font_id, glyph_indices, &aw, &ah);
+    vd_ft_font_get_glyph_bounds(font_id, 32.f, glyph_indices, &aw, &ah);
 
-    VdFtBitmapRegion region = vd_ft_font_raster(font_id, &glyph_indices, 1);
+    VdFtBitmapRegion region = vd_ft_font_raster(font_id, 32.f, &glyph_indices, 1);
 
     uint32_t *memory = malloc(region.w * region.h * 4);
 
