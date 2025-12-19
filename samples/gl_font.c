@@ -47,35 +47,60 @@ int main(int argc, char const *argv[])
 
 
     VdFtFontId font_id = vd_ft_create_font_from_memory(font_memory, (int)font_size);
-    uint32_t codepoint = (uint32_t)'A';
 
+    VdFtFontMetrics metrics = vd_ft_font_get_metrics(font_id, 32.f);
 
     #define TX L"Hello, world!"
     const wchar_t *s = TX;
-    size_t s_len = sizeof(TX) - 1;
-    vd_ft_font_analyze_utf16(font_id, 16.f, s, s_len);
+    size_t s_len = (sizeof(TX) / 2) - 1;
+    VdFtAnalysis analysis = vd_ft_font_analyze_utf16(font_id, 32.f, s, s_len);
 
+    float total_width = 0.f;
+    float max_height = 0.f;
+    VdFtRun *run = &analysis.runs[0];
+    for (size_t i = 0; i < run->glyph_count; ++i) {
+        size_t glyph_index_index = run->glyph_start + i;
+        uint16_t glyph_index = analysis.glyph_indices[glyph_index_index];
 
-    uint16_t glyph_indices;
-    vd_ft_font_get_glyph_indices(font_id, &codepoint, 1, &glyph_indices);
-
-    int aw, ah;
-    vd_ft_font_get_glyph_bounds(font_id, 32.f, glyph_indices, &aw, &ah);
-
-    VdFtBitmapRegion region = vd_ft_font_raster(font_id, 32.f, &glyph_indices, 1);
-
-    uint32_t *memory = malloc(region.w * region.h * 4);
-
-    for (unsigned int y = 0; y < region.h; ++y) {
-        for (unsigned int x = 0; x < region.w; ++x) {
-            uint8_t *line = ((uint8_t*)region.memory) + region.pitch * (region.y + y) + (region.x + x) * region.stride;
-            uint8_t pixel = *line;
-
-            uint32_t cv_pixel = 0x00FFFFFF | (pixel << 24);
-            memory[y * region.w + x] = cv_pixel;
+        int aw, ah;
+        vd_ft_font_get_glyph_bounds(font_id, 32.f, glyph_index, &aw, &ah);
+        if (max_height < ((float)ah)) {
+            max_height = (float)ah;
         }
+
+        total_width += analysis.glyph_advances[glyph_index_index];
+        // total_width += aw;
     }
-    stbi_write_png("./test.png", region.w, region.h, 4, memory, 4 * region.w);
+
+    int bitmap_width  = ((int)total_width) + 1;
+    int bitmap_height = ((int)max_height) * 4 + 1;
+    uint32_t *memory = malloc(bitmap_width * bitmap_height * 4);
+
+    int running_width = 0;
+    for (size_t i = 0; i < run->glyph_count; ++i) {
+
+        size_t glyph_index_index = run->glyph_start + i;
+        uint16_t glyph_index = analysis.glyph_indices[glyph_index_index];
+
+        VdFtGlyphMetrics glyph_metrics = vd_ft_font_get_glyph_metrics(font_id, 32.f, glyph_index);
+        VdFtBitmapRegion region = vd_ft_font_raster(font_id, 32.f, &glyph_index, 1);
+        for (unsigned int y = 0; y < region.h; ++y) {
+            for (unsigned int x = 0; x < region.w; ++x) {
+                uint8_t *line = ((uint8_t*)region.memory) + region.pitch * (region.y + y) + (region.x + x) * region.stride;
+                uint8_t pixel = *line;
+
+                uint32_t cv_pixel = 0x00FFFFFF | (pixel << 24);
+                int yoff = (y + (int)glyph_metrics.baseline_origin_y - region.h + 10);
+                // int yoff = (y + region.h - 10);
+                memory[yoff * bitmap_width + x + running_width] = cv_pixel;
+            }
+        }
+
+
+        running_width += (int)analysis.glyph_advances[glyph_index_index];
+        // running_width += region.w;
+    }
+    stbi_write_png("./test.png", bitmap_width, bitmap_height, 4, memory, 4 * bitmap_width);
 
     GLuint program = 0;
     unsigned long long program_time = 0;
