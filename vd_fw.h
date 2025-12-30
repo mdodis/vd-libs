@@ -6838,7 +6838,6 @@ VD_FW_API VdFwGamepadClass vd_fw_get_gamepad_class(int index)
     return VD_FW_G.gamepad_curr_states[index].klass;
 }
 
-
 VD_FW_API int vd_fw_get_gamepad_rumble_support(int index)
 {
     return VD_FW_G.gamepad_curr_states[index].has_rumble;
@@ -10462,6 +10461,71 @@ VD_FW_API int vd_fw_get_key_down(int key)
     return VD_FW_G.curr_key_states[key];    
 }
 
+VD_FW_API int vd_fw_get_gamepad_count(void)
+{
+    return 0;    
+}
+
+VD_FW_API VdFwU64 vd_fw_get_gamepad_button_state(int index)
+{
+    (void)index;
+    return 0;
+}
+
+VD_FW_API int vd_fw_get_gamepad_down(int index, int button)
+{
+    (void)index;
+    (void)button;
+    return 0;
+}
+
+VD_FW_API int vd_fw_get_gamepad_pressed(int index, int button)
+{
+    (void)index;
+    (void)button;
+    return 0;
+}
+
+VD_FW_API int vd_fw_get_gamepad_axis(int index, int axis, float *out)
+{
+    (void)index;
+    (void)axis;
+    (void)out;
+    return 0;
+}
+
+VD_FW_API void vd_fw_set_gamepad_rumble(int index, float rumble_lo, float rumble_hi)
+{
+    (void)index;
+    (void)rumble_lo;
+    (void)rumble_hi;
+}
+
+VD_FW_API VdFwGuid vd_fw_get_gamepad_guid(int index)
+{
+    (void)index;
+    VdFwGuid result = {0};
+    return result;
+}
+
+VD_FW_API VdFwGamepadFace vd_fw_get_gamepad_face(int index)
+{
+    (void)index;
+    return VD_FW_GAMEPAD_FACE_UNKNOWN;
+}
+
+VD_FW_API VdFwGamepadClass vd_fw_get_gamepad_class(int index)
+{
+    (void)index;
+    return VD_FW_GAMEPAD_CLASS_XBOX;
+}
+
+VD_FW_API int vd_fw_get_gamepad_rumble_support(int index)
+{
+    (void)index;
+    return 0;
+}
+
 VD_FW_API int vd_fw_running(void)
 {
     if (sem_trywait(VD_FW_G.s_main_thread_window_closed) == 0) {
@@ -11096,13 +11160,28 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
     int filter[] = {kHIDPage_GenericDesktop};
     IOHIDManagerRef hidman = IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDManagerOptionNone);
 
-    CFMutableDictionaryRef match_dictionary = CFDictionaryCreateMutable(kCFAllocatorDefault,
-                                                                        0,
-                                                                        &kCFTypeDictionaryKeyCallBacks,
-                                                                        &kCFTypeDictionaryValueCallBacks);
-    CFDictionarySetValue(match_dictionary,
-                         CFSTR(kIOHIDDeviceUsagePageKey),
-                         CFNumberCreate(kCFAllocatorDefault, kCFNumberIntType, filter));
+    const void *keys[] = {
+        CFSTR(kIOHIDDeviceUsagePageKey),
+    };
+
+    const void *values[] = {
+        CFNumberCreate(kCFAllocatorDefault, kCFNumberIntType, filter)
+    };
+
+    CFDictionaryRef match_dictionary = CFDictionaryCreate(kCFAllocatorDefault,
+                                                          keys,
+                                                          values,
+                                                          1,
+                                                          NULL,
+                                                          NULL);
+
+    // CFMutableDictionaryRef match_dictionary = CFDictionaryCreateMutable(kCFAllocatorDefault,
+    //                                                                     0,
+    //                                                                     &kCFTypeDictionaryKeyCallBacks,
+    //                                                                     &kCFTypeDictionaryValueCallBacks);
+    // CFDictionarySetValue(match_dictionary,
+    //                      CFSTR(kIOHIDDeviceUsagePageKey),
+    //                      CFNumberCreate(kCFAllocatorDefault, kCFNumberIntType, filter));
     IOHIDManagerSetDeviceMatching(hidman, match_dictionary);
     IOHIDManagerRegisterDeviceMatchingCallback(hidman, vd_fw__mac_hid_device_added_callback, 0);
     IOHIDManagerRegisterDeviceRemovalCallback(hidman, vd_fw__mac_hid_device_removed_callback, 0);
@@ -11162,6 +11241,10 @@ static int vd_fw__msgbuf_w(VdFw__MacMessage *message)
 static void vd_fw__mac_hid_device_added_callback(void *context, IOReturn result, void *sender, IOHIDDeviceRef device)
 {
     CFTypeRef ref_usage = IOHIDDeviceGetProperty(device, CFSTR(kIOHIDPrimaryUsageKey));
+    if (!ref_usage) {
+        return;
+    }
+
     int usage = 0;
     CFNumberGetValue(ref_usage, kCFNumberIntType, (void*)&usage);
 

@@ -2240,7 +2240,175 @@ static int vd_ft__utf8_to_wide(char *buf, int blen, wchar_t *wbuf, int wlen)
     return MultiByteToWideChar(65001, 8, buf, blen, wbuf, wlen);
 }
 
-#endif // _WIN32
+#elif defined(__APPLE__)
+#include <stdlib.h>
+#include <dlfcn.h>
+
+typedef struct {
+    CGFontRef cg_font_ref;
+} VdFt__MacosFont;
+
+typedef struct {
+    int             initialized;
+
+    VdFt__MacosFont *font_buffer;
+    uint32_t        font_buffer_len;
+    uint32_t        font_buffer_cap;
+} VdFt__MacosInternalData;
+static VdFt__MacosInternalData Vd_Ft_G = {0};
+
+static void                 vd_ft__macos_init(void);
+static VdFt__MacosFont*     vd_ft__macos_id_to_font(VdFtFontId id);
+
+VD_FT_API VdFtFontId vd_ft_create_font_from_memory(void *memory, int size)
+{
+    vd_ft__macos_init();
+
+    Vd_Ft_G.font_buffer = vd_ft__resize_buffer_u32(Vd_Ft_G.font_buffer, sizeof(*Vd_Ft_G.font_buffer),
+                                                   Vd_Ft_G.font_buffer_len + 1,
+                                                   &Vd_Ft_G.font_buffer_cap);
+    uint32_t font_index = Vd_Ft_G.font_buffer_len++;
+    VdFt__MacosFont *font = &Vd_Ft_G.font_buffer[font_index];
+
+    NSData *data = [NSData dataWithBytesNoCopy: memory
+                                        length: size
+                                  freeWhenDone: NO];
+
+    CGDataProviderRef provider = CGDataProviderCreateWithCFData((__bridge CFDataRef)data);
+
+    CGFontRef cg_font = CGFontCreateWithDataProvider(provider);
+    CGDataProviderRelease(provider);
+
+    font->cg_font_ref = cg_font;
+
+    VdFtFontId result = {0};
+    result.source = VD_FT_SOURCE_MEMORY;
+    result.index = font_index;
+    return result;
+}
+
+VD_FT_API VdFtFontMetrics vd_ft_font_get_metrics(VdFtFontId id, float dd_pixel_scale)
+{
+    VdFt__MacosFont *font = vd_ft__macos_id_to_font(id);
+    CTFontRef font_ref = CTFontCreateWithGraphicsFont(font->cg_font_ref, dd_pixel_scale, NULL, NULL);
+
+    VdFtFontMetrics result = {0};
+    result.ascent = CTFontGetAscent(font_ref);
+    result.descent = CTFontGetDescent(font_ref);
+    result.line_gap = 0.f;
+
+    CFRelease(font_ref);
+    return result;
+}
+
+VD_FT_API void vd_ft_font_get_glyph_indices(VdFtFontId id, uint32_t *codepoints, uint32_t num_codepoints, uint16_t *indices)
+{
+    return;
+}
+
+VD_FT_API void vd_ft_font_get_glyph_bounds(VdFtFontId id, float dd_pixel_scale, uint16_t glyph_index, int *width, int *height)
+{
+    return;
+}
+
+VD_FT_API VdFtGlyphMetrics vd_ft_font_get_glyph_metrics(VdFtFontId id, float dd_pixel_scale, uint16_t glyph_index)
+{
+    VdFtGlyphMetrics result = {9};
+    return result;
+}
+
+VD_FT_API VdFtAnalysis vd_ft_font_analyze(VdFtFontId id, float dd_pixel_scale, const char *text, size_t text_len_bytes)
+{
+    VdFtAnalysis result = {0};
+    return result;
+}
+
+VD_FT_API VdFtAnalysis vd_ft_font_analyze_utf16(VdFtFontId id, float dd_pixel_scale, const wchar_t *text, size_t text_len_units)
+{
+    VdFt__MacosFont *font = vd_ft__macos_id_to_font(id);
+
+    CFStringRef cf_str = CFStringCreateWithBytes(kCFAllocatorDefault,
+                                                 (const UInt8*) text, text_len_units,
+                                                 kCFStringEncodingUTF16LE, NO);
+
+    const void *keys[] = {
+        kCTFontAttributeName,
+    };
+
+
+    const void *values[] = {
+        font->cg_font_ref,
+    };
+
+    CFDictionaryRef prop_dict = CFDictionaryCreate(kCFAllocatorDefault,
+                                                   keys,
+                                                   values,
+                                                   1,
+                                                   NULL,
+                                                   NULL);
+    CFAttributedStringRef attr_string = CFAttributedStringCreate(kCFAllocatorDefault,
+                                                                 cf_str,
+                                                                 prop_dict);
+
+    CTFramesetterRef frame_setter = CTFramesetterCreateWithAttributedString(attr_string);
+    CGPathRef path = CGPathCreateWithRect(CGRectMake(0,0,1000,1000), NULL);
+
+    CTFrameRef frame = CTFramesetterCreateFrame(frame_setter,
+                                                CFRangeMake(0, CFAttributedStringGetLength(attr_string)),
+                                                path,
+                                                NULL);
+    CFArrayRef lines = CTFrameGetLines(frame);
+
+    for (CFIndex i = 0; i < CFArrayGetCount(lines); ++i) {
+        CTLineRef line = CFArrayGetValueAtIndex(lines, i);
+        CFArrayRef runs = CTLineGetGlyphRuns(line);
+
+        for (CFIndex j = 0; j < CFArrayGetCount(runs); ++j) {
+            CTRunRef run = CFArrayGetValueAtIndex(runs, j);
+            CFIndex glyph_count = CTRunGetGlyphCount(run);
+
+            CGGlyph glyphs[glyph_count];
+            CGPoint positions[glyph_count];
+
+            CTRunGetGlyphs(run, CFRangeMake(0, 0), glyphs);
+            CTRunGetPositions(run, CFRangeMake(0, 0), positions);
+        }
+    }
+
+    VdFtAnalysis result = {0};
+
+    CFRelease(attr_string);
+    CFRelease(prop_dict);
+    return result;
+}
+
+VD_FT_API VdFtBitmapRegion vd_ft_font_raster(VdFtFontId id, float dd_pixel_scale, uint16_t *indices, size_t num_indices)
+{
+    VdFtBitmapRegion result = {0};
+    return result;
+}
+
+static void vd_ft__macos_init(void)
+{
+    if (Vd_Ft_G.initialized) {
+        return;
+    }
+
+    Vd_Ft_G.initialized = 1;
+    return;
+}
+
+static VdFt__MacosFont *vd_ft__macos_id_to_font(VdFtFontId id)
+{
+    return &Vd_Ft_G.font_buffer[id.index];
+}
+
+static void *vd_ft__realloc_mem(void *prev_ptr, size_t size)
+{
+    return realloc(prev_ptr, size);
+}
+
+#endif // _WIN32, defined(__APPLE__)
 
 static void *vd_ft__resize_buffer(void *buffer, size_t element_size, int required_capacity, int *cap)
 {

@@ -108,7 +108,7 @@ typedef char VdUiBool;
 #endif // !VD_UI_MEMCPY
 
 #ifndef VD_UI_ABORT
-#   define VD_UI_ABORT(msg) do { (*(int*)0) = msg; } while (0)
+#   define VD_UI_ABORT(msg) do { (*(volatile char*)0) = 0; } while (0)
 #endif // !VD_UI_ABORT
 
 #ifndef VD_UI_ASSERT
@@ -559,6 +559,8 @@ VD_UI_INL void             vd_ui_style_size_pop_all(void);
 VD_UI_API void             vd_ui_style_coloring_push(VdUiFlags mask, VdUiColoring *coloring);
 VD_UI_API VdUiColoring*    vd_ui_style_coloring_get(VdUiFlags mask);
 VD_UI_API void             vd_ui_style_coloring_pop(VdUiFlags mask);
+VD_UI_API VdUiColoring     vd_ui_coloring(VdUiGradient normal, VdUiGradient hot, VdUiGradient active);
+VD_UI_API VdUiColoring     vd_ui_coloring_all(float v);
 
 VD_UI_INL void vd_ui_style_size_push_all(VdUiSizeMode mode, float value, float niceness)
 {
@@ -1063,6 +1065,8 @@ enum {
 };
 static unsigned char Vd_Ui_Public_Sans_Regular[84836];
 static unsigned char Vd_Ui_Default_Icons_Font[7840];
+
+static VdUiColoring  Vd_Ui__Coloring_Default;
 
 #define VD_UI_LAYERS_MAX                    8
 #define VD_UI_CHANNELS_MAX                  24
@@ -2327,11 +2331,9 @@ VD_UI_API VdUiSize *vd_ui_style_size_get(VdUiAxis axis)
 VD_UI_API void vd_ui_style_size_pop(VdUiAxis axis)
 {
     VdUiContext *ctx = vd_ui_context_get();
-    VdUiSize *stack = ctx->size_h_stack;
     unsigned int *stack_count = &ctx->size_h_stack_count;
 
     if (axis == VD_UI_AXISV) {
-        stack = ctx->size_v_stack;
         stack_count = &ctx->size_v_stack_count;
     }
 
@@ -2364,14 +2366,12 @@ VD_UI_API VdUiColoring *vd_ui_style_coloring_get(VdUiFlags mask)
 {
     VdUiContext *ctx = vd_ui_context_get();
 
-    static VdUiColoring default_coloring = {1.f};
-
     switch (mask) {
         case VD_UI_FLAG_BACKGROUND: {
             if (ctx->coloring_bg_stack_count > 0) {
                 return &ctx->coloring_bg_stack[ctx->coloring_bg_stack_count - 1];
             } else {
-                return &default_coloring;
+                return &Vd_Ui__Coloring_Default;
             }
         } break;
 
@@ -2379,7 +2379,7 @@ VD_UI_API VdUiColoring *vd_ui_style_coloring_get(VdUiFlags mask)
             if (ctx->coloring_bd_stack_count > 0) {
                 return &ctx->coloring_bd_stack[ctx->coloring_bd_stack_count - 1];
             } else {
-                return &default_coloring;
+                return &Vd_Ui__Coloring_Default;
             }
         } break;
 
@@ -2387,7 +2387,7 @@ VD_UI_API VdUiColoring *vd_ui_style_coloring_get(VdUiFlags mask)
             if (ctx->coloring_tx_stack_count > 0) {
                 return &ctx->coloring_tx_stack[ctx->coloring_tx_stack_count - 1];
             } else {
-                return &default_coloring;
+                return &Vd_Ui__Coloring_Default;
             }
         } break;
 
@@ -2416,6 +2416,22 @@ VD_UI_API void vd_ui_style_coloring_pop(VdUiFlags mask)
         VD_UI_ASSERT(ctx->coloring_tx_stack_count > 0);
         ctx->coloring_tx_stack_count--;
     }
+}
+
+VD_UI_API VdUiColoring vd_ui_coloring(VdUiGradient normal, VdUiGradient hot, VdUiGradient active)
+{
+    VdUiColoring result;
+    result.normal = normal;
+    result.hot = hot;
+    result.active = active;
+    return result;
+}
+
+VD_UI_API VdUiColoring vd_ui_coloring_all(float v)
+{
+    return vd_ui_coloring(vd_ui_gradient1(vd_ui_fall4(v)),
+                          vd_ui_gradient1(vd_ui_fall4(v)),
+                          vd_ui_gradient1(vd_ui_fall4(v)));
 }
 
 VD_UI_API int vd_ui_demo(void)
@@ -2665,12 +2681,14 @@ static void vd_ui__calc_dyn_size_down(VdUiContext *ctx, VdUiDiv *curr)
     vd_ui__get_axes_for_div(curr, &daxis, &faxis, &daxisf, &faxisf);
 
     VdUiDiv *child = curr->first;
-    int size_will_change = 0;
+
+    // int size_will_change = 0;
+
     while (child != 0) {
         vd_ui__calc_dyn_size_down(ctx, child);
 
         if (child->is_null || child->size_changed) {
-            size_will_change = 1;
+            // size_will_change = 1;
         }
 
         if ((child->flags & VD_UI_FLAG_FLOAT) == 0) {
@@ -3755,6 +3773,7 @@ typedef struct
 VD_UI_API VdUiContext *vd_ui_context_create(VdUiContextCreateInfo *info)
 {
     (void)info;
+    Vd_Ui__Coloring_Default = vd_ui_coloring_all(1.f);
 
     // Context creation
     VdUiContext *result = VD_UI_MALLOC(sizeof(VdUiContext));
@@ -4495,10 +4514,10 @@ int vd_ui__cv_double_to_str(double x, char *result, int mode, int auto_min_exp, 
         uint32_t d0 = (d % 100) << 1;
         uint32_t d1 = (d / 100) << 1;
 
-        RYU_MEMCPY(result + index + output_len - 1, VD_UI__DIGIT_TABLE + c0, 2);
-        RYU_MEMCPY(result + index + output_len - 3, VD_UI__DIGIT_TABLE + c1, 2);
-        RYU_MEMCPY(result + index + output_len - 5, VD_UI__DIGIT_TABLE + d0, 2);
-        RYU_MEMCPY(result + index + output_len - 7, VD_UI__DIGIT_TABLE + d1, 2);
+        RYU_MEMCPY(result + index + output_len - 1, (void*)VD_UI__DIGIT_TABLE + c0, 2);
+        RYU_MEMCPY(result + index + output_len - 3, (void*)VD_UI__DIGIT_TABLE + c1, 2);
+        RYU_MEMCPY(result + index + output_len - 5, (void*)VD_UI__DIGIT_TABLE + d0, 2);
+        RYU_MEMCPY(result + index + output_len - 7, (void*)VD_UI__DIGIT_TABLE + d1, 2);
 
         i += 8;
     }
@@ -4515,8 +4534,8 @@ int vd_ui__cv_double_to_str(double x, char *result, int mode, int auto_min_exp, 
         uint32_t c0 = (c % 100) << 1;
         uint32_t c1 = (c / 100) << 1;
 
-        RYU_MEMCPY(result + index + output_len - i - 1, VD_UI__DIGIT_TABLE + c0, 2);
-        RYU_MEMCPY(result + index + output_len - i - 3, VD_UI__DIGIT_TABLE + c1, 2);
+        RYU_MEMCPY(result + index + output_len - i - 1, (void*)VD_UI__DIGIT_TABLE + c0, 2);
+        RYU_MEMCPY(result + index + output_len - i - 3, (void*)VD_UI__DIGIT_TABLE + c1, 2);
 
         i += 4;
     }
@@ -4524,7 +4543,7 @@ int vd_ui__cv_double_to_str(double x, char *result, int mode, int auto_min_exp, 
     if (output2 >= 100) {
         uint32_t c = (output2 % 100) << 1;
         output2 /= 100;
-        RYU_MEMCPY(result + index + output_len - i - 1, VD_UI__DIGIT_TABLE + c, 2);
+        RYU_MEMCPY(result + index + output_len - i - 1, (void*)VD_UI__DIGIT_TABLE + c, 2);
         i += 2;
     }
 
@@ -4553,11 +4572,11 @@ int vd_ui__cv_double_to_str(double x, char *result, int mode, int auto_min_exp, 
 
     if (exp >= 100) {
         int32_t c = exp % 10;
-        RYU_MEMCPY(result + index, VD_UI__DIGIT_TABLE + 2 * (exp / 10), 2);
+        RYU_MEMCPY(result + index, (void*)VD_UI__DIGIT_TABLE + 2 * (exp / 10), 2);
         result[index + 2] = (char)('0' + c);
         index += 3;
     } else if (exp >= 10) {
-        RYU_MEMCPY(result + index, VD_UI__DIGIT_TABLE + 2 * exp, 2);
+        RYU_MEMCPY(result + index, (void*)VD_UI__DIGIT_TABLE + 2 * exp, 2);
         index += 2;
     } else {
         result[index++] = (char)('0' + exp);

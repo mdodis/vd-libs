@@ -230,7 +230,6 @@ static Color  button_b_color(int pressed);
 static Color  button_x_color(int pressed);
 static Color  button_y_color(int pressed);
 static Color  button_d_color(int pressed);
-static Color  button_bumper_color(int pressed);
 static Color  stick_base_color(void);
 static Color  stick_color(int pressed);
 static Color  bar_color(void);
@@ -477,10 +476,10 @@ int main(int argc, char const *argv[])
                 draw_controller_info(&draw_infos[i], mouse_inside);
 
                 VdUiDiv *div = vd_ui_div_newf(VD_UI_FLAG_FLOAT, "Controller%d", i);
-                div->size[0].mode = VD_UI_SIZE_MODE_ABSOLUTE;
-                div->size[0].value = draw_infos[i].controller_dim[0];
-                div->size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
-                div->size[1].value = draw_infos[i].controller_dim[1];
+                div->style.size[0].mode = VD_UI_SIZE_MODE_ABSOLUTE;
+                div->style.size[0].value = draw_infos[i].controller_dim[0];
+                div->style.size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
+                div->style.size[1].value = draw_infos[i].controller_dim[1];
                 div->comp_pos_rel[0] = draw_infos[i].controller_pos[0];
                 div->comp_pos_rel[1] = draw_infos[i].controller_pos[1];
 
@@ -897,14 +896,6 @@ static Color button_x_color(int pressed)
 }
 
 static Color button_d_color(int pressed)
-{
-    return switch_color_digital(
-        make_color(0.3f, 0.3f, 0.3f, 1.f),
-        make_color(0.7f, 0.7f, 0.7f, 1.f),
-        pressed);
-}
-
-static Color button_bumper_color(int pressed)
 {
     return switch_color_digital(
         make_color(0.3f, 0.3f, 0.3f, 1.f),

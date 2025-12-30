@@ -52,6 +52,7 @@ if [ -n "$SAMPLE_TO_COMPILE" ]; then
         -x objective-c \
         $CFLAGS \
         -fsanitize=address \
+        -I $PRJ_DIR/ext \
         $PRJ_DIR/samples/$SAMPLE_TO_COMPILE.c \
         -o $SAMPLE_TO_COMPILE \
         -framework Cocoa \
