@@ -73,9 +73,9 @@
  * - Should vd_fw_set_receive_ncmouse be default 0 or 1?
  *   - Actually, consider removing it entirely
  * - set window unresizable
+ * - MacOS: simple flag to disable cocoa main thread requirement workaround
  * - MacOS: vd_fw_get_last_key_pressed
  * - MacOS: vd_fw_get_executable_dir()
- * - MacOS: vd_fw_set_fullscreen
  * - MacOS: Gamepad Support
  * - MacOS: Metal Sample
  * - MacOS: Set Graphics API
@@ -9616,6 +9616,8 @@ static int vd_fw__msgbuf_r(VdFw__MacMessage *message);
 static int vd_fw__msgbuf_w(VdFw__MacMessage *message);
 static void vd_fw__mac_hid_device_added_callback(void *context, IOReturn result, void *sender, IOHIDDeviceRef device);
 static void vd_fw__mac_hid_device_removed_callback(void *context, IOReturn result, void *sender, IOHIDDeviceRef device);
+static void vd_fw__mac_hid_value_callback(void *context, IOReturn result, void *sender, IOHIDValueRef value);
+
 
 static VdFw__MacOsInternalData Vd_Fw_Globals;
 
@@ -11268,7 +11270,8 @@ static void vd_fw__mac_hid_device_added_callback(void *context, IOReturn result,
         return;
     }
 
-    VdFw__MacGamepadInfo *gamepad_info = &VD_FW_G.gamepad_infos[VD_FW_G.winthread_num_gamepads++];
+    int new_device_index = VD_FW_G.winthread_num_gamepads++;
+    VdFw__MacGamepadInfo *gamepad_info = &VD_FW_G.gamepad_infos[new_device_index];
 
     VdFwU32 product_id = 0;
     VdFwU32 vendor_id = 0;
@@ -11311,6 +11314,7 @@ static void vd_fw__mac_hid_device_added_callback(void *context, IOReturn result,
     vd_fw_gamepad_guid_to_cstr(&guid, guid_str);
 
     gamepad_info->device = device;
+    IOHIDDeviceRegisterInputValueCallback(device, vd_fw__mac_hid_value_callback, (void*)device);
 
 }
 
@@ -11335,6 +11339,47 @@ static void vd_fw__mac_hid_device_removed_callback(void *context, IOReturn resul
     VD_FW_MEMSET(&VD_FW_G.gamepad_infos[VD_FW_G.winthread_num_gamepads - 1], 0, sizeof(VD_FW_G.gamepad_infos[0]));
 
     VD_FW_G.winthread_num_gamepads--;
+}
+
+static void vd_fw__mac_hid_value_callback(void *context, IOReturn result, void *sender, IOHIDValueRef value)
+{
+    IOHIDDeviceRef device = (IOHIDDeviceRef)context;
+    // @todo(mdodis): Find a way to deregister + re-register device callbacks upon device reassignment
+    int gamepad_index = -1;
+    for (int i = 0; i < VD_FW_G.winthread_num_gamepads; ++i) {
+        if (VD_FW_G.gamepad_infos[i].device == device) {
+            gamepad_index = i;
+            break;
+        }
+    }
+
+    if (gamepad_index == -1) {
+        return;
+    }
+
+    IOHIDElementRef element = IOHIDValueGetElement(value);
+    IOHIDDeviceRef device_from_element = IOHIDElementGetDevice(element);
+
+    VdFwU32 usage_page = IOHIDElementGetUsagePage(element);
+    VdFwU32 usage = IOHIDElementGetUsage(element);
+    CFIndex int_value = IOHIDValueGetIntegerValue(value);
+
+    if (device_from_element != device) {
+        return;
+    }
+
+    switch (usage_page) {
+        case kHIDPage_Button: {
+            NSLog(@"Button pressed: %8x %8x", usage, usage_page);
+
+        } break;
+
+        case kHIDPage_GenericDesktop: {
+
+        } break;
+
+        default: break;
+    }
 }
 
 #elif defined(__linux__)
