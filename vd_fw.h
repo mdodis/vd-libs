@@ -938,6 +938,13 @@ VD_FW_API void               vd_fw_set_gamepad_rumble(int index, float rumble_lo
 VD_FW_API VdFwGuid           vd_fw_get_gamepad_guid(int index);
 
 /**
+ * @brief Convert a gamepad GUID to a C String
+ * @param  guid The GUID
+ * @param  out  The output buffer. Must be at least 32 bytes long
+ */
+VD_FW_API void               vd_fw_gamepad_guid_to_cstr(VdFwGuid *guid, char *out);
+
+/**
  * @brief Get the detected gamepad's face type (i.e. the symbols shown on the physical controller)
  * @param  index The gamepad index
  * @return       The face type
@@ -9529,6 +9536,10 @@ typedef struct {
 } VdFw__MacFrame;
 
 typedef struct {
+    IOHIDDeviceRef device;
+} VdFw__MacGamepadInfo;
+
+typedef struct {
     NSOpenGLContext             *gl_context;
     BOOL                        should_close;
     mach_timebase_info_data_t   time_base;
@@ -9570,6 +9581,8 @@ typedef struct {
     int                         cap_gamepad_db_entries;
     int                         num_gamepad_db_entries;
     VdFwGamepadDBEntry          *gamepad_db_entries;
+    int                         winthread_num_gamepads;
+    VdFw__MacGamepadInfo        gamepad_infos[VD_FW_GAMEPAD_COUNT_MAX];
 
 
 /* ----MAIN - RENDER THREAD DATA------------------------------------------------------------------------------------- */
@@ -11255,14 +11268,73 @@ static void vd_fw__mac_hid_device_added_callback(void *context, IOReturn result,
         return;
     }
 
-    CFStringRef cf_name = IOHIDDeviceGetProperty(device, CFSTR(kIOHIDProductKey));
-    NSString *name = (__bridge NSString *)cf_name;
-    NSLog(@"Device name: %@", name);
+    VdFw__MacGamepadInfo *gamepad_info = &VD_FW_G.gamepad_infos[VD_FW_G.winthread_num_gamepads++];
+
+    VdFwU32 product_id = 0;
+    VdFwU32 vendor_id = 0;
+    VdFwU32 version = 0;
+    char product_name[128];
+
+    {
+        CFStringRef prop = (CFStringRef)IOHIDDeviceGetProperty(device, CFSTR(kIOHIDProductKey));
+        if (prop) {
+            CFStringGetCString(prop, product_name, sizeof(product_name), kCFStringEncodingUTF8);
+        }
+    }
+
+    {
+        CFTypeRef prop = IOHIDDeviceGetProperty(device, CFSTR(kIOHIDVendorIDKey));
+        if (prop) {
+            CFNumberGetValue((CFNumberRef)prop, (CFNumberType)kCFNumberSInt32Type, (void*)&vendor_id);
+        }
+    }
+
+    {
+        CFTypeRef prop = IOHIDDeviceGetProperty(device, CFSTR(kIOHIDProductIDKey));
+        if (prop) {
+            CFNumberGetValue((CFNumberRef)prop, (CFNumberType)kCFNumberSInt32Type, (void*)&product_id);
+        }
+    }
+
+    {
+        CFTypeRef prop = IOHIDDeviceGetProperty(device, CFSTR(kIOHIDVersionNumberKey));
+        if (prop) {
+            CFNumberGetValue((CFNumberRef)prop, (CFNumberType)kCFNumberSInt32Type, (void*)&version);
+        }
+    }
+
+    VdFwGuid guid = vd_fw__make_gamepad_guid(0x03, (VdFwU16)vendor_id, (VdFwU16)product_id, (VdFwU16)version,
+                                             NULL, product_name,
+                                             0x00, 0x00);
+
+    char guid_str[33] = {0};
+    vd_fw_gamepad_guid_to_cstr(&guid, guid_str);
+
+    gamepad_info->device = device;
+
 }
 
 static void vd_fw__mac_hid_device_removed_callback(void *context, IOReturn result, void *sender, IOHIDDeviceRef device)
 {
-    printf("HID Device Removed\n");
+    int disconnected_gamepad_index = -1;
+    for (int i = 0; i < VD_FW_G.winthread_num_gamepads; ++i) {
+        if (VD_FW_G.gamepad_infos[i].device == device) {
+            disconnected_gamepad_index = i;
+            break;
+        }
+    }
+
+    if (disconnected_gamepad_index == -1) {
+        return;
+    }
+
+    for (int i = disconnected_gamepad_index; i < (VD_FW_G.winthread_num_gamepads - 1); ++i) {
+        VD_FW_G.gamepad_infos[i] = VD_FW_G.gamepad_infos[i + 1];
+    }
+
+    VD_FW_MEMSET(&VD_FW_G.gamepad_infos[VD_FW_G.winthread_num_gamepads - 1], 0, sizeof(VD_FW_G.gamepad_infos[0]));
+
+    VD_FW_G.winthread_num_gamepads--;
 }
 
 #elif defined(__linux__)
@@ -11724,6 +11796,37 @@ VD_FW_INL const char *vd_fw_get_key_name(VdFwKey k)
     };
 
     return translation_table[k];
+}
+
+VD_FW_INL void vd_fw__u8_to_hex(VdFwU8 n, char *out)
+{
+    static const char numbers[] = "0123456789abcdef";
+    VdFwU8 hi_bits = (n & 0xF0) >> 4;
+    VdFwU8 lo_bits = (n & 0x0F);
+    out[0] = numbers[hi_bits];
+    out[1] = numbers[lo_bits];
+}
+
+VD_FW_INL void vd_fw__u16_to_hex(VdFwU16 n, char *out)
+{
+    VdFwU8 msb = (n & 0xFF00) >> 8;
+    VdFwU8 lsb = (n & 0x00FF);
+
+    vd_fw__u8_to_hex(msb, out + 0);
+    vd_fw__u8_to_hex(lsb, out + 2);
+}
+
+VD_FW_API void vd_fw_gamepad_guid_to_cstr(VdFwGuid *guid, char *out)
+{
+    vd_fw__u16_to_hex(guid->parts.bus,             out +  0);
+    vd_fw__u16_to_hex(guid->parts.crc,             out +  4);
+    vd_fw__u16_to_hex(guid->parts.vendor_id,       out +  8);
+    vd_fw__u16_to_hex(guid->parts.reserved0,       out + 12);
+    vd_fw__u16_to_hex(guid->parts.product_id,      out + 16);
+    vd_fw__u16_to_hex(guid->parts.reserved1,       out + 20);
+    vd_fw__u16_to_hex(guid->parts.version,         out + 24);
+    vd_fw__u8_to_hex(guid->parts.driver_signature, out + 28);
+    vd_fw__u8_to_hex(guid->parts.driver_data,      out + 30);
 }
 
 VD_FW_API const char *vd_fw_get_gamepad_face_name(VdFwGamepadFace face)
