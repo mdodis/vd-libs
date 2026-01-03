@@ -9492,6 +9492,9 @@ typedef enum {
     VD_FW__MAC_MESSAGE_ZOOMED,
     VD_FW__MAC_MESSAGE_CLOSE_REQUEST,
     VD_FW__MAC_MESSAGE_FULLSCREEN,
+    VD_FW__MAC_MESSAGE_GAMEPAD_CONNECTED,
+    VD_FW__MAC_MESSAGE_GAMEPAD_DISCONNECTED,
+    VD_FW__MAC_MESSAGE_GAMEPAD_INPUT,
 } VdFw__MacMessageType;
 
 typedef struct {
@@ -9527,6 +9530,16 @@ typedef struct {
         struct {
             int on;
         } fullscreen;
+
+        struct {
+            int gamepad_index;
+        } gamepad_connected, gamepad_disconnected;
+
+        struct {
+            int                 gamepad_index;
+            VdFwGamepadMapEntry entry;
+            VdFwI32             value;
+        } gamepad_input;
     } dat;
 } VdFw__MacMessage;
 
@@ -9537,6 +9550,7 @@ typedef struct {
 
 typedef struct {
     IOHIDDeviceRef device;
+    VdFwGamepadMap map;
 } VdFw__MacGamepadInfo;
 
 typedef struct {
@@ -9571,6 +9585,9 @@ typedef struct {
     int                         is_fullscreen;
     int                         fullscreen_changed_this_frame;
     uint64_t                    delta_ns;
+    int                         num_gamepads_present;
+    VdFw__GamepadState          gamepad_curr_states[VD_FW_GAMEPAD_COUNT_MAX];
+    VdFw__GamepadState          gamepad_prev_states[VD_FW_GAMEPAD_COUNT_MAX];
 
 /* ----WINDOW THREAD ONLY-------------------------------------------------------------------------------------------- */
     BOOL                        draw_decorations;
@@ -10478,20 +10495,17 @@ VD_FW_API int vd_fw_get_key_down(int key)
 
 VD_FW_API int vd_fw_get_gamepad_count(void)
 {
-    return 0;    
+    return VD_FW_G.num_gamepads_present;
 }
 
 VD_FW_API VdFwU64 vd_fw_get_gamepad_button_state(int index)
 {
-    (void)index;
-    return 0;
+    return VD_FW_G.gamepad_curr_states[index].bits;
 }
 
 VD_FW_API int vd_fw_get_gamepad_down(int index, int button)
 {
-    (void)index;
-    (void)button;
-    return 0;
+    return (VD_FW_G.gamepad_curr_states[index].bits >> button) & 1;
 }
 
 VD_FW_API int vd_fw_get_gamepad_pressed(int index, int button)
@@ -10563,6 +10577,10 @@ VD_FW_API int vd_fw_running(void)
         VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
     }
 
+    for (int i = 0; i < VD_FW_GAMEPAD_COUNT_MAX; ++i) {
+        VD_FW_G.gamepad_prev_states[i] = VD_FW_G.gamepad_curr_states[i];
+    }
+
     VdFw__MacMessage msg;
     while (vd_fw__msgbuf_r(&msg)) {
         switch (msg.type) {
@@ -10617,6 +10635,36 @@ VD_FW_API int vd_fw_running(void)
 
             case VD_FW__MAC_MESSAGE_CLOSE_REQUEST: {
                 VD_FW_G.close_request = 1;
+            } break;
+
+            case VD_FW__MAC_MESSAGE_GAMEPAD_CONNECTED: {
+                VdFw__GamepadState zero_state = {0};
+                VD_FW_G.gamepad_prev_states[msg.dat.gamepad_connected.gamepad_index] = zero_state;
+                VD_FW_G.gamepad_curr_states[msg.dat.gamepad_connected.gamepad_index] = zero_state;
+                VD_FW_G.num_gamepads_present++;
+            } break;
+
+            case VD_FW__MAC_MESSAGE_GAMEPAD_DISCONNECTED: {
+                VD_FW_G.num_gamepads_present--;
+            } break;
+
+            case VD_FW__MAC_MESSAGE_GAMEPAD_INPUT: {
+                VdFw__GamepadState *state = &VD_FW_G.gamepad_curr_states[msg.dat.gamepad_input.gamepad_index];
+                VdFwGamepadMapEntry *entry = &msg.dat.gamepad_input.entry;
+                int value = msg.dat.gamepad_input.value;
+
+                switch ((entry->kind & VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_MASK)) {
+
+                    case VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON: {
+                        if (value) {
+                            state->bits |= (1 << entry->target);
+                        } else {
+                            state->bits &= ~(1 << entry->target);
+                        }
+                    } break;
+
+                    default: break;
+                }
             } break;
 
             default: break;
@@ -11314,8 +11362,16 @@ static void vd_fw__mac_hid_device_added_callback(void *context, IOReturn result,
     vd_fw_gamepad_guid_to_cstr(&guid, guid_str);
 
     gamepad_info->device = device;
-    IOHIDDeviceRegisterInputValueCallback(device, vd_fw__mac_hid_value_callback, (void*)device);
+    if (!vd_fw__map_gamepad(guid, &gamepad_info->map)) {
+        vd_fw__def_gamepad(&gamepad_info->map);
+    }
 
+
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_GAMEPAD_CONNECTED;
+    msg.dat.gamepad_connected.gamepad_index = new_device_index;
+    vd_fw__msgbuf_w(&msg); 
+    IOHIDDeviceRegisterInputValueCallback(device, vd_fw__mac_hid_value_callback, (void*)device);
 }
 
 static void vd_fw__mac_hid_device_removed_callback(void *context, IOReturn result, void *sender, IOHIDDeviceRef device)
@@ -11338,6 +11394,10 @@ static void vd_fw__mac_hid_device_removed_callback(void *context, IOReturn resul
 
     VD_FW_MEMSET(&VD_FW_G.gamepad_infos[VD_FW_G.winthread_num_gamepads - 1], 0, sizeof(VD_FW_G.gamepad_infos[0]));
 
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_GAMEPAD_DISCONNECTED;
+    msg.dat.gamepad_disconnected.gamepad_index = disconnected_gamepad_index;
+    vd_fw__msgbuf_w(&msg); 
     VD_FW_G.winthread_num_gamepads--;
 }
 
@@ -11368,18 +11428,48 @@ static void vd_fw__mac_hid_value_callback(void *context, IOReturn result, void *
         return;
     }
 
+    VdFwGamepadMappingSourceKind source_match = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON;
+
     switch (usage_page) {
-        case kHIDPage_Button: {
-            NSLog(@"Button pressed: %8x %8x", usage, usage_page);
-
-        } break;
-
         case kHIDPage_GenericDesktop: {
-
+            source_match = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS;
         } break;
 
         default: break;
     }
+
+    VdFw__MacGamepadInfo *gamepad_info = &VD_FW_G.gamepad_infos[gamepad_index];
+    VdFwGamepadMapEntry *matched_entry = 0;
+
+    int matched_entry_index = -1;
+    for (int entry_index = 0;
+             ((entry_index < VD_FW_GAMEPAD_MAX_MAPPINGS) && 
+             !vd_fw_gamepad_map_entry_is_none(&gamepad_info->map.mappings[entry_index]));
+         ++entry_index)
+    {
+        VdFwGamepadMapEntry *entry = &gamepad_info->map.mappings[entry_index];
+
+        if ((entry->kind & VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_MASK) != source_match) {
+            continue;
+        }
+
+        if (entry->index == usage) {
+            matched_entry = entry;
+            matched_entry_index = entry_index;
+            break;
+        }
+    }
+
+    if (!matched_entry) {
+        return;
+    }
+
+    VdFw__MacMessage msg;
+    msg.type = VD_FW__MAC_MESSAGE_GAMEPAD_INPUT;
+    msg.dat.gamepad_input.entry = *matched_entry;
+    msg.dat.gamepad_input.gamepad_index = gamepad_index;
+    msg.dat.gamepad_input.value = int_value;
+    vd_fw__msgbuf_w(&msg); 
 }
 
 #elif defined(__linux__)
