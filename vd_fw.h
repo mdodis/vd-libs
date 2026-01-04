@@ -185,6 +185,8 @@
 #       else
 #           define VD_FW_ENDIANNESS VD_FW_ENDIANNESS_BE
 #       endif
+#   elif defined(__APPLE__)
+#       define VD_FW_ENDIANNESS VD_FW_ENDIANNESS_LE
 #   endif
 #endif // VD_FW_ENDIANESS
 
@@ -9627,6 +9629,7 @@ typedef struct {
     sem_t                       *s_main_thread_window_closed;
     sem_t                       *s_main_thread_context_needs_update;
     int                         context_update_requested;
+    int                         main_thread_exited;
 } VdFw__MacOsInternalData;
 
 static int vd_fw__msgbuf_r(VdFw__MacMessage *message);
@@ -11020,7 +11023,8 @@ static void *vd_fw__macos__main(void *arg)
 {
     (void)arg;
     vd_fw__macos_main(VD_FW_G.argc, VD_FW_G.argv);
-
+    VD_FW_G.main_thread_exited = 1;
+    sem_post(VD_FW_G.s_main_thread_opened_me);
     return NULL;
 }
 
@@ -11060,6 +11064,11 @@ int main(int argc, char const *argv[])
     while (1) {
 
         sem_wait(VD_FW_G.s_main_thread_opened_me);
+
+        if (VD_FW_G.main_thread_exited) {
+            break;
+        }
+
         vd_fw__mac_init(&VD_FW_G.c_init_info);
 
         sem_post(VD_FW_G.s_main_thread_window_ready);
@@ -11355,7 +11364,7 @@ static void vd_fw__mac_hid_device_added_callback(void *context, IOReturn result,
     }
 
     VdFwGuid guid = vd_fw__make_gamepad_guid(0x03, (VdFwU16)vendor_id, (VdFwU16)product_id, (VdFwU16)version,
-                                             NULL, product_name,
+                                             NULL, NULL,
                                              0x00, 0x00);
 
     char guid_str[33] = {0};
@@ -11365,7 +11374,6 @@ static void vd_fw__mac_hid_device_added_callback(void *context, IOReturn result,
     if (!vd_fw__map_gamepad(guid, &gamepad_info->map)) {
         vd_fw__def_gamepad(&gamepad_info->map);
     }
-
 
     VdFw__MacMessage msg;
     msg.type = VD_FW__MAC_MESSAGE_GAMEPAD_CONNECTED;
@@ -11453,7 +11461,7 @@ static void vd_fw__mac_hid_value_callback(void *context, IOReturn result, void *
             continue;
         }
 
-        if (entry->index == usage) {
+        if (entry->index == (usage - 1)) {
             matched_entry = entry;
             matched_entry_index = entry_index;
             break;
@@ -12567,7 +12575,8 @@ VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepad
 #if defined(VD_FW_GAMEPAD_DB_DEFAULT_EXTERNAL)
 #include "builtin.rgcdb.c"
 #else
-VdFwGamepadDBEntry Vd_Fw__Gamepad_Db_Entries[3] = {
+VdFwGamepadDBEntry Vd_Fw__Gamepad_Db_Entries[] = {
+#if defined(_WIN32)
     /*Sony DualShock 4*/
     {{0x03,0x00,0xd0,0x42,0x4c,0x05,0x00,0x00,0xcc,0x09,0x00,0x00,0x00,0x01,0x72,0x00},
     {
@@ -12601,6 +12610,28 @@ VdFwGamepadDBEntry Vd_Fw__Gamepad_Db_Entries[3] = {
         VD_FW_GAMEPAD_FACE_XBOX,
         VD_FW_GAMEPAD_CLASS_XBOX,
     }},
+#elif defined(__APPLE__)
+    /*8BitDo Ultimate 2C*/
+    {{0x03,0x00,0x00,0x00,0xc8,0x2d,0x00,0x00,0x1b,0x30,0x00,0x00,0x01,0x00,0x00,0x00},
+    {
+        {{0x1,VD_FW_GAMEPAD_A,0},{0x1,VD_FW_GAMEPAD_B,1},{0x1,VD_FW_GAMEPAD_SELECT,10},{0x2,VD_FW_GAMEPAD_DDOWN,4},{0x2,VD_FW_GAMEPAD_DLEFT,8},{0x2,VD_FW_GAMEPAD_DRIGHT,2},{0x2,VD_FW_GAMEPAD_DUP,1},{0x1,VD_FW_GAMEPAD_L1,6},{0x1,VD_FW_GAMEPAD_L3,13},{0x3,VD_FW_GAMEPAD_LT,5},{0x3,VD_FW_GAMEPAD_LH,0},{0x3,VD_FW_GAMEPAD_LV,1},{0x1,VD_FW_GAMEPAD_R1,7},{0x1,VD_FW_GAMEPAD_R3,14},{0x3,VD_FW_GAMEPAD_RT,4},{0x3,VD_FW_GAMEPAD_RH,2},{0x3,VD_FW_GAMEPAD_RV,3},{0x1,VD_FW_GAMEPAD_START,11},{0x1,VD_FW_GAMEPAD_X,3},{0x1,VD_FW_GAMEPAD_Y,4},{0,0,0},},
+        {
+            VD_FW_GAMEPAD_RUMBLE_TYPE_NOT_AVAILABLE,
+        },
+        VD_FW_GAMEPAD_FACE_UNKNOWN,
+        VD_FW_GAMEPAD_CLASS_INVALID,
+    }},
+    /*8BitDo Ultimate 2C*/
+    {{0x03,0x00,0x00,0x00,0xc8,0x2d,0x00,0x00,0x1d,0x30,0x00,0x00,0x01,0x00,0x00,0x00},
+    {
+        {{0x1,VD_FW_GAMEPAD_A,0},{0x1,VD_FW_GAMEPAD_B,1},{0x1,VD_FW_GAMEPAD_SELECT,10},{0x2,VD_FW_GAMEPAD_DDOWN,4},{0x2,VD_FW_GAMEPAD_DLEFT,8},{0x2,VD_FW_GAMEPAD_DRIGHT,2},{0x2,VD_FW_GAMEPAD_DUP,1},{0x1,VD_FW_GAMEPAD_L1,6},{0x1,VD_FW_GAMEPAD_L3,13},{0x3,VD_FW_GAMEPAD_LT,5},{0x3,VD_FW_GAMEPAD_LH,0},{0x3,VD_FW_GAMEPAD_LV,1},{0x1,VD_FW_GAMEPAD_R1,7},{0x1,VD_FW_GAMEPAD_R3,14},{0x3,VD_FW_GAMEPAD_RT,4},{0x3,VD_FW_GAMEPAD_RH,2},{0x3,VD_FW_GAMEPAD_RV,3},{0x1,VD_FW_GAMEPAD_START,11},{0x1,VD_FW_GAMEPAD_X,3},{0x1,VD_FW_GAMEPAD_Y,4},{0,0,0},},
+        {
+            VD_FW_GAMEPAD_RUMBLE_TYPE_NOT_AVAILABLE,
+        },
+        VD_FW_GAMEPAD_FACE_UNKNOWN,
+        VD_FW_GAMEPAD_CLASS_INVALID,
+    }},
+#endif
 };
 #endif // VD_FW_GAMEPAD_DB_DEFAULT_EXTERNAL
 #endif // VD_FW_GAMEPAD_DB_DEFAULT
