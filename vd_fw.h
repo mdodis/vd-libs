@@ -9541,6 +9541,7 @@ typedef struct {
             int                 gamepad_index;
             VdFwGamepadMapEntry entry;
             VdFwI32             value;
+            float               float_value;
         } gamepad_input;
     } dat;
 } VdFw__MacMessage;
@@ -10520,9 +10521,7 @@ VD_FW_API int vd_fw_get_gamepad_pressed(int index, int button)
 
 VD_FW_API int vd_fw_get_gamepad_axis(int index, int axis, float *out)
 {
-    (void)index;
-    (void)axis;
-    (void)out;
+    *out = VD_FW_G.gamepad_curr_states[index].axes[axis];
     return 0;
 }
 
@@ -10664,6 +10663,10 @@ VD_FW_API int vd_fw_running(void)
                         } else {
                             state->bits &= ~(1 << entry->target);
                         }
+                    } break;
+
+                    case VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS: {
+                        state->axes[entry->target] = msg.dat.gamepad_input.float_value;
                     } break;
 
                     default: break;
@@ -11431,6 +11434,7 @@ static void vd_fw__mac_hid_value_callback(void *context, IOReturn result, void *
     VdFwU32 usage_page = IOHIDElementGetUsagePage(element);
     VdFwU32 usage = IOHIDElementGetUsage(element);
     CFIndex int_value = IOHIDValueGetIntegerValue(value);
+    float   float_value = (float)int_value;
 
     if (device_from_element != device) {
         return;
@@ -11438,9 +11442,23 @@ static void vd_fw__mac_hid_value_callback(void *context, IOReturn result, void *
 
     VdFwGamepadMappingSourceKind source_match = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON;
 
+    // @todo(mdodis): Proper axis mapping (usages -> indices <-> targets)
     switch (usage_page) {
         case kHIDPage_GenericDesktop: {
             source_match = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS;
+            CFIndex logical_min = IOHIDElementGetLogicalMin(element);
+            CFIndex logical_max = IOHIDElementGetLogicalMax(element);
+
+            if (logical_min > int_value) {
+                int_value = logical_min;
+            }
+
+            if (logical_max < int_value) {
+                int_value = logical_max;
+            }
+
+            float_value = -1.f + ((int_value - logical_min) * 2.f) / ((float)(logical_max - logical_min));
+
         } break;
 
         default: break;
@@ -11461,11 +11479,27 @@ static void vd_fw__mac_hid_value_callback(void *context, IOReturn result, void *
             continue;
         }
 
-        if (entry->index == (usage - 1)) {
-            matched_entry = entry;
-            matched_entry_index = entry_index;
-            break;
+        switch (source_match) {
+            case VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON: {
+                if (entry->index == (usage - 1)) {
+                    matched_entry = entry;
+                    matched_entry_index = entry_index;
+                    break;
+                }
+            } break;
+
+            case VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS: {
+
+                if (entry->index == (usage - 0x30)) {
+                    matched_entry = entry;
+                    matched_entry_index = entry_index;
+                    break;
+                }
+            } break;
+
+            default: break;
         }
+
     }
 
     if (!matched_entry) {
@@ -11477,6 +11511,7 @@ static void vd_fw__mac_hid_value_callback(void *context, IOReturn result, void *
     msg.dat.gamepad_input.entry = *matched_entry;
     msg.dat.gamepad_input.gamepad_index = gamepad_index;
     msg.dat.gamepad_input.value = int_value;
+    msg.dat.gamepad_input.float_value = float_value;
     vd_fw__msgbuf_w(&msg); 
 }
 
