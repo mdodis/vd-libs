@@ -286,34 +286,50 @@ static int my_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                                        CLSCTX_INPROC_SERVER,
                                        IID_PPV_ARGS(&Dm_Manager)));
 
-        CHECK_HRESULT(Dm_Manager->GetUpdateManager(IID_PPV_ARGS(&Dm_Update_Manager)));
+
         CHECK_HRESULT(Dm_Manager->CreateViewport(nullptr, hwnd, IID_PPV_ARGS(&Dm_Viewport)));
 
         DIRECTMANIPULATION_CONFIGURATION configuration = DIRECTMANIPULATION_CONFIGURATION_INTERACTION |
                                                          DIRECTMANIPULATION_CONFIGURATION_TRANSLATION_X |
                                                          DIRECTMANIPULATION_CONFIGURATION_TRANSLATION_Y |
-                                                         DIRECTMANIPULATION_CONFIGURATION_TRANSLATION_INERTIA |
+                                                         // DIRECTMANIPULATION_CONFIGURATION_TRANSLATION_INERTIA |
                                                          DIRECTMANIPULATION_CONFIGURATION_RAILS_X |
                                                          DIRECTMANIPULATION_CONFIGURATION_RAILS_Y |
                                                          DIRECTMANIPULATION_CONFIGURATION_SCALING |
                                                          DIRECTMANIPULATION_CONFIGURATION_SCALING_INERTIA;
 
         CHECK_HRESULT(Dm_Viewport->ActivateConfiguration(configuration));
-        // CHECK_HRESULT(Dm_Viewport->SetViewportOptions(DIRECTMANIPULATION_VIEWPORT_OPTIONS_MANUALUPDATE));
-        CHECK_HRESULT(Dm_Viewport->SetViewportOptions(DIRECTMANIPULATION_VIEWPORT_OPTIONS_DEFAULT));
+        CHECK_HRESULT(Dm_Viewport->SetViewportOptions(DIRECTMANIPULATION_VIEWPORT_OPTIONS_MANUALUPDATE));
         CFWDirectManipulationViewportEventHandler *viewport_event_handler = new CFWDirectManipulationViewportEventHandler();
 
         DWORD viewport_event_handler_cookie = 0;
         CHECK_HRESULT(Dm_Viewport->AddEventHandler(hwnd, viewport_event_handler, &viewport_event_handler_cookie));
 
-        RECT rect;
-        rect.left = 0;
-        rect.top = 0;
-        rect.right = (int)PAGE_WIDTH;
-        rect.bottom = (int)PAGE_LENGTH * NUM_PAGES;
-        CHECK_HRESULT(Dm_Viewport->SetViewportRect(&rect));
+        {
+
+            RECT rect;
+            rect.left = 0;
+            rect.top = 0;
+            rect.right = (int)PAGE_WIDTH;
+            rect.bottom = (int)PAGE_LENGTH;
+            CHECK_HRESULT(Dm_Viewport->SetViewportRect(&rect));
+        }
+
+        IDirectManipulationContent *content;
+        CHECK_HRESULT(Dm_Viewport->GetPrimaryContent(IID_PPV_ARGS(&content)));
+
+        {
+            RECT rect;
+            rect.left = 0;
+            rect.top = 0;
+            rect.right = (int)PAGE_WIDTH;
+            rect.bottom = (int)PAGE_LENGTH * NUM_PAGES;
+            CHECK_HRESULT(content->SetContentRect(&rect));
+        }
 
         CHECK_HRESULT(Dm_Viewport->Enable());
+
+        CHECK_HRESULT(Dm_Manager->GetUpdateManager(IID_PPV_ARGS(&Dm_Update_Manager)));
         Dm_Update_Manager->Update(nullptr);
 
         CHECK_HRESULT(Dm_Manager->Activate(hwnd));

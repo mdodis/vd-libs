@@ -85,6 +85,7 @@ typedef struct {
     char *buf;
     int  len;
     int  buf_cap;
+    int  filter_index;
 } VdDlgFileResult;
 
 /**
@@ -111,6 +112,8 @@ VD_DLG_API int              vd_dlg_message_box(int title_len, const char *title,
  * @return                The selected file, all zeroes if 'Cancel' was pressed
  */
 VD_DLG_API VdDlgFileResult  vd_dlg_open_file(int title_len, const char *title, int path_len, const char *path, int num_filters, VdDlgFileFilter *filters, int default_filter, VdDlgOpenFileOptions options);
+
+VD_DLG_API VdDlgFileResult  vd_dlg_save_file(int title_len, const char *title, int path_len, const char *path, int num_filters, VdDlgFileFilter *filters, int default_filter);
 
 /**
  * @brief Set the context for any upcoming calls (this is usually the window owner)
@@ -202,6 +205,7 @@ typedef UINT      VdDlgUINT;
 typedef HMODULE   VdDlgHMODULE;
 typedef HRESULT   VdDlgHRESULT;
 typedef ULONG     VdDlgULONG;
+typedef BOOL      VdDlgBOOL;
 #endif // !_WINDOWS_
 
 typedef struct VdDlg_GUID {
@@ -388,6 +392,7 @@ typedef struct VdDlgIFileDialog         VdDlgIFileDialog;
 typedef struct VdDlgIFileOpenDialog     VdDlgIFileOpenDialog;
 typedef struct VdDlgIShellItemArray     VdDlgIShellItemArray;
 typedef struct VdDlgIEnumShellItems     VdDlgIEnumShellItems;
+typedef struct VdDlgIFileSaveDialog     VdDlgIFileSaveDialog;
 
 typedef struct VdDlg_COMDLG_FILTERSPEC {
     VdDlgLPCWSTR pszName;
@@ -540,6 +545,45 @@ typedef struct {
 } VdDlgIFileOpenDialogVtbl;
 struct VdDlgIFileOpenDialog { const VdDlgIFileOpenDialogVtbl *lpVtbl; };
 
+typedef struct {
+    VdDlgHRESULT (__stdcall *QueryInterface)(VdDlgIFileSaveDialog *This, VdDlgREFIID riid, void **ppvObject);
+    VdDlgULONG   (__stdcall *AddRef)(VdDlgIFileSaveDialog *This);
+    VdDlgULONG   (__stdcall *Release)(VdDlgIFileSaveDialog *This);
+    
+    VdDlgHRESULT (__stdcall *Show)(VdDlgIFileSaveDialog *This, VdDlgHWND hwndOwner);
+    VdDlgHRESULT (__stdcall *SetFileTypes)(VdDlgIFileSaveDialog *This, VdDlgUINT cFileTypes, const VdDlgCOMDLG_FILTERSPEC *rgFilterSpec);
+    VdDlgHRESULT (__stdcall *SetFileTypeIndex)(VdDlgIFileSaveDialog *This, VdDlgUINT iFileType);
+    VdDlgHRESULT (__stdcall *GetFileTypeIndex)(VdDlgIFileSaveDialog *This, VdDlgUINT *piFileType);
+    VdDlgHRESULT (__stdcall *Advise)(VdDlgIFileSaveDialog *This, VdDlgIFileDialogEvents *pfde, VdDlgDWORD *pdwCookie);
+    VdDlgHRESULT (__stdcall *Unadvise)(VdDlgIFileSaveDialog *This, VdDlgDWORD dwCookie);
+    VdDlgHRESULT (__stdcall *SetOptions)(VdDlgIFileSaveDialog *This, VdDlgFILEOPENDIALOGOPTIONS fos);
+    VdDlgHRESULT (__stdcall *GetOptions)(VdDlgIFileSaveDialog *This, VdDlgFILEOPENDIALOGOPTIONS *pfos);
+    VdDlgHRESULT (__stdcall *SetDefaultFolder)(VdDlgIFileSaveDialog *This, VdDlgIShellItem *psi);
+    VdDlgHRESULT (__stdcall *SetFolder)(VdDlgIFileSaveDialog *This, VdDlgIShellItem *psi);
+    VdDlgHRESULT (__stdcall *GetFolder)(VdDlgIFileSaveDialog *This, VdDlgIShellItem **ppsi);
+    VdDlgHRESULT (__stdcall *GetCurrentSelection)(VdDlgIFileSaveDialog *This, VdDlgIShellItem **ppsi);
+    VdDlgHRESULT (__stdcall *SetFileName)(VdDlgIFileSaveDialog *This, VdDlgLPCWSTR pszName);
+    VdDlgHRESULT (__stdcall *GetFileName)(VdDlgIFileSaveDialog *This, VdDlgLPWSTR *pszName);
+    VdDlgHRESULT (__stdcall *SetTitle)(VdDlgIFileSaveDialog *This, VdDlgLPCWSTR pszTitle);
+    VdDlgHRESULT (__stdcall *SetOkButtonLabel)(VdDlgIFileSaveDialog *This, VdDlgLPCWSTR pszText);
+    VdDlgHRESULT (__stdcall *SetFileNameLabel)(VdDlgIFileSaveDialog *This, VdDlgLPCWSTR pszLabel);
+    VdDlgHRESULT (__stdcall *GetResult)(VdDlgIFileSaveDialog *This, VdDlgIShellItem **ppsi);
+    VdDlgHRESULT (__stdcall *AddPlace)(VdDlgIFileSaveDialog *This, VdDlgIShellItem *psi, VdDlgFDAP fdap);
+    VdDlgHRESULT (__stdcall *SetDefaultExtension)(VdDlgIFileSaveDialog *This, VdDlgLPCWSTR pszDefaultExtension);
+    VdDlgHRESULT (__stdcall *Close)(VdDlgIFileSaveDialog *This, VdDlgHRESULT hr);
+    VdDlgHRESULT (__stdcall *SetClientGuid)(VdDlgIFileSaveDialog *This, VdDlgREFGUID guid);
+    VdDlgHRESULT (__stdcall *ClearClientData)(VdDlgIFileSaveDialog *This);
+    VdDlgHRESULT (__stdcall *SetFilter)(VdDlgIFileSaveDialog *This, /*IShellItemFilter*/ VdDlgIUnknown *pFilter);
+    VdDlgHRESULT (__stdcall *GetResults)(VdDlgIFileSaveDialog *This, VdDlgIShellItemArray **ppenum);
+    VdDlgHRESULT (__stdcall *GetSelectedItems)(VdDlgIFileSaveDialog *This, VdDlgIShellItemArray **ppsai);
+    VdDlgHRESULT (__stdcall *SetSaveAsItem)(VdDlgIFileSaveDialog *This, VdDlgIShellItem *psi);
+    VdDlgHRESULT (__stdcall *SetProperties)(VdDlgIFileSaveDialog * This, VdDlgIUnknown /* IPropertyStore */ *pStore);
+    VdDlgHRESULT (__stdcall *SetCollectedProperties)(VdDlgIFileSaveDialog *This, VdDlgIUnknown /* IPropertyDescriptionList */ *pList, VdDlgBOOL fAppendDefault);
+    VdDlgHRESULT (__stdcall *GetProperties)(VdDlgIFileSaveDialog *This, VdDlgIUnknown /* IPropertyStore */ **ppStore);
+    VdDlgHRESULT (__stdcall *ApplyProperties)(VdDlgIFileSaveDialog * This, VdDlgIShellItem *psi, VdDlgIUnknown /*IPropertyStore*/ *pStore, VdDlgHWND hwnd, VdDlgIUnknown /*IFileOperationProgressSink*/ *pSink);
+} VdDlgIFileSaveDialogVtbl;
+struct VdDlgIFileSaveDialog { const VdDlgIFileSaveDialogVtbl *lpVtbl; };
+
 #define VD_DLG__HRESULT_TYPEDEF_(_sc) ((VdDlgHRESULT)_sc)
 #define VD_DLG__E_NOINTERFACE         VD_DLG__HRESULT_TYPEDEF_(0x80004002L)
 #define VD_DLG__E_POINTER             VD_DLG__HRESULT_TYPEDEF_(0x80004003L)
@@ -549,6 +593,8 @@ VD_DLG_DEFINE_GUID(VD_DLG_IID_IUnknown,         0x00000000, 0x0000, 0x0000, 0xC0
 VD_DLG_DEFINE_GUID(VD_DLG_IID_FileDialogEvents, 0x973510db, 0x7d7f, 0x452b, 0x89, 0x75, 0x74, 0xa8, 0x58, 0x28, 0xd3, 0x54);
 VD_DLG_DEFINE_GUID(VD_DLG_IID_FileOpenDialog,   0xd57c7288, 0xd4ad, 0x4768, 0xbe, 0x02, 0x9d, 0x96, 0x95, 0x32, 0xd9, 0x60);
 VD_DLG_DEFINE_GUID(VD_DLG_CLSID_FileOpenDialog, 0xDC1C5A9C, 0xE88A, 0x4dde, 0xA5, 0xA1, 0x60, 0xF8, 0x2A, 0x20, 0xAE, 0xF7);
+VD_DLG_DEFINE_GUID(VD_DLG_IID_FileSaveDialog,   0x84bccd23, 0x5fde, 0x4cdb, 0xae, 0xa4, 0xaf, 0x64, 0xb8, 0x3d, 0x78, 0xab);
+VD_DLG_DEFINE_GUID(VD_DLG_CLSID_FileSaveDialog, 0xC0B4E2F3, 0xBA21, 0x4773, 0x8D, 0xBA, 0x33, 0x5E, 0xC9, 0x46, 0xEB, 0x8B);
 
 typedef struct {
     int name;
@@ -779,6 +825,85 @@ VD_DLG_API VdDlgFileResult vd_dlg_open_file(int title_len, const char *title, in
                                                                                  &Vd_Dlg__Globals.file_results[0].buf_cap);
 
             rt_result = Vd_Dlg__Globals.file_results[0];
+        }
+    }
+
+    VD_DLG__WIN32_CHECK_HRESULT(pfd->lpVtbl->Unadvise(pfd, dw_cookie));
+    VD_DLG__WIN32_CHECK_HRESULT(pfd->lpVtbl->Release(pfd));
+
+    return rt_result;
+}
+
+VD_DLG_API VdDlgFileResult vd_dlg_save_file(int title_len, const char *title, int path_len, const char *path, int num_filters, VdDlgFileFilter *filters, int default_filter)
+{
+
+    VdDlgIFileSaveDialog *pfd = NULL;
+    VD_DLG__WIN32_CHECK_HRESULT(VdDlgCoCreateInstance(&VD_DLG_CLSID_FileSaveDialog, NULL,
+                                                      VD_DLG_CLSCTX_INPROC_SERVER,
+                                                      &VD_DLG_IID_FileSaveDialog, &pfd));
+    VdDlgDWORD dw_cookie;
+    VD_DLG__WIN32_CHECK_HRESULT(pfd->lpVtbl->Advise(pfd, &Vd_Dlg__CFileDialogEvents, &dw_cookie));
+
+    VdDlgFILEOPENDIALOGOPTIONS dw_options;
+    VD_DLG__WIN32_CHECK_HRESULT(pfd->lpVtbl->GetOptions(pfd, &dw_options));
+    VD_DLG__WIN32_CHECK_HRESULT(pfd->lpVtbl->SetOptions(pfd, dw_options | VD_DLG_FOS_FORCEFILESYSTEM));
+
+    if (title_len > 0) {
+
+        vd_dlg__win32_cv_utf8_to_utf16(title, title_len,
+                                       &Vd_Dlg__Globals.title_buf, &Vd_Dlg__Globals.title_buf_cap);
+
+        VD_DLG__WIN32_CHECK_HRESULT(pfd->lpVtbl->SetTitle(pfd, Vd_Dlg__Globals.title_buf));
+    }
+
+    if (num_filters > 0) {
+        Vd_Dlg__Globals.file_types = vd_dlg__win32_resize_buffer(Vd_Dlg__Globals.file_types,
+                                                                 sizeof(VdDlgCOMDLG_FILTERSPEC), num_filters,
+                                                                 &Vd_Dlg__Globals.file_types_cap);
+        Vd_Dlg__Globals.file_types_caps = vd_dlg__win32_resize_buffer(Vd_Dlg__Globals.file_types_caps,
+                                                                      sizeof(VdDlgFilterSpecCaps), num_filters,
+                                                                      &Vd_Dlg__Globals.file_types_caps_cap);
+        for (int i = 0; i < num_filters; ++i) {
+            VdDlgCOMDLG_FILTERSPEC *ft  = &Vd_Dlg__Globals.file_types[i];
+            VdDlgFilterSpecCaps    *cap = &Vd_Dlg__Globals.file_types_caps[i];
+
+            vd_dlg__win32_cv_utf8_to_utf16(filters[i].description, filters[i].description_len,
+                                           &ft->pszName, &cap->name);
+            vd_dlg__win32_cv_utf8_to_utf16(filters[i].extensions, filters[i].extensions_len,
+                                           &ft->pszSpec, &cap->spec);
+        }
+
+        VD_DLG__WIN32_CHECK_HRESULT(pfd->lpVtbl->SetFileTypes(pfd, num_filters, Vd_Dlg__Globals.file_types));
+        VD_DLG__WIN32_CHECK_HRESULT(pfd->lpVtbl->SetFileTypeIndex(pfd, default_filter + 1));
+    }
+
+    VdDlgHRESULT hr = pfd->lpVtbl->Show(pfd, vd_dlg__get_hwnd());
+
+    VdDlgFileResult rt_result = {0};
+
+    if (hr == 0) {
+        VdDlgIShellItem *result;
+        hr = pfd->lpVtbl->GetResult(pfd, &result);
+        if (hr == 0) {
+            VdDlgLPWSTR result_path = NULL;
+            VD_DLG__WIN32_CHECK_HRESULT(result->lpVtbl->GetDisplayName(result, VD_DLG_SIGDN_FILESYSPATH, &result_path));
+
+            Vd_Dlg__Globals.file_results = vd_dlg__win32_resize_buffer(Vd_Dlg__Globals.file_results,
+                                                                       sizeof(VdDlgFileResult), 1,
+                                                                       &Vd_Dlg__Globals.file_results_cap);
+            Vd_Dlg__Globals.file_results[0].len = vd_dlg__win32_cv_utf16_to_utf8(result_path, -1,
+                                                                                 &Vd_Dlg__Globals.file_results[0].buf,
+                                                                                 &Vd_Dlg__Globals.file_results[0].buf_cap);
+
+            rt_result = Vd_Dlg__Globals.file_results[0];
+        }
+
+        VdDlgUINT file_type_index;
+        VD_DLG__WIN32_CHECK_HRESULT(pfd->lpVtbl->GetFileTypeIndex(pfd, &file_type_index));
+
+        if (file_type_index > 0) {
+
+            rt_result.filter_index = file_type_index - 1;
         }
     }
 

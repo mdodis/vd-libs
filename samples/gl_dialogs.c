@@ -73,6 +73,7 @@ int main(int argc, char const *argv[])
 
     vd_fw_set_vsync_on(1);
     const char *single_open_file_path = NULL;
+    const char *single_save_file_path = NULL;
     while (vd_fw_running()) {
 
         if (vd_fw_close_requested()) {
@@ -108,13 +109,19 @@ int main(int argc, char const *argv[])
 
 
         VdUiDiv *app = vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("##app"));
-        app->size[0].mode = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
-        app->size[0].value = 1.f;
-        app->size[1].mode = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
-        app->size[1].value = 1.f;
+        app->style.size[0].mode = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+        app->style.size[0].value = 1.f;
+        app->style.size[1].mode = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
+        app->style.size[1].value = 1.f;
         app->style.background.normal = vd_ui_gradient1(vd_ui_f4(0.1f, 0.1f, 0.1f, 1.f));
         vd_ui_parent_push(app);
         {
+            vd_ui_style_font_size_push(18.f);
+            {
+                vd_ui_labelf("Message Boxes");
+            }
+            vd_ui_style_font_size_pop();
+
             if (vd_ui_buttonf("Message Box (Ok)").clicked) {
                 vd_dlg_message_box(CSTR_AND_LEN("<Simple Message Title>"),
                                    CSTR_AND_LEN("This is a simple message with a title, and an OK button."),
@@ -127,7 +134,51 @@ int main(int argc, char const *argv[])
                                    VD_DLG_MESSAGE_BOX_OPTION_OK | VD_DLG_MESSAGE_BOX_OPTION_WARNING);
             }
 
-            if (vd_ui_buttonf("Open File").clicked) {
+            if (vd_ui_buttonf("Message Box (Yes/No)").clicked) {
+                int result = vd_dlg_message_box(CSTR_AND_LEN("<Simple Message Title>"),
+                                                CSTR_AND_LEN("This is a simple message with a title, and Yes, No buttons."),
+                                                VD_DLG_MESSAGE_BOX_OPTION_YES_NO | VD_DLG_MESSAGE_BOX_OPTION_INFO);
+
+                if (result == VD_DLG_MESSAGE_BOX_RESULT_YES) {
+                    puts("YES");
+                } else {
+                    puts("NO");
+                }
+            }
+
+            if (vd_ui_buttonf("Message Box (Ok/Cancel)").clicked) {
+                int result = vd_dlg_message_box(CSTR_AND_LEN("<Simple Message Title>"),
+                                                CSTR_AND_LEN("This is a simple message with a title, and OK, Cancel buttons."),
+                                                VD_DLG_MESSAGE_BOX_OPTION_OK_CANCEL | VD_DLG_MESSAGE_BOX_OPTION_INFO);
+
+                if (result == VD_DLG_MESSAGE_BOX_RESULT_OK) {
+                    puts("OK");
+                } else {
+                    puts("Cancel");
+                }
+            }
+
+            if (vd_ui_buttonf("Message Box (Yes/No/Cancel)").clicked) {
+                int result = vd_dlg_message_box(CSTR_AND_LEN("<Simple Message Title>"),
+                                                CSTR_AND_LEN("This is a simple message with a title, and Yes, No, Cancel buttons."),
+                                                VD_DLG_MESSAGE_BOX_OPTION_YES_NO_CANCEL | VD_DLG_MESSAGE_BOX_OPTION_INFO);
+
+                if (result == VD_DLG_MESSAGE_BOX_RESULT_YES) {
+                    puts("Yes");
+                } else if (result == VD_DLG_MESSAGE_BOX_RESULT_NO) {
+                    puts("No");
+                } else {
+                    puts("Cancel");
+                }
+            }
+
+            vd_ui_style_font_size_push(18.f);
+            {
+                vd_ui_labelf("File Dialogs");
+            }
+            vd_ui_style_font_size_pop();
+
+            if (vd_ui_buttonf("Open File (All/*.png)").clicked) {
                 VdDlgFileFilter filters[2] = {
                     {
                         CSTR_AND_LEN("All Files"),
@@ -143,11 +194,33 @@ int main(int argc, char const *argv[])
                                                           0, NULL,
                                                           2, filters, 1,
                                                           0);
-                single_open_file_path = result.buf;
+                single_open_file_path = _strdup(result.buf);
             }
 
             if (single_open_file_path) {
                 vd_ui_labelf("Open File Result: %s", single_open_file_path);
+            }
+
+            if (vd_ui_buttonf("Save File (All/*.png)").clicked) {
+                VdDlgFileFilter filters[2] = {
+                    {
+                        CSTR_AND_LEN("All Files"),
+                        CSTR_AND_LEN("*.*"),
+                    },
+                    {
+                        CSTR_AND_LEN("PNG Files"),
+                        CSTR_AND_LEN("*.png"),
+                    }
+                };
+
+                VdDlgFileResult result = vd_dlg_save_file(CSTR_AND_LEN("Save a File"),
+                                                          0, NULL,
+                                                          2, filters, 1);
+                single_save_file_path = _strdup(result.buf);
+            }
+
+            if (single_save_file_path) {
+                vd_ui_labelf("Save File Result: %s", single_save_file_path);
             }
 
         }
