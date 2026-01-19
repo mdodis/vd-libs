@@ -17,6 +17,10 @@ int main(int argc, char const *argv[])
 
     vd_fw_set_size(1600, 900);
 
+    for (int i = 0; i < vd_fw_get_monitor_count(); ++i) {
+        printf("%d %s\n", i, vd_fw_get_monitor_name(i));
+    }
+
     vd_um_init();
 
     vd_fw_set_title("UM Basic");
@@ -171,10 +175,10 @@ int main(int argc, char const *argv[])
                 point = fzero3();                
             }
 
-            vd_um_push_depth_flags(1,1);
+            vd_um_depth_flags_push(1,1);
             vd_um_cylinder(point.e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 0.5f, 0.1f, fm4(0.3f, 0.6f, 0.25f, 1.f).e);
             vd_um_grid(fzero3().e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 100.f, fm4(1,1,1,1).e);
-            vd_um_pop_depth_flags();
+            vd_um_depth_flags_pop();
 
             vd_um_translate_axial("tZ", point.e, fm3(0,0,1).e);
             vd_um_translate_axial("tY", point.e, fm3(0,1,0).e);
