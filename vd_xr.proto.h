@@ -47,9 +47,40 @@ $$openxr.h$$
 
 #ifdef VD_XR_IMPL
 
+#ifndef VD_XR_ABORT
+#   include <assert.h>
+#   define VD_XR_ABORT(message) do { assert(0 && message); *(char*)0 = *message; } while(0)
+#endif // !VD_XR_ABORT
+
+#ifndef VD_XR_ASSERTIONS
+#   define VD_XR_ASSERTIONS 0
+#endif // !VD_XR_ASSERTIONS
+
+#if VD_XR_ASSERTIONS
+#   define VD_XR_ASSERT(x) do { if (!(x)) { VD_XR_ABORT("Assertion Failed: " #x " At: " __FILE__ ":" #__LINE__ ); } } while (0);
+#else
+#   define VD_XR_ASSERT(x) (x)
+#endif // VD_XR_ASSERTIONS
+
 #ifdef _WIN32
 #define XR_OS_WINDOWS 1
 #endif
+
+#ifndef XR_OS_WINDOWS
+#   define XR_OS_WINDOWS 0
+#endif // !XR_OS_WINDOWS
+
+#ifndef XR_OS_ANDROID
+#   define XR_OS_ANDROID 0
+#endif // !XR_OS_ANDROID
+
+#ifndef XR_OS_APPLE
+#   define XR_OS_APPLE 0
+#endif // !XR_OS_APPLE
+
+#ifndef XR_OS_LINUX
+#   define XR_OS_LINUX 0
+#endif // !XR_OS_LINUX
 
 #define OPENXR_RELATIVE_PATH "openxr/"
 #define OPENXR_IMPLICIT_API_LAYER_RELATIVE_PATH "/api_layers/implicit.d"
@@ -66,10 +97,31 @@ $$openxr.h$$
 
 #define OPENXR_ENABLE_LAYERS_ENV_VAR "XR_ENABLE_API_LAYERS"
 
+#if defined(XR_OS_LINUX) || defined(XR_OS_APPLE) || defined(XR_OS_ANDROID)
+#define VD_XR__PATH_SEPARATOR ':'
+#define VD_XR__DIRECTORY_SYMBOL '/'
+#elif defined(XR_OS_WINDOWS)
+#define VD_XR__PATH_SEPARATOR ';'
+#define VD_XR__DIRECTORY_SYMBOL '\\'
+#else
+#define VD_XR__PATH_SEPARATOR ':'
+#define VD_XR__DIRECTORY_SYMBOL '/'
+#endif
+
+typedef uint8_t VdXr__ArenaFlags;
+
 static void*    vd_xr__realloc_mem(void *prev_ptr, size_t size);
 static void     vd_xr__free_mem(void *ptr);
 static void*    vd_xr__resize_buffer(void *buffer, size_t element_size, int required_capacity, int *cap);
 static int      vd_xr__strlen(const char *s);
+static int      vd_xr__str_first_of(const char *s, char c);
+static int      vd_xr__str_first_of_with_start(const char *s, char c, int start);
+
+VD_XR_INL void *vd_xr__memset(void *dest, int value, size_t num)
+{
+    for (size_t i = 0; i < num; ++i) ((uint8_t*)dest)[i] = (uint8_t)value;
+    return dest;
+}
 
 VD_XR_INL void *vd_xr__memcpy(void *dst, void *src, size_t count)
 {
@@ -77,10 +129,94 @@ VD_XR_INL void *vd_xr__memcpy(void *dst, void *src, size_t count)
     return dst;
 }
 
+VD_XR_INL void *vd_xr__memmove(void *dest, void *src, size_t num) {
+    uint8_t* d = (uint8_t*)dest;
+    uint8_t* s = (uint8_t*)src;
+
+    if (d < s) {
+        for (size_t i = 0; i < num; ++i) {
+            d[i] = s[i];
+        }
+    } else if (s < d) {
+        for (size_t i = num; i > 0; --i) {
+            d[i - 1] = s[i - 1];
+        }
+    }
+
+    return d;
+}
+
+VD_XR_INL int vd_xr__is_power_of_two(size_t x) {
+    return (x & (x - 1)) == 0;
+}
+
+VD_XR_INL uintptr_t vd_xr__align_forward(uintptr_t ptr, size_t align) {
+    VD_XR_ASSERT(vd_xr__is_power_of_two(align));
+
+    uintptr_t p, a, modulo;
+
+    p = ptr;
+    a = (uintptr_t)align;
+    modulo = p & (a - 1);
+
+    if (modulo != 0) {
+        p += a - modulo;
+    }
+
+    return p;
+}
+
+typedef struct VdXr__Arena {
+    uint8_t             *buf;
+    size_t              buf_len;
+    size_t              prev_offset;
+    size_t              curr_offset;
+    VdXr__ArenaFlags    flags;
+    uint8_t             reserved[7];
+} VdXr__Arena;
+
+typedef struct __VD_ArenaSave {
+    /** The saved arena. */
+    VdXr__Arena     *arena;
+    /** The previous offset in the arena. */
+    size_t          prev_offset;
+    /** The current offset in the arena. */
+    size_t          curr_offset;
+} VdXr__ArenaSave;
+
+void                        vd_xr__arena_init(VdXr__Arena *a, void *buf, size_t len);
+void*                       vd_xr__arena_alloc_align(VdXr__Arena *a, size_t size, size_t align);
+void*                       vd_xr__arena_resize_align(VdXr__Arena *a, void *old_memory, size_t old_size, size_t new_size, size_t align);
+void                        vd_xr__arena_clear(VdXr__Arena *a);
+int                         vd_xr__arena_free(VdXr__Arena *a, void *memory, size_t size);
+VD_XR_INL VdXr__ArenaSave   vd_xr__arena_save(VdXr__Arena *a)                                                       { VdXr__ArenaSave result = { a, a->prev_offset, a->curr_offset }; return result; }
+VD_XR_INL void              vd_xr__arena_restore(VdXr__ArenaSave save)                                              { save.arena->prev_offset = save.prev_offset; save.arena->curr_offset = save.curr_offset; }
+VD_XR_INL void*             vd_xr__arena_alloc(VdXr__Arena *a, size_t size)                                         { return vd_xr__arena_alloc_align(a, size, 8);}
+VD_XR_INL void*             vd_xr__arena_resize(VdXr__Arena *a, void *old_memory, size_t old_size, size_t new_size) { return vd_xr__arena_resize_align(a, old_memory, old_size, new_size, 8); }
+VD_XR_INL VdXr__Arena       vd_xr__arena_from_malloc(size_t size)                                               { VdXr__Arena result; vd_xr__arena_init(&result, vd_xr__realloc_mem(0, size), size); return result; }
+
+#define VD_XR__ARENA_PUSH_ARRAY(a, x, count) (x*)vd_xr__arena_alloc(a, sizeof(x) * count)
+#define VD_XR__ARENA_PUSH_STRUCT(a, x)       VD_XR__ARENA_PUSH_ARRAY(a, x, 1)
+#define VD_XR__ARENA_FROM_SYSTEM(a, size)    (vd_xr__arena_init(a, VD_MALLOC(size), size))
+
+
+
 $$xr_generated_dispatch_table.h$$
 
+#define VD_XR__LOADER_PROPERTY_XDG_CONFIG_DIRS_NAME "XDG_CONFIG_DIRS"
+#define VD_XR__LOADER_PROPERTY_XDG_DATA_DIRS_NAME "XDG_DATA_DIRS"
+#define VD_XR__LOADER_PROPERTY_XDG_DATA_HOME_NAME "XDG_DATA_HOME"
+#define VD_XR__LOADER_PROPERTY_HOME_NAME "HOME"
+
 typedef enum {
+    VD_XR__LOADER_PROPERTY_NONE = 0,
     VD_XR__LOADER_PROPERTY_XR_ENABLE_API_LAYERS,
+#if !defined(XR_OS_WINDOWS) && !defined(XR_OS_ANDROID)
+    VD_XR__LOADER_PROPERTY_XDG_CONFIG_DIRS,
+    VD_XR__LOADER_PROPERTY_XDG_DATA_DIRS,
+    VD_XR__LOADER_PROPERTY_XDG_DATA_HOME,
+    VD_XR__LOADER_PROPERTY_HOME,
+#endif
     VD_XR__LOADER_PROPERTY_COUNT
 } VdXr__LoaderProperty;
 
@@ -108,30 +244,48 @@ typedef struct {
 } VdXr__StringBuffer;
 
 typedef struct {
+    const char          *s;
+    int                 l;
+} VdXr__StringRange;
+
+typedef struct {
     VdXr__StringBuffer buffer;
     int                overriden;
 } VdXr__LoaderPropertyStorage;
 
-static void         vd_xr__string_buffer_empty(VdXr__StringBuffer *buf);
-static char*        vd_xr__string_buffer_push(VdXr__StringBuffer *buf, const char *str);
-static char*        vd_xr__string_buffer_pushu16(VdXr__StringBuffer *buf, uint16_t i);
-static void*        vd_xr__string_buffer_pushraw(VdXr__StringBuffer *buf, int required_capacity, int update_len);
+static void                 vd_xr__string_buffer_empty(VdXr__StringBuffer *buf);
+static char*                vd_xr__string_buffer_push(VdXr__StringBuffer *buf, const char *str);
+static char*                vd_xr__string_buffer_push_range(VdXr__StringBuffer *buf, VdXr__StringRange range);
+static char*                vd_xr__string_buffer_pushu16(VdXr__StringBuffer *buf, uint16_t i);
+static char*                vd_xr__string_buffer_pushchar(VdXr__StringBuffer *buf, char c);
+static void*                vd_xr__string_buffer_pushraw(VdXr__StringBuffer *buf, int required_capacity, int update_len);
 
-static void         vd_xr__manifest_file_list_empty(VdXr__ManifestFileList *list);
-static void         vd_xr__manifest_file_list_push(VdXr__ManifestFileList *list, VdXr__ManifestFile *file);
-static XrResult     vd_xr__find_manifest_files(VdXr__ManifestFileType type, VdXr__ManifestFileList *list);
-static const char*  vd_xr__get_loader_property(VdXr__LoaderProperty property);
+static void                 vd_xr__manifest_file_list_empty(VdXr__ManifestFileList *list);
+static void                 vd_xr__manifest_file_list_push(VdXr__ManifestFileList *list, VdXr__ManifestFile *file);
+static XrResult             vd_xr__find_manifest_files(VdXr__ManifestFileType type, VdXr__ManifestFileList *list);
+static void                 vd_xr__add_files_in_path(VdXr__ManifestFileList *list, int is_directory_list, const char *search_path);
+static void                 vd_xr__check_all_files_in_path(VdXr__StringRange search_path, int is_directory_list, VdXr__ManifestFileList *list);
+
+
+static const char*          vd_xr__get_loader_property(VdXr__LoaderProperty property);
+static void                 vd_xr__copy_include_paths(VdXr__StringBuffer *buf, int is_directory_list, const char *cur_path, const char *rel_path);
+
+static VdXr__StringRange    vd_xr__substr(const char *s, int i, int count);
 
 #if XR_OS_WINDOWS
-static int          vd_xr__utf8_to_wide(char *buf, int blen, wchar_t *wbuf, int wlen);
-static int          vd_xr__wide_to_utf8(wchar_t *wbuf, int wlen, char *buf, int blen);
+static int                  vd_xr__utf8_to_wide(char *buf, int blen, wchar_t *wbuf, int wlen);
+static int                  vd_xr__wide_to_utf8(wchar_t *wbuf, int wlen, char *buf, int blen);
 #endif
 
 typedef struct {
     XrGeneratedDispatchTable        *dispatch_table;
     VdXr__ManifestFileList          manbuf;
     VdXr__StringBuffer              strbuf;
+    VdXr__StringBuffer              pathbuf;
     VdXr__LoaderPropertyStorage     properties[VD_XR__LOADER_PROPERTY_COUNT];
+#if XR_OS_WINDOWS
+    int                             initialized;
+#endif
 } VdXr__InternalData;
 
 static VdXr__InternalData Vd_Xr_G;
@@ -144,7 +298,7 @@ $$xr_generated_dispatch_table.c$$
 #pragma pack(push, 1)
 /* ----WIN32 BASE---------------------------------------------------------------------------------------------------- */
 #ifndef _MINWINDEF_
-#define VD_FT_DECLARE_HANDLE(name) struct name##__{int unused;}; typedef struct name##__ *name
+#define VD_XR_DECLARE_HANDLE(name) struct name##__{int unused;}; typedef struct name##__ *name
 
 typedef unsigned long        VdXrDWORD;
 typedef int                  VdXrBOOL;
@@ -210,15 +364,19 @@ typedef short               VdXrSHORT;
 typedef VdXrDWORD           VdXrCOLORREF;
 typedef VdXrDWORD*          VdXrLPCOLORREF;
 
-VD_FT_DECLARE_HANDLE(VdXrHWND);
-VD_FT_DECLARE_HANDLE(VdXrHINSTANCE);
-VD_FT_DECLARE_HANDLE(VdXrHDC);
-VD_FT_DECLARE_HANDLE(VdXrHMONITOR);
-VD_FT_DECLARE_HANDLE(VdXrHGDIOBJ);
-VD_FT_DECLARE_HANDLE(VdXrHBITMAP);
+VD_XR_DECLARE_HANDLE(VdXrHWND);
+VD_XR_DECLARE_HANDLE(VdXrHINSTANCE);
+VD_XR_DECLARE_HANDLE(VdXrHDC);
+VD_XR_DECLARE_HANDLE(VdXrHMONITOR);
+VD_XR_DECLARE_HANDLE(VdXrHGDIOBJ);
+VD_XR_DECLARE_HANDLE(VdXrHBITMAP);
+VD_XR_DECLARE_HANDLE(VdXrHKEY);
+
 typedef VdXrHINSTANCE VdXrHMODULE;
 
 extern VdXrHMODULE LoadLibraryA(VdXrLPCSTR path);
+extern VdXrBOOL    CloseHandle(VdXrHANDLE hObject);
+extern VdXrHANDLE  GetCurrentProcess();
 extern void*       HeapAlloc(VdXrHANDLE hHeap, VdXrDWORD dwFlags, VdXrSIZE_T dwBytes);
 extern VdXrHANDLE  GetProcessHeap();
 extern void*       HeapReAlloc(VdXrHANDLE hHeap, VdXrDWORD dwFlags, void *lpMem, VdXrSIZE_T dwBytes);
@@ -262,9 +420,172 @@ typedef FLOAT       VdXrFLOAT;
 typedef VdXrDWORD   VdXrCOLORREF;
 typedef VdXrDWORD*  VdXrLPCOLORREF;
 #endif // !_MINWINDEF_
-#pragma pack(pop)
 
-#if XR_OS_WINDOWS
+typedef VdXrLONG VdXrLSTATUS;
+
+typedef VdXrDWORD VdXrACCESS_MASK;
+typedef VdXrACCESS_MASK VdXrREGSAM;
+
+#define VD_XR__WIN32_KEY_QUERY_VALUE         (0x0001)
+#define VD_XR__WIN32_KEY_SET_VALUE           (0x0002)
+#define VD_XR__WIN32_KEY_CREATE_SUB_KEY      (0x0004)
+#define VD_XR__WIN32_KEY_ENUMERATE_SUB_KEYS  (0x0008)
+#define VD_XR__WIN32_KEY_NOTIFY              (0x0010)
+#define VD_XR__WIN32_KEY_CREATE_LINK         (0x0020)
+#define VD_XR__WIN32_KEY_WOW64_32KEY         (0x0200)
+#define VD_XR__WIN32_KEY_WOW64_64KEY         (0x0100)
+#define VD_XR__WIN32_KEY_WOW64_RES           (0x0300)
+
+#define VD_XR__WIN32_KEY_READ       ((VD_XR__WIN32_STANDARD_RIGHTS_READ       |\
+                                     VD_XR__WIN32_KEY_QUERY_VALUE             |\
+                                     VD_XR__WIN32_KEY_ENUMERATE_SUB_KEYS      |\
+                                     VD_XR__WIN32_KEY_NOTIFY)                  \
+                                     &                                         \
+                                    (~VD_XR__WIN32_SYNCHRONIZE))
+
+#define VD_XR__WIN32_KEY_WRITE      ((VD_XR__WIN32_STANDARD_RIGHTS_WRITE      |\
+                                     VD_XR__WIN32_KEY_SET_VALUE               |\
+                                     VD_XR__WIN32_KEY_CREATE_SUB_KEY)          \
+                                     &                                         \
+                                    (~VD_XR__WIN32_SYNCHRONIZE))
+
+#define VD_XR__WIN32_KEY_EXECUTE    ((VD_XR__WIN32_KEY_READ)                   \
+                                     &                                         \
+                                    (~VD_XR__WIN32_SYNCHRONIZE))
+
+#define VD_XR__WIN32_KEY_ALL_ACCESS      ((VD_XR__WIN32_STANDARD_RIGHTS_ALL  |\
+                                    VD_XR__WIN32_KEY_QUERY_VALUE             |\
+                                    VD_XR__WIN32_KEY_SET_VALUE               |\
+                                    VD_XR__WIN32_KEY_CREATE_SUB_KEY          |\
+                                    VD_XR__WIN32_KEY_ENUMERATE_SUB_KEYS      |\
+                                    VD_XR__WIN32_KEY_NOTIFY                  |\
+                                    VD_XR__WIN32_KEY_CREATE_LINK)             \
+                                    &                                         \
+                                    (~VD_XR__WIN32_SYNCHRONIZE))
+
+#define VD_XR__WIN32_TOKEN_ASSIGN_PRIMARY    (0x0001)
+#define VD_XR__WIN32_TOKEN_DUPLICATE         (0x0002)
+#define VD_XR__WIN32_TOKEN_IMPERSONATE       (0x0004)
+#define VD_XR__WIN32_TOKEN_QUERY             (0x0008)
+#define VD_XR__WIN32_TOKEN_QUERY_SOURCE      (0x0010)
+#define VD_XR__WIN32_TOKEN_ADJUST_PRIVILEGES (0x0020)
+#define VD_XR__WIN32_TOKEN_ADJUST_GROUPS     (0x0040)
+#define VD_XR__WIN32_TOKEN_ADJUST_DEFAULT    (0x0080)
+#define VD_XR__WIN32_TOKEN_ADJUST_SESSIONID  (0x0100)
+
+#define VD_XR__WIN32_SECURITY_MANDATORY_LABEL_AUTHORITY          {0,0,0,0,0,16}
+#define VD_XR__WIN32_SECURITY_MANDATORY_UNTRUSTED_RID            (0x00000000L)
+#define VD_XR__WIN32_SECURITY_MANDATORY_LOW_RID                  (0x00001000L)
+#define VD_XR__WIN32_SECURITY_MANDATORY_MEDIUM_RID               (0x00002000L)
+#define VD_XR__WIN32_SECURITY_MANDATORY_MEDIUM_PLUS_RID          (VD_XR__WIN32_SECURITY_MANDATORY_MEDIUM_RID + 0x100)
+#define VD_XR__WIN32_SECURITY_MANDATORY_HIGH_RID                 (0x00003000L)
+#define VD_XR__WIN32_SECURITY_MANDATORY_SYSTEM_RID               (0x00004000L)
+#define VD_XR__WIN32_SECURITY_MANDATORY_PROTECTED_PROCESS_RID    (0x00005000L)
+
+typedef enum VdXr_TOKEN_INFORMATION_CLASS {
+  VD_XR_TokenUser = 1,
+  VD_XR_TokenGroups,
+  VD_XR_TokenPrivileges,
+  VD_XR_TokenOwner,
+  VD_XR_TokenPrimaryGroup,
+  VD_XR_TokenDefaultDacl,
+  VD_XR_TokenSource,
+  VD_XR_TokenType,
+  VD_XR_TokenImpersonationLevel,
+  VD_XR_TokenStatistics,
+  VD_XR_TokenRestrictedSids,
+  VD_XR_TokenSessionId,
+  VD_XR_TokenGroupsAndPrivileges,
+  VD_XR_TokenSessionReference,
+  VD_XR_TokenSandBoxInert,
+  VD_XR_TokenAuditPolicy,
+  VD_XR_TokenOrigin,
+  VD_XR_TokenElevationType,
+  VD_XR_TokenLinkedToken,
+  VD_XR_TokenElevation,
+  VD_XR_TokenHasRestrictions,
+  VD_XR_TokenAccessInformation,
+  VD_XR_TokenVirtualizationAllowed,
+  VD_XR_TokenVirtualizationEnabled,
+  VD_XR_TokenIntegrityLevel,
+  VD_XR_TokenUIAccess,
+  VD_XR_TokenMandatoryPolicy,
+  VD_XR_TokenLogonSid,
+  VD_XR_TokenIsAppContainer,
+  VD_XR_TokenCapabilities,
+  VD_XR_TokenAppContainerSid,
+  VD_XR_TokenAppContainerNumber,
+  VD_XR_TokenUserClaimAttributes,
+  VD_XR_TokenDeviceClaimAttributes,
+  VD_XR_TokenRestrictedUserClaimAttributes,
+  VD_XR_TokenRestrictedDeviceClaimAttributes,
+  VD_XR_TokenDeviceGroups,
+  VD_XR_TokenRestrictedDeviceGroups,
+  VD_XR_TokenSecurityAttributes,
+  VD_XR_TokenIsRestricted,
+  VD_XR_TokenProcessTrustLevel,
+  VD_XR_TokenPrivateNameSpace,
+  VD_XR_TokenSingletonAttributes,
+  VD_XR_TokenBnoIsolation,
+  VD_XR_TokenChildProcessFlags,
+  VD_XR_TokenIsLessPrivilegedAppContainer,
+  VD_XR_TokenIsSandboxed,
+  VD_XR_TokenIsAppSilo,
+  VD_XR_TokenLoggingInformation,
+  VD_XR_TokenLearningMode,
+  VD_XR_MaxTokenInfoClass
+} VdXrTOKEN_INFORMATION_CLASS, *VdXrPTOKEN_INFORMATION_CLASS;
+
+typedef struct VdXr_SID_IDENTIFIER_AUTHORITY {
+    VdXrBYTE  Value[6];
+} VdXrSID_IDENTIFIER_AUTHORITY, *VdXrPSID_IDENTIFIER_AUTHORITY;
+
+typedef struct VdXr_SID {
+    VdXrBYTE  Revision;
+    VdXrBYTE  SubAuthorityCount;
+    VdXrSID_IDENTIFIER_AUTHORITY IdentifierAuthority;
+    VdXrDWORD SubAuthority[1];
+} VdXrSID, *VdXrPISID;
+
+typedef struct VdXr_SID_AND_ATTRIBUTES {
+  VdXrPISID Sid;
+  VdXrDWORD Attributes;
+} VdXrSID_AND_ATTRIBUTES, *VdXrPSID_AND_ATTRIBUTES;
+
+typedef struct VdXr_TOKEN_MANDATORY_LABEL {
+    VdXrSID_AND_ATTRIBUTES Label;
+} VdXrTOKEN_MANDATORY_LABEL, *VdXrPTOKEN_MANDATORY_LABEL;
+
+#define VD_XR__SID_MAX_SUB_AUTHORITIES          (15)
+#define VD_XR__SID_RECOMMENDED_SUB_AUTHORITIES  (1)    // Will change to around 6
+
+                                                // in a future release.
+#define VD_XR__SECURITY_MAX_SID_SIZE  \
+      (sizeof(VdXrSID) - sizeof(VdXrDWORD) + (VD_XR__SID_MAX_SUB_AUTHORITIES * sizeof(VdXrDWORD)))
+
+
+#define VD_XR__WIN32_HKEY_CURRENT_USER                   (( VdXrHKEY ) (VdXrULONG_PTR)((VdXrLONG)0x80000001) )
+#define VD_XR__WIN32_HKEY_LOCAL_MACHINE                  (( VdXrHKEY ) (VdXrULONG_PTR)((VdXrLONG)0x80000002) )
+
+typedef VdXrLSTATUS (*VdXr__ProcRegOpenKeyExW)(VdXrHKEY hKey, VdXrLPCWSTR lpSubKey, VdXrDWORD ulOptions, VdXrREGSAM samDesired, VdXrHKEY *phkResult);
+typedef VdXrLSTATUS (*VdXr__ProcRegCloseKey)(VdXrHKEY hKey);
+typedef VdXrBOOL    (*VdXr__ProcOpenProcessToken)(VdXrHANDLE ProcessHandle, VdXrDWORD DesiredAccess, VdXrPHANDLE TokenHandle);
+typedef VdXrBOOL    (*VdXr__ProcGetTokenInformation)(VdXrHANDLE TokenHandle, VdXrTOKEN_INFORMATION_CLASS TokenInformationClass, VdXrLPVOID TokenInformation, VdXrDWORD TokenInformationLength, VdXrPDWORD ReturnLength);
+typedef VdXrUCHAR*  (*VdXr__ProcGetSidSubAuthorityCount)(VdXrPISID pSid);
+typedef VdXrPDWORD  (*VdXr__ProcGetSidSubAuthority)(VdXrPISID pSid, VdXrDWORD nSubAuthority);
+
+#pragma pack(pop)
+static VdXr__ProcRegOpenKeyExW VdXr__RegOpenKeyExW;
+static VdXr__ProcRegCloseKey VdXr__RegCloseKey;
+static VdXr__ProcOpenProcessToken VdXr__OpenProcessToken;
+static VdXr__ProcGetTokenInformation VdXr__GetTokenInformation;
+static VdXr__ProcGetSidSubAuthorityCount VdXr__GetSidSubAuthorityCount;
+static VdXr__ProcGetSidSubAuthority VdXr__GetSidSubAuthority;
+
+static void                 vd_xr__win32_init(void);
+static int                  vd_xr__read_data_files_in_hive(VdXrHKEY hive, const wchar_t *location, VdXr__ManifestFileList *list);
+static int                  vd_xr__is_high_integrity_level(void);
+
 static int vd_xr__utf8_to_wide(char *buf, int blen, wchar_t *wbuf, int wlen)
 {
     return MultiByteToWideChar(65001, 8, buf, blen, wbuf, wlen);
@@ -274,7 +595,6 @@ static int vd_xr__wide_to_utf8(wchar_t *wbuf, int wlen, char *buf, int blen)
 {
     return WideCharToMultiByte(65001, 0, wbuf, wlen, buf, blen, NULL, NULL);
 }
-#endif
 
 static void *vd_xr__realloc_mem(void *prev_ptr, size_t size)
 {
@@ -289,6 +609,76 @@ static void vd_xr__free_mem(void *ptr)
 {
     HeapFree(GetProcessHeap(), 0, ptr);
 }
+
+static int vd_xr__read_data_files_in_hive(VdXrHKEY hive, const wchar_t *location, VdXr__ManifestFileList *list)
+{
+    VdXrHKEY hkey;
+    VdXrLONG open_val = VdXr__RegOpenKeyExW(hive, location, 0, VD_XR__WIN32_KEY_QUERY_VALUE, &hkey);
+
+    if (open_val != 0) {
+        return 0;
+    }
+
+    VdXr__RegCloseKey(hkey);
+
+    return 1;
+}
+
+static int vd_xr__is_high_integrity_level(void)
+{
+    static int cached_result = 0;
+
+    if (cached_result != 0) {
+        return cached_result > 0 ? 1 : 0;
+    }
+
+    VdXrHANDLE token;
+    if (VdXr__OpenProcessToken(GetCurrentProcess(),
+                               VD_XR__WIN32_TOKEN_QUERY | VD_XR__WIN32_TOKEN_QUERY_SOURCE,
+                               &token))
+    {
+        uint8_t label_buf[VD_XR__SECURITY_MAX_SID_SIZE + sizeof(VdXrDWORD)] = {0};
+        VdXrDWORD buffer_size;
+
+        if (VdXr__GetTokenInformation(token, VD_XR_TokenIntegrityLevel, label_buf, sizeof(label_buf), &buffer_size) != 0) {
+            VdXrTOKEN_MANDATORY_LABEL *mandatory_label = (VdXrTOKEN_MANDATORY_LABEL*)label_buf;
+
+            if (mandatory_label->Label.Sid != 0) {
+                VdXrDWORD sub_auth_count = *VdXr__GetSidSubAuthorityCount(mandatory_label->Label.Sid);
+                VdXrDWORD integrity_level = *VdXr__GetSidSubAuthority(mandatory_label->Label.Sid, sub_auth_count - 1);
+
+                cached_result = integrity_level > VD_XR__WIN32_SECURITY_MANDATORY_MEDIUM_RID
+                    ? 1
+                    : -1;
+            }
+        }
+
+        CloseHandle(token);
+    }
+
+    return cached_result > 0 ? 1 : 0;
+}
+
+static void vd_xr__win32_init(void)
+{
+    if (Vd_Xr_G.initialized) {
+        return;    
+    }
+
+    Vd_Xr_G.initialized = 1;
+
+    {
+        VdXrHMODULE mod = LoadLibraryA("Advapi32.dll");
+        VdXr__RegOpenKeyExW = (VdXr__ProcRegOpenKeyExW)GetProcAddress(mod, "RegOpenKeyExW");
+        VdXr__RegCloseKey = (VdXr__ProcRegCloseKey)GetProcAddress(mod, "RegCloseKey");
+        VdXr__OpenProcessToken = (VdXr__ProcOpenProcessToken)GetProcAddress(mod, "OpenProcessToken");
+        VdXr__GetTokenInformation = (VdXr__ProcGetTokenInformation)GetProcAddress(mod, "GetTokenInformation");
+        VdXr__GetSidSubAuthorityCount = (VdXr__ProcGetSidSubAuthorityCount)GetProcAddress(mod, "GetSidSubAuthorityCount");
+        VdXr__GetSidSubAuthority = (VdXr__ProcGetSidSubAuthority)GetProcAddress(mod, "GetSidSubAuthority");
+
+    }
+}
+
 #endif // _WIN32
 
 static void vd_xr__string_buffer_empty(VdXr__StringBuffer *buf)
@@ -302,7 +692,19 @@ static char *vd_xr__string_buffer_push(VdXr__StringBuffer *buf, const char *str)
     int required_capacity = buf->len + str_len + 1;
     buf->ptr = (char*)vd_xr__resize_buffer(buf->ptr, sizeof(char), required_capacity, &buf->cap);
 
-    vd_xr__memcpy(buf->ptr + buf->len, str, str_len);
+    vd_xr__memcpy(buf->ptr + buf->len, (char*)str, str_len);
+    buf->len += str_len;
+    buf->ptr[buf->len] = '\0';
+    return buf->ptr;
+}
+
+static char *vd_xr__string_buffer_push_range(VdXr__StringBuffer *buf, VdXr__StringRange range)
+{
+    int str_len = range.l;
+    int required_capacity = buf->len + str_len + 1;
+    buf->ptr = (char*)vd_xr__resize_buffer(buf->ptr, sizeof(char), required_capacity, &buf->cap);
+
+    vd_xr__memcpy(buf->ptr + buf->len, (char*)range.s, str_len);
     buf->len += str_len;
     buf->ptr[buf->len] = '\0';
     return buf->ptr;
@@ -328,12 +730,20 @@ static char *vd_xr__string_buffer_pushu16(VdXr__StringBuffer *buf, uint16_t i)
 
     int c = 0;
     while (i > 0) {
-        ibuf[c] = (i % 10);
+        ibuf[c] = (i % 10) + '0';
         i = i / 10;
         c++;
     }
 
     return vd_xr__string_buffer_push(buf, ibuf);
+}
+
+static char *vd_xr__string_buffer_pushchar(VdXr__StringBuffer *buf, char c)
+{
+    char b[2];
+    b[0] = c;
+    b[1] = 0;
+    return vd_xr__string_buffer_push(buf, b);
 }
 
 static void vd_xr__manifest_file_list_empty(VdXr__ManifestFileList *list)
@@ -355,24 +765,23 @@ static XrResult vd_xr__find_manifest_files(VdXr__ManifestFileType type, VdXr__Ma
     vd_xr__string_buffer_empty(strbuf);
     vd_xr__string_buffer_push(strbuf, OPENXR_RELATIVE_PATH);
     vd_xr__string_buffer_pushu16(strbuf, XR_VERSION_MAJOR(XR_CURRENT_API_VERSION));
-    const char *override_env_var = 0;
-#ifdef XR_OS_WINDOWS
+    VdXr__LoaderProperty override_env_var = VD_XR__LOADER_PROPERTY_NONE;
+#if XR_OS_WINDOWS
     const char *registry_location = 0;
 #endif
 
     switch (type) {
         case VD_XR__MANIFEST_FILE_TYPE_IMPLICIT_API_LAYER: {
             vd_xr__string_buffer_push(strbuf, OPENXR_IMPLICIT_API_LAYER_RELATIVE_PATH);
-            override_env_var = "";
-#ifdef XR_OS_WINDOWS
+#if XR_OS_WINDOWS
             registry_location = OPENXR_IMPLICIT_API_LAYER_REGISTRY_LOCATION;
 #endif
         } break;
 
         case VD_XR__MANIFEST_FILE_TYPE_EXPLICIT_API_LAYER: {
             vd_xr__string_buffer_push(strbuf, OPENXR_EXPLICIT_API_LAYER_RELATIVE_PATH);
-            override_env_var = "";
-#ifdef XR_OS_WINDOWS
+            override_env_var = VD_XR__LOADER_PROPERTY_XR_ENABLE_API_LAYERS;
+#if XR_OS_WINDOWS
             registry_location = OPENXR_EXPLICIT_API_LAYER_REGISTRY_LOCATION;
 #endif
         } break;
@@ -384,10 +793,106 @@ static XrResult vd_xr__find_manifest_files(VdXr__ManifestFileType type, VdXr__Ma
         } break;
     }
 
+    VdXr__StringBuffer *search_path = &Vd_Xr_G.pathbuf;
     // Find data files in search paths
     {
+        int override_active = 0;
+        const char *relative_path = strbuf->ptr;
+        // ReadDataFilesInSearchPaths(override_env_var, relative_path, override_active, filenames);
 
+        const char *override_path = 0;
+
+        int is_override_env_var_empty = override_env_var != VD_XR__LOADER_PROPERTY_NONE;
+
+        if (!is_override_env_var_empty) {
+            int permit_override = 1;
+#if !XR_OS_WINDOWS
+            if (geteuid() != getuid() || getegid() != getgid()) {
+                permit_override = 0;
+            }
+#endif
+            if (permit_override) {
+                override_path = vd_xr__get_loader_property(override_env_var);
+            }
+        }
+
+        if (override_path != 0) {
+            vd_xr__copy_include_paths(search_path, 1, override_path, "");
+            override_active = 1;
+        } else {
+            override_active = 0;
+
+#if !XR_OS_WINDOWS && !XR_OS_ANDROID
+#error "Unsupported platform!"
+#elif XR_OS_ANDROID
+#error "Unsupported platform!"
+#else
+            (void)relative_path;
+#endif
+        }
+
+        vd_xr__add_files_in_path(list, 1, search_path->ptr);
     }
+
+#if defined(XR_OS_WINDOWS)
+    {
+        // ReadLayerDataFilesInRegistry
+        vd_xr__win32_init();
+
+        VdXr__StringBuffer *full_registry_location_buf = &Vd_Xr_G.strbuf;
+        vd_xr__string_buffer_empty(full_registry_location_buf);
+        vd_xr__string_buffer_push(full_registry_location_buf, OPENXR_REGISTRY_LOCATION);
+        vd_xr__string_buffer_pushu16(full_registry_location_buf, XR_VERSION_MAJOR(XR_CURRENT_API_VERSION));
+        const char *full_registry_location = vd_xr__string_buffer_push(full_registry_location_buf, registry_location);
+        int full_registry_location_len = full_registry_location_buf->len;
+
+        wchar_t buf[128];
+
+        int buf_end = vd_xr__utf8_to_wide((char*)full_registry_location, full_registry_location_len, buf, sizeof(buf));
+        if (buf_end <= 0) {
+            return 0;
+        }
+
+        buf[buf_end] = 0;
+
+        int found = vd_xr__read_data_files_in_hive(VD_XR__WIN32_HKEY_LOCAL_MACHINE, buf, list);
+        if (!vd_xr__is_high_integrity_level()) {
+            found |= vd_xr__read_data_files_in_hive(VD_XR__WIN32_HKEY_CURRENT_USER, buf, list);
+        }
+    }
+#endif // XR_OS_WINDOWS
+
+    return XR_SUCCESS;
+}
+
+static void vd_xr__add_files_in_path(VdXr__ManifestFileList *list, int is_directory_list, const char *search_path)
+{
+    int last_found = 0;
+    int found = vd_xr__str_first_of(search_path, VD_XR__PATH_SEPARATOR);
+    VdXr__StringRange cur_search;
+
+    while (found != -1) {
+        int len = found - last_found;
+        cur_search = vd_xr__substr(search_path, last_found, len);
+
+        vd_xr__check_all_files_in_path(cur_search, is_directory_list, list);
+
+        last_found = found;
+        while (found == last_found) {
+            last_found = found + 1;
+            found = vd_xr__str_first_of_with_start(search_path, VD_XR__PATH_SEPARATOR, last_found);
+        }
+    }
+
+    if (last_found < vd_xr__strlen(search_path)) {
+        cur_search = vd_xr__substr(search_path, last_found, -1);
+        vd_xr__check_all_files_in_path(cur_search, is_directory_list, list);
+    }
+}
+
+static void vd_xr__check_all_files_in_path(VdXr__StringRange search_path, int is_directory_list, VdXr__ManifestFileList *list)
+{
+
 }
 
 static const char *vd_xr__get_loader_property(VdXr__LoaderProperty property)
@@ -400,6 +905,29 @@ static const char *vd_xr__get_loader_property(VdXr__LoaderProperty property)
             env_var_name = OPENXR_ENABLE_LAYERS_ENV_VAR;
             env_var_name_len = sizeof(OPENXR_ENABLE_LAYERS_ENV_VAR) - 1;
         } break;
+
+#if !defined(XR_OS_WINDOWS) && !defined(XR_OS_ANDROID)
+        case VD_XR__LOADER_PROPERTY_XDG_CONFIG_DIRS: {
+            env_var_name = VD_XR__LOADER_PROPERTY_XDG_CONFIG_DIRS_NAME;
+            env_var_name_len = sizeof(VD_XR__LOADER_PROPERTY_XDG_CONFIG_DIRS_NAME) - 1;
+        } break;
+
+        case VD_XR__LOADER_PROPERTY_XDG_DATA_DIRS: {
+            env_var_name = VD_XR__LOADER_PROPERTY_XDG_DATA_DIRS_NAME;
+            env_var_name_len = sizeof(VD_XR__LOADER_PROPERTY_XDG_DATA_DIRS_NAME) - 1;
+        } break;
+
+        case VD_XR__LOADER_PROPERTY_XDG_DATA_HOME: {
+            env_var_name = VD_XR__LOADER_PROPERTY_XDG_DATA_HOME_NAME;
+            env_var_name_len = sizeof(VD_XR__LOADER_PROPERTY_XDG_DATA_HOME_NAME) - 1;
+        } break;
+
+        case VD_XR__LOADER_PROPERTY_HOME: {
+            env_var_name = VD_XR__LOADER_PROPERTY_HOME_NAME;
+            env_var_name_len = sizeof(VD_XR__LOADER_PROPERTY_HOME_NAME) - 1;
+        } break;
+#endif // !defined(XR_OS_WINDOWS) && !defined(XR_OS_ANDROID)
+
         default: return 0;
     }
 
@@ -446,6 +974,54 @@ static const char *vd_xr__get_loader_property(VdXr__LoaderProperty property)
     return storage->buffer.ptr;
 }
 
+static void vd_xr__copy_include_paths(VdXr__StringBuffer *buf, int is_directory_list, const char *cur_path, const char *rel_path)
+{
+    if (cur_path != 0) {
+        int cur_path_len = vd_xr__strlen(cur_path);
+
+        int last_found = 0;
+        int found = vd_xr__str_first_of(cur_path, VD_XR__PATH_SEPARATOR);
+
+        while (found != -1) {
+            int len = found - last_found;
+
+            vd_xr__string_buffer_push_range(buf, vd_xr__substr(cur_path, last_found, len));
+
+            if (is_directory_list && (cur_path[found - 1] != '\\' && cur_path[found - 1] != '/')) {
+                vd_xr__string_buffer_pushchar(buf, VD_XR__DIRECTORY_SYMBOL);
+            }
+
+            vd_xr__string_buffer_push(buf, rel_path);
+            vd_xr__string_buffer_pushchar(buf, VD_XR__PATH_SEPARATOR);
+        }
+
+        int last_char = cur_path_len - 1;
+        if (last_found != last_char) {
+            vd_xr__string_buffer_push_range(buf, vd_xr__substr(cur_path, last_found, cur_path_len));
+
+            if (is_directory_list && (cur_path[last_char] != '\\' && cur_path[last_char] != '/')) {
+                vd_xr__string_buffer_pushchar(buf, VD_XR__DIRECTORY_SYMBOL);
+            }
+
+            vd_xr__string_buffer_push(buf, rel_path);
+            vd_xr__string_buffer_pushchar(buf, VD_XR__PATH_SEPARATOR);
+        }
+    }
+}
+
+static VdXr__StringRange vd_xr__substr(const char *s, int i, int count)
+{
+    VdXr__StringRange result;
+    result.s = s + i;
+
+    if (count < 0) {
+        count = vd_xr__strlen(s) - i;
+    }
+
+    result.l = count;
+    return result;
+}
+
 XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateApiLayerProperties(uint32_t propertyCapacityInput,
                                                              uint32_t *propertyCountOutput,
                                                              XrApiLayerProperties *properties)
@@ -469,10 +1045,11 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInstanceExtensionProperties(const char
 
     int just_layer_props = 0;
 
-    if ((layerName == 0) && vd_xr__strlen(layerName) == 0) {
+    if ((layerName != 0) && vd_xr__strlen(layerName) != 0) {
         just_layer_props = 1;
     }
 
+    // @note(mdodis): ApiLayerInterface::GetInstanceExtensionProperties
     if (just_layer_props) {
 
     } else {
@@ -496,14 +1073,130 @@ static void *vd_xr__resize_buffer(void *buffer, size_t element_size, int require
     return buffer;
 }
 
-
 static int vd_xr__strlen(const char *s)
 {
     int r = 0;
+    if (s == 0) {
+        return 0;
+    }
+
     while (*s++) r++;
     return r;
 }
 
+static int vd_xr__str_first_of(const char *s, char c)
+{
+    int i = 0;
 
+    if (s == 0) {
+        return -1;
+    }
+
+    while (*s) {
+        if (*s == c) {
+            return i;
+        }
+        i++;
+        s++;
+    }
+
+    return -1;
+}
+
+static int vd_xr__str_first_of_with_start(const char *s, char c, int start)
+{
+    int i = start;
+    s += start;
+
+    while (*s) {
+        if (*s == c) {
+            return i;
+        }
+        i++;
+        s++;
+    }
+
+    return -1;
+}
+
+void vd_xr__arena_init(VdXr__Arena *a, void *buf, size_t len)
+{
+    a->buf = (uint8_t*)buf;
+    a->buf_len = len;
+    a->curr_offset = 0;
+    a->prev_offset = 0;
+}
+
+void *vd_xr__arena_alloc_align(VdXr__Arena *a, size_t size, size_t align)
+{
+    uintptr_t curr_ptr = (uintptr_t)a->buf + (uintptr_t)a->curr_offset;
+    uintptr_t offset = vd_xr__align_forward(curr_ptr, align);
+    offset -= (uintptr_t)a->buf;
+
+    if (offset + size <= a->buf_len) {
+        void *ptr = 0;
+        ptr = &a->buf[offset];
+        a->prev_offset = offset;
+        a->curr_offset = offset + size;
+
+        vd_xr__memset(ptr, 0, size);
+        return ptr;
+    }
+
+    VD_XR_ABORT("vd_xr__arena_alloc_align");
+    return 0;
+}
+
+void *vd_xr__arena_resize_align(VdXr__Arena *a, void *old_memory, size_t old_size, size_t new_size, size_t align)
+{
+    VD_XR_ASSERT(vd_xr__is_power_of_two(align));
+
+    uint8_t* old_mem = (uint8_t*)old_memory;
+
+    if (old_mem == 0 || old_size == 0) {
+        return vd_xr__arena_alloc_align(a, new_size, align);
+    } else if (a->buf <= old_mem && old_mem < a->buf + a->buf_len) {
+        if (a->buf + a->prev_offset == old_mem) {
+            a->curr_offset = a->prev_offset + new_size;
+            if (new_size > old_size) {
+                vd_xr__memset(&a->buf[a->curr_offset], 0, new_size - old_size);
+            }
+
+            return old_memory;
+        } else {
+            void *new_memory = vd_xr__arena_alloc_align(a, new_size, align);
+            size_t copy_size = old_size < new_size ? old_size : new_size;
+
+            vd_xr__memmove(new_memory, old_memory, copy_size);
+            return new_memory;
+        }
+    } else {
+        VD_XR_ABORT("vd_xr__arena_resize_align");
+    }
+    return 0;
+}
+
+void vd_xr__arena_clear(VdXr__Arena *a)
+{
+    vd_xr__memset(a->buf, 0, a->curr_offset);
+    a->curr_offset = 0;
+    a->prev_offset = 0;
+}
+
+int vd_xr__arena_free(VdXr__Arena *a, void *memory, size_t size)
+{
+    (void)(size);
+
+    uintptr_t last_ptr = (uintptr_t)(a->buf + a->prev_offset);
+    uintptr_t mptr     = (uintptr_t)memory;
+
+    if (mptr == last_ptr) {
+        a->curr_offset = a->prev_offset;
+        a->prev_offset = 0;
+        return 1;
+    }
+
+    return 0;
+}
 
 #endif // VD_XR_IMPL
