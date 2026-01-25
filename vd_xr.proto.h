@@ -184,6 +184,7 @@ typedef struct __VD_ArenaSave {
     size_t          curr_offset;
 } VdXr__ArenaSave;
 
+
 void                        vd_xr__arena_init(VdXr__Arena *a, void *buf, size_t len);
 void*                       vd_xr__arena_alloc_align(VdXr__Arena *a, size_t size, size_t align);
 void*                       vd_xr__arena_resize_align(VdXr__Arena *a, void *old_memory, size_t old_size, size_t new_size, size_t align);
@@ -199,7 +200,66 @@ VD_XR_INL VdXr__Arena       vd_xr__arena_from_malloc(size_t size)               
 #define VD_XR__ARENA_PUSH_STRUCT(a, x)       VD_XR__ARENA_PUSH_ARRAY(a, x, 1)
 #define VD_XR__ARENA_FROM_SYSTEM(a, size)    (vd_xr__arena_init(a, VD_MALLOC(size), size))
 
+typedef struct {
+    uint32_t     len;
+    uint32_t     cap;
+    VdXr__Arena  *arena;
+} VdXr__DynArrayHeader;
 
+#define VD_XR__DYNARRAY_HEADER(a)                      ((VdXr__DynArrayHeader*)(((uint8_t*)a) - sizeof(VdXr__DynArrayHeader)))
+#define VD_XR__DYNARRAY_INIT(a, arena)                 ((a) = vd__dynarray_grow(a, sizeof(*(a)), 1, 0, arena))
+#define VD_XR__DYNARRAY_INIT_WITH_CAP(a, arena, cap)   ((a) = vd__dynarray_grow(a, sizeof(*(a)), cap, cap, arena))
+#define VD_XR__DYNARRAY_ADD(a, v)                      (VD_XR__DYNARRAY_CHECKGROW(a, 1), (a)[VD_XR__DYNARRAY_HEADER(a)->len++] = (v))
+#define VD_XR__DYNARRAY_PUSH(a)                        (VD_XR__DYNARRAY_CHECKGROW(a, 1), &((a)[VD_XR__DYNARRAY_HEADER(a)->len++]))
+#define VD_XR__DYNARRAY_ADDN(a, n)                     (VD_XR__DYNARRAY_CHECKGROW(a, n), VD_XR__DYNARRAY_HEADER(a)->len += (n))
+#define VD_XR__DYNARRAY_CLEAR(a)                       ((a) ? VD_XR__DYNARRAY_HEADER(a)->len = 0 : 0)
+#define VD_XR__DYNARRAY_POP(a)                         (VD_XR__DYNARRAY_HEADER(a)->len--, (a)[VD_XR__DYNARRAY_HEADER(a)->len])
+#define VD_XR__DYNARRAY_LAST(a)                        ((a)[VD_XR__DYNARRAY_HEADER(a)->len - 1])
+#define VD_XR__DYNARRAY_LEN(a)                         ((a) ? VD_XR__DYNARRAY_HEADER(a)->len : 0)
+#define VD_XR__DYNARRAY_CAP(a)                         ((a) ? VD_XR__DYNARRAY_HEADER(a)->cap : 0)
+#define VD_XR__DYNARRAY_DEL(a, i)                      do { uint32_t _i_ = (i); if (_i_ == (VD_XR__DYNARRAY_LEN(a) - 1)) { (VD_XR__DYNARRAY_HEADER(a)->len--); } else {  (a)[_i_] = VD_XR__DYNARRAY_LAST(a); (VD_XR__DYNARRAY_HEADER(a)->len--); } } while (0)
+#define VD_XR__DYNARRAY_ARENAP(a)                      ((a) ? VD_XR__DYNARRAY_HEADER(a)->arena : 0)
+#define VD_XR__DYNARRAY_GROW(a, b, c)                  ((a) = vd__dynarray_grow((a), sizeof(*(a)), (b), (c), VD_XR__DYNARRAY_ARENAP(a)))
+#define VD_XR__DYNARRAY_PTR_CHECKED(a, i)              ((i < VD_XR__DYNARRAY_LEN(a)) ? &(a)[i] : 0)
+
+// @todo(mdodis): fix & check dynarray & fixedarray (they use invalid macros and dynarray is not tested)
+#define VD_XR__DYNARRAY_CHECKGROW(a, n)                      \
+    ((!(a) || VD_XR__DYNARRAY_HEADER(a)->len + (n) > VD_XR__DYNARRAY_HEADER(a)->cap) \
+    ? (VD_XR__DYNARRAY_GROW(a, n, 0), 0) : 0)
+
+VD_XR_INL void *vd__dynarray_grow(void *a, size_t tsize, uint32_t addlen, uint32_t mincap, VdXr__Arena *arena)
+{
+    size_t min_len = VD_XR__DYNARRAY_LEN(a) + addlen;
+
+    if (min_len > mincap) {
+        mincap = (uint32_t)min_len;
+    }
+
+    if (mincap <= VD_XR__DYNARRAY_CAP(a)) {
+        return a;
+    }
+
+    if (mincap < (2 * VD_XR__DYNARRAY_CAP(a))) {
+        mincap = 2 * VD_XR__DYNARRAY_CAP(a);
+    } else if (mincap < 4) {
+        mincap = 4;
+    }
+
+    void *b = vd_xr__arena_resize(arena, 
+        a ? VD_XR__DYNARRAY_HEADER(a) : 0,
+        VD_XR__DYNARRAY_CAP(a) == 0 ? 0 : tsize * VD_XR__DYNARRAY_CAP(a) + sizeof(VdXr__DynArrayHeader),
+        tsize * mincap + sizeof(VdXr__DynArrayHeader));
+
+    b = (uint8_t*)b + sizeof(VdXr__DynArrayHeader);
+
+    if (a == 0) {
+        VD_XR__DYNARRAY_HEADER(b)->len = 0;
+        VD_XR__DYNARRAY_HEADER(b)->arena = arena;
+    }
+
+    VD_XR__DYNARRAY_HEADER(b)->cap = mincap;
+    return b;
+}
 
 $$xr_generated_dispatch_table.h$$
 
@@ -211,6 +271,7 @@ $$xr_generated_dispatch_table.h$$
 typedef enum {
     VD_XR__LOADER_PROPERTY_NONE = 0,
     VD_XR__LOADER_PROPERTY_XR_ENABLE_API_LAYERS,
+    VD_XR__LOADER_PROPERTY_XR_RUNTIME_JSON_ENV_VAR,
 #if !defined(XR_OS_WINDOWS) && !defined(XR_OS_ANDROID)
     VD_XR__LOADER_PROPERTY_XDG_CONFIG_DIRS,
     VD_XR__LOADER_PROPERTY_XDG_DATA_DIRS,
@@ -228,7 +289,17 @@ typedef enum {
 } VdXr__ManifestFileType;
 
 typedef struct {
+    char name[128];
+    char library_path[256]
+} VdXr__RuntimeManifestFileData;
+
+typedef struct {
     VdXr__ManifestFileType file_type;
+    uint32_t file_format_version;
+
+    union {
+        VdXr__RuntimeManifestFileData runtime;
+    } data;
 } VdXr__ManifestFile;
 
 typedef struct {
@@ -260,12 +331,16 @@ static char*                vd_xr__string_buffer_pushu16(VdXr__StringBuffer *buf
 static char*                vd_xr__string_buffer_pushchar(VdXr__StringBuffer *buf, char c);
 static void*                vd_xr__string_buffer_pushraw(VdXr__StringBuffer *buf, int required_capacity, int update_len);
 
+static void                 vd_xr__init(void);
 static void                 vd_xr__manifest_file_list_empty(VdXr__ManifestFileList *list);
 static void                 vd_xr__manifest_file_list_push(VdXr__ManifestFileList *list, VdXr__ManifestFile *file);
 static XrResult             vd_xr__find_manifest_files(VdXr__ManifestFileType type, VdXr__ManifestFileList *list);
+static XrResult             vd_xr__find_runtime_manifest_files(VdXr__ManifestFileList *list);
+static XrResult             vd_xr__load_runtime(void);
+static XrResult             vd_xr__get_instance_extension_properties_from_runtime(void);
 static void                 vd_xr__add_files_in_path(VdXr__ManifestFileList *list, int is_directory_list, const char *search_path);
 static void                 vd_xr__check_all_files_in_path(VdXr__StringRange search_path, int is_directory_list, VdXr__ManifestFileList *list);
-
+static int                  vd_xr__load_manifest_file(VdXr__ManifestFile *file, char *json, size_t len);
 
 static const char*          vd_xr__get_loader_property(VdXr__LoaderProperty property);
 static void                 vd_xr__copy_include_paths(VdXr__StringBuffer *buf, int is_directory_list, const char *cur_path, const char *rel_path);
@@ -274,18 +349,20 @@ static VdXr__StringRange    vd_xr__substr(const char *s, int i, int count);
 
 #if XR_OS_WINDOWS
 static int                  vd_xr__utf8_to_wide(char *buf, int blen, wchar_t *wbuf, int wlen);
+static wchar_t*             vd_xr__utf8_to_wide_arena(VdXr__Arena *arena, char *buf, int blen, int *wlen);
 static int                  vd_xr__wide_to_utf8(wchar_t *wbuf, int wlen, char *buf, int blen);
 #endif
 
 typedef struct {
     XrGeneratedDispatchTable        *dispatch_table;
     VdXr__ManifestFileList          manbuf;
+    VdXr__ManifestFileList          runmanbuf;
     VdXr__StringBuffer              strbuf;
     VdXr__StringBuffer              pathbuf;
     VdXr__LoaderPropertyStorage     properties[VD_XR__LOADER_PROPERTY_COUNT];
-#if XR_OS_WINDOWS
+    VdXr__Arena                     arena;
     int                             initialized;
-#endif
+    int                             runtime_loaded;
 } VdXr__InternalData;
 
 static VdXr__InternalData Vd_Xr_G;
@@ -385,6 +462,8 @@ extern int         MultiByteToWideChar(VdXrUINT CodePage, VdXrDWORD dwFlags, VdX
 extern int         WideCharToMultiByte(VdXrUINT CodePage, VdXrDWORD dwFlags, VdXrLPCWSTR lpWideCharStr, int cchWideChar, VdXrLPSTR lpMultiByteStr, int cbMultiByte, VdXrLPSTR lpDefaultChar, VdXrBOOL *lpUsedDefaultChar);
 extern void*       GetProcAddress(VdXrHMODULE hModule, VdXrLPCSTR lpProcName);
 extern VdXrDWORD   GetEnvironmentVariableW(VdXrLPCWSTR lpName, VdXrLPWSTR lpBuffer, VdXrDWORD nSize);
+extern VdXrDWORD   GetFileAttributesW(VdXrLPCWSTR lpFileName);
+extern VdXrDWORD   GetFullPathNameW(VdXrLPCWSTR lpFileName, VdXrDWORD nBufferLength, VdXrLPWSTR lpBuffer, VdXrLPWSTR *lpFilePart);
 
 #else
 typedef HWND        VdXrHWND;
@@ -482,6 +561,99 @@ typedef VdXrACCESS_MASK VdXrREGSAM;
 #define VD_XR__WIN32_SECURITY_MANDATORY_SYSTEM_RID               (0x00004000L)
 #define VD_XR__WIN32_SECURITY_MANDATORY_PROTECTED_PROCESS_RID    (0x00005000L)
 
+#define VD_XR__WIN32_RRF_RT_REG_NONE        0x00000001
+#define VD_XR__WIN32_RRF_RT_REG_SZ          0x00000002
+#define VD_XR__WIN32_RRF_RT_REG_EXPAND_SZ   0x00000004
+#define VD_XR__WIN32_RRF_RT_REG_BINARY      0x00000008
+#define VD_XR__WIN32_RRF_RT_REG_DWORD       0x00000010
+#define VD_XR__WIN32_RRF_RT_REG_MULTI_SZ    0x00000020
+#define VD_XR__WIN32_RRF_RT_REG_QWORD       0x00000040
+#define VD_XR__WIN32_RRF_RT_DWORD           (VD_XR__WIN32_RRF_RT_REG_BINARY | VD_XR__WIN32_RRF_RT_REG_DWORD)
+#define VD_XR__WIN32_RRF_RT_QWORD           (VD_XR__WIN32_RRF_RT_REG_BINARY | VD_XR__WIN32_RRF_RT_REG_QWORD)
+#define VD_XR__WIN32_RRF_RT_ANY             0x0000ffff
+#define VD_XR__WIN32_RRF_NOEXPAND           0x10000000  // do not automatically expand environment strings if value is of type REG_EXPAND_SZ
+#define VD_XR__WIN32_RRF_ZEROONFAILURE      0x20000000  // if pvData is not NULL, set content to all zeros on failure
+
+
+#define VD_XR__WIN32_REG_NONE                    ( 0ul )
+#define VD_XR__WIN32_REG_SZ                      ( 1ul )
+#define VD_XR__WIN32_REG_EXPAND_SZ               ( 2ul )
+#define VD_XR__WIN32_REG_BINARY                  ( 3ul )
+#define VD_XR__WIN32_REG_DWORD                   ( 4ul )
+#define VD_XR__WIN32_REG_DWORD_LITTLE_ENDIAN     ( 4ul )
+#define VD_XR__WIN32_REG_DWORD_BIG_ENDIAN        ( 5ul )
+#define VD_XR__WIN32_REG_LINK                    ( 6ul )
+#define VD_XR__WIN32_REG_MULTI_SZ                ( 7ul )
+#define VD_XR__WIN32_REG_RESOURCE_LIST           ( 8ul )
+#define VD_XR__WIN32_REG_FULL_RESOURCE_DESCRIPTOR ( 9ul )
+#define VD_XR__WIN32_REG_RESOURCE_REQUIREMENTS_LIST ( 10ul )
+#define VD_XR__WIN32_REG_QWORD                   ( 11ul )
+#define VD_XR__WIN32_REG_QWORD_LITTLE_ENDIAN     ( 11ul )
+
+#define VD_XR__WIN32_DELETE                           (0x00010000L)
+#define VD_XR__WIN32_READ_CONTROL                     (0x00020000L)
+#define VD_XR__WIN32_WRITE_DAC                        (0x00040000L)
+#define VD_XR__WIN32_WRITE_OWNER                      (0x00080000L)
+#define VD_XR__WIN32_SYNCHRONIZE                      (0x00100000L)
+
+#define VD_XR__WIN32_FILE_READ_DATA            ( 0x0001 )    // file & pipe
+#define VD_XR__WIN32_FILE_LIST_DIRECTORY       ( 0x0001 )    // directory
+
+#define VD_XR__WIN32_FILE_WRITE_DATA           ( 0x0002 )    // file & pipe
+#define VD_XR__WIN32_FILE_ADD_FILE             ( 0x0002 )    // directory
+
+#define VD_XR__WIN32_FILE_APPEND_DATA          ( 0x0004 )    // file
+#define VD_XR__WIN32_FILE_ADD_SUBDIRECTORY     ( 0x0004 )    // directory
+#define VD_XR__WIN32_FILE_CREATE_PIPE_INSTANCE ( 0x0004 )    // named pipe
+
+
+#define VD_XR__WIN32_FILE_READ_EA              ( 0x0008 )    // file & directory
+
+#define VD_XR__WIN32_FILE_WRITE_EA             ( 0x0010 )    // file & directory
+
+#define VD_XR__WIN32_FILE_EXECUTE              ( 0x0020 )    // file
+#define VD_XR__WIN32_FILE_TRAVERSE             ( 0x0020 )    // directory
+
+#define VD_XR__WIN32_FILE_DELETE_CHILD         ( 0x0040 )    // directory
+
+#define VD_XR__WIN32_FILE_READ_ATTRIBUTES      ( 0x0080 )    // all
+
+#define VD_XR__WIN32_FILE_WRITE_ATTRIBUTES     ( 0x0100 )    // all
+
+#define VD_XR__WIN32_FILE_GENERIC_READ         (VD_XR__WIN32_STANDARD_RIGHTS_READ     |\
+                                                VD_XR__WIN32_FILE_READ_DATA           |\
+                                                VD_XR__WIN32_FILE_READ_ATTRIBUTES     |\
+                                                VD_XR__WIN32_FILE_READ_EA             |\
+                                                VD_XR__WIN32_SYNCHRONIZE)
+
+
+#define VD_XR__WIN32_FILE_GENERIC_WRITE        (VD_XR__WIN32_STANDARD_RIGHTS_WRITE    |\
+                                                VD_XR__WIN32_FILE_WRITE_DATA          |\
+                                                VD_XR__WIN32_FILE_WRITE_ATTRIBUTES    |\
+                                                VD_XR__WIN32_FILE_WRITE_EA            |\
+                                                VD_XR__WIN32_FILE_APPEND_DATA         |\
+                                                VD_XR__WIN32_SYNCHRONIZE)
+
+
+#define VD_XR__WIN32_FILE_GENERIC_EXECUTE      (VD_XR__WIN32_STANDARD_RIGHTS_EXECUTE  |\
+                                                VD_XR__WIN32_FILE_READ_ATTRIBUTES     |\
+                                                VD_XR__WIN32_FILE_EXECUTE             |\
+                                                VD_XR__WIN32_SYNCHRONIZE)
+
+#define VD_XR__WIN32_FILE_SHARE_READ                 0x00000001  
+#define VD_XR__WIN32_FILE_SHARE_WRITE                0x00000002  
+#define VD_XR__WIN32_FILE_SHARE_DELETE               0x00000004  
+#define VD_XR__WIN32_FILE_ATTRIBUTE_READONLY             0x00000001  
+#define VD_XR__WIN32_FILE_ATTRIBUTE_HIDDEN               0x00000002  
+#define VD_XR__WIN32_FILE_ATTRIBUTE_SYSTEM               0x00000004  
+#define VD_XR__WIN32_FILE_ATTRIBUTE_DIRECTORY            0x00000010  
+#define VD_XR__WIN32_FILE_ATTRIBUTE_ARCHIVE              0x00000020  
+#define VD_XR__WIN32_FILE_ATTRIBUTE_DEVICE               0x00000040  
+#define VD_XR__WIN32_FILE_ATTRIBUTE_NORMAL               0x00000080  
+#define VD_XR__WIN32_FILE_ATTRIBUTE_TEMPORARY            0x00000100  
+
+#define VD_XR__WIN32_INVALID_FILE_ATTRIBUTES ((VdXrDWORD)-1)
+
 typedef enum VdXr_TOKEN_INFORMATION_CLASS {
   VD_XR_TokenUser = 1,
   VD_XR_TokenGroups,
@@ -568,6 +740,7 @@ typedef struct VdXr_TOKEN_MANDATORY_LABEL {
 #define VD_XR__WIN32_HKEY_LOCAL_MACHINE                  (( VdXrHKEY ) (VdXrULONG_PTR)((VdXrLONG)0x80000002) )
 
 typedef VdXrLSTATUS (*VdXr__ProcRegOpenKeyExW)(VdXrHKEY hKey, VdXrLPCWSTR lpSubKey, VdXrDWORD ulOptions, VdXrREGSAM samDesired, VdXrHKEY *phkResult);
+typedef VdXrLSTATUS (*VdXr__ProcRegGetValueW)(VdXrHKEY hkey, VdXrLPCWSTR lpSubKey, VdXrLPCWSTR lpValue, VdXrDWORD dwFlags, VdXrLPDWORD pdwType, void *pvData, VdXrLPDWORD pcbData);
 typedef VdXrLSTATUS (*VdXr__ProcRegCloseKey)(VdXrHKEY hKey);
 typedef VdXrBOOL    (*VdXr__ProcOpenProcessToken)(VdXrHANDLE ProcessHandle, VdXrDWORD DesiredAccess, VdXrPHANDLE TokenHandle);
 typedef VdXrBOOL    (*VdXr__ProcGetTokenInformation)(VdXrHANDLE TokenHandle, VdXrTOKEN_INFORMATION_CLASS TokenInformationClass, VdXrLPVOID TokenInformation, VdXrDWORD TokenInformationLength, VdXrPDWORD ReturnLength);
@@ -576,6 +749,7 @@ typedef VdXrPDWORD  (*VdXr__ProcGetSidSubAuthority)(VdXrPISID pSid, VdXrDWORD nS
 
 #pragma pack(pop)
 static VdXr__ProcRegOpenKeyExW VdXr__RegOpenKeyExW;
+static VdXr__ProcRegGetValueW VdXr__RegGetValueW;
 static VdXr__ProcRegCloseKey VdXr__RegCloseKey;
 static VdXr__ProcOpenProcessToken VdXr__OpenProcessToken;
 static VdXr__ProcGetTokenInformation VdXr__GetTokenInformation;
@@ -589,6 +763,19 @@ static int                  vd_xr__is_high_integrity_level(void);
 static int vd_xr__utf8_to_wide(char *buf, int blen, wchar_t *wbuf, int wlen)
 {
     return MultiByteToWideChar(65001, 8, buf, blen, wbuf, wlen);
+}
+
+static wchar_t *vd_xr__utf8_to_wide_arena(VdXr__Arena *arena, char *buf, int blen, int *wlen)
+{
+    int count = vd_xr__utf8_to_wide(buf, blen, 0, 0);
+    wchar_t *wbuf = (wchar_t*)vd_xr__arena_alloc(arena, sizeof(wchar_t) * (count + 1));
+    int written = vd_xr__utf8_to_wide(buf, blen, wbuf, count);
+
+    if (wlen) *wlen = count;
+
+    wbuf[written] = 0;
+
+    return wbuf;
 }
 
 static int vd_xr__wide_to_utf8(wchar_t *wbuf, int wlen, char *buf, int blen)
@@ -661,15 +848,10 @@ static int vd_xr__is_high_integrity_level(void)
 
 static void vd_xr__win32_init(void)
 {
-    if (Vd_Xr_G.initialized) {
-        return;    
-    }
-
-    Vd_Xr_G.initialized = 1;
-
     {
         VdXrHMODULE mod = LoadLibraryA("Advapi32.dll");
         VdXr__RegOpenKeyExW = (VdXr__ProcRegOpenKeyExW)GetProcAddress(mod, "RegOpenKeyExW");
+        VdXr__RegGetValueW = (VdXr__ProcRegGetValueW)GetProcAddress(mod, "RegGetValueW");
         VdXr__RegCloseKey = (VdXr__ProcRegCloseKey)GetProcAddress(mod, "RegCloseKey");
         VdXr__OpenProcessToken = (VdXr__ProcOpenProcessToken)GetProcAddress(mod, "OpenProcessToken");
         VdXr__GetTokenInformation = (VdXr__ProcGetTokenInformation)GetProcAddress(mod, "GetTokenInformation");
@@ -837,8 +1019,6 @@ static XrResult vd_xr__find_manifest_files(VdXr__ManifestFileType type, VdXr__Ma
 #if defined(XR_OS_WINDOWS)
     {
         // ReadLayerDataFilesInRegistry
-        vd_xr__win32_init();
-
         VdXr__StringBuffer *full_registry_location_buf = &Vd_Xr_G.strbuf;
         vd_xr__string_buffer_empty(full_registry_location_buf);
         vd_xr__string_buffer_push(full_registry_location_buf, OPENXR_REGISTRY_LOCATION);
@@ -890,6 +1070,85 @@ static void vd_xr__add_files_in_path(VdXr__ManifestFileList *list, int is_direct
     }
 }
 
+static XrResult vd_xr__load_runtime(void)
+{
+    if (Vd_Xr_G.runtime_loaded) {
+        return XR_SUCCESS;
+    }
+
+    // @note(mdodis): RuntimeManifestFile::FindManifestFiles
+    {
+
+        VdXr__ManifestFileList *list = &Vd_Xr_G.runmanbuf;
+        vd_xr__manifest_file_list_empty(list);
+        vd_xr__get_loader_property(VD_XR__LOADER_PROPERTY_XR_RUNTIME_JSON_ENV_VAR);
+
+        VdXr__ManifestFile file = {0};
+#if XR_OS_WINDOWS
+        const char *runtime_registry_location = "";
+        const char *default_runtime_value_name = "ActiveRuntime";
+
+        // ReadRuntimeDataFilesInRegistry
+        VdXrHKEY hkey;
+        VdXr__StringBuffer *strbuf = &Vd_Xr_G.strbuf;
+        vd_xr__string_buffer_empty(strbuf);
+
+        vd_xr__string_buffer_push(strbuf, OPENXR_REGISTRY_LOCATION);
+        vd_xr__string_buffer_pushu16(strbuf, XR_VERSION_MAJOR(XR_CURRENT_API_VERSION));
+        const char *full_registry_location = vd_xr__string_buffer_push(strbuf, runtime_registry_location);
+        size_t full_registry_location_len = strbuf->len;
+
+        VdXr__ArenaSave save = vd_xr__arena_save(&Vd_Xr_G.arena);
+        int full_registry_locationw_len;
+        wchar_t *full_registry_locationw = vd_xr__utf8_to_wide_arena(&Vd_Xr_G.arena, 
+                                                                     full_registry_location, full_registry_location_len,
+                                                                     &full_registry_locationw_len);
+
+        int default_runtime_value_namew_len;
+        wchar_t *default_runtime_value_namew = vd_xr__utf8_to_wide_arena(&Vd_Xr_G.arena, 
+                                                                         default_runtime_value_name, vd_xr__strlen(default_runtime_value_name),
+                                                                         &default_runtime_value_namew_len);
+
+        VdXrLONG open_val = VdXr__RegOpenKeyExW(VD_XR__WIN32_HKEY_LOCAL_MACHINE, full_registry_locationw,
+                                                0, VD_XR__WIN32_KEY_QUERY_VALUE, &hkey);
+        if (open_val == 0) {
+            wchar_t *full_pathw = 0;
+            wchar_t value_w[1024];
+            VdXrDWORD value_w_size = sizeof(value_w);
+            if (VdXr__RegGetValueW(hkey, 0, default_runtime_value_namew,
+                                   VD_XR__WIN32_RRF_RT_REG_SZ | VD_XR__WIN32_REG_EXPAND_SZ | VD_XR__WIN32_RRF_ZEROONFAILURE,
+                                   0, (VdXrLPBYTE)&value_w, &value_w_size) == 0)
+            {
+                VdXrDWORD attr = GetFileAttributesW(value_w);
+                int is_regular_file = attr != VD_XR__WIN32_INVALID_FILE_ATTRIBUTES && !(attr & VD_XR__WIN32_FILE_ATTRIBUTE_DIRECTORY);
+
+                if (is_regular_file) {
+
+                    VdXrDWORD nreq = GetFullPathNameW(value_w, 0, 0, NULL);
+                    full_pathw = VD_XR__ARENA_PUSH_ARRAY(&Vd_Xr_G.arena, wchar_t, nreq + 1);
+                    GetFullPathNameW(value_w, nreq, full_pathw, NULL);
+                }
+            }
+
+            VdXr__RegCloseKey(hkey);
+        }
+
+
+        vd_xr__arena_restore(save);
+#endif
+
+    }
+
+
+    Vd_Xr_G.runtime_loaded = 1;
+    return XR_SUCCESS;
+}
+
+static XrResult vd_xr__get_instance_extension_properties_from_runtime(void)
+{
+    return XR_SUCCESS;
+}
+
 static void vd_xr__check_all_files_in_path(VdXr__StringRange search_path, int is_directory_list, VdXr__ManifestFileList *list)
 {
 
@@ -904,6 +1163,11 @@ static const char *vd_xr__get_loader_property(VdXr__LoaderProperty property)
         case VD_XR__LOADER_PROPERTY_XR_ENABLE_API_LAYERS: {
             env_var_name = OPENXR_ENABLE_LAYERS_ENV_VAR;
             env_var_name_len = sizeof(OPENXR_ENABLE_LAYERS_ENV_VAR) - 1;
+        } break;
+
+        case VD_XR__LOADER_PROPERTY_XR_RUNTIME_JSON_ENV_VAR: {
+            env_var_name = OPENXR_RUNTIME_JSON_ENV_VAR;
+            env_var_name_len = sizeof(OPENXR_RUNTIME_JSON_ENV_VAR) - 1;
         } break;
 
 #if !defined(XR_OS_WINDOWS) && !defined(XR_OS_ANDROID)
@@ -1036,11 +1300,22 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInstanceExtensionProperties(const char
                                                                       uint32_t *propertyCountOutput,
                                                                       XrExtensionProperties *properties)
 {
-    VdXr__ManifestFileList *manifest_files = &Vd_Xr_G.manbuf;
+    XrResult result;
+    VdXr__ManifestFileList *manifest_files;
+    XrExtensionProperties *props_array;
+    VdXr__ArenaSave arena_save;
+
+    vd_xr__init();
+
+    manifest_files = &Vd_Xr_G.manbuf;
+    props_array = 0;
+    result = XR_SUCCESS;
+
+    arena_save = vd_xr__arena_save(&Vd_Xr_G.arena);
 
     if (propertyCountOutput == 0)
     {
-        return XR_ERROR_VALIDATION_FAILURE;
+        result = XR_ERROR_VALIDATION_FAILURE;
     }
 
     int just_layer_props = 0;
@@ -1050,15 +1325,30 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInstanceExtensionProperties(const char
     }
 
     // @note(mdodis): ApiLayerInterface::GetInstanceExtensionProperties
-    if (just_layer_props) {
+    if (XR_SUCCEEDED(result)) {
+        result = vd_xr__find_manifest_files(VD_XR__MANIFEST_FILE_TYPE_IMPLICIT_API_LAYER, manifest_files);
+        // <--
+        
+        if (XR_SUCCEEDED(result) && !just_layer_props) {
+            result = vd_xr__load_runtime();
 
-    } else {
-        XrResult result = vd_xr__find_manifest_files(VD_XR__MANIFEST_FILE_TYPE_IMPLICIT_API_LAYER, manifest_files);
-        if (XR_SUCCEEDED(result)) {
-
+            if (XR_SUCCEEDED(result)) {
+                vd_xr__get_instance_extension_properties_from_runtime();
+            }
         }
     }
 
+
+    if (XR_SUCCEEDED(result)) {
+
+        if (just_layer_props) {
+
+        } else {
+        }
+    }
+
+    vd_xr__arena_restore(arena_save);
+    return result;
 }
 
 static void *vd_xr__resize_buffer(void *buffer, size_t element_size, int required_capacity, int *cap)
@@ -1197,6 +1487,21 @@ int vd_xr__arena_free(VdXr__Arena *a, void *memory, size_t size)
     }
 
     return 0;
+}
+
+static void vd_xr__init(void)
+{
+    if (Vd_Xr_G.initialized) {
+        return;    
+    }
+
+    Vd_Xr_G.initialized = 1;
+
+#if XR_OS_WINDOWS
+    vd_xr__win32_init();
+#endif
+
+    Vd_Xr_G.arena = vd_xr__arena_from_malloc(1024 * 1024 * 4);
 }
 
 #endif // VD_XR_IMPL
