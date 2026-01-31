@@ -114,6 +114,7 @@ static void*    vd_xr__realloc_mem(void *prev_ptr, size_t size);
 static void     vd_xr__free_mem(void *ptr);
 static void*    vd_xr__resize_buffer(void *buffer, size_t element_size, int required_capacity, int *cap);
 static int      vd_xr__strlen(const char *s);
+static int      vd_xr__strncmp(const char *s, const char *t, int count);
 static int      vd_xr__str_first_of(const char *s, char c);
 static int      vd_xr__str_first_of_with_start(const char *s, char c, int start);
 
@@ -289,14 +290,18 @@ typedef enum {
 } VdXr__ManifestFileType;
 
 typedef struct {
+    int  name_len;
     char name[128];
-    char library_path[256]
+
+    int library_path_len;
+    char library_path[256];
 } VdXr__RuntimeManifestFileData;
 
 typedef struct {
     VdXr__ManifestFileType file_type;
-    uint32_t file_format_version;
-
+    int version_major;
+    int version_minor;
+    int version_patch;
     union {
         VdXr__RuntimeManifestFileData runtime;
     } data;
@@ -440,6 +445,36 @@ typedef VdXrULONG_PTR       VdXrSIZE_T;
 typedef short               VdXrSHORT;
 typedef VdXrDWORD           VdXrCOLORREF;
 typedef VdXrDWORD*          VdXrLPCOLORREF;
+typedef struct VdXr_SECURITY_ATTRIBUTES {
+  VdXrDWORD  nLength;
+  VdXrLPVOID lpSecurityDescriptor;
+  VdXrBOOL   bInheritHandle;
+} VdXrSECURITY_ATTRIBUTES, *VdXrPSECURITY_ATTRIBUTES, *VdXrLPSECURITY_ATTRIBUTES;
+
+typedef union VdXr_LARGE_INTEGER {
+  struct {
+    VdXrDWORD LowPart;
+    VdXrLONG  HighPart;
+  } DUMMYSTRUCTNAME;
+  struct {
+    VdXrDWORD LowPart;
+    VdXrLONG  HighPart;
+  } u;
+  VdXrLONGLONG QuadPart;
+} VdXrLARGE_INTEGER, *VdXrPLARGE_INTEGER;
+
+typedef struct VdXr_OVERLAPPED {
+  VdXrULONG_PTR Internal;
+  VdXrULONG_PTR InternalHigh;
+  union {
+    struct {
+      VdXrDWORD Offset;
+      VdXrDWORD OffsetHigh;
+    } DUMMYSTRUCTNAME;
+    void* Pointer;
+  } DUMMYUNIONNAME;
+  VdXrHANDLE    hEvent;
+} VdXrOVERLAPPED, *VdXrLPOVERLAPPED;
 
 VD_XR_DECLARE_HANDLE(VdXrHWND);
 VD_XR_DECLARE_HANDLE(VdXrHINSTANCE);
@@ -464,40 +499,44 @@ extern void*       GetProcAddress(VdXrHMODULE hModule, VdXrLPCSTR lpProcName);
 extern VdXrDWORD   GetEnvironmentVariableW(VdXrLPCWSTR lpName, VdXrLPWSTR lpBuffer, VdXrDWORD nSize);
 extern VdXrDWORD   GetFileAttributesW(VdXrLPCWSTR lpFileName);
 extern VdXrDWORD   GetFullPathNameW(VdXrLPCWSTR lpFileName, VdXrDWORD nBufferLength, VdXrLPWSTR lpBuffer, VdXrLPWSTR *lpFilePart);
+extern VdXrHANDLE  CreateFileW(VdXrLPCWSTR lpFileName, VdXrDWORD dwDesiredAccess, VdXrDWORD dwShareMode, VdXrLPSECURITY_ATTRIBUTES lpSecurityAttributes, VdXrDWORD dwCreationDisposition, VdXrDWORD dwFlagsAndAttributes, VdXrHANDLE hTemplateFile);
+extern VdXrBOOL    GetFileSizeEx(VdXrHANDLE hFile, VdXrPLARGE_INTEGER lpFileSize);
+extern VdXrBOOL    ReadFile(VdXrHANDLE hFile, VdXrLPVOID lpBuffer, VdXrDWORD nNumberOfBytesToRead, VdXrLPDWORD lpNumberOfBytesRead, VdXrLPOVERLAPPED lpOverlapped);
 
 #else
-typedef HWND        VdXrHWND;
-typedef DWORD       VdXrDWORD;
-typedef WORD        VdXrWORD;
-typedef LPWSTR      VdXrLPWSTR;
-typedef LPCWSTR     VdXrLPCWSTR;
-typedef LPCSTR      VdXrLPCSTR;
-typedef DWORD       VdXrDWORD;
-typedef UINT        VdXrUINT;
-typedef UINT64      VdXrUINT64;
-typedef UINT32      VdXrUINT32;
-typedef INT32       VdXrINT32;
-typedef UINT16      VdXrUINT16;
-typedef UINT8       VdXrUINT8;
-typedef INT16       VdXrINT16;
-typedef HMODULE     VdXrHMODULE;
-typedef HRESULT     VdXrHRESULT;
-typedef ULONG       VdXrULONG;
-typedef HDC         VdXrHDC;
-typedef HMONITOR    VdXrHMONITOR;
-typedef HANDLE      VdXrHANDLE;
-typedef HGDIOBJ     VdXrHGDIOBJ;
-typedef HBITMAP     VdXrHBITMAP;
-typedef LPARAM      VdXrLPARAM;
-typedef BOOL        VdXrPBOOL;
-typedef LONG        VdXrLONG;
-typedef BYTE        VdXrBYTE;
-typedef WCHAR       VdXrWCHAR;
-typedef BOOL        VdXrBOOL;
-typedef LPVOID      VdXrLPVOID;
-typedef FLOAT       VdXrFLOAT;
-typedef VdXrDWORD   VdXrCOLORREF;
-typedef VdXrDWORD*  VdXrLPCOLORREF;
+typedef HWND            VdXrHWND;
+typedef DWORD           VdXrDWORD;
+typedef WORD            VdXrWORD;
+typedef LPWSTR          VdXrLPWSTR;
+typedef LPCWSTR         VdXrLPCWSTR;
+typedef LPCSTR          VdXrLPCSTR;
+typedef DWORD           VdXrDWORD;
+typedef UINT            VdXrUINT;
+typedef UINT64          VdXrUINT64;
+typedef UINT32          VdXrUINT32;
+typedef INT32           VdXrINT32;
+typedef UINT16          VdXrUINT16;
+typedef UINT8           VdXrUINT8;
+typedef INT16           VdXrINT16;
+typedef HMODULE         VdXrHMODULE;
+typedef HRESULT         VdXrHRESULT;
+typedef ULONG           VdXrULONG;
+typedef HDC             VdXrHDC;
+typedef HMONITOR        VdXrHMONITOR;
+typedef HANDLE          VdXrHANDLE;
+typedef HGDIOBJ         VdXrHGDIOBJ;
+typedef HBITMAP         VdXrHBITMAP;
+typedef LPARAM          VdXrLPARAM;
+typedef BOOL            VdXrPBOOL;
+typedef LONG            VdXrLONG;
+typedef BYTE            VdXrBYTE;
+typedef WCHAR           VdXrWCHAR;
+typedef BOOL            VdXrBOOL;
+typedef LPVOID          VdXrLPVOID;
+typedef FLOAT           VdXrFLOAT;
+typedef VdXrDWORD       VdXrCOLORREF;
+typedef VdXrDWORD*      VdXrLPCOLORREF;
+typedef LARGE_INTEGER   VdXrLARGE_INTEGER;
 #endif // !_MINWINDEF_
 
 typedef VdXrLONG VdXrLSTATUS;
@@ -514,6 +553,15 @@ typedef VdXrACCESS_MASK VdXrREGSAM;
 #define VD_XR__WIN32_KEY_WOW64_32KEY         (0x0200)
 #define VD_XR__WIN32_KEY_WOW64_64KEY         (0x0100)
 #define VD_XR__WIN32_KEY_WOW64_RES           (0x0300)
+
+
+#define VD_XR__WIN32_DELETE                           (0x00010000L)
+#define VD_XR__WIN32_READ_CONTROL                     (0x00020000L)
+#define VD_XR__WIN32_WRITE_DAC                        (0x00040000L)
+#define VD_XR__WIN32_WRITE_OWNER                      (0x00080000L)
+#define VD_XR__WIN32_SYNCHRONIZE                      (0x00100000L)
+
+#define VD_XR__WIN32_STANDARD_RIGHTS_READ             (VD_XR__WIN32_READ_CONTROL)
 
 #define VD_XR__WIN32_KEY_READ       ((VD_XR__WIN32_STANDARD_RIGHTS_READ       |\
                                      VD_XR__WIN32_KEY_QUERY_VALUE             |\
@@ -589,13 +637,6 @@ typedef VdXrACCESS_MASK VdXrREGSAM;
 #define VD_XR__WIN32_REG_RESOURCE_REQUIREMENTS_LIST ( 10ul )
 #define VD_XR__WIN32_REG_QWORD                   ( 11ul )
 #define VD_XR__WIN32_REG_QWORD_LITTLE_ENDIAN     ( 11ul )
-
-#define VD_XR__WIN32_DELETE                           (0x00010000L)
-#define VD_XR__WIN32_READ_CONTROL                     (0x00020000L)
-#define VD_XR__WIN32_WRITE_DAC                        (0x00040000L)
-#define VD_XR__WIN32_WRITE_OWNER                      (0x00080000L)
-#define VD_XR__WIN32_SYNCHRONIZE                      (0x00100000L)
-
 #define VD_XR__WIN32_FILE_READ_DATA            ( 0x0001 )    // file & pipe
 #define VD_XR__WIN32_FILE_LIST_DIRECTORY       ( 0x0001 )    // directory
 
@@ -619,6 +660,11 @@ typedef VdXrACCESS_MASK VdXrREGSAM;
 #define VD_XR__WIN32_FILE_READ_ATTRIBUTES      ( 0x0080 )    // all
 
 #define VD_XR__WIN32_FILE_WRITE_ATTRIBUTES     ( 0x0100 )    // all
+
+#define VD_XR__WIN32_GENERIC_READ                     (0x80000000L)
+#define VD_XR__WIN32_GENERIC_WRITE                    (0x40000000L)
+#define VD_XR__WIN32_GENERIC_EXECUTE                  (0x20000000L)
+#define VD_XR__WIN32_GENERIC_ALL                      (0x10000000L)
 
 #define VD_XR__WIN32_FILE_GENERIC_READ         (VD_XR__WIN32_STANDARD_RIGHTS_READ     |\
                                                 VD_XR__WIN32_FILE_READ_DATA           |\
@@ -1127,6 +1173,21 @@ static XrResult vd_xr__load_runtime(void)
                     VdXrDWORD nreq = GetFullPathNameW(value_w, 0, 0, NULL);
                     full_pathw = VD_XR__ARENA_PUSH_ARRAY(&Vd_Xr_G.arena, wchar_t, nreq + 1);
                     GetFullPathNameW(value_w, nreq, full_pathw, NULL);
+                    full_pathw[nreq] = 0;
+
+                    VdXrHANDLE file_handle = CreateFileW(full_pathw, VD_XR__WIN32_GENERIC_READ,
+                                                         VD_XR__WIN32_FILE_SHARE_READ, 0, 4 /* OPEN_ALWAYS */,
+                                                         VD_XR__WIN32_FILE_ATTRIBUTE_NORMAL, 0);
+                    if (file_handle != 0) {
+
+                        VdXrLARGE_INTEGER file_size = {0};
+                        GetFileSizeEx(file_handle, &file_size);
+                        char *json = (char*)vd_xr__arena_alloc(&Vd_Xr_G.arena, file_size.QuadPart);
+                        VdXrDWORD num_bytes_read;
+                        if (ReadFile(file_handle, json, file_size.QuadPart, &num_bytes_read, 0) && (num_bytes_read >= file_size.QuadPart)) {
+                            vd_xr__load_manifest_file(&file, json, file_size.QuadPart);
+                        }
+                    }
                 }
             }
 
@@ -1152,6 +1213,95 @@ static XrResult vd_xr__get_instance_extension_properties_from_runtime(void)
 static void vd_xr__check_all_files_in_path(VdXr__StringRange search_path, int is_directory_list, VdXr__ManifestFileList *list)
 {
 
+}
+
+static int vd_xr__load_manifest_file(VdXr__ManifestFile *file, char *json, size_t len)
+{
+    size_t cur = 0;
+    size_t nxt = 0;
+#define VD_XR_EXPECT(c)     (((cur < len) && (json[cur] == c)) ? 1 : 0)
+#define VD_XR_MUST(c)       do { if (!VD_XR_EXPECT(c)) { return 0; } else { VD_XR_NEXT(); } } while(0)
+#define VD_XR_PEEK()        ((cur < len) ? (int)json[cur] : 0)
+#define VD_XR_NEXT()        ((++cur >= len) ? 0 : 1)
+#define VD_XR_SKIP()        while ((cur < len) && ((json[cur] == ' ') || (json[cur] == '\t') || (json[cur] == '\r') || (json[cur] == '\n'))) cur++;
+#define VD_XR_DONE()        (cur >= len)
+#define VD_XR_CURSUB(t)     ((vd_xr__strncmp(json + cur, t, sizeof(t) - 1) == 0) ? (cur += (sizeof(t) - 1)) : 0)
+#define VD_XR_INT(var)      while ((cur < len) && (json[cur] >= '0') && (json[cur <= '9'])) { var *= 10; var += json[cur] - '0'; cur++; }
+#define VD_XR_STR(var, l)   while ((cur < len) && (json[cur] != '\"')) { var[l++] = json[cur]; cur++; }
+
+    VD_XR_SKIP();
+    VD_XR_MUST('{');
+
+    while (!VD_XR_DONE()) {
+
+        VD_XR_SKIP();
+
+        if (VD_XR_CURSUB("\"file_format_version\"")) { VD_XR_SKIP(); VD_XR_MUST(':'); VD_XR_SKIP();
+            VD_XR_MUST('\"');
+            int major = 0;
+            VD_XR_INT(major);
+            VD_XR_MUST('.');
+
+            int minor = 0;
+            VD_XR_INT(minor);
+            VD_XR_MUST('.');
+
+            int patch = 0;
+            VD_XR_INT(patch);
+
+            VD_XR_MUST('\"');
+            file->version_major = major;
+            file->version_minor = minor;
+            file->version_patch = patch;
+
+            VD_XR_SKIP();
+            VD_XR_MUST(',');
+        } else if (VD_XR_CURSUB("\"runtime\"")) { VD_XR_SKIP(); VD_XR_MUST(':'); VD_XR_SKIP();
+            VD_XR_MUST('{');
+
+            file->file_type = VD_XR__MANIFEST_FILE_TYPE_RUNTIME;
+
+            while (!VD_XR_DONE() && !VD_XR_EXPECT('}')) {
+                VD_XR_SKIP();
+
+                if (VD_XR_CURSUB("\"name\"")) { VD_XR_SKIP(); VD_XR_MUST(':'); VD_XR_SKIP();
+
+                    VD_XR_MUST('\"');
+
+                    file->data.runtime.name_len = 0;
+                    VD_XR_STR(file->data.runtime.name, file->data.runtime.name_len);
+
+                    VD_XR_MUST('\"');
+                    VD_XR_SKIP();
+                    VD_XR_MUST(',');
+                } else if (VD_XR_CURSUB("\"library_path\"")) { VD_XR_SKIP(); VD_XR_MUST(':'); VD_XR_SKIP();
+
+                    VD_XR_MUST('\"');
+
+                    file->data.runtime.library_path_len = 0;
+                    VD_XR_STR(file->data.runtime.library_path, file->data.runtime.library_path_len);
+
+                    VD_XR_MUST('\"');
+                    VD_XR_SKIP();
+                    VD_XR_MUST(',');
+                }
+            }
+            
+            VD_XR_MUST('}');
+        }
+    }
+
+    VD_XR_MUST('}');
+
+    return 1;
+
+#undef VD_XR_EXPECT
+#undef VD_XR_MUST
+#undef VD_XR_PEEK
+#undef VD_XR_NEXT
+#undef VD_XR_SKIP
+#undef VD_XR_DONE
+#undef VD_XR_CURSUB
 }
 
 static const char *vd_xr__get_loader_property(VdXr__LoaderProperty property)
@@ -1372,6 +1522,23 @@ static int vd_xr__strlen(const char *s)
 
     while (*s++) r++;
     return r;
+}
+
+static int vd_xr__strncmp(const char *s, const char *t, int count)
+{
+    while ((*s) && (*t) && (count > 0)) {
+        int d = *s - *t;
+
+        if (d != 0) {
+            return d;
+        }
+
+        s++;
+        t++;
+        count--;
+    }
+
+    return 0;
 }
 
 static int vd_xr__str_first_of(const char *s, char c)
