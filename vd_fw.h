@@ -291,10 +291,19 @@ VD_FW_API int                vd_fw_init(VdFwInitInfo *info);
 VD_FW_API int                vd_fw_running(void);
 
 /**
- * @brief End rendering and swap buffers. Call this right at the end of your rendering code.
- * @return  (Reserved)
+ * @brief Poll for events. Call this every frame, even if you don't use them.
  */
-VD_FW_API int                vd_fw_swap_buffers(void);
+VD_FW_API void               vd_fw_poll(void);
+
+/**
+ * @brief Acquire lock to the window buffer for drawing
+ */
+VD_FW_API void               vd_fw_lock(void);
+
+/**
+ * @brief Swap buffers and release lock to the window buffer after drawing
+ */
+VD_FW_API void               vd_fw_unlock(void);
 
 /**
  * @brief Get if the user requested to close the window
@@ -314,7 +323,7 @@ VD_FW_API void               vd_fw_quit(void);
 VD_FW_API VdFwPlatform       vd_fw_get_platform(void);
 
 /**
- * @brief Switch the current graphics API (must not be called between vd_fw_running and vd_fw_swap_buffers)
+ * @brief Switch the current graphics API (must not be called between vd_fw_lock and vd_fw_unlock)
  * @param  api        The new API to use
  * @param  gl_options If api is VD_FW_GRAPHICS_API_OPENGL, the options for OpenGL
  */
@@ -433,13 +442,13 @@ VD_FW_API void               vd_fw_set_title(const char *title);
 VD_FW_API void               vd_fw_set_app_icon(void *pixels, int width, int height);
 
 /**
- * @brief Get the time (in nanoseconds) since the last call to vd_fw_swap_buffers
+ * @brief Get the time (in nanoseconds) since the last call to vd_fw_poll
  * @return  The delta time (in nanoseconds)
  */
 VD_FW_API unsigned long long vd_fw_delta_ns(void);
 
 /**
- * @brief Get the time (in seconds) since the last call to vd_fw_swap_buffers
+ * @brief Get the time (in seconds) since the last call to vd_fw_poll
  * @return  The delta time (in seconds)
  */
 VD_FW_INL float              vd_fw_delta_s(void);
@@ -6180,6 +6189,11 @@ VD_FW_API int vd_fw_running(void)
         return 0;
     }
 
+    return 1;
+}
+
+VD_FW_API void vd_fw_poll(void)
+{
     VD_FW_G.wheel_moved = 0;
     VD_FW_G.wheel[0] = 0.f;
     VD_FW_G.wheel[1] = 0.f;
@@ -6316,10 +6330,9 @@ VD_FW_API int vd_fw_running(void)
         VD_FW_WIN32_PROFILE_END(read_all_input);
     }
 
-    EnterCriticalSection(&VD_FW_G.critical_section);
-    VD_FW_G.curr_frame = VD_FW_G.next_frame;
-    VD_FW_G.next_frame.flags = 0;
-    LeaveCriticalSection(&VD_FW_G.critical_section);
+    if (VD_FW_G.mouse_is_locked && VD_FW_G.focused) {
+        VdFwSetCursorPos(VD_FW_G.last_mouse_before_lock[0], VD_FW_G.last_mouse_before_lock[1]);
+    }
 
     LARGE_INTEGER now_performance_counter;
     QueryPerformanceCounter(&now_performance_counter);
@@ -6332,15 +6345,17 @@ VD_FW_API int vd_fw_running(void)
     VD_FW_G.last_ns = ns;
 
     VD_FW_G.performance_counter = now_performance_counter;
-
-    if (VD_FW_G.mouse_is_locked && VD_FW_G.focused) {
-        VdFwSetCursorPos(VD_FW_G.last_mouse_before_lock[0], VD_FW_G.last_mouse_before_lock[1]);
-    }
-
-    return 1;
 }
 
-VD_FW_API int vd_fw_swap_buffers(void)
+VD_FW_API void vd_fw_lock(void)
+{
+    EnterCriticalSection(&VD_FW_G.critical_section);
+    VD_FW_G.curr_frame = VD_FW_G.next_frame;
+    VD_FW_G.next_frame.flags = 0;
+    LeaveCriticalSection(&VD_FW_G.critical_section);
+}
+
+VD_FW_API void vd_fw_unlock(void)
 {
     if (VD_FW_G.graphics_api != VD_FW_GRAPHICS_API_CUSTOM) {
         VdFwSwapBuffers(VD_FW_G.hdc);
@@ -6363,7 +6378,6 @@ VD_FW_API int vd_fw_swap_buffers(void)
     if (VD_FW_G.curr_frame.flags & VD_FW_WIN32_FLAGS_WAKE_COND_VAR) {
         WakeConditionVariable(&VD_FW_G.cond_var);
     }
-    return 1;
 }
 
 VD_FW_API int vd_fw_close_requested(void)

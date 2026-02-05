@@ -175,11 +175,16 @@ int main(int argc, char const *argv[])
     debug_init();
 
     while (vd_fw_running()) {
+
+        vd_fw_poll();
+
         if (vd_fw_close_requested()) {
             vd_fw_quit();
         }
 
+        vd_fw_lock();
         float delta_seconds = vd_fw_delta_s();
+
 
         F2 mouse;
         vd_fw_get_mouse_delta(&mouse.x, &mouse.y);
@@ -271,7 +276,7 @@ int main(int argc, char const *argv[])
 
         debug_update();
 
-        vd_fw_swap_buffers();
+        vd_fw_unlock();
     }
     return 0;
 }

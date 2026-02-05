@@ -150,6 +150,8 @@ int main(int argc, char const *argv[])
 
     while (vd_fw_running()) {
 
+        vd_fw_poll();
+
         if (vd_fw_close_requested()) {
             vd_fw_quit();
         }
@@ -159,6 +161,8 @@ int main(int argc, char const *argv[])
         if (vd_fw_get_key_pressed(VD_FW_KEY_F1) && vd_fw_get_key_down(VD_FW_KEY_LSHIFT)) {
             vd_fw_set_mouse_locked(!vd_fw_get_mouse_locked());
         }
+
+        vd_fw_lock();
 
         static int w, h;
         if (vd_fw_get_size(&w, &h)) {
@@ -266,7 +270,7 @@ int main(int argc, char const *argv[])
 
         glDrawArrays(GL_TRIANGLES, 0, 36);
 
-        vd_fw_swap_buffers();
+        vd_fw_unlock();
     }
     return 0;
 }

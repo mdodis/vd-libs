@@ -2130,7 +2130,7 @@ VD_UM_INL void vd_um__conjugate(float q[4], float out[4])
 
 
 /* ----INTEGRATION - OPENGL------------------------------------------------------------------------------------------ */
-#define VD_UM_GL_VERTEX_SHADER_SOURCE                                                                                  \
+#define VD_UM_GL_VERTEX_SHADER_SOURCE \
 "#version 330 core                                                                                                 \n" \
 "                                                                                                                  \n" \
 "layout (location = 0) in vec3 v_v0;                                                                               \n" \
@@ -2143,35 +2143,32 @@ VD_UM_INL void vd_um__conjugate(float q[4], float out[4])
 "                                                                                                                  \n" \
 "uniform mat4 u_proj;                                                                                              \n" \
 "uniform mat4 u_view;                                                                                              \n" \
+"uniform vec2 u_resolution;                                                                                        \n" \
+"                                                                                                                  \n" \
 "out vec4 f_col;                                                                                                   \n" \
 "flat out uint f_mode;                                                                                             \n" \
 "out vec2 f_texcoord;                                                                                              \n" \
 "out vec2 f_timeout;                                                                                               \n" \
-"out vec4 f_param;                                                                                                 \n" \
+"flat out vec4 f_param;                                                                                            \n" \
 "                                                                                                                  \n" \
-"vec3 quat_rotate(vec3 v, vec4 q) {                                                                                \n" \
+"vec3 quat_rotate(vec3 v, vec4 q)                                                                                  \n" \
+"{                                                                                                                 \n" \
 "    return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v);                                                     \n" \
 "}                                                                                                                 \n" \
 "                                                                                                                  \n" \
-"void do_line()                                                                                                    \n" \
+"vec3 find_orthogonal_vector(vec3 v)                                                                               \n" \
 "{                                                                                                                 \n" \
-"    float line_width = thickness;                                                                                 \n" \
+"    vec3 x = vec3(1,0,0);                                                                                         \n" \
+"    if (abs(dot(v, x)) >= 0.9999) {                                                                               \n" \
+"        x = vec3(0,1,0);                                                                                          \n" \
+"    }                                                                                                             \n" \
+"    return normalize(cross(x,v));                                                                                 \n" \
+"}                                                                                                                 \n" \
 "                                                                                                                  \n" \
-"    // Transform to view space                                                                                    \n" \
-"    // This will allow us to treat 0,0,0 as camera origin                                                         \n" \
-"    vec4 Pv0 = u_view * vec4(v_v0, 1.0);                                                                          \n" \
-"    vec4 Pv1 = u_view * vec4(v_v1, 1.0);                                                                          \n" \
-"                                                                                                                  \n" \
-"    // For each of the 6 vertices we do:                                                                          \n" \
-"    // V = V0 + Table{ID}x * hL * R + Table{ID}y * L * F                                                          \n" \
-"    // Where:                                                                                                     \n" \
-"    // - V:  The final output vertex                                                                              \n" \
-"    // - V0: The starting vertex                                                                                  \n" \
-"    // - ID: gl_VertexID                                                                                          \n" \
-"    // - hL: half line width in the direction orthogonal to the normalized line direction                         \n" \
-"    // - R:  The right vector. orthogonal to F                                                                    \n" \
-"    // - L:  The length of the line in the F direction                                                            \n" \
-"    // - F:  The direction of the line                                                                            \n" \
+"vec4 pos_viewspace_rectangle_aligned_on_positions(vec3 p0, vec3 p1, float width)                                  \n" \
+"{                                                                                                                 \n" \
+"    vec4 Pv0 = u_view * vec4(p0, 1.0);                                                                            \n" \
+"    vec4 Pv1 = u_view * vec4(p1, 1.0);                                                                            \n" \
 "    vec2 movements[6] = vec2[](                                                                                   \n" \
 "        vec2(+1.0, 1.0),                                                                                          \n" \
 "        vec2(-1.0, 1.0),                                                                                          \n" \
@@ -2180,39 +2177,37 @@ VD_UM_INL void vd_um__conjugate(float q[4], float out[4])
 "        vec2(-1.0, 1.0),                                                                                          \n" \
 "        vec2(-1.0, 0.0)                                                                                           \n" \
 "    );                                                                                                            \n" \
-"                                                                                                                  \n" \
 "    float L = distance(Pv1.xyz, Pv0.xyz);                                                                         \n" \
-"    // Take the half point between the view relative points                                                       \n" \
-"    // This allows us to handle cases where one point starts at 0,0,0 (i.e. the camera)                           \n" \
 "    vec3 F = normalize(Pv1.xyz - Pv0.xyz);                                                                        \n" \
-"                                                                                                                  \n" \
-"    // Find closest point on line Pv0-Pv1 to (0,0,0)                                                              \n" \
-"    float t = -dot(Pv0.xyz, F) / dot(F, F);                                                                       \n" \
-"    vec3 closest = Pv0.xyz + F * t;                                                                               \n" \
-"                                                                                                                  \n" \
-"    float H = line_width / 2.0;                                                                                   \n" \
-"                                                                                                                  \n" \
+"    vec3 closest = Pv0.xyz + F * (-dot(Pv0.xyz, F) / dot(F, F));                                                  \n" \
+"    float H = width / 2.0;                                                                                        \n" \
 "    vec3 M = -normalize(closest);                                                                                 \n" \
-"    // vec3 M = normalize(mix(Pv0.xyz, Pv1.xyz, 0.5));                                                            \n" \
-"    // vec3 M = normalize(Pv0.xyz);                                                                               \n" \
-"    vec3 Ur = M;                                                                                                  \n" \
-"    // What M represents here is a direction vector that we know if aligns with line                              \n" \
-"    // the line won't be shown anyway.                                                                            \n" \
-"                                                                                                                  \n" \
-"    // if (abs(dot(F, Ur)) >= 0.9999) {                                                                           \n" \
-"    //     Ur = vec3(1,0,0);                                                                                      \n" \
-"    // }                                                                                                          \n" \
-"    vec3 R = cross(Ur, F);                                                                                        \n" \
+"    vec3 R = cross(M, F);                                                                                         \n" \
 "    vec3 vertex = Pv0.xyz + movements[gl_VertexID].x * H * R + movements[gl_VertexID].y * L * F;                  \n" \
-"    gl_Position = u_proj * vec4(vertex, 1.0);                                                                     \n" \
-"    f_col = v_col;                                                                                                \n" \
-"    f_mode = mode;                                                                                                \n" \
+"    return u_proj * vec4(vertex, 1.0);                                                                            \n" \
 "}                                                                                                                 \n" \
 "                                                                                                                  \n" \
-"void do_grid() {                                                                                                  \n" \
-"    vec3 origin = vec3(v_v0);                                                                                     \n" \
-"    vec3 scale = vec3(thickness);                                                                                 \n" \
+"vec4 pos_viewspace_triangle_aligned_to_camera(vec3 base, vec3 apex, float width)                                  \n" \
+"{                                                                                                                 \n" \
+"    vec4 Pv0 = u_view * vec4(base, 1.0);                                                                          \n" \
+"    vec4 Pv1 = u_view * vec4(apex, 1.0);                                                                          \n" \
+"    const vec2 movements[3] = vec2[](                                                                             \n" \
+"        vec2(+0.0, 1.0),                                                                                          \n" \
+"        vec2(-1.0, 0.0),                                                                                          \n" \
+"        vec2(+1.0, 0.0)                                                                                           \n" \
+"    );                                                                                                            \n" \
+"    float L = distance(Pv1.xyz, Pv0.xyz);                                                                         \n" \
+"    vec3 F = normalize(Pv1.xyz - Pv0.xyz);                                                                        \n" \
+"    vec3 closest = Pv0.xyz + F * (-dot(Pv0.xyz, F) / dot(F,F));                                                   \n" \
+"    float H = width / 2.0;                                                                                        \n" \
+"    vec3 M = -normalize(closest);                                                                                 \n" \
+"    vec3 R = cross(F, M);                                                                                         \n" \
+"    vec3 vertex = Pv0.xyz + movements[gl_VertexID].x * H * R + movements[gl_VertexID].y * L * F;                  \n" \
+"    return u_proj * vec4(vertex, 1.0);                                                                            \n" \
+"}                                                                                                                 \n" \
 "                                                                                                                  \n" \
+"vec3 pos_worldspace_rectangle(vec3 origin, vec4 orientation, vec3 scale)                                          \n" \
+"{                                                                                                                 \n" \
 "    vec3 verts[6] = vec3[](                                                                                       \n" \
 "        vec3(+0.5, +0.5, 0.0),                                                                                    \n" \
 "        vec3(-0.5, +0.5, 0.0),                                                                                    \n" \
@@ -2221,33 +2216,111 @@ VD_UM_INL void vd_um__conjugate(float q[4], float out[4])
 "        vec3(-0.5, +0.5, 0.0),                                                                                    \n" \
 "        vec3(-0.5, -0.5, 0.0)                                                                                     \n" \
 "    );                                                                                                            \n" \
+"    return origin + quat_rotate(verts[gl_VertexID] * scale, orientation);                                         \n" \
+"}                                                                                                                 \n" \
+"                                                                                                                  \n" \
+"vec2 uv_rectangle()                                                                                               \n" \
+"{                                                                                                                 \n" \
 "    vec2 uvs[6] = vec2[](                                                                                         \n" \
 "        vec2(1.0, 1.0),   // top-right                                                                            \n" \
 "        vec2(0.0, 1.0),   // top-left                                                                             \n" \
 "        vec2(1.0, 0.0),   // bottom-right                                                                         \n" \
-"                                                                                                                  \n" \
 "        vec2(1.0, 0.0),   // bottom-right                                                                         \n" \
 "        vec2(0.0, 1.0),   // top-left                                                                             \n" \
 "        vec2(0.0, 0.0)    // bottom-left                                                                          \n" \
 "    );                                                                                                            \n" \
-"    vec3 position = origin + quat_rotate(verts[gl_VertexID] * scale, orientation);                                \n" \
-"    vec4 view_pos = u_view * vec4(position, 1.0);                                                                 \n" \
-"    vec4 clip_pos = u_proj * view_pos;                                                                            \n" \
-"    gl_Position = clip_pos;                                                                                       \n" \
-"    f_col = v_col;                                                                                                \n" \
-"    vec3 local_x = quat_rotate(vec3(1,0,0), orientation);                                                         \n" \
-"    vec3 local_y = quat_rotate(vec3(0,1,0), orientation);                                                         \n" \
-"    vec3 rel = position - origin;                                                                                 \n" \
-"    f_texcoord = vec2(dot(rel,local_x),dot(rel, local_y));                                                        \n" \
-"    f_mode = mode;                                                                                                \n" \
+"                                                                                                                  \n" \
+"    return uvs[gl_VertexID];                                                                                      \n" \
 "}                                                                                                                 \n" \
 "                                                                                                                  \n" \
-"vec3 find_orthogonal_vector(vec3 v) {                                                                             \n" \
-"    vec3 x = vec3(1,0,0);                                                                                         \n" \
-"    if (abs(dot(v, x)) >= 0.9999) {                                                                               \n" \
-"        x = vec3(0,1,0);                                                                                          \n" \
-"    }                                                                                                             \n" \
-"    return normalize(cross(x,v));                                                                                 \n" \
+"vec2 uv_triangle()                                                                                                \n" \
+"{                                                                                                                 \n" \
+"    const vec2 uvs[3] = vec2[](                                                                                   \n" \
+"        vec2(+0.0, 1.0),                                                                                          \n" \
+"        vec2(+1.0, 0.0),                                                                                          \n" \
+"        vec2(-1.0, 0.0)                                                                                           \n" \
+"    );                                                                                                            \n" \
+"    return uvs[gl_VertexID];                                                                                      \n" \
+"}                                                                                                                 \n" \
+"                                                                                                                  \n" \
+"vec2 uv_worldspace_from_orientation(vec3 worldspace_origin, vec3 vertex_position, vec4 orientation)               \n" \
+"{                                                                                                                 \n" \
+"    vec3 local_x = quat_rotate(vec3(1,0,0), orientation);                                                         \n" \
+"    vec3 local_y = quat_rotate(vec3(0,1,0), orientation);                                                         \n" \
+"    vec3 rel = vertex_position - worldspace_origin;                                                               \n" \
+"    return vec2(dot(rel,local_x),dot(rel, local_y));                                                              \n" \
+"}                                                                                                                 \n" \
+"                                                                                                                  \n" \
+"void do_line()                                                                                                    \n" \
+"{                                                                                                                 \n" \
+"                                                                                                                  \n" \
+"    vec3 p0 = v_v0;                                                                                               \n" \
+"    vec3 p1 = v_v1;                                                                                               \n" \
+"    float width = thickness;                                                                                      \n" \
+"    // = pos_viewspace_rectangle_aligned_on_positions(v_v0, v_v1, thickness);                                     \n" \
+"                                                                                                                  \n" \
+"    vec4 Pv0 = u_view * vec4(p0, 1.0);                                                                            \n" \
+"    vec4 Pv1 = u_view * vec4(p1, 1.0);                                                                            \n" \
+"    vec2 movements[6] = vec2[](                                                                                   \n" \
+"        vec2(+1.0, 1.0),                                                                                          \n" \
+"        vec2(-1.0, 1.0),                                                                                          \n" \
+"        vec2(+1.0, 0.0),                                                                                          \n" \
+"        vec2(+1.0, 0.0),                                                                                          \n" \
+"        vec2(-1.0, 1.0),                                                                                          \n" \
+"        vec2(-1.0, 0.0)                                                                                           \n" \
+"    );                                                                                                            \n" \
+"    float L = distance(Pv1.xyz, Pv0.xyz);                                                                         \n" \
+"    vec3 F = normalize(Pv1.xyz - Pv0.xyz);                                                                        \n" \
+"    vec3 closest = Pv0.xyz + F * (-dot(Pv0.xyz, F) / dot(F, F));                                                  \n" \
+"    float H = width / 2.0;                                                                                        \n" \
+"    vec3 M = -normalize(closest);                                                                                 \n" \
+"    vec3 R = cross(M, F);                                                                                         \n" \
+"    vec3 vertex = Pv0.xyz + movements[gl_VertexID].x * H * R + movements[gl_VertexID].y * L * F;                  \n" \
+"    gl_Position = u_proj * vec4(vertex, 1.0);                                                                     \n" \
+"    f_col = v_col;                                                                                                \n" \
+"    f_mode = mode;                                                                                                \n" \
+"    f_texcoord = uv_rectangle();                                                                                  \n" \
+"                                                                                                                  \n" \
+"    // vec4 view_0 = u_view * vec4(v_v0, 1.0);                                                                    \n" \
+"    // vec4 view_1 = u_view * vec4(v_v1, 1.0);                                                                    \n" \
+"                                                                                                                  \n" \
+"    // vec4 ndc_0 = u_proj * view_0;                                                                              \n" \
+"    // vec4 ndc_1 = u_proj * view_1;                                                                              \n" \
+"                                                                                                                  \n" \
+"    // vec2 screen_0 = u_resolution * ((ndc_0.xy / ndc_0.w) + 1.0) / 2.0;                                         \n" \
+"    // vec2 screen_1 = u_resolution * ((ndc_1.xy / ndc_1.w) + 1.0) / 2.0;                                         \n" \
+"                                                                                                                  \n" \
+"    // float antialias = 3.0;                                                                                     \n" \
+"    // float w = thickness / 2.0 + antialias;                                                                     \n" \
+"    // float l = distance(screen_1.xy, screen_0.xy);                                                              \n" \
+"    // vec2  D = normalize(screen_1.xy - screen_0.xy);                                                            \n" \
+"    // vec2  O = normalize(vec2(-D.y, D.x));                                                                      \n" \
+"    // vec2 uv = uv_rectangle() - vec2(0.0, 0.5);                                                                 \n" \
+"    // float t = uv.x;                                                                                            \n" \
+"    // float depth = mix(ndc_0.z, ndc_1.z, t);                                                                    \n" \
+"    // float w_interp = ndc_0.w; // mix(ndc_0.w, ndc_1.w, t);                                                     \n" \
+"                                                                                                                  \n" \
+"    // vec2 position;                                                                                             \n" \
+"    // position = screen_0.xy + D * uv.x * l + O * uv.y * w;                                                      \n" \
+"    // gl_Position = vec4((2.0 * position / u_resolution - 1.0), ndc_0.z / w_interp, 1.0);                        \n" \
+"    // f_mode = 3u;                                                                                               \n" \
+"}                                                                                                                 \n" \
+"                                                                                                                  \n" \
+"void do_triangle() {                                                                                              \n" \
+"    gl_Position = pos_viewspace_triangle_aligned_to_camera(v_v0, v_v1, thickness);                                \n" \
+"    f_col = v_col;                                                                                                \n" \
+"    f_mode = 4u;                                                                                                  \n" \
+"    f_texcoord = uv_triangle();                                                                                   \n" \
+"}                                                                                                                 \n" \
+"                                                                                                                  \n" \
+"void do_grid() {                                                                                                  \n" \
+"    vec3 origin = vec3(v_v0);                                                                                     \n" \
+"    vec3 scale = vec3(thickness);                                                                                 \n" \
+"    vec3 position = pos_worldspace_rectangle(v_v0, orientation, vec3(thickness));                                 \n" \
+"    gl_Position = u_proj * u_view * vec4(position, 1.0);                                                          \n" \
+"    f_texcoord = uv_worldspace_from_orientation(origin, position, orientation);                                   \n" \
+"    f_col = v_col;                                                                                                \n" \
+"    f_mode = mode;                                                                                                \n" \
 "}                                                                                                                 \n" \
 "                                                                                                                  \n" \
 "void do_point() {                                                                                                 \n" \
@@ -2262,20 +2335,18 @@ VD_UM_INL void vd_um__conjugate(float q[4], float out[4])
 "        vec2(-0.5, -0.5)                                                                                          \n" \
 "    );                                                                                                            \n" \
 "    float H = point_scale;                                                                                        \n" \
-"                                                                                                                  \n" \
 "    vec3 M = -normalize(Pv0.xyz);                                                                                 \n" \
 "    vec3 A = find_orthogonal_vector(M);                                                                           \n" \
 "    vec3 R = cross(A, M);                                                                                         \n" \
 "    vec3 F = cross(M, R);                                                                                         \n" \
 "    vec3 vertex = Pv0.xyz + movements[gl_VertexID].x * H * R + movements[gl_VertexID].y * H * F;                  \n" \
 "    gl_Position = u_proj * vec4(vertex, 1.0);                                                                     \n" \
-"    f_mode = 0u;                                                                                                  \n" \
+"    f_mode = 3u;                                                                                                  \n" \
 "}                                                                                                                 \n" \
 "                                                                                                                  \n" \
 "void do_ring() {                                                                                                  \n" \
 "    vec3 origin = vec3(v_v0);                                                                                     \n" \
 "    vec3 scale = vec3(thickness);                                                                                 \n" \
-"                                                                                                                  \n" \
 "    vec3 verts[6] = vec3[](                                                                                       \n" \
 "        vec3(+0.5, +0.5, 0.0),                                                                                    \n" \
 "        vec3(-0.5, +0.5, 0.0),                                                                                    \n" \
@@ -2284,23 +2355,83 @@ VD_UM_INL void vd_um__conjugate(float q[4], float out[4])
 "        vec3(-0.5, +0.5, 0.0),                                                                                    \n" \
 "        vec3(-0.5, -0.5, 0.0)                                                                                     \n" \
 "    );                                                                                                            \n" \
-"    vec2 uvs[6] = vec2[](                                                                                         \n" \
-"        vec2(1.0, 1.0),   // top-right                                                                            \n" \
-"        vec2(0.0, 1.0),   // top-left                                                                             \n" \
-"        vec2(1.0, 0.0),   // bottom-right                                                                         \n" \
+"    vec3 position = origin + quat_rotate(verts[gl_VertexID] * scale, orientation);                                \n" \
+"    vec4 view_pos = u_view * vec4(position, 1.0);                                                                 \n" \
+"    vec4 clip_pos = u_proj * view_pos;                                                                            \n" \
+"    gl_Position = clip_pos;                                                                                       \n" \
+"    f_col = v_col;                                                                                                \n" \
+"    f_texcoord = uv_rectangle();                                                                                  \n" \
+"    f_mode = 2u;                                                                                                  \n" \
+"    f_param = vec4(v_v1.x,v_v1.y,0,0);                                                                            \n" \
+"}                                                                                                                 \n" \
 "                                                                                                                  \n" \
-"        vec2(1.0, 0.0),   // bottom-right                                                                         \n" \
-"        vec2(0.0, 1.0),   // top-left                                                                             \n" \
-"        vec2(0.0, 0.0)    // bottom-left                                                                          \n" \
+"#define CYLINDER_SLICES 8                                                                                         \n" \
+"void do_cylinder() {                                                                                              \n" \
+"    int tri = gl_VertexID / 6;      // which slice                                                                \n" \
+"    int vid = gl_VertexID % 6;      // which vertex inside slice                                                  \n" \
+"    float h = thickness;                                                                                          \n" \
+"    float radius = v_v1.x;                                                                                        \n" \
+"                                                                                                                  \n" \
+"    float a0 = float(tri)     / float(CYLINDER_SLICES) * 6.28318530718;                                           \n" \
+"    float a1 = float(tri + 1) / float(CYLINDER_SLICES) * 6.28318530718;                                           \n" \
+"                                                                                                                  \n" \
+"    vec3 p0b = vec3(cos(a0) * radius, sin(a0) * radius,  0);                                                      \n" \
+"    vec3 p0t = vec3(cos(a0) * radius, sin(a0) * radius,  h);                                                      \n" \
+"    vec3 p1b = vec3(cos(a1) * radius, sin(a1) * radius,  0);                                                      \n" \
+"    vec3 p1t = vec3(cos(a1) * radius, sin(a1) * radius,  h);                                                      \n" \
+"                                                                                                                  \n" \
+"    vec3 local_positions[6] = vec3[](                                                                             \n" \
+"        p0b,p0t,p1b,                                                                                              \n" \
+"        p1b,p0t,p1t                                                                                               \n" \
+"    );                                                                                                            \n" \
+"                                                                                                                  \n" \
+"    vec3 local_pos = local_positions[vid];                                                                        \n" \
+"                                                                                                                  \n" \
+"    vec3 nlocal = normalize(vec3(local_pos.x, 0.0, local_pos.z));                                                 \n" \
+"                                                                                                                  \n" \
+"    vec3 world_pos = quat_rotate(local_pos, orientation);                                                         \n" \
+"    vec3 world_nrm = quat_rotate(nlocal, orientation);                                                            \n" \
+"                                                                                                                  \n" \
+"    world_pos += v_v0;                                                                                            \n" \
+"    gl_Position = u_proj * u_view * vec4(world_pos, 1.0);                                                         \n" \
+"    f_col = v_col;                                                                                                \n" \
+"    f_mode = 3u;                                                                                                  \n" \
+"}                                                                                                                 \n" \
+"                                                                                                                  \n" \
+"void do_plane() {                                                                                                 \n" \
+"    vec3 origin = vec3(v_v0);                                                                                     \n" \
+"    vec3 scale = vec3(thickness);                                                                                 \n" \
+"    vec3 verts[6] = vec3[](                                                                                       \n" \
+"        vec3(+0.5, +0.5, 0.0),                                                                                    \n" \
+"        vec3(-0.5, +0.5, 0.0),                                                                                    \n" \
+"        vec3(+0.5, -0.5, 0.0),                                                                                    \n" \
+"        vec3(+0.5, -0.5, 0.0),                                                                                    \n" \
+"        vec3(-0.5, +0.5, 0.0),                                                                                    \n" \
+"        vec3(-0.5, -0.5, 0.0)                                                                                     \n" \
 "    );                                                                                                            \n" \
 "    vec3 position = origin + quat_rotate(verts[gl_VertexID] * scale, orientation);                                \n" \
 "    vec4 view_pos = u_view * vec4(position, 1.0);                                                                 \n" \
 "    vec4 clip_pos = u_proj * view_pos;                                                                            \n" \
 "    gl_Position = clip_pos;                                                                                       \n" \
 "    f_col = v_col;                                                                                                \n" \
-"    f_texcoord = uvs[gl_VertexID];                                                                                \n" \
-"    f_mode = 2u;                                                                                                  \n" \
-"    f_param = vec4(v_v1.x,0,0,0);                                                                                 \n" \
+"    f_mode = 3u;                                                                                                  \n" \
+"}                                                                                                                 \n" \
+"                                                                                                                  \n" \
+"void do_quad() {                                                                                                  \n" \
+"    vec3 origin = vec3(v_v0);                                                                                     \n" \
+"    vec3 scale = vec3(v_v1.x, v_v1.y, 1.0);                                                                       \n" \
+"    float falloff = v_v1.z;                                                                                       \n" \
+"    float radius = thickness;                                                                                     \n" \
+"                                                                                                                  \n" \
+"    vec3 position = pos_worldspace_rectangle(origin, orientation, scale);                                         \n" \
+"    gl_Position = u_proj * u_view * vec4(position, 1.0);                                                          \n" \
+"    f_texcoord = (uv_rectangle() - vec2(0.5)); /* * v_v1.xy; */                                                   \n" \
+"    f_col = v_col;                                                                                                \n" \
+"    f_param.x = radius;                                                                                           \n" \
+"    f_param.y = falloff;                                                                                          \n" \
+"    f_param.z = v_v1.x * 1.0;                                                                                     \n" \
+"    f_param.w = v_v1.y * 1.0;                                                                                     \n" \
+"    f_mode = 5u;                                                                                                  \n" \
 "}                                                                                                                 \n" \
 "                                                                                                                  \n" \
 "void main() {                                                                                                     \n" \
@@ -2308,10 +2439,13 @@ VD_UM_INL void vd_um__conjugate(float q[4], float out[4])
 "    if (mode == 1u) { do_grid(); }                                                                                \n" \
 "    if (mode == 2u) { do_point(); }                                                                               \n" \
 "    if (mode == 3u) { do_ring(); }                                                                                \n" \
+"    if (mode == 4u) { do_cylinder(); }                                                                            \n" \
+"    if (mode == 5u) { do_quad(); }                                                                                \n" \
+"    if (mode == 6u) { do_triangle(); }                                                                            \n" \
 "    f_timeout = timeout;                                                                                          \n" \
 "}                                                                                                                 \n" \
 
-#define VD_UM_GL_FRAGMENT_SHADER_SOURCE                                                                                \
+#define VD_UM_GL_FRAGMENT_SHADER_SOURCE \
 "#version 330 core                                                                                                 \n" \
 "                                                                                                                  \n" \
 "in vec4 f_col;                                                                                                    \n" \
@@ -2319,10 +2453,27 @@ VD_UM_INL void vd_um__conjugate(float q[4], float out[4])
 "in vec2 f_timeout;                                                                                                \n" \
 "flat in uint f_mode;                                                                                              \n" \
 "out vec4 r_col;                                                                                                   \n" \
-"in vec4 f_param;                                                                                                  \n" \
+"flat in vec4 f_param;                                                                                             \n" \
+"                                                                                                                  \n" \
+"uniform vec2 u_resolution;                                                                                        \n" \
+"                                                                                                                  \n" \
 "                                                                                                                  \n" \
 "void do_line() {                                                                                                  \n" \
-"    r_col = f_col;                                                                                                \n" \
+"    vec2 uv = f_texcoord * 2.0 - 1.0;                                                                             \n" \
+"    float w = 1.0;                                                                                                \n" \
+"    vec2 centers = vec2(0.5, -0.5);                                                                               \n" \
+"    vec2 distances = 0.7 * abs(vec2(uv.x, uv.x) - centers);                                                       \n" \
+"    vec2 widths = vec2(fwidth(distances.x), fwidth(distances.y));                                                 \n" \
+"    vec2 alphas = vec2(                                                                                           \n" \
+"        1.0 - smoothstep(w - widths.x, w + widths.x, distances.x),                                                \n" \
+"        1.0 - smoothstep(w - widths.x, w + widths.x, distances.y));                                               \n" \
+"                                                                                                                  \n" \
+"    float alpha = alphas.y * alphas.x;                                                                            \n" \
+"    // float alpha = mix(alphas.y, 1.0f, alphas.x);                                                               \n" \
+"                                                                                                                  \n" \
+"    // Final color (example: white)                                                                               \n" \
+"    r_col = vec4(f_col.rgb, f_col.a * alpha);                                                                     \n" \
+"                                                                                                                  \n" \
 "}                                                                                                                 \n" \
 "                                                                                                                  \n" \
 "float grid(vec2 lineWidth, vec2 texcoord) {                                                                       \n" \
@@ -2336,25 +2487,22 @@ VD_UM_INL void vd_um__conjugate(float q[4], float out[4])
 "      invertLine.y ? 1.0 - lineWidth.y : lineWidth.y                                                              \n" \
 "      );                                                                                                          \n" \
 "    vec2 drawWidth = clamp(targetWidth, uvDeriv, vec2(0.5));                                                      \n" \
-"    vec2 lineAA = uvDeriv * 1.5;                                                                                  \n" \
+"    vec2 lineAA = uvDeriv * 3.0;                                                                                  \n" \
 "    vec2 gridUV = abs(fract(uv) * 2.0 - 1.0);                                                                     \n" \
 "    gridUV.x = invertLine.x ? gridUV.x : 1.0 - gridUV.x;                                                          \n" \
 "    gridUV.y = invertLine.y ? gridUV.y : 1.0 - gridUV.y;                                                          \n" \
 "    vec2 grid2 = smoothstep(drawWidth + lineAA, drawWidth - lineAA, gridUV);                                      \n" \
-"                                                                                                                  \n" \
 "    grid2 *= clamp(targetWidth / drawWidth, 0.0, 1.0);                                                            \n" \
 "    grid2 = mix(grid2, targetWidth, clamp(uvDeriv * 2.0 - 1.0, 0.0, 1.0));                                        \n" \
 "    grid2.x = invertLine.x ? 1.0 - grid2.x : grid2.x;                                                             \n" \
 "    grid2.y = invertLine.y ? 1.0 - grid2.y : grid2.y;                                                             \n" \
 "    return mix(grid2.x, 1.0, grid2.y);                                                                            \n" \
 "}                                                                                                                 \n" \
-"                                                                                                                  \n" \
 "void do_grid() {                                                                                                  \n" \
-"    float grid1 = grid(vec2(0.02), f_texcoord * 1.0);                                                             \n" \
-"    float grid2 = grid(vec2(0.01), f_texcoord * 2.0);                                                             \n" \
+"    float grid1 = grid(vec2(0.005), f_texcoord * 1.0);                                                            \n" \
+"    float grid2 = grid(vec2(0.005), f_texcoord * 10.0);                                                           \n" \
 "    vec3 color1 = vec3(1.0,1.0,1.0);                                                                              \n" \
 "    vec3 color2 = vec3(0.7,0.7,0.7);                                                                              \n" \
-"                                                                                                                  \n" \
 "    float a1 = grid1;                                                                                             \n" \
 "    float a2 = grid2 * (1.0 - a1);                                                                                \n" \
 "    vec3 color = mix(color1, color2, a2);                                                                         \n" \
@@ -2363,20 +2511,97 @@ VD_UM_INL void vd_um__conjugate(float q[4], float out[4])
 "    if (alpha < 0.01) discard;                                                                                    \n" \
 "}                                                                                                                 \n" \
 "                                                                                                                  \n" \
+"#define PI 3.14159265359                                                                                          \n" \
+"                                                                                                                  \n" \
 "void do_ring() {                                                                                                  \n" \
 "    vec2 uv = f_texcoord * 2.0 - 1.0;                                                                             \n" \
-"    vec2 p = uv;                                                                                                  \n" \
-"                                                                                                                  \n" \
+"    vec2 dd = fwidth(f_texcoord);                                                                                 \n" \
+"    uv = uv / (1.0 - min(dd.x, dd.y));                                                                            \n" \
+"    float turn = ((atan(uv.y, uv.x) / PI) + 1.0) / 2.0;                                                           \n" \
+"    float cutoff = step(f_param.y, turn);                                                                         \n" \
 "    float lsq = length(uv);                                                                                       \n" \
 "    float R1 = 1.0;                                                                                               \n" \
 "    float H = f_param.x;                                                                                          \n" \
 "    float R2 = R1 - H;                                                                                            \n" \
 "    float T = lsq;                                                                                                \n" \
-"    float a1 = smoothstep(R2, R2 + 0.001, T);                                                                     \n" \
-"    float a2 = 1.0 - smoothstep(R1 - 0.001, R1, T);                                                               \n" \
+"    float P = 0.001;                                                                                              \n" \
+"    float a1 = smoothstep(R2, R2 + P, T);                                                                         \n" \
+"    float a2 = 1.0 - smoothstep(R1 - P, R1, T);                                                                   \n" \
 "    vec4 color = f_col;                                                                                           \n" \
-"    color.a *= a1 * a2;                                                                                           \n" \
+"    color.a *= a1 * a2 * cutoff;                                                                                  \n" \
+"    if (color.a < 0.001) {                                                                                        \n" \
+"        discard;                                                                                                  \n" \
+"    }                                                                                                             \n" \
 "    r_col = color;                                                                                                \n" \
+"}                                                                                                                 \n" \
+"                                                                                                                  \n" \
+"float sdTriangle( in vec2 p, in vec2 p0, in vec2 p1, in vec2 p2 )                                                 \n" \
+"{                                                                                                                 \n" \
+"    vec2 e0 = p1-p0, e1 = p2-p1, e2 = p0-p2;                                                                      \n" \
+"    vec2 v0 = p -p0, v1 = p -p1, v2 = p -p2;                                                                      \n" \
+"    vec2 pq0 = v0 - e0*clamp( dot(v0,e0)/dot(e0,e0), 0.0, 1.0 );                                                  \n" \
+"    vec2 pq1 = v1 - e1*clamp( dot(v1,e1)/dot(e1,e1), 0.0, 1.0 );                                                  \n" \
+"    vec2 pq2 = v2 - e2*clamp( dot(v2,e2)/dot(e2,e2), 0.0, 1.0 );                                                  \n" \
+"    float s = sign( e0.x*e2.y - e0.y*e2.x );                                                                      \n" \
+"    vec2 d = min(min(vec2(dot(pq0,pq0), s*(v0.x*e0.y-v0.y*e0.x)),                                                 \n" \
+"                     vec2(dot(pq1,pq1), s*(v1.x*e1.y-v1.y*e1.x))),                                                \n" \
+"                     vec2(dot(pq2,pq2), s*(v2.x*e2.y-v2.y*e2.x)));                                                \n" \
+"    return -sqrt(d.x)*sign(d.y);                                                                                  \n" \
+"}                                                                                                                 \n" \
+"                                                                                                                  \n" \
+"void do_triangle() {                                                                                              \n" \
+"    // vec2 uv = f_texcoord - vec2(0.5, 0.5);                                                                     \n" \
+"    vec2 uv = f_texcoord;                                                                                         \n" \
+"    float dist = distance(uv, vec2(0.5, 0.3));                                                                    \n" \
+"    float stepfactor = fwidth(f_texcoord.y);                                                                      \n" \
+"    // float alpha = 1.0 - smoothstep(0.1 - stepfactor, 0.1, dist);                                               \n" \
+"    vec2 dvx = vec2(dFdx(f_texcoord.x), dFdy(f_texcoord.x));                                                      \n" \
+"    vec2 dvy = vec2(dFdx(f_texcoord.y), dFdy(f_texcoord.y));                                                      \n" \
+"    vec2 dudv = vec2(length(dvx), length(dvy));                                                                   \n" \
+"    dudv *= 10.0;                                                                                                 \n" \
+"    vec2 uv_dudv = (uv) / (dudv);                                                                                 \n" \
+"    float dudvL = max(uv_dudv.x, uv_dudv.y);                                                                      \n" \
+"    // r_col = vec4(dudvL , 0, 0, 1.0);                                                                           \n" \
+"                                                                                                                  \n" \
+"    float yval = 0.00;                                                                                            \n" \
+"    vec2 tri_bot_right = vec2(+1.0, 0.0 + yval);                                                                  \n" \
+"    vec2 tri_bot_left  = vec2(-1.0, 0.0 + yval);                                                                  \n" \
+"    vec2 tri_top       = vec2(+0.0, 1.0 + yval);                                                                  \n" \
+"                                                                                                                  \n" \
+"    float alpha = sdTriangle(uv * 1.1, tri_bot_right, tri_bot_left, tri_top) * 8.0;                               \n" \
+"    // alpha = smoothstep(alpha, alpha, dudvL);                                                                   \n" \
+"    // r_col = vec4(alpha, 0.0, 0.0, 1.0);                                                                        \n" \
+"                                                                                                                  \n" \
+"    r_col = vec4(f_col.xyz, f_col.a * (1.0 - alpha));                                                             \n" \
+"}                                                                                                                 \n" \
+"                                                                                                                  \n" \
+"void do_color() {                                                                                                 \n" \
+"    r_col = f_col;                                                                                                \n" \
+"}                                                                                                                 \n" \
+"                                                                                                                  \n" \
+"float sdf_rounded_rect(vec2 sample_pos, vec2 rect_center, vec2 rect_half_size, float r) {                         \n" \
+"    vec2 d2 = (abs(rect_center - sample_pos) - rect_half_size + vec2(r, r));                                      \n" \
+"    return min(max(d2.x, d2.y), 0.0) + length(max(d2, 0.0)) - r;                                                  \n" \
+"}                                                                                                                 \n" \
+"                                                                                                                  \n" \
+"void do_rounded_rect()                                                                                            \n" \
+"{                                                                                                                 \n" \
+"    vec2 uv = (f_texcoord) * f_param.zw;                                                                          \n" \
+"                                                                                                                  \n" \
+"    // float radius = 0.1;                                                                                        \n" \
+"    // float falloff = 0.003;                                                                                     \n" \
+"    float radius = f_param.x * length(f_param.zw);                                                                \n" \
+"    float falloff = f_param.y;                                                                                    \n" \
+"    vec2 softness = vec2(falloff);                                                                                \n" \
+"    vec2 softness_padding = vec2(max(0, falloff*2 - 1), max(0, falloff*2 - 1));                                   \n" \
+"    float dist = sdf_rounded_rect(uv, vec2(0.0), (f_param.zw * 0.980) * 0.5 - softness_padding, radius);          \n" \
+"    float sdf_factor = 1.0 - smoothstep(0, 2*falloff, dist);                                                      \n" \
+"    float alpha = sdf_factor;                                                                                     \n" \
+"    // r_col = vec4(alpha, 0,0,1);                                                                                \n" \
+"    r_col = vec4(f_col.xyz, f_col.a * alpha);                                                                     \n" \
+"    // float edge = max(abs(dudv.x), abs(dudv.y)) * (sdf_factor);                                                 \n" \
+"                                                                                                                  \n" \
+"    // r_col = vec4(edge * 100.0, 0.0, 0.0, 1.0);                                                                 \n" \
 "}                                                                                                                 \n" \
 "                                                                                                                  \n" \
 "void main()                                                                                                       \n" \
@@ -2384,6 +2609,9 @@ VD_UM_INL void vd_um__conjugate(float q[4], float out[4])
 "    if (f_mode == 0u) { do_line(); }                                                                              \n" \
 "    else if (f_mode == 1u) { do_grid(); }                                                                         \n" \
 "    else if (f_mode == 2u) { do_ring(); }                                                                         \n" \
+"    else if (f_mode == 3u) { do_color(); }                                                                        \n" \
+"    else if (f_mode == 4u) { do_triangle(); }                                                                     \n" \
+"    else if (f_mode == 5u) { do_rounded_rect(); }                                                                 \n" \
 "    r_col.a *= (f_timeout.x / f_timeout.y);                                                                       \n" \
 "}                                                                                                                 \n" \
 

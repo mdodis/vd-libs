@@ -359,10 +359,13 @@ int main(int argc, char const *argv[])
     ControllerInfo draw_infos[VD_FW_GAMEPAD_COUNT_MAX] = {0};
     while (vd_fw_running()) {
 
+        vd_fw_poll();
+
         if (vd_fw_close_requested()) {
             vd_fw_quit();
         }
 
+        vd_fw_lock();
         int w, h;
         vd_fw_get_size(&w, &h);
 
@@ -624,8 +627,7 @@ int main(int argc, char const *argv[])
                 pass->instance_count);
         }
 
-
-        vd_fw_swap_buffers();
+        vd_fw_unlock();
     }
 
     return 0;

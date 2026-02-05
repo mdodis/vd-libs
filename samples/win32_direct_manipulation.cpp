@@ -217,6 +217,8 @@ int main(int argc, char const *argv[])
     vd_fw_link_program(Gl_Program);
 
     while (vd_fw_running()) {
+        vd_fw_poll();
+
 
         if (Dm_Initialized && Dm_Should_Keep_Updating) {
             Dm_Update_Manager->Update(nullptr);
@@ -226,6 +228,8 @@ int main(int argc, char const *argv[])
         if (vd_fw_close_requested()) {
             vd_fw_quit();
         }
+
+        vd_fw_lock();
 
         int w, h;
         vd_fw_get_size(&w, &h);
@@ -256,7 +260,7 @@ int main(int argc, char const *argv[])
         }
 
 
-        vd_fw_swap_buffers();
+        vd_fw_unlock();
     }
     return 0;
 }
@@ -292,7 +296,7 @@ static int my_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         DIRECTMANIPULATION_CONFIGURATION configuration = DIRECTMANIPULATION_CONFIGURATION_INTERACTION |
                                                          DIRECTMANIPULATION_CONFIGURATION_TRANSLATION_X |
                                                          DIRECTMANIPULATION_CONFIGURATION_TRANSLATION_Y |
-                                                         // DIRECTMANIPULATION_CONFIGURATION_TRANSLATION_INERTIA |
+                                                         DIRECTMANIPULATION_CONFIGURATION_TRANSLATION_INERTIA |
                                                          DIRECTMANIPULATION_CONFIGURATION_RAILS_X |
                                                          DIRECTMANIPULATION_CONFIGURATION_RAILS_Y |
                                                          DIRECTMANIPULATION_CONFIGURATION_SCALING |

@@ -356,6 +356,7 @@ static VdXr__StringRange    vd_xr__substr(const char *s, int i, int count);
 static int                  vd_xr__utf8_to_wide(char *buf, int blen, wchar_t *wbuf, int wlen);
 static wchar_t*             vd_xr__utf8_to_wide_arena(VdXr__Arena *arena, char *buf, int blen, int *wlen);
 static int                  vd_xr__wide_to_utf8(wchar_t *wbuf, int wlen, char *buf, int blen);
+static char*                vd_xr__wide_to_utf8_arena(VdXr__Arena *arena, wchar_t *wbuf, int wlen);
 #endif
 
 typedef struct {
@@ -829,6 +830,11 @@ static int vd_xr__wide_to_utf8(wchar_t *wbuf, int wlen, char *buf, int blen)
     return WideCharToMultiByte(65001, 0, wbuf, wlen, buf, blen, NULL, NULL);
 }
 
+static char *vd_xr__wide_to_utf8_arena(VdXr__Arena *arena, wchar_t *wbuf, int wlen)
+{
+    
+}
+
 static void *vd_xr__realloc_mem(void *prev_ptr, size_t size)
 {
     if (prev_ptr == 0) {
@@ -1174,6 +1180,8 @@ static XrResult vd_xr__load_runtime(void)
                     full_pathw = VD_XR__ARENA_PUSH_ARRAY(&Vd_Xr_G.arena, wchar_t, nreq + 1);
                     GetFullPathNameW(value_w, nreq, full_pathw, NULL);
                     full_pathw[nreq] = 0;
+
+                    vd_xr__wide_to_utf8
 
                     VdXrHANDLE file_handle = CreateFileW(full_pathw, VD_XR__WIN32_GENERIC_READ,
                                                          VD_XR__WIN32_FILE_SHARE_READ, 0, 4 /* OPEN_ALWAYS */,

@@ -106,10 +106,13 @@ int main(int argc, char const *argv[])
     switch_to_graphics_backend(Graphics_Backends[current_backend_index]);
 
     while (vd_fw_running()) {
+        vd_fw_poll();
+
         if (vd_fw_close_requested()) {
             vd_fw_quit();
         }
 
+        vd_fw_lock();
         int w, h;
         if (vd_fw_get_size(&w, &h)) {
             Current_Graphics->resize(w, h);
@@ -122,7 +125,7 @@ int main(int argc, char const *argv[])
             will_switch_to_next_backend = 1;
         }
 
-        vd_fw_swap_buffers();
+        vd_fw_unlock();
 
         if (will_switch_to_next_backend) {
             current_backend_index += 1;

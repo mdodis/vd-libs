@@ -93,9 +93,13 @@ int main(int argc, char const *argv[])
     }
 
     while (vd_fw_running()) {
+        vd_fw_poll();
+
         if (vd_fw_close_requested()) {
             vd_fw_quit();
         }
+
+        vd_fw_lock();
 
         if (vd_fw_get_key_pressed(VD_FW_KEY_F11)) {
             vd_fw_set_fullscreen(!vd_fw_get_fullscreen());
@@ -235,7 +239,7 @@ int main(int argc, char const *argv[])
             glDrawArraysInstanced(GL_TRIANGLES, 0, pass->vertex_count, pass->instance_count);
         }
 
-        vd_fw_swap_buffers();
+        vd_fw_unlock();
     }
 
     return 0;

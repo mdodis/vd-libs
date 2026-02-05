@@ -136,12 +136,15 @@ int main(int argc, char const *argv[])
     glEnable(GL_DEPTH_TEST);
 
     while (vd_fw_running()) {
+        vd_fw_poll();
+
         if (vd_fw_close_requested()) {
             vd_fw_quit();
         }
 
         float ds = vd_fw_delta_s();
 
+        vd_fw_lock();
         static int w, h;
         if (vd_fw_get_size(&w, &h)) {
             glViewport(0, 0, w, h);
@@ -180,7 +183,7 @@ int main(int argc, char const *argv[])
         cy += ds * 2.f;
         cp += ds * 2.f;
 
-        vd_fw_swap_buffers();
+        vd_fw_unlock();
     }
     return 0;
 }

@@ -82,10 +82,13 @@ int main(int argc, char const *argv[])
 
     while (vd_fw_running()) {
 
+        vd_fw_poll();
+
         if (vd_fw_close_requested()) {
             vd_fw_quit();
         }
 
+        vd_fw_lock();
         int w, h;
         vd_fw_get_size(&w, &h);
 
@@ -151,8 +154,7 @@ int main(int argc, char const *argv[])
         glUseProgram(0);
         glBindVertexArray(0);
 
-
-        vd_fw_swap_buffers();
+        vd_fw_unlock();
     }
 
     return 0;

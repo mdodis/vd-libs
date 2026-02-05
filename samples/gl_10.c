@@ -10,14 +10,17 @@ int main(int argc, char const *argv[]) {
     vd_fw_init(&init_info);
 
     while (vd_fw_running()) {
+        vd_fw_poll();
+
         if (vd_fw_close_requested()) {
             vd_fw_quit();
         }
 
+        vd_fw_lock();
         glClearColor(0.2f, 0.2f, 0.2f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        vd_fw_swap_buffers();
+        vd_fw_unlock();
     }
     return 0;
 }

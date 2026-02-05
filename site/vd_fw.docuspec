@@ -100,15 +100,18 @@
 #include "vd_fw.h"                                           // Include library
 int main() {
     vd_fw_init(NULL);                                        // Initialize library
-    while (vd_fw_running()) {                                // Check if the window is closed & gather events
+    while (vd_fw_running()) {                                // Check if the window is closed
+
+        vd_fw_poll();                                        // Gather events
 
         if (vd_fw_close_requested()) {
             vd_fw_quit();
         }
 
+        vd_fw_lock();                                        // Lock window for drawing
         glClearColor(0.5f, 0.3f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        vd_fw_swap_buffers();                                // Swap buffers
+        vd_fw_unlock();                                      // Unlock window
     }
     return 0;
 }
@@ -816,10 +819,13 @@ int main(int argc, char const *argv[])
 
     while (vd_fw_running()) {                                // Check if the window is closed
 
+        vd_fw_poll();                                        // Gather events
+
         if (vd_fw_close_requested()) {                       // Close the window if the
             vd_fw_quit();                                    // user requested it
         }
 
+        vd_fw_lock();                                        // Lock the window
         int w, h;
         vd_fw_get_size(&w, &h);                              // Get window size, in pixels.
 
@@ -827,7 +833,7 @@ int main(int argc, char const *argv[])
         glClearColor(0.5f, 0.3f, 0.2f, 1.0f);                // Select clear color
         glClear(GL_COLOR_BUFFER_BIT);                        // Clear
 
-        vd_fw_swap_buffers();                                // Swap buffers
+        vd_fw_unlock();                                      // Unlock
     }
 
     return 0;
@@ -1983,7 +1989,7 @@ switch_to_graphics_backend(Graphics_Backends[current_backend_index]);
 
         para {
             In the game loop, we check for the event that will cause the graphics API to change, and <b>after</b>
-            <code>vd_fw_swap_buffers</code>, we switch our graphics context:
+            <code>vd_fw_unlock</code>, we switch our graphics context:
         }
 
         verb```
@@ -1992,7 +1998,7 @@ if (vd_fw_get_key_pressed(VD_FW_KEY_SPACE)) {
     will_switch_to_next_backend = 1;
 }
 
-vd_fw_swap_buffers(); // <--- IMPORTANT: vd_fw_set_graphics_api must not be called between vd_fw_running and vd_fw_swap_buffers.
+vd_fw_unlock(); // <--- IMPORTANT: vd_fw_set_graphics_api must not be called between vd_fw_lock and vd_fw_unlock.
 
 if (will_switch_to_next_backend) {
     current_backend_index += 1;

@@ -79,9 +79,14 @@ int main(int argc, char const *argv[])
 
     vd_fw_set_vsync_on(1);
     while (vd_fw_running()) {
+
+        vd_fw_poll();
+
         float delta_seconds = vd_fw_delta_s();
 
         vd_fw_compile_or_hotload_program(&program, &program_time, "./glsl/ui_basic.vert", "./glsl/ui_basic.frag");
+
+        vd_fw_lock();
 
         int w, h;
         vd_fw_get_size(&w, &h);
@@ -259,7 +264,7 @@ int main(int argc, char const *argv[])
                 pass->instance_count);
         }
         
-        vd_fw_swap_buffers();
+        vd_fw_unlock();
     }
     return 0;
 }
