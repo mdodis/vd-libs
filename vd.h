@@ -2370,6 +2370,7 @@ void vd_arena_init(VdArena *a, void *buf, size_t len)
     a->buf_len = len;
     a->curr_offset = 0;
     a->prev_offset = 0;
+    a->flags = 0;
 }
 
 void *vd_arena_alloc_align(VdArena *a, size_t size, size_t align)
