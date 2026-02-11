@@ -25,22 +25,20 @@ int main(int argc, char const *argv[])
 
     vd_fw_set_title("UM Basic");
 
-    GLuint program = 0;
-    unsigned long long program_time = 0;
-    // {
-    //     const char *vertex_shader_source;
-    //     size_t vertex_shader_source_size;
-    //     const char *fragment_shader_source;
-    //     size_t fragment_shader_source_size;
-    //     vd_um_gl_get_default_shader_sources(&vertex_shader_source, &vertex_shader_source_size, &fragment_shader_source, &fragment_shader_source_size);
 
-    //     GLuint vshd = vd_fw_compile_shader(GL_VERTEX_SHADER, vertex_shader_source);
-    //     GLuint fshd = vd_fw_compile_shader(GL_FRAGMENT_SHADER, fragment_shader_source);
-    //     program = glCreateProgram();
-    //     glAttachShader(program, vshd);
-    //     glAttachShader(program, fshd);
-    //     vd_fw_link_program(program);
-    // }
+    GLuint vshd, fshd;
+    GLuint program;
+    const char *vsrc;
+    size_t vsrc_len;
+    const char *fsrc;
+    size_t fsrc_len;
+    vd_um_gl_get_default_shader_sources(&vsrc, &vsrc_len, &fsrc, &fsrc_len);
+    vshd = vd_fw_compile_shader(GL_VERTEX_SHADER, vsrc);
+    fshd = vd_fw_compile_shader(GL_FRAGMENT_SHADER, fsrc);
+    program = glCreateProgram();
+    glAttachShader(program, vshd);
+    glAttachShader(program, fshd);
+    vd_fw_link_program(program);
 
     GLuint vao;
     GLuint vbo;
@@ -105,8 +103,6 @@ int main(int argc, char const *argv[])
             vd_fw_set_fullscreen(!vd_fw_get_fullscreen());
         }
 
-        vd_fw_compile_or_hotload_program(&program, &program_time,
-                                         "./glsl/um_basic.vert", "./glsl/um_basic.frag");
 
         F2 mouse_pos;
         int mouse_state = vd_fw_get_mouse_statef(&mouse_pos.x, &mouse_pos.y);
@@ -181,7 +177,7 @@ int main(int argc, char const *argv[])
 
             vd_um_depth_flags_push(1,1);
             vd_um_cylinder(point.e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 0.5f, 0.1f, fm4(0.3f, 0.6f, 0.25f, 1.f).e);
-            vd_um_grid(fzero3().e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 100.f, fm4(1,1,1,1).e);
+            vd_um_grid(fzero3().e, flookrotquat(fm3(0,1,0), fm3(0,0,1)).e, 100.f, fm4(1,1,1,1).e, 0.001f, 1.f);
             vd_um_depth_flags_pop();
 
             vd_um_translate_axial("tZ", point.e, fm3(0,0,1).e);

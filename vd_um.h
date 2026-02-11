@@ -111,7 +111,7 @@ VD_UM_API void              vd_um_point(float position[3], float size, float col
 VD_UM_API void              vd_um_segment(float start[3], float end[3], float thickness, float color[4]);
 VD_UM_API void              vd_um_quad(float center[3], float orientation[4], float extents[2], float corner_radius, float falloff, float color[4]);
 VD_UM_API void              vd_um_arrow(float base[3], float apex[3], float width, float color[4]);
-VD_UM_API void              vd_um_grid(float origin[3], float orientation[4], float extent, float color[4]);
+VD_UM_API void              vd_um_grid(float origin[3], float orientation[4], float extent, float color[4], float line_width, float tex_scale);
 VD_UM_API void              vd_um_cylinder(float base[3], float orientation[4], float height, float radius, float color[4]);
 VD_UM_API void              vd_um_plane(float point[3], float normal[3], float extent, float color[4]);
 VD_UM_API void              vd_um_ring(float center[3], float orientation[4], float radius, float thickness, float fill_radius, float color[4]);
@@ -162,6 +162,43 @@ VD_UM_API void          vd_um_gl_get_attribute_properties(int attribute, int *si
 VD_UM_API const char*   vd_um_gl_get_uniform_name_projection(void);
 VD_UM_API const char*   vd_um_gl_get_uniform_name_view(void);
 VD_UM_API const char*   vd_um_gl_get_uniform_name_resolution(void);
+
+/* ----INTEGRATION - D3D11------------------------------------------------------------------------------------------- */
+#pragma pack(push, 1)
+typedef struct {
+    float projection[16];
+    float inv_view[16];
+    float resolution[2];
+    float padding[14];
+} VdUmStandardPushConstants;
+
+// @note: If you reinterp this as D3D11_INPUT_ELEMENT_DESC, it should line up
+typedef struct {
+    const char      *semantic_name;             // LPCSTR
+    unsigned int    semantic_index;             // UINT
+    unsigned int    format;                     // DXGI_FORMAT
+    unsigned int    input_slot;                 // UINT
+    unsigned int    aligned_byte_offset;        // UINT
+    unsigned int    input_slot_class;           // D3D11_INPUT_CLASSIFICATION
+    unsigned int    instance_data_step_rate;    // UINT
+} VdUmD3D11In;
+#pragma pack(pop)
+
+typedef struct {
+    int depth_test;
+    int depth_write;
+} VdUmD3D11DepthStateFlags;
+
+#define VD_UM_D3D11_DEPTH_STATE_PERMUTATION_COUNT 4
+
+VD_UM_API void                      vd_um_d3d11_get_default_shader_sources(const char **const source, size_t *source_len,
+                                                                           const char **const vs_entry,
+                                                                           const char **const ps_entry);
+
+VD_UM_API int                       vd_um_d3d11_get_num_attributes(void);
+VD_UM_API VdUmD3D11In*              vd_um_d3d11_get_attribute_properties(void);
+VD_UM_API VdUmD3D11DepthStateFlags* vd_um_d3d11_get_depth_state_flags(int permutation);
+VD_UM_API int                       vd_um_d3d11_get_depth_state_permutation(int flags);
 
 #endif // !VD_UM_H
 
@@ -642,7 +679,7 @@ VD_UM_API void vd_um_arrow(float base[3], float apex[3], float width, float colo
     vd_um_vertex_count_pop();
 }
 
-VD_UM_API void vd_um_grid(float origin[3], float orientation[4], float extent, float color[4])
+VD_UM_API void vd_um_grid(float origin[3], float orientation[4], float extent, float color[4], float line_width, float tex_scale)
 {
     VdUmContext *ctx = vd_um_context_get();
     vd_um_vertex_count_push(6);
@@ -653,6 +690,8 @@ VD_UM_API void vd_um_grid(float origin[3], float orientation[4], float extent, f
     vertex.mode = VD_UM__VERTEX_MODE_GRID;
     for (int i = 0; i < 4; i++) vertex.color[i] = color[i];
     for (int i = 0; i < 4; i++) vertex.orientation[i] = orientation[i];
+    vertex.pos1[0] = line_width;
+    vertex.pos1[1] = tex_scale;
 
     vd_um__push_vertex(ctx, &vertex);
     vd_um_vertex_count_pop();
@@ -2321,6 +2360,7 @@ VD_UM_INL void vd_um__conjugate(float q[4], float out[4])
 "    f_texcoord = uv_worldspace_from_orientation(origin, position, orientation);                                   \n" \
 "    f_col = v_col;                                                                                                \n" \
 "    f_mode = mode;                                                                                                \n" \
+"    f_param = vec4(v_v1.x, v_v1.y, v_v1.z, 0.0);                                                                  \n" \
 "}                                                                                                                 \n" \
 "                                                                                                                  \n" \
 "void do_point() {                                                                                                 \n" \
@@ -2499,14 +2539,10 @@ VD_UM_INL void vd_um__conjugate(float q[4], float out[4])
 "    return mix(grid2.x, 1.0, grid2.y);                                                                            \n" \
 "}                                                                                                                 \n" \
 "void do_grid() {                                                                                                  \n" \
-"    float grid1 = grid(vec2(0.005), f_texcoord * 1.0);                                                            \n" \
-"    float grid2 = grid(vec2(0.005), f_texcoord * 10.0);                                                           \n" \
-"    vec3 color1 = vec3(1.0,1.0,1.0);                                                                              \n" \
-"    vec3 color2 = vec3(0.7,0.7,0.7);                                                                              \n" \
+"    float grid1 = grid(vec2(f_param.x), f_texcoord * f_param.y);                                                  \n" \
+"    vec3 color = vec3(f_col.xyz);                                                                                 \n" \
 "    float a1 = grid1;                                                                                             \n" \
-"    float a2 = grid2 * (1.0 - a1);                                                                                \n" \
-"    vec3 color = mix(color1, color2, a2);                                                                         \n" \
-"    float alpha = a1 + a2;                                                                                        \n" \
+"    float alpha = a1;                                                                                             \n" \
 "    r_col = vec4(color, alpha);                                                                                   \n" \
 "    if (alpha < 0.01) discard;                                                                                    \n" \
 "}                                                                                                                 \n" \
@@ -2658,6 +2694,574 @@ VD_UM_API const char *vd_um_gl_get_uniform_name_view(void)
 VD_UM_API const char *vd_um_gl_get_uniform_name_resolution(void)
 {
     return "u_resolution";
+}
+
+/* ----INTEGRATION - D3D11------------------------------------------------------------------------------------------- */
+#define VD_UM_D3D11_SHADER_SOURCE \
+"cbuffer Constants : register (b0) { \n" \
+"    float4x4 u_proj;\n" \
+"    float4x4 u_view;\n" \
+"    float2   u_resolution;\n" \
+"};\n" \
+" \n" \
+"struct VS_INPUT {\n" \
+"    float3 v_v0               : POS0; \n" \
+"    float  thickness          : SIZE; \n" \
+"    float3 v_v1               : POS1; \n" \
+"    uint mode                 : MODE; \n" \
+"    float4 v_col              : COLOR; \n" \
+"    float4 orientation        : ORIENTATION; \n" \
+"    float2 timeout            : TIMEOUT;\n" \
+"};\n" \
+" \n" \
+"struct PS_INPUT {\n" \
+"    float4 pos                     : SV_POSITION;\n" \
+"    float4 f_col                   : COLOR; \n" \
+"    float2 f_texcoord              : TEXCOORD; \n" \
+"    float2 f_timeout               : TIMEOUT; \n" \
+"    nointerpolation float4 f_param : PARAM; \n" \
+"    nointerpolation uint f_mode    : MODE;\n" \
+"};\n" \
+" \n" \
+"float3 quat_rotate(float3 v, float4 q) \n" \
+"{ \n" \
+"    return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v); \n" \
+"} \n" \
+" \n" \
+"float3 find_orthogonal_vector(float3 v)\n" \
+"{ \n" \
+"    float3 x = float3(1,0,0);\n" \
+"    \n" \
+"    if (abs(dot(v, x)) >= 0.9999) {\n" \
+"        x = float3(0,1,0); \n" \
+"    }\n" \
+"    return normalize(cross(x, v));\n" \
+"} \n" \
+" \n" \
+"float4 pos_viewspace_rectangle_aligned_on_positions(float3 p0, float3 p1, float width, uint vertex_id)\n" \
+"{ \n" \
+"    float4 Pv0 = mul(u_view, float4(p0, 1.0));\n" \
+"    float4 Pv1 = mul(u_view, float4(p1, 1.0));\n" \
+"    float2 movements[6] = {                                                                                   \n" \
+"        float2(+1.0, 1.0),                                                                                          \n" \
+"        float2(-1.0, 1.0),                                                                                          \n" \
+"        float2(+1.0, 0.0),                                                                                          \n" \
+"        float2(+1.0, 0.0),                                                                                          \n" \
+"        float2(-1.0, 1.0),                                                                                          \n" \
+"        float2(-1.0, 0.0)                                                                                           \n" \
+"    };                                                                                                            \n" \
+"    \n" \
+"    float L = distance(Pv1.xyz, Pv0.xyz); \n" \
+"    float3 F = normalize(Pv1.xyz - Pv0.xyz); \n" \
+"    float3 closest = Pv0.xyz + F * (-dot(Pv0.xyz, F) / dot(F,F)); \n" \
+"    float H = width / 2.0;; \n" \
+"    float3 M = -normalize(closest); \n" \
+"    float3 R = cross(M, F); \n" \
+"    float3 vertex = Pv0.xyz + movements[vertex_id].x * H * R + movements[vertex_id].y * L * F; \n" \
+"    return mul(u_proj, float4(vertex, 1.0));\n" \
+"} \n" \
+" \n" \
+"float4 pos_viewspace_triangle_aligned_to_camera(float3 base, float3 apex, float width, uint vertex_id)\n" \
+"{ \n" \
+"    float4 Pv0 = mul(u_view, float4(base, 1.0));\n" \
+"    float4 Pv1 = mul(u_view, float4(apex, 1.0));\n" \
+"    \n" \
+"    float2 movements[3] = {\n" \
+"        float2(+0.0, 1.0),\n" \
+"        float2(-1.0, 0.0),\n" \
+"        float2(+1.0, 0.0)\n" \
+"    };\n" \
+"    \n" \
+"    float L = distance(Pv1.xyz, Pv0.xyz);\n" \
+"    float3 F = normalize(Pv1.xyz - Pv0.xyz); \n" \
+"    float3 closest = Pv0.xyz + F * (-dot(Pv0.xyz, F) / dot(F,F)); \n" \
+"    float H = width / 2.0;; \n" \
+"    float3 M = -normalize(closest); \n" \
+"    float3 R = cross(M, F); \n" \
+"    float3 vertex = Pv0.xyz + (movements[vertex_id].x * H) * R + (movements[vertex_id].y * L) * F; \n" \
+"    return mul(u_proj, float4(vertex, 1.0));\n" \
+"} \n" \
+" \n" \
+" \n" \
+"float3 pos_worldspace_rectangle(float3 origin, float4 orientation, float3 scale, uint vertex_id) \n" \
+"{ \n" \
+"    \n" \
+"    float3 verts[6] = {                                                                                       \n" \
+"        float3(+0.5, +0.5, 0.0),                                                                                    \n" \
+"        float3(-0.5, +0.5, 0.0),                                                                                    \n" \
+"        float3(+0.5, -0.5, 0.0),                                                                                    \n" \
+"        float3(+0.5, -0.5, 0.0),                                                                                    \n" \
+"        float3(-0.5, +0.5, 0.0),                                                                                    \n" \
+"        float3(-0.5, -0.5, 0.0)                                                                                     \n" \
+"    };                                                                                                            \n" \
+"    return origin + quat_rotate(verts[vertex_id] * scale, orientation);\n" \
+"} \n" \
+" \n" \
+"float2 uv_rectangle(uint vertex_id)\n" \
+"{\n" \
+"    float2 uvs[6] = {                                                                                         \n" \
+"        float2(1.0, 1.0),   // top-right                                                                            \n" \
+"        float2(0.0, 1.0),   // top-left                                                                             \n" \
+"        float2(1.0, 0.0),   // bottom-right                                                                         \n" \
+"        float2(1.0, 0.0),   // bottom-right                                                                         \n" \
+"        float2(0.0, 1.0),   // top-left                                                                             \n" \
+"        float2(0.0, 0.0)    // bottom-left                                                                          \n" \
+"    };                                                                                                            \n" \
+"                                                                                                                  \n" \
+"    return uvs[vertex_id];                                                                                      \n" \
+"}\n" \
+" \n" \
+"float2 uv_triangle(uint vertex_id)                                                                                                \n" \
+"{                                                                                                                 \n" \
+"    float2 uvs[3] = {                                                                                  \n" \
+"        float2(+0.0, 1.0),                                                                                          \n" \
+"        float2(+1.0, 0.0),                                                                                          \n" \
+"        float2(-1.0, 0.0)                                                                                           \n" \
+"    };                                                                                                            \n" \
+"    return uvs[vertex_id];                                                                                      \n" \
+"}                                                                                                                 \n" \
+" \n" \
+"float2 uv_worldspace_from_orientation(float3 worldspace_origin, float3 vertex_position, float4 orientation)\n" \
+"{\n" \
+"    float3 local_x = quat_rotate(float3(1,0,0), orientation);\n" \
+"    float3 local_y = quat_rotate(float3(0,1,0), orientation);\n" \
+"    float3 rel = vertex_position - worldspace_origin;\n" \
+"    return float2(dot(rel,local_x), dot(rel, local_y));\n" \
+"}\n" \
+" \n" \
+"void do_line_vs(in VS_INPUT input, in uint vertex_id, out PS_INPUT output)\n" \
+"{\n" \
+"    output = (PS_INPUT)0;\n" \
+"    float3 p0 = input.v_v0;\n" \
+"    float3 p1 = input.v_v0;\n" \
+"    \n" \
+"    float width = input.thickness;\n" \
+"    float4 Pv0 = mul(u_view, float4(p0, 1.0));\n" \
+"    float4 Pv1 = mul(u_view, float4(p1, 1.0));\n" \
+"    float2 movements[6] = {                                                                                   \n" \
+"        float2(+1.0, 1.0),                                                                                          \n" \
+"        float2(-1.0, 1.0),                                                                                          \n" \
+"        float2(+1.0, 0.0),                                                                                          \n" \
+"        float2(+1.0, 0.0),                                                                                          \n" \
+"        float2(-1.0, 1.0),                                                                                          \n" \
+"        float2(-1.0, 0.0)                                                                                           \n" \
+"    };                                                                                                            \n" \
+"    float L = distance(Pv1.xyz, Pv0.xyz);\n" \
+"    float3 F = normalize(Pv1.xyz - Pv0.xyz);\n" \
+"    float3 closest = Pv0.xyz + F * (-dot(Pv0.xyz, F) / dot(F,F));\n" \
+"    float H = width / 2.0;\n" \
+"    float3 M = -normalize(closest);\n" \
+"    float3 R = cross(M,F);\n" \
+"    float3 vertex = Pv0.xyz + movements[vertex_id].x * H * R + movements[vertex_id].y * L * F;\n" \
+"    \n" \
+"    output.pos = mul(u_proj, float4(vertex, 1.0));\n" \
+"    output.f_col = input.v_col;\n" \
+"    output.f_mode = input.mode;\n" \
+"    output.f_texcoord = uv_rectangle(vertex_id);\n" \
+"}\n" \
+" \n" \
+"void do_triangle_vs(in VS_INPUT input, uint vertex_id, out PS_INPUT output)\n" \
+"{\n" \
+"    output = (PS_INPUT)0;\n" \
+"    output.pos = pos_viewspace_triangle_aligned_to_camera(input.v_v0, input.v_v1, input.thickness, vertex_id);\n" \
+"    output.f_col = input.v_col;\n" \
+"    output.f_mode = 4;\n" \
+"    output.f_texcoord = uv_triangle(vertex_id);\n" \
+"}\n" \
+" \n" \
+"void do_grid_vs(in VS_INPUT input, uint vertex_id, out PS_INPUT output)\n" \
+"{\n" \
+"    output = (PS_INPUT)0;\n" \
+"    float3 origin = input.v_v0;\n" \
+"    float3 scale = float3(input.thickness, input.thickness, input.thickness);\n" \
+"    float3 position = pos_worldspace_rectangle(origin, input.orientation, scale, vertex_id);\n" \
+"    output.pos = mul(u_proj, mul(u_view, float4(position, 1.0))); \n" \
+"    output.f_texcoord = uv_worldspace_from_orientation(origin, position, input.orientation); \n" \
+"    output.f_col = input.v_col;\n" \
+"    output.f_mode = input.mode;\n" \
+"    output.f_param = float4(input.v_v1.x, input.v_v1.y, input.v_v1.z, 0.0);\n" \
+"}\n" \
+" \n" \
+"void do_point_vs(in VS_INPUT input, uint vertex_id, out PS_INPUT output)\n" \
+"{\n" \
+"    output = (PS_INPUT)0;\n" \
+"    float4 Pv0 = mul(u_view, float4(input.v_v0, 1.0));\n" \
+"    float point_scale = input.thickness;\n" \
+"    float2 movements[6] = {                                                                                   \n" \
+"        float2(+0.5, +0.5),                                                                                         \n" \
+"        float2(-0.5, +0.5),                                                                                         \n" \
+"        float2(+0.5, -0.5),                                                                                         \n" \
+"        float2(+0.5, -0.5),                                                                                         \n" \
+"        float2(-0.5, +0.5),                                                                                         \n" \
+"        float2(-0.5, -0.5)                                                                                          \n" \
+"    };                                                                                                            \n" \
+"    float H = point_scale;\n" \
+"    float3 M = -normalize(Pv0.xyz);\n" \
+"    float3 A = find_orthogonal_vector(M);\n" \
+"    float3 R = cross(A, M);\n" \
+"    float3 F = cross(M, R);\n" \
+"    float3 vertex = Pv0.xyz + movements[vertex_id].x * H * R + movements[vertex_id].y * H * F;\n" \
+"    output.pos = mul(u_proj, float4(vertex, 1.0));\n" \
+"    output.f_mode = 3;\n" \
+"}\n" \
+" \n" \
+"void do_ring_vs(in VS_INPUT input, uint vertex_id, out PS_INPUT output)\n" \
+"{\n" \
+"    output = (PS_INPUT)0;\n" \
+"    float3 origin = input.v_v0;\n" \
+"    float3 scale = float3(input.thickness, input.thickness, input.thickness);\n" \
+"    float3 verts[6] = {                                                                                       \n" \
+"        float3(+0.5, +0.5, 0.0),                                                                                    \n" \
+"        float3(-0.5, +0.5, 0.0),                                                                                    \n" \
+"        float3(+0.5, -0.5, 0.0),                                                                                    \n" \
+"        float3(+0.5, -0.5, 0.0),                                                                                    \n" \
+"        float3(-0.5, +0.5, 0.0),                                                                                    \n" \
+"        float3(-0.5, -0.5, 0.0)                                                                                     \n" \
+"    };                                                                                                            \n" \
+"    float3 position = origin + quat_rotate(verts[vertex_id] * scale, input.orientation);\n" \
+"    \n" \
+"    float4 view_pos = mul(u_view, float4(position, 1.0));\n" \
+"    float4 clip_pos = mul(u_proj, view_pos);\n" \
+"    output.pos = clip_pos;\n" \
+"    output.f_col = input.v_col;\n" \
+"    output.f_texcoord = uv_rectangle(vertex_id);\n" \
+"    output.f_mode = 2;\n" \
+"    output.f_param = float4(input.v_v1.x, input.v_v1.y, 0, 0);\n" \
+"}\n" \
+" \n" \
+"#define CYLINDER_SLICES 8\n" \
+"void do_cylinder_vs(in VS_INPUT input, uint vertex_id, out PS_INPUT output)\n" \
+"{\n" \
+"    output = (PS_INPUT)0;\n" \
+"    uint tri = vertex_id / 6;\n" \
+"    uint vid = vertex_id % 6;\n" \
+"    float h = input.thickness;\n" \
+"    float radius = input.v_v1.x;\n" \
+"    \n" \
+"    float a0 = float(tri)        / float(CYLINDER_SLICES) * 6.28318530718;\n" \
+"    float a1 = float(tri + 1)    / float(CYLINDER_SLICES) * 6.28318530718;\n" \
+"    \n" \
+"    float3 p0b = float3(cos(a0) * radius, sin(a0) * radius, 0);\n" \
+"    float3 p0t = float3(cos(a0) * radius, sin(a0) * radius, h);\n" \
+"    float3 p1b = float3(cos(a1) * radius, sin(a1) * radius, 0);\n" \
+"    float3 p1t = float3(cos(a1) * radius, sin(a1) * radius, h);\n" \
+"    \n" \
+"    float3 local_positions[6] = {\n" \
+"       p0b, p0t, p1b,\n" \
+"       p1b, p0t, p1t\n" \
+"    };\n" \
+"    \n" \
+"    float3 local_pos = local_positions[vid];\n" \
+"    float3 nlocal = normalize(float3(local_pos.x, 0.0, local_pos.z));\n" \
+"    float3 world_pos = quat_rotate(local_pos, input.orientation);\n" \
+"    float3 world_nrm = quat_rotate(nlocal, input.orientation);\n" \
+"    \n" \
+"    world_pos = world_pos + input.v_v0;\n" \
+"    output.pos = mul(u_proj, mul(u_view, float4(world_pos, 1.0)));\n" \
+"    output.f_col = input.v_col;\n" \
+"    output.f_mode = 3;\n" \
+"}\n" \
+" \n" \
+"void do_quad_vs(in VS_INPUT input, uint vertex_id, out PS_INPUT output)\n" \
+"{\n" \
+"    output = (PS_INPUT)0;\n" \
+"    float3 origin = input.v_v0;\n" \
+"    float3 scale = float3(input.v_v1.x, input.v_v1.y, 1.0);\n" \
+"    float falloff = input.v_v1.z;\n" \
+"    float radius = input.thickness;\n" \
+"    float3 position = pos_worldspace_rectangle(origin, input.orientation, scale, vertex_id);\n" \
+"    \n" \
+"    output.pos = mul(u_proj, mul(u_view, float4(position, 1.0)));\n" \
+"    output.f_texcoord = (uv_rectangle(vertex_id) - float2(0.5, 0.5));\n" \
+"    output.f_col = input.v_col;\n" \
+"    output.f_param.x = radius;\n" \
+"    output.f_param.y = falloff;\n" \
+"    output.f_param.z = input.v_v1.x * 1.0;\n" \
+"    output.f_param.w = input.v_v1.y * 1.0;\n" \
+"    output.f_mode = 5;\n" \
+"}\n" \
+" \n" \
+"PS_INPUT vs(VS_INPUT input, uint vertex_id : SV_VertexID)\n" \
+"{\n" \
+"    PS_INPUT result = (PS_INPUT)0; \n" \
+"    switch (input.mode) {\n" \
+"        case 0: do_line_vs(input, vertex_id, result);  break; \n" \
+"        case 1: do_grid_vs(input, vertex_id, result);  break; \n" \
+"        case 2: do_point_vs(input, vertex_id, result);  break; \n" \
+"        case 3: do_ring_vs(input, vertex_id, result);  break; \n" \
+"        case 4: do_cylinder_vs(input, vertex_id, result);  break; \n" \
+"        case 5: do_quad_vs(input, vertex_id, result);  break; \n" \
+"        case 6: do_triangle_vs(input, vertex_id, result);  break; \n" \
+"        default: break; \n" \
+"    }\n" \
+"    result.f_timeout = input.timeout;\n" \
+"    return result;\n" \
+"}\n" \
+" \n" \
+"float4 do_line_ps(PS_INPUT input)\n" \
+"{\n" \
+"    float2 uv = input.f_texcoord * 2.0 - 1.0;\n" \
+"    float w = 1.0;\n" \
+"    float2 centers = float2(0.5, -0.5);\n" \
+"    float2 distances = 0.7 * abs(float2(uv.x, uv.y) - centers);\n" \
+"    float2 widths = float2(fwidth(distances.x), fwidth(distances.y));\n" \
+"    float2 alphas = float2(\n" \
+"        1.0 - smoothstep(w - widths.x, w + widths.y, distances.x), \n" \
+"        1.0 - smoothstep(w - widths.x, w + widths.y, distances.y)); \n" \
+"    float alpha = alphas.y * alphas.x;\n" \
+"    return float4(input.f_col.rgb, input.f_col.a * alpha);\n" \
+"}\n" \
+" \n" \
+"float grid(float2 lineWidth, float2 texcoord)\n" \
+"{\n" \
+"    float2 uv = texcoord * 1;\n" \
+"    float2 dx = ddx(uv);\n" \
+"    float2 dy = ddy(uv);\n" \
+"    float2 uvDeriv = float2(length(float2(dx.x, dy.x)), length(float2(dx.y, dy.y)));\n" \
+"    bool2 invertLine = bool2(lineWidth.x > 0.5, lineWidth.y > 0.5);\n" \
+"    float2 targetWidth = float2(\n" \
+"        invertLine.x ? 1.0 - lineWidth.x : lineWidth.x,\n" \
+"        invertLine.y ? 1.0 - lineWidth.y : lineWidth.y);\n" \
+"    float2 drawWidth = clamp(targetWidth, uvDeriv, float2(0.5, 0.5));\n" \
+"    float2 lineAA = uvDeriv * 3.0;\n" \
+"    float2 gridUV = abs(frac(uv) * 2.0 - 1.0);\n" \
+"    \n" \
+"    gridUV.x = invertLine.x ? gridUV.x : 1.0 - gridUV.x;\n" \
+"    gridUV.y = invertLine.y ? gridUV.y : 1.0 - gridUV.y;\n" \
+"    \n" \
+"    float2 grid2 = smoothstep(drawWidth + lineAA, drawWidth - lineAA, gridUV);\n" \
+"    grid2 *= clamp(targetWidth / drawWidth, 0.0, 1.0);\n" \
+"    grid2.x = invertLine.x ? 1.0 - grid2.x : grid2.x;\n" \
+"    grid2.y = invertLine.y ? 1.0 - grid2.y : grid2.y;\n" \
+"    return lerp(grid2.x, 1.0, grid2.y);\n" \
+"}\n" \
+" \n" \
+"float4 do_grid_ps(PS_INPUT input)\n" \
+"{\n" \
+"    float grid1 = grid(float2(input.f_param.x, input.f_param.x), input.f_texcoord * input.f_param.y);\n" \
+"    \n" \
+"    float3 color = input.f_col.xyz;\n" \
+"    \n" \
+"    float a1 = grid1;\n" \
+"    \n" \
+"    float alpha = a1;\n" \
+"    \n" \
+"    clip(alpha - 0.01);\n" \
+"    return float4(color, alpha);\n" \
+"}\n" \
+" \n" \
+"#define PI 3.14159265359\n" \
+" \n" \
+"float4 do_ring_ps(PS_INPUT input)\n" \
+"{\n" \
+"    float2 uv = input.f_texcoord * 2.0 - 1.0;\n" \
+"    float2 dd = fwidth(input.f_texcoord);\n" \
+"    uv = uv / (1.0 - min(dd.x, dd.y));\n" \
+"    float turn = ((atan(uv.y / uv.x) / PI) + 1.0) / 2.0;\n" \
+"    float cutoff = step(input.f_param.y, turn);\n" \
+"    float lsq = length(uv);\n" \
+"    float R1 = 1.0;\n" \
+"    float H = input.f_param.x;\n" \
+"    float R2 = R1 - H;\n" \
+"    float T = lsq;\n" \
+"    float P = 0.001;\n" \
+"    float a1 = smoothstep(R2, R2 + P, T);\n" \
+"    float a2 = 1.0 - smoothstep(R1 - P, R1, T);\n" \
+"    float4 color = input.f_col;\n" \
+"    color.a *= a1 * a2 * cutoff;\n" \
+"    clip(color.a - 0.001);\n" \
+"    return color;\n" \
+"}\n" \
+" \n" \
+"float sdTriangle( in float2 p, in float2 p0, in float2 p1, in float2 p2 )                                                 \n" \
+"{                                                                                                                 \n" \
+"    float2 e0 = p1-p0, e1 = p2-p1, e2 = p0-p2;                                                                      \n" \
+"    float2 v0 = p -p0, v1 = p -p1, v2 = p -p2;                                                                      \n" \
+"    float2 pq0 = v0 - e0*clamp( dot(v0,e0)/dot(e0,e0), 0.0, 1.0 );                                                  \n" \
+"    float2 pq1 = v1 - e1*clamp( dot(v1,e1)/dot(e1,e1), 0.0, 1.0 );                                                  \n" \
+"    float2 pq2 = v2 - e2*clamp( dot(v2,e2)/dot(e2,e2), 0.0, 1.0 );                                                  \n" \
+"    float s = sign( e0.x*e2.y - e0.y*e2.x );                                                                      \n" \
+"    float2 d = min(min(float2(dot(pq0,pq0), s*(v0.x*e0.y-v0.y*e0.x)),                                                 \n" \
+"                     float2(dot(pq1,pq1), s*(v1.x*e1.y-v1.y*e1.x))),                                                \n" \
+"                     float2(dot(pq2,pq2), s*(v2.x*e2.y-v2.y*e2.x)));                                                \n" \
+"    return -sqrt(d.x)*sign(d.y);                                                                                  \n" \
+"}                                                                                                                 \n" \
+" \n" \
+"float4 do_triangle_ps(PS_INPUT input)\n" \
+"{\n" \
+"    float2 uv = input.f_texcoord;\n" \
+"    float dist = distance(uv, float2(0.5, 0.3));\n" \
+"    float stepfactor = fwidth(input.f_texcoord.y);\n" \
+"    \n" \
+"    float2 dvx = float2(ddx(input.f_texcoord.x), ddy(input.f_texcoord.x));\n" \
+"    float2 dvy = float2(ddx(input.f_texcoord.y), ddy(input.f_texcoord.y));\n" \
+"    float2 dudv = float2(length(dvx), length(dvy));\n" \
+"    dudv *= 10.0;\n" \
+"    float2 uv_dudv = (uv) / (dudv);\n" \
+"    float dudvL = max(uv_dudv.x, uv_dudv.y);\n" \
+"    \n" \
+"    float yval = 0.0;\n" \
+"    float2 tri_bot_right = float2(+1.0, 0.0 + yval);\n" \
+"    float2 tri_bot_left  = float2(-1.0, 0.0 + yval);\n" \
+"    float2 tri_top       = float2(+0.0, 1.0 + yval);\n" \
+"    \n" \
+"    float alpha = sdTriangle(uv * 1.1, tri_bot_right, tri_bot_left, tri_top) * 8.0;\n" \
+"    \n" \
+"    return float4(input.f_col.xyz, input.f_col.z * (1.0 - alpha));\n" \
+"}\n" \
+" \n" \
+"float4 do_color_ps(PS_INPUT input)\n" \
+"{\n" \
+"    return input.f_col;\n" \
+"    \n" \
+"}\n" \
+" \n" \
+"float sdf_rounded_rect(float2 sample_pos, float2 rect_center, float2 rect_half_size, float r) {                         \n" \
+"    float2 d2 = (abs(rect_center - sample_pos) - rect_half_size + float2(r, r));                                      \n" \
+"    return min(max(d2.x, d2.y), 0.0) + length(max(d2, 0.0)) - r;                                                  \n" \
+"}                                                                                                                 \n" \
+" \n" \
+"float4 do_rounded_rect_ps(PS_INPUT input)\n" \
+"{\n" \
+"    \n" \
+"    float2 uv = (input.f_texcoord) * input.f_param.zw;\n" \
+"    float radius = input.f_param.x * length(input.f_param.zw);\n" \
+"    float falloff = input.f_param.y;\n" \
+"    float2 softness = float2(falloff, falloff);\n" \
+"    float2 softness_padding = float2(max(0, falloff * 2 - 1), max(0, falloff * 2 - 1));\n" \
+"    \n" \
+"    float dist = sdf_rounded_rect(uv, float2(0.0, 0.0), (input.f_param.zw * 0.980) * 0.5 - softness_padding, radius); \n" \
+"    float sdf_factor = 1.0 - smoothstep(0, 2 * falloff, dist);\n" \
+"    float alpha = sdf_factor;\n" \
+"    return float4(input.f_col.xyz, input.f_col.a * alpha);\n" \
+"    \n" \
+"    \n" \
+"}\n" \
+" \n" \
+"float4 ps(PS_INPUT input) : SV_TARGET\n" \
+"{\n" \
+"    float4 result = float4(1.0, 1.0, 1.0, 1.0); \n" \
+"    switch (input.f_mode) {\n" \
+"        case 0: result = do_line_ps(input); break;\n" \
+"        case 1: result = do_grid_ps(input); break;\n" \
+"        case 2: result = do_ring_ps(input); break;\n" \
+"        case 3: result = do_color_ps(input); break;\n" \
+"        case 4: result = do_triangle_ps(input); break;\n" \
+"        case 5: result = do_rounded_rect_ps(input); break;\n" \
+"        default: break;\n" \
+"    }\n" \
+"    result.a *= (input.f_timeout.x / input.f_timeout.y);\n" \
+"    return result;\n" \
+"}\n" \
+
+static const char *Vd_Um__D3D11_Vs_Entry = "vs";
+static const char *Vd_Um__D3D11_Ps_Entry = "ps";
+
+VD_UM_API void vd_um_d3d11_get_default_shader_sources(const char **const source, size_t *source_len,
+                                                      const char **const vs_entry,
+                                                      const char **const ps_entry)
+{
+    *source = VD_UM_D3D11_SHADER_SOURCE;
+    *source_len = sizeof(VD_UM_D3D11_SHADER_SOURCE);
+    *vs_entry = Vd_Um__D3D11_Vs_Entry;
+    *ps_entry = Vd_Um__D3D11_Ps_Entry;
+}
+
+VD_UM_API int vd_um_d3d11_get_num_attributes(void)
+{
+    return 7;
+}
+
+static VdUmD3D11In Vd_Um__D3D11_Attributes[7] = {
+    {
+        "POS",
+        0,
+        6,                                  /* DXGI_FORMAT_R32G32B32_FLOAT */
+        0,
+        VD_UM_OFFSET_OF(VdUmVertex, pos0),
+        1,                                  /* D3D11_INPUT_PER_INSTANCE_DATA */
+        1
+    },
+    {
+        "SIZE",
+        0,
+        41,                                 /* DXGI_FORMAT_R32_FLOAT */
+        0,
+        VD_UM_OFFSET_OF(VdUmVertex, size),
+        1,                                  /* D3D11_INPUT_PER_INSTANCE_DATA */
+        1
+    },
+    {
+        "POS",
+        1,
+        6,                                  /* DXGI_FORMAT_R32G32B32_FLOAT */
+        0,
+        VD_UM_OFFSET_OF(VdUmVertex, pos1),
+        1,                                  /* D3D11_INPUT_PER_INSTANCE_DATA */
+        1
+    },
+    {
+        "MODE",
+        0,
+        42,                                 /* DXGI_FORMAT_R32_UINT */
+        0,
+        VD_UM_OFFSET_OF(VdUmVertex, mode),
+        1,                                  /* D3D11_INPUT_PER_INSTANCE_DATA */
+        1
+    },
+    {
+        "COLOR",
+        0,
+        2,                                  /* DXGI_FORMAT_R32G32B32A32_FLOAT */
+        0,
+        VD_UM_OFFSET_OF(VdUmVertex, color),
+        1,                                  /* D3D11_INPUT_PER_INSTANCE_DATA */
+        1
+    },
+    {
+        "ORIENTATION",
+        0,
+        2,                                  /* DXGI_FORMAT_R32G32B32A32_FLOAT */
+        0,
+        VD_UM_OFFSET_OF(VdUmVertex, orientation),
+        1,                                  /* D3D11_INPUT_PER_INSTANCE_DATA */
+        1
+    },
+    {
+        "TIMEOUT",
+        0,
+        16,                                 /* DXGI_FORMAT_R32G32_FLOAT */
+        0,
+        VD_UM_OFFSET_OF(VdUmVertex, timeout),
+        1,
+        1
+    }
+};
+
+VD_UM_API VdUmD3D11In *vd_um_d3d11_get_attribute_properties(void)
+{
+    return Vd_Um__D3D11_Attributes;
+}
+
+static VdUmD3D11DepthStateFlags Vd_Um__D3D11_Depth_State_Permutations[VD_UM_D3D11_DEPTH_STATE_PERMUTATION_COUNT] = {
+    // Depth Test    Depth Write
+    {  0,            0, },
+    {  0,            1, },
+    {  1,            0, },
+    {  1,            1, },
+};
+
+VD_UM_API VdUmD3D11DepthStateFlags *vd_um_d3d11_get_depth_state_flags(int permutation)
+{
+    return &Vd_Um__D3D11_Depth_State_Permutations[permutation];
+}
+
+VD_UM_API int vd_um_d3d11_get_depth_state_permutation(int flags)
+{
+    int depth_test = (flags & VD_UM_RENDER_PASS_FLAG_DEPTH_TEST) ? 1 : 0;
+    int depth_write = (flags & VD_UM_RENDER_PASS_FLAG_DEPTH_WRITE) ? 1 : 0;
+
+    return depth_test * 2 + depth_write;
 }
 
 #endif // VD_UM_IMPL
