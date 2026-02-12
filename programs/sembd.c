@@ -115,4 +115,5 @@ int main(int argc, char const *argv[])
         if (result[i] == '\r') i++;
         if (result[i] == '\n') i++;
     }
+    printf("\n");
 }

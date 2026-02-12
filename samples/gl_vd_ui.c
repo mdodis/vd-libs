@@ -110,6 +110,8 @@ int main(int argc, char const *argv[])
         vd_ui_event_mouse_button(VD_UI_MOUSE_LEFT,  mouse_state & VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN);
         vd_ui_event_mouse_button(VD_UI_MOUSE_RIGHT, mouse_state & VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN);
         vd_ui_event_mouse_wheel(wx, wy);
+        if (vd_fw_get_key_pressed(VD_FW_KEY_ARROW_RIGHT)) vd_ui_event_key_press(VD_UI_KEY_ARROW_RIGHT);
+        if (vd_fw_get_key_pressed(VD_FW_KEY_ARROW_LEFT)) vd_ui_event_key_press(VD_UI_KEY_ARROW_LEFT);
 
 
         int window_buttons = vd_ui_demo();

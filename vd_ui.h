@@ -26,8 +26,8 @@
  * | ------------------------------------- | ------------------------------------------------------------------ | - |
  * | Single Line Label                     | vd_ui_label*                                                       | X |
  * | Button                                | vd_ui_button* vd_ui_icon_button*                                   | X |
- * | Slider                                | vd_ui_slider*                                                      |   |
- * |                                       |                                                                    |   |
+ * | Slider                                | vd_ui_slider*                                                      | ~ |
+ * | Text Line                             | vd_ui_text_line*                                                   | ~ |
  * 
  * @todo(mdodis):
  * - Sliders
@@ -230,8 +230,13 @@ enum {
 
     // Coloring
     VD_UI_ALL_SHAPES = VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_BORDER,
+
+    VD_UI_KEY_NONE = 0,
+    VD_UI_KEY_ARROW_UP   = 40,
+    VD_UI_KEY_ARROW_LEFT = 41, VD_UI_KEY_ARROW_DOWN = 42, VD_UI_KEY_ARROW_RIGHT = 43,
 };
 typedef int VdUiFlags;
+typedef int VdUiKey;
 
 enum {
     VD_UI_SIZE_MODE_ABSOLUTE = 0,
@@ -332,49 +337,71 @@ typedef struct VdUiStyle {
     VdUiStyleText   text;
 } VdUiStyle;
 
+typedef struct {
+    unsigned int byte_index;
+} VdUiTextEditState;
+
+typedef struct {
+    long long l;
+    long long c;
+} VdUiTextPoint;
+
+typedef struct {
+    VdUiTextPoint c;
+    VdUiTextPoint m;
+} VdUiSel;
+
 typedef struct VdUiDiv VdUiDiv;
+
+#define VD_UI_DRAW_PROC(name) void name(VdUiDiv *div, float rect[4], void *usr)
+typedef VD_UI_DRAW_PROC(VdUiDrawProc);
+
 struct VdUiDiv {
     /** The first child of this div */
-    VdUiDiv     *first;
+    VdUiDiv         *first;
     /** The last child of this div (eqt. first->next->...) */
-    VdUiDiv     *last;
+    VdUiDiv         *last;
     /** The next sibling of this div */
-    VdUiDiv     *next;
+    VdUiDiv         *next;
     /** The prev sibling of this div */
-    VdUiDiv     *prev;
+    VdUiDiv         *prev;
     /** The parent of this div */
-    VdUiDiv     *parent;
+    VdUiDiv         *parent;
 
-    VdUiFlags   flags;
-    VdUiStyle   style;
+    VdUiFlags       flags;
+    VdUiStyle       style;
 
-    size_t      h;
-    size_t      last_frame_touched;
-    int         size_changed;
+    size_t          h;
+    size_t          last_frame_touched;
+    int             size_changed;
 
-    VdUiDiv     *hnext;
-    VdUiDiv     *hprev;
+    VdUiDiv         *hnext;
+    VdUiDiv         *hprev;
 
-    VdUiStr     content_str;
-    VdUiStr     id_str;
+    VdUiStr         content_str;
+    VdUiStr         id_str;
+
+    VdUiDrawProc    *draw_proc;
 
 
-    float       text_size[VD_UI_AXES];
-    float       comp_pos_rel[VD_UI_AXES];
-    float       comp_size[VD_UI_AXES];
-    float       rect[4];
-    int         zoffset;
+    float           text_size[VD_UI_AXES];
+    float           comp_pos_rel[VD_UI_AXES];
+    float           comp_size[VD_UI_AXES];
+    float           rect[4];
+    int             zoffset;
 
-    float       hot_t;
-    float       active_t;
-    float       timeout_t;
-    float       timeout_inv_t;
-    float       size_timeout_t;
+    VdUiTextEditState text_edit;
 
-    float       offset[VD_UI_AXES];
-    float       scale[VD_UI_AXES];
+    float           hot_t;
+    float           active_t;
+    float           timeout_t;
+    float           timeout_inv_t;
+    float           size_timeout_t;
 
-    VdUiBool    is_null;
+    float           offset[VD_UI_AXES];
+    float           scale[VD_UI_AXES];
+
+    VdUiBool        is_null;
 };
 
 typedef struct {
@@ -503,6 +530,8 @@ VD_UI_API int              vd_ui_slider(void *value, void *min_value, void *max_
 VD_UI_INL int              vd_ui_sliderf_float(float *value, float min_value, float max_value,
                                                VdUiAxis orientation,
                                                const char *label, ...)                                                  { VD_UI_DOTTOSTR(label); float ivp = min_value; float mvp = max_value; return vd_ui_slider(value, &ivp, &mvp, VD_UI_DATA_TYPE_FLOAT, orientation, str); }
+
+VD_UI_API int              vd_ui_text_box(VdUiStr label, VdUiSel *sel, char *buf, size_t *len, size_t capacity);
 
 VD_UI_API void             vd_ui_scroll_begin(VdUiStr str, float *x, float *y);
 VD_UI_API void             vd_ui_scroll_end(void);
@@ -678,9 +707,12 @@ VD_UI_API VdUiRenderPass*  vd_ui_frame_get_render_passes(unsigned int *num_passe
 VD_UI_API void             vd_ui_render_begin(void);
 
 /**
- * End custom rendering. @see vd_ui_render_begin
+ * @brief Enable custom drawing for a specific div. This procedure will be called after rendering everything else
+ * @param  div  The div for which custom drawing will be enabled
+ * @param  proc The callback
+ * @param  usr  User data passed to the callback
  */
-VD_UI_API void             vd_ui_render_end(void);
+VD_UI_API void             vd_ui_set_draw_proc(VdUiDiv *div, VdUiDrawProc *proc, void *usr);
 
 /**
  * Push a gradient-colored rectangle to athe vertex buffer
@@ -692,6 +724,14 @@ VD_UI_API void             vd_ui_push_rectgrad(float rect[4], float color[16],
                                                float edge_softness,
                                                float border_thickness);
 
+VD_UI_API float            vd_ui_get_font_height(VdUiFontId font, float pixel_height);
+VD_UI_API void             vd_ui_push_glyph(VdUiFontId font, float rect[4], float uv[4], float color[4]);
+
+/**
+ * End custom rendering. @see vd_ui_render_begin
+ */
+VD_UI_API void             vd_ui_render_end(void);
+
 /* ----FONTS--------------------------------------------------------------------------------------------------------- */
 VD_UI_API VdUiFontId       vd_ui_font_add_ttf(void *buffer, size_t size);
 VD_UI_API void*            vd_ui_font_default(size_t *size);
@@ -701,6 +741,7 @@ VD_UI_API void             vd_ui_event_size(float width, float height);
 VD_UI_API void             vd_ui_event_mouse_location(float mx, float my);
 VD_UI_API void             vd_ui_event_mouse_button(int index, int down);
 VD_UI_API void             vd_ui_event_mouse_wheel(float dx, float dy);
+VD_UI_API void             vd_ui_event_key_press(VdUiKey key);
 VD_UI_API void             vd_ui_event_focus(int on);
 
 /* ----INPUT UTILITIES----------------------------------------------------------------------------------------------- */
@@ -709,6 +750,8 @@ VD_UI_API int              vd_ui_mouse_left_just_released(void);
 VD_UI_API void             vd_ui_transform_point(VdUiDiv *div, float point[2], float out_point[2]);
 VD_UI_API void             vd_ui_set_capture(size_t eid);
 VD_UI_API int              vd_ui_is_captured(VdUiDiv *div);
+VD_UI_API VdUiKey          vd_ui_get_key_pressed(int off);
+VD_UI_API int              vd_ui_get_num_keys_pressed(void);
 
 /* ----CONTEXT CREATION---------------------------------------------------------------------------------------------- */
 typedef struct VdUiContext VdUiContext;
@@ -1103,6 +1146,10 @@ static VdUiColoring  Vd_Ui__Coloring_Tx_Default;
 #   define VD_UI_STYLE_FONT_SIZE_STACK_COUNT    32
 #endif // !VD_UI_STYLE_FONT_SIZE_STACK_COUNT
 
+#ifndef VD_UI_KEYS_PRESSED_MAX
+#   define VD_UI_KEYS_PRESSED_MAX 16
+#endif // !VD_UI_KEYS_PRESSED_MAX
+
 #ifndef VD_UI_LOG_ENABLE
 #define VD_UI_LOG_ENABLE 0
 #endif // !VD_UI_LOG_ENABLE
@@ -1282,6 +1329,9 @@ struct VdUiContext {
     int                     mouse_right;
     int                     mouse_middle;
 
+    int                     num_keys_pressed;
+    VdUiKey                 keys_pressed[VD_UI_KEYS_PRESSED_MAX];
+
     size_t                  id_capturing_mouse;
     size_t                  hot;
     size_t                  active;
@@ -1370,6 +1420,7 @@ VD_UI_API void vd_ui_frame_begin(float delta_seconds)
 
     ctx->strbuf_len           = 0;
     ctx->null_divs_len        = 0;
+    ctx->num_keys_pressed     = 0;
 
     vd_ui_parent_push(&ctx->root);
 
@@ -1571,6 +1622,35 @@ VD_UI_API void vd_ui_push_rectgrad(float rect[4], float color[16],
                                    float border_thickness)
 {
     vd_ui__push_rectgrad(vd_ui_context_get(), rect, color, corner_radius, edge_softness, border_thickness);
+}
+
+VD_UI_API float vd_ui_get_font_height(VdUiFontId font, float pixel_height)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    VdUiFont *fontv = &ctx->fonts[font.id];
+    float pixel_size = (float)pixel_height;
+    float size_scaled = stbtt_ScaleForPixelHeight(&fontv->font_info, pixel_size);
+
+    float hadd = (float)fontv->bounding_box[3] - (float)fontv->bounding_box[1];
+    return hadd * size_scaled * 0.5f;
+}
+
+VD_UI_API void vd_ui_push_glyph(VdUiFontId font, float rect[4], float uv[4], float color[4])
+{
+    VD_UI_ASSERT(font.id == 0);
+
+    VdUiContext *ctx = vd_ui_context_get();
+    float p0[2] = {rect[VD_UI_LEFT], rect[VD_UI_TOP]};
+    float p1[2] = {rect[VD_UI_RIGHT], rect[VD_UI_BOTTOM]};
+
+    float u0[2] = {uv[VD_UI_LEFT],  uv[VD_UI_TOP]};
+    float u1[2] = {uv[VD_UI_RIGHT], uv[VD_UI_BOTTOM]};
+
+    vd_ui__push_vertex(ctx, &ctx->texture,
+        p0, p1,
+        u0, u1,
+        color,
+        VD_UI_VERTEX_FLAG_TEXTURE_IS_ALPHA_BUFFER);
 }
 
 /* ----UI IMPL------------------------------------------------------------------------------------------------------- */
@@ -1795,16 +1875,20 @@ VD_UI_API int vd_ui_slider(void *value, void *min_value, void *max_value,
         grip->style.size[0].value = 16.f;
         grip->style.size[1].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
         grip->style.size[1].value = 16.f;
-        grip->style.background.corner_radius = 8.f;
-        grip->style.background.edge_softness = 0.8f;
+        grip->style.background.edge_softness = 0.7f;
         grip->style.background.normal   = vd_ui_gradient1(vd_ui_f4(0.294f, 0.71f, 0.925f, 1.f));
         grip->style.background.hot      = vd_ui_gradient1(vd_ui_f4(0.294f, 0.71f, 0.925f, 1.f));
         grip->style.background.active   = vd_ui_gradient1(vd_ui_f4(0.294f, 0.71f, 0.925f, 1.f));
         grip->zoffset             = 1;
         VdUiReply grip_reply  = vd_ui_call(grip);
 
-        grip->scale[0] = vd_ui__clampf(grip->hot_t - (grip->active_t) * 0.2f, 0.8f, 1.f);
-        grip->scale[1] = vd_ui__clampf(grip->hot_t - (grip->active_t) * 0.2f, 0.8f, 1.f);
+        float t = vd_ui__clampf01(grip->hot_t + grip->active_t);
+        grip->style.background.corner_radius = 8.f;
+        // grip->scale[0] = vd_ui__clampf(grip->hot_t - (grip->active_t) * 0.2f, 0.8f, 1.f);
+        // grip->scale[1] = vd_ui__clampf(grip->hot_t - (grip->active_t) * 0.2f, 0.8f, 1.f);
+
+        grip->scale[0] = vd_ui_fremap(t, 0.f, 1.f, 0.8f, 1.f);
+        grip->scale[1] = vd_ui_fremap(t, 0.f, 1.f, 0.8f, 1.f);
 
         float track_size = track->rect[2] - track->rect[0];
 
@@ -1825,6 +1909,66 @@ VD_UI_API int vd_ui_slider(void *value, void *min_value, void *max_value,
     }
     vd_ui_parent_pop();
 
+    return 0;
+}
+
+VD_UI_API int vd_ui_text_box(VdUiStr label, VdUiSel *sel, char *buf, size_t *len, size_t capacity)
+{
+    VdUiColoring cursor_style = vd_ui_coloring_all4(vd_ui_f4(0.0, 0.7f, 1.f, 1.f));
+
+    VdUiDiv *box = vd_ui_div_new(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_CLICKABLE | VD_UI_FLAG_CLIP_CONTENT, label);
+    vd_ui_parent_push(box);
+
+    vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_ABSOLUTE, 3.f, 0.f);
+    vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_ABSOLUTE, 32.f, 0.f);
+    vd_ui_style_coloring_push(VD_UI_FLAG_BACKGROUND,  &cursor_style);
+    VdUiDiv *cursor = vd_ui_div_new(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_FLOAT, VD_UI_LIT("##cursor"));
+    vd_ui_style_coloring_pop(VD_UI_FLAG_BACKGROUND);
+    vd_ui_style_size_pop(VD_UI_AXISV);
+    vd_ui_style_size_pop(VD_UI_AXISH);
+
+    vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_TEXT_CONTENT, 1.f, 1.f);
+    VdUiDiv *text = vd_ui_div_newf(VD_UI_FLAG_TEXT, "%s##%d", buf, 0);
+    vd_ui_style_size_pop(VD_UI_AXISH);
+
+    vd_ui_parent_pop();
+
+    VdUiTextEditState *text_edit = &cursor->text_edit;
+
+    // if (vd_ui_get_key_pressed(0) == VD_UI_KEY_ARROW_RIGHT) {
+    //     if (text_edit->byte_index < len) {
+    //         unsigned int cur_codepoint = (unsigned int)buf[text_edit->byte_index];
+
+    //         VdUiFontId font_id = {0};
+    //         float rx = 0.f, ry = 0.f;
+    //         float x0, y0, x1, y1, s0, t0, s1, t1;
+    //         vd_ui_get_glyph_metrics(font_id, cur_codepoint, text->style.text.font_size,
+    //                                 &rx, &ry,
+    //                                 &x0, &y0,
+    //                                 &x1, &y1,
+    //                                 &s0, &t0,
+    //                                 &s1, &t1);
+    //         cursor->comp_pos_rel[0] += rx;
+    //         text_edit->byte_index += 1;
+    //     }
+    // } else if (vd_ui_get_key_pressed(0) == VD_UI_KEY_ARROW_LEFT) {
+
+    //     if (text_edit->byte_index > 0) {
+    //         unsigned int cur_codepoint = (unsigned int)buf[text_edit->byte_index - 1];
+
+    //         VdUiFontId font_id = {0};
+    //         float rx = 0.f, ry = 0.f;
+    //         float x0, y0, x1, y1, s0, t0, s1, t1;
+    //         vd_ui_get_glyph_metrics(font_id, cur_codepoint, text->style.text.font_size,
+    //                                 &rx, &ry,
+    //                                 &x0, &y0,
+    //                                 &x1, &y1,
+    //                                 &s0, &t0,
+    //                                 &s1, &t1);
+    //         cursor->comp_pos_rel[0] -= rx;
+    //         text_edit->byte_index -= 1;
+    //     }
+    // }
     return 0;
 }
 
@@ -2247,7 +2391,7 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
         div->hot_t    = vd_ui__lerp(div->hot_t, hovered ? 1.0f : 0.0f, dt * hot_speed);
         div->hot_t    = vd_ui__clampf01(div->hot_t);
 
-        div->active_t = vd_ui__lerp(div->active_t, (pressed && hovered) ? 1.0f : 0.0f, dt * active_speed);
+        div->active_t = vd_ui__lerp(div->active_t, ((pressed && hovered) || captured) ? 1.0f : 0.0f, dt * active_speed);
         div->active_t = vd_ui__clampf01(div->active_t);
 
         div->timeout_t = vd_ui__lerp(div->timeout_t, 0.f, dt * 11.f);
@@ -2565,6 +2709,11 @@ VD_UI_API int vd_ui_demo(void)
             vd_ui_buttonf("Another Button");
 
             vd_ui_labelf(u8"Some unicode: ă x ă");
+
+            static char buf[64] = "a text box";
+            static size_t buf_len = 10;
+            static VdUiSel sel = {0};
+            vd_ui_text_box(VD_UI_LIT("TextBox"), &sel, buf, &buf_len, sizeof(buf));
 
             static int checkbox = 0;
             vd_ui_checkboxf(&checkbox, "Show Hidden");
@@ -3024,6 +3173,12 @@ VD_UI_API void vd_ui_event_mouse_wheel(float dx, float dy)
 #endif
 }
 
+VD_UI_API void vd_ui_event_key_press(VdUiKey key)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    ctx->keys_pressed[ctx->num_keys_pressed++] = key;
+}
+
 VD_UI_API void vd_ui_event_mouse_button(int index, int down)
 {
     VdUiContext *ctx = vd_ui_context_get();
@@ -3072,6 +3227,22 @@ VD_UI_API int vd_ui_is_captured(VdUiDiv *div)
 {
     VdUiContext *ctx = vd_ui_context_get();
     return div->h == ctx->id_capturing_mouse;
+}
+
+VD_UI_API VdUiKey vd_ui_get_key_pressed(int off)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    if ((ctx->num_keys_pressed - off - 1) < 0) {
+        return VD_UI_KEY_NONE;
+    }
+
+    return ctx->keys_pressed[ctx->num_keys_pressed - off - 1];
+}
+
+VD_UI_API int vd_ui_get_num_keys_pressed(void)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    return ctx->num_keys_pressed;
 }
 
 static void vd_ui__push_clip(VdUiContext *ctx, float clip[4])
@@ -3831,7 +4002,7 @@ VD_UI_API VdUiContext *vd_ui_context_create(VdUiContextCreateInfo *info)
     result->glyph_cache = (VdUiGlyph*)VD_UI_MALLOC(sizeof(VdUiGlyph) * VD_UI_GLYPH_CACHE_COUNT_MAX);
     for (int i = 0; i < VD_UI_GLYPH_CACHE_COUNT_MAX; ++i) {
         result->glyph_cache[i].codepoint = 0;
-        result->glyph_cache[i].texture.id = 0;
+        VD_UI_TEXTURE_ID_MAKE_NULL(result->glyph_cache[i].texture);
         result->glyph_cache[i].font.id = 0;
         result->glyph_cache[i].next = -1;
     }
