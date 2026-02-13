@@ -59,6 +59,8 @@
  *     - Win32: Required extensions function
  *     - Win32: Query queue surface presentation support
  *     - Win32: Implement vkCreateWin32SurfaceKHR
+ * - Event Queue
+ * - vd_fw_get_key_released: Gets if the key was released this frame
  * - raw hat states
  * - File dialog
  * - OpenGL anti-alias setting
@@ -291,11 +293,6 @@ VD_FW_API int                vd_fw_init(VdFwInitInfo *info);
 VD_FW_API int                vd_fw_running(void);
 
 /**
- * @brief Poll for events. Call this every frame, even if you don't use them.
- */
-VD_FW_API void               vd_fw_poll(void);
-
-/**
  * @brief Acquire lock to the window buffer for drawing
  */
 VD_FW_API void               vd_fw_lock(void);
@@ -306,15 +303,160 @@ VD_FW_API void               vd_fw_lock(void);
 VD_FW_API void               vd_fw_unlock(void);
 
 /**
+ * @brief Close the window and end the rendering loop
+ */
+VD_FW_API void               vd_fw_quit(void);
+
+/* ----EVENTS-------------------------------------------------------------------------------------------------------- */
+enum {
+    VD_FW_KEY_UNKNOWN       = 0,
+    VD_FW_KEY_F1  = 1,  VD_FW_KEY_F2  = 2,  VD_FW_KEY_F3  = 3,  VD_FW_KEY_F4  = 4,
+    VD_FW_KEY_F5  = 5,  VD_FW_KEY_F6  = 6,  VD_FW_KEY_F7  = 7,  VD_FW_KEY_F8  = 8,
+    VD_FW_KEY_F9  = 9,  VD_FW_KEY_F10 = 10, VD_FW_KEY_F11 = 11, VD_FW_KEY_F12 = 12,
+    VD_FW_KEY_F13 = 13, VD_FW_KEY_F14 = 14, VD_FW_KEY_F15 = 15, VD_FW_KEY_F16 = 16,
+    VD_FW_KEY_F17 = 17, VD_FW_KEY_F18 = 18, VD_FW_KEY_F19 = 19, VD_FW_KEY_F20 = 20,
+    VD_FW_KEY_F21 = 21, VD_FW_KEY_F22 = 22, VD_FW_KEY_F23 = 23, VD_FW_KEY_F24 = 24,
+    VD_FW_KEY_BACKSPACE     = 25,  
+    VD_FW_KEY_INS = 26, VD_FW_KEY_HOME = 27, VD_FW_KEY_PGUP = 28,
+    VD_FW_KEY_DEL = 29, VD_FW_KEY_END  = 30, VD_FW_KEY_PGDN = 31,
+    VD_FW_KEY_SPACE         = 32,  /* ' ' */
+    VD_FW_KEY_LCONTROL = 33, VD_FW_KEY_RCONTROL = 34,
+    VD_FW_KEY_LALT     = 35, VD_FW_KEY_RALT     = 36,
+    VD_FW_KEY_LSHIFT   = 37, VD_FW_KEY_RSHIFT   = 38,
+    VD_FW_KEY_QUOTE         = 39,  /* '\''*/
+    VD_FW_KEY_ARROW_UP   = 40,
+    VD_FW_KEY_ARROW_LEFT = 41, VD_FW_KEY_ARROW_DOWN = 42, VD_FW_KEY_ARROW_RIGHT = 43,
+    VD_FW_KEY_COMMA         = 44,  /* ','*/
+    VD_FW_KEY_MINUS         = 45,  /* '-' */
+    VD_FW_KEY_DOT           = 46,  /* '.' */
+    VD_FW_KEY_SLASH_FORWARD = 47,  /* '/' */
+    VD_FW_KEY_0 = 48,  /* '0' */ VD_FW_KEY_1 = 49,  /* '1' */
+    VD_FW_KEY_2 = 50,  /* '2' */ VD_FW_KEY_3 = 51,  /* '3' */
+    VD_FW_KEY_4 = 52,  /* '4' */ VD_FW_KEY_5 = 53,  /* '5' */
+    VD_FW_KEY_6 = 54,  /* '6' */ VD_FW_KEY_7 = 55,  /* '7' */
+    VD_FW_KEY_8 = 56,  /* '8' */ VD_FW_KEY_9 = 57,  /* '9' */
+    VD_FW_KEY_ENTER         = 58,
+    VD_FW_KEY_SEMICOLON     = 59,  /* ';' */
+    VD_FW_KEY_TAB           = 60,
+    VD_FW_KEY_EQUALS        = 61,  /* '=' */
+    VD_FW_KEY_CAPITAL       = 62,
+    VD_FW_KEY_ESCAPE        = 63,
+    VD_FW_KEY_RESERVED1     = 64,  /* '@' */
+    VD_FW_KEY_A = 65, VD_FW_KEY_B = 66, VD_FW_KEY_C = 67, VD_FW_KEY_D = 68,
+    VD_FW_KEY_E = 69, VD_FW_KEY_F = 70, VD_FW_KEY_G = 71, VD_FW_KEY_H = 72,
+    VD_FW_KEY_I = 73, VD_FW_KEY_J = 74, VD_FW_KEY_K = 75, VD_FW_KEY_L = 76,
+    VD_FW_KEY_M = 77, VD_FW_KEY_N = 78, VD_FW_KEY_O = 79, VD_FW_KEY_P = 80,
+    VD_FW_KEY_Q = 81, VD_FW_KEY_R = 82, VD_FW_KEY_S = 83, VD_FW_KEY_T = 84,
+    VD_FW_KEY_U = 85, VD_FW_KEY_V = 86, VD_FW_KEY_W = 87, VD_FW_KEY_X = 88,
+    VD_FW_KEY_Y = 89,
+    VD_FW_KEY_Z = 90,
+    VD_FW_KEY_BRACKET_OPEN  = 91,  /* '[' */
+    VD_FW_KEY_SLASH_BACK    = 92,  /* '\\' */
+    VD_FW_KEY_BRACKET_CLOSE = 93,  /* ']' */
+    VD_FW_KEY_MEDIA_NEXT    = 94,  /* Media Next Track */
+    VD_FW_KEY_MEDIA_PREV    = 95,  /* Media Prev Track */
+    VD_FW_KEY_BACKTICK      = 96,  /* '`' */
+    VD_FW_KEY_MEDIA_PLAY    = 97,  /* Media Play/Pause */
+    VD_FW_KEY_NUMPAD_0 = 98,  /* Numpad 0 */ VD_FW_KEY_NUMPAD_1 = 99,  /* Numpad 1 */
+    VD_FW_KEY_NUMPAD_2 = 100, /* Numpad 2 */ VD_FW_KEY_NUMPAD_3 = 101, /* Numpad 3 */
+    VD_FW_KEY_NUMPAD_4 = 102, /* Numpad 4 */ VD_FW_KEY_NUMPAD_5 = 103, /* Numpad 5 */
+    VD_FW_KEY_NUMPAD_6 = 104, /* Numpad 6 */ VD_FW_KEY_NUMPAD_7 = 105, /* Numpad 7 */
+    VD_FW_KEY_NUMPAD_8 = 106, /* Numpad 8 */ VD_FW_KEY_NUMPAD_9 = 107, /* Numpad 9 */
+    VD_FW_KEY_MAX,
+};
+typedef int VdFwKey;
+
+enum {
+    VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN   = 1 << 0,
+    VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN  = 1 << 1,
+    VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN = 1 << 2,
+    VD_FW_MOUSE_STATE_M1_BUTTON_DOWN     = 1 << 3,
+    VD_FW_MOUSE_STATE_M2_BUTTON_DOWN     = 1 << 4,
+
+    VD_FW_MOUSE_BUTTON_LEFT   = VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN,
+    VD_FW_MOUSE_BUTTON_RIGHT  = VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN,
+    VD_FW_MOUSE_BUTTON_MIDDLE = VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN,
+    VD_FW_MOUSE_BUTTON_M1     = VD_FW_MOUSE_STATE_M1_BUTTON_DOWN,
+    VD_FW_MOUSE_BUTTON_M2     = VD_FW_MOUSE_STATE_M2_BUTTON_DOWN,
+};
+
+typedef enum {
+    VD_FW_EVENT_TYPE_NONE = 0,
+    VD_FW_EVENT_TYPE_WINDOW_SIZE_CHANGE,
+    VD_FW_EVENT_TYPE_FOCUS_CHANGE,
+    VD_FW_EVENT_TYPE_KEY_DOWN,
+    VD_FW_EVENT_TYPE_KEY_UP,
+    VD_FW_EVENT_TYPE_CHARACTER,
+    VD_FW_EVENT_TYPE_MOUSE_MOVE,
+    VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN,
+    VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP,
+    VD_FW_EVENT_TYPE_MOUSE_SCROLL,
+} VdFwEventType;
+
+typedef struct {
+    int w, h;
+} VdFwEventWindowSizeChangeData;
+
+typedef struct {
+    int got_focus;
+} VdFwEventFocusChangeData;
+
+typedef struct {
+    VdFwKey key;
+    int     repeat;
+} VdFwEventKeyDownData;
+
+typedef struct {
+    VdFwKey key;
+} VdFwEventKeyUpData;
+
+typedef struct {
+    unsigned int codepoint;
+} VdFwEventCharacter;
+
+typedef struct {
+    int x, y;
+} VdFwEventMouseMoveData;
+
+typedef struct {
+    int     button;
+} VdFwEventMouseButtonDownData;
+
+typedef struct {
+    int     button;
+} VdFwEventMouseButtonUpData;
+
+typedef struct {
+    float   dx, dy;
+} VdFwEventMouseScrollData;
+
+typedef union {
+    VdFwEventWindowSizeChangeData  window_size_change;
+    VdFwEventFocusChangeData       focus_change;
+    VdFwEventKeyDownData           key_down;
+    VdFwEventKeyUpData             key_up;
+    VdFwEventCharacter             character;
+    VdFwEventMouseMoveData         mouse_move;
+    VdFwEventMouseButtonDownData   mouse_button_down;
+    VdFwEventMouseButtonUpData     mouse_button_up;
+    VdFwEventMouseScrollData       mouse_scroll;
+} VdFwEventData;
+
+typedef struct {
+    VdFwEventType type;
+    VdFwEventData data;
+} VdFwEvent;
+
+/**
+ * @brief Poll for events. Call this every frame, even if you don't use them.
+ */
+VD_FW_API void               vd_fw_poll(void);
+
+/**
  * @brief Get if the user requested to close the window
  * @return  Whether the user tried to close the window this frame
  */
 VD_FW_API int                vd_fw_close_requested(void);
-
-/**
- * @brief Close the window and end the rendering loop
- */
-VD_FW_API void               vd_fw_quit(void);
 
 /**
  * @brief Get the current platform.
@@ -500,19 +642,6 @@ VD_FW_API const char*        vd_fw_get_monitor_name(int index);
 VD_FW_API VdFwDisplayMode*   vd_fw_get_monitor_display_modes(int index, int *count);
 
 /* ----MOUSE--------------------------------------------------------------------------------------------------------- */
-enum {
-    VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN   = 1 << 0,
-    VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN  = 1 << 1,
-    VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN = 1 << 2,
-    VD_FW_MOUSE_STATE_M1_BUTTON_DOWN     = 1 << 3,
-    VD_FW_MOUSE_STATE_M2_BUTTON_DOWN     = 1 << 4,
-
-    VD_FW_MOUSE_BUTTON_LEFT   = VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN,
-    VD_FW_MOUSE_BUTTON_RIGHT  = VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN,
-    VD_FW_MOUSE_BUTTON_MIDDLE = VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN,
-    VD_FW_MOUSE_BUTTON_M1     = VD_FW_MOUSE_STATE_M1_BUTTON_DOWN,
-    VD_FW_MOUSE_BUTTON_M2     = VD_FW_MOUSE_STATE_M2_BUTTON_DOWN,
-};
 
 /**
  * @brief Read the mouse state.
@@ -586,63 +715,6 @@ VD_FW_API int                vd_fw_get_mouse_locked(void);
 VD_FW_API int                vd_fw_get_mouse_wheel(float *dx, float *dy);
 
 /* ----KEYBOARD------------------------------------------------------------------------------------------------------ */
-enum {
-    VD_FW_KEY_UNKNOWN       = 0,
-    VD_FW_KEY_F1  = 1,  VD_FW_KEY_F2  = 2,  VD_FW_KEY_F3  = 3,  VD_FW_KEY_F4  = 4,
-    VD_FW_KEY_F5  = 5,  VD_FW_KEY_F6  = 6,  VD_FW_KEY_F7  = 7,  VD_FW_KEY_F8  = 8,
-    VD_FW_KEY_F9  = 9,  VD_FW_KEY_F10 = 10, VD_FW_KEY_F11 = 11, VD_FW_KEY_F12 = 12,
-    VD_FW_KEY_F13 = 13, VD_FW_KEY_F14 = 14, VD_FW_KEY_F15 = 15, VD_FW_KEY_F16 = 16,
-    VD_FW_KEY_F17 = 17, VD_FW_KEY_F18 = 18, VD_FW_KEY_F19 = 19, VD_FW_KEY_F20 = 20,
-    VD_FW_KEY_F21 = 21, VD_FW_KEY_F22 = 22, VD_FW_KEY_F23 = 23, VD_FW_KEY_F24 = 24,
-    VD_FW_KEY_BACKSPACE     = 25,  
-    VD_FW_KEY_INS = 26, VD_FW_KEY_HOME = 27, VD_FW_KEY_PGUP = 28,
-    VD_FW_KEY_DEL = 29, VD_FW_KEY_END  = 30, VD_FW_KEY_PGDN = 31,
-    VD_FW_KEY_SPACE         = 32,  /* ' ' */
-    VD_FW_KEY_LCONTROL = 33, VD_FW_KEY_RCONTROL = 34,
-    VD_FW_KEY_LALT     = 35, VD_FW_KEY_RALT     = 36,
-    VD_FW_KEY_LSHIFT   = 37, VD_FW_KEY_RSHIFT   = 38,
-    VD_FW_KEY_QUOTE         = 39,  /* '\''*/
-    VD_FW_KEY_ARROW_UP   = 40,
-    VD_FW_KEY_ARROW_LEFT = 41, VD_FW_KEY_ARROW_DOWN = 42, VD_FW_KEY_ARROW_RIGHT = 43,
-    VD_FW_KEY_COMMA         = 44,  /* ','*/
-    VD_FW_KEY_MINUS         = 45,  /* '-' */
-    VD_FW_KEY_DOT           = 46,  /* '.' */
-    VD_FW_KEY_SLASH_FORWARD = 47,  /* '/' */
-    VD_FW_KEY_0 = 48,  /* '0' */ VD_FW_KEY_1 = 49,  /* '1' */
-    VD_FW_KEY_2 = 50,  /* '2' */ VD_FW_KEY_3 = 51,  /* '3' */
-    VD_FW_KEY_4 = 52,  /* '4' */ VD_FW_KEY_5 = 53,  /* '5' */
-    VD_FW_KEY_6 = 54,  /* '6' */ VD_FW_KEY_7 = 55,  /* '7' */
-    VD_FW_KEY_8 = 56,  /* '8' */ VD_FW_KEY_9 = 57,  /* '9' */
-    VD_FW_KEY_ENTER         = 58,
-    VD_FW_KEY_SEMICOLON     = 59,  /* ';' */
-    VD_FW_KEY_TAB           = 60,
-    VD_FW_KEY_EQUALS        = 61,  /* '=' */
-    VD_FW_KEY_CAPITAL       = 62,
-    VD_FW_KEY_ESCAPE        = 63,
-    VD_FW_KEY_RESERVED1     = 64,  /* '@' */
-    VD_FW_KEY_A = 65, VD_FW_KEY_B = 66, VD_FW_KEY_C = 67, VD_FW_KEY_D = 68,
-    VD_FW_KEY_E = 69, VD_FW_KEY_F = 70, VD_FW_KEY_G = 71, VD_FW_KEY_H = 72,
-    VD_FW_KEY_I = 73, VD_FW_KEY_J = 74, VD_FW_KEY_K = 75, VD_FW_KEY_L = 76,
-    VD_FW_KEY_M = 77, VD_FW_KEY_N = 78, VD_FW_KEY_O = 79, VD_FW_KEY_P = 80,
-    VD_FW_KEY_Q = 81, VD_FW_KEY_R = 82, VD_FW_KEY_S = 83, VD_FW_KEY_T = 84,
-    VD_FW_KEY_U = 85, VD_FW_KEY_V = 86, VD_FW_KEY_W = 87, VD_FW_KEY_X = 88,
-    VD_FW_KEY_Y = 89,
-    VD_FW_KEY_Z = 90,
-    VD_FW_KEY_BRACKET_OPEN  = 91,  /* '[' */
-    VD_FW_KEY_SLASH_BACK    = 92,  /* '\\' */
-    VD_FW_KEY_BRACKET_CLOSE = 93,  /* ']' */
-    VD_FW_KEY_MEDIA_NEXT    = 94,  /* Media Next Track */
-    VD_FW_KEY_MEDIA_PREV    = 95,  /* Media Prev Track */
-    VD_FW_KEY_BACKTICK      = 96,  /* '`' */
-    VD_FW_KEY_MEDIA_PLAY    = 97,  /* Media Play/Pause */
-    VD_FW_KEY_NUMPAD_0 = 98,  /* Numpad 0 */ VD_FW_KEY_NUMPAD_1 = 99,  /* Numpad 1 */
-    VD_FW_KEY_NUMPAD_2 = 100, /* Numpad 2 */ VD_FW_KEY_NUMPAD_3 = 101, /* Numpad 3 */
-    VD_FW_KEY_NUMPAD_4 = 102, /* Numpad 4 */ VD_FW_KEY_NUMPAD_5 = 103, /* Numpad 5 */
-    VD_FW_KEY_NUMPAD_6 = 104, /* Numpad 6 */ VD_FW_KEY_NUMPAD_7 = 105, /* Numpad 7 */
-    VD_FW_KEY_NUMPAD_8 = 106, /* Numpad 8 */ VD_FW_KEY_NUMPAD_9 = 107, /* Numpad 9 */
-    VD_FW_KEY_MAX,
-};
-typedef int VdFwKey;
 
 /**
  * @brief Get whether a key was just pressed this frame

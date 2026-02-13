@@ -82,6 +82,10 @@ int main(int argc, char const *argv[])
 
         vd_fw_poll();
 
+        if (vd_fw_close_requested()) {
+            vd_fw_quit();
+        }
+
         float delta_seconds = vd_fw_delta_s();
 
         vd_fw_compile_or_hotload_program(&program, &program_time, "./glsl/ui_basic.vert", "./glsl/ui_basic.frag");
@@ -112,6 +116,10 @@ int main(int argc, char const *argv[])
         vd_ui_event_mouse_wheel(wx, wy);
         if (vd_fw_get_key_pressed(VD_FW_KEY_ARROW_RIGHT)) vd_ui_event_key_press(VD_UI_KEY_ARROW_RIGHT);
         if (vd_fw_get_key_pressed(VD_FW_KEY_ARROW_LEFT)) vd_ui_event_key_press(VD_UI_KEY_ARROW_LEFT);
+
+        for (unsigned short i = 0; i < vd_fw_get_num_codepoints(); ++i) {
+            vd_ui_event_char(vd_fw_get_codepoint(i));
+        }
 
 
         int window_buttons = vd_ui_demo();
