@@ -127,6 +127,15 @@ int main(int argc, char const *argv[])
                 } break;
 
                 case VD_FW_EVENT_TYPE_KEY_DOWN: {
+                    int shift   = (evt->data.key_down.modifiers & VD_FW_MOD_SHIFT)   ? 1 : 0;
+                    int control = (evt->data.key_down.modifiers & VD_FW_MOD_CONTROL) ? 1 : 0;
+                    int alt     = (evt->data.key_down.modifiers & VD_FW_MOD_ALT)     ? 1 : 0;
+                    if (shift && evt->data.key_down.key != VD_FW_KEY_LSHIFT) {
+                        printf("SHIFT\n");
+                    }
+                    vd_ui_event_mod(VD_UI_MOD_SHIFT, shift);
+                    vd_ui_event_mod(VD_UI_MOD_CONTROL, control);
+                    vd_ui_event_mod(VD_UI_MOD_ALT, alt);
                     vd_ui_event_key_press(vd_ui_vd_fw_key_translate(evt->data.key_down.key));
                 } break;
 

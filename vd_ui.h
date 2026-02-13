@@ -262,18 +262,25 @@ enum {
     VD_UI_KEY_NONE = 0,
     VD_UI_KEY_ARROW_UP   = 40,
     VD_UI_KEY_ARROW_LEFT = 41, VD_UI_KEY_ARROW_DOWN = 42, VD_UI_KEY_ARROW_RIGHT = 43,
+    VD_UI_KEY_BACKSPACE,
 
-    VD_UI_MOD_SHIFT = 0,
-    VD_UI_MOD_CTRL,
+    VD_UI_MOD_SHIFT   = 0,
+    VD_UI_MOD_CONTROL = 1,
+    VD_UI_MOD_ALT     = 2,
     VD_UI_MOD_MAX,
+
+    VD_UI_KEYSTROKE_FLAG_KEY  = 0 << 0,
+    VD_UI_KEYSTROKE_FLAG_CHAR = 1 << 0,
 };
 typedef int VdUiFlags;
 typedef int VdUiKey;
 typedef int VdUiMod;
 
 typedef struct {
-    VdUiKey key;
-    int     mods;
+    int          flags;
+    VdUiKey      key;
+    unsigned int codepoint;
+    int          mods;
 } VdUiKeyStroke;
 
 enum {
@@ -391,9 +398,11 @@ typedef struct {
 } VdUiSel;
 
 typedef enum {
-    VD_UI_TEXT_OP_FLAGS_NONE = 0,
-    VD_UI_TEXT_OP_FLAGS_SCAN_LETTER = 1,
-    VD_UI_TEXT_OP_FLAGS_SYNC_MARK = 1 << 3,
+    VD_UI_TEXT_OP_FLAGS_NONE               = 0,
+    VD_UI_TEXT_OP_FLAGS_DISTANCE_UNIT_MASK = 0b11,
+    VD_UI_TEXT_OP_FLAGS_SCAN_LETTER        = 1,
+    VD_UI_TEXT_OP_FLAGS_SYNC_MARK          = 0 << 3,
+    VD_UI_TEXT_OP_FLAGS_KEEP_MARK          = 1 << 3,
 } VdUiTextOpFlags;
 
 typedef struct {
@@ -806,8 +815,6 @@ VD_UI_API void             vd_ui_set_capture(size_t eid);
 VD_UI_API int              vd_ui_is_captured(VdUiDiv *div);
 VD_UI_API int              vd_ui_get_num_keystrokes(void);
 VD_UI_API VdUiKeyStroke    vd_ui_get_keystroke(int index);
-VD_UI_API int              vd_ui_get_num_chars(void);
-VD_UI_API unsigned int     vd_ui_get_char(int off);
 
 /* ----CONTEXT CREATION---------------------------------------------------------------------------------------------- */
 typedef struct VdUiContext VdUiContext;
@@ -1460,9 +1467,6 @@ struct VdUiContext {
     int                     num_keystrokes;
     VdUiKeyStroke           keystrokes[VD_UI_KEYSTROKES_MAX];
 
-    int                     num_chars;
-    unsigned int            chars[VD_UI_CHARS_MAX];
-
     size_t                  id_capturing_mouse;
     size_t                  hot;
     size_t                  active;
@@ -1552,7 +1556,6 @@ VD_UI_API void vd_ui_frame_begin(float delta_seconds)
     ctx->strbuf_len           = 0;
     ctx->null_divs_len        = 0;
     ctx->num_keystrokes       = 0;
-    ctx->num_chars            = 0;
 
     vd_ui__arena_clear(&ctx->frame_arena);
 
@@ -2063,21 +2066,94 @@ typedef struct {
     VdUiSel sel;
 } VdUi__TextBoxDrawData;
 
+typedef struct VdUi__TextBoxDrawNode VdUi__TextBoxDrawNode;
+struct VdUi__TextBoxDrawNode {
+    VdUiF4                rect;
+    VdUi__TextBoxDrawNode *next;
+};
+
 VD_UI_DRAW_PROC(vd_ui_text_box_draw)
 {
+    VdUiContext *ctx = vd_ui_context_get();
+    VdUi__ArenaSave save = vd_ui__arena_save(&ctx->frame_arena);
+
     VdUi__TextBoxDrawData *draw_data = (VdUi__TextBoxDrawData*)usr;
 
     VdUiFontId font_id = {0};
     float font_height = vd_ui_get_font_height(font_id, div->style.text.font_size);
 
-    float rx = rect[0], ry = rect[1] + font_height;
+    float text_start = rect[0] + div->style.padding[VD_UI_LEFT];
+    float rx = text_start;
+    float ry = rect[1] + font_height + div->style.padding[VD_UI_TOP];
     float caret_start[2] = {0, 0};
+    float mark_start[2] = {0, 0};
+
+    int caret_different_from_mark = draw_data->sel.m.b != draw_data->sel.c.b;
+    int mark_after_caret = draw_data->sel.m.b > draw_data->sel.c.b;
+    VdUi__TextBoxDrawNode sel_draw_first = {0};
+    VdUi__TextBoxDrawNode *sel_draw_curr = 0;
+
+    float caret_len = 16.f;
+    float caret_h_len = caret_len * 0.5f;
 
     for (int char_index = 0; char_index < (draw_data->str.l); ++char_index) {
         unsigned int codepoint = (unsigned int)draw_data->str.s[char_index];
+
         if (char_index == draw_data->sel.c.b) {
             caret_start[0] = rx;
-            caret_start[1] = ry;
+            caret_start[1] = ry - font_height * 0.5f;
+            if (caret_different_from_mark) {
+                if (mark_after_caret) {
+                    sel_draw_curr = &sel_draw_first;
+                    sel_draw_curr->rect.e[VD_UI_LEFT] = rx; 
+                    sel_draw_curr->rect.e[VD_UI_TOP]  = ry - font_height * 0.5f; 
+                } else {
+                    sel_draw_curr->rect.e[VD_UI_RIGHT]  = rx;
+                    sel_draw_curr->rect.e[VD_UI_BOTTOM] = ry - font_height * 0.5f;
+                    sel_draw_curr = 0;
+                }
+            }
+        }
+
+        if (char_index == draw_data->sel.m.b) {
+            mark_start[0] = rx;
+            mark_start[1] = ry - font_height;
+
+            if (caret_different_from_mark) {
+                if (mark_after_caret) {
+                    sel_draw_curr->rect.e[VD_UI_RIGHT]  = rx;
+                    sel_draw_curr->rect.e[VD_UI_BOTTOM] = ry - font_height * 0.5f;
+                    sel_draw_curr = 0;
+                } else {
+                    sel_draw_curr = &sel_draw_first;
+                    sel_draw_curr->rect.e[VD_UI_LEFT] = rx; 
+                    sel_draw_curr->rect.e[VD_UI_TOP]  = ry - font_height * 0.5f; 
+                }
+            }
+        }
+
+        if (codepoint == '\n') {
+            float prev_rx = rx;
+            float prev_ry = ry;
+
+            ry += font_height;
+            rx = text_start;
+
+            if ((caret_different_from_mark) && (sel_draw_curr != 0)) {
+                sel_draw_curr->rect.e[VD_UI_RIGHT] = prev_rx;
+                sel_draw_curr->rect.e[VD_UI_BOTTOM] = prev_ry - font_height * 0.5f;
+                VdUi__TextBoxDrawNode *node = vd_ui_mem_push(sizeof(VdUi__TextBoxDrawNode));
+                node->rect.e[VD_UI_LEFT] = rx;
+                node->rect.e[VD_UI_TOP] = ry - font_height * 0.5f;
+                node->next = 0;
+                sel_draw_curr->next = node;
+                sel_draw_curr = node;
+            }
+        }
+
+
+        if (codepoint == '\n') {
+            continue;
         }
 
         float x0, y0, x1, y1, s0, t0, s1, t1;
@@ -2105,19 +2181,51 @@ VD_UI_DRAW_PROC(vd_ui_text_box_draw)
 
     if (draw_data->sel.c.b == draw_data->str.l) {
         caret_start[0] = rx;
-        caret_start[1] = ry;
+        caret_start[1] = ry - font_height * 0.5f;
+
+        if (caret_different_from_mark) {
+            if (!mark_after_caret) {
+                sel_draw_curr->rect.e[VD_UI_RIGHT]  = rx;
+                sel_draw_curr->rect.e[VD_UI_BOTTOM] = ry - font_height * 0.5f;
+                sel_draw_curr = 0;
+            }
+        }
+    }
+
+    if (draw_data->sel.m.b == draw_data->str.l) {
+        mark_start[0] = rx;
+        mark_start[1] = ry - font_height * 0.5f;
     }
 
     float caret_rect[4] = {
-        caret_start[0],       caret_start[1] - (14.f + 4.f),
-        caret_start[0] + 2.f, caret_start[1] + 4.f
+        caret_start[0],       caret_start[1] - caret_h_len,
+        caret_start[0] + 2.f, caret_start[1] + caret_h_len
     };
+
+    if (caret_different_from_mark) {
+        sel_draw_curr = &sel_draw_first;
+
+        while (sel_draw_curr != 0) {
+
+            VdUiGradient sel_grad = vd_ui_gradient1(vd_ui_f4(1.f, 1.f, 0.f, 0.2f));
+            sel_draw_curr->rect.e[VD_UI_TOP] -= caret_h_len;
+            sel_draw_curr->rect.e[VD_UI_BOTTOM] += caret_h_len;
+            vd_ui_push_rectgrad(sel_draw_curr->rect.e, sel_grad.e, 0.f, 0.2f, 0.f);
+
+
+            sel_draw_curr = sel_draw_curr->next;
+        }
+    }
+
     VdUiGradient caret_grad = vd_ui_gradient1(vd_ui_f4(1.f, 1.f, 0.f, 1.f));
     vd_ui_push_rectgrad(caret_rect, caret_grad.e, 0.f, 0.2f, 0.f);
+
+    vd_ui__arena_restore(save);
 }
 
 VD_UI_API int vd_ui_input_text(VdUiStr label, VdUiSel *sel, char *buf, size_t *len, size_t capacity)
 {
+    VdUiContext *ctx = vd_ui_context_get();
     VdUiColoring cursor_style = vd_ui_coloring_all4(vd_ui_f4(0.0, 0.7f, 1.f, 1.f));
 
     VdUiDiv *box = vd_ui_div_new(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_CLICKABLE | VD_UI_FLAG_CLIP_CONTENT, label);
@@ -2128,27 +2236,75 @@ VD_UI_API int vd_ui_input_text(VdUiStr label, VdUiSel *sel, char *buf, size_t *l
     box->style.background.normal = vd_ui_gradient1(vd_ui_f4(0.1f, 0.1f, 0.1f, 1.f));
 
     for (int i = 0; i < vd_ui_get_num_keystrokes(); ++i) {
+        VdUi__ArenaSave save = vd_ui__arena_save(&ctx->frame_arena);
+
         VdUiTextPoint new_c = sel->c;
         VdUiTextPoint new_m = sel->m;
+        VdUiKeyStroke keystroke = vd_ui_get_keystroke(i);
 
         VdUiTextOp op = {0};
-        VdUiKeyStroke keystroke = vd_ui_get_keystroke(i);
-        VdUiKey key = keystroke.key;
-        if (key == VD_UI_KEY_ARROW_RIGHT) {
-            op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER | VD_UI_TEXT_OP_FLAGS_SYNC_MARK;
-            op.dt = 1;
-        } else if (key == VD_UI_KEY_ARROW_LEFT) {
-            op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER | VD_UI_TEXT_OP_FLAGS_SYNC_MARK;
-            op.dt = -1;
+
+        if (keystroke.flags & VD_UI_KEYSTROKE_FLAG_CHAR) {
+            // @todo(mdodis): unicode
+            char *c = (char*)vd_ui_mem_push(sizeof(char));
+            *c = (char)keystroke.codepoint;
+            op.replace_str.s = c;
+            op.replace_str.l = 1;
+
+            for (int j = 0; j < op.replace_str.l; ++j) {
+                if (op.replace_str.s[j] == '\r') {
+                    op.replace_str.s[j] = '\n';
+                }
+            }
+
+            op.dt = op.replace_str.l;
+        } else {
+            VdUiKey key = keystroke.key;
+            switch (key) {
+                case VD_UI_KEY_ARROW_LEFT: {
+                    op.dt = -1;
+                } break;
+
+                case VD_UI_KEY_ARROW_RIGHT: {
+                    op.dt = 1;
+                } break;
+
+                default: {
+                    continue;
+                } break;
+            }
+
+            if (keystroke.mods & (1 << VD_UI_MOD_SHIFT)) {
+                op.flags |= VD_UI_TEXT_OP_FLAGS_KEEP_MARK;
+            }
+
         }
+
+        if (op.replace_str.l > 0) {
+            size_t bytes_to_move = (*len) - new_c.b;
+            long long move_start_pos = new_c.b;
+            long long move_end_pos = move_start_pos + op.replace_str.l;
+            VD_UI_MEMMOVE(buf + move_end_pos, buf + move_start_pos, bytes_to_move);
+
+            VD_UI_MEMCPY(buf + move_start_pos, op.replace_str.s, op.replace_str.l);
+            (*len) += op.replace_str.l;
+        }
+
 
         new_c.b += op.dt;
 
         if (new_c.b < 0) new_c.b = 0;
         else if (((size_t)new_c.b) > (*len)) new_c.b = (*len);
 
-        sel->c = new_c;
+        if (!(op.flags & VD_UI_TEXT_OP_FLAGS_KEEP_MARK)) {
+            new_m = new_c;
+        }
 
+        sel->c = new_c;
+        sel->m = new_m;
+        printf("%llu %llu\n", sel->c.b, sel->m.b);
+
+        vd_ui__arena_restore(save);
     }
 
 
@@ -2161,6 +2317,21 @@ VD_UI_API int vd_ui_input_text(VdUiStr label, VdUiSel *sel, char *buf, size_t *l
     VdUi__TextBoxDrawData *draw_data = (VdUi__TextBoxDrawData*)vd_ui_mem_push(sizeof(VdUi__TextBoxDrawData));
     draw_data->str = vd_ui_str(buf, *len);
     draw_data->sel = *sel;
+
+    // Count newlines
+    int line_count = 1;
+    for (int i = 0; i < draw_data->str.l; ++i) {
+        if (draw_data->str.s[i] == '\n') {
+            line_count++;
+        }
+    }
+
+    VdUiFontId font_id = {0};
+    float font_height = vd_ui_get_font_height(font_id, box->style.text.font_size);
+    box->style.size[VD_UI_AXISV].mode = VD_UI_SIZE_MODE_ABSOLUTE;
+    box->style.size[VD_UI_AXISV].value = line_count * font_height;
+    box->style.size[VD_UI_AXISV].niceness = 0.f;
+
     vd_ui_set_draw_proc(box, vd_ui_text_box_draw, (void*)draw_data);
 
     // if (vd_ui_get_key_pressed(0) == VD_UI_KEY_ARROW_RIGHT) {
@@ -2938,8 +3109,8 @@ VD_UI_API int vd_ui_demo(void)
 
             vd_ui_labelf(u8"Some unicode: ă x ă");
 
-            static char buf[64] = "a text box";
-            static size_t buf_len = 10;
+            static char buf[64] = "a text \nbox";
+            static size_t buf_len = 11;
             static VdUiSel sel = {0};
             vd_ui_input_text(VD_UI_LIT("TextBox"), &sel, buf, &buf_len, sizeof(buf));
 
@@ -3407,8 +3578,8 @@ VD_UI_API void vd_ui_event_key_press(VdUiKey key)
     VdUiKeyStroke keystroke;
     keystroke.key = key;
     keystroke.mods = 0;
-    keystroke.mods |= ctx->mods[VD_UI_MOD_SHIFT] << VD_UI_MOD_SHIFT;
-    keystroke.mods |= ctx->mods[VD_UI_MOD_CTRL]  << VD_UI_MOD_CTRL;
+    keystroke.mods |= ctx->mods[VD_UI_MOD_SHIFT]    << VD_UI_MOD_SHIFT;
+    keystroke.mods |= ctx->mods[VD_UI_MOD_CONTROL]  << VD_UI_MOD_CONTROL;
     ctx->keystrokes[ctx->num_keystrokes % VD_UI_KEYSTROKES_MAX] = keystroke;
     ctx->num_keystrokes++;
 }
@@ -3423,8 +3594,11 @@ VD_UI_API void vd_ui_event_mod(VdUiMod mod, int on)
 VD_UI_API void vd_ui_event_char(unsigned int codepoint)
 {
     VdUiContext *ctx = vd_ui_context_get();
-    ctx->chars[ctx->num_chars % VD_UI_CHARS_MAX] = codepoint;
-    ctx->num_chars++;
+    VdUiKeyStroke keystroke;
+    keystroke.flags |= VD_UI_KEYSTROKE_FLAG_CHAR;
+    keystroke.codepoint = codepoint;
+    ctx->keystrokes[ctx->num_keystrokes % VD_UI_KEYSTROKES_MAX] = keystroke;
+    ctx->num_keystrokes++;
 }
 
 VD_UI_API void vd_ui_event_mouse_button(int index, int down)
@@ -3490,21 +3664,6 @@ VD_UI_API VdUiKeyStroke vd_ui_get_keystroke(int index)
     int keystroke_count = (ctx->num_keystrokes % VD_UI_KEYSTROKES_MAX);
     VD_UI_ASSERT(index < keystroke_count);
     return ctx->keystrokes[index];
-}
-
-VD_UI_API int vd_ui_get_num_chars(void)
-{
-    VdUiContext *ctx = vd_ui_context_get();
-    return ctx->num_chars % VD_UI_CHARS_MAX;
-}
-
-VD_UI_API unsigned int vd_ui_get_char(int off)
-{
-    VdUiContext *ctx = vd_ui_context_get();
-    VD_UI_ASSERT(off >= 0);
-    VD_UI_ASSERT(off < (ctx->num_chars % VD_UI_CHARS_MAX));
-
-    return ctx->chars[off];
 }
 
 static void vd_ui__push_clip(VdUiContext *ctx, float clip[4])
@@ -5818,8 +5977,9 @@ VD_UI_API VdUiKey vd_ui_vd_fw_key_translate(VdFwKey key)
 {
     VdUiKey result = VD_UI_KEY_NONE;
     switch (key) {
-        case VD_FW_KEY_ARROW_LEFT:  result = VD_UI_KEY_ARROW_LEFT; break;
+        case VD_FW_KEY_ARROW_LEFT:  result = VD_UI_KEY_ARROW_LEFT;  break;
         case VD_FW_KEY_ARROW_RIGHT: result = VD_UI_KEY_ARROW_RIGHT; break;
+        case VD_FW_KEY_BACKSPACE:   result = VD_UI_KEY_BACKSPACE;   break;
         default: break;
     }
 

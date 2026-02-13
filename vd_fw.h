@@ -59,10 +59,9 @@
  *     - Win32: Required extensions function
  *     - Win32: Query queue surface presentation support
  *     - Win32: Implement vkCreateWin32SurfaceKHR
- * - Event Queue
- * - vd_fw_get_key_released: Gets if the key was released this frame
+ * - MacOS: Event Queue
+ * - MacOS: vd_fw_get_key_released: Gets if the key was released this frame
  * - raw hat states
- * - File dialog
  * - OpenGL anti-alias setting
  * - OBS Studio breaks ChoosePixelFormat
  * - Make sure we can export functions properly for C++
@@ -367,6 +366,10 @@ enum {
     VD_FW_KEY_NUMPAD_6 = 104, /* Numpad 6 */ VD_FW_KEY_NUMPAD_7 = 105, /* Numpad 7 */
     VD_FW_KEY_NUMPAD_8 = 106, /* Numpad 8 */ VD_FW_KEY_NUMPAD_9 = 107, /* Numpad 9 */
     VD_FW_KEY_MAX,
+
+    VD_FW_MOD_SHIFT   = 1 << 0,
+    VD_FW_MOD_CONTROL = 1 << 1,
+    VD_FW_MOD_ALT     = 1 << 1,
 };
 typedef int VdFwKey;
 
@@ -415,6 +418,7 @@ typedef struct {
 typedef struct {
     VdFwKey key;
     int     repeat;
+    int     modifiers;
 } VdFwEventKeyDownData;
 
 typedef struct {
@@ -746,6 +750,13 @@ VD_FW_API int                vd_fw_get_mouse_wheel(float *dx, float *dy);
  * @return     Whether this key was pressed this frame
  */
 VD_FW_API int                vd_fw_get_key_pressed(int key);
+
+/**
+ * @brief Get whether a key was just released this frame
+ * @param  key The key to check
+ * @return     Whether this key was released this frame
+ */
+VD_FW_API int                vd_fw_get_key_released(int key);
 
 /**
  * @brief Get the last known state of this key
@@ -6848,6 +6859,11 @@ VD_FW_API int vd_fw_get_key_pressed(int key)
     return !VD_FW_G.prev_key_states[key] && VD_FW_G.curr_key_states[key];
 }
 
+VD_FW_API int vd_fw_get_key_released(int key)
+{
+    return VD_FW_G.prev_key_states[key] && !VD_FW_G.curr_key_states[key];
+}
+
 VD_FW_API int vd_fw_get_key_down(int key)
 {
     return VD_FW_G.curr_key_states[key];
@@ -8685,7 +8701,11 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
             WORD scancode = LOBYTE(keyflags);                             // scan code
             BOOL isextendedkey = (keyflags & KF_EXTENDED) == KF_EXTENDED; // extended-key flag, 1 if scancode has 0xE0 prefix
-            
+
+            BOOL shift   = (VdFwGetKeyState(VK_SHIFT)   & 0x8000) != 0 ? 1 : 0;
+            BOOL ctrl    = (VdFwGetKeyState(VK_CONTROL) & 0x8000) != 0 ? 1 : 0;
+            BOOL alt     = (VdFwGetKeyState(VK_MENU)    & 0x8000) != 0 ? 1 : 0;            
+
             if (isextendedkey)
                 scancode = MAKEWORD(scancode, 0xE0);
 
@@ -8705,6 +8725,10 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             if (is_down) {
                 int repeat = (lparam & (1 << 30)) != 0;
                 evt.type = VD_FW_EVENT_TYPE_KEY_DOWN;
+                evt.data.key_down.modifiers = 0;
+                if (shift) { evt.data.key_down.modifiers |= VD_FW_MOD_SHIFT; }
+                if (ctrl)  { evt.data.key_down.modifiers |= VD_FW_MOD_CONTROL; }
+                if (alt)   { evt.data.key_down.modifiers |= VD_FW_MOD_ALT; }
                 evt.data.key_down.key = vd_fw___vkcode_to_key(vkcode);
                 evt.data.key_down.repeat = repeat;
             } else {
