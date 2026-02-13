@@ -223,6 +223,10 @@
 #   define VD_FW_CODEPOINT_BUFFER_COUNT 8
 #endif // !VD_FW_CODEPOINT_BUFFER_COUNT
 
+#ifndef VD_FW_EVENT_COUNT_MAX
+#   define VD_FW_EVENT_COUNT_MAX 32
+#endif // !VD_FW_EVENT_COUNT_MAX
+
 #define VD_FW_ARRAY_COUNT(x) (sizeof(x)/sizeof(x[0]))
 
 #define VD_FW_SWAP16(x) ((VdFwU16)((x << 8) | (x >> 8)))
@@ -381,21 +385,28 @@ enum {
 };
 
 typedef enum {
+    VD_FW_WINDOW_STATE_MINIMIZED = 1 << 0,
+    VD_FW_WINDOW_STATE_MAXIMIZED = 1 << 1,
+} VdFwWindowState;
+
+typedef enum {
     VD_FW_EVENT_TYPE_NONE = 0,
-    VD_FW_EVENT_TYPE_WINDOW_SIZE_CHANGE,
+    VD_FW_EVENT_TYPE_CLOSE_REQUEST,
     VD_FW_EVENT_TYPE_FOCUS_CHANGE,
     VD_FW_EVENT_TYPE_KEY_DOWN,
     VD_FW_EVENT_TYPE_KEY_UP,
     VD_FW_EVENT_TYPE_CHARACTER,
     VD_FW_EVENT_TYPE_MOUSE_MOVE,
+    VD_FW_EVENT_TYPE_MOUSE_DELTA,
     VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN,
     VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP,
     VD_FW_EVENT_TYPE_MOUSE_SCROLL,
+    VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE,
 } VdFwEventType;
 
 typedef struct {
-    int w, h;
-} VdFwEventWindowSizeChangeData;
+    int _temp;
+} VdFwEventCloseRequestData;
 
 typedef struct {
     int got_focus;
@@ -419,6 +430,10 @@ typedef struct {
 } VdFwEventMouseMoveData;
 
 typedef struct {
+    float dx, dy;
+} VdFwEventMouseDeltaData;
+
+typedef struct {
     int     button;
 } VdFwEventMouseButtonDownData;
 
@@ -430,16 +445,23 @@ typedef struct {
     float   dx, dy;
 } VdFwEventMouseScrollData;
 
+typedef struct {
+    int flag;
+    int value;
+} VdFwEventWindowStateChangeData;
+
 typedef union {
-    VdFwEventWindowSizeChangeData  window_size_change;
+    VdFwEventCloseRequestData      close_request;
     VdFwEventFocusChangeData       focus_change;
     VdFwEventKeyDownData           key_down;
     VdFwEventKeyUpData             key_up;
     VdFwEventCharacter             character;
     VdFwEventMouseMoveData         mouse_move;
+    VdFwEventMouseDeltaData        mouse_delta;
     VdFwEventMouseButtonDownData   mouse_button_down;
     VdFwEventMouseButtonUpData     mouse_button_up;
     VdFwEventMouseScrollData       mouse_scroll;
+    VdFwEventWindowStateChangeData window_state_change;
 } VdFwEventData;
 
 typedef struct {
@@ -449,8 +471,10 @@ typedef struct {
 
 /**
  * @brief Poll for events. Call this every frame, even if you don't use them.
+ * @param  count The count of events available
+ * @return The event buffer
  */
-VD_FW_API void               vd_fw_poll(void);
+VD_FW_API VdFwEvent*         vd_fw_poll(int *count);
 
 /**
  * @brief Get if the user requested to close the window
@@ -5474,15 +5498,6 @@ enum {
     VD_FW_WIN32_MESSAGE_BUFFER_SIZE = 256,
     VD_FW_WIN32_RAW_INPUT_BUFFER_COUNT = 1024,
 
-    VD_FW_WIN32_MESSAGE_TYPE_SCROLL      = 10,
-    VD_FW_WIN32_MESSAGE_TYPE_MOUSEMOVE   = 11,
-    VD_FW_WIN32_MESSAGE_TYPE_MOUSEBTN    = 12,
-    VD_FW_WIN32_MESSAGE_TYPE_CHANGEFOCUS = 13,
-    VD_FW_WIN32_MESSAGE_TYPE_KEYSTATE    = 14,
-    VD_FW_WIN32_MESSAGE_TYPE_STATECHANGE = 15,
-    VD_FW_WIN32_MESSAGE_TYPE_CLOSERQ     = 16,
-    VD_FW_WIN32_MESSAGE_TYPE_CHAR        = 17,
-
     VD_FW_WIN32_SHOW_CURSOR     = VD_FW_WM_USER + 1,
     VD_FW_WIN32_UPDATE_TITLE    = VD_FW_WM_USER + 2,
     VD_FW_WIN32_FULLSCREEN      = VD_FW_WM_USER + 3,
@@ -5502,42 +5517,6 @@ typedef struct {
     int w, h;
     int flags;
 } VdFw__Win32Frame;
-
-typedef struct {
-    VdFwUINT msg;
-    union {
-        struct {
-            float dx, dy;
-        } scroll;
-
-        struct {
-            int   mx, my;
-        } mousemove;
-
-        struct {
-            VdFwDWORD vkbutton;
-            int       down;
-        } mousebtn;
-
-        struct {
-            int   got_focus;
-        } changefocus;
-
-        struct {
-            VdFwWORD  vkcode;
-            int       down;
-        } keystate;
-
-        struct {
-            int window_state_flag_that_changed;
-            int window_state_flag_value;
-        } statechange;
-
-        struct {
-            VdFwU32 codepoint;
-        } character;
-    } dat;
-} VdFw__Win32Message;
 
 enum {
     VD_FW__WIN32_GAMEPAD_FLAG_XINPUT = 1 << 0,
@@ -5685,8 +5664,11 @@ typedef struct {
     int                         temp_buf_cap;
     int                         last_mouse_before_lock[2];
 
+    int                         num_evts;
+    VdFwEvent                   evtbuf[VD_FW_EVENT_COUNT_MAX];
+
 /* ----RENDER THREAD - WINDOW THREAD DATA---------------------------------------------------------------------------- */
-    VdFw__Win32Message          msgbuf[VD_FW_WIN32_MESSAGE_BUFFER_SIZE];
+    VdFwEvent                   msgbuf[VD_FW_WIN32_MESSAGE_BUFFER_SIZE];
     volatile VdFwLONG           msgbuf_r;
     volatile VdFwLONG           msgbuf_w;
     int                         ncrect_count;
@@ -5719,6 +5701,20 @@ typedef struct {
 
 #define VD_FW_RAW_INPUT_ALIGN(x)        (((x) + sizeof(unsigned __int64) - 1) & ~(sizeof(unsigned __int64) - 1))
 #define VD_FW_NEXT_RAW_INPUT_BLOCK(ptr) ((PRAWINPUT)VD_FW_RAW_INPUT_ALIGN((ULONG_PTR)((PBYTE)(ptr) + (ptr)->header.dwSize)))
+
+int vd_fw__win32_translate_button(WORD vkcode)
+{
+    int result = 0;
+    switch (vkcode) {
+        case VK_LBUTTON:  result = VD_FW_MOUSE_BUTTON_LEFT; break;
+        case VK_RBUTTON:  result = VD_FW_MOUSE_BUTTON_RIGHT; break;
+        case VK_MBUTTON:  result = VD_FW_MOUSE_BUTTON_MIDDLE; break;
+        case VK_XBUTTON1: result = VD_FW_MOUSE_BUTTON_M1; break;
+        case VK_XBUTTON2: result = VD_FW_MOUSE_BUTTON_M2; break;
+        default: break;
+    }
+    return result;
+}
 
 VdFwKey vd_fw___vkcode_to_key(WORD vkcode)
 {
@@ -5997,8 +5993,8 @@ static VdFwDWORD    vd_fw__win_thread_proc(LPVOID param);
 static void         vd_fw__gl_debug_message_callback(GLenum source, GLenum type, GLuint id,
                                                      GLenum severity, GLsizei length, const GLchar *message,
                                                      const void *userParam);
-static int          vd_fw__msgbuf_r(VdFw__Win32Message *message);
-static int          vd_fw__msgbuf_w(VdFw__Win32Message *message);
+static int          vd_fw__msgbuf_r(VdFwEvent *message);
+static int          vd_fw__msgbuf_w(VdFwEvent *message);
 static char*        vd_fw__utf16_to_utf8(const wchar_t *ws);
 static void         vd_fw__update_kb_codepage(void);
 static VdFwBOOL     vd_fw__win32_enum_monitor(VdFwHMONITOR monitor, VdFwHDC hdc, VdFwLPRECT rect, VdFwLPARAM lpparam);
@@ -6264,7 +6260,7 @@ VD_FW_API int vd_fw_running(void)
     return 1;
 }
 
-VD_FW_API void vd_fw_poll(void)
+VD_FW_API VdFwEvent *vd_fw_poll(int *count)
 {
     VD_FW_G.wheel_moved = 0;
     VD_FW_G.wheel[0] = 0.f;
@@ -6277,92 +6273,70 @@ VD_FW_API void vd_fw_poll(void)
     VD_FW_G.num_codepoints = 0;
     VD_FW_G.last_key = VD_FW_KEY_UNKNOWN;
     VdFwU16 num_codepoints = 0;
+    VD_FW_G.mouse_delta[0] = VD_FW_G.mouse_delta[1] = 0.f;
 
     for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
         VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
     }
-    VdFw__Win32Message mm;
-    while (vd_fw__msgbuf_r(&mm)) {
-        switch (mm.msg) {
 
-            case VD_FW_WIN32_MESSAGE_TYPE_CHAR: {
-                VD_FW_G.codepoints[(num_codepoints++) % VD_FW_CODEPOINT_BUFFER_COUNT] = mm.dat.character.codepoint;
+    VD_FW_G.num_evts = 0;
+
+    VdFwEvent mm;
+    while (vd_fw__msgbuf_r(&mm) && (VD_FW_G.num_evts < VD_FW_EVENT_COUNT_MAX)) {
+        VD_FW_G.evtbuf[VD_FW_G.num_evts++] = mm;
+
+        switch (mm.type) {
+            case VD_FW_EVENT_TYPE_CHARACTER: {
+                VD_FW_G.codepoints[(num_codepoints++) % VD_FW_CODEPOINT_BUFFER_COUNT] = mm.data.character.codepoint;
             } break;
 
-            case VD_FW_WIN32_MESSAGE_TYPE_CLOSERQ: {
+            case VD_FW_EVENT_TYPE_CLOSE_REQUEST: {
                 VD_FW_G.close_request = 1;
             } break;
 
-            case VD_FW_WIN32_MESSAGE_TYPE_MOUSEMOVE: {
-                VD_FW_G.mouse[0] = mm.dat.mousemove.mx;
-                VD_FW_G.mouse[1] = mm.dat.mousemove.my;
+            case VD_FW_EVENT_TYPE_MOUSE_MOVE: {
+                VD_FW_G.mouse[0] = mm.data.mouse_move.x;
+                VD_FW_G.mouse[1] = mm.data.mouse_move.y;
             } break;
 
-            case VD_FW_WIN32_MESSAGE_TYPE_SCROLL: {
-                VD_FW_G.wheel[0] += mm.dat.scroll.dx;
-                VD_FW_G.wheel[1] += mm.dat.scroll.dy;
+            case VD_FW_EVENT_TYPE_MOUSE_DELTA: {
+                VD_FW_G.mouse_delta[0] += VD_FW_G.mouse_delta[0] * 0.8f + mm.data.mouse_delta.dx * 0.2f;
+                VD_FW_G.mouse_delta[1] += VD_FW_G.mouse_delta[1] * 0.8f + mm.data.mouse_delta.dy * 0.2f;
             } break;
 
-            case VD_FW_WIN32_MESSAGE_TYPE_MOUSEBTN: {
-                int state_mask = 0;
-
-                switch (mm.dat.mousebtn.vkbutton) {
-                    case VK_LBUTTON:  state_mask = VD_FW_MOUSE_BUTTON_LEFT; break;
-                    case VK_RBUTTON:  state_mask = VD_FW_MOUSE_BUTTON_RIGHT; break;
-                    case VK_MBUTTON:  state_mask = VD_FW_MOUSE_BUTTON_MIDDLE; break;
-                    case VK_XBUTTON1: state_mask = VD_FW_MOUSE_BUTTON_M1; break;
-                    case VK_XBUTTON2: state_mask = VD_FW_MOUSE_BUTTON_M2; break;
-                    default: break;
-                }
-
-                if (state_mask) {
-                    if (mm.dat.mousebtn.down) {
-                        VD_FW_G.mouse_state |= state_mask;
-                    } else {
-                        VD_FW_G.mouse_state &= ~state_mask;
-                    }
-                }
+            case VD_FW_EVENT_TYPE_MOUSE_SCROLL: {
+                VD_FW_G.wheel[0] += mm.data.mouse_scroll.dx;
+                VD_FW_G.wheel[1] += mm.data.mouse_scroll.dy;
             } break;
 
-            case VD_FW_WIN32_MESSAGE_TYPE_CHANGEFOCUS: {
+            case VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN: {
+                VD_FW_G.mouse_state |= mm.data.mouse_button_down.button;
+            } break;
+
+            case VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP: {
+                VD_FW_G.mouse_state &= ~mm.data.mouse_button_up.button;
+            } break;
+
+            case VD_FW_EVENT_TYPE_FOCUS_CHANGE: {
                 VD_FW_G.focus_changed = 1;
-                VD_FW_G.focused = mm.dat.changefocus.got_focus;
+                VD_FW_G.focused = mm.data.focus_change.got_focus;
             } break;
 
-            case VD_FW_WIN32_MESSAGE_TYPE_KEYSTATE: {
-
-                int is_down = mm.dat.keystate.down;
-                VdFwKey key = vd_fw___vkcode_to_key(mm.dat.keystate.vkcode);
-
-                if (is_down) {
-                    VD_FW_G.last_key = key;
-                }
-
-                // VD_FW_G.prev_key_states[key] = VD_FW_G.curr_key_states[key];
-                VD_FW_G.curr_key_states[key] = (unsigned char)is_down;
-
+            case VD_FW_EVENT_TYPE_KEY_UP: {
+                VD_FW_G.curr_key_states[mm.data.key_up.key] = 0;
             } break;
 
-            case VD_FW_WIN32_MESSAGE_TYPE_STATECHANGE: {
+            case VD_FW_EVENT_TYPE_KEY_DOWN: {
+                VD_FW_G.curr_key_states[mm.data.key_down.key] = 1;
+            } break;
+
+            case VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE: {
                 int prev_state = VD_FW_G.window_state;
-                int change_flag = 0;
-
-                if (mm.dat.statechange.window_state_flag_that_changed & VD_FW_WIN32_WINDOW_STATE_MINIMIZED) {
-                    change_flag = VD_FW_WIN32_WINDOW_STATE_MINIMIZED;
-
-                    if (mm.dat.statechange.window_state_flag_value) {
-                        VD_FW_G.window_state |= VD_FW_WIN32_WINDOW_STATE_MINIMIZED;
-                    } else {
-                        VD_FW_G.window_state &= ~VD_FW_WIN32_WINDOW_STATE_MINIMIZED;
-                    }
-                } else if (mm.dat.statechange.window_state_flag_that_changed & VD_FW_WIN32_WINDOW_STATE_MAXIMIZED) {
-                    change_flag = VD_FW_WIN32_WINDOW_STATE_MAXIMIZED;
-
-                    if (mm.dat.statechange.window_state_flag_value) {
-                        VD_FW_G.window_state |= VD_FW_WIN32_WINDOW_STATE_MAXIMIZED;
-                    } else {
-                        VD_FW_G.window_state &= ~VD_FW_WIN32_WINDOW_STATE_MAXIMIZED;
-                    }
+                int change_flag = mm.data.window_state_change.flag;
+                if (mm.data.window_state_change.value) {
+                    VD_FW_G.window_state |= change_flag;
+                } else {
+                    VD_FW_G.window_state &= ~change_flag;
                 }
 
                 if (prev_state != VD_FW_G.window_state) {
@@ -6383,6 +6357,11 @@ VD_FW_API void vd_fw_poll(void)
     } else {
         VD_FW_G.first_codepoint_index = 0;
     }
+
+    if (count) {
+        *count = VD_FW_G.num_evts;
+    }
+
 
     // @note(mdodis): For Raw Input mouse handling, instead of using the message queue
     // We use two sinks with an atomic write index.
@@ -6417,6 +6396,8 @@ VD_FW_API void vd_fw_poll(void)
     VD_FW_G.last_ns = ns;
 
     VD_FW_G.performance_counter = now_performance_counter;
+
+    return VD_FW_G.evtbuf;
 }
 
 VD_FW_API void vd_fw_lock(void)
@@ -7755,9 +7736,9 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
     switch (msg) {
 
         case WM_CLOSE: {
-            VdFw__Win32Message m;
-            m.msg = VD_FW_WIN32_MESSAGE_TYPE_CLOSERQ;
-            vd_fw__msgbuf_w(&m);
+            VdFwEvent evt;
+            evt.type = VD_FW_EVENT_TYPE_CLOSE_REQUEST;
+            vd_fw__msgbuf_w(&evt);
         } break;
 
         case WM_DESTROY: {
@@ -7877,22 +7858,20 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         // relatively simple.
         case WM_EXITSIZEMOVE: {
             if (!VD_FW_G.draw_decorations) {
-                VdFw__Win32Message m;
-                m.msg = VD_FW_WIN32_MESSAGE_TYPE_MOUSEBTN;
-                m.dat.mousebtn.down = 0;
-                m.dat.mousebtn.vkbutton = VK_LBUTTON;
-                vd_fw__msgbuf_w(&m);
+                VdFwEvent evt;
+                evt.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP;
+                evt.data.mouse_button_up.button = vd_fw__win32_translate_button(VK_LBUTTON);
+                vd_fw__msgbuf_w(&evt);
             }
         } break;
 
         case WM_SYSCOMMAND: {
             if (!VD_FW_G.draw_decorations) {
                 if (wparam == 0x0000F012) {
-                    VdFw__Win32Message m;
-                    m.msg = VD_FW_WIN32_MESSAGE_TYPE_MOUSEBTN;
-                    m.dat.mousebtn.down = 0;
-                    m.dat.mousebtn.vkbutton = VK_LBUTTON;
-                    vd_fw__msgbuf_w(&m);
+                    VdFwEvent evt;
+                    evt.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP;
+                    evt.data.mouse_button_up.button = vd_fw__win32_translate_button(VK_LBUTTON);
+                    vd_fw__msgbuf_w(&evt);
                 }
             }
             result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
@@ -7981,32 +7960,31 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
             switch (wparam) {
                 case SIZE_MINIMIZED: {
-                    VdFw__Win32Message mm;
-                    mm.msg = VD_FW_WIN32_MESSAGE_TYPE_STATECHANGE;
-                    mm.dat.statechange.window_state_flag_that_changed = VD_FW_WIN32_WINDOW_STATE_MINIMIZED;
-                    mm.dat.statechange.window_state_flag_value = 1;
-                    vd_fw__msgbuf_w(&mm);
+                    VdFwEvent evt;
+                    evt.type = VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE;
+                    evt.data.window_state_change.flag = VD_FW_WINDOW_STATE_MINIMIZED;
+                    evt.data.window_state_change.value = 1;
+                    vd_fw__msgbuf_w(&evt);
                 } break;
 
                 case SIZE_RESTORED: {
-                    VdFw__Win32Message mm;
-                    mm.msg = VD_FW_WIN32_MESSAGE_TYPE_STATECHANGE;
-                    mm.dat.statechange.window_state_flag_that_changed = VD_FW_WIN32_WINDOW_STATE_MINIMIZED;
-                    mm.dat.statechange.window_state_flag_value = 0;
-                    vd_fw__msgbuf_w(&mm);
+                    VdFwEvent evt;
+                    evt.type = VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE;
+                    evt.data.window_state_change.flag = VD_FW_WINDOW_STATE_MINIMIZED;
+                    evt.data.window_state_change.value = 0;
+                    vd_fw__msgbuf_w(&evt);
 
-                    mm.msg = VD_FW_WIN32_MESSAGE_TYPE_STATECHANGE;
-                    mm.dat.statechange.window_state_flag_that_changed = VD_FW_WIN32_WINDOW_STATE_MAXIMIZED;
-                    mm.dat.statechange.window_state_flag_value = 0;
-                    vd_fw__msgbuf_w(&mm);
+                    evt.data.window_state_change.flag = VD_FW_WINDOW_STATE_MAXIMIZED;
+                    evt.data.window_state_change.value = 0;
+                    vd_fw__msgbuf_w(&evt);
                 } break;
 
                 case SIZE_MAXIMIZED: {
-                    VdFw__Win32Message mm;
-                    mm.msg = VD_FW_WIN32_MESSAGE_TYPE_STATECHANGE;
-                    mm.dat.statechange.window_state_flag_that_changed = VD_FW_WIN32_WINDOW_STATE_MAXIMIZED;
-                    mm.dat.statechange.window_state_flag_value = 1;
-                    vd_fw__msgbuf_w(&mm);
+                    VdFwEvent evt;
+                    evt.type = VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE;
+                    evt.data.window_state_change.flag = VD_FW_WINDOW_STATE_MAXIMIZED;
+                    evt.data.window_state_change.value = 1;
+                    vd_fw__msgbuf_w(&evt);
                 } break;
 
                 default: break;
@@ -8015,11 +7993,10 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             if ((wparam == SIZE_MAXIMIZED) || (wparam == SIZE_MINIMIZED) || (wparam == SIZE_RESTORED)) {
                 // @note(mdodis): Send a mouse release event right as we go into minimized or out of maximized/minimized
                 // state. This is because we'll miss the mouse release otherwise.
-                VdFw__Win32Message m;
-                m.msg = VD_FW_WIN32_MESSAGE_TYPE_MOUSEBTN;
-                m.dat.mousebtn.down = 0;
-                m.dat.mousebtn.vkbutton = VK_LBUTTON;
-                vd_fw__msgbuf_w(&m);
+                VdFwEvent evt;
+                evt.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP;
+                evt.data.mouse_button_up.button = vd_fw__win32_translate_button(VK_LBUTTON);
+                vd_fw__msgbuf_w(&evt);
             }
         } break;
 
@@ -8041,10 +8018,10 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 VdFwLONG dx = raw->data.mouse.lLastX;
                 VdFwLONG dy = raw->data.mouse.lLastY;
 
-                EnterCriticalSection(&VD_FW_G.input_critical_section);
-                VD_FW_G.winthread_mouse_delta[0] = VD_FW_G.winthread_mouse_delta[0] * 0.8f + dx * 0.2f;
-                VD_FW_G.winthread_mouse_delta[1] = VD_FW_G.winthread_mouse_delta[1] * 0.8f + dy * 0.2f;
-                LeaveCriticalSection(&VD_FW_G.input_critical_section);
+                VdFwEvent evt;
+                evt.type = VD_FW_EVENT_TYPE_MOUSE_DELTA;
+                evt.data.mouse_delta.dx = (float)dx;
+                evt.data.mouse_delta.dy = (float)dy;
             } else if (raw->header.dwType == RIM_TYPEHID) {
 
                 VdFw__Win32GamepadInfo *gamepad_info = 0;
@@ -8724,11 +8701,18 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
             int is_down = msg == WM_KEYDOWN;
 
-            VdFw__Win32Message m;
-            m.msg = VD_FW_WIN32_MESSAGE_TYPE_KEYSTATE;
-            m.dat.mousebtn.down   = is_down;
-            m.dat.keystate.vkcode = vkcode;
-            vd_fw__msgbuf_w(&m);
+            VdFwEvent evt;
+            if (is_down) {
+                int repeat = (lparam & (1 << 30)) != 0;
+                evt.type = VD_FW_EVENT_TYPE_KEY_DOWN;
+                evt.data.key_down.key = vd_fw___vkcode_to_key(vkcode);
+                evt.data.key_down.repeat = repeat;
+            } else {
+                evt.type = VD_FW_EVENT_TYPE_KEY_UP;
+                evt.data.key_up.key = vd_fw___vkcode_to_key(vkcode);
+            }
+
+            vd_fw__msgbuf_w(&evt);
 
             result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
         } break;
@@ -8739,10 +8723,11 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 break;
             }
 
-            VdFw__Win32Message m;
-            m.msg = VD_FW_WIN32_MESSAGE_TYPE_CHAR;
-            m.dat.character.codepoint = (VdFwU32)wparam;
-            vd_fw__msgbuf_w(&m);
+
+            VdFwEvent evt;
+            evt.type = VD_FW_EVENT_TYPE_CHARACTER;
+            evt.data.character.codepoint = (VdFwU32)wparam;
+            vd_fw__msgbuf_w(&evt);
         } break;
 
         case WM_CHAR: {
@@ -8765,10 +8750,10 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 break;
             }
 
-            VdFw__Win32Message m;
-            m.msg = VD_FW_WIN32_MESSAGE_TYPE_CHAR;
-            m.dat.character.codepoint = codepoint;
-            vd_fw__msgbuf_w(&m);
+            VdFwEvent evt;
+            evt.type = VD_FW_EVENT_TYPE_CHARACTER;
+            evt.data.character.codepoint = codepoint;
+            vd_fw__msgbuf_w(&evt);
         } break;
 
         case WM_INPUTLANGCHANGE: {
@@ -8800,11 +8785,15 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 default: break;
             }
 
-            VdFw__Win32Message m;
-            m.msg = VD_FW_WIN32_MESSAGE_TYPE_MOUSEBTN;
-            m.dat.mousebtn.down = down;
-            m.dat.mousebtn.vkbutton = code;
-            vd_fw__msgbuf_w(&m);
+            VdFwEvent evt;
+            if (down) {
+                evt.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN;
+                evt.data.mouse_button_down.button = vd_fw__win32_translate_button((VdFwWORD)code);
+            } else {
+                evt.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP;
+                evt.data.mouse_button_up.button = vd_fw__win32_translate_button((VdFwWORD)code);
+            }
+            vd_fw__msgbuf_w(&evt);
         } break;
 
         case WM_NCMBUTTONUP:
@@ -8829,11 +8818,15 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     default: break;
                 }
 
-                VdFw__Win32Message m;
-                m.msg = VD_FW_WIN32_MESSAGE_TYPE_MOUSEBTN;
-                m.dat.mousebtn.down = down;
-                m.dat.mousebtn.vkbutton = code;
-                vd_fw__msgbuf_w(&m);
+                VdFwEvent evt;
+                if (down) {
+                    evt.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN;
+                    evt.data.mouse_button_down.button = vd_fw__win32_translate_button((VdFwWORD)code);
+                } else {
+                    evt.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP;
+                    evt.data.mouse_button_up.button = vd_fw__win32_translate_button((VdFwWORD)code);
+                }
+                vd_fw__msgbuf_w(&evt);
             }
 
             result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
@@ -8842,10 +8835,10 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         case WM_SETFOCUS:
         case WM_KILLFOCUS: {
             int got_focus = msg == WM_SETFOCUS;
-            VdFw__Win32Message m;
-            m.msg = VD_FW_WIN32_MESSAGE_TYPE_CHANGEFOCUS;
-            m.dat.changefocus.got_focus = got_focus;
-            vd_fw__msgbuf_w(&m);
+            VdFwEvent evt;
+            evt.type = VD_FW_EVENT_TYPE_FOCUS_CHANGE;
+            evt.data.focus_change.got_focus = got_focus;
+            vd_fw__msgbuf_w(&evt);
         } break;
 
         // case WM_NCMOUSEMOVE: {
@@ -8884,11 +8877,11 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 y -= rect.top;
             }
 
-            VdFw__Win32Message m;
-            m.msg = VD_FW_WIN32_MESSAGE_TYPE_MOUSEMOVE;
-            m.dat.mousemove.mx = x;
-            m.dat.mousemove.my = y;
-            vd_fw__msgbuf_w(&m);
+            VdFwEvent evt;
+            evt.type = VD_FW_EVENT_TYPE_MOUSE_MOVE;
+            evt.data.mouse_move.x = x;
+            evt.data.mouse_move.y = y;
+            vd_fw__msgbuf_w(&evt);
         } break;
 
         case VD_FW_WIN32_SHOW_CURSOR: {
@@ -9086,22 +9079,23 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             if (!VD_FW_G.t_paint_ready) { result = VdFwDefWindowProc(hwnd, msg, wparam, lparam); break; }
             int delta = GET_WHEEL_DELTA_WPARAM(wparam);
             float dx = (float)delta / (float)WHEEL_DELTA;
-            VdFw__Win32Message m;
-            m.msg = VD_FW_WIN32_MESSAGE_TYPE_SCROLL;
-            m.dat.scroll.dx = dx;
-            m.dat.scroll.dy = 0.f;
-            vd_fw__msgbuf_w(&m);
+            VdFwEvent evt;
+            evt.type = VD_FW_EVENT_TYPE_MOUSE_SCROLL;
+            evt.data.mouse_scroll.dx = dx;
+            evt.data.mouse_scroll.dy = 0.f;
+            vd_fw__msgbuf_w(&evt);
         } break;
 
         case WM_MOUSEWHEEL: {
             if (!VD_FW_G.t_paint_ready) { result = VdFwDefWindowProc(hwnd, msg, wparam, lparam); break; }
             int delta = GET_WHEEL_DELTA_WPARAM(wparam);
             float dy = (float)delta / (float)WHEEL_DELTA;
-            VdFw__Win32Message m;
-            m.msg = VD_FW_WIN32_MESSAGE_TYPE_SCROLL;
-            m.dat.scroll.dx = 0.f;
-            m.dat.scroll.dy = dy;
-            vd_fw__msgbuf_w(&m);
+
+            VdFwEvent evt;
+            evt.type = VD_FW_EVENT_TYPE_MOUSE_SCROLL;
+            evt.data.mouse_scroll.dx = 0.f;
+            evt.data.mouse_scroll.dy = dy;
+            vd_fw__msgbuf_w(&evt);
         } break;
 
         default: {
@@ -9111,7 +9105,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
     return result;
 }
 
-static int vd_fw__msgbuf_r(VdFw__Win32Message *message)
+static int vd_fw__msgbuf_r(VdFwEvent *message)
 {
     LONG r = VD_FW_G.msgbuf_r;
     LONG w = InterlockedCompareExchange(&VD_FW_G.msgbuf_w, VD_FW_G.msgbuf_w, VD_FW_G.msgbuf_w);
@@ -9130,7 +9124,7 @@ static int vd_fw__msgbuf_r(VdFw__Win32Message *message)
     return 1;
 }
 
-static int vd_fw__msgbuf_w(VdFw__Win32Message *message)
+static int vd_fw__msgbuf_w(VdFwEvent *message)
 {
     LONG w = VD_FW_G.msgbuf_w;
     LONG r = InterlockedCompareExchange(&VD_FW_G.msgbuf_r, VD_FW_G.msgbuf_r, VD_FW_G.msgbuf_r);

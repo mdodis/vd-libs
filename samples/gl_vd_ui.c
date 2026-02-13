@@ -80,7 +80,8 @@ int main(int argc, char const *argv[])
     vd_fw_set_vsync_on(1);
     while (vd_fw_running()) {
 
-        vd_fw_poll();
+        int num_events = 0;
+        VdFwEvent *events = vd_fw_poll(&num_events);
 
         if (vd_fw_close_requested()) {
             vd_fw_quit();
@@ -110,17 +111,33 @@ int main(int argc, char const *argv[])
         }
 
         vd_ui_event_size((float)w, (float)h);
-        vd_ui_event_mouse_location(mx, my);
-        vd_ui_event_mouse_button(VD_UI_MOUSE_LEFT,  mouse_state & VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN);
-        vd_ui_event_mouse_button(VD_UI_MOUSE_RIGHT, mouse_state & VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN);
-        vd_ui_event_mouse_wheel(wx, wy);
-        if (vd_fw_get_key_pressed(VD_FW_KEY_ARROW_RIGHT)) vd_ui_event_key_press(VD_UI_KEY_ARROW_RIGHT);
-        if (vd_fw_get_key_pressed(VD_FW_KEY_ARROW_LEFT)) vd_ui_event_key_press(VD_UI_KEY_ARROW_LEFT);
+        for (int i = 0; i < num_events; ++i) {
+            VdFwEvent *evt = &events[i];
+            switch (evt->type) {
+                case VD_FW_EVENT_TYPE_MOUSE_MOVE: {
+                    vd_ui_event_mouse_location((float)evt->data.mouse_move.x, (float)evt->data.mouse_move.y);
+                } break;
 
-        for (unsigned short i = 0; i < vd_fw_get_num_codepoints(); ++i) {
-            vd_ui_event_char(vd_fw_get_codepoint(i));
+                case VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP: {
+                    vd_ui_event_mouse_button(vd_ui_vd_fw_mouse_button_translate(evt->data.mouse_button_up.button), 0);
+                } break;
+
+                case VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN: {
+                    vd_ui_event_mouse_button(vd_ui_vd_fw_mouse_button_translate(evt->data.mouse_button_down.button), 1);
+                } break;
+
+                case VD_FW_EVENT_TYPE_KEY_DOWN: {
+                    vd_ui_event_key_press(vd_ui_vd_fw_key_translate(evt->data.key_down.key));
+                } break;
+
+                case VD_FW_EVENT_TYPE_CHARACTER: {
+                    vd_ui_event_char(evt->data.character.codepoint);
+                } break;
+
+                default: break;
+            }
         }
-
+        vd_ui_event_mouse_wheel(wx, wy);
 
         int window_buttons = vd_ui_demo();
 

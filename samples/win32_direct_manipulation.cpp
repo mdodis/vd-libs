@@ -217,7 +217,7 @@ int main(int argc, char const *argv[])
     vd_fw_link_program(Gl_Program);
 
     while (vd_fw_running()) {
-        vd_fw_poll();
+        vd_fw_poll(0);
 
 
         if (Dm_Initialized && Dm_Should_Keep_Updating) {

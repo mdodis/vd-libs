@@ -922,6 +922,12 @@ VD_UI_API void             vd_ui_gl_get_attribute_properties(int attribute, int 
                                                              unsigned char *normalized, int *stride, void **pointer,
                                                              unsigned int *divisor);
 
+/* ----INTEGRATION - vd_fw.h----------------------------------------------------------------------------------------- */
+#ifdef VD_FW_H
+VD_UI_API int              vd_ui_vd_fw_mouse_button_translate(int fw_mouse_button);
+VD_UI_API VdUiKey          vd_ui_vd_fw_key_translate(VdFwKey key);
+#endif // !VD_FW_H
+
 /* ----INLINE IMPL--------------------------------------------------------------------------------------------------- */
 VD_UI_INL VdUiStr vd_ui_str(char *s, int l)
 {
@@ -5792,6 +5798,34 @@ VD_UI_API void vd_ui_gl_get_attribute_properties(int attribute, int *size, unsig
         default: break;
     }
 }
+
+/* ----INTEGRATION - vd_fw.h----------------------------------------------------------------------------------------- */
+#ifdef VD_FW_H
+VD_UI_API int vd_ui_vd_fw_mouse_button_translate(int fw_mouse_button)
+{
+    int result = -1;
+    switch (fw_mouse_button) {
+        case VD_FW_MOUSE_BUTTON_LEFT:   result = VD_UI_MOUSE_LEFT; break;
+        case VD_FW_MOUSE_BUTTON_RIGHT:  result = VD_UI_MOUSE_RIGHT; break;
+        case VD_FW_MOUSE_BUTTON_MIDDLE: result = VD_UI_MOUSE_MIDDLE; break;
+        default: break;
+    }
+
+    return result;
+}
+
+VD_UI_API VdUiKey vd_ui_vd_fw_key_translate(VdFwKey key)
+{
+    VdUiKey result = VD_UI_KEY_NONE;
+    switch (key) {
+        case VD_FW_KEY_ARROW_LEFT:  result = VD_UI_KEY_ARROW_LEFT; break;
+        case VD_FW_KEY_ARROW_RIGHT: result = VD_UI_KEY_ARROW_RIGHT; break;
+        default: break;
+    }
+
+    return result;
+}
+#endif // !VD_FW_H
 
 static unsigned char Vd_Ui_Public_Sans_Regular[84836] = {
 0x00,0x01,0x00,0x00,0x00,0x11,0x01,0x00,0x00,0x04,0x00,0x10,0x47,0x44,0x45,0x46,0x28,0xfe,0x2a,0x80,0x00,0x01,0x0a,0xcc,0x00,0x00,0x00,0xe2,0x47,0x50,0x4f,0x53,

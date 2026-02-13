@@ -176,7 +176,7 @@ int main(int argc, char const *argv[])
 
     while (vd_fw_running()) {
 
-        vd_fw_poll();
+        vd_fw_poll(0);
 
         if (vd_fw_close_requested()) {
             vd_fw_quit();
