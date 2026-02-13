@@ -102,7 +102,7 @@ int main() {
     vd_fw_init(NULL);                                        // Initialize library
     while (vd_fw_running()) {                                // Check if the window is closed
 
-        vd_fw_poll();                                        // Gather events
+        vd_fw_poll(0);                                       // Gather events
 
         if (vd_fw_close_requested()) {
             vd_fw_quit();
@@ -819,7 +819,7 @@ int main(int argc, char const *argv[])
 
     while (vd_fw_running()) {                                // Check if the window is closed
 
-        vd_fw_poll();                                        // Gather events
+        vd_fw_poll(0);                                       // Gather events
 
         if (vd_fw_close_requested()) {                       // Close the window if the
             vd_fw_quit();                                    // user requested it
