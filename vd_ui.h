@@ -392,6 +392,80 @@ typedef struct {
     long long          b;
 } VdUiTextPoint;
 
+VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_char(VdUiTextPoint pt, char *buf, long long len, int fwd)
+{
+    VdUiTextPoint new_pt = pt;
+
+    if (fwd && (new_pt.b <= len)) {
+        if ((new_pt.b < len) && (buf[new_pt.b] == '\n')) {
+            new_pt.l++;
+            new_pt.c = 0;
+        } else {
+            new_pt.c++;
+        }
+        new_pt.b++;
+    } else if (new_pt.b > 0) {
+
+        if (buf[new_pt.b] == '\n') {
+
+            // Scan backwards to find column size
+            size_t c = 0;
+            for (size_t i = (new_pt.b - 1); (i != 0) && (buf[i] != '\n'); --i) {
+                c++;
+            }
+
+            new_pt.l--;
+            new_pt.c = c;
+
+        } else {
+            new_pt.c--;
+        }
+
+        new_pt.b--;
+    }
+
+    return new_pt;
+}
+
+VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_line(VdUiTextPoint pt, char *buf, long long len, int fwd)
+{
+    VdUiTextPoint new_pt = pt;
+    long long last_column = new_pt.c;
+    long long last_line = new_pt.l;
+
+    if (fwd && (new_pt.b <= len)) {
+
+        // Scan forward until newline
+        while ((new_pt.b <= len) && (last_line == new_pt.l)) {
+            new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 1);
+        }
+
+        // If we found a newline then move to the end until we find it
+        // or until last_column matches new_pt.c
+        long long cur_line = new_pt.l;
+        while ((new_pt.b <= len) && (new_pt.c < last_column)) {
+            VdUiTextPoint next_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 1);
+            if (next_pt.l != cur_line) {
+                break;
+            } else {
+                new_pt = next_pt;
+            }
+        }
+    } else if ((new_pt.b > 0)) {
+
+        // Scan backward until newline
+        while ((new_pt.b > 0) && (last_line == new_pt.l)) {
+            new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 0);
+        }
+
+        while (new_pt.c > last_column) {
+            new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 0);
+        }
+    }
+
+    return new_pt;
+}
+
 typedef struct {
     VdUiTextPoint c;
     VdUiTextPoint m;
@@ -401,6 +475,7 @@ typedef enum {
     VD_UI_TEXT_OP_FLAGS_NONE               = 0,
     VD_UI_TEXT_OP_FLAGS_DISTANCE_UNIT_MASK = 0b11,
     VD_UI_TEXT_OP_FLAGS_SCAN_LETTER        = 1,
+    VD_UI_TEXT_OP_FLAGS_SCAN_LINE          = 2,
     VD_UI_TEXT_OP_FLAGS_SYNC_MARK          = 0 << 3,
     VD_UI_TEXT_OP_FLAGS_KEEP_MARK          = 1 << 3,
 } VdUiTextOpFlags;
@@ -2074,6 +2149,8 @@ struct VdUi__TextBoxDrawNode {
 
 VD_UI_DRAW_PROC(vd_ui_text_box_draw)
 {
+    // @todo(mdodis): keep max column as we go down/up lines
+    // reset max column if we go right left or anything else
     VdUiContext *ctx = vd_ui_context_get();
     VdUi__ArenaSave save = vd_ui__arena_save(&ctx->frame_arena);
 
@@ -2195,6 +2272,14 @@ VD_UI_DRAW_PROC(vd_ui_text_box_draw)
     if (draw_data->sel.m.b == draw_data->str.l) {
         mark_start[0] = rx;
         mark_start[1] = ry - font_height * 0.5f;
+
+        if (caret_different_from_mark) {
+            if (mark_after_caret) {
+                sel_draw_curr->rect.e[VD_UI_RIGHT]  = rx;
+                sel_draw_curr->rect.e[VD_UI_BOTTOM] = ry - font_height * 0.5f;
+                sel_draw_curr = 0;
+            }
+        }
     }
 
     float caret_rect[4] = {
@@ -2262,10 +2347,22 @@ VD_UI_API int vd_ui_input_text(VdUiStr label, VdUiSel *sel, char *buf, size_t *l
             VdUiKey key = keystroke.key;
             switch (key) {
                 case VD_UI_KEY_ARROW_LEFT: {
+                    op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER;
                     op.dt = -1;
                 } break;
 
                 case VD_UI_KEY_ARROW_RIGHT: {
+                    op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER;
+                    op.dt = 1;
+                } break;
+
+                case VD_UI_KEY_ARROW_UP: {
+                    op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LINE;
+                    op.dt = -1;
+                } break;
+
+                case VD_UI_KEY_ARROW_DOWN: {
+                    op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LINE;
                     op.dt = 1;
                 } break;
 
@@ -2288,10 +2385,34 @@ VD_UI_API int vd_ui_input_text(VdUiStr label, VdUiSel *sel, char *buf, size_t *l
 
             VD_UI_MEMCPY(buf + move_start_pos, op.replace_str.s, op.replace_str.l);
             (*len) += op.replace_str.l;
+            op.flags = VD_UI_TEXT_OP_FLAGS_SCAN_LETTER | VD_UI_TEXT_OP_FLAGS_SYNC_MARK;
+            op.dt = op.replace_str.l;
         }
 
+        int distance_unit_flags = op.flags & VD_UI_TEXT_OP_FLAGS_DISTANCE_UNIT_MASK;
+        if (distance_unit_flags == VD_UI_TEXT_OP_FLAGS_SCAN_LETTER) {
+            int fwd = op.dt > 0;
+            long long move_amt = op.dt;
+            if (!fwd) {
+                move_amt = -move_amt;
+            }
 
-        new_c.b += op.dt;
+            for (long long m = 0; m < move_amt; ++m) {
+                new_c = vd_ui_text_point_move_by_char(new_c, buf, *len, fwd);
+            }
+
+        } else if (distance_unit_flags == VD_UI_TEXT_OP_FLAGS_SCAN_LINE) {
+
+            int fwd = op.dt > 0;
+            long long move_amt = op.dt;
+            if (!fwd) {
+                move_amt = -move_amt;
+            }
+
+            for (long long m = 0; m < move_amt; ++m) {
+                new_c = vd_ui_text_point_move_by_line(new_c, buf, *len, fwd);
+            }
+        }
 
         if (new_c.b < 0) new_c.b = 0;
         else if (((size_t)new_c.b) > (*len)) new_c.b = (*len);
@@ -5979,6 +6100,8 @@ VD_UI_API VdUiKey vd_ui_vd_fw_key_translate(VdFwKey key)
     switch (key) {
         case VD_FW_KEY_ARROW_LEFT:  result = VD_UI_KEY_ARROW_LEFT;  break;
         case VD_FW_KEY_ARROW_RIGHT: result = VD_UI_KEY_ARROW_RIGHT; break;
+        case VD_FW_KEY_ARROW_UP:    result = VD_UI_KEY_ARROW_UP;    break;
+        case VD_FW_KEY_ARROW_DOWN:  result = VD_UI_KEY_ARROW_DOWN;  break;
         case VD_FW_KEY_BACKSPACE:   result = VD_UI_KEY_BACKSPACE;   break;
         default: break;
     }
