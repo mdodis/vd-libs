@@ -263,6 +263,8 @@ enum {
     VD_UI_KEY_ARROW_UP   = 40,
     VD_UI_KEY_ARROW_LEFT = 41, VD_UI_KEY_ARROW_DOWN = 42, VD_UI_KEY_ARROW_RIGHT = 43,
     VD_UI_KEY_BACKSPACE,
+    VD_UI_KEY_HOME,
+    VD_UI_KEY_END,
 
     VD_UI_MOD_SHIFT   = 0,
     VD_UI_MOD_CONTROL = 1,
@@ -383,14 +385,23 @@ typedef struct VdUiStyle {
 } VdUiStyle;
 
 typedef struct {
-    unsigned int byte_index;
-} VdUiTextEditState;
-
-typedef struct {
     long long          l;   // Line
     long long          c;   // Column
     long long          b;   // Byte
 } VdUiTextPoint;
+
+VD_UI_INL VdUiTextPoint vd_ui_text_point_clamp(VdUiTextPoint pt, long long len)
+{
+    if (pt.b < 0) {
+        pt.b = 0;
+    }
+
+    if (pt.b > len) {
+        pt.b = len;
+    }
+
+    return pt;
+}
 
 VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_char(VdUiTextPoint pt, char *buf, long long len, int fwd)
 {
@@ -422,6 +433,34 @@ VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_char(VdUiTextPoint pt, char *bu
         }
 
         new_pt.b--;
+    }
+
+    return new_pt;
+}
+
+VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_bounds(VdUiTextPoint pt, char *buf, long long len, int end)
+{
+    VdUiTextPoint new_pt = pt;
+    long long last_line = new_pt.l;
+
+    if (end) {
+        while (new_pt.b <= len) {
+            VdUiTextPoint next_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 1);
+            if (next_pt.l != last_line) {
+                break;
+            } else {
+                new_pt = next_pt;
+            }
+        }
+    } else {
+        while (new_pt.b > 0) {
+            VdUiTextPoint next_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 0);
+            if (next_pt.l != last_line) {
+                break;
+            } else {
+                new_pt = next_pt;
+            }
+        }
     }
 
     return new_pt;
@@ -474,8 +513,9 @@ typedef struct {
 typedef enum {
     VD_UI_TEXT_OP_FLAGS_NONE               = 0,
     VD_UI_TEXT_OP_FLAGS_DISTANCE_UNIT_MASK = 0b11,
-    VD_UI_TEXT_OP_FLAGS_SCAN_LETTER        = 1,
-    VD_UI_TEXT_OP_FLAGS_SCAN_LINE          = 2,
+    VD_UI_TEXT_OP_FLAGS_SCAN_LETTER        = 0b01,
+    VD_UI_TEXT_OP_FLAGS_SCAN_LINE          = 0b10,
+    VD_UI_TEXT_OP_FLAGS_SCAN_BOUNDS        = 0b11,
     VD_UI_TEXT_OP_FLAGS_SYNC_MARK          = 0 << 3,
     VD_UI_TEXT_OP_FLAGS_KEEP_MARK          = 1 << 3,
 } VdUiTextOpFlags;
@@ -526,7 +566,7 @@ struct VdUiDiv {
     float           rect[4];
     int             zoffset;
 
-    VdUiTextEditState text_edit;
+    VdUiSel         sel;
 
     float           hot_t;
     float           active_t;
@@ -667,7 +707,7 @@ VD_UI_INL int              vd_ui_sliderf_float(float *value, float min_value, fl
                                                VdUiAxis orientation,
                                                const char *label, ...)                                                  { VD_UI_DOTTOSTR(label); float ivp = min_value; float mvp = max_value; return vd_ui_slider(value, &ivp, &mvp, VD_UI_DATA_TYPE_FLOAT, orientation, str); }
 
-VD_UI_API int              vd_ui_input_text(VdUiStr label, VdUiSel *sel, char *buf, size_t *len, size_t capacity);
+VD_UI_API int              vd_ui_input_text(VdUiStr label, char *buf, size_t *len, size_t capacity);
 
 VD_UI_API void             vd_ui_scroll_begin(VdUiStr str, float *x, float *y);
 VD_UI_API void             vd_ui_scroll_end(void);
@@ -2308,7 +2348,7 @@ VD_UI_DRAW_PROC(vd_ui_text_box_draw)
     vd_ui__arena_restore(save);
 }
 
-VD_UI_API int vd_ui_input_text(VdUiStr label, VdUiSel *sel, char *buf, size_t *len, size_t capacity)
+VD_UI_API int vd_ui_input_text(VdUiStr label, char *buf, size_t *len, size_t capacity)
 {
     VdUiContext *ctx = vd_ui_context_get();
     VdUiColoring cursor_style = vd_ui_coloring_all4(vd_ui_f4(0.0, 0.7f, 1.f, 1.f));
@@ -2319,6 +2359,8 @@ VD_UI_API int vd_ui_input_text(VdUiStr label, VdUiSel *sel, char *buf, size_t *l
     box->style.padding[VD_UI_RIGHT] = 4.f;
     box->style.padding[VD_UI_BOTTOM] = 4.f;
     box->style.background.normal = vd_ui_gradient1(vd_ui_f4(0.1f, 0.1f, 0.1f, 1.f));
+
+    VdUiSel *sel = &box->sel;
 
     for (int i = 0; i < vd_ui_get_num_keystrokes(); ++i) {
         VdUi__ArenaSave save = vd_ui__arena_save(&ctx->frame_arena);
@@ -2366,6 +2408,16 @@ VD_UI_API int vd_ui_input_text(VdUiStr label, VdUiSel *sel, char *buf, size_t *l
                     op.dt = 1;
                 } break;
 
+                case VD_UI_KEY_HOME: {
+                    op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_BOUNDS;
+                    op.dt = -1;
+                } break;
+
+                case VD_UI_KEY_END: {
+                    op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_BOUNDS;
+                    op.dt = 1;
+                } break;
+
                 default: {
                     continue;
                 } break;
@@ -2390,32 +2442,54 @@ VD_UI_API int vd_ui_input_text(VdUiStr label, VdUiSel *sel, char *buf, size_t *l
         }
 
         int distance_unit_flags = op.flags & VD_UI_TEXT_OP_FLAGS_DISTANCE_UNIT_MASK;
-        if (distance_unit_flags == VD_UI_TEXT_OP_FLAGS_SCAN_LETTER) {
-            int fwd = op.dt > 0;
-            long long move_amt = op.dt;
-            if (!fwd) {
-                move_amt = -move_amt;
-            }
+        switch (distance_unit_flags) {
+            case VD_UI_TEXT_OP_FLAGS_SCAN_LETTER: {
+                int fwd = op.dt > 0;
+                long long move_amt = op.dt;
+                if (!fwd) {
+                    move_amt = -move_amt;
+                }
 
-            for (long long m = 0; m < move_amt; ++m) {
-                new_c = vd_ui_text_point_move_by_char(new_c, buf, *len, fwd);
-            }
+                for (long long m = 0; m < move_amt; ++m) {
+                    new_c = vd_ui_text_point_move_by_char(new_c, buf, *len, fwd);
+                }
 
-            if (sel->max_column < new_c.c) {
+                new_c = vd_ui_text_point_clamp(new_c, *len);
                 sel->max_column = new_c.c;
-            }
+            } break;
 
-        } else if (distance_unit_flags == VD_UI_TEXT_OP_FLAGS_SCAN_LINE) {
+            case VD_UI_TEXT_OP_FLAGS_SCAN_LINE: {
+                int fwd = op.dt > 0;
+                long long move_amt = op.dt;
+                if (!fwd) {
+                    move_amt = -move_amt;
+                }
 
-            int fwd = op.dt > 0;
-            long long move_amt = op.dt;
-            if (!fwd) {
-                move_amt = -move_amt;
-            }
+                for (long long m = 0; m < move_amt; ++m) {
+                    new_c = vd_ui_text_point_move_by_line(new_c, sel->max_column, buf, *len, fwd);
+                }
 
-            for (long long m = 0; m < move_amt; ++m) {
-                new_c = vd_ui_text_point_move_by_line(new_c, sel->max_column, buf, *len, fwd);
-            }
+                new_c = vd_ui_text_point_clamp(new_c, *len);
+            } break;
+
+            case VD_UI_TEXT_OP_FLAGS_SCAN_BOUNDS: {
+
+                int fwd = op.dt > 0;
+                long long move_amt = op.dt;
+                if (!fwd) {
+                    move_amt = -move_amt;
+                }
+
+                for (long long m = 0; m < move_amt; ++m) {
+                    new_c = vd_ui_text_point_move_by_bounds(new_c, buf, *len, fwd);
+                }
+
+                new_c = vd_ui_text_point_clamp(new_c, *len);
+
+                sel->max_column = new_c.c;
+            } break;
+
+            default: VD_UI_ASSERT(0 && "Invalid distance unit flags!"); break;
         }
 
         if (new_c.b < 0) new_c.b = 0;
@@ -2434,9 +2508,6 @@ VD_UI_API int vd_ui_input_text(VdUiStr label, VdUiSel *sel, char *buf, size_t *l
 
 
     // ----
-
-
-
 
     VdUi__TextBoxDrawData *draw_data = (VdUi__TextBoxDrawData*)vd_ui_mem_push(sizeof(VdUi__TextBoxDrawData));
     draw_data->str = vd_ui_str(buf, *len);
@@ -3235,8 +3306,7 @@ VD_UI_API int vd_ui_demo(void)
 
             static char buf[64] = "a text \nbox";
             static size_t buf_len = 11;
-            static VdUiSel sel = {0};
-            vd_ui_input_text(VD_UI_LIT("TextBox"), &sel, buf, &buf_len, sizeof(buf));
+            vd_ui_input_text(VD_UI_LIT("TextBox"), buf, &buf_len, sizeof(buf));
 
             static int checkbox = 0;
             vd_ui_checkboxf(&checkbox, "Show Hidden");
@@ -6106,6 +6176,8 @@ VD_UI_API VdUiKey vd_ui_vd_fw_key_translate(VdFwKey key)
         case VD_FW_KEY_ARROW_UP:    result = VD_UI_KEY_ARROW_UP;    break;
         case VD_FW_KEY_ARROW_DOWN:  result = VD_UI_KEY_ARROW_DOWN;  break;
         case VD_FW_KEY_BACKSPACE:   result = VD_UI_KEY_BACKSPACE;   break;
+        case VD_FW_KEY_HOME:        result = VD_UI_KEY_HOME;        break;
+        case VD_FW_KEY_END:         result = VD_UI_KEY_END;         break;
         default: break;
     }
 
