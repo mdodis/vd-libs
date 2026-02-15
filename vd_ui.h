@@ -504,6 +504,40 @@ VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_line(VdUiTextPoint pt, long lon
     return new_pt;
 }
 
+VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_word(VdUiTextPoint pt, char *buf, long long len, int fwd)
+{
+    VdUiTextPoint new_pt = pt;
+
+    if (fwd) {
+        new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 1);
+        while ((new_pt.b < len) && (buf[new_pt.b] != ' ')) {
+            if (buf[new_pt.b] == '\n') {
+                new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 1);
+                break;
+            }
+
+            new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 1);
+        }
+    } else {
+        if (new_pt.c == 0) {
+            new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 0);
+        } else {
+            new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 0);
+
+            while ((new_pt.b > 0) && (buf[new_pt.b] != ' ')) {
+                if (buf[new_pt.b] == '\n') {
+                    new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 1);
+                    break;
+                }
+
+                new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 0);
+            }
+        }
+    }
+
+    return new_pt;
+}
+
 typedef struct {
     VdUiTextPoint c;
     VdUiTextPoint m;
@@ -512,10 +546,11 @@ typedef struct {
 
 typedef enum {
     VD_UI_TEXT_OP_FLAGS_NONE               = 0,
-    VD_UI_TEXT_OP_FLAGS_DISTANCE_UNIT_MASK = 0b11,
-    VD_UI_TEXT_OP_FLAGS_SCAN_LETTER        = 0b01,
-    VD_UI_TEXT_OP_FLAGS_SCAN_LINE          = 0b10,
-    VD_UI_TEXT_OP_FLAGS_SCAN_BOUNDS        = 0b11,
+    VD_UI_TEXT_OP_FLAGS_DISTANCE_UNIT_MASK = 0b111,
+    VD_UI_TEXT_OP_FLAGS_SCAN_LETTER        = 0b001,
+    VD_UI_TEXT_OP_FLAGS_SCAN_LINE          = 0b010,
+    VD_UI_TEXT_OP_FLAGS_SCAN_BOUNDS        = 0b011,
+    VD_UI_TEXT_OP_FLAGS_SCAN_WORD          = 0b100,
     VD_UI_TEXT_OP_FLAGS_SYNC_MARK          = 0 << 3,
     VD_UI_TEXT_OP_FLAGS_KEEP_MARK          = 1 << 3,
 } VdUiTextOpFlags;
@@ -2389,13 +2424,23 @@ VD_UI_API int vd_ui_input_text(VdUiStr label, char *buf, size_t *len, size_t cap
             VdUiKey key = keystroke.key;
             switch (key) {
                 case VD_UI_KEY_ARROW_LEFT: {
-                    op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER;
-                    op.dt = -1;
+                    if (keystroke.mods & (1 << VD_UI_MOD_CONTROL)) {
+                        op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_WORD;
+                        op.dt = -1;
+                    } else {
+                        op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER;
+                        op.dt = -1;
+                    }
                 } break;
 
                 case VD_UI_KEY_ARROW_RIGHT: {
-                    op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER;
-                    op.dt = 1;
+                    if (keystroke.mods & (1 << VD_UI_MOD_CONTROL)) {
+                        op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_WORD;
+                        op.dt = 1;
+                    } else {
+                        op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER;
+                        op.dt = 1;
+                    }
                 } break;
 
                 case VD_UI_KEY_ARROW_UP: {
@@ -2473,7 +2518,6 @@ VD_UI_API int vd_ui_input_text(VdUiStr label, char *buf, size_t *len, size_t cap
             } break;
 
             case VD_UI_TEXT_OP_FLAGS_SCAN_BOUNDS: {
-
                 int fwd = op.dt > 0;
                 long long move_amt = op.dt;
                 if (!fwd) {
@@ -2482,6 +2526,22 @@ VD_UI_API int vd_ui_input_text(VdUiStr label, char *buf, size_t *len, size_t cap
 
                 for (long long m = 0; m < move_amt; ++m) {
                     new_c = vd_ui_text_point_move_by_bounds(new_c, buf, *len, fwd);
+                }
+
+                new_c = vd_ui_text_point_clamp(new_c, *len);
+
+                sel->max_column = new_c.c;
+            } break;
+
+            case VD_UI_TEXT_OP_FLAGS_SCAN_WORD: {
+                int fwd = op.dt > 0;
+                long long move_amt = op.dt;
+                if (!fwd) {
+                    move_amt = -move_amt;
+                }
+
+                for (long long m = 0; m < move_amt; ++m) {
+                    new_c = vd_ui_text_point_move_by_word(new_c, buf, *len, fwd);
                 }
 
                 new_c = vd_ui_text_point_clamp(new_c, *len);
