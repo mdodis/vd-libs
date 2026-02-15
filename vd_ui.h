@@ -387,9 +387,9 @@ typedef struct {
 } VdUiTextEditState;
 
 typedef struct {
-    long long          l;
-    long long          c;
-    long long          b;
+    long long          l;   // Line
+    long long          c;   // Column
+    long long          b;   // Byte
 } VdUiTextPoint;
 
 VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_char(VdUiTextPoint pt, char *buf, long long len, int fwd)
@@ -406,11 +406,11 @@ VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_char(VdUiTextPoint pt, char *bu
         new_pt.b++;
     } else if (new_pt.b > 0) {
 
-        if (buf[new_pt.b] == '\n') {
+        if (buf[new_pt.b - 1] == '\n') {
 
             // Scan backwards to find column size
             size_t c = 0;
-            for (size_t i = (new_pt.b - 1); (i != 0) && (buf[i] != '\n'); --i) {
+            for (size_t i = (new_pt.b - 1); (i > 0) && (buf[i - 1] != '\n'); --i) {
                 c++;
             }
 
@@ -427,10 +427,9 @@ VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_char(VdUiTextPoint pt, char *bu
     return new_pt;
 }
 
-VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_line(VdUiTextPoint pt, char *buf, long long len, int fwd)
+VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_line(VdUiTextPoint pt, long long max_column, char *buf, long long len, int fwd)
 {
     VdUiTextPoint new_pt = pt;
-    long long last_column = new_pt.c;
     long long last_line = new_pt.l;
 
     if (fwd && (new_pt.b <= len)) {
@@ -441,9 +440,9 @@ VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_line(VdUiTextPoint pt, char *bu
         }
 
         // If we found a newline then move to the end until we find it
-        // or until last_column matches new_pt.c
+        // or until max_column matches new_pt.c
         long long cur_line = new_pt.l;
-        while ((new_pt.b <= len) && (new_pt.c < last_column)) {
+        while ((new_pt.b <= len) && (new_pt.c < max_column)) {
             VdUiTextPoint next_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 1);
             if (next_pt.l != cur_line) {
                 break;
@@ -458,7 +457,7 @@ VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_line(VdUiTextPoint pt, char *bu
             new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 0);
         }
 
-        while (new_pt.c > last_column) {
+        while (new_pt.c > max_column) {
             new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 0);
         }
     }
@@ -469,6 +468,7 @@ VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_line(VdUiTextPoint pt, char *bu
 typedef struct {
     VdUiTextPoint c;
     VdUiTextPoint m;
+    long long     max_column;
 } VdUiSel;
 
 typedef enum {
@@ -2401,6 +2401,10 @@ VD_UI_API int vd_ui_input_text(VdUiStr label, VdUiSel *sel, char *buf, size_t *l
                 new_c = vd_ui_text_point_move_by_char(new_c, buf, *len, fwd);
             }
 
+            if (sel->max_column < new_c.c) {
+                sel->max_column = new_c.c;
+            }
+
         } else if (distance_unit_flags == VD_UI_TEXT_OP_FLAGS_SCAN_LINE) {
 
             int fwd = op.dt > 0;
@@ -2410,7 +2414,7 @@ VD_UI_API int vd_ui_input_text(VdUiStr label, VdUiSel *sel, char *buf, size_t *l
             }
 
             for (long long m = 0; m < move_amt; ++m) {
-                new_c = vd_ui_text_point_move_by_line(new_c, buf, *len, fwd);
+                new_c = vd_ui_text_point_move_by_line(new_c, sel->max_column, buf, *len, fwd);
             }
         }
 
@@ -2421,9 +2425,8 @@ VD_UI_API int vd_ui_input_text(VdUiStr label, VdUiSel *sel, char *buf, size_t *l
             new_m = new_c;
         }
 
-        sel->c = new_c;
-        sel->m = new_m;
-        printf("%llu %llu\n", sel->c.b, sel->m.b);
+        sel->c          = new_c;
+        sel->m          = new_m;
 
         vd_ui__arena_restore(save);
     }
