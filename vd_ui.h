@@ -40,6 +40,7 @@
  * - Allow active elements to capture the mouse
  * - Text Input
  * - Images
+ * - Glyph paging
  * - Support more of printf
  * - Cache div full size and compare to stop doing size_changed for VD_UI_SIZE_MODE_CONTAIN_CHILDREN
  * - New and improved render pass api using texture id + scissor + layer id as keys
@@ -234,16 +235,16 @@ VD_UI_INL float            vd_ui_fremap(float value, float low1, float high1, fl
 /* ----UI------------------------------------------------------------------------------------------------------------ */
 enum {
     // Per div flags
-    VD_UI_FLAG_TEXT             = 1 << 0,
-    VD_UI_FLAG_BACKGROUND       = 1 << 1,
-    VD_UI_FLAG_BORDER           = 1 << 2,
-    VD_UI_FLAG_SYMBOL           = 1 << 3,
-    VD_UI_FLAG_CLICKABLE        = 1 << 4,
-    VD_UI_FLAG_CLIP_CONTENT     = 1 << 5,
-    VD_UI_FLAG_FLEX_HORIZONTAL  = 1 << 6, // 0 here means Vertical
-    VD_UI_FLAG_ALIGN_CENTER     = 1 << 7,
-    VD_UI_FLAG_FLOAT            = 1 << 8,
-    VD_UI_FLAG_CAPTURES_MOUSE   = 1 << 9,
+    VD_UI_FLAG_TEXT             = 1 <<  0,
+    VD_UI_FLAG_BACKGROUND       = 1 <<  1,
+    VD_UI_FLAG_BORDER           = 1 <<  2,
+    VD_UI_FLAG_SYMBOL           = 1 <<  3,
+    VD_UI_FLAG_CLICKABLE        = 1 <<  4,
+    VD_UI_FLAG_CLIP_CONTENT     = 1 <<  5,
+    VD_UI_FLAG_FLEX_HORIZONTAL  = 1 <<  6, // 0 here means Vertical
+    VD_UI_FLAG_ALIGN_CENTER     = 1 <<  7,
+    VD_UI_FLAG_FLOAT            = 1 <<  8,
+    VD_UI_FLAG_CAPTURES_MOUSE   = 1 <<  9,
 
     // Mouse Enumerations
     VD_UI_MOUSE_LEFT        = 0,
@@ -262,6 +263,7 @@ enum {
     VD_UI_KEY_NONE = 0,
     VD_UI_KEY_ARROW_UP   = 40,
     VD_UI_KEY_ARROW_LEFT = 41, VD_UI_KEY_ARROW_DOWN = 42, VD_UI_KEY_ARROW_RIGHT = 43,
+    VD_UI_KEY_ENTER,
     VD_UI_KEY_BACKSPACE,
     VD_UI_KEY_HOME,
     VD_UI_KEY_END,
@@ -671,6 +673,7 @@ typedef struct {
 extern char Vd_Ui_CharBuf[VD_UI_CHAR_BUF_COUNT];
 
 VD_UI_API int              vd_ui_div_is_active(VdUiDiv *div);
+VD_UI_API int              vd_ui_div_is_focused(VdUiDiv *div);
 
 /* ----DEMOS--------------------------------------------------------------------------------------------------------- */
 VD_UI_API int              vd_ui_demo(void);
@@ -773,7 +776,7 @@ VD_UI_INL int              vd_ui_sliderf_float(float *value, float min_value, fl
                                                VdUiAxis orientation,
                                                const char *label, ...)                                                  { VD_UI_DOTTOSTR(label); float ivp = min_value; float mvp = max_value; return vd_ui_slider(value, &ivp, &mvp, VD_UI_DATA_TYPE_FLOAT, orientation, str); }
 
-VD_UI_API int              vd_ui_input_text(VdUiStr label, char *buf, size_t *len, size_t capacity);
+VD_UI_API int              vd_ui_textbox(VdUiStr label, char *buf, size_t *len, size_t capacity);
 
 VD_UI_API void             vd_ui_scroll_begin(VdUiStr str, float *x, float *y);
 VD_UI_API void             vd_ui_scroll_end(void);
@@ -1651,6 +1654,7 @@ struct VdUiContext {
     size_t                  id_capturing_mouse;
     size_t                  hot;
     size_t                  active;
+    size_t                  focused;
 
     // Per frame storage (strings)
     char                    *strbuf;
@@ -2414,7 +2418,7 @@ VD_UI_DRAW_PROC(vd_ui_text_box_draw)
     vd_ui__arena_restore(save);
 }
 
-VD_UI_API int vd_ui_input_text(VdUiStr label, char *buf, size_t *len, size_t capacity)
+VD_UI_API int vd_ui_textbox(VdUiStr label, char *buf, size_t *len, size_t capacity)
 {
     VdUiContext *ctx = vd_ui_context_get();
     VdUiColoring cursor_style = vd_ui_coloring_all4(vd_ui_f4(0.0, 0.7f, 1.f, 1.f));
@@ -2425,228 +2429,245 @@ VD_UI_API int vd_ui_input_text(VdUiStr label, char *buf, size_t *len, size_t cap
     box->style.padding[VD_UI_RIGHT] = 4.f;
     box->style.padding[VD_UI_BOTTOM] = 4.f;
     box->style.background.normal = vd_ui_gradient1(vd_ui_f4(0.1f, 0.1f, 0.1f, 1.f));
+    vd_ui_call(box);
 
     VdUiSel *sel = &box->sel;
 
-    for (int i = 0; i < vd_ui_get_num_keystrokes(); ++i) {
-        VdUi__ArenaSave save = vd_ui__arena_save(&ctx->frame_arena);
+    if (vd_ui_div_is_focused(box)) {
+        for (int i = 0; i < vd_ui_get_num_keystrokes(); ++i) {
+            VdUi__ArenaSave save = vd_ui__arena_save(&ctx->frame_arena);
 
-        VdUiTextPoint new_c = sel->c;
-        VdUiTextPoint new_m = sel->m;
-        VdUiKeyStroke keystroke = vd_ui_get_keystroke(i);
+            VdUiTextPoint new_c = sel->c;
+            VdUiTextPoint new_m = sel->m;
+            VdUiKeyStroke keystroke = vd_ui_get_keystroke(i);
 
-        VdUiTextOp op = {0};
+            VdUiTextOp op = {0};
 
-        if (keystroke.flags & VD_UI_KEYSTROKE_FLAG_CHAR) {
-            // @todo(mdodis): unicode
-            char *c = (char*)vd_ui_mem_push(sizeof(char));
-            *c = (char)keystroke.codepoint;
-            op.replace_str.s = c;
-            op.replace_str.l = 1;
+            if (keystroke.flags & VD_UI_KEYSTROKE_FLAG_CHAR) {
+                // @todo(mdodis): unicode
+                char *c = (char*)vd_ui_mem_push(sizeof(char));
+                *c = (char)keystroke.codepoint;
+                op.replace_str.s = c;
+                op.replace_str.l = 1;
 
-            for (int j = 0; j < op.replace_str.l; ++j) {
-                if (op.replace_str.s[j] == '\r') {
-                    op.replace_str.s[j] = '\n';
+                for (int j = 0; j < op.replace_str.l; ++j) {
+                    if (op.replace_str.s[j] == '\r') {
+                        op.replace_str.s[j] = '\n';
+                    }
                 }
-            }
 
-            op.flags = VD_UI_TEXT_OP_FLAGS_SCAN_LETTER | VD_UI_TEXT_OP_FLAGS_SYNC_MARK;
-            op.dt = op.replace_str.l;
-        } else {
-            VdUiKey key = keystroke.key;
-            switch (key) {
-                case VD_UI_KEY_ARROW_LEFT: {
-                    if (keystroke.mods & (1 << VD_UI_MOD_CONTROL)) {
-                        op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_WORD;
+                op.flags = VD_UI_TEXT_OP_FLAGS_SCAN_LETTER | VD_UI_TEXT_OP_FLAGS_SYNC_MARK;
+                op.dt = op.replace_str.l;
+            } else {
+                VdUiKey key = keystroke.key;
+                switch (key) {
+                    case VD_UI_KEY_ARROW_LEFT: {
+                        if (keystroke.mods & (1 << VD_UI_MOD_CONTROL)) {
+                            op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_WORD;
+                            op.dt = -1;
+                        } else {
+                            op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER;
+                            op.dt = -1;
+                        }
+                    } break;
+
+                    case VD_UI_KEY_ARROW_RIGHT: {
+                        if (keystroke.mods & (1 << VD_UI_MOD_CONTROL)) {
+                            op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_WORD;
+                            op.dt = 1;
+                        } else {
+                            op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER;
+                            op.dt = 1;
+                        }
+                    } break;
+
+                    case VD_UI_KEY_ARROW_UP: {
+                        op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LINE;
                         op.dt = -1;
-                    } else {
-                        op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER;
+                    } break;
+
+                    case VD_UI_KEY_ARROW_DOWN: {
+                        op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LINE;
+                        op.dt = 1;
+                    } break;
+
+                    case VD_UI_KEY_HOME: {
+                        op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_BOUNDS;
                         op.dt = -1;
-                    }
-                } break;
+                    } break;
 
-                case VD_UI_KEY_ARROW_RIGHT: {
-                    if (keystroke.mods & (1 << VD_UI_MOD_CONTROL)) {
-                        op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_WORD;
+                    case VD_UI_KEY_END: {
+                        op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_BOUNDS;
                         op.dt = 1;
-                    } else {
-                        op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER;
+                    } break;
+
+                    case VD_UI_KEY_BACKSPACE: {
+                        op.flags |= VD_UI_TEXT_OP_FLAGS_DELETE
+                                    | VD_UI_TEXT_OP_FLAGS_SYNC_MARK;
+
+                        if (keystroke.mods & (1 << VD_UI_MOD_CONTROL)) {
+                            op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_WORD;
+                        } else {
+                            op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER;
+                        }
+
+                        op.dt = -1;
+                    } break;
+
+                    case VD_UI_KEY_DEL: {
+                        op.flags |= VD_UI_TEXT_OP_FLAGS_DELETE | VD_UI_TEXT_OP_FLAGS_SYNC_MARK;
                         op.dt = 1;
-                    }
-                } break;
 
-                case VD_UI_KEY_ARROW_UP: {
-                    op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LINE;
-                    op.dt = -1;
-                } break;
+                        if (keystroke.mods & (1 << VD_UI_MOD_CONTROL)) {
+                            op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_WORD;
+                        } else {
+                            op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER;
+                        }
+                    } break;
 
-                case VD_UI_KEY_ARROW_DOWN: {
-                    op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LINE;
-                    op.dt = 1;
-                } break;
+                    case VD_UI_KEY_ENTER: {
+                        char *c = (char*)vd_ui_mem_push(sizeof(char));
+                        *c = (char)'\n';
+                        op.replace_str.s = c;
+                        op.replace_str.l = 1;
 
-                case VD_UI_KEY_HOME: {
-                    op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_BOUNDS;
-                    op.dt = -1;
-                } break;
+                        for (int j = 0; j < op.replace_str.l; ++j) {
+                            if (op.replace_str.s[j] == '\r') {
+                                op.replace_str.s[j] = '\n';
+                            }
+                        }
 
-                case VD_UI_KEY_END: {
-                    op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_BOUNDS;
-                    op.dt = 1;
-                } break;
+                        op.flags = VD_UI_TEXT_OP_FLAGS_SCAN_LETTER | VD_UI_TEXT_OP_FLAGS_SYNC_MARK;
+                        op.dt = op.replace_str.l;
+                    } break;
 
-                case VD_UI_KEY_BACKSPACE: {
-                    op.flags |= VD_UI_TEXT_OP_FLAGS_DELETE
-                                | VD_UI_TEXT_OP_FLAGS_SYNC_MARK;
+                    default: {
+                        continue;
+                    } break;
+                }
 
-                    if (keystroke.mods & (1 << VD_UI_MOD_CONTROL)) {
-                        op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_WORD;
-                    } else {
-                        op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER;
-                    }
+                if (keystroke.mods & (1 << VD_UI_MOD_SHIFT)) {
+                    op.flags |= VD_UI_TEXT_OP_FLAGS_KEEP_MARK;
 
-                    op.dt = -1;
-                } break;
+                }
 
-                case VD_UI_KEY_DEL: {
-                    op.flags |= VD_UI_TEXT_OP_FLAGS_DELETE | VD_UI_TEXT_OP_FLAGS_SYNC_MARK;
-                    op.dt = 1;
-
-                    if (keystroke.mods & (1 << VD_UI_MOD_CONTROL)) {
-                        op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_WORD;
-                    } else {
-                        op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER;
-                    }
-                } break;
-
-                default: {
-                    continue;
-                } break;
-            }
-
-            if (keystroke.mods & (1 << VD_UI_MOD_SHIFT)) {
-                op.flags |= VD_UI_TEXT_OP_FLAGS_KEEP_MARK;
+                if (new_c.b != new_m.b) {
+                    op.flags |= VD_UI_TEXT_OP_FLAGS_ZERO_DELTA;
+                }
 
             }
 
-            if (new_c.b != new_m.b) {
-                op.flags |= VD_UI_TEXT_OP_FLAGS_ZERO_DELTA;
+            if (op.replace_str.l > 0) {
+                size_t bytes_to_move = (*len) - new_c.b;
+                long long move_start_pos = new_c.b;
+                long long move_end_pos = move_start_pos + op.replace_str.l;
+                VD_UI_MEMMOVE(buf + move_end_pos, buf + move_start_pos, bytes_to_move);
+
+                VD_UI_MEMCPY(buf + move_start_pos, op.replace_str.s, op.replace_str.l);
+                (*len) += op.replace_str.l;
             }
 
+            if ((op.flags & VD_UI_TEXT_OP_FLAGS_ZERO_DELTA) && (op.flags & VD_UI_TEXT_OP_FLAGS_DELETE)) {
+                op.dt = 0;
+            }
+
+            int distance_unit_flags = op.flags & VD_UI_TEXT_OP_FLAGS_DISTANCE_UNIT_MASK;
+            switch (distance_unit_flags) {
+                case VD_UI_TEXT_OP_FLAGS_SCAN_LETTER: {
+                    int fwd = op.dt > 0;
+                    long long move_amt = op.dt;
+                    if (!fwd) {
+                        move_amt = -move_amt;
+                    }
+
+                    for (long long m = 0; m < move_amt; ++m) {
+                        new_c = vd_ui_text_point_move_by_char(new_c, buf, *len, fwd);
+                    }
+
+                    new_c = vd_ui_text_point_clamp(new_c, *len);
+                    sel->max_column = new_c.c;
+                } break;
+
+                case VD_UI_TEXT_OP_FLAGS_SCAN_LINE: {
+                    int fwd = op.dt > 0;
+                    long long move_amt = op.dt;
+                    if (!fwd) {
+                        move_amt = -move_amt;
+                    }
+
+                    for (long long m = 0; m < move_amt; ++m) {
+                        new_c = vd_ui_text_point_move_by_line(new_c, sel->max_column, buf, *len, fwd);
+                    }
+
+                    new_c = vd_ui_text_point_clamp(new_c, *len);
+                } break;
+
+                case VD_UI_TEXT_OP_FLAGS_SCAN_BOUNDS: {
+                    int fwd = op.dt > 0;
+                    long long move_amt = op.dt;
+                    if (!fwd) {
+                        move_amt = -move_amt;
+                    }
+
+                    for (long long m = 0; m < move_amt; ++m) {
+                        new_c = vd_ui_text_point_move_by_bounds(new_c, buf, *len, fwd);
+                    }
+
+                    new_c = vd_ui_text_point_clamp(new_c, *len);
+
+                    sel->max_column = new_c.c;
+                } break;
+
+                case VD_UI_TEXT_OP_FLAGS_SCAN_WORD: {
+                    int fwd = op.dt > 0;
+                    long long move_amt = op.dt;
+                    if (!fwd) {
+                        move_amt = -move_amt;
+                    }
+
+                    for (long long m = 0; m < move_amt; ++m) {
+                        new_c = vd_ui_text_point_move_by_word(new_c, buf, *len, fwd);
+                    }
+
+                    new_c = vd_ui_text_point_clamp(new_c, *len);
+
+                    sel->max_column = new_c.c;
+                } break;
+
+                default: VD_UI_ASSERT(0 && "Invalid distance unit flags!"); break;
+            }
+
+            if (new_c.b < 0) new_c.b = 0;
+            else if (((size_t)new_c.b) > (*len)) new_c.b = (*len);
+
+            if (op.flags & VD_UI_TEXT_OP_FLAGS_DELETE) {
+                // Delete everything within range
+                VdUiTextPoint min, max;
+                vd_ui_text_point_minmax(new_c, new_m, &min, &max);
+
+                size_t dist = max.b - min.b;
+                size_t amount_to_move = *len - min.b;
+                VD_UI_MEMCPY(buf + min.b, buf + max.b, amount_to_move);
+
+                new_c = min;
+
+                (*len) -= dist;
+            }
+
+            if (new_c.b < 0) new_c.b = 0;
+            else if (((size_t)new_c.b) > (*len)) new_c.b = (*len);
+
+
+            if (!(op.flags & VD_UI_TEXT_OP_FLAGS_KEEP_MARK)) {
+                new_m = new_c;
+            }
+
+            sel->c          = new_c;
+            sel->m          = new_m;
+
+            vd_ui__arena_restore(save);
         }
-
-        if (op.replace_str.l > 0) {
-            size_t bytes_to_move = (*len) - new_c.b;
-            long long move_start_pos = new_c.b;
-            long long move_end_pos = move_start_pos + op.replace_str.l;
-            VD_UI_MEMMOVE(buf + move_end_pos, buf + move_start_pos, bytes_to_move);
-
-            VD_UI_MEMCPY(buf + move_start_pos, op.replace_str.s, op.replace_str.l);
-            (*len) += op.replace_str.l;
-        }
-
-        if ((op.flags & VD_UI_TEXT_OP_FLAGS_ZERO_DELTA) && (op.flags & VD_UI_TEXT_OP_FLAGS_DELETE)) {
-            op.dt = 0;
-        }
-
-        int distance_unit_flags = op.flags & VD_UI_TEXT_OP_FLAGS_DISTANCE_UNIT_MASK;
-        switch (distance_unit_flags) {
-            case VD_UI_TEXT_OP_FLAGS_SCAN_LETTER: {
-                int fwd = op.dt > 0;
-                long long move_amt = op.dt;
-                if (!fwd) {
-                    move_amt = -move_amt;
-                }
-
-                for (long long m = 0; m < move_amt; ++m) {
-                    new_c = vd_ui_text_point_move_by_char(new_c, buf, *len, fwd);
-                }
-
-                new_c = vd_ui_text_point_clamp(new_c, *len);
-                sel->max_column = new_c.c;
-            } break;
-
-            case VD_UI_TEXT_OP_FLAGS_SCAN_LINE: {
-                int fwd = op.dt > 0;
-                long long move_amt = op.dt;
-                if (!fwd) {
-                    move_amt = -move_amt;
-                }
-
-                for (long long m = 0; m < move_amt; ++m) {
-                    new_c = vd_ui_text_point_move_by_line(new_c, sel->max_column, buf, *len, fwd);
-                }
-
-                new_c = vd_ui_text_point_clamp(new_c, *len);
-            } break;
-
-            case VD_UI_TEXT_OP_FLAGS_SCAN_BOUNDS: {
-                int fwd = op.dt > 0;
-                long long move_amt = op.dt;
-                if (!fwd) {
-                    move_amt = -move_amt;
-                }
-
-                for (long long m = 0; m < move_amt; ++m) {
-                    new_c = vd_ui_text_point_move_by_bounds(new_c, buf, *len, fwd);
-                }
-
-                new_c = vd_ui_text_point_clamp(new_c, *len);
-
-                sel->max_column = new_c.c;
-            } break;
-
-            case VD_UI_TEXT_OP_FLAGS_SCAN_WORD: {
-                int fwd = op.dt > 0;
-                long long move_amt = op.dt;
-                if (!fwd) {
-                    move_amt = -move_amt;
-                }
-
-                for (long long m = 0; m < move_amt; ++m) {
-                    new_c = vd_ui_text_point_move_by_word(new_c, buf, *len, fwd);
-                }
-
-                new_c = vd_ui_text_point_clamp(new_c, *len);
-
-                sel->max_column = new_c.c;
-            } break;
-
-            default: VD_UI_ASSERT(0 && "Invalid distance unit flags!"); break;
-        }
-
-        if (new_c.b < 0) new_c.b = 0;
-        else if (((size_t)new_c.b) > (*len)) new_c.b = (*len);
-
-        if (op.flags & VD_UI_TEXT_OP_FLAGS_DELETE) {
-            // Delete everything within range
-            VdUiTextPoint min, max;
-            vd_ui_text_point_minmax(new_c, new_m, &min, &max);
-
-            size_t dist = max.b - min.b;
-            size_t amount_to_move = *len - min.b;
-            VD_UI_MEMCPY(buf + min.b, buf + max.b, amount_to_move);
-
-            new_c = min;
-
-            (*len) -= dist;
-        }
-
-        if (new_c.b < 0) new_c.b = 0;
-        else if (((size_t)new_c.b) > (*len)) new_c.b = (*len);
-
-
-        if (!(op.flags & VD_UI_TEXT_OP_FLAGS_KEEP_MARK)) {
-            new_m = new_c;
-        }
-
-        sel->c          = new_c;
-        sel->m          = new_m;
-
-        vd_ui__arena_restore(save);
     }
-
-
 
     // ----
 
@@ -2669,41 +2690,6 @@ VD_UI_API int vd_ui_input_text(VdUiStr label, char *buf, size_t *len, size_t cap
     box->style.size[VD_UI_AXISV].niceness = 0.f;
 
     vd_ui_set_draw_proc(box, vd_ui_text_box_draw, (void*)draw_data);
-
-    // if (vd_ui_get_key_pressed(0) == VD_UI_KEY_ARROW_RIGHT) {
-    //     if (text_edit->byte_index < len) {
-    //         unsigned int cur_codepoint = (unsigned int)buf[text_edit->byte_index];
-
-    //         VdUiFontId font_id = {0};
-    //         float rx = 0.f, ry = 0.f;
-    //         float x0, y0, x1, y1, s0, t0, s1, t1;
-    //         vd_ui_get_glyph_metrics(font_id, cur_codepoint, text->style.text.font_size,
-    //                                 &rx, &ry,
-    //                                 &x0, &y0,
-    //                                 &x1, &y1,
-    //                                 &s0, &t0,
-    //                                 &s1, &t1);
-    //         cursor->comp_pos_rel[0] += rx;
-    //         text_edit->byte_index += 1;
-    //     }
-    // } else if (vd_ui_get_key_pressed(0) == VD_UI_KEY_ARROW_LEFT) {
-
-    //     if (text_edit->byte_index > 0) {
-    //         unsigned int cur_codepoint = (unsigned int)buf[text_edit->byte_index - 1];
-
-    //         VdUiFontId font_id = {0};
-    //         float rx = 0.f, ry = 0.f;
-    //         float x0, y0, x1, y1, s0, t0, s1, t1;
-    //         vd_ui_get_glyph_metrics(font_id, cur_codepoint, text->style.text.font_size,
-    //                                 &rx, &ry,
-    //                                 &x0, &y0,
-    //                                 &x1, &y1,
-    //                                 &s0, &t0,
-    //                                 &s1, &t1);
-    //         cursor->comp_pos_rel[0] -= rx;
-    //         text_edit->byte_index -= 1;
-    //     }
-    // }
     return 0;
 }
 
@@ -3134,6 +3120,10 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
         div->timeout_inv_t = (div->timeout_t > 0.1f) ? (1.f - div->timeout_t) : 0.f;
         if (div->timeout_t < 0.1f) div->timeout_t = 0.f;
 
+        if (reply.clicked) {
+            ctx->focused = div->h;
+        }
+
         if (reply.pressed && (ctx->active == div->h)) {
             reply.drag[0] = mouse_delta[0]; reply.drag[1] = mouse_delta[1];
         }
@@ -3447,7 +3437,7 @@ VD_UI_API int vd_ui_demo(void)
 
             static char buf[64] = "a text \nbox";
             static size_t buf_len = 11;
-            vd_ui_input_text(VD_UI_LIT("TextBox"), buf, &buf_len, sizeof(buf));
+            vd_ui_textbox(VD_UI_LIT("TextBox"), buf, &buf_len, sizeof(buf));
 
             static int checkbox = 0;
             vd_ui_checkboxf(&checkbox, "Show Hidden");
@@ -3932,7 +3922,7 @@ VD_UI_API void vd_ui_event_mod(VdUiMod mod, int on)
 
 VD_UI_API void vd_ui_event_char(unsigned int codepoint)
 {
-    if ((codepoint == '\b') || (codepoint == 0x7F)) {
+    if ((codepoint < 32) || (codepoint == 127)) {
         return;
     }
 
@@ -4562,8 +4552,8 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
             curr->draw_proc(curr, rect, curr->draw_proc_data);
         }
 
+        curr->size_timeout_t = vd_ui__lerp(curr->size_timeout_t, 0.f, ctx->delta_seconds * 11.f);
         if (ctx->debug.layout_recompute_vis_on) {
-            curr->size_timeout_t = vd_ui__lerp(curr->size_timeout_t, 0.f, ctx->delta_seconds * 11.f);
             VdUiGradient grad = vd_ui_gradient1(vd_ui_f4(0.922f, 0.753f, 0.306f, curr->size_timeout_t));
             vd_ui__push_rectgrad(ctx, rect, grad.e, 0.f, 0.f, 0.f);
         }
@@ -4832,6 +4822,12 @@ VD_UI_API int vd_ui_div_is_active(VdUiDiv *div)
 {
     VdUiContext *ctx = vd_ui_context_get();
     return ctx->active == div->h;
+}
+
+VD_UI_API int vd_ui_div_is_focused(VdUiDiv *div)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    return ctx->focused == div->h;
 }
 
 static void vd_ui__putc(char **buf, size_t *rm, int c, int *count) {
@@ -5879,9 +5875,7 @@ VD_UI_API int vd_ui_ws_nc_area_get(int nc_area_rect[4],
 static void vd_ui__size_changed(VdUiContext *ctx, VdUiDiv *div)
 {
     div->size_changed = 1;
-    if (ctx->debug.layout_recompute_vis_on) {
-        div->size_timeout_t = 1.f;
-    }
+    div->size_timeout_t = 1.f;
 }
 
 static struct {
@@ -6325,6 +6319,7 @@ VD_UI_API VdUiKey vd_ui_vd_fw_key_translate(VdFwKey key)
         case VD_FW_KEY_ARROW_UP:    result = VD_UI_KEY_ARROW_UP;    break;
         case VD_FW_KEY_ARROW_DOWN:  result = VD_UI_KEY_ARROW_DOWN;  break;
         case VD_FW_KEY_BACKSPACE:   result = VD_UI_KEY_BACKSPACE;   break;
+        case VD_FW_KEY_ENTER:       result = VD_UI_KEY_ENTER;       break;
         case VD_FW_KEY_HOME:        result = VD_UI_KEY_HOME;        break;
         case VD_FW_KEY_END:         result = VD_UI_KEY_END;         break;
         case VD_FW_KEY_DEL:         result = VD_UI_KEY_DEL;         break;
