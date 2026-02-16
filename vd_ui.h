@@ -27,7 +27,7 @@
  * | Single Line Label                     | vd_ui_label*                                                       | X |
  * | Button                                | vd_ui_button* vd_ui_icon_button*                                   | X |
  * | Slider                                | vd_ui_slider*                                                      | ~ |
- * | Text Line                             | vd_ui_text_line*                                                   | ~ |
+ * | Text Box                              | vd_ui_textbox*                                                     | ~ |
  * 
  * @todo(mdodis):
  * - Sliders
@@ -426,6 +426,8 @@ VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_char(VdUiTextPoint pt, char *bu
 VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_bounds(VdUiTextPoint pt, char *buf, long long len, int end);
 VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_line(VdUiTextPoint pt, long long max_column, char *buf, long long len, int fwd);
 VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_word(VdUiTextPoint pt, char *buf, long long len, int fwd);
+VD_UI_API VdUiTextOp    vd_ui_text_op_from_keystroke(VdUiKeyStroke keystroke, VdUiTextPoint c, VdUiTextPoint m);
+VD_UI_API void          vd_ui_text_op_exec(VdUiTextOp op, VdUiSel *sel, char *buf, size_t *len, size_t capacity);
 typedef struct VdUiDiv VdUiDiv;
 
 #define VD_UI_DRAW_PROC(name) void name(VdUiDiv *div, float rect[4], void *usr)
@@ -1089,7 +1091,7 @@ VD_UI_INL float vd_ui_fremap(float value, float low1, float high1, float low2, f
     return low2 + (value - low1) * (high2 - low2) / (high1 - low1);
 }
 
-/* ----TEXTOPS------------------------------------------------------------------------------------------------------- */
+/* ----TEXTOPS INL--------------------------------------------------------------------------------------------------- */
 VD_UI_INL int vd_ui_text_point_eq(VdUiTextPoint a, VdUiTextPoint b)
 {
     return a.b == b.b;
@@ -1907,6 +1909,239 @@ VD_UI_API void vd_ui_frame_end(void)
     vd_ui__update_all_fonts(ctx);
 }
 
+/* ----TEXTOPS IMPL-------------------------------------------------------------------------------------------------- */
+VD_UI_API VdUiTextOp vd_ui_text_op_from_keystroke(VdUiKeyStroke keystroke, VdUiTextPoint c, VdUiTextPoint m)
+{
+    VdUiTextOp op = {0};
+
+    if (keystroke.flags & VD_UI_KEYSTROKE_FLAG_CHAR) {
+        // @todo(mdodis): unicode
+        char *s = (char*)vd_ui_mem_push(sizeof(char));
+        *s = (char)keystroke.codepoint;
+        op.replace_str.s = s;
+        op.replace_str.l = 1;
+
+        for (int j = 0; j < op.replace_str.l; ++j) {
+            if (op.replace_str.s[j] == '\r') {
+                op.replace_str.s[j] = '\n';
+            }
+        }
+
+        op.flags = VD_UI_TEXT_OP_FLAGS_SCAN_LETTER | VD_UI_TEXT_OP_FLAGS_SYNC_MARK;
+        op.dt = op.replace_str.l;
+    } else {
+        VdUiKey key = keystroke.key;
+        switch (key) {
+            case VD_UI_KEY_ARROW_LEFT: {
+                if (keystroke.mods & (1 << VD_UI_MOD_CONTROL)) {
+                    op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_WORD;
+                    op.dt = -1;
+                } else {
+                    op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER;
+                    op.dt = -1;
+                }
+            } break;
+
+            case VD_UI_KEY_ARROW_RIGHT: {
+                if (keystroke.mods & (1 << VD_UI_MOD_CONTROL)) {
+                    op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_WORD;
+                    op.dt = 1;
+                } else {
+                    op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER;
+                    op.dt = 1;
+                }
+            } break;
+
+            case VD_UI_KEY_ARROW_UP: {
+                op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LINE;
+                op.dt = -1;
+            } break;
+
+            case VD_UI_KEY_ARROW_DOWN: {
+                op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LINE;
+                op.dt = 1;
+            } break;
+
+            case VD_UI_KEY_HOME: {
+                op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_BOUNDS;
+                op.dt = -1;
+            } break;
+
+            case VD_UI_KEY_END: {
+                op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_BOUNDS;
+                op.dt = 1;
+            } break;
+
+            case VD_UI_KEY_BACKSPACE: {
+                op.flags |= VD_UI_TEXT_OP_FLAGS_DELETE
+                            | VD_UI_TEXT_OP_FLAGS_SYNC_MARK;
+
+                if (keystroke.mods & (1 << VD_UI_MOD_CONTROL)) {
+                    op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_WORD;
+                } else {
+                    op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER;
+                }
+
+                op.dt = -1;
+            } break;
+
+            case VD_UI_KEY_DEL: {
+                op.flags |= VD_UI_TEXT_OP_FLAGS_DELETE | VD_UI_TEXT_OP_FLAGS_SYNC_MARK;
+                op.dt = 1;
+
+                if (keystroke.mods & (1 << VD_UI_MOD_CONTROL)) {
+                    op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_WORD;
+                } else {
+                    op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER;
+                }
+            } break;
+
+            case VD_UI_KEY_ENTER: {
+                char *s = (char*)vd_ui_mem_push(sizeof(char));
+                *s = (char)'\n';
+                op.replace_str.s = s;
+                op.replace_str.l = 1;
+
+                for (int j = 0; j < op.replace_str.l; ++j) {
+                    if (op.replace_str.s[j] == '\r') {
+                        op.replace_str.s[j] = '\n';
+                    }
+                }
+
+                op.flags = VD_UI_TEXT_OP_FLAGS_SCAN_LETTER | VD_UI_TEXT_OP_FLAGS_SYNC_MARK;
+                op.dt = op.replace_str.l;
+            } break;
+
+            default: {} break;
+        }
+
+        if (keystroke.mods & (1 << VD_UI_MOD_SHIFT)) {
+            op.flags |= VD_UI_TEXT_OP_FLAGS_KEEP_MARK;
+
+        }
+
+        if (c.b != m.b) {
+            op.flags |= VD_UI_TEXT_OP_FLAGS_ZERO_DELTA;
+        }
+    }
+
+    return op;
+}
+
+VD_UI_API void vd_ui_text_op_exec(VdUiTextOp op, VdUiSel *sel, char *buf, size_t *len, size_t capacity)
+{
+    VdUiTextPoint new_c = sel->c;
+    VdUiTextPoint new_m = sel->m;
+
+    if (op.replace_str.l > 0) {
+        size_t bytes_to_move = (*len) - new_c.b;
+        long long move_start_pos = new_c.b;
+        long long move_end_pos = move_start_pos + op.replace_str.l;
+        VD_UI_MEMMOVE(buf + move_end_pos, buf + move_start_pos, bytes_to_move);
+
+        VD_UI_MEMCPY(buf + move_start_pos, op.replace_str.s, op.replace_str.l);
+        (*len) += op.replace_str.l;
+    }
+
+    if ((op.flags & VD_UI_TEXT_OP_FLAGS_ZERO_DELTA) && (op.flags & VD_UI_TEXT_OP_FLAGS_DELETE)) {
+        op.dt = 0;
+    }
+
+    int distance_unit_flags = op.flags & VD_UI_TEXT_OP_FLAGS_DISTANCE_UNIT_MASK;
+    switch (distance_unit_flags) {
+        case VD_UI_TEXT_OP_FLAGS_SCAN_LETTER: {
+            int fwd = op.dt > 0;
+            long long move_amt = op.dt;
+            if (!fwd) {
+                move_amt = -move_amt;
+            }
+
+            for (long long m = 0; m < move_amt; ++m) {
+                new_c = vd_ui_text_point_move_by_char(new_c, buf, *len, fwd);
+            }
+
+            new_c = vd_ui_text_point_clamp(new_c, *len);
+            sel->max_column = new_c.c;
+        } break;
+
+        case VD_UI_TEXT_OP_FLAGS_SCAN_LINE: {
+            int fwd = op.dt > 0;
+            long long move_amt = op.dt;
+            if (!fwd) {
+                move_amt = -move_amt;
+            }
+
+            for (long long m = 0; m < move_amt; ++m) {
+                new_c = vd_ui_text_point_move_by_line(new_c, sel->max_column, buf, *len, fwd);
+            }
+
+            new_c = vd_ui_text_point_clamp(new_c, *len);
+        } break;
+
+        case VD_UI_TEXT_OP_FLAGS_SCAN_BOUNDS: {
+            int fwd = op.dt > 0;
+            long long move_amt = op.dt;
+            if (!fwd) {
+                move_amt = -move_amt;
+            }
+
+            for (long long m = 0; m < move_amt; ++m) {
+                new_c = vd_ui_text_point_move_by_bounds(new_c, buf, *len, fwd);
+            }
+
+            new_c = vd_ui_text_point_clamp(new_c, *len);
+
+            sel->max_column = new_c.c;
+        } break;
+
+        case VD_UI_TEXT_OP_FLAGS_SCAN_WORD: {
+            int fwd = op.dt > 0;
+            long long move_amt = op.dt;
+            if (!fwd) {
+                move_amt = -move_amt;
+            }
+
+            for (long long m = 0; m < move_amt; ++m) {
+                new_c = vd_ui_text_point_move_by_word(new_c, buf, *len, fwd);
+            }
+
+            new_c = vd_ui_text_point_clamp(new_c, *len);
+
+            sel->max_column = new_c.c;
+        } break;
+
+        default: VD_UI_ASSERT(0 && "Invalid distance unit flags!"); break;
+    }
+
+    if (new_c.b < 0) new_c.b = 0;
+    else if (((size_t)new_c.b) > (*len)) new_c.b = (*len);
+
+    if (op.flags & VD_UI_TEXT_OP_FLAGS_DELETE) {
+        // Delete everything within range
+        VdUiTextPoint min, max;
+        vd_ui_text_point_minmax(new_c, new_m, &min, &max);
+
+        size_t dist = max.b - min.b;
+        size_t amount_to_move = *len - min.b;
+        VD_UI_MEMCPY(buf + min.b, buf + max.b, amount_to_move);
+
+        new_c = min;
+
+        (*len) -= dist;
+    }
+
+    if (new_c.b < 0) new_c.b = 0;
+    else if (((size_t)new_c.b) > (*len)) new_c.b = (*len);
+
+
+    if (!(op.flags & VD_UI_TEXT_OP_FLAGS_KEEP_MARK)) {
+        new_m = new_c;
+    }
+
+    sel->c          = new_c;
+    sel->m          = new_m;
+}
+
 /* ----RENDERING IMPL------------------------------------------------------------------------------------------------ */
 VD_UI_API size_t vd_ui_get_min_vertex_buffer_size(void)
 {
@@ -2445,234 +2680,10 @@ VD_UI_API int vd_ui_textbox(VdUiStr label, char *buf, size_t *len, size_t capaci
     if (vd_ui_div_is_focused(box)) {
         for (int i = 0; i < vd_ui_get_num_keystrokes(); ++i) {
             VdUi__ArenaSave save = vd_ui__arena_save(&ctx->frame_arena);
-
-            VdUiTextPoint new_c = sel->c;
-            VdUiTextPoint new_m = sel->m;
             VdUiKeyStroke keystroke = vd_ui_get_keystroke(i);
 
-            VdUiTextOp op = {0};
-
-            if (keystroke.flags & VD_UI_KEYSTROKE_FLAG_CHAR) {
-                // @todo(mdodis): unicode
-                char *c = (char*)vd_ui_mem_push(sizeof(char));
-                *c = (char)keystroke.codepoint;
-                op.replace_str.s = c;
-                op.replace_str.l = 1;
-
-                for (int j = 0; j < op.replace_str.l; ++j) {
-                    if (op.replace_str.s[j] == '\r') {
-                        op.replace_str.s[j] = '\n';
-                    }
-                }
-
-                op.flags = VD_UI_TEXT_OP_FLAGS_SCAN_LETTER | VD_UI_TEXT_OP_FLAGS_SYNC_MARK;
-                op.dt = op.replace_str.l;
-            } else {
-                VdUiKey key = keystroke.key;
-                switch (key) {
-                    case VD_UI_KEY_ARROW_LEFT: {
-                        if (keystroke.mods & (1 << VD_UI_MOD_CONTROL)) {
-                            op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_WORD;
-                            op.dt = -1;
-                        } else {
-                            op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER;
-                            op.dt = -1;
-                        }
-                    } break;
-
-                    case VD_UI_KEY_ARROW_RIGHT: {
-                        if (keystroke.mods & (1 << VD_UI_MOD_CONTROL)) {
-                            op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_WORD;
-                            op.dt = 1;
-                        } else {
-                            op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER;
-                            op.dt = 1;
-                        }
-                    } break;
-
-                    case VD_UI_KEY_ARROW_UP: {
-                        op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LINE;
-                        op.dt = -1;
-                    } break;
-
-                    case VD_UI_KEY_ARROW_DOWN: {
-                        op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LINE;
-                        op.dt = 1;
-                    } break;
-
-                    case VD_UI_KEY_HOME: {
-                        op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_BOUNDS;
-                        op.dt = -1;
-                    } break;
-
-                    case VD_UI_KEY_END: {
-                        op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_BOUNDS;
-                        op.dt = 1;
-                    } break;
-
-                    case VD_UI_KEY_BACKSPACE: {
-                        op.flags |= VD_UI_TEXT_OP_FLAGS_DELETE
-                                    | VD_UI_TEXT_OP_FLAGS_SYNC_MARK;
-
-                        if (keystroke.mods & (1 << VD_UI_MOD_CONTROL)) {
-                            op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_WORD;
-                        } else {
-                            op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER;
-                        }
-
-                        op.dt = -1;
-                    } break;
-
-                    case VD_UI_KEY_DEL: {
-                        op.flags |= VD_UI_TEXT_OP_FLAGS_DELETE | VD_UI_TEXT_OP_FLAGS_SYNC_MARK;
-                        op.dt = 1;
-
-                        if (keystroke.mods & (1 << VD_UI_MOD_CONTROL)) {
-                            op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_WORD;
-                        } else {
-                            op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER;
-                        }
-                    } break;
-
-                    case VD_UI_KEY_ENTER: {
-                        char *c = (char*)vd_ui_mem_push(sizeof(char));
-                        *c = (char)'\n';
-                        op.replace_str.s = c;
-                        op.replace_str.l = 1;
-
-                        for (int j = 0; j < op.replace_str.l; ++j) {
-                            if (op.replace_str.s[j] == '\r') {
-                                op.replace_str.s[j] = '\n';
-                            }
-                        }
-
-                        op.flags = VD_UI_TEXT_OP_FLAGS_SCAN_LETTER | VD_UI_TEXT_OP_FLAGS_SYNC_MARK;
-                        op.dt = op.replace_str.l;
-                    } break;
-
-                    default: {
-                        continue;
-                    } break;
-                }
-
-                if (keystroke.mods & (1 << VD_UI_MOD_SHIFT)) {
-                    op.flags |= VD_UI_TEXT_OP_FLAGS_KEEP_MARK;
-
-                }
-
-                if (new_c.b != new_m.b) {
-                    op.flags |= VD_UI_TEXT_OP_FLAGS_ZERO_DELTA;
-                }
-
-            }
-
-            if (op.replace_str.l > 0) {
-                size_t bytes_to_move = (*len) - new_c.b;
-                long long move_start_pos = new_c.b;
-                long long move_end_pos = move_start_pos + op.replace_str.l;
-                VD_UI_MEMMOVE(buf + move_end_pos, buf + move_start_pos, bytes_to_move);
-
-                VD_UI_MEMCPY(buf + move_start_pos, op.replace_str.s, op.replace_str.l);
-                (*len) += op.replace_str.l;
-            }
-
-            if ((op.flags & VD_UI_TEXT_OP_FLAGS_ZERO_DELTA) && (op.flags & VD_UI_TEXT_OP_FLAGS_DELETE)) {
-                op.dt = 0;
-            }
-
-            int distance_unit_flags = op.flags & VD_UI_TEXT_OP_FLAGS_DISTANCE_UNIT_MASK;
-            switch (distance_unit_flags) {
-                case VD_UI_TEXT_OP_FLAGS_SCAN_LETTER: {
-                    int fwd = op.dt > 0;
-                    long long move_amt = op.dt;
-                    if (!fwd) {
-                        move_amt = -move_amt;
-                    }
-
-                    for (long long m = 0; m < move_amt; ++m) {
-                        new_c = vd_ui_text_point_move_by_char(new_c, buf, *len, fwd);
-                    }
-
-                    new_c = vd_ui_text_point_clamp(new_c, *len);
-                    sel->max_column = new_c.c;
-                } break;
-
-                case VD_UI_TEXT_OP_FLAGS_SCAN_LINE: {
-                    int fwd = op.dt > 0;
-                    long long move_amt = op.dt;
-                    if (!fwd) {
-                        move_amt = -move_amt;
-                    }
-
-                    for (long long m = 0; m < move_amt; ++m) {
-                        new_c = vd_ui_text_point_move_by_line(new_c, sel->max_column, buf, *len, fwd);
-                    }
-
-                    new_c = vd_ui_text_point_clamp(new_c, *len);
-                } break;
-
-                case VD_UI_TEXT_OP_FLAGS_SCAN_BOUNDS: {
-                    int fwd = op.dt > 0;
-                    long long move_amt = op.dt;
-                    if (!fwd) {
-                        move_amt = -move_amt;
-                    }
-
-                    for (long long m = 0; m < move_amt; ++m) {
-                        new_c = vd_ui_text_point_move_by_bounds(new_c, buf, *len, fwd);
-                    }
-
-                    new_c = vd_ui_text_point_clamp(new_c, *len);
-
-                    sel->max_column = new_c.c;
-                } break;
-
-                case VD_UI_TEXT_OP_FLAGS_SCAN_WORD: {
-                    int fwd = op.dt > 0;
-                    long long move_amt = op.dt;
-                    if (!fwd) {
-                        move_amt = -move_amt;
-                    }
-
-                    for (long long m = 0; m < move_amt; ++m) {
-                        new_c = vd_ui_text_point_move_by_word(new_c, buf, *len, fwd);
-                    }
-
-                    new_c = vd_ui_text_point_clamp(new_c, *len);
-
-                    sel->max_column = new_c.c;
-                } break;
-
-                default: VD_UI_ASSERT(0 && "Invalid distance unit flags!"); break;
-            }
-
-            if (new_c.b < 0) new_c.b = 0;
-            else if (((size_t)new_c.b) > (*len)) new_c.b = (*len);
-
-            if (op.flags & VD_UI_TEXT_OP_FLAGS_DELETE) {
-                // Delete everything within range
-                VdUiTextPoint min, max;
-                vd_ui_text_point_minmax(new_c, new_m, &min, &max);
-
-                size_t dist = max.b - min.b;
-                size_t amount_to_move = *len - min.b;
-                VD_UI_MEMCPY(buf + min.b, buf + max.b, amount_to_move);
-
-                new_c = min;
-
-                (*len) -= dist;
-            }
-
-            if (new_c.b < 0) new_c.b = 0;
-            else if (((size_t)new_c.b) > (*len)) new_c.b = (*len);
-
-
-            if (!(op.flags & VD_UI_TEXT_OP_FLAGS_KEEP_MARK)) {
-                new_m = new_c;
-            }
-
-            sel->c          = new_c;
-            sel->m          = new_m;
+            VdUiTextOp op = vd_ui_text_op_from_keystroke(keystroke, sel->c, sel->m);
+            vd_ui_text_op_exec(op, sel, buf, len, capacity);
 
             vd_ui__arena_restore(save);
         }
