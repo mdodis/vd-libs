@@ -387,187 +387,12 @@ typedef struct VdUiStyle {
     VdUiStyleText   text;
 } VdUiStyle;
 
+/* ----TEXTOPS------------------------------------------------------------------------------------------------------- */
 typedef struct {
     long long          l;   // Line
     long long          c;   // Column
     long long          b;   // Byte
 } VdUiTextPoint;
-
-VD_UI_INL int vd_ui_text_point_eq(VdUiTextPoint a, VdUiTextPoint b)
-{
-    return a.b == b.b;
-}
-
-VD_UI_INL void vd_ui_text_point_minmax(VdUiTextPoint a, VdUiTextPoint b, VdUiTextPoint *min, VdUiTextPoint *max)
-{
-    if (a.b > b.b) {
-        *max = a;
-        *min = b;
-    } else {
-        *max = b;
-        *min = a;
-    }
-}
-
-VD_UI_INL VdUiTextPoint vd_ui_text_point_clamp(VdUiTextPoint pt, long long len)
-{
-    if (pt.b < 0) {
-        pt.b = 0;
-    }
-
-    if (pt.b > len) {
-        pt.b = len;
-    }
-
-    return pt;
-}
-
-VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_char(VdUiTextPoint pt, char *buf, long long len, int fwd)
-{
-    VdUiTextPoint new_pt = pt;
-
-    if (fwd && (new_pt.b <= len)) {
-        if ((new_pt.b < len) && (buf[new_pt.b] == '\n')) {
-            new_pt.l++;
-            new_pt.c = 0;
-        } else {
-            new_pt.c++;
-        }
-        new_pt.b++;
-    } else if (new_pt.b > 0) {
-
-        if (buf[new_pt.b - 1] == '\n') {
-
-            // Scan backwards to find column size
-            size_t c = 0;
-            for (size_t i = (new_pt.b - 1); (i > 0) && (buf[i - 1] != '\n'); --i) {
-                c++;
-            }
-
-            new_pt.l--;
-            new_pt.c = c;
-
-        } else {
-            new_pt.c--;
-        }
-
-        new_pt.b--;
-    }
-
-    return new_pt;
-}
-
-VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_bounds(VdUiTextPoint pt, char *buf, long long len, int end)
-{
-    VdUiTextPoint new_pt = pt;
-    long long last_line = new_pt.l;
-
-    if (end) {
-        while (new_pt.b <= len) {
-            VdUiTextPoint next_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 1);
-            if (next_pt.l != last_line) {
-                break;
-            } else {
-                new_pt = next_pt;
-            }
-        }
-    } else {
-        while (new_pt.b > 0) {
-            VdUiTextPoint next_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 0);
-            if (next_pt.l != last_line) {
-                break;
-            } else {
-                new_pt = next_pt;
-            }
-        }
-    }
-
-    return new_pt;
-}
-
-VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_line(VdUiTextPoint pt, long long max_column, char *buf, long long len, int fwd)
-{
-    VdUiTextPoint new_pt = pt;
-    long long last_line = new_pt.l;
-
-    if (fwd && (new_pt.b <= len)) {
-
-        // Scan forward until newline
-        while ((new_pt.b <= len) && (last_line == new_pt.l)) {
-            new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 1);
-        }
-
-        // If we found a newline then move to the end until we find it
-        // or until max_column matches new_pt.c
-        long long cur_line = new_pt.l;
-        while ((new_pt.b <= len) && (new_pt.c < max_column)) {
-            VdUiTextPoint next_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 1);
-            if (next_pt.l != cur_line) {
-                break;
-            } else {
-                new_pt = next_pt;
-            }
-        }
-    } else if ((new_pt.b > 0)) {
-
-        // Scan backward until newline
-        while ((new_pt.b > 0) && (last_line == new_pt.l)) {
-            new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 0);
-        }
-
-        while (new_pt.c > max_column) {
-            new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 0);
-        }
-    }
-
-    return new_pt;
-}
-
-VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_word(VdUiTextPoint pt, char *buf, long long len, int fwd)
-{
-    VdUiTextPoint new_pt = pt;
-
-    if (fwd) {
-        if (new_pt.b > len) {
-            goto end;    
-        }
-
-        if (buf[new_pt.b] == '\n') {
-            new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 1);
-        } else {
-            new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 1);
-            while ((new_pt.b < len) && (buf[new_pt.b] != ' ')) {
-                if (buf[new_pt.b] == '\n') {
-                    // new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 0);
-                    break;
-                }
-
-                new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 1);
-            }
-        }
-    } else {
-        if (new_pt.b == 0) {
-            goto end;    
-        }
-
-        if (new_pt.c == 0) {
-            new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 0);
-        } else {
-            new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 0);
-
-            while ((new_pt.b > 0) && (buf[new_pt.b] != ' ')) {
-                if (buf[new_pt.b] == '\n') {
-                    new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 1);
-                    break;
-                }
-
-                new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 0);
-            }
-        }
-    }
-end:
-    return new_pt;
-}
 
 typedef struct {
     VdUiTextPoint c;
@@ -594,6 +419,13 @@ typedef struct {
     VdUiStr         replace_str;
 } VdUiTextOp;
 
+VD_UI_INL int           vd_ui_text_point_eq(VdUiTextPoint a, VdUiTextPoint b);
+VD_UI_INL void          vd_ui_text_point_minmax(VdUiTextPoint a, VdUiTextPoint b, VdUiTextPoint *min, VdUiTextPoint *max);
+VD_UI_INL VdUiTextPoint vd_ui_text_point_clamp(VdUiTextPoint pt, long long len);
+VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_char(VdUiTextPoint pt, char *buf, long long len, int fwd);
+VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_bounds(VdUiTextPoint pt, char *buf, long long len, int end);
+VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_line(VdUiTextPoint pt, long long max_column, char *buf, long long len, int fwd);
+VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_word(VdUiTextPoint pt, char *buf, long long len, int fwd);
 typedef struct VdUiDiv VdUiDiv;
 
 #define VD_UI_DRAW_PROC(name) void name(VdUiDiv *div, float rect[4], void *usr)
@@ -671,9 +503,6 @@ typedef struct {
 
 
 extern char Vd_Ui_CharBuf[VD_UI_CHAR_BUF_COUNT];
-
-VD_UI_API int              vd_ui_div_is_active(VdUiDiv *div);
-VD_UI_API int              vd_ui_div_is_focused(VdUiDiv *div);
 
 /* ----DEMOS--------------------------------------------------------------------------------------------------------- */
 VD_UI_API int              vd_ui_demo(void);
@@ -821,6 +650,9 @@ VD_UI_API VdUiDiv*         vd_ui_parent_get(int i);
  */
 VD_UI_API void             vd_ui_set_scale(float s);
 VD_UI_API float            vd_ui_get_scale(void);
+
+VD_UI_API int              vd_ui_div_is_active(VdUiDiv *div);
+VD_UI_API int              vd_ui_div_is_focused(VdUiDiv *div);
 
 /* ----STYLE STACKS-------------------------------------------------------------------------------------------------- */
 VD_UI_API void             vd_ui_style_size_push(VdUiAxis axis, VdUiSizeMode mode, float value, float niceness);
@@ -1255,6 +1087,183 @@ static inline VdUiStr vd_ui_symbol_as_str(VdUiSymbol symbol)
 VD_UI_INL float vd_ui_fremap(float value, float low1, float high1, float low2, float high2)
 {
     return low2 + (value - low1) * (high2 - low2) / (high1 - low1);
+}
+
+/* ----TEXTOPS------------------------------------------------------------------------------------------------------- */
+VD_UI_INL int vd_ui_text_point_eq(VdUiTextPoint a, VdUiTextPoint b)
+{
+    return a.b == b.b;
+}
+
+VD_UI_INL void vd_ui_text_point_minmax(VdUiTextPoint a, VdUiTextPoint b, VdUiTextPoint *min, VdUiTextPoint *max)
+{
+    if (a.b > b.b) {
+        *max = a;
+        *min = b;
+    } else {
+        *max = b;
+        *min = a;
+    }
+}
+
+VD_UI_INL VdUiTextPoint vd_ui_text_point_clamp(VdUiTextPoint pt, long long len)
+{
+    if (pt.b < 0) {
+        pt.b = 0;
+    }
+
+    if (pt.b > len) {
+        pt.b = len;
+    }
+
+    return pt;
+}
+
+VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_char(VdUiTextPoint pt, char *buf, long long len, int fwd)
+{
+    VdUiTextPoint new_pt = pt;
+
+    if (fwd && (new_pt.b <= len)) {
+        if ((new_pt.b < len) && (buf[new_pt.b] == '\n')) {
+            new_pt.l++;
+            new_pt.c = 0;
+        } else {
+            new_pt.c++;
+        }
+        new_pt.b++;
+    } else if (new_pt.b > 0) {
+
+        if (buf[new_pt.b - 1] == '\n') {
+
+            // Scan backwards to find column size
+            size_t c = 0;
+            for (size_t i = (new_pt.b - 1); (i > 0) && (buf[i - 1] != '\n'); --i) {
+                c++;
+            }
+
+            new_pt.l--;
+            new_pt.c = c;
+
+        } else {
+            new_pt.c--;
+        }
+
+        new_pt.b--;
+    }
+
+    return new_pt;
+}
+
+VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_bounds(VdUiTextPoint pt, char *buf, long long len, int end)
+{
+    VdUiTextPoint new_pt = pt;
+    long long last_line = new_pt.l;
+
+    if (end) {
+        while (new_pt.b <= len) {
+            VdUiTextPoint next_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 1);
+            if (next_pt.l != last_line) {
+                break;
+            } else {
+                new_pt = next_pt;
+            }
+        }
+    } else {
+        while (new_pt.b > 0) {
+            VdUiTextPoint next_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 0);
+            if (next_pt.l != last_line) {
+                break;
+            } else {
+                new_pt = next_pt;
+            }
+        }
+    }
+
+    return new_pt;
+}
+
+VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_line(VdUiTextPoint pt, long long max_column, char *buf, long long len, int fwd)
+{
+    VdUiTextPoint new_pt = pt;
+    long long last_line = new_pt.l;
+
+    if (fwd && (new_pt.b <= len)) {
+
+        // Scan forward until newline
+        while ((new_pt.b <= len) && (last_line == new_pt.l)) {
+            new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 1);
+        }
+
+        // If we found a newline then move to the end until we find it
+        // or until max_column matches new_pt.c
+        long long cur_line = new_pt.l;
+        while ((new_pt.b <= len) && (new_pt.c < max_column)) {
+            VdUiTextPoint next_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 1);
+            if (next_pt.l != cur_line) {
+                break;
+            } else {
+                new_pt = next_pt;
+            }
+        }
+    } else if ((new_pt.b > 0)) {
+
+        // Scan backward until newline
+        while ((new_pt.b > 0) && (last_line == new_pt.l)) {
+            new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 0);
+        }
+
+        while (new_pt.c > max_column) {
+            new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 0);
+        }
+    }
+
+    return new_pt;
+}
+
+VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_word(VdUiTextPoint pt, char *buf, long long len, int fwd)
+{
+    VdUiTextPoint new_pt = pt;
+
+    if (fwd) {
+        if (new_pt.b > len) {
+            goto end;    
+        }
+
+        if (buf[new_pt.b] == '\n') {
+            new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 1);
+        } else {
+            new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 1);
+            while ((new_pt.b < len) && (buf[new_pt.b] != ' ')) {
+                if (buf[new_pt.b] == '\n') {
+                    // new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 0);
+                    break;
+                }
+
+                new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 1);
+            }
+        }
+    } else {
+        if (new_pt.b == 0) {
+            goto end;    
+        }
+
+        if (new_pt.c == 0) {
+            new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 0);
+        } else {
+            new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 0);
+
+            while ((new_pt.b > 0) && (buf[new_pt.b] != ' ')) {
+                if (buf[new_pt.b] == '\n') {
+                    new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 1);
+                    break;
+                }
+
+                new_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 0);
+            }
+        }
+    }
+end:
+    return new_pt;
 }
 
 #endif // !VD_UI_H
