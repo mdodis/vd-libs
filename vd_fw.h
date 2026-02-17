@@ -14627,32 +14627,47 @@ static void vd_fw__mac_hid_value_callback(void *context, IOReturn result, void *
 }
 
 #elif defined(__linux__)
+#define GL_NO_PROTOTYPES
+#define GL_GLEXT_PROTOTYPES 0
+#define GLX_GLXEXT_PROTOTYPES 0
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/Xatom.h>
-
-extern Window XCreateWindow(
-    Display*            /* display */,
-    Window              /* parent */,
-    int                 /* x */,
-    int                 /* y */,
-    unsigned int        /* width */,
-    unsigned int        /* height */,
-    unsigned int        /* border_width */,
-    int                 /* depth */,
-    unsigned int        /* class */,
-    Visual*             /* visual */,
-    unsigned long       /* valuemask */,
-    XSetWindowAttributes*       /* attributes */
-);
+// @note(mdodis): Defined to stop glx from including opengl functions
+#define __gl_h_
+#include <GL/glx.h>
 
 #define VD_FW_X11_FUNCTIONS \
     XBEGIN_MODULE(xlib) \
     XSYM(xlib, Display*, XOpenDisplay, (const char *name)) \
-    XEND_MODULE()
+    XSYM(xlib, Status, XMatchVisualInfo, (Display *display, int screen, int depth, int klass, XVisualInfo *vinfo_return)) \
+    XSYM(xlib, Colormap, XCreateColormap, (Display *display, Window w, Visual *visual, int alloc)) \
+    XSYM(xlib, Window, XCreateWindow, (Display *display, Window parent, int x, int y, unsigned int width, unsigned int height, unsigned int border_width, int depth, unsigned int class, Visual *visual, unsigned long valuemask, XSetWindowAttributes *attributes)) \
+    XSYM(xlib, int, XMapWindow, (Display *display, Window w)) \
+    XSYM(xlib, int, XFree, (void *data)) \
+    XSYM(xlib, int, XStoreName, (Display *display, Window w, char *window_name)) \
+    XSYM(xlib, int, XSync, (Display *display, Bool discard)) \
+    XSYM(xlib, int, XFlush, (Display *display)) \
+    XSYM(xlib, int, XPending, (Display* display)) \
+    XSYM(xlib, int, XNextEvent, (Display* display, XEvent* evt)) \
+    XSYM(xlib, int, XChangeWindowAttributes, (Display *display, Window w, unsigned long valuemask, XSetWindowAttributes *attributes)) \
+    XSYM(xlib, Atom, XInternAtom, (Display *display, char *atom_name, Bool only_if_exists)) \
+    XSYM(xlib, Status, XSetWMProtocols, (Display *display, Window w, Atom *protocols, int count)) \
+    XSYM(xlib, int, XDestroyWindow, (Display *display, Window w)) \
+    XSYM(xlib, int, XSetWindowColormap, (Display *display, Window w, Colormap colormap)) \
+    XEND_MODULE() \
+    XBEGIN_MODULE(glx) \
+    XSYM(glx, GLXFBConfig*, glXChooseFBConfig, (Display *display, int screen, const int *attrib_list, int *nelements)) \
+    XSYM(glx, XVisualInfo*, glXGetVisualFromFBConfig, (Display *display, GLXFBConfig config)) \
+    XSYM(glx, const char*, glXQueryExtensionsString, (Display *display, int screen)) \
+    XSYM(glx, void*, glXGetProcAddress, (const GLubyte *procName))\
+    XSYM(glx, Bool, glXMakeCurrent, (Display *display, GLXDrawable drawable, GLXContext ctx)) \
+    XSYM(glx, void, glXDestroyContext, (Display *display, GLXContext ctx)) \
+    XSYM(glx, void, glXSwapBuffers, (Display *display, GLXDrawable drawable)) \
+    XEND_MODULE() \
 
 #define XBEGIN_MODULE(name)
-#define XSYM(module, retval, name, args) typedef retval (*VdFw__Proc##name)args; static VdFw__Proc##name VdFw__##name;
+#define XSYM(module, retval, name, args) typedef retval (*VdFw__Proc##name)args; static VdFw__Proc##name VdFw##name;
 #define XEND_MODULE()
 
 VD_FW_X11_FUNCTIONS
@@ -14661,35 +14676,98 @@ VD_FW_X11_FUNCTIONS
 #undef XSYM
 #undef XEND_MODULE
 
-#define VD_FW_LOG(fmt, ...) printf("fw: " fmt "\n", ##__VA_ARGS__)
-
 #include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 typedef struct {
-    void         *handle_xlib;
-    int          has_xlib;
-    Display      *display;
+    void                        *handle_xlib;
+    int                         has_xlib;
+    void                        *handle_glx;
+    int                         has_glx;
+
+    GLXContext                  glx_context;
+
+    Display                     *display;
+    Window                      root_window;
+    Window                      window;
+    int                         screen;
+    XVisualInfo                 visual_info;
+    Atom                        wm_delete_window;
+    int                         size_changed;
+    int                         width, height;
+
+    int                         window_open;
+    VdFwGraphicsApi             graphics_api;
+
+    int                         has_initialized;
+    int                         cap_gamepad_db_entries;
+    int                         num_gamepad_db_entries;
+    VdFwGamepadDBEntry          *gamepad_db_entries;
 } VdFw__LinuxInternalData;
 
 VdFw__LinuxInternalData VdFw__Globals = {0};
 
 #define VD_FW_G VdFw__Globals
 
+static int vd_fw__x11_extension_supported(const char *extList, const char *extension)
+{
+    const char *start;
+    const char *where, *terminator;
+    
+    where = strchr(extension, ' ');
+    if (where || *extension == '\0')
+        return 0;
+    
+    for (start=extList;;) {
+        where = strstr(start, extension);
+        
+        if (!where)
+            break;
+        
+        terminator = where + strlen(extension);
+        
+        if ( where == start || *(where - 1) == ' ' )
+            if ( *terminator == ' ' || *terminator == '\0' )
+            return 1;
+        
+        start = terminator;
+    }
+    
+    return 0;
+}
+
 void *vd_fw__gl_get_proc_address(const char *name)
 {
-    return NULL;
+    void *result = VdFwglXGetProcAddress((const GLubyte*) name);
+    return result;
 }
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
+    VD_FW_G.graphics_api = VD_FW_GRAPHICS_API_INVALID;
+
     {
         VD_FW_G.handle_xlib = dlopen("libX11.so.6", RTLD_NOW | RTLD_GLOBAL);
         VD_FW_G.has_xlib    = VD_FW_G.handle_xlib != NULL;
 
+        const char *glx_libs[] = {
+            "libGLX.so.0",
+            "libGL.so.1",
+            "libGL.so",
+        };
+
+        for (int i = 0; i < sizeof(glx_libs) / sizeof(glx_libs[0]); ++i) {
+            void *dl = dlopen(glx_libs[i], RTLD_NOW | RTLD_GLOBAL);
+            if (dl) {
+                VD_FW_G.handle_glx = dl;
+                VD_FW_G.has_glx = 1;
+                break;
+            }
+        }
+
 #define XBEGIN_MODULE(name) if (VD_FW_G.has_##name) {
-#define XSYM(module, retval, name, args) VdFw__##name = (VdFw__Proc##name)dlsym(VD_FW_G.handle_##module, #name);
+#define XSYM(module, retval, name, args) VdFw##name = (VdFw__Proc##name)dlsym(VD_FW_G.handle_##module, #name);
 #define XEND_MODULE() }
         VD_FW_X11_FUNCTIONS
 #undef XBEGIN_MODULE
@@ -14697,37 +14775,335 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 #undef XEND_MODULE
     }
 
-    VD_FW_G.display = VdFw__XOpenDisplay(NULL);
+    VdFwGraphicsApi api = VD_FW_GRAPHICS_API_OPENGL;
+    if (info) {
+        api = info->api;
+    }
+
+    VD_FW_G.display = VdFwXOpenDisplay(NULL);
+    VD_FW_G.screen = DefaultScreen(VD_FW_G.display);
+    VD_FW_G.root_window = DefaultRootWindow(VD_FW_G.display);
+
 
     if (VD_FW_G.display) {
         VD_FW_LOG("Opened default display");
     }
 
-    Window root = DefaultRootWindow(VD_FW_G.display);
-    int default_screen = DefaultScreen(VD_FW_G.display);
-
     int screen_bits = 24;
     XVisualInfo visual_info = {};
-    if (!XMatchVisualInfo(VD_FW_G.display, default_screen, screen_bits, TrueColor, &visual_info)) {
+    if (!VdFwXMatchVisualInfo(VD_FW_G.display, VD_FW_G.screen, screen_bits, TrueColor, &visual_info)) {
         return 0;
     }
 
+    VD_FW_G.visual_info = visual_info;
+
     XSetWindowAttributes window_attributes = {0};
+    window_attributes.bit_gravity = ForgetGravity;
+    // window_attributes.bit_gravity = StaticGravity;
     window_attributes.background_pixel = 0;
-    window_attributes.colormap = XCreateColormap(VD_FW_G.display, root, visual_info.visual, AllocNone);
-    unsigned long attribute_mask = CWBackPixel | CWColormap;
+    window_attributes.colormap = VdFwXCreateColormap(VD_FW_G.display, VD_FW_G.root_window, visual_info.visual, AllocNone);
+    window_attributes.event_mask = StructureNotifyMask | ExposureMask | KeyPressMask | KeyReleaseMask;
+    unsigned long attribute_mask = CWBitGravity | CWBackPixel | CWColormap | CWEventMask;
+
+    int width = 640;
+    int height = 480;
+    VD_FW_G.window = VdFwXCreateWindow(VD_FW_G.display, VD_FW_G.root_window,
+                                       0, 0,
+                                       width, height, 0,
+                                       visual_info.depth, InputOutput,
+                                       visual_info.visual, attribute_mask, &window_attributes);
+
+    if (!VD_FW_G.window) {
+        return 0;
+    }
+
+    VdFwXMapWindow(VD_FW_G.display, VD_FW_G.window);
+    VdFwXStoreName(VD_FW_G.display, VD_FW_G.window, "FW Window");
+    VdFwXFlush(VD_FW_G.display);
+
+    VD_FW_G.window_open = 1;
+
+    VD_FW_G.wm_delete_window = VdFwXInternAtom(VD_FW_G.display, "WM_DELETE_WINDOW", 0);
+    VdFwXSetWMProtocols(VD_FW_G.display, VD_FW_G.window, &VD_FW_G.wm_delete_window, 1);
+
+    VdFwOpenGLOptions *gl_options = 0;
+    if (info) {
+        gl_options = &info->gl;
+    }
+
+    if (!vd_fw_set_graphics_api(api, gl_options)) {
+        return 0;
+    }
 
     return 1;
 }
 
+VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_options)
+{
+    int result = 1;
+
+    if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
+        // Destroy OpenGL Context
+        VdFwglXMakeCurrent(VD_FW_G.display, VD_FW_G.window, NULL);
+        VdFwglXDestroyContext(VD_FW_G.display, VD_FW_G.glx_context);
+    }
+
+    switch (api) {
+        case VD_FW_GRAPHICS_API_OPENGL: {
+
+            VdFwGlConfig      default_configs[2] = {0};
+            default_configs[0].version = VD_FW_GL_VERSION_3_3;
+
+            VdFwOpenGLOptions default_options = {0};
+            default_options.configs = default_configs;
+
+            if (!gl_options || (gl_options->configs == 0) || (gl_options->configs[0].version == VD_FW_GL_VERSION_BASIC)) {
+                gl_options = &default_options;
+            }
+
+            const char *glx_exts = VdFwglXQueryExtensionsString(VD_FW_G.display, VD_FW_G.screen);
+            PFNGLXCREATECONTEXTATTRIBSARBPROC glXCreateContextAttribsARB = (PFNGLXCREATECONTEXTATTRIBSARBPROC)
+                VdFwglXGetProcAddress((const GLubyte*)"glXCreateContextAttribsARB");
+
+
+            int use_old_style_context = 0;
+            if (!vd_fw__x11_extension_supported(glx_exts, "GLX_ARB_create_context") || !glXCreateContextAttribsARB) {
+                use_old_style_context = 1;
+            }
+
+            int index = 0;
+            while (gl_options->configs && gl_options->configs[index].version != 0) {
+                int minor        = gl_options->configs[index].version % 10;
+                int major        = gl_options->configs[index].version / 10;
+                int debug        = gl_options->configs[index].debug;
+                int compat       = gl_options->configs[index].compat;
+                int pixel_format = gl_options->configs[index].pixel_format;
+                int depth_format = gl_options->configs[index].depth_format;
+                int msaa         = gl_options->configs[index].msaa;
+
+                int running_attrib = 0;
+                GLint pixel_attribs[32] = {0};
+                pixel_attribs[running_attrib++] = GLX_X_RENDERABLE;
+                pixel_attribs[running_attrib++] = 1;
+
+                pixel_attribs[running_attrib++] = GLX_DRAWABLE_TYPE;
+                pixel_attribs[running_attrib++] = GLX_WINDOW_BIT;
+
+                pixel_attribs[running_attrib++] = GLX_RENDER_TYPE;
+                pixel_attribs[running_attrib++] = GLX_RGBA_BIT;
+
+                pixel_attribs[running_attrib++] = GLX_X_VISUAL_TYPE;
+                pixel_attribs[running_attrib++] = GLX_TRUE_COLOR;
+
+                pixel_attribs[running_attrib++] = GLX_DOUBLEBUFFER;
+                pixel_attribs[running_attrib++] = 1;
+
+                switch (pixel_format) {
+                    case VD_FW_GL_PIXEL_FORMAT_R8G8B8A8: {
+                        pixel_attribs[running_attrib++] = GLX_RED_SIZE;
+                        pixel_attribs[running_attrib++] = 8;
+
+                        pixel_attribs[running_attrib++] = GLX_GREEN_SIZE;
+                        pixel_attribs[running_attrib++] = 8;
+
+                        pixel_attribs[running_attrib++] = GLX_BLUE_SIZE;
+                        pixel_attribs[running_attrib++] = 8;
+
+                        pixel_attribs[running_attrib++] = GLX_ALPHA_SIZE;
+                        pixel_attribs[running_attrib++] = 8;
+                    } break;
+
+                    case VD_FW_GL_PIXEL_FORMAT_R8G8B8: {
+                        pixel_attribs[running_attrib++] = GLX_RED_SIZE;
+                        pixel_attribs[running_attrib++] = 8;
+
+                        pixel_attribs[running_attrib++] = GLX_GREEN_SIZE;
+                        pixel_attribs[running_attrib++] = 8;
+
+                        pixel_attribs[running_attrib++] = GLX_BLUE_SIZE;
+                        pixel_attribs[running_attrib++] = 8;
+                    } break;
+
+                    default: break;
+                }
+
+                switch (depth_format) {
+                    case VD_FW_GL_DEPTH_FORMAT_D32: {
+                        pixel_attribs[running_attrib++] = GLX_DEPTH_SIZE;
+                        pixel_attribs[running_attrib++] = 32;
+                    } break;
+
+                    case VD_FW_GL_DEPTH_FORMAT_D24S8: {
+                        pixel_attribs[running_attrib++] = GLX_DEPTH_SIZE;
+                        pixel_attribs[running_attrib++] = 24;
+
+                        pixel_attribs[running_attrib++] = GLX_STENCIL_SIZE;
+                        pixel_attribs[running_attrib++] = 8;
+                    } break;
+
+                    default: break;
+                }
+
+                switch (msaa) {
+                    case VD_FW_GL_MSAA_ENABLED_2X: {
+                        pixel_attribs[running_attrib++] = GLX_SAMPLES;
+                        pixel_attribs[running_attrib++] = 2;
+                    } break;
+
+                    case VD_FW_GL_MSAA_ENABLED_4X: {
+                        pixel_attribs[running_attrib++] = GLX_SAMPLES;
+                        pixel_attribs[running_attrib++] = 4;
+                    } break;
+
+                    case VD_FW_GL_MSAA_ENABLED_8X: {
+                        pixel_attribs[running_attrib++] = GLX_SAMPLES;
+                        pixel_attribs[running_attrib++] = 8;
+                    } break;
+
+                    default: break;
+                }
+
+                int nelements;
+                GLXFBConfig *fbs = VdFwglXChooseFBConfig(VD_FW_G.display, VD_FW_G.screen, pixel_attribs, &nelements);
+
+                if (!fbs || nelements < 1) {
+                    VdFwXFree(fbs);
+                    goto LOOP_END;
+                }
+
+                GLXFBConfig fb_cfg = fbs[0];
+                VdFwXFree(fbs);
+
+                // XVisualInfo *vi_info = VdFwglXGetVisualFromFBConfig(VD_FW_G.display, fb_cfg);
+                // Colormap colormap = VdFwXCreateColormap(VD_FW_G.display, VD_FW_G.root_window, vi_info->visual, AllocNone);
+                Colormap colormap = VdFwXCreateColormap(VD_FW_G.display, VD_FW_G.root_window, VD_FW_G.visual_info.visual, AllocNone);
+
+                if (!VdFwXSetWindowColormap(VD_FW_G.display, VD_FW_G.window, colormap)) {
+                    goto LOOP_END;
+                }
+                VdFwXSync(VD_FW_G.display, False);
+
+                int ctx_flags = 0;
+                int prf_flags = 0;
+
+                if (debug) {
+                    ctx_flags |= GLX_CONTEXT_DEBUG_BIT_ARB;
+                }
+
+                if (compat) {
+                    prf_flags |= GLX_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
+                } else {
+                    prf_flags |= GLX_CONTEXT_CORE_PROFILE_BIT_ARB;
+                }
+
+                int context_attribs[] = {
+                    GLX_CONTEXT_MAJOR_VERSION_ARB, major,
+                    GLX_CONTEXT_MINOR_VERSION_ARB, minor,
+                    GLX_CONTEXT_PROFILE_MASK_ARB,  prf_flags,
+                    GLX_CONTEXT_FLAGS_ARB,         ctx_flags,
+                    0
+                };
+
+                VD_FW_G.glx_context = glXCreateContextAttribsARB(VD_FW_G.display, fb_cfg, 0, 1, context_attribs);
+                if (!VD_FW_G.glx_context) {
+                    goto LOOP_END;
+                }
+
+                if (vd_fw__load_opengl(&gl_options->configs[index])) {
+                    VdFwglXMakeCurrent(VD_FW_G.display, VD_FW_G.window, VD_FW_G.glx_context);
+                    break;
+                } else {
+                    VdFwglXDestroyContext(VD_FW_G.display, VD_FW_G.glx_context);
+                    goto LOOP_END;
+                }
+
+                break;
+LOOP_END:
+                index++;
+            }
+
+            if (!gl_options->configs[index].version) {
+                result = 0;
+                break;
+            }
+
+            gl_options->selected_config = index;
+
+        } break;
+
+        default: break;
+    }
+
+    if (result) {
+        VD_FW_G.graphics_api = api;
+    }
+
+    return result;
+}
+
 VD_FW_API int vd_fw_running(void)
 {
+    return VD_FW_G.window_open;
+}
+
+VD_FW_API VdFwEvent *vd_fw_poll(int *count)
+{
+    VD_FW_G.size_changed = 0;
+
+    XEvent evt = {};
+    while (VdFwXPending(VD_FW_G.display) > 0) {
+        VdFwXNextEvent(VD_FW_G.display, &evt);
+
+        switch (evt.type) {
+            case DestroyNotify: {
+                VD_FW_G.window_open = 0;
+            } break;
+
+            case ClientMessage: {
+                XClientMessageEvent* e = (XClientMessageEvent*)&evt;
+
+                if((Atom)e->data.l[0] == VD_FW_G.wm_delete_window)
+                {
+                    VdFwXDestroyWindow(VD_FW_G.display, VD_FW_G.window);
+                    VD_FW_G.window_open = 0;
+                }
+
+            } break;
+
+            case ConfigureNotify: {
+                XConfigureEvent* e = (XConfigureEvent*)&evt;
+                VD_FW_G.width = e->width;
+                VD_FW_G.height = e->height;
+                VD_FW_G.size_changed = 1;
+            } break;
+
+            default: break;
+        }
+
+    }
+
+    if (count) *count = 0;
     return 0;
 }
 
-VD_FW_API int vd_fw_swap_buffers(void)
+VD_FW_API int vd_fw_close_requested(void)
 {
-    return 0;
+    return 1;
+}
+
+VD_FW_API void vd_fw_quit(void)
+{
+}
+
+VD_FW_API void vd_fw_lock(void)
+{
+}
+
+VD_FW_API void vd_fw_unlock(void)
+{
+    if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
+        VdFwglXSwapBuffers(VD_FW_G.display, VD_FW_G.window);
+    }
 }
 
 VD_FW_API int vd_fw_set_vsync_on(int on)
@@ -14737,7 +15113,15 @@ VD_FW_API int vd_fw_set_vsync_on(int on)
 
 VD_FW_API int vd_fw_get_size(int *w, int *h)
 {
-    return 0;
+    if (w) {
+        *w = VD_FW_G.width;
+    }
+
+    if (h) {
+        *h = VD_FW_G.height;
+    }
+
+    return VD_FW_G.size_changed;
 }
 
 VD_FW_API int vd_fw__any_time_higher(int num_files, const char **files, unsigned long long *check_against)
@@ -14745,15 +15129,55 @@ VD_FW_API int vd_fw__any_time_higher(int num_files, const char **files, unsigned
     return 0;
 }
 
+VD_FW_API VdFwPlatform vd_fw_get_platform(void)
+{
+    return VD_FW_PLATFORM_LINUX;
+}
+
 VD_FW_API char *vd_fw__debug_dump_file_text(const char *path)
 {
-    return NULL;
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        return 0;
+    }
+
+    fseek(f, 0, SEEK_END);
+    size_t size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    char *result = (char*)malloc(size +1);
+    fread(result, size, 1, f);
+
+    result[size] = 0;
+    return result;
 }
 
 VD_FW_API void vd_fw__free_mem(void *memory)
 {
     free(memory);
 }
+
+VD_FW_API void vd_fw__lock_gamepaddb(void)
+{
+    return;
+}
+
+VD_FW_API void vd_fw__unlock_gamepaddb(void)
+{
+    return;
+}
+
+VD_FW_API void vd_fw__notify_gamepaddb_changed(void)
+{
+    return;
+}
+
+VD_FW_API void *vd_fw__realloc_mem(void *prev_ptr, size_t size)
+{
+    return realloc(prev_ptr, size);
+}
+
+
 #endif // _WIN32, __APPLE__, __linux__
 
 #if !defined(__APPLE__)
@@ -14799,7 +15223,6 @@ static int vd_fw__lookup_gl_extension(const char *q, VdFwGlConfig *config)
 
 static int vd_fw__load_opengl(VdFwGlConfig *config)
 {
-    VD_FW_WIN32_PROFILE_BEGIN(load_opengl);
 #if defined(__APPLE__)
     // @todo(mdodis): This check
     // if (version > VD_FW_GL_VERION_4_1) {
@@ -14833,8 +15256,6 @@ VD_FW_OPENGL_CORE_FUNCTIONS
         }
         i++;
     }
-
-    VD_FW_WIN32_PROFILE_END(load_opengl);
     return result;
 }
 

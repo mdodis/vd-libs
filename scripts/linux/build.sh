@@ -21,7 +21,10 @@ done
 pushd $SCRIPT_DIR/../.. > /dev/null
 
 PRJ_DIR="$(realpath .)"
-CFLAGS="-O0 -g -Wall -std=c11 -I $PRJ_DIR"
+CFLAGS="-Wall -std=c11 -Wno-unused-but-set-variable -Wno-unused-function -I $PRJ_DIR"
+DFLAGS="-O0 -g"
+CFLAGS="$DFLAGS $CFLAGS"
+
 
 mkdir -p ./build-linux > /dev/null
 pushd ./build-linux > /dev/null
@@ -41,9 +44,9 @@ if [ -n "$SAMPLE_TO_COMPILE" ]; then
         -pthread \
         $CFLAGS \
         $PRJ_DIR/samples/$SAMPLE_TO_COMPILE.c \
-        -lX11 -lGL \
         -o $SAMPLE_TO_COMPILE
 fi
 
+echo "done"
 popd > /dev/null
 popd > /dev/null
