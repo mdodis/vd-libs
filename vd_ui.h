@@ -22,12 +22,29 @@
  * 3. This notice may not be removed or altered from any source distribution.
  * ---------------------------------------------------------------------------------------------------------------------
  *
- * | Widget                                | Function                                                           | ? |
+ * | Widget                                | Function/Feature                                                   | ? |
  * | ------------------------------------- | ------------------------------------------------------------------ | - |
  * | Single Line Label                     | vd_ui_label*                                                       | X |
  * | Button                                | vd_ui_button* vd_ui_icon_button*                                   | X |
  * | Slider                                | vd_ui_slider*                                                      | ~ |
  * | Text Box                              | vd_ui_textbox*                                                     | ~ |
+ * | |                                     | Move   character                                                   | X |
+ * | |                                     | Move   word                                                        | X |
+ * | |                                     | Move   line                                                        | X |
+ * | |                                     | Move   start/end                                                   | X |
+ * | |                                     | Move   page                                                        |   |
+ * | |                                     | Select character                                                   | X |
+ * | |                                     | Select word                                                        | X |
+ * | |                                     | Select line                                                        | X |
+ * | |                                     | Select start/end                                                   | X |
+ * | |                                     | Delete character                                                   | X |
+ * | |                                     | Delete word                                                        | ~ |
+ * | |                                     | Multiline                                                          | X |
+ * | |                                     | Singleline                                                         |   |
+ * | |                                     | Mouse Selection                                                    |   |
+ * | |                                     | Change event                                                       |   |
+ * | |                                     | UTF-8                                                              |   |
+ * | |                                     | Dynamic Resize Buffer                                              |   |
  * 
  * @todo(mdodis):
  * - Sliders
@@ -44,6 +61,7 @@
  * - Support more of printf
  * - Cache div full size and compare to stop doing size_changed for VD_UI_SIZE_MODE_CONTAIN_CHILDREN
  * - New and improved render pass api using texture id + scissor + layer id as keys
+ * - Tagging/Theming system
  *
  * EXAMPLE - OpenGL (@todo)
  * 
@@ -2034,6 +2052,15 @@ VD_UI_API void vd_ui_text_op_exec(VdUiTextOp op, VdUiSel *sel, char *buf, size_t
     VdUiTextPoint new_m = sel->m;
 
     if (op.replace_str.l > 0) {
+        size_t space_remaining = capacity - (*len);
+        if (op.replace_str.l > space_remaining) {
+            op.replace_str.l = space_remaining;
+        }
+
+        if (space_remaining == 0) {
+            return;
+        }
+
         size_t bytes_to_move = (*len) - new_c.b;
         long long move_start_pos = new_c.b;
         long long move_end_pos = move_start_pos + op.replace_str.l;
@@ -3193,7 +3220,7 @@ VD_UI_API float vd_ui_get_scale(void)
     return ctx->dpi_scale;
 }
 
-/* ----STYLE STACKS-------------------------------------------------------------------------------------------------- */
+/* ----STYLE STACKS IMPL--------------------------------------------------------------------------------------------- */
 VD_UI_API void vd_ui_style_size_push(VdUiAxis axis, VdUiSizeMode mode, float value, float niceness)
 {
     VdUiContext *ctx = vd_ui_context_get();
