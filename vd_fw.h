@@ -41,6 +41,7 @@
  * ╚════════════════════════════════════════════════════════════╝
  * 
  * TODO
+ * - Have a way for a user to request OpenGL extensions/versions via a precedence array, and initialize the maximum possible version
  * - Add option to enable sys keys
  * - Gamepads
  *     - Face Heuristics
@@ -66,7 +67,6 @@
  * - OBS Studio breaks ChoosePixelFormat
  * - Make sure we can export functions properly for C++
  * - Expose customizable function pointer if the user needs to do something platform-specific before/after winthread has initialized or before vd_fw_init returns anyways.
- * - Have a way for a user to request OpenGL extensions/versions via a precedence array, and initialize the maximum possible version
  * - Clipboard
  * - Properly handle vd_fw_set_receive_ncmouse for clicks and scrolls
  * - Set mouse cursor to constants (resize, I, etc...)
@@ -263,11 +263,38 @@ typedef enum {
 } VdFwGraphicsApi;
 
 typedef struct {
-    /* What version of OpenGL you'd like to use. 3.3 and upwards recommended. */
-    VdFwGlVersion version;
+    const char *name;
+    int        available;
+} VdFwGlExtension;
 
-    /* Whether to enable a debug console to show you errors produced by GL calls */
-    int           debug_on;
+enum {
+    VD_FW_GL_DONT_CARE             = 0,
+    VD_FW_GL_PIXEL_FORMAT_R8G8B8A8 = 1,
+    VD_FW_GL_PIXEL_FORMAT_R8G8B8   = 2,
+
+    VD_FW_GL_DEPTH_FORMAT_D32      = 1,
+    VD_FW_GL_DEPTH_FORMAT_D24S8    = 2,
+
+    VD_FW_GL_MSAA_DISABLED         = 0,
+    VD_FW_GL_MSAA_ENABLED_2X       = 2,
+    VD_FW_GL_MSAA_ENABLED_4X       = 4,
+    VD_FW_GL_MSAA_ENABLED_8X       = 8,
+};
+
+typedef struct {
+    VdFwGlVersion   version;
+    int             pixel_format;
+    int             depth_format;
+    int             msaa;
+    int             debug;
+    int             compat;
+    VdFwGlExtension *req_extensions;
+    VdFwGlExtension *opt_extensions;
+} VdFwGlConfig;
+
+typedef struct {
+    int           selected_config;
+    VdFwGlConfig  *configs;
 } VdFwOpenGLOptions;
 
 typedef struct {
@@ -496,8 +523,9 @@ VD_FW_API VdFwPlatform       vd_fw_get_platform(void);
  * @brief Switch the current graphics API (must not be called between vd_fw_lock and vd_fw_unlock)
  * @param  api        The new API to use
  * @param  gl_options If api is VD_FW_GRAPHICS_API_OPENGL, the options for OpenGL
+ * @return  Whether changing API was successful. For OpenGL: No = no config could be selected
  */
-VD_FW_API void               vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_options);
+VD_FW_API int                vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_options);
 
 /* ----WINDOW-------------------------------------------------------------------------------------------------------- */
 /**
@@ -1562,6 +1590,7 @@ VD_FW_API void     vd_fw__notify_gamepaddb_changed(void);
 VD_FW_INL int      vd_fw__strlen(const char *s);
 VD_FW_INL size_t   vd_fw__strlcpy(char *dst, const char *src, size_t maxlen);
 VD_FW_INL VdFwU32  vd_fw__gcd(VdFwU32 a, VdFwU32 b);
+VD_FW_INL int      vd_fw__strcmp(const char *a, const char *b);
 
 VD_FW_INL int vd_fw__compare_string_wide_nullsep_case_insensitive(const wchar_t *str1, const wchar_t *str2);
 
@@ -1630,6 +1659,16 @@ VD_FW_INL VdFwU32 vd_fw__gcd(VdFwU32 a, VdFwU32 b)
     }
 
     return a;
+}
+
+VD_FW_INL int vd_fw__strcmp(const char *a, const char *b)
+{
+    const unsigned char *p1 = (const unsigned char *)a;
+    const unsigned char *p2 = (const unsigned char *)b;
+
+    while (*p1 && *p1 == *p2 ) ++p1, ++p2;
+
+    return (*p1 > *p2 ) - (*p2  > *p1);
 }
 
 VD_FW_INL int vd_fw__compare_display_mode(VdFwDisplayMode *a, VdFwDisplayMode *b)
@@ -1709,8 +1748,10 @@ VD_FW_INL void vd_fw__sort_display_modes(VdFwDisplayMode *modes, int count)
 #   define GL_SILENCE_DEPRECATION
 #endif // !GL_SILENCE_DEPRECATION
 #import <OpenGL/gl3.h>
+typedef void *GLhandleARB;
 #else
 /* ----GL TYPEDEFS--------------------------------------------------------------------------------------------------- */
+typedef unsigned int       GLhandleARB;
 typedef void               GLvoid;
 typedef unsigned int       GLenum;
 typedef float              GLfloat;
@@ -1741,2529 +1782,5437 @@ typedef __int64            GLint64;
 typedef uint64_t GLuint64;
 typedef int64_t  GLint64;
 #endif // _WIN32
+typedef void (*GLVULKANPROCNV)(void);
+typedef GLintptr GLvdpauSurfaceNV;
 typedef void (*GLDEBUGPROC)(GLenum source,GLenum type,GLuint id,GLenum severity,GLsizei length,const GLchar *message,const void *userParam);
+typedef GLDEBUGPROC GLDEBUGPROCKHR;
+typedef GLDEBUGPROC GLDEBUGPROCARB;
+typedef GLDEBUGPROC GLDEBUGPROCAMD;
+typedef GLint64 GLint64EXT;
+typedef GLuint64 GLuint64EXT;
+struct _cl_context;
+struct _cl_event;
+typedef GLchar GLcharARB;
+typedef GLsizeiptr GLsizeiptrARB;
+typedef GLintptr GLintptrARB;
+typedef void *GLeglImageOES;
+typedef void *GLeglClientBufferEXT;
+typedef unsigned short GLhalfNV;
 
 /* ----GL CONSTANTS-------------------------------------------------------------------------------------------------- */
-#define GL_DEPTH_BUFFER_BIT                                           0x00000100
-#define GL_STENCIL_BUFFER_BIT                                         0x00000400
-#define GL_COLOR_BUFFER_BIT                                           0x00004000
-#define GL_FALSE                                                      0
-#define GL_TRUE                                                       1
-#define GL_POINTS                                                     0x0000
-#define GL_LINES                                                      0x0001
-#define GL_LINE_LOOP                                                  0x0002
-#define GL_LINE_STRIP                                                 0x0003
-#define GL_TRIANGLES                                                  0x0004
-#define GL_TRIANGLE_STRIP                                             0x0005
-#define GL_TRIANGLE_FAN                                               0x0006
-#define GL_QUADS                                                      0x0007
-#define GL_NEVER                                                      0x0200
-#define GL_LESS                                                       0x0201
-#define GL_EQUAL                                                      0x0202
-#define GL_LEQUAL                                                     0x0203
-#define GL_GREATER                                                    0x0204
-#define GL_NOTEQUAL                                                   0x0205
-#define GL_GEQUAL                                                     0x0206
-#define GL_ALWAYS                                                     0x0207
-#define GL_ZERO                                                       0
-#define GL_ONE                                                        1
-#define GL_SRC_COLOR                                                  0x0300
-#define GL_ONE_MINUS_SRC_COLOR                                        0x0301
-#define GL_SRC_ALPHA                                                  0x0302
-#define GL_ONE_MINUS_SRC_ALPHA                                        0x0303
-#define GL_DST_ALPHA                                                  0x0304
-#define GL_ONE_MINUS_DST_ALPHA                                        0x0305
-#define GL_DST_COLOR                                                  0x0306
-#define GL_ONE_MINUS_DST_COLOR                                        0x0307
-#define GL_SRC_ALPHA_SATURATE                                         0x0308
-#define GL_NONE                                                       0
-#define GL_FRONT_LEFT                                                 0x0400
-#define GL_FRONT_RIGHT                                                0x0401
-#define GL_BACK_LEFT                                                  0x0402
-#define GL_BACK_RIGHT                                                 0x0403
-#define GL_FRONT                                                      0x0404
-#define GL_BACK                                                       0x0405
-#define GL_LEFT                                                       0x0406
-#define GL_RIGHT                                                      0x0407
-#define GL_FRONT_AND_BACK                                             0x0408
-#define GL_NO_ERROR                                                   0
-#define GL_INVALID_ENUM                                               0x0500
-#define GL_INVALID_VALUE                                              0x0501
-#define GL_INVALID_OPERATION                                          0x0502
-#define GL_OUT_OF_MEMORY                                              0x0505
-#define GL_CW                                                         0x0900
-#define GL_CCW                                                        0x0901
-#define GL_POINT_SIZE                                                 0x0B11
-#define GL_POINT_SIZE_RANGE                                           0x0B12
-#define GL_POINT_SIZE_GRANULARITY                                     0x0B13
-#define GL_LINE_SMOOTH                                                0x0B20
-#define GL_LINE_WIDTH                                                 0x0B21
-#define GL_LINE_WIDTH_RANGE                                           0x0B22
-#define GL_LINE_WIDTH_GRANULARITY                                     0x0B23
-#define GL_POLYGON_MODE                                               0x0B40
-#define GL_POLYGON_SMOOTH                                             0x0B41
-#define GL_CULL_FACE                                                  0x0B44
-#define GL_CULL_FACE_MODE                                             0x0B45
-#define GL_FRONT_FACE                                                 0x0B46
-#define GL_DEPTH_RANGE                                                0x0B70
-#define GL_DEPTH_TEST                                                 0x0B71
-#define GL_DEPTH_WRITEMASK                                            0x0B72
-#define GL_DEPTH_CLEAR_VALUE                                          0x0B73
-#define GL_DEPTH_FUNC                                                 0x0B74
-#define GL_STENCIL_TEST                                               0x0B90
-#define GL_STENCIL_CLEAR_VALUE                                        0x0B91
-#define GL_STENCIL_FUNC                                               0x0B92
-#define GL_STENCIL_VALUE_MASK                                         0x0B93
-#define GL_STENCIL_FAIL                                               0x0B94
-#define GL_STENCIL_PASS_DEPTH_FAIL                                    0x0B95
-#define GL_STENCIL_PASS_DEPTH_PASS                                    0x0B96
-#define GL_STENCIL_REF                                                0x0B97
-#define GL_STENCIL_WRITEMASK                                          0x0B98
-#define GL_VIEWPORT                                                   0x0BA2
-#define GL_DITHER                                                     0x0BD0
-#define GL_BLEND_DST                                                  0x0BE0
-#define GL_BLEND_SRC                                                  0x0BE1
-#define GL_BLEND                                                      0x0BE2
-#define GL_LOGIC_OP_MODE                                              0x0BF0
-#define GL_DRAW_BUFFER                                                0x0C01
-#define GL_READ_BUFFER                                                0x0C02
-#define GL_SCISSOR_BOX                                                0x0C10
-#define GL_SCISSOR_TEST                                               0x0C11
-#define GL_COLOR_CLEAR_VALUE                                          0x0C22
-#define GL_COLOR_WRITEMASK                                            0x0C23
-#define GL_DOUBLEBUFFER                                               0x0C32
-#define GL_STEREO                                                     0x0C33
-#define GL_LINE_SMOOTH_HINT                                           0x0C52
-#define GL_POLYGON_SMOOTH_HINT                                        0x0C53
-#define GL_UNPACK_SWAP_BYTES                                          0x0CF0
-#define GL_UNPACK_LSB_FIRST                                           0x0CF1
-#define GL_UNPACK_ROW_LENGTH                                          0x0CF2
-#define GL_UNPACK_SKIP_ROWS                                           0x0CF3
-#define GL_UNPACK_SKIP_PIXELS                                         0x0CF4
-#define GL_UNPACK_ALIGNMENT                                           0x0CF5
-#define GL_PACK_SWAP_BYTES                                            0x0D00
-#define GL_PACK_LSB_FIRST                                             0x0D01
-#define GL_PACK_ROW_LENGTH                                            0x0D02
-#define GL_PACK_SKIP_ROWS                                             0x0D03
-#define GL_PACK_SKIP_PIXELS                                           0x0D04
-#define GL_PACK_ALIGNMENT                                             0x0D05
-#define GL_MAX_TEXTURE_SIZE                                           0x0D33
-#define GL_MAX_VIEWPORT_DIMS                                          0x0D3A
-#define GL_SUBPIXEL_BITS                                              0x0D50
-#define GL_TEXTURE_1D                                                 0x0DE0
-#define GL_TEXTURE_2D                                                 0x0DE1
-#define GL_TEXTURE_WIDTH                                              0x1000
-#define GL_TEXTURE_HEIGHT                                             0x1001
-#define GL_TEXTURE_BORDER_COLOR                                       0x1004
-#define GL_DONT_CARE                                                  0x1100
-#define GL_FASTEST                                                    0x1101
-#define GL_NICEST                                                     0x1102
-#define GL_BYTE                                                       0x1400
-#define GL_UNSIGNED_BYTE                                              0x1401
-#define GL_SHORT                                                      0x1402
-#define GL_UNSIGNED_SHORT                                             0x1403
-#define GL_INT                                                        0x1404
-#define GL_UNSIGNED_INT                                               0x1405
-#define GL_FLOAT                                                      0x1406
-#define GL_STACK_OVERFLOW                                             0x0503
-#define GL_STACK_UNDERFLOW                                            0x0504
-#define GL_CLEAR                                                      0x1500
-#define GL_AND                                                        0x1501
-#define GL_AND_REVERSE                                                0x1502
-#define GL_COPY                                                       0x1503
-#define GL_AND_INVERTED                                               0x1504
-#define GL_NOOP                                                       0x1505
-#define GL_XOR                                                        0x1506
-#define GL_OR                                                         0x1507
-#define GL_NOR                                                        0x1508
-#define GL_EQUIV                                                      0x1509
-#define GL_INVERT                                                     0x150A
-#define GL_OR_REVERSE                                                 0x150B
-#define GL_COPY_INVERTED                                              0x150C
-#define GL_OR_INVERTED                                                0x150D
-#define GL_NAND                                                       0x150E
-#define GL_SET                                                        0x150F
-#define GL_TEXTURE                                                    0x1702
-#define GL_COLOR                                                      0x1800
-#define GL_DEPTH                                                      0x1801
-#define GL_STENCIL                                                    0x1802
-#define GL_STENCIL_INDEX                                              0x1901
-#define GL_DEPTH_COMPONENT                                            0x1902
-#define GL_RED                                                        0x1903
-#define GL_GREEN                                                      0x1904
-#define GL_BLUE                                                       0x1905
-#define GL_ALPHA                                                      0x1906
-#define GL_RGB                                                        0x1907
-#define GL_RGBA                                                       0x1908
-#define GL_POINT                                                      0x1B00
-#define GL_LINE                                                       0x1B01
-#define GL_FILL                                                       0x1B02
-#define GL_KEEP                                                       0x1E00
-#define GL_REPLACE                                                    0x1E01
-#define GL_INCR                                                       0x1E02
-#define GL_DECR                                                       0x1E03
-#define GL_VENDOR                                                     0x1F00
-#define GL_RENDERER                                                   0x1F01
-#define GL_VERSION                                                    0x1F02
-#define GL_EXTENSIONS                                                 0x1F03
-#define GL_NEAREST                                                    0x2600
-#define GL_LINEAR                                                     0x2601
-#define GL_NEAREST_MIPMAP_NEAREST                                     0x2700
-#define GL_LINEAR_MIPMAP_NEAREST                                      0x2701
-#define GL_NEAREST_MIPMAP_LINEAR                                      0x2702
-#define GL_LINEAR_MIPMAP_LINEAR                                       0x2703
-#define GL_TEXTURE_MAG_FILTER                                         0x2800
-#define GL_TEXTURE_MIN_FILTER                                         0x2801
-#define GL_TEXTURE_WRAP_S                                             0x2802
-#define GL_TEXTURE_WRAP_T                                             0x2803
-#define GL_REPEAT                                                     0x2901
-#define GL_COLOR_LOGIC_OP                                             0x0BF2
-#define GL_POLYGON_OFFSET_UNITS                                       0x2A00
-#define GL_POLYGON_OFFSET_POINT                                       0x2A01
-#define GL_POLYGON_OFFSET_LINE                                        0x2A02
-#define GL_POLYGON_OFFSET_FILL                                        0x8037
-#define GL_POLYGON_OFFSET_FACTOR                                      0x8038
-#define GL_TEXTURE_BINDING_1D                                         0x8068
-#define GL_TEXTURE_BINDING_2D                                         0x8069
-#define GL_TEXTURE_INTERNAL_FORMAT                                    0x1003
-#define GL_TEXTURE_RED_SIZE                                           0x805C
-#define GL_TEXTURE_GREEN_SIZE                                         0x805D
-#define GL_TEXTURE_BLUE_SIZE                                          0x805E
-#define GL_TEXTURE_ALPHA_SIZE                                         0x805F
-#define GL_DOUBLE                                                     0x140A
-#define GL_PROXY_TEXTURE_1D                                           0x8063
-#define GL_PROXY_TEXTURE_2D                                           0x8064
-#define GL_R3_G3_B2                                                   0x2A10
-#define GL_RGB4                                                       0x804F
-#define GL_RGB5                                                       0x8050
-#define GL_RGB8                                                       0x8051
-#define GL_RGB10                                                      0x8052
-#define GL_RGB12                                                      0x8053
-#define GL_RGB16                                                      0x8054
-#define GL_RGBA2                                                      0x8055
-#define GL_RGBA4                                                      0x8056
-#define GL_RGB5_A1                                                    0x8057
-#define GL_RGBA8                                                      0x8058
-#define GL_RGB10_A2                                                   0x8059
-#define GL_RGBA12                                                     0x805A
-#define GL_RGBA16                                                     0x805B
-#define GL_VERTEX_ARRAY                                               0x8074
-#define GL_UNSIGNED_BYTE_3_3_2                                        0x8032
-#define GL_UNSIGNED_SHORT_4_4_4_4                                     0x8033
-#define GL_UNSIGNED_SHORT_5_5_5_1                                     0x8034
-#define GL_UNSIGNED_INT_8_8_8_8                                       0x8035
-#define GL_UNSIGNED_INT_10_10_10_2                                    0x8036
-#define GL_TEXTURE_BINDING_3D                                         0x806A
-#define GL_PACK_SKIP_IMAGES                                           0x806B
-#define GL_PACK_IMAGE_HEIGHT                                          0x806C
-#define GL_UNPACK_SKIP_IMAGES                                         0x806D
-#define GL_UNPACK_IMAGE_HEIGHT                                        0x806E
-#define GL_TEXTURE_3D                                                 0x806F
-#define GL_PROXY_TEXTURE_3D                                           0x8070
-#define GL_TEXTURE_DEPTH                                              0x8071
-#define GL_TEXTURE_WRAP_R                                             0x8072
-#define GL_MAX_3D_TEXTURE_SIZE                                        0x8073
-#define GL_UNSIGNED_BYTE_2_3_3_REV                                    0x8362
-#define GL_UNSIGNED_SHORT_5_6_5                                       0x8363
-#define GL_UNSIGNED_SHORT_5_6_5_REV                                   0x8364
-#define GL_UNSIGNED_SHORT_4_4_4_4_REV                                 0x8365
-#define GL_UNSIGNED_SHORT_1_5_5_5_REV                                 0x8366
-#define GL_UNSIGNED_INT_8_8_8_8_REV                                   0x8367
-#define GL_UNSIGNED_INT_2_10_10_10_REV                                0x8368
-#define GL_BGR                                                        0x80E0
-#define GL_BGRA                                                       0x80E1
-#define GL_MAX_ELEMENTS_VERTICES                                      0x80E8
-#define GL_MAX_ELEMENTS_INDICES                                       0x80E9
-#define GL_CLAMP_TO_EDGE                                              0x812F
-#define GL_TEXTURE_MIN_LOD                                            0x813A
-#define GL_TEXTURE_MAX_LOD                                            0x813B
-#define GL_TEXTURE_BASE_LEVEL                                         0x813C
-#define GL_TEXTURE_MAX_LEVEL                                          0x813D
-#define GL_SMOOTH_POINT_SIZE_RANGE                                    0x0B12
-#define GL_SMOOTH_POINT_SIZE_GRANULARITY                              0x0B13
-#define GL_SMOOTH_LINE_WIDTH_RANGE                                    0x0B22
-#define GL_SMOOTH_LINE_WIDTH_GRANULARITY                              0x0B23
-#define GL_ALIASED_LINE_WIDTH_RANGE                                   0x846E
-#define GL_TEXTURE0                                                   0x84C0
-#define GL_TEXTURE1                                                   0x84C1
-#define GL_TEXTURE2                                                   0x84C2
-#define GL_TEXTURE3                                                   0x84C3
-#define GL_TEXTURE4                                                   0x84C4
-#define GL_TEXTURE5                                                   0x84C5
-#define GL_TEXTURE6                                                   0x84C6
-#define GL_TEXTURE7                                                   0x84C7
-#define GL_TEXTURE8                                                   0x84C8
-#define GL_TEXTURE9                                                   0x84C9
-#define GL_TEXTURE10                                                  0x84CA
-#define GL_TEXTURE11                                                  0x84CB
-#define GL_TEXTURE12                                                  0x84CC
-#define GL_TEXTURE13                                                  0x84CD
-#define GL_TEXTURE14                                                  0x84CE
-#define GL_TEXTURE15                                                  0x84CF
-#define GL_TEXTURE16                                                  0x84D0
-#define GL_TEXTURE17                                                  0x84D1
-#define GL_TEXTURE18                                                  0x84D2
-#define GL_TEXTURE19                                                  0x84D3
-#define GL_TEXTURE20                                                  0x84D4
-#define GL_TEXTURE21                                                  0x84D5
-#define GL_TEXTURE22                                                  0x84D6
-#define GL_TEXTURE23                                                  0x84D7
-#define GL_TEXTURE24                                                  0x84D8
-#define GL_TEXTURE25                                                  0x84D9
-#define GL_TEXTURE26                                                  0x84DA
-#define GL_TEXTURE27                                                  0x84DB
-#define GL_TEXTURE28                                                  0x84DC
-#define GL_TEXTURE29                                                  0x84DD
-#define GL_TEXTURE30                                                  0x84DE
-#define GL_TEXTURE31                                                  0x84DF
-#define GL_ACTIVE_TEXTURE                                             0x84E0
-#define GL_MULTISAMPLE                                                0x809D
-#define GL_SAMPLE_ALPHA_TO_COVERAGE                                   0x809E
-#define GL_SAMPLE_ALPHA_TO_ONE                                        0x809F
-#define GL_SAMPLE_COVERAGE                                            0x80A0
-#define GL_SAMPLE_BUFFERS                                             0x80A8
-#define GL_SAMPLES                                                    0x80A9
-#define GL_SAMPLE_COVERAGE_VALUE                                      0x80AA
-#define GL_SAMPLE_COVERAGE_INVERT                                     0x80AB
-#define GL_TEXTURE_CUBE_MAP                                           0x8513
-#define GL_TEXTURE_BINDING_CUBE_MAP                                   0x8514
-#define GL_TEXTURE_CUBE_MAP_POSITIVE_X                                0x8515
-#define GL_TEXTURE_CUBE_MAP_NEGATIVE_X                                0x8516
-#define GL_TEXTURE_CUBE_MAP_POSITIVE_Y                                0x8517
-#define GL_TEXTURE_CUBE_MAP_NEGATIVE_Y                                0x8518
-#define GL_TEXTURE_CUBE_MAP_POSITIVE_Z                                0x8519
-#define GL_TEXTURE_CUBE_MAP_NEGATIVE_Z                                0x851A
-#define GL_PROXY_TEXTURE_CUBE_MAP                                     0x851B
-#define GL_MAX_CUBE_MAP_TEXTURE_SIZE                                  0x851C
-#define GL_COMPRESSED_RGB                                             0x84ED
-#define GL_COMPRESSED_RGBA                                            0x84EE
-#define GL_TEXTURE_COMPRESSION_HINT                                   0x84EF
-#define GL_TEXTURE_COMPRESSED_IMAGE_SIZE                              0x86A0
-#define GL_TEXTURE_COMPRESSED                                         0x86A1
-#define GL_NUM_COMPRESSED_TEXTURE_FORMATS                             0x86A2
-#define GL_COMPRESSED_TEXTURE_FORMATS                                 0x86A3
-#define GL_CLAMP_TO_BORDER                                            0x812D
-#define GL_BLEND_DST_RGB                                              0x80C8
-#define GL_BLEND_SRC_RGB                                              0x80C9
-#define GL_BLEND_DST_ALPHA                                            0x80CA
-#define GL_BLEND_SRC_ALPHA                                            0x80CB
-#define GL_POINT_FADE_THRESHOLD_SIZE                                  0x8128
-#define GL_DEPTH_COMPONENT16                                          0x81A5
-#define GL_DEPTH_COMPONENT24                                          0x81A6
-#define GL_DEPTH_COMPONENT32                                          0x81A7
-#define GL_MIRRORED_REPEAT                                            0x8370
-#define GL_MAX_TEXTURE_LOD_BIAS                                       0x84FD
-#define GL_TEXTURE_LOD_BIAS                                           0x8501
-#define GL_INCR_WRAP                                                  0x8507
-#define GL_DECR_WRAP                                                  0x8508
-#define GL_TEXTURE_DEPTH_SIZE                                         0x884A
-#define GL_TEXTURE_COMPARE_MODE                                       0x884C
-#define GL_TEXTURE_COMPARE_FUNC                                       0x884D
-#define GL_BLEND_COLOR                                                0x8005
-#define GL_BLEND_EQUATION                                             0x8009
-#define GL_CONSTANT_COLOR                                             0x8001
-#define GL_ONE_MINUS_CONSTANT_COLOR                                   0x8002
-#define GL_CONSTANT_ALPHA                                             0x8003
-#define GL_ONE_MINUS_CONSTANT_ALPHA                                   0x8004
-#define GL_FUNC_ADD                                                   0x8006
-#define GL_FUNC_REVERSE_SUBTRACT                                      0x800B
-#define GL_FUNC_SUBTRACT                                              0x800A
-#define GL_MIN                                                        0x8007
-#define GL_MAX                                                        0x8008
-#define GL_BUFFER_SIZE                                                0x8764
-#define GL_BUFFER_USAGE                                               0x8765
-#define GL_QUERY_COUNTER_BITS                                         0x8864
-#define GL_CURRENT_QUERY                                              0x8865
-#define GL_QUERY_RESULT                                               0x8866
-#define GL_QUERY_RESULT_AVAILABLE                                     0x8867
-#define GL_ARRAY_BUFFER                                               0x8892
-#define GL_ELEMENT_ARRAY_BUFFER                                       0x8893
-#define GL_ARRAY_BUFFER_BINDING                                       0x8894
-#define GL_ELEMENT_ARRAY_BUFFER_BINDING                               0x8895
-#define GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING                         0x889F
-#define GL_READ_ONLY                                                  0x88B8
-#define GL_WRITE_ONLY                                                 0x88B9
-#define GL_READ_WRITE                                                 0x88BA
-#define GL_BUFFER_ACCESS                                              0x88BB
-#define GL_BUFFER_MAPPED                                              0x88BC
-#define GL_BUFFER_MAP_POINTER                                         0x88BD
-#define GL_STREAM_DRAW                                                0x88E0
-#define GL_STREAM_READ                                                0x88E1
-#define GL_STREAM_COPY                                                0x88E2
-#define GL_STATIC_DRAW                                                0x88E4
-#define GL_STATIC_READ                                                0x88E5
-#define GL_STATIC_COPY                                                0x88E6
-#define GL_DYNAMIC_DRAW                                               0x88E8
-#define GL_DYNAMIC_READ                                               0x88E9
-#define GL_DYNAMIC_COPY                                               0x88EA
-#define GL_SAMPLES_PASSED                                             0x8914
-#define GL_SRC1_ALPHA                                                 0x8589
-#define GL_BLEND_EQUATION_RGB                                         0x8009
-#define GL_VERTEX_ATTRIB_ARRAY_ENABLED                                0x8622
-#define GL_VERTEX_ATTRIB_ARRAY_SIZE                                   0x8623
-#define GL_VERTEX_ATTRIB_ARRAY_STRIDE                                 0x8624
-#define GL_VERTEX_ATTRIB_ARRAY_TYPE                                   0x8625
-#define GL_CURRENT_VERTEX_ATTRIB                                      0x8626
-#define GL_VERTEX_PROGRAM_POINT_SIZE                                  0x8642
-#define GL_VERTEX_ATTRIB_ARRAY_POINTER                                0x8645
-#define GL_STENCIL_BACK_FUNC                                          0x8800
-#define GL_STENCIL_BACK_FAIL                                          0x8801
-#define GL_STENCIL_BACK_PASS_DEPTH_FAIL                               0x8802
-#define GL_STENCIL_BACK_PASS_DEPTH_PASS                               0x8803
-#define GL_MAX_DRAW_BUFFERS                                           0x8824
-#define GL_DRAW_BUFFER0                                               0x8825
-#define GL_DRAW_BUFFER1                                               0x8826
-#define GL_DRAW_BUFFER2                                               0x8827
-#define GL_DRAW_BUFFER3                                               0x8828
-#define GL_DRAW_BUFFER4                                               0x8829
-#define GL_DRAW_BUFFER5                                               0x882A
-#define GL_DRAW_BUFFER6                                               0x882B
-#define GL_DRAW_BUFFER7                                               0x882C
-#define GL_DRAW_BUFFER8                                               0x882D
-#define GL_DRAW_BUFFER9                                               0x882E
-#define GL_DRAW_BUFFER10                                              0x882F
-#define GL_DRAW_BUFFER11                                              0x8830
-#define GL_DRAW_BUFFER12                                              0x8831
-#define GL_DRAW_BUFFER13                                              0x8832
-#define GL_DRAW_BUFFER14                                              0x8833
-#define GL_DRAW_BUFFER15                                              0x8834
-#define GL_BLEND_EQUATION_ALPHA                                       0x883D
-#define GL_MAX_VERTEX_ATTRIBS                                         0x8869
-#define GL_VERTEX_ATTRIB_ARRAY_NORMALIZED                             0x886A
-#define GL_MAX_TEXTURE_IMAGE_UNITS                                    0x8872
-#define GL_FRAGMENT_SHADER                                            0x8B30
-#define GL_VERTEX_SHADER                                              0x8B31
-#define GL_MAX_FRAGMENT_UNIFORM_COMPONENTS                            0x8B49
-#define GL_MAX_VERTEX_UNIFORM_COMPONENTS                              0x8B4A
-#define GL_MAX_VARYING_FLOATS                                         0x8B4B
-#define GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS                             0x8B4C
-#define GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS                           0x8B4D
-#define GL_SHADER_TYPE                                                0x8B4F
-#define GL_FLOAT_VEC2                                                 0x8B50
-#define GL_FLOAT_VEC3                                                 0x8B51
-#define GL_FLOAT_VEC4                                                 0x8B52
-#define GL_INT_VEC2                                                   0x8B53
-#define GL_INT_VEC3                                                   0x8B54
-#define GL_INT_VEC4                                                   0x8B55
-#define GL_BOOL                                                       0x8B56
-#define GL_BOOL_VEC2                                                  0x8B57
-#define GL_BOOL_VEC3                                                  0x8B58
-#define GL_BOOL_VEC4                                                  0x8B59
-#define GL_FLOAT_MAT2                                                 0x8B5A
-#define GL_FLOAT_MAT3                                                 0x8B5B
-#define GL_FLOAT_MAT4                                                 0x8B5C
-#define GL_SAMPLER_1D                                                 0x8B5D
-#define GL_SAMPLER_2D                                                 0x8B5E
-#define GL_SAMPLER_3D                                                 0x8B5F
-#define GL_SAMPLER_CUBE                                               0x8B60
-#define GL_SAMPLER_1D_SHADOW                                          0x8B61
-#define GL_SAMPLER_2D_SHADOW                                          0x8B62
-#define GL_DELETE_STATUS                                              0x8B80
-#define GL_COMPILE_STATUS                                             0x8B81
-#define GL_LINK_STATUS                                                0x8B82
-#define GL_VALIDATE_STATUS                                            0x8B83
-#define GL_INFO_LOG_LENGTH                                            0x8B84
-#define GL_ATTACHED_SHADERS                                           0x8B85
-#define GL_ACTIVE_UNIFORMS                                            0x8B86
-#define GL_ACTIVE_UNIFORM_MAX_LENGTH                                  0x8B87
-#define GL_SHADER_SOURCE_LENGTH                                       0x8B88
-#define GL_ACTIVE_ATTRIBUTES                                          0x8B89
-#define GL_ACTIVE_ATTRIBUTE_MAX_LENGTH                                0x8B8A
-#define GL_FRAGMENT_SHADER_DERIVATIVE_HINT                            0x8B8B
-#define GL_SHADING_LANGUAGE_VERSION                                   0x8B8C
-#define GL_CURRENT_PROGRAM                                            0x8B8D
-#define GL_POINT_SPRITE_COORD_ORIGIN                                  0x8CA0
-#define GL_LOWER_LEFT                                                 0x8CA1
-#define GL_UPPER_LEFT                                                 0x8CA2
-#define GL_STENCIL_BACK_REF                                           0x8CA3
-#define GL_STENCIL_BACK_VALUE_MASK                                    0x8CA4
-#define GL_STENCIL_BACK_WRITEMASK                                     0x8CA5
-#define GL_PIXEL_PACK_BUFFER                                          0x88EB
-#define GL_PIXEL_UNPACK_BUFFER                                        0x88EC
-#define GL_PIXEL_PACK_BUFFER_BINDING                                  0x88ED
-#define GL_PIXEL_UNPACK_BUFFER_BINDING                                0x88EF
-#define GL_FLOAT_MAT2x3                                               0x8B65
-#define GL_FLOAT_MAT2x4                                               0x8B66
-#define GL_FLOAT_MAT3x2                                               0x8B67
-#define GL_FLOAT_MAT3x4                                               0x8B68
-#define GL_FLOAT_MAT4x2                                               0x8B69
-#define GL_FLOAT_MAT4x3                                               0x8B6A
-#define GL_SRGB                                                       0x8C40
-#define GL_SRGB8                                                      0x8C41
-#define GL_SRGB_ALPHA                                                 0x8C42
-#define GL_SRGB8_ALPHA8                                               0x8C43
-#define GL_COMPRESSED_SRGB                                            0x8C48
-#define GL_COMPRESSED_SRGB_ALPHA                                      0x8C49
-#define GL_COMPARE_REF_TO_TEXTURE                                     0x884E
-#define GL_CLIP_DISTANCE0                                             0x3000
-#define GL_CLIP_DISTANCE1                                             0x3001
-#define GL_CLIP_DISTANCE2                                             0x3002
-#define GL_CLIP_DISTANCE3                                             0x3003
-#define GL_CLIP_DISTANCE4                                             0x3004
-#define GL_CLIP_DISTANCE5                                             0x3005
-#define GL_CLIP_DISTANCE6                                             0x3006
-#define GL_CLIP_DISTANCE7                                             0x3007
-#define GL_MAX_CLIP_DISTANCES                                         0x0D32
-#define GL_MAJOR_VERSION                                              0x821B
-#define GL_MINOR_VERSION                                              0x821C
-#define GL_NUM_EXTENSIONS                                             0x821D
-#define GL_CONTEXT_FLAGS                                              0x821E
-#define GL_COMPRESSED_RED                                             0x8225
-#define GL_COMPRESSED_RG                                              0x8226
-#define GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT                        0x00000001
-#define GL_RGBA32F                                                    0x8814
-#define GL_RGB32F                                                     0x8815
-#define GL_RGBA16F                                                    0x881A
-#define GL_RGB16F                                                     0x881B
-#define GL_VERTEX_ATTRIB_ARRAY_INTEGER                                0x88FD
-#define GL_MAX_ARRAY_TEXTURE_LAYERS                                   0x88FF
-#define GL_MIN_PROGRAM_TEXEL_OFFSET                                   0x8904
-#define GL_MAX_PROGRAM_TEXEL_OFFSET                                   0x8905
-#define GL_CLAMP_READ_COLOR                                           0x891C
-#define GL_FIXED_ONLY                                                 0x891D
-#define GL_MAX_VARYING_COMPONENTS                                     0x8B4B
-#define GL_TEXTURE_1D_ARRAY                                           0x8C18
-#define GL_PROXY_TEXTURE_1D_ARRAY                                     0x8C19
-#define GL_TEXTURE_2D_ARRAY                                           0x8C1A
-#define GL_PROXY_TEXTURE_2D_ARRAY                                     0x8C1B
-#define GL_TEXTURE_BINDING_1D_ARRAY                                   0x8C1C
-#define GL_TEXTURE_BINDING_2D_ARRAY                                   0x8C1D
-#define GL_R11F_G11F_B10F                                             0x8C3A
-#define GL_UNSIGNED_INT_10F_11F_11F_REV                               0x8C3B
-#define GL_RGB9_E5                                                    0x8C3D
-#define GL_UNSIGNED_INT_5_9_9_9_REV                                   0x8C3E
-#define GL_TEXTURE_SHARED_SIZE                                        0x8C3F
-#define GL_TRANSFORM_FEEDBACK_VARYING_MAX_LENGTH                      0x8C76
-#define GL_TRANSFORM_FEEDBACK_BUFFER_MODE                             0x8C7F
-#define GL_MAX_TRANSFORM_FEEDBACK_SEPARATE_COMPONENTS                 0x8C80
-#define GL_TRANSFORM_FEEDBACK_VARYINGS                                0x8C83
-#define GL_TRANSFORM_FEEDBACK_BUFFER_START                            0x8C84
-#define GL_TRANSFORM_FEEDBACK_BUFFER_SIZE                             0x8C85
-#define GL_PRIMITIVES_GENERATED                                       0x8C87
-#define GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN                      0x8C88
-#define GL_RASTERIZER_DISCARD                                         0x8C89
-#define GL_MAX_TRANSFORM_FEEDBACK_INTERLEAVED_COMPONENTS              0x8C8A
-#define GL_MAX_TRANSFORM_FEEDBACK_SEPARATE_ATTRIBS                    0x8C8B
-#define GL_INTERLEAVED_ATTRIBS                                        0x8C8C
-#define GL_SEPARATE_ATTRIBS                                           0x8C8D
-#define GL_TRANSFORM_FEEDBACK_BUFFER                                  0x8C8E
-#define GL_TRANSFORM_FEEDBACK_BUFFER_BINDING                          0x8C8F
-#define GL_RGBA32UI                                                   0x8D70
-#define GL_RGB32UI                                                    0x8D71
-#define GL_RGBA16UI                                                   0x8D76
-#define GL_RGB16UI                                                    0x8D77
-#define GL_RGBA8UI                                                    0x8D7C
-#define GL_RGB8UI                                                     0x8D7D
-#define GL_RGBA32I                                                    0x8D82
-#define GL_RGB32I                                                     0x8D83
-#define GL_RGBA16I                                                    0x8D88
-#define GL_RGB16I                                                     0x8D89
-#define GL_RGBA8I                                                     0x8D8E
-#define GL_RGB8I                                                      0x8D8F
-#define GL_RED_INTEGER                                                0x8D94
-#define GL_GREEN_INTEGER                                              0x8D95
-#define GL_BLUE_INTEGER                                               0x8D96
-#define GL_RGB_INTEGER                                                0x8D98
-#define GL_RGBA_INTEGER                                               0x8D99
-#define GL_BGR_INTEGER                                                0x8D9A
-#define GL_BGRA_INTEGER                                               0x8D9B
-#define GL_SAMPLER_1D_ARRAY                                           0x8DC0
-#define GL_SAMPLER_2D_ARRAY                                           0x8DC1
-#define GL_SAMPLER_1D_ARRAY_SHADOW                                    0x8DC3
-#define GL_SAMPLER_2D_ARRAY_SHADOW                                    0x8DC4
-#define GL_SAMPLER_CUBE_SHADOW                                        0x8DC5
-#define GL_UNSIGNED_INT_VEC2                                          0x8DC6
-#define GL_UNSIGNED_INT_VEC3                                          0x8DC7
-#define GL_UNSIGNED_INT_VEC4                                          0x8DC8
-#define GL_INT_SAMPLER_1D                                             0x8DC9
-#define GL_INT_SAMPLER_2D                                             0x8DCA
-#define GL_INT_SAMPLER_3D                                             0x8DCB
-#define GL_INT_SAMPLER_CUBE                                           0x8DCC
-#define GL_INT_SAMPLER_1D_ARRAY                                       0x8DCE
-#define GL_INT_SAMPLER_2D_ARRAY                                       0x8DCF
-#define GL_UNSIGNED_INT_SAMPLER_1D                                    0x8DD1
-#define GL_UNSIGNED_INT_SAMPLER_2D                                    0x8DD2
-#define GL_UNSIGNED_INT_SAMPLER_3D                                    0x8DD3
-#define GL_UNSIGNED_INT_SAMPLER_CUBE                                  0x8DD4
-#define GL_UNSIGNED_INT_SAMPLER_1D_ARRAY                              0x8DD6
-#define GL_UNSIGNED_INT_SAMPLER_2D_ARRAY                              0x8DD7
-#define GL_QUERY_WAIT                                                 0x8E13
-#define GL_QUERY_NO_WAIT                                              0x8E14
-#define GL_QUERY_BY_REGION_WAIT                                       0x8E15
-#define GL_QUERY_BY_REGION_NO_WAIT                                    0x8E16
-#define GL_BUFFER_ACCESS_FLAGS                                        0x911F
-#define GL_BUFFER_MAP_LENGTH                                          0x9120
-#define GL_BUFFER_MAP_OFFSET                                          0x9121
-#define GL_DEPTH_COMPONENT32F                                         0x8CAC
-#define GL_DEPTH32F_STENCIL8                                          0x8CAD
-#define GL_FLOAT_32_UNSIGNED_INT_24_8_REV                             0x8DAD
-#define GL_INVALID_FRAMEBUFFER_OPERATION                              0x0506
-#define GL_FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING                      0x8210
-#define GL_FRAMEBUFFER_ATTACHMENT_COMPONENT_TYPE                      0x8211
-#define GL_FRAMEBUFFER_ATTACHMENT_RED_SIZE                            0x8212
-#define GL_FRAMEBUFFER_ATTACHMENT_GREEN_SIZE                          0x8213
-#define GL_FRAMEBUFFER_ATTACHMENT_BLUE_SIZE                           0x8214
-#define GL_FRAMEBUFFER_ATTACHMENT_ALPHA_SIZE                          0x8215
-#define GL_FRAMEBUFFER_ATTACHMENT_DEPTH_SIZE                          0x8216
-#define GL_FRAMEBUFFER_ATTACHMENT_STENCIL_SIZE                        0x8217
-#define GL_FRAMEBUFFER_DEFAULT                                        0x8218
-#define GL_FRAMEBUFFER_UNDEFINED                                      0x8219
-#define GL_DEPTH_STENCIL_ATTACHMENT                                   0x821A
-#define GL_MAX_RENDERBUFFER_SIZE                                      0x84E8
-#define GL_DEPTH_STENCIL                                              0x84F9
-#define GL_UNSIGNED_INT_24_8                                          0x84FA
-#define GL_DEPTH24_STENCIL8                                           0x88F0
-#define GL_TEXTURE_STENCIL_SIZE                                       0x88F1
-#define GL_TEXTURE_RED_TYPE                                           0x8C10
-#define GL_TEXTURE_GREEN_TYPE                                         0x8C11
-#define GL_TEXTURE_BLUE_TYPE                                          0x8C12
-#define GL_TEXTURE_ALPHA_TYPE                                         0x8C13
-#define GL_TEXTURE_DEPTH_TYPE                                         0x8C16
-#define GL_UNSIGNED_NORMALIZED                                        0x8C17
-#define GL_FRAMEBUFFER_BINDING                                        0x8CA6
-#define GL_DRAW_FRAMEBUFFER_BINDING                                   0x8CA6
-#define GL_RENDERBUFFER_BINDING                                       0x8CA7
-#define GL_READ_FRAMEBUFFER                                           0x8CA8
-#define GL_DRAW_FRAMEBUFFER                                           0x8CA9
-#define GL_READ_FRAMEBUFFER_BINDING                                   0x8CAA
-#define GL_RENDERBUFFER_SAMPLES                                       0x8CAB
-#define GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE                         0x8CD0
-#define GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME                         0x8CD1
-#define GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_LEVEL                       0x8CD2
-#define GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_CUBE_MAP_FACE               0x8CD3
-#define GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_LAYER                       0x8CD4
-#define GL_FRAMEBUFFER_COMPLETE                                       0x8CD5
-#define GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT                          0x8CD6
-#define GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT                  0x8CD7
-#define GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER                         0x8CDB
-#define GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER                         0x8CDC
-#define GL_FRAMEBUFFER_UNSUPPORTED                                    0x8CDD
-#define GL_MAX_COLOR_ATTACHMENTS                                      0x8CDF
-#define GL_COLOR_ATTACHMENT0                                          0x8CE0
-#define GL_COLOR_ATTACHMENT1                                          0x8CE1
-#define GL_COLOR_ATTACHMENT2                                          0x8CE2
-#define GL_COLOR_ATTACHMENT3                                          0x8CE3
-#define GL_COLOR_ATTACHMENT4                                          0x8CE4
-#define GL_COLOR_ATTACHMENT5                                          0x8CE5
-#define GL_COLOR_ATTACHMENT6                                          0x8CE6
-#define GL_COLOR_ATTACHMENT7                                          0x8CE7
-#define GL_COLOR_ATTACHMENT8                                          0x8CE8
-#define GL_COLOR_ATTACHMENT9                                          0x8CE9
-#define GL_COLOR_ATTACHMENT10                                         0x8CEA
-#define GL_COLOR_ATTACHMENT11                                         0x8CEB
-#define GL_COLOR_ATTACHMENT12                                         0x8CEC
-#define GL_COLOR_ATTACHMENT13                                         0x8CED
-#define GL_COLOR_ATTACHMENT14                                         0x8CEE
-#define GL_COLOR_ATTACHMENT15                                         0x8CEF
-#define GL_COLOR_ATTACHMENT16                                         0x8CF0
-#define GL_COLOR_ATTACHMENT17                                         0x8CF1
-#define GL_COLOR_ATTACHMENT18                                         0x8CF2
-#define GL_COLOR_ATTACHMENT19                                         0x8CF3
-#define GL_COLOR_ATTACHMENT20                                         0x8CF4
-#define GL_COLOR_ATTACHMENT21                                         0x8CF5
-#define GL_COLOR_ATTACHMENT22                                         0x8CF6
-#define GL_COLOR_ATTACHMENT23                                         0x8CF7
-#define GL_COLOR_ATTACHMENT24                                         0x8CF8
-#define GL_COLOR_ATTACHMENT25                                         0x8CF9
-#define GL_COLOR_ATTACHMENT26                                         0x8CFA
-#define GL_COLOR_ATTACHMENT27                                         0x8CFB
-#define GL_COLOR_ATTACHMENT28                                         0x8CFC
-#define GL_COLOR_ATTACHMENT29                                         0x8CFD
-#define GL_COLOR_ATTACHMENT30                                         0x8CFE
-#define GL_COLOR_ATTACHMENT31                                         0x8CFF
-#define GL_DEPTH_ATTACHMENT                                           0x8D00
-#define GL_STENCIL_ATTACHMENT                                         0x8D20
-#define GL_FRAMEBUFFER                                                0x8D40
-#define GL_RENDERBUFFER                                               0x8D41
-#define GL_RENDERBUFFER_WIDTH                                         0x8D42
-#define GL_RENDERBUFFER_HEIGHT                                        0x8D43
-#define GL_RENDERBUFFER_INTERNAL_FORMAT                               0x8D44
-#define GL_STENCIL_INDEX1                                             0x8D46
-#define GL_STENCIL_INDEX4                                             0x8D47
-#define GL_STENCIL_INDEX8                                             0x8D48
-#define GL_STENCIL_INDEX16                                            0x8D49
-#define GL_RENDERBUFFER_RED_SIZE                                      0x8D50
-#define GL_RENDERBUFFER_GREEN_SIZE                                    0x8D51
-#define GL_RENDERBUFFER_BLUE_SIZE                                     0x8D52
-#define GL_RENDERBUFFER_ALPHA_SIZE                                    0x8D53
-#define GL_RENDERBUFFER_DEPTH_SIZE                                    0x8D54
-#define GL_RENDERBUFFER_STENCIL_SIZE                                  0x8D55
-#define GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE                         0x8D56
-#define GL_MAX_SAMPLES                                                0x8D57
-#define GL_FRAMEBUFFER_SRGB                                           0x8DB9
-#define GL_HALF_FLOAT                                                 0x140B
-#define GL_MAP_READ_BIT                                               0x0001
-#define GL_MAP_WRITE_BIT                                              0x0002
-#define GL_MAP_INVALIDATE_RANGE_BIT                                   0x0004
-#define GL_MAP_INVALIDATE_BUFFER_BIT                                  0x0008
-#define GL_MAP_FLUSH_EXPLICIT_BIT                                     0x0010
-#define GL_MAP_UNSYNCHRONIZED_BIT                                     0x0020
-#define GL_COMPRESSED_RED_RGTC1                                       0x8DBB
-#define GL_COMPRESSED_SIGNED_RED_RGTC1                                0x8DBC
-#define GL_COMPRESSED_RG_RGTC2                                        0x8DBD
-#define GL_COMPRESSED_SIGNED_RG_RGTC2                                 0x8DBE
-#define GL_RG                                                         0x8227
-#define GL_RG_INTEGER                                                 0x8228
-#define GL_R8                                                         0x8229
-#define GL_R16                                                        0x822A
-#define GL_RG8                                                        0x822B
-#define GL_RG16                                                       0x822C
-#define GL_R16F                                                       0x822D
-#define GL_R32F                                                       0x822E
-#define GL_RG16F                                                      0x822F
-#define GL_RG32F                                                      0x8230
-#define GL_R8I                                                        0x8231
-#define GL_R8UI                                                       0x8232
-#define GL_R16I                                                       0x8233
-#define GL_R16UI                                                      0x8234
-#define GL_R32I                                                       0x8235
-#define GL_R32UI                                                      0x8236
-#define GL_RG8I                                                       0x8237
-#define GL_RG8UI                                                      0x8238
-#define GL_RG16I                                                      0x8239
-#define GL_RG16UI                                                     0x823A
-#define GL_RG32I                                                      0x823B
-#define GL_RG32UI                                                     0x823C
-#define GL_VERTEX_ARRAY_BINDING                                       0x85B5
-#define GL_SAMPLER_2D_RECT                                            0x8B63
-#define GL_SAMPLER_2D_RECT_SHADOW                                     0x8B64
-#define GL_SAMPLER_BUFFER                                             0x8DC2
-#define GL_INT_SAMPLER_2D_RECT                                        0x8DCD
-#define GL_INT_SAMPLER_BUFFER                                         0x8DD0
-#define GL_UNSIGNED_INT_SAMPLER_2D_RECT                               0x8DD5
-#define GL_UNSIGNED_INT_SAMPLER_BUFFER                                0x8DD8
-#define GL_TEXTURE_BUFFER                                             0x8C2A
-#define GL_MAX_TEXTURE_BUFFER_SIZE                                    0x8C2B
-#define GL_TEXTURE_BINDING_BUFFER                                     0x8C2C
-#define GL_TEXTURE_BUFFER_DATA_STORE_BINDING                          0x8C2D
-#define GL_TEXTURE_RECTANGLE                                          0x84F5
-#define GL_TEXTURE_BINDING_RECTANGLE                                  0x84F6
-#define GL_PROXY_TEXTURE_RECTANGLE                                    0x84F7
-#define GL_MAX_RECTANGLE_TEXTURE_SIZE                                 0x84F8
-#define GL_R8_SNORM                                                   0x8F94
-#define GL_RG8_SNORM                                                  0x8F95
-#define GL_RGB8_SNORM                                                 0x8F96
-#define GL_RGBA8_SNORM                                                0x8F97
-#define GL_R16_SNORM                                                  0x8F98
-#define GL_RG16_SNORM                                                 0x8F99
-#define GL_RGB16_SNORM                                                0x8F9A
-#define GL_RGBA16_SNORM                                               0x8F9B
-#define GL_SIGNED_NORMALIZED                                          0x8F9C
-#define GL_PRIMITIVE_RESTART                                          0x8F9D
-#define GL_PRIMITIVE_RESTART_INDEX                                    0x8F9E
-#define GL_COPY_READ_BUFFER                                           0x8F36
-#define GL_COPY_WRITE_BUFFER                                          0x8F37
-#define GL_UNIFORM_BUFFER                                             0x8A11
-#define GL_UNIFORM_BUFFER_BINDING                                     0x8A28
-#define GL_UNIFORM_BUFFER_START                                       0x8A29
-#define GL_UNIFORM_BUFFER_SIZE                                        0x8A2A
-#define GL_MAX_VERTEX_UNIFORM_BLOCKS                                  0x8A2B
-#define GL_MAX_GEOMETRY_UNIFORM_BLOCKS                                0x8A2C
-#define GL_MAX_FRAGMENT_UNIFORM_BLOCKS                                0x8A2D
-#define GL_MAX_COMBINED_UNIFORM_BLOCKS                                0x8A2E
-#define GL_MAX_UNIFORM_BUFFER_BINDINGS                                0x8A2F
-#define GL_MAX_UNIFORM_BLOCK_SIZE                                     0x8A30
-#define GL_MAX_COMBINED_VERTEX_UNIFORM_COMPONENTS                     0x8A31
-#define GL_MAX_COMBINED_GEOMETRY_UNIFORM_COMPONENTS                   0x8A32
-#define GL_MAX_COMBINED_FRAGMENT_UNIFORM_COMPONENTS                   0x8A33
-#define GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT                            0x8A34
-#define GL_ACTIVE_UNIFORM_BLOCK_MAX_NAME_LENGTH                       0x8A35
-#define GL_ACTIVE_UNIFORM_BLOCKS                                      0x8A36
-#define GL_UNIFORM_TYPE                                               0x8A37
-#define GL_UNIFORM_SIZE                                               0x8A38
-#define GL_UNIFORM_NAME_LENGTH                                        0x8A39
-#define GL_UNIFORM_BLOCK_INDEX                                        0x8A3A
-#define GL_UNIFORM_OFFSET                                             0x8A3B
-#define GL_UNIFORM_ARRAY_STRIDE                                       0x8A3C
-#define GL_UNIFORM_MATRIX_STRIDE                                      0x8A3D
-#define GL_UNIFORM_IS_ROW_MAJOR                                       0x8A3E
-#define GL_UNIFORM_BLOCK_BINDING                                      0x8A3F
-#define GL_UNIFORM_BLOCK_DATA_SIZE                                    0x8A40
-#define GL_UNIFORM_BLOCK_NAME_LENGTH                                  0x8A41
-#define GL_UNIFORM_BLOCK_ACTIVE_UNIFORMS                              0x8A42
-#define GL_UNIFORM_BLOCK_ACTIVE_UNIFORM_INDICES                       0x8A43
-#define GL_UNIFORM_BLOCK_REFERENCED_BY_VERTEX_SHADER                  0x8A44
-#define GL_UNIFORM_BLOCK_REFERENCED_BY_GEOMETRY_SHADER                0x8A45
-#define GL_UNIFORM_BLOCK_REFERENCED_BY_FRAGMENT_SHADER                0x8A46
-#define GL_INVALID_INDEX                                              0xFFFFFFFFu
-#define GL_CONTEXT_CORE_PROFILE_BIT                                   0x00000001
-#define GL_CONTEXT_COMPATIBILITY_PROFILE_BIT                          0x00000002
-#define GL_LINES_ADJACENCY                                            0x000A
-#define GL_LINE_STRIP_ADJACENCY                                       0x000B
-#define GL_TRIANGLES_ADJACENCY                                        0x000C
-#define GL_TRIANGLE_STRIP_ADJACENCY                                   0x000D
-#define GL_PROGRAM_POINT_SIZE                                         0x8642
-#define GL_MAX_GEOMETRY_TEXTURE_IMAGE_UNITS                           0x8C29
-#define GL_FRAMEBUFFER_ATTACHMENT_LAYERED                             0x8DA7
-#define GL_FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS                       0x8DA8
-#define GL_GEOMETRY_SHADER                                            0x8DD9
-#define GL_GEOMETRY_VERTICES_OUT                                      0x8916
-#define GL_GEOMETRY_INPUT_TYPE                                        0x8917
-#define GL_GEOMETRY_OUTPUT_TYPE                                       0x8918
-#define GL_MAX_GEOMETRY_UNIFORM_COMPONENTS                            0x8DDF
-#define GL_MAX_GEOMETRY_OUTPUT_VERTICES                               0x8DE0
-#define GL_MAX_GEOMETRY_TOTAL_OUTPUT_COMPONENTS                       0x8DE1
-#define GL_MAX_VERTEX_OUTPUT_COMPONENTS                               0x9122
-#define GL_MAX_GEOMETRY_INPUT_COMPONENTS                              0x9123
-#define GL_MAX_GEOMETRY_OUTPUT_COMPONENTS                             0x9124
-#define GL_MAX_FRAGMENT_INPUT_COMPONENTS                              0x9125
-#define GL_CONTEXT_PROFILE_MASK                                       0x9126
-#define GL_DEPTH_CLAMP                                                0x864F
-#define GL_QUADS_FOLLOW_PROVOKING_VERTEX_CONVENTION                   0x8E4C
-#define GL_FIRST_VERTEX_CONVENTION                                    0x8E4D
-#define GL_LAST_VERTEX_CONVENTION                                     0x8E4E
-#define GL_PROVOKING_VERTEX                                           0x8E4F
-#define GL_TEXTURE_CUBE_MAP_SEAMLESS                                  0x884F
-#define GL_MAX_SERVER_WAIT_TIMEOUT                                    0x9111
-#define GL_OBJECT_TYPE                                                0x9112
-#define GL_SYNC_CONDITION                                             0x9113
-#define GL_SYNC_STATUS                                                0x9114
-#define GL_SYNC_FLAGS                                                 0x9115
-#define GL_SYNC_FENCE                                                 0x9116
-#define GL_SYNC_GPU_COMMANDS_COMPLETE                                 0x9117
-#define GL_UNSIGNALED                                                 0x9118
-#define GL_SIGNALED                                                   0x9119
-#define GL_ALREADY_SIGNALED                                           0x911A
-#define GL_TIMEOUT_EXPIRED                                            0x911B
-#define GL_CONDITION_SATISFIED                                        0x911C
-#define GL_WAIT_FAILED                                                0x911D
-#define GL_TIMEOUT_IGNORED                                            0xFFFFFFFFFFFFFFFFull
-#define GL_SYNC_FLUSH_COMMANDS_BIT                                    0x00000001
-#define GL_SAMPLE_POSITION                                            0x8E50
-#define GL_SAMPLE_MASK                                                0x8E51
-#define GL_SAMPLE_MASK_VALUE                                          0x8E52
-#define GL_MAX_SAMPLE_MASK_WORDS                                      0x8E59
-#define GL_TEXTURE_2D_MULTISAMPLE                                     0x9100
-#define GL_PROXY_TEXTURE_2D_MULTISAMPLE                               0x9101
-#define GL_TEXTURE_2D_MULTISAMPLE_ARRAY                               0x9102
-#define GL_PROXY_TEXTURE_2D_MULTISAMPLE_ARRAY                         0x9103
-#define GL_TEXTURE_BINDING_2D_MULTISAMPLE                             0x9104
-#define GL_TEXTURE_BINDING_2D_MULTISAMPLE_ARRAY                       0x9105
-#define GL_TEXTURE_SAMPLES                                            0x9106
-#define GL_TEXTURE_FIXED_SAMPLE_LOCATIONS                             0x9107
-#define GL_SAMPLER_2D_MULTISAMPLE                                     0x9108
-#define GL_INT_SAMPLER_2D_MULTISAMPLE                                 0x9109
-#define GL_UNSIGNED_INT_SAMPLER_2D_MULTISAMPLE                        0x910A
-#define GL_SAMPLER_2D_MULTISAMPLE_ARRAY                               0x910B
-#define GL_INT_SAMPLER_2D_MULTISAMPLE_ARRAY                           0x910C
-#define GL_UNSIGNED_INT_SAMPLER_2D_MULTISAMPLE_ARRAY                  0x910D
-#define GL_MAX_COLOR_TEXTURE_SAMPLES                                  0x910E
-#define GL_MAX_DEPTH_TEXTURE_SAMPLES                                  0x910F
-#define GL_MAX_INTEGER_SAMPLES                                        0x9110
-#define GL_VERTEX_ATTRIB_ARRAY_DIVISOR                                0x88FE
-#define GL_SRC1_COLOR                                                 0x88F9
-#define GL_ONE_MINUS_SRC1_COLOR                                       0x88FA
-#define GL_ONE_MINUS_SRC1_ALPHA                                       0x88FB
-#define GL_MAX_DUAL_SOURCE_DRAW_BUFFERS                               0x88FC
-#define GL_ANY_SAMPLES_PASSED                                         0x8C2F
-#define GL_SAMPLER_BINDING                                            0x8919
-#define GL_RGB10_A2UI                                                 0x906F
-#define GL_TEXTURE_SWIZZLE_R                                          0x8E42
-#define GL_TEXTURE_SWIZZLE_G                                          0x8E43
-#define GL_TEXTURE_SWIZZLE_B                                          0x8E44
-#define GL_TEXTURE_SWIZZLE_A                                          0x8E45
-#define GL_TEXTURE_SWIZZLE_RGBA                                       0x8E46
-#define GL_TIME_ELAPSED                                               0x88BF
-#define GL_TIMESTAMP                                                  0x8E28
-#define GL_INT_2_10_10_10_REV                                         0x8D9F
-#define GL_SAMPLE_SHADING                                             0x8C36
-#define GL_MIN_SAMPLE_SHADING_VALUE                                   0x8C37
-#define GL_MIN_PROGRAM_TEXTURE_GATHER_OFFSET                          0x8E5E
-#define GL_MAX_PROGRAM_TEXTURE_GATHER_OFFSET                          0x8E5F
-#define GL_TEXTURE_CUBE_MAP_ARRAY                                     0x9009
-#define GL_TEXTURE_BINDING_CUBE_MAP_ARRAY                             0x900A
-#define GL_PROXY_TEXTURE_CUBE_MAP_ARRAY                               0x900B
-#define GL_SAMPLER_CUBE_MAP_ARRAY                                     0x900C
-#define GL_SAMPLER_CUBE_MAP_ARRAY_SHADOW                              0x900D
-#define GL_INT_SAMPLER_CUBE_MAP_ARRAY                                 0x900E
-#define GL_UNSIGNED_INT_SAMPLER_CUBE_MAP_ARRAY                        0x900F
-#define GL_DRAW_INDIRECT_BUFFER                                       0x8F3F
-#define GL_DRAW_INDIRECT_BUFFER_BINDING                               0x8F43
-#define GL_GEOMETRY_SHADER_INVOCATIONS                                0x887F
-#define GL_MAX_GEOMETRY_SHADER_INVOCATIONS                            0x8E5A
-#define GL_MIN_FRAGMENT_INTERPOLATION_OFFSET                          0x8E5B
-#define GL_MAX_FRAGMENT_INTERPOLATION_OFFSET                          0x8E5C
-#define GL_FRAGMENT_INTERPOLATION_OFFSET_BITS                         0x8E5D
-#define GL_MAX_VERTEX_STREAMS                                         0x8E71
-#define GL_DOUBLE_VEC2                                                0x8FFC
-#define GL_DOUBLE_VEC3                                                0x8FFD
-#define GL_DOUBLE_VEC4                                                0x8FFE
-#define GL_DOUBLE_MAT2                                                0x8F46
-#define GL_DOUBLE_MAT3                                                0x8F47
-#define GL_DOUBLE_MAT4                                                0x8F48
-#define GL_DOUBLE_MAT2x3                                              0x8F49
-#define GL_DOUBLE_MAT2x4                                              0x8F4A
-#define GL_DOUBLE_MAT3x2                                              0x8F4B
-#define GL_DOUBLE_MAT3x4                                              0x8F4C
-#define GL_DOUBLE_MAT4x2                                              0x8F4D
-#define GL_DOUBLE_MAT4x3                                              0x8F4E
-#define GL_ACTIVE_SUBROUTINES                                         0x8DE5
-#define GL_ACTIVE_SUBROUTINE_UNIFORMS                                 0x8DE6
-#define GL_ACTIVE_SUBROUTINE_UNIFORM_LOCATIONS                        0x8E47
-#define GL_ACTIVE_SUBROUTINE_MAX_LENGTH                               0x8E48
-#define GL_ACTIVE_SUBROUTINE_UNIFORM_MAX_LENGTH                       0x8E49
-#define GL_MAX_SUBROUTINES                                            0x8DE7
-#define GL_MAX_SUBROUTINE_UNIFORM_LOCATIONS                           0x8DE8
-#define GL_NUM_COMPATIBLE_SUBROUTINES                                 0x8E4A
-#define GL_COMPATIBLE_SUBROUTINES                                     0x8E4B
-#define GL_PATCHES                                                    0x000E
-#define GL_PATCH_VERTICES                                             0x8E72
-#define GL_PATCH_DEFAULT_INNER_LEVEL                                  0x8E73
-#define GL_PATCH_DEFAULT_OUTER_LEVEL                                  0x8E74
-#define GL_TESS_CONTROL_OUTPUT_VERTICES                               0x8E75
-#define GL_TESS_GEN_MODE                                              0x8E76
-#define GL_TESS_GEN_SPACING                                           0x8E77
-#define GL_TESS_GEN_VERTEX_ORDER                                      0x8E78
-#define GL_TESS_GEN_POINT_MODE                                        0x8E79
-#define GL_ISOLINES                                                   0x8E7A
-#define GL_FRACTIONAL_ODD                                             0x8E7B
-#define GL_FRACTIONAL_EVEN                                            0x8E7C
-#define GL_MAX_PATCH_VERTICES                                         0x8E7D
-#define GL_MAX_TESS_GEN_LEVEL                                         0x8E7E
-#define GL_MAX_TESS_CONTROL_UNIFORM_COMPONENTS                        0x8E7F
-#define GL_MAX_TESS_EVALUATION_UNIFORM_COMPONENTS                     0x8E80
-#define GL_MAX_TESS_CONTROL_TEXTURE_IMAGE_UNITS                       0x8E81
-#define GL_MAX_TESS_EVALUATION_TEXTURE_IMAGE_UNITS                    0x8E82
-#define GL_MAX_TESS_CONTROL_OUTPUT_COMPONENTS                         0x8E83
-#define GL_MAX_TESS_PATCH_COMPONENTS                                  0x8E84
-#define GL_MAX_TESS_CONTROL_TOTAL_OUTPUT_COMPONENTS                   0x8E85
-#define GL_MAX_TESS_EVALUATION_OUTPUT_COMPONENTS                      0x8E86
-#define GL_MAX_TESS_CONTROL_UNIFORM_BLOCKS                            0x8E89
-#define GL_MAX_TESS_EVALUATION_UNIFORM_BLOCKS                         0x8E8A
-#define GL_MAX_TESS_CONTROL_INPUT_COMPONENTS                          0x886C
-#define GL_MAX_TESS_EVALUATION_INPUT_COMPONENTS                       0x886D
-#define GL_MAX_COMBINED_TESS_CONTROL_UNIFORM_COMPONENTS               0x8E1E
-#define GL_MAX_COMBINED_TESS_EVALUATION_UNIFORM_COMPONENTS            0x8E1F
-#define GL_UNIFORM_BLOCK_REFERENCED_BY_TESS_CONTROL_SHADER            0x84F0
-#define GL_UNIFORM_BLOCK_REFERENCED_BY_TESS_EVALUATION_SHADER         0x84F1
-#define GL_TESS_EVALUATION_SHADER                                     0x8E87
-#define GL_TESS_CONTROL_SHADER                                        0x8E88
-#define GL_TRANSFORM_FEEDBACK                                         0x8E22
-#define GL_TRANSFORM_FEEDBACK_BUFFER_PAUSED                           0x8E23
-#define GL_TRANSFORM_FEEDBACK_BUFFER_ACTIVE                           0x8E24
-#define GL_TRANSFORM_FEEDBACK_BINDING                                 0x8E25
-#define GL_MAX_TRANSFORM_FEEDBACK_BUFFERS                             0x8E70
-#define GL_FIXED                                                      0x140C
-#define GL_IMPLEMENTATION_COLOR_READ_TYPE                             0x8B9A
-#define GL_IMPLEMENTATION_COLOR_READ_FORMAT                           0x8B9B
-#define GL_LOW_FLOAT                                                  0x8DF0
-#define GL_MEDIUM_FLOAT                                               0x8DF1
-#define GL_HIGH_FLOAT                                                 0x8DF2
-#define GL_LOW_INT                                                    0x8DF3
-#define GL_MEDIUM_INT                                                 0x8DF4
-#define GL_HIGH_INT                                                   0x8DF5
-#define GL_SHADER_COMPILER                                            0x8DFA
-#define GL_SHADER_BINARY_FORMATS                                      0x8DF8
-#define GL_NUM_SHADER_BINARY_FORMATS                                  0x8DF9
-#define GL_MAX_VERTEX_UNIFORM_VECTORS                                 0x8DFB
-#define GL_MAX_VARYING_VECTORS                                        0x8DFC
-#define GL_MAX_FRAGMENT_UNIFORM_VECTORS                               0x8DFD
-#define GL_RGB565                                                     0x8D62
-#define GL_PROGRAM_BINARY_RETRIEVABLE_HINT                            0x8257
-#define GL_PROGRAM_BINARY_LENGTH                                      0x8741
-#define GL_NUM_PROGRAM_BINARY_FORMATS                                 0x87FE
-#define GL_PROGRAM_BINARY_FORMATS                                     0x87FF
-#define GL_VERTEX_SHADER_BIT                                          0x00000001
-#define GL_FRAGMENT_SHADER_BIT                                        0x00000002
-#define GL_GEOMETRY_SHADER_BIT                                        0x00000004
-#define GL_TESS_CONTROL_SHADER_BIT                                    0x00000008
-#define GL_TESS_EVALUATION_SHADER_BIT                                 0x00000010
-#define GL_ALL_SHADER_BITS                                            0xFFFFFFFF
-#define GL_PROGRAM_SEPARABLE                                          0x8258
-#define GL_ACTIVE_PROGRAM                                             0x8259
-#define GL_PROGRAM_PIPELINE_BINDING                                   0x825A
-#define GL_MAX_VIEWPORTS                                              0x825B
-#define GL_VIEWPORT_SUBPIXEL_BITS                                     0x825C
-#define GL_VIEWPORT_BOUNDS_RANGE                                      0x825D
-#define GL_LAYER_PROVOKING_VERTEX                                     0x825E
-#define GL_VIEWPORT_INDEX_PROVOKING_VERTEX                            0x825F
-#define GL_UNDEFINED_VERTEX                                           0x8260
-#define GL_COPY_READ_BUFFER_BINDING                                   0x8F36
-#define GL_COPY_WRITE_BUFFER_BINDING                                  0x8F37
-#define GL_TRANSFORM_FEEDBACK_ACTIVE                                  0x8E24
-#define GL_TRANSFORM_FEEDBACK_PAUSED                                  0x8E23
-#define GL_UNPACK_COMPRESSED_BLOCK_WIDTH                              0x9127
-#define GL_UNPACK_COMPRESSED_BLOCK_HEIGHT                             0x9128
-#define GL_UNPACK_COMPRESSED_BLOCK_DEPTH                              0x9129
-#define GL_UNPACK_COMPRESSED_BLOCK_SIZE                               0x912A
-#define GL_PACK_COMPRESSED_BLOCK_WIDTH                                0x912B
-#define GL_PACK_COMPRESSED_BLOCK_HEIGHT                               0x912C
-#define GL_PACK_COMPRESSED_BLOCK_DEPTH                                0x912D
-#define GL_PACK_COMPRESSED_BLOCK_SIZE                                 0x912E
-#define GL_NUM_SAMPLE_COUNTS                                          0x9380
-#define GL_MIN_MAP_BUFFER_ALIGNMENT                                   0x90BC
-#define GL_ATOMIC_COUNTER_BUFFER                                      0x92C0
-#define GL_ATOMIC_COUNTER_BUFFER_BINDING                              0x92C1
-#define GL_ATOMIC_COUNTER_BUFFER_START                                0x92C2
-#define GL_ATOMIC_COUNTER_BUFFER_SIZE                                 0x92C3
-#define GL_ATOMIC_COUNTER_BUFFER_DATA_SIZE                            0x92C4
-#define GL_ATOMIC_COUNTER_BUFFER_ACTIVE_ATOMIC_COUNTERS               0x92C5
-#define GL_ATOMIC_COUNTER_BUFFER_ACTIVE_ATOMIC_COUNTER_INDICES        0x92C6
-#define GL_ATOMIC_COUNTER_BUFFER_REFERENCED_BY_VERTEX_SHADER          0x92C7
-#define GL_ATOMIC_COUNTER_BUFFER_REFERENCED_BY_TESS_CONTROL_SHADER    0x92C8
-#define GL_ATOMIC_COUNTER_BUFFER_REFERENCED_BY_TESS_EVALUATION_SHADER 0x92C9
-#define GL_ATOMIC_COUNTER_BUFFER_REFERENCED_BY_GEOMETRY_SHADER        0x92CA
-#define GL_ATOMIC_COUNTER_BUFFER_REFERENCED_BY_FRAGMENT_SHADER        0x92CB
-#define GL_MAX_VERTEX_ATOMIC_COUNTER_BUFFERS                          0x92CC
-#define GL_MAX_TESS_CONTROL_ATOMIC_COUNTER_BUFFERS                    0x92CD
-#define GL_MAX_TESS_EVALUATION_ATOMIC_COUNTER_BUFFERS                 0x92CE
-#define GL_MAX_GEOMETRY_ATOMIC_COUNTER_BUFFERS                        0x92CF
-#define GL_MAX_FRAGMENT_ATOMIC_COUNTER_BUFFERS                        0x92D0
-#define GL_MAX_COMBINED_ATOMIC_COUNTER_BUFFERS                        0x92D1
-#define GL_MAX_VERTEX_ATOMIC_COUNTERS                                 0x92D2
-#define GL_MAX_TESS_CONTROL_ATOMIC_COUNTERS                           0x92D3
-#define GL_MAX_TESS_EVALUATION_ATOMIC_COUNTERS                        0x92D4
-#define GL_MAX_GEOMETRY_ATOMIC_COUNTERS                               0x92D5
-#define GL_MAX_FRAGMENT_ATOMIC_COUNTERS                               0x92D6
-#define GL_MAX_COMBINED_ATOMIC_COUNTERS                               0x92D7
-#define GL_MAX_ATOMIC_COUNTER_BUFFER_SIZE                             0x92D8
-#define GL_MAX_ATOMIC_COUNTER_BUFFER_BINDINGS                         0x92DC
-#define GL_ACTIVE_ATOMIC_COUNTER_BUFFERS                              0x92D9
-#define GL_UNIFORM_ATOMIC_COUNTER_BUFFER_INDEX                        0x92DA
-#define GL_UNSIGNED_INT_ATOMIC_COUNTER                                0x92DB
-#define GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT                            0x00000001
-#define GL_ELEMENT_ARRAY_BARRIER_BIT                                  0x00000002
-#define GL_UNIFORM_BARRIER_BIT                                        0x00000004
-#define GL_TEXTURE_FETCH_BARRIER_BIT                                  0x00000008
-#define GL_SHADER_IMAGE_ACCESS_BARRIER_BIT                            0x00000020
-#define GL_COMMAND_BARRIER_BIT                                        0x00000040
-#define GL_PIXEL_BUFFER_BARRIER_BIT                                   0x00000080
-#define GL_TEXTURE_UPDATE_BARRIER_BIT                                 0x00000100
-#define GL_BUFFER_UPDATE_BARRIER_BIT                                  0x00000200
-#define GL_FRAMEBUFFER_BARRIER_BIT                                    0x00000400
-#define GL_TRANSFORM_FEEDBACK_BARRIER_BIT                             0x00000800
-#define GL_ATOMIC_COUNTER_BARRIER_BIT                                 0x00001000
-#define GL_ALL_BARRIER_BITS                                           0xFFFFFFFF
-#define GL_MAX_IMAGE_UNITS                                            0x8F38
-#define GL_MAX_COMBINED_IMAGE_UNITS_AND_FRAGMENT_OUTPUTS              0x8F39
-#define GL_IMAGE_BINDING_NAME                                         0x8F3A
-#define GL_IMAGE_BINDING_LEVEL                                        0x8F3B
-#define GL_IMAGE_BINDING_LAYERED                                      0x8F3C
-#define GL_IMAGE_BINDING_LAYER                                        0x8F3D
-#define GL_IMAGE_BINDING_ACCESS                                       0x8F3E
-#define GL_IMAGE_1D                                                   0x904C
-#define GL_IMAGE_2D                                                   0x904D
-#define GL_IMAGE_3D                                                   0x904E
-#define GL_IMAGE_2D_RECT                                              0x904F
-#define GL_IMAGE_CUBE                                                 0x9050
-#define GL_IMAGE_BUFFER                                               0x9051
-#define GL_IMAGE_1D_ARRAY                                             0x9052
-#define GL_IMAGE_2D_ARRAY                                             0x9053
-#define GL_IMAGE_CUBE_MAP_ARRAY                                       0x9054
-#define GL_IMAGE_2D_MULTISAMPLE                                       0x9055
-#define GL_IMAGE_2D_MULTISAMPLE_ARRAY                                 0x9056
-#define GL_INT_IMAGE_1D                                               0x9057
-#define GL_INT_IMAGE_2D                                               0x9058
-#define GL_INT_IMAGE_3D                                               0x9059
-#define GL_INT_IMAGE_2D_RECT                                          0x905A
-#define GL_INT_IMAGE_CUBE                                             0x905B
-#define GL_INT_IMAGE_BUFFER                                           0x905C
-#define GL_INT_IMAGE_1D_ARRAY                                         0x905D
-#define GL_INT_IMAGE_2D_ARRAY                                         0x905E
-#define GL_INT_IMAGE_CUBE_MAP_ARRAY                                   0x905F
-#define GL_INT_IMAGE_2D_MULTISAMPLE                                   0x9060
-#define GL_INT_IMAGE_2D_MULTISAMPLE_ARRAY                             0x9061
-#define GL_UNSIGNED_INT_IMAGE_1D                                      0x9062
-#define GL_UNSIGNED_INT_IMAGE_2D                                      0x9063
-#define GL_UNSIGNED_INT_IMAGE_3D                                      0x9064
-#define GL_UNSIGNED_INT_IMAGE_2D_RECT                                 0x9065
-#define GL_UNSIGNED_INT_IMAGE_CUBE                                    0x9066
-#define GL_UNSIGNED_INT_IMAGE_BUFFER                                  0x9067
-#define GL_UNSIGNED_INT_IMAGE_1D_ARRAY                                0x9068
-#define GL_UNSIGNED_INT_IMAGE_2D_ARRAY                                0x9069
-#define GL_UNSIGNED_INT_IMAGE_CUBE_MAP_ARRAY                          0x906A
-#define GL_UNSIGNED_INT_IMAGE_2D_MULTISAMPLE                          0x906B
-#define GL_UNSIGNED_INT_IMAGE_2D_MULTISAMPLE_ARRAY                    0x906C
-#define GL_MAX_IMAGE_SAMPLES                                          0x906D
-#define GL_IMAGE_BINDING_FORMAT                                       0x906E
-#define GL_IMAGE_FORMAT_COMPATIBILITY_TYPE                            0x90C7
-#define GL_IMAGE_FORMAT_COMPATIBILITY_BY_SIZE                         0x90C8
-#define GL_IMAGE_FORMAT_COMPATIBILITY_BY_CLASS                        0x90C9
-#define GL_MAX_VERTEX_IMAGE_UNIFORMS                                  0x90CA
-#define GL_MAX_TESS_CONTROL_IMAGE_UNIFORMS                            0x90CB
-#define GL_MAX_TESS_EVALUATION_IMAGE_UNIFORMS                         0x90CC
-#define GL_MAX_GEOMETRY_IMAGE_UNIFORMS                                0x90CD
-#define GL_MAX_FRAGMENT_IMAGE_UNIFORMS                                0x90CE
-#define GL_MAX_COMBINED_IMAGE_UNIFORMS                                0x90CF
-#define GL_COMPRESSED_RGBA_BPTC_UNORM                                 0x8E8C
-#define GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM                           0x8E8D
-#define GL_COMPRESSED_RGB_BPTC_SIGNED_FLOAT                           0x8E8E
-#define GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT                         0x8E8F
-#define GL_TEXTURE_IMMUTABLE_FORMAT                                   0x912F
-#define GL_NUM_SHADING_LANGUAGE_VERSIONS                              0x82E9
-#define GL_VERTEX_ATTRIB_ARRAY_LONG                                   0x874E
-#define GL_COMPRESSED_RGB8_ETC2                                       0x9274
-#define GL_COMPRESSED_SRGB8_ETC2                                      0x9275
-#define GL_COMPRESSED_RGB8_PUNCHTHROUGH_ALPHA1_ETC2                   0x9276
-#define GL_COMPRESSED_SRGB8_PUNCHTHROUGH_ALPHA1_ETC2                  0x9277
-#define GL_COMPRESSED_RGBA8_ETC2_EAC                                  0x9278
-#define GL_COMPRESSED_SRGB8_ALPHA8_ETC2_EAC                           0x9279
-#define GL_COMPRESSED_R11_EAC                                         0x9270
-#define GL_COMPRESSED_SIGNED_R11_EAC                                  0x9271
-#define GL_COMPRESSED_RG11_EAC                                        0x9272
-#define GL_COMPRESSED_SIGNED_RG11_EAC                                 0x9273
-#define GL_PRIMITIVE_RESTART_FIXED_INDEX                              0x8D69
-#define GL_ANY_SAMPLES_PASSED_CONSERVATIVE                            0x8D6A
-#define GL_MAX_ELEMENT_INDEX                                          0x8D6B
-#define GL_COMPUTE_SHADER                                             0x91B9
-#define GL_MAX_COMPUTE_UNIFORM_BLOCKS                                 0x91BB
-#define GL_MAX_COMPUTE_TEXTURE_IMAGE_UNITS                            0x91BC
-#define GL_MAX_COMPUTE_IMAGE_UNIFORMS                                 0x91BD
-#define GL_MAX_COMPUTE_SHARED_MEMORY_SIZE                             0x8262
-#define GL_MAX_COMPUTE_UNIFORM_COMPONENTS                             0x8263
-#define GL_MAX_COMPUTE_ATOMIC_COUNTER_BUFFERS                         0x8264
-#define GL_MAX_COMPUTE_ATOMIC_COUNTERS                                0x8265
-#define GL_MAX_COMBINED_COMPUTE_UNIFORM_COMPONENTS                    0x8266
-#define GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS                         0x90EB
-#define GL_MAX_COMPUTE_WORK_GROUP_COUNT                               0x91BE
-#define GL_MAX_COMPUTE_WORK_GROUP_SIZE                                0x91BF
-#define GL_COMPUTE_WORK_GROUP_SIZE                                    0x8267
-#define GL_UNIFORM_BLOCK_REFERENCED_BY_COMPUTE_SHADER                 0x90EC
-#define GL_ATOMIC_COUNTER_BUFFER_REFERENCED_BY_COMPUTE_SHADER         0x90ED
-#define GL_DISPATCH_INDIRECT_BUFFER                                   0x90EE
-#define GL_DISPATCH_INDIRECT_BUFFER_BINDING                           0x90EF
-#define GL_COMPUTE_SHADER_BIT                                         0x00000020
-#define GL_DEBUG_OUTPUT_SYNCHRONOUS                                   0x8242
-#define GL_DEBUG_NEXT_LOGGED_MESSAGE_LENGTH                           0x8243
-#define GL_DEBUG_CALLBACK_FUNCTION                                    0x8244
-#define GL_DEBUG_CALLBACK_USER_PARAM                                  0x8245
-#define GL_DEBUG_SOURCE_API                                           0x8246
-#define GL_DEBUG_SOURCE_WINDOW_SYSTEM                                 0x8247
-#define GL_DEBUG_SOURCE_SHADER_COMPILER                               0x8248
-#define GL_DEBUG_SOURCE_THIRD_PARTY                                   0x8249
-#define GL_DEBUG_SOURCE_APPLICATION                                   0x824A
-#define GL_DEBUG_SOURCE_OTHER                                         0x824B
-#define GL_DEBUG_TYPE_ERROR                                           0x824C
-#define GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR                             0x824D
-#define GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR                              0x824E
-#define GL_DEBUG_TYPE_PORTABILITY                                     0x824F
-#define GL_DEBUG_TYPE_PERFORMANCE                                     0x8250
-#define GL_DEBUG_TYPE_OTHER                                           0x8251
-#define GL_MAX_DEBUG_MESSAGE_LENGTH                                   0x9143
-#define GL_MAX_DEBUG_LOGGED_MESSAGES                                  0x9144
-#define GL_DEBUG_LOGGED_MESSAGES                                      0x9145
-#define GL_DEBUG_SEVERITY_HIGH                                        0x9146
-#define GL_DEBUG_SEVERITY_MEDIUM                                      0x9147
-#define GL_DEBUG_SEVERITY_LOW                                         0x9148
-#define GL_DEBUG_TYPE_MARKER                                          0x8268
-#define GL_DEBUG_TYPE_PUSH_GROUP                                      0x8269
-#define GL_DEBUG_TYPE_POP_GROUP                                       0x826A
-#define GL_DEBUG_SEVERITY_NOTIFICATION                                0x826B
-#define GL_MAX_DEBUG_GROUP_STACK_DEPTH                                0x826C
-#define GL_DEBUG_GROUP_STACK_DEPTH                                    0x826D
-#define GL_BUFFER                                                     0x82E0
-#define GL_SHADER                                                     0x82E1
-#define GL_PROGRAM                                                    0x82E2
-#define GL_QUERY                                                      0x82E3
-#define GL_PROGRAM_PIPELINE                                           0x82E4
-#define GL_SAMPLER                                                    0x82E6
-#define GL_MAX_LABEL_LENGTH                                           0x82E8
-#define GL_DEBUG_OUTPUT                                               0x92E0
-#define GL_CONTEXT_FLAG_DEBUG_BIT                                     0x00000002
-#define GL_MAX_UNIFORM_LOCATIONS                                      0x826E
-#define GL_FRAMEBUFFER_DEFAULT_WIDTH                                  0x9310
-#define GL_FRAMEBUFFER_DEFAULT_HEIGHT                                 0x9311
-#define GL_FRAMEBUFFER_DEFAULT_LAYERS                                 0x9312
-#define GL_FRAMEBUFFER_DEFAULT_SAMPLES                                0x9313
-#define GL_FRAMEBUFFER_DEFAULT_FIXED_SAMPLE_LOCATIONS                 0x9314
-#define GL_MAX_FRAMEBUFFER_WIDTH                                      0x9315
-#define GL_MAX_FRAMEBUFFER_HEIGHT                                     0x9316
-#define GL_MAX_FRAMEBUFFER_LAYERS                                     0x9317
-#define GL_MAX_FRAMEBUFFER_SAMPLES                                    0x9318
-#define GL_INTERNALFORMAT_SUPPORTED                                   0x826F
-#define GL_INTERNALFORMAT_PREFERRED                                   0x8270
-#define GL_INTERNALFORMAT_RED_SIZE                                    0x8271
-#define GL_INTERNALFORMAT_GREEN_SIZE                                  0x8272
-#define GL_INTERNALFORMAT_BLUE_SIZE                                   0x8273
-#define GL_INTERNALFORMAT_ALPHA_SIZE                                  0x8274
-#define GL_INTERNALFORMAT_DEPTH_SIZE                                  0x8275
-#define GL_INTERNALFORMAT_STENCIL_SIZE                                0x8276
-#define GL_INTERNALFORMAT_SHARED_SIZE                                 0x8277
-#define GL_INTERNALFORMAT_RED_TYPE                                    0x8278
-#define GL_INTERNALFORMAT_GREEN_TYPE                                  0x8279
-#define GL_INTERNALFORMAT_BLUE_TYPE                                   0x827A
-#define GL_INTERNALFORMAT_ALPHA_TYPE                                  0x827B
-#define GL_INTERNALFORMAT_DEPTH_TYPE                                  0x827C
-#define GL_INTERNALFORMAT_STENCIL_TYPE                                0x827D
-#define GL_MAX_WIDTH                                                  0x827E
-#define GL_MAX_HEIGHT                                                 0x827F
-#define GL_MAX_DEPTH                                                  0x8280
-#define GL_MAX_LAYERS                                                 0x8281
-#define GL_MAX_COMBINED_DIMENSIONS                                    0x8282
-#define GL_COLOR_COMPONENTS                                           0x8283
-#define GL_DEPTH_COMPONENTS                                           0x8284
-#define GL_STENCIL_COMPONENTS                                         0x8285
-#define GL_COLOR_RENDERABLE                                           0x8286
-#define GL_DEPTH_RENDERABLE                                           0x8287
-#define GL_STENCIL_RENDERABLE                                         0x8288
-#define GL_FRAMEBUFFER_RENDERABLE                                     0x8289
-#define GL_FRAMEBUFFER_RENDERABLE_LAYERED                             0x828A
-#define GL_FRAMEBUFFER_BLEND                                          0x828B
-#define GL_READ_PIXELS                                                0x828C
-#define GL_READ_PIXELS_FORMAT                                         0x828D
-#define GL_READ_PIXELS_TYPE                                           0x828E
-#define GL_TEXTURE_IMAGE_FORMAT                                       0x828F
-#define GL_TEXTURE_IMAGE_TYPE                                         0x8290
-#define GL_GET_TEXTURE_IMAGE_FORMAT                                   0x8291
-#define GL_GET_TEXTURE_IMAGE_TYPE                                     0x8292
-#define GL_MIPMAP                                                     0x8293
-#define GL_MANUAL_GENERATE_MIPMAP                                     0x8294
-#define GL_AUTO_GENERATE_MIPMAP                                       0x8295
-#define GL_COLOR_ENCODING                                             0x8296
-#define GL_SRGB_READ                                                  0x8297
-#define GL_SRGB_WRITE                                                 0x8298
-#define GL_FILTER                                                     0x829A
-#define GL_VERTEX_TEXTURE                                             0x829B
-#define GL_TESS_CONTROL_TEXTURE                                       0x829C
-#define GL_TESS_EVALUATION_TEXTURE                                    0x829D
-#define GL_GEOMETRY_TEXTURE                                           0x829E
-#define GL_FRAGMENT_TEXTURE                                           0x829F
-#define GL_COMPUTE_TEXTURE                                            0x82A0
-#define GL_TEXTURE_SHADOW                                             0x82A1
-#define GL_TEXTURE_GATHER                                             0x82A2
-#define GL_TEXTURE_GATHER_SHADOW                                      0x82A3
-#define GL_SHADER_IMAGE_LOAD                                          0x82A4
-#define GL_SHADER_IMAGE_STORE                                         0x82A5
-#define GL_SHADER_IMAGE_ATOMIC                                        0x82A6
-#define GL_IMAGE_TEXEL_SIZE                                           0x82A7
-#define GL_IMAGE_COMPATIBILITY_CLASS                                  0x82A8
-#define GL_IMAGE_PIXEL_FORMAT                                         0x82A9
-#define GL_IMAGE_PIXEL_TYPE                                           0x82AA
-#define GL_SIMULTANEOUS_TEXTURE_AND_DEPTH_TEST                        0x82AC
-#define GL_SIMULTANEOUS_TEXTURE_AND_STENCIL_TEST                      0x82AD
-#define GL_SIMULTANEOUS_TEXTURE_AND_DEPTH_WRITE                       0x82AE
-#define GL_SIMULTANEOUS_TEXTURE_AND_STENCIL_WRITE                     0x82AF
-#define GL_TEXTURE_COMPRESSED_BLOCK_WIDTH                             0x82B1
-#define GL_TEXTURE_COMPRESSED_BLOCK_HEIGHT                            0x82B2
-#define GL_TEXTURE_COMPRESSED_BLOCK_SIZE                              0x82B3
-#define GL_CLEAR_BUFFER                                               0x82B4
-#define GL_TEXTURE_VIEW                                               0x82B5
-#define GL_VIEW_COMPATIBILITY_CLASS                                   0x82B6
-#define GL_FULL_SUPPORT                                               0x82B7
-#define GL_CAVEAT_SUPPORT                                             0x82B8
-#define GL_IMAGE_CLASS_4_X_32                                         0x82B9
-#define GL_IMAGE_CLASS_2_X_32                                         0x82BA
-#define GL_IMAGE_CLASS_1_X_32                                         0x82BB
-#define GL_IMAGE_CLASS_4_X_16                                         0x82BC
-#define GL_IMAGE_CLASS_2_X_16                                         0x82BD
-#define GL_IMAGE_CLASS_1_X_16                                         0x82BE
-#define GL_IMAGE_CLASS_4_X_8                                          0x82BF
-#define GL_IMAGE_CLASS_2_X_8                                          0x82C0
-#define GL_IMAGE_CLASS_1_X_8                                          0x82C1
-#define GL_IMAGE_CLASS_11_11_10                                       0x82C2
-#define GL_IMAGE_CLASS_10_10_10_2                                     0x82C3
-#define GL_VIEW_CLASS_128_BITS                                        0x82C4
-#define GL_VIEW_CLASS_96_BITS                                         0x82C5
-#define GL_VIEW_CLASS_64_BITS                                         0x82C6
-#define GL_VIEW_CLASS_48_BITS                                         0x82C7
-#define GL_VIEW_CLASS_32_BITS                                         0x82C8
-#define GL_VIEW_CLASS_24_BITS                                         0x82C9
-#define GL_VIEW_CLASS_16_BITS                                         0x82CA
-#define GL_VIEW_CLASS_8_BITS                                          0x82CB
-#define GL_VIEW_CLASS_S3TC_DXT1_RGB                                   0x82CC
-#define GL_VIEW_CLASS_S3TC_DXT1_RGBA                                  0x82CD
-#define GL_VIEW_CLASS_S3TC_DXT3_RGBA                                  0x82CE
-#define GL_VIEW_CLASS_S3TC_DXT5_RGBA                                  0x82CF
-#define GL_VIEW_CLASS_RGTC1_RED                                       0x82D0
-#define GL_VIEW_CLASS_RGTC2_RG                                        0x82D1
-#define GL_VIEW_CLASS_BPTC_UNORM                                      0x82D2
-#define GL_VIEW_CLASS_BPTC_FLOAT                                      0x82D3
-#define GL_UNIFORM                                                    0x92E1
-#define GL_UNIFORM_BLOCK                                              0x92E2
-#define GL_PROGRAM_INPUT                                              0x92E3
-#define GL_PROGRAM_OUTPUT                                             0x92E4
-#define GL_BUFFER_VARIABLE                                            0x92E5
-#define GL_SHADER_STORAGE_BLOCK                                       0x92E6
-#define GL_VERTEX_SUBROUTINE                                          0x92E8
-#define GL_TESS_CONTROL_SUBROUTINE                                    0x92E9
-#define GL_TESS_EVALUATION_SUBROUTINE                                 0x92EA
-#define GL_GEOMETRY_SUBROUTINE                                        0x92EB
-#define GL_FRAGMENT_SUBROUTINE                                        0x92EC
-#define GL_COMPUTE_SUBROUTINE                                         0x92ED
-#define GL_VERTEX_SUBROUTINE_UNIFORM                                  0x92EE
-#define GL_TESS_CONTROL_SUBROUTINE_UNIFORM                            0x92EF
-#define GL_TESS_EVALUATION_SUBROUTINE_UNIFORM                         0x92F0
-#define GL_GEOMETRY_SUBROUTINE_UNIFORM                                0x92F1
-#define GL_FRAGMENT_SUBROUTINE_UNIFORM                                0x92F2
-#define GL_COMPUTE_SUBROUTINE_UNIFORM                                 0x92F3
-#define GL_TRANSFORM_FEEDBACK_VARYING                                 0x92F4
-#define GL_ACTIVE_RESOURCES                                           0x92F5
-#define GL_MAX_NAME_LENGTH                                            0x92F6
-#define GL_MAX_NUM_ACTIVE_VARIABLES                                   0x92F7
-#define GL_MAX_NUM_COMPATIBLE_SUBROUTINES                             0x92F8
-#define GL_NAME_LENGTH                                                0x92F9
-#define GL_TYPE                                                       0x92FA
-#define GL_ARRAY_SIZE                                                 0x92FB
-#define GL_OFFSET                                                     0x92FC
-#define GL_BLOCK_INDEX                                                0x92FD
-#define GL_ARRAY_STRIDE                                               0x92FE
-#define GL_MATRIX_STRIDE                                              0x92FF
-#define GL_IS_ROW_MAJOR                                               0x9300
-#define GL_ATOMIC_COUNTER_BUFFER_INDEX                                0x9301
-#define GL_BUFFER_BINDING                                             0x9302
-#define GL_BUFFER_DATA_SIZE                                           0x9303
-#define GL_NUM_ACTIVE_VARIABLES                                       0x9304
-#define GL_ACTIVE_VARIABLES                                           0x9305
-#define GL_REFERENCED_BY_VERTEX_SHADER                                0x9306
-#define GL_REFERENCED_BY_TESS_CONTROL_SHADER                          0x9307
-#define GL_REFERENCED_BY_TESS_EVALUATION_SHADER                       0x9308
-#define GL_REFERENCED_BY_GEOMETRY_SHADER                              0x9309
-#define GL_REFERENCED_BY_FRAGMENT_SHADER                              0x930A
-#define GL_REFERENCED_BY_COMPUTE_SHADER                               0x930B
-#define GL_TOP_LEVEL_ARRAY_SIZE                                       0x930C
-#define GL_TOP_LEVEL_ARRAY_STRIDE                                     0x930D
-#define GL_LOCATION                                                   0x930E
-#define GL_LOCATION_INDEX                                             0x930F
-#define GL_IS_PER_PATCH                                               0x92E7
-#define GL_SHADER_STORAGE_BUFFER                                      0x90D2
-#define GL_SHADER_STORAGE_BUFFER_BINDING                              0x90D3
-#define GL_SHADER_STORAGE_BUFFER_START                                0x90D4
-#define GL_SHADER_STORAGE_BUFFER_SIZE                                 0x90D5
-#define GL_MAX_VERTEX_SHADER_STORAGE_BLOCKS                           0x90D6
-#define GL_MAX_GEOMETRY_SHADER_STORAGE_BLOCKS                         0x90D7
-#define GL_MAX_TESS_CONTROL_SHADER_STORAGE_BLOCKS                     0x90D8
-#define GL_MAX_TESS_EVALUATION_SHADER_STORAGE_BLOCKS                  0x90D9
-#define GL_MAX_FRAGMENT_SHADER_STORAGE_BLOCKS                         0x90DA
-#define GL_MAX_COMPUTE_SHADER_STORAGE_BLOCKS                          0x90DB
-#define GL_MAX_COMBINED_SHADER_STORAGE_BLOCKS                         0x90DC
-#define GL_MAX_SHADER_STORAGE_BUFFER_BINDINGS                         0x90DD
-#define GL_MAX_SHADER_STORAGE_BLOCK_SIZE                              0x90DE
-#define GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT                     0x90DF
-#define GL_SHADER_STORAGE_BARRIER_BIT                                 0x00002000
-#define GL_MAX_COMBINED_SHADER_OUTPUT_RESOURCES                       0x8F39
-#define GL_DEPTH_STENCIL_TEXTURE_MODE                                 0x90EA
-#define GL_TEXTURE_BUFFER_OFFSET                                      0x919D
-#define GL_TEXTURE_BUFFER_SIZE                                        0x919E
-#define GL_TEXTURE_BUFFER_OFFSET_ALIGNMENT                            0x919F
-#define GL_TEXTURE_VIEW_MIN_LEVEL                                     0x82DB
-#define GL_TEXTURE_VIEW_NUM_LEVELS                                    0x82DC
-#define GL_TEXTURE_VIEW_MIN_LAYER                                     0x82DD
-#define GL_TEXTURE_VIEW_NUM_LAYERS                                    0x82DE
-#define GL_TEXTURE_IMMUTABLE_LEVELS                                   0x82DF
-#define GL_VERTEX_ATTRIB_BINDING                                      0x82D4
-#define GL_VERTEX_ATTRIB_RELATIVE_OFFSET                              0x82D5
-#define GL_VERTEX_BINDING_DIVISOR                                     0x82D6
-#define GL_VERTEX_BINDING_OFFSET                                      0x82D7
-#define GL_VERTEX_BINDING_STRIDE                                      0x82D8
-#define GL_MAX_VERTEX_ATTRIB_RELATIVE_OFFSET                          0x82D9
-#define GL_MAX_VERTEX_ATTRIB_BINDINGS                                 0x82DA
-#define GL_VERTEX_BINDING_BUFFER                                      0x8F4F
-#define GL_MAX_VERTEX_ATTRIB_STRIDE                                   0x82E5
-#define GL_PRIMITIVE_RESTART_FOR_PATCHES_SUPPORTED                    0x8221
-#define GL_TEXTURE_BUFFER_BINDING                                     0x8C2A
-#define GL_MAP_PERSISTENT_BIT                                         0x0040
-#define GL_MAP_COHERENT_BIT                                           0x0080
-#define GL_DYNAMIC_STORAGE_BIT                                        0x0100
-#define GL_CLIENT_STORAGE_BIT                                         0x0200
-#define GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT                           0x00004000
-#define GL_BUFFER_IMMUTABLE_STORAGE                                   0x821F
-#define GL_BUFFER_STORAGE_FLAGS                                       0x8220
-#define GL_CLEAR_TEXTURE                                              0x9365
-#define GL_LOCATION_COMPONENT                                         0x934A
-#define GL_TRANSFORM_FEEDBACK_BUFFER_INDEX                            0x934B
-#define GL_TRANSFORM_FEEDBACK_BUFFER_STRIDE                           0x934C
-#define GL_QUERY_BUFFER                                               0x9192
-#define GL_QUERY_BUFFER_BARRIER_BIT                                   0x00008000
-#define GL_QUERY_BUFFER_BINDING                                       0x9193
-#define GL_QUERY_RESULT_NO_WAIT                                       0x9194
-#define GL_MIRROR_CLAMP_TO_EDGE                                       0x8743
-#define GL_CONTEXT_LOST                                               0x0507
-#define GL_NEGATIVE_ONE_TO_ONE                                        0x935E
-#define GL_ZERO_TO_ONE                                                0x935F
-#define GL_CLIP_ORIGIN                                                0x935C
-#define GL_CLIP_DEPTH_MODE                                            0x935D
-#define GL_QUERY_WAIT_INVERTED                                        0x8E17
-#define GL_QUERY_NO_WAIT_INVERTED                                     0x8E18
-#define GL_QUERY_BY_REGION_WAIT_INVERTED                              0x8E19
-#define GL_QUERY_BY_REGION_NO_WAIT_INVERTED                           0x8E1A
-#define GL_MAX_CULL_DISTANCES                                         0x82F9
-#define GL_MAX_COMBINED_CLIP_AND_CULL_DISTANCES                       0x82FA
-#define GL_TEXTURE_TARGET                                             0x1006
-#define GL_QUERY_TARGET                                               0x82EA
-#define GL_GUILTY_CONTEXT_RESET                                       0x8253
-#define GL_INNOCENT_CONTEXT_RESET                                     0x8254
-#define GL_UNKNOWN_CONTEXT_RESET                                      0x8255
-#define GL_RESET_NOTIFICATION_STRATEGY                                0x8256
-#define GL_LOSE_CONTEXT_ON_RESET                                      0x8252
-#define GL_NO_RESET_NOTIFICATION                                      0x8261
-#define GL_CONTEXT_FLAG_ROBUST_ACCESS_BIT                             0x00000004
-#define GL_CONTEXT_RELEASE_BEHAVIOR                                   0x82FB
-#define GL_CONTEXT_RELEASE_BEHAVIOR_FLUSH                             0x82FC
-#define GL_SHADER_BINARY_FORMAT_SPIR_V                                0x9551
-#define GL_SPIR_V_BINARY                                              0x9552
-#define GL_PARAMETER_BUFFER                                           0x80EE
-#define GL_PARAMETER_BUFFER_BINDING                                   0x80EF
-#define GL_CONTEXT_FLAG_NO_ERROR_BIT                                  0x00000008
-#define GL_VERTICES_SUBMITTED                                         0x82EE
-#define GL_PRIMITIVES_SUBMITTED                                       0x82EF
-#define GL_VERTEX_SHADER_INVOCATIONS                                  0x82F0
-#define GL_TESS_CONTROL_SHADER_PATCHES                                0x82F1
-#define GL_TESS_EVALUATION_SHADER_INVOCATIONS                         0x82F2
-#define GL_GEOMETRY_SHADER_PRIMITIVES_EMITTED                         0x82F3
-#define GL_FRAGMENT_SHADER_INVOCATIONS                                0x82F4
-#define GL_COMPUTE_SHADER_INVOCATIONS                                 0x82F5
-#define GL_CLIPPING_INPUT_PRIMITIVES                                  0x82F6
-#define GL_CLIPPING_OUTPUT_PRIMITIVES                                 0x82F7
-#define GL_POLYGON_OFFSET_CLAMP                                       0x8E1B
-#define GL_SPIR_V_EXTENSIONS                                          0x9553
-#define GL_NUM_SPIR_V_EXTENSIONS                                      0x9554
-#define GL_TEXTURE_MAX_ANISOTROPY                                     0x84FE
-#define GL_MAX_TEXTURE_MAX_ANISOTROPY                                 0x84FF
-#define GL_TRANSFORM_FEEDBACK_OVERFLOW                                0x82EC
-#define GL_TRANSFORM_FEEDBACK_STREAM_OVERFLOW                         0x82ED
+enum {
+    /* GetPName */                                                                        /* InternalFormat */                                        /* AttributeType */
+    GL_CURRENT_COLOR                                                           = 0x0B00,  GL_STENCIL_INDEX_OES                             = 0x1901,  GL_FLOAT_VEC2                                = 0x8B50,
+    GL_CURRENT_INDEX                                                           = 0x0B01,  GL_R3_G3_B2                                      = 0x2A10,  GL_FLOAT_VEC2_ARB                            = 0x8B50,
+    GL_CURRENT_NORMAL                                                          = 0x0B02,  GL_ALPHA4                                        = 0x803B,  GL_FLOAT_VEC3                                = 0x8B51,
+    GL_CURRENT_TEXTURE_COORDS                                                  = 0x0B03,  GL_ALPHA4_EXT                                    = 0x803B,  GL_FLOAT_VEC3_ARB                            = 0x8B51,
+    GL_CURRENT_RASTER_COLOR                                                    = 0x0B04,  GL_ALPHA8                                        = 0x803C,  GL_FLOAT_VEC4                                = 0x8B52,
+    GL_CURRENT_RASTER_INDEX                                                    = 0x0B05,  GL_ALPHA8_EXT                                    = 0x803C,  GL_FLOAT_VEC4_ARB                            = 0x8B52,
+    GL_CURRENT_RASTER_TEXTURE_COORDS                                           = 0x0B06,  GL_ALPHA8_OES                                    = 0x803C,  GL_INT_VEC2                                  = 0x8B53,
+    GL_CURRENT_RASTER_POSITION                                                 = 0x0B07,  GL_ALPHA12                                       = 0x803D,  GL_INT_VEC2_ARB                              = 0x8B53,
+    GL_CURRENT_RASTER_POSITION_VALID                                           = 0x0B08,  GL_ALPHA12_EXT                                   = 0x803D,  GL_INT_VEC3                                  = 0x8B54,
+    GL_CURRENT_RASTER_DISTANCE                                                 = 0x0B09,  GL_ALPHA16                                       = 0x803E,  GL_INT_VEC3_ARB                              = 0x8B54,
+    GL_POINT_SMOOTH                                                            = 0x0B10,  GL_ALPHA16_EXT                                   = 0x803E,  GL_INT_VEC4                                  = 0x8B55,
+    GL_POINT_SIZE                                                              = 0x0B11,  GL_LUMINANCE4                                    = 0x803F,  GL_INT_VEC4_ARB                              = 0x8B55,
+    GL_POINT_SIZE_RANGE                                                        = 0x0B12,  GL_LUMINANCE4_EXT                                = 0x803F,  GL_BOOL                                      = 0x8B56,
+    GL_SMOOTH_POINT_SIZE_RANGE                                                 = 0x0B12,  GL_LUMINANCE8                                    = 0x8040,  GL_BOOL_ARB                                  = 0x8B56,
+    GL_POINT_SIZE_GRANULARITY                                                  = 0x0B13,  GL_LUMINANCE8_EXT                                = 0x8040,  GL_BOOL_VEC2                                 = 0x8B57,
+    GL_SMOOTH_POINT_SIZE_GRANULARITY                                           = 0x0B13,  GL_LUMINANCE8_OES                                = 0x8040,  GL_BOOL_VEC2_ARB                             = 0x8B57,
+    GL_LINE_SMOOTH                                                             = 0x0B20,  GL_LUMINANCE12                                   = 0x8041,  GL_BOOL_VEC3                                 = 0x8B58,
+    GL_LINE_WIDTH                                                              = 0x0B21,  GL_LUMINANCE12_EXT                               = 0x8041,  GL_BOOL_VEC3_ARB                             = 0x8B58,
+    GL_LINE_WIDTH_RANGE                                                        = 0x0B22,  GL_LUMINANCE16                                   = 0x8042,  GL_BOOL_VEC4                                 = 0x8B59,
+    GL_SMOOTH_LINE_WIDTH_RANGE                                                 = 0x0B22,  GL_LUMINANCE16_EXT                               = 0x8042,  GL_BOOL_VEC4_ARB                             = 0x8B59,
+    GL_LINE_WIDTH_GRANULARITY                                                  = 0x0B23,  GL_LUMINANCE4_ALPHA4                             = 0x8043,  GL_FLOAT_MAT2                                = 0x8B5A,
+    GL_SMOOTH_LINE_WIDTH_GRANULARITY                                           = 0x0B23,  GL_LUMINANCE4_ALPHA4_EXT                         = 0x8043,  GL_FLOAT_MAT2_ARB                            = 0x8B5A,
+    GL_LINE_STIPPLE                                                            = 0x0B24,  GL_LUMINANCE4_ALPHA4_OES                         = 0x8043,  GL_FLOAT_MAT3                                = 0x8B5B,
+    GL_LINE_STIPPLE_PATTERN                                                    = 0x0B25,  GL_LUMINANCE6_ALPHA2                             = 0x8044,  GL_FLOAT_MAT3_ARB                            = 0x8B5B,
+    GL_LINE_STIPPLE_REPEAT                                                     = 0x0B26,  GL_LUMINANCE6_ALPHA2_EXT                         = 0x8044,  GL_FLOAT_MAT4                                = 0x8B5C,
+    GL_LIST_MODE                                                               = 0x0B30,  GL_LUMINANCE8_ALPHA8                             = 0x8045,  GL_FLOAT_MAT4_ARB                            = 0x8B5C,
+    GL_MAX_LIST_NESTING                                                        = 0x0B31,  GL_LUMINANCE8_ALPHA8_EXT                         = 0x8045,  GL_SAMPLER_1D                                = 0x8B5D,
+    GL_LIST_BASE                                                               = 0x0B32,  GL_LUMINANCE8_ALPHA8_OES                         = 0x8045,  GL_SAMPLER_1D_ARB                            = 0x8B5D,
+    GL_LIST_INDEX                                                              = 0x0B33,  GL_LUMINANCE12_ALPHA4                            = 0x8046,  GL_SAMPLER_2D                                = 0x8B5E,
+    GL_POLYGON_MODE                                                            = 0x0B40,  GL_LUMINANCE12_ALPHA4_EXT                        = 0x8046,  GL_SAMPLER_2D_ARB                            = 0x8B5E,
+    GL_POLYGON_SMOOTH                                                          = 0x0B41,  GL_LUMINANCE12_ALPHA12                           = 0x8047,  GL_SAMPLER_3D                                = 0x8B5F,
+    GL_POLYGON_STIPPLE                                                         = 0x0B42,  GL_LUMINANCE12_ALPHA12_EXT                       = 0x8047,  GL_SAMPLER_3D_ARB                            = 0x8B5F,
+    GL_EDGE_FLAG                                                               = 0x0B43,  GL_LUMINANCE16_ALPHA16                           = 0x8048,  GL_SAMPLER_3D_OES                            = 0x8B5F,
+    GL_CULL_FACE                                                               = 0x0B44,  GL_LUMINANCE16_ALPHA16_EXT                       = 0x8048,  GL_SAMPLER_CUBE                              = 0x8B60,
+    GL_CULL_FACE_MODE                                                          = 0x0B45,  GL_INTENSITY4                                    = 0x804A,  GL_SAMPLER_CUBE_ARB                          = 0x8B60,
+    GL_FRONT_FACE                                                              = 0x0B46,  GL_INTENSITY4_EXT                                = 0x804A,  GL_SAMPLER_1D_SHADOW                         = 0x8B61,
+    GL_LIGHTING                                                                = 0x0B50,  GL_INTENSITY8                                    = 0x804B,  GL_SAMPLER_1D_SHADOW_ARB                     = 0x8B61,
+    GL_LIGHT_MODEL_LOCAL_VIEWER                                                = 0x0B51,  GL_INTENSITY8_EXT                                = 0x804B,  GL_SAMPLER_2D_SHADOW                         = 0x8B62,
+    GL_LIGHT_MODEL_TWO_SIDE                                                    = 0x0B52,  GL_INTENSITY12                                   = 0x804C,  GL_SAMPLER_2D_SHADOW_ARB                     = 0x8B62,
+    GL_LIGHT_MODEL_AMBIENT                                                     = 0x0B53,  GL_INTENSITY12_EXT                               = 0x804C,  GL_SAMPLER_2D_SHADOW_EXT                     = 0x8B62,
+    GL_SHADE_MODEL                                                             = 0x0B54,  GL_INTENSITY16                                   = 0x804D,  GL_SAMPLER_2D_RECT                           = 0x8B63,
+    GL_COLOR_MATERIAL_FACE                                                     = 0x0B55,  GL_INTENSITY16_EXT                               = 0x804D,  GL_SAMPLER_2D_RECT_ARB                       = 0x8B63,
+    GL_COLOR_MATERIAL_PARAMETER                                                = 0x0B56,  GL_RGB2_EXT                                      = 0x804E,  GL_SAMPLER_2D_RECT_SHADOW                    = 0x8B64,
+    GL_COLOR_MATERIAL                                                          = 0x0B57,  GL_RGB4                                          = 0x804F,  GL_SAMPLER_2D_RECT_SHADOW_ARB                = 0x8B64,
+    GL_FOG                                                                     = 0x0B60,  GL_RGB4_EXT                                      = 0x804F,  GL_FLOAT_MAT2x3                              = 0x8B65,
+    GL_FOG_INDEX                                                               = 0x0B61,  GL_RGB5                                          = 0x8050,  GL_FLOAT_MAT2x3_NV                           = 0x8B65,
+    GL_FOG_DENSITY                                                             = 0x0B62,  GL_RGB5_EXT                                      = 0x8050,  GL_FLOAT_MAT2x4                              = 0x8B66,
+    GL_FOG_START                                                               = 0x0B63,  GL_RGB8                                          = 0x8051,  GL_FLOAT_MAT2x4_NV                           = 0x8B66,
+    GL_FOG_END                                                                 = 0x0B64,  GL_RGB8_EXT                                      = 0x8051,  GL_FLOAT_MAT3x2                              = 0x8B67,
+    GL_FOG_MODE                                                                = 0x0B65,  GL_RGB8_OES                                      = 0x8051,  GL_FLOAT_MAT3x2_NV                           = 0x8B67,
+    GL_FOG_COLOR                                                               = 0x0B66,  GL_RGB10                                         = 0x8052,  GL_FLOAT_MAT3x4                              = 0x8B68,
+    GL_DEPTH_RANGE                                                             = 0x0B70,  GL_RGB10_EXT                                     = 0x8052,  GL_FLOAT_MAT3x4_NV                           = 0x8B68,
+    GL_DEPTH_TEST                                                              = 0x0B71,  GL_RGB12                                         = 0x8053,  GL_FLOAT_MAT4x2                              = 0x8B69,
+    GL_DEPTH_WRITEMASK                                                         = 0x0B72,  GL_RGB12_EXT                                     = 0x8053,  GL_FLOAT_MAT4x2_NV                           = 0x8B69,
+    GL_DEPTH_CLEAR_VALUE                                                       = 0x0B73,  GL_RGB16                                         = 0x8054,  GL_FLOAT_MAT4x3                              = 0x8B6A,
+    GL_DEPTH_FUNC                                                              = 0x0B74,  GL_RGB16_EXT                                     = 0x8054,  GL_FLOAT_MAT4x3_NV                           = 0x8B6A,
+    GL_ACCUM_CLEAR_VALUE                                                       = 0x0B80,  GL_RGBA2                                         = 0x8055,  GL_SAMPLER_BUFFER                            = 0x8DC2,
+    GL_STENCIL_TEST                                                            = 0x0B90,  GL_RGBA2_EXT                                     = 0x8055,  GL_SAMPLER_1D_ARRAY_SHADOW                   = 0x8DC3,
+    GL_STENCIL_CLEAR_VALUE                                                     = 0x0B91,  GL_RGBA4                                         = 0x8056,  GL_SAMPLER_2D_ARRAY_SHADOW                   = 0x8DC4,
+    GL_STENCIL_FUNC                                                            = 0x0B92,  GL_RGBA4_EXT                                     = 0x8056,  GL_SAMPLER_CUBE_SHADOW                       = 0x8DC5,
+    GL_STENCIL_VALUE_MASK                                                      = 0x0B93,  GL_RGBA4_OES                                     = 0x8056,  GL_UNSIGNED_INT_VEC2                         = 0x8DC6,
+    GL_STENCIL_FAIL                                                            = 0x0B94,  GL_RGB5_A1                                       = 0x8057,  GL_UNSIGNED_INT_VEC3                         = 0x8DC7,
+    GL_STENCIL_PASS_DEPTH_FAIL                                                 = 0x0B95,  GL_RGB5_A1_EXT                                   = 0x8057,  GL_UNSIGNED_INT_VEC4                         = 0x8DC8,
+    GL_STENCIL_PASS_DEPTH_PASS                                                 = 0x0B96,  GL_RGB5_A1_OES                                   = 0x8057,  GL_INT_SAMPLER_1D                            = 0x8DC9,
+    GL_STENCIL_REF                                                             = 0x0B97,  GL_RGBA8                                         = 0x8058,  GL_INT_SAMPLER_2D                            = 0x8DCA,
+    GL_STENCIL_WRITEMASK                                                       = 0x0B98,  GL_RGBA8_EXT                                     = 0x8058,  GL_INT_SAMPLER_3D                            = 0x8DCB,
+    GL_MATRIX_MODE                                                             = 0x0BA0,  GL_RGBA8_OES                                     = 0x8058,  GL_INT_SAMPLER_CUBE                          = 0x8DCC,
+    GL_NORMALIZE                                                               = 0x0BA1,  GL_RGB10_A2                                      = 0x8059,  GL_INT_SAMPLER_2D_RECT                       = 0x8DCD,
+    GL_VIEWPORT                                                                = 0x0BA2,  GL_RGB10_A2_EXT                                  = 0x8059,  GL_INT_SAMPLER_1D_ARRAY                      = 0x8DCE,
+    GL_MODELVIEW_STACK_DEPTH                                                   = 0x0BA3,  GL_RGBA12                                        = 0x805A,  GL_INT_SAMPLER_2D_ARRAY                      = 0x8DCF,
+    GL_MODELVIEW0_STACK_DEPTH_EXT                                              = 0x0BA3,  GL_RGBA12_EXT                                    = 0x805A,  GL_INT_SAMPLER_BUFFER                        = 0x8DD0,
+    GL_PROJECTION_STACK_DEPTH                                                  = 0x0BA4,  GL_RGBA16                                        = 0x805B,  GL_UNSIGNED_INT_SAMPLER_1D                   = 0x8DD1,
+    GL_TEXTURE_STACK_DEPTH                                                     = 0x0BA5,  GL_RGBA16_EXT                                    = 0x805B,  GL_UNSIGNED_INT_SAMPLER_2D                   = 0x8DD2,
+    GL_MODELVIEW_MATRIX                                                        = 0x0BA6,  GL_DUAL_ALPHA4_SGIS                              = 0x8110,  GL_UNSIGNED_INT_SAMPLER_3D                   = 0x8DD3,
+    GL_MODELVIEW0_MATRIX_EXT                                                   = 0x0BA6,  GL_DUAL_ALPHA8_SGIS                              = 0x8111,  GL_UNSIGNED_INT_SAMPLER_CUBE                 = 0x8DD4,
+    GL_PROJECTION_MATRIX                                                       = 0x0BA7,  GL_DUAL_ALPHA12_SGIS                             = 0x8112,  GL_UNSIGNED_INT_SAMPLER_2D_RECT              = 0x8DD5,
+    GL_TEXTURE_MATRIX                                                          = 0x0BA8,  GL_DUAL_ALPHA16_SGIS                             = 0x8113,  GL_UNSIGNED_INT_SAMPLER_1D_ARRAY             = 0x8DD6,
+    GL_ATTRIB_STACK_DEPTH                                                      = 0x0BB0,  GL_DUAL_LUMINANCE4_SGIS                          = 0x8114,  GL_UNSIGNED_INT_SAMPLER_2D_ARRAY             = 0x8DD7,
+    GL_CLIENT_ATTRIB_STACK_DEPTH                                               = 0x0BB1,  GL_DUAL_LUMINANCE8_SGIS                          = 0x8115,  GL_UNSIGNED_INT_SAMPLER_BUFFER               = 0x8DD8,
+    GL_ALPHA_TEST                                                              = 0x0BC0,  GL_DUAL_LUMINANCE12_SGIS                         = 0x8116,  GL_DOUBLE_MAT2                               = 0x8F46,
+    GL_ALPHA_TEST_QCOM                                                         = 0x0BC0,  GL_DUAL_LUMINANCE16_SGIS                         = 0x8117,  GL_DOUBLE_MAT3                               = 0x8F47,
+    GL_ALPHA_TEST_FUNC                                                         = 0x0BC1,  GL_DUAL_INTENSITY4_SGIS                          = 0x8118,  GL_DOUBLE_MAT4                               = 0x8F48,
+    GL_ALPHA_TEST_FUNC_QCOM                                                    = 0x0BC1,  GL_DUAL_INTENSITY8_SGIS                          = 0x8119,  GL_DOUBLE_MAT2x3                             = 0x8F49,
+    GL_ALPHA_TEST_REF                                                          = 0x0BC2,  GL_DUAL_INTENSITY12_SGIS                         = 0x811A,  GL_DOUBLE_MAT2x4                             = 0x8F4A,
+    GL_ALPHA_TEST_REF_QCOM                                                     = 0x0BC2,  GL_DUAL_INTENSITY16_SGIS                         = 0x811B,  GL_DOUBLE_MAT3x2                             = 0x8F4B,
+    GL_DITHER                                                                  = 0x0BD0,  GL_DUAL_LUMINANCE_ALPHA4_SGIS                    = 0x811C,  GL_DOUBLE_MAT3x4                             = 0x8F4C,
+    GL_BLEND_DST                                                               = 0x0BE0,  GL_DUAL_LUMINANCE_ALPHA8_SGIS                    = 0x811D,  GL_DOUBLE_MAT4x2                             = 0x8F4D,
+    GL_BLEND_SRC                                                               = 0x0BE1,  GL_QUAD_ALPHA4_SGIS                              = 0x811E,  GL_DOUBLE_MAT4x3                             = 0x8F4E,
+    GL_LOGIC_OP_MODE                                                           = 0x0BF0,  GL_QUAD_ALPHA8_SGIS                              = 0x811F,  GL_INT64_VEC2_ARB                            = 0x8FE9,
+    GL_INDEX_LOGIC_OP                                                          = 0x0BF1,  GL_QUAD_LUMINANCE4_SGIS                          = 0x8120,  GL_INT64_VEC3_ARB                            = 0x8FEA,
+    GL_LOGIC_OP                                                                = 0x0BF1,  GL_QUAD_LUMINANCE8_SGIS                          = 0x8121,  GL_INT64_VEC4_ARB                            = 0x8FEB,
+    GL_COLOR_LOGIC_OP                                                          = 0x0BF2,  GL_QUAD_INTENSITY4_SGIS                          = 0x8122,  GL_UNSIGNED_INT64_VEC2_ARB                   = 0x8FF5,
+    GL_AUX_BUFFERS                                                             = 0x0C00,  GL_QUAD_INTENSITY8_SGIS                          = 0x8123,  GL_UNSIGNED_INT64_VEC3_ARB                   = 0x8FF6,
+    GL_DRAW_BUFFER                                                             = 0x0C01,  GL_DEPTH_COMPONENT16                             = 0x81A5,  GL_UNSIGNED_INT64_VEC4_ARB                   = 0x8FF7,
+    GL_DRAW_BUFFER_EXT                                                         = 0x0C01,  GL_DEPTH_COMPONENT16_ARB                         = 0x81A5,  GL_DOUBLE_VEC2                               = 0x8FFC,
+    GL_READ_BUFFER                                                             = 0x0C02,  GL_DEPTH_COMPONENT16_OES                         = 0x81A5,  GL_DOUBLE_VEC3                               = 0x8FFD,
+    GL_READ_BUFFER_EXT                                                         = 0x0C02,  GL_DEPTH_COMPONENT16_SGIX                        = 0x81A5,  GL_DOUBLE_VEC4                               = 0x8FFE,
+    GL_READ_BUFFER_NV                                                          = 0x0C02,  GL_DEPTH_COMPONENT24                             = 0x81A6,  GL_SAMPLER_CUBE_MAP_ARRAY                    = 0x900C,
+    GL_SCISSOR_BOX                                                             = 0x0C10,  GL_DEPTH_COMPONENT24_ARB                         = 0x81A6,  GL_SAMPLER_CUBE_MAP_ARRAY_SHADOW             = 0x900D,
+    GL_SCISSOR_TEST                                                            = 0x0C11,  GL_DEPTH_COMPONENT24_OES                         = 0x81A6,  GL_INT_SAMPLER_CUBE_MAP_ARRAY                = 0x900E,
+    GL_INDEX_CLEAR_VALUE                                                       = 0x0C20,  GL_DEPTH_COMPONENT24_SGIX                        = 0x81A6,  GL_UNSIGNED_INT_SAMPLER_CUBE_MAP_ARRAY       = 0x900F,
+    GL_INDEX_WRITEMASK                                                         = 0x0C21,  GL_DEPTH_COMPONENT32                             = 0x81A7,  GL_IMAGE_1D                                  = 0x904C,
+    GL_COLOR_CLEAR_VALUE                                                       = 0x0C22,  GL_DEPTH_COMPONENT32_ARB                         = 0x81A7,  GL_IMAGE_2D                                  = 0x904D,
+    GL_COLOR_WRITEMASK                                                         = 0x0C23,  GL_DEPTH_COMPONENT32_OES                         = 0x81A7,  GL_IMAGE_3D                                  = 0x904E,
+    GL_INDEX_MODE                                                              = 0x0C30,  GL_DEPTH_COMPONENT32_SGIX                        = 0x81A7,  GL_IMAGE_2D_RECT                             = 0x904F,
+    GL_RGBA_MODE                                                               = 0x0C31,  GL_COMPRESSED_RED                                = 0x8225,  GL_IMAGE_CUBE                                = 0x9050,
+    GL_DOUBLEBUFFER                                                            = 0x0C32,  GL_COMPRESSED_RG                                 = 0x8226,  GL_IMAGE_BUFFER                              = 0x9051,
+    GL_STEREO                                                                  = 0x0C33,  GL_R8                                            = 0x8229,  GL_IMAGE_1D_ARRAY                            = 0x9052,
+    GL_RENDER_MODE                                                             = 0x0C40,  GL_R8_EXT                                        = 0x8229,  GL_IMAGE_2D_ARRAY                            = 0x9053,
+    GL_PERSPECTIVE_CORRECTION_HINT                                             = 0x0C50,  GL_R16                                           = 0x822A,  GL_IMAGE_CUBE_MAP_ARRAY                      = 0x9054,
+    GL_POINT_SMOOTH_HINT                                                       = 0x0C51,  GL_R16_EXT                                       = 0x822A,  GL_IMAGE_2D_MULTISAMPLE                      = 0x9055,
+    GL_LINE_SMOOTH_HINT                                                        = 0x0C52,  GL_RG8                                           = 0x822B,  GL_IMAGE_2D_MULTISAMPLE_ARRAY                = 0x9056,
+    GL_POLYGON_SMOOTH_HINT                                                     = 0x0C53,  GL_RG8_EXT                                       = 0x822B,  GL_INT_IMAGE_1D                              = 0x9057,
+    GL_FOG_HINT                                                                = 0x0C54,  GL_RG16                                          = 0x822C,  GL_INT_IMAGE_2D                              = 0x9058,
+    GL_TEXTURE_GEN_S                                                           = 0x0C60,  GL_RG16_EXT                                      = 0x822C,  GL_INT_IMAGE_3D                              = 0x9059,
+    GL_TEXTURE_GEN_T                                                           = 0x0C61,  GL_R16F                                          = 0x822D,  GL_INT_IMAGE_2D_RECT                         = 0x905A,
+    GL_TEXTURE_GEN_R                                                           = 0x0C62,  GL_R16F_EXT                                      = 0x822D,  GL_INT_IMAGE_CUBE                            = 0x905B,
+    GL_TEXTURE_GEN_Q                                                           = 0x0C63,  GL_R32F                                          = 0x822E,  GL_INT_IMAGE_BUFFER                          = 0x905C,
+    GL_PIXEL_MAP_I_TO_I_SIZE                                                   = 0x0CB0,  GL_R32F_EXT                                      = 0x822E,  GL_INT_IMAGE_1D_ARRAY                        = 0x905D,
+    GL_PIXEL_MAP_S_TO_S_SIZE                                                   = 0x0CB1,  GL_RG16F                                         = 0x822F,  GL_INT_IMAGE_2D_ARRAY                        = 0x905E,
+    GL_PIXEL_MAP_I_TO_R_SIZE                                                   = 0x0CB2,  GL_RG16F_EXT                                     = 0x822F,  GL_INT_IMAGE_CUBE_MAP_ARRAY                  = 0x905F,
+    GL_PIXEL_MAP_I_TO_G_SIZE                                                   = 0x0CB3,  GL_RG32F                                         = 0x8230,  GL_INT_IMAGE_2D_MULTISAMPLE                  = 0x9060,
+    GL_PIXEL_MAP_I_TO_B_SIZE                                                   = 0x0CB4,  GL_RG32F_EXT                                     = 0x8230,  GL_INT_IMAGE_2D_MULTISAMPLE_ARRAY            = 0x9061,
+    GL_PIXEL_MAP_I_TO_A_SIZE                                                   = 0x0CB5,  GL_R8I                                           = 0x8231,  GL_UNSIGNED_INT_IMAGE_1D                     = 0x9062,
+    GL_PIXEL_MAP_R_TO_R_SIZE                                                   = 0x0CB6,  GL_R8UI                                          = 0x8232,  GL_UNSIGNED_INT_IMAGE_2D                     = 0x9063,
+    GL_PIXEL_MAP_G_TO_G_SIZE                                                   = 0x0CB7,  GL_R16I                                          = 0x8233,  GL_UNSIGNED_INT_IMAGE_3D                     = 0x9064,
+    GL_PIXEL_MAP_B_TO_B_SIZE                                                   = 0x0CB8,  GL_R16UI                                         = 0x8234,  GL_UNSIGNED_INT_IMAGE_2D_RECT                = 0x9065,
+    GL_PIXEL_MAP_A_TO_A_SIZE                                                   = 0x0CB9,  GL_R32I                                          = 0x8235,  GL_UNSIGNED_INT_IMAGE_CUBE                   = 0x9066,
+    GL_UNPACK_SWAP_BYTES                                                       = 0x0CF0,  GL_R32UI                                         = 0x8236,  GL_UNSIGNED_INT_IMAGE_BUFFER                 = 0x9067,
+    GL_UNPACK_LSB_FIRST                                                        = 0x0CF1,  GL_RG8I                                          = 0x8237,  GL_UNSIGNED_INT_IMAGE_1D_ARRAY               = 0x9068,
+    GL_UNPACK_ROW_LENGTH                                                       = 0x0CF2,  GL_RG8UI                                         = 0x8238,  GL_UNSIGNED_INT_IMAGE_2D_ARRAY               = 0x9069,
+    GL_UNPACK_SKIP_ROWS                                                        = 0x0CF3,  GL_RG16I                                         = 0x8239,  GL_UNSIGNED_INT_IMAGE_CUBE_MAP_ARRAY         = 0x906A,
+    GL_UNPACK_SKIP_PIXELS                                                      = 0x0CF4,  GL_RG16UI                                        = 0x823A,  GL_UNSIGNED_INT_IMAGE_2D_MULTISAMPLE         = 0x906B,
+    GL_UNPACK_ALIGNMENT                                                        = 0x0CF5,  GL_RG32I                                         = 0x823B,  GL_UNSIGNED_INT_IMAGE_2D_MULTISAMPLE_ARRAY   = 0x906C,
+    GL_PACK_SWAP_BYTES                                                         = 0x0D00,  GL_RG32UI                                        = 0x823C,  GL_SAMPLER_2D_MULTISAMPLE                    = 0x9108,
+    GL_PACK_LSB_FIRST                                                          = 0x0D01,  GL_COMPRESSED_RGB_S3TC_DXT1_EXT                  = 0x83F0,  GL_INT_SAMPLER_2D_MULTISAMPLE                = 0x9109,
+    GL_PACK_ROW_LENGTH                                                         = 0x0D02,  GL_COMPRESSED_RGBA_S3TC_DXT1_EXT                 = 0x83F1,  GL_UNSIGNED_INT_SAMPLER_2D_MULTISAMPLE       = 0x910A,
+    GL_PACK_ROW_LENGTH_NV                                                      = 0x0D02,  GL_COMPRESSED_RGBA_S3TC_DXT3_ANGLE               = 0x83F2,  GL_SAMPLER_2D_MULTISAMPLE_ARRAY              = 0x910B,
+    GL_PACK_SKIP_ROWS                                                          = 0x0D03,  GL_COMPRESSED_RGBA_S3TC_DXT3_EXT                 = 0x83F2,  GL_INT_SAMPLER_2D_MULTISAMPLE_ARRAY          = 0x910C,
+    GL_PACK_SKIP_ROWS_NV                                                       = 0x0D03,  GL_COMPRESSED_RGBA_S3TC_DXT5_ANGLE               = 0x83F3,  GL_UNSIGNED_INT_SAMPLER_2D_MULTISAMPLE_ARRAY = 0x910D,
+    GL_PACK_SKIP_PIXELS                                                        = 0x0D04,  GL_COMPRESSED_RGBA_S3TC_DXT5_EXT                 = 0x83F3,
+    GL_PACK_SKIP_PIXELS_NV                                                     = 0x0D04,  GL_COMPRESSED_RGB                                = 0x84ED,
+    GL_PACK_ALIGNMENT                                                          = 0x0D05,  GL_COMPRESSED_RGBA                               = 0x84EE,
+    GL_MAP_COLOR                                                               = 0x0D10,  GL_DEPTH_STENCIL_EXT                             = 0x84F9,
+    GL_MAP_STENCIL                                                             = 0x0D11,  GL_DEPTH_STENCIL_NV                              = 0x84F9,
+    GL_INDEX_SHIFT                                                             = 0x0D12,  GL_DEPTH_STENCIL_OES                             = 0x84F9,
+    GL_INDEX_OFFSET                                                            = 0x0D13,  GL_DEPTH_STENCIL_MESA                            = 0x8750,
+    GL_RED_SCALE                                                               = 0x0D14,  GL_RGBA32F                                       = 0x8814,
+    GL_RED_BIAS                                                                = 0x0D15,  GL_RGBA32F_ARB                                   = 0x8814,
+    GL_ZOOM_X                                                                  = 0x0D16,  GL_RGBA32F_EXT                                   = 0x8814,
+    GL_ZOOM_Y                                                                  = 0x0D17,  GL_RGB32F                                        = 0x8815,
+    GL_GREEN_SCALE                                                             = 0x0D18,  GL_RGB32F_ARB                                    = 0x8815,
+    GL_GREEN_BIAS                                                              = 0x0D19,  GL_RGB32F_EXT                                    = 0x8815,
+    GL_BLUE_SCALE                                                              = 0x0D1A,  GL_RGBA16F                                       = 0x881A,
+    GL_BLUE_BIAS                                                               = 0x0D1B,  GL_RGBA16F_ARB                                   = 0x881A,
+    GL_ALPHA_SCALE                                                             = 0x0D1C,  GL_RGBA16F_EXT                                   = 0x881A,
+    GL_ALPHA_BIAS                                                              = 0x0D1D,  GL_RGB16F                                        = 0x881B,
+    GL_DEPTH_SCALE                                                             = 0x0D1E,  GL_RGB16F_ARB                                    = 0x881B,
+    GL_DEPTH_BIAS                                                              = 0x0D1F,  GL_RGB16F_EXT                                    = 0x881B,
+    GL_MAX_EVAL_ORDER                                                          = 0x0D30,  GL_DEPTH24_STENCIL8                              = 0x88F0,
+    GL_MAX_LIGHTS                                                              = 0x0D31,  GL_DEPTH24_STENCIL8_EXT                          = 0x88F0,
+    GL_MAX_CLIP_PLANES                                                         = 0x0D32,  GL_DEPTH24_STENCIL8_OES                          = 0x88F0,
+    GL_MAX_CLIP_DISTANCES                                                      = 0x0D32,  GL_R11F_G11F_B10F                                = 0x8C3A,
+    GL_MAX_TEXTURE_SIZE                                                        = 0x0D33,  GL_R11F_G11F_B10F_APPLE                          = 0x8C3A,
+    GL_MAX_PIXEL_MAP_TABLE                                                     = 0x0D34,  GL_R11F_G11F_B10F_EXT                            = 0x8C3A,
+    GL_MAX_ATTRIB_STACK_DEPTH                                                  = 0x0D35,  GL_RGB9_E5                                       = 0x8C3D,
+    GL_MAX_MODELVIEW_STACK_DEPTH                                               = 0x0D36,  GL_RGB9_E5_APPLE                                 = 0x8C3D,
+    GL_MAX_NAME_STACK_DEPTH                                                    = 0x0D37,  GL_RGB9_E5_EXT                                   = 0x8C3D,
+    GL_MAX_PROJECTION_STACK_DEPTH                                              = 0x0D38,  GL_SRGB                                          = 0x8C40,
+    GL_MAX_TEXTURE_STACK_DEPTH                                                 = 0x0D39,  GL_SRGB_EXT                                      = 0x8C40,
+    GL_MAX_VIEWPORT_DIMS                                                       = 0x0D3A,  GL_SRGB8                                         = 0x8C41,
+    GL_MAX_CLIENT_ATTRIB_STACK_DEPTH                                           = 0x0D3B,  GL_SRGB8_EXT                                     = 0x8C41,
+    GL_SUBPIXEL_BITS                                                           = 0x0D50,  GL_SRGB8_NV                                      = 0x8C41,
+    GL_INDEX_BITS                                                              = 0x0D51,  GL_SRGB_ALPHA                                    = 0x8C42,
+    GL_RED_BITS                                                                = 0x0D52,  GL_SRGB_ALPHA_EXT                                = 0x8C42,
+    GL_GREEN_BITS                                                              = 0x0D53,  GL_SRGB8_ALPHA8                                  = 0x8C43,
+    GL_BLUE_BITS                                                               = 0x0D54,  GL_SRGB8_ALPHA8_EXT                              = 0x8C43,
+    GL_ALPHA_BITS                                                              = 0x0D55,  GL_COMPRESSED_SRGB                               = 0x8C48,
+    GL_DEPTH_BITS                                                              = 0x0D56,  GL_COMPRESSED_SRGB_ALPHA                         = 0x8C49,
+    GL_STENCIL_BITS                                                            = 0x0D57,  GL_COMPRESSED_SRGB_S3TC_DXT1_EXT                 = 0x8C4C,
+    GL_ACCUM_RED_BITS                                                          = 0x0D58,  GL_COMPRESSED_SRGB_S3TC_DXT1_NV                  = 0x8C4C,
+    GL_ACCUM_GREEN_BITS                                                        = 0x0D59,  GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT           = 0x8C4D,
+    GL_ACCUM_BLUE_BITS                                                         = 0x0D5A,  GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_NV            = 0x8C4D,
+    GL_ACCUM_ALPHA_BITS                                                        = 0x0D5B,  GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT           = 0x8C4E,
+    GL_NAME_STACK_DEPTH                                                        = 0x0D70,  GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_NV            = 0x8C4E,
+    GL_AUTO_NORMAL                                                             = 0x0D80,  GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT           = 0x8C4F,
+    GL_MAP1_COLOR_4                                                            = 0x0D90,  GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_NV            = 0x8C4F,
+    GL_MAP1_INDEX                                                              = 0x0D91,  GL_DEPTH_COMPONENT32F                            = 0x8CAC,
+    GL_MAP1_NORMAL                                                             = 0x0D92,  GL_DEPTH32F_STENCIL8                             = 0x8CAD,
+    GL_MAP1_TEXTURE_COORD_1                                                    = 0x0D93,  GL_STENCIL_INDEX1                                = 0x8D46,
+    GL_MAP1_TEXTURE_COORD_2                                                    = 0x0D94,  GL_STENCIL_INDEX1_EXT                            = 0x8D46,
+    GL_MAP1_TEXTURE_COORD_3                                                    = 0x0D95,  GL_STENCIL_INDEX1_OES                            = 0x8D46,
+    GL_MAP1_TEXTURE_COORD_4                                                    = 0x0D96,  GL_STENCIL_INDEX4                                = 0x8D47,
+    GL_MAP1_VERTEX_3                                                           = 0x0D97,  GL_STENCIL_INDEX4_EXT                            = 0x8D47,
+    GL_MAP1_VERTEX_4                                                           = 0x0D98,  GL_STENCIL_INDEX4_OES                            = 0x8D47,
+    GL_MAP2_COLOR_4                                                            = 0x0DB0,  GL_STENCIL_INDEX8                                = 0x8D48,
+    GL_MAP2_INDEX                                                              = 0x0DB1,  GL_STENCIL_INDEX8_EXT                            = 0x8D48,
+    GL_MAP2_NORMAL                                                             = 0x0DB2,  GL_STENCIL_INDEX8_OES                            = 0x8D48,
+    GL_MAP2_TEXTURE_COORD_1                                                    = 0x0DB3,  GL_STENCIL_INDEX16                               = 0x8D49,
+    GL_MAP2_TEXTURE_COORD_2                                                    = 0x0DB4,  GL_STENCIL_INDEX16_EXT                           = 0x8D49,
+    GL_MAP2_TEXTURE_COORD_3                                                    = 0x0DB5,  GL_RGB565_OES                                    = 0x8D62,
+    GL_MAP2_TEXTURE_COORD_4                                                    = 0x0DB6,  GL_RGB565                                        = 0x8D62,
+    GL_MAP2_VERTEX_3                                                           = 0x0DB7,  GL_ETC1_RGB8_OES                                 = 0x8D64,
+    GL_MAP2_VERTEX_4                                                           = 0x0DB8,  GL_RGBA32UI                                      = 0x8D70,
+    GL_MAP1_GRID_DOMAIN                                                        = 0x0DD0,  GL_RGBA32UI_EXT                                  = 0x8D70,
+    GL_MAP1_GRID_SEGMENTS                                                      = 0x0DD1,  GL_RGB32UI                                       = 0x8D71,
+    GL_MAP2_GRID_DOMAIN                                                        = 0x0DD2,  GL_RGB32UI_EXT                                   = 0x8D71,
+    GL_MAP2_GRID_SEGMENTS                                                      = 0x0DD3,  GL_ALPHA32UI_EXT                                 = 0x8D72,
+    GL_TEXTURE_1D                                                              = 0x0DE0,  GL_INTENSITY32UI_EXT                             = 0x8D73,
+    GL_TEXTURE_2D                                                              = 0x0DE1,  GL_LUMINANCE32UI_EXT                             = 0x8D74,
+    GL_FEEDBACK_BUFFER_SIZE                                                    = 0x0DF1,  GL_LUMINANCE_ALPHA32UI_EXT                       = 0x8D75,
+    GL_FEEDBACK_BUFFER_TYPE                                                    = 0x0DF2,  GL_RGBA16UI                                      = 0x8D76,
+    GL_SELECTION_BUFFER_SIZE                                                   = 0x0DF4,  GL_RGBA16UI_EXT                                  = 0x8D76,
+    GL_POLYGON_OFFSET_UNITS                                                    = 0x2A00,  GL_RGB16UI                                       = 0x8D77,
+    GL_POLYGON_OFFSET_POINT                                                    = 0x2A01,  GL_RGB16UI_EXT                                   = 0x8D77,
+    GL_POLYGON_OFFSET_LINE                                                     = 0x2A02,  GL_ALPHA16UI_EXT                                 = 0x8D78,
+    GL_CLIP_PLANE0                                                             = 0x3000,  GL_INTENSITY16UI_EXT                             = 0x8D79,
+    GL_CLIP_PLANE1                                                             = 0x3001,  GL_LUMINANCE16UI_EXT                             = 0x8D7A,
+    GL_CLIP_PLANE2                                                             = 0x3002,  GL_LUMINANCE_ALPHA16UI_EXT                       = 0x8D7B,
+    GL_CLIP_PLANE3                                                             = 0x3003,  GL_RGBA8UI                                       = 0x8D7C,
+    GL_CLIP_PLANE4                                                             = 0x3004,  GL_RGBA8UI_EXT                                   = 0x8D7C,
+    GL_CLIP_PLANE5                                                             = 0x3005,  GL_RGB8UI                                        = 0x8D7D,
+    GL_LIGHT0                                                                  = 0x4000,  GL_RGB8UI_EXT                                    = 0x8D7D,
+    GL_LIGHT1                                                                  = 0x4001,  GL_ALPHA8UI_EXT                                  = 0x8D7E,
+    GL_LIGHT2                                                                  = 0x4002,  GL_INTENSITY8UI_EXT                              = 0x8D7F,
+    GL_LIGHT3                                                                  = 0x4003,  GL_LUMINANCE8UI_EXT                              = 0x8D80,
+    GL_LIGHT4                                                                  = 0x4004,  GL_LUMINANCE_ALPHA8UI_EXT                        = 0x8D81,
+    GL_LIGHT5                                                                  = 0x4005,  GL_RGBA32I                                       = 0x8D82,
+    GL_LIGHT6                                                                  = 0x4006,  GL_RGBA32I_EXT                                   = 0x8D82,
+    GL_LIGHT7                                                                  = 0x4007,  GL_RGB32I                                        = 0x8D83,
+    GL_BLEND_COLOR                                                             = 0x8005,  GL_RGB32I_EXT                                    = 0x8D83,
+    GL_BLEND_COLOR_EXT                                                         = 0x8005,  GL_ALPHA32I_EXT                                  = 0x8D84,
+    GL_BLEND_EQUATION                                                          = 0x8009,  GL_INTENSITY32I_EXT                              = 0x8D85,
+    GL_BLEND_EQUATION_EXT                                                      = 0x8009,  GL_LUMINANCE32I_EXT                              = 0x8D86,
+    GL_BLEND_EQUATION_OES                                                      = 0x8009,  GL_LUMINANCE_ALPHA32I_EXT                        = 0x8D87,
+    GL_BLEND_EQUATION_RGB                                                      = 0x8009,  GL_RGBA16I                                       = 0x8D88,
+    GL_PACK_CMYK_HINT_EXT                                                      = 0x800E,  GL_RGBA16I_EXT                                   = 0x8D88,
+    GL_UNPACK_CMYK_HINT_EXT                                                    = 0x800F,  GL_RGB16I                                        = 0x8D89,
+    GL_CONVOLUTION_1D_EXT                                                      = 0x8010,  GL_RGB16I_EXT                                    = 0x8D89,
+    GL_CONVOLUTION_2D_EXT                                                      = 0x8011,  GL_ALPHA16I_EXT                                  = 0x8D8A,
+    GL_SEPARABLE_2D_EXT                                                        = 0x8012,  GL_INTENSITY16I_EXT                              = 0x8D8B,
+    GL_POST_CONVOLUTION_RED_SCALE_EXT                                          = 0x801C,  GL_LUMINANCE16I_EXT                              = 0x8D8C,
+    GL_POST_CONVOLUTION_GREEN_SCALE_EXT                                        = 0x801D,  GL_LUMINANCE_ALPHA16I_EXT                        = 0x8D8D,
+    GL_POST_CONVOLUTION_BLUE_SCALE_EXT                                         = 0x801E,  GL_RGBA8I                                        = 0x8D8E,
+    GL_POST_CONVOLUTION_ALPHA_SCALE_EXT                                        = 0x801F,  GL_RGBA8I_EXT                                    = 0x8D8E,
+    GL_POST_CONVOLUTION_RED_BIAS_EXT                                           = 0x8020,  GL_RGB8I                                         = 0x8D8F,
+    GL_POST_CONVOLUTION_GREEN_BIAS_EXT                                         = 0x8021,  GL_RGB8I_EXT                                     = 0x8D8F,
+    GL_POST_CONVOLUTION_BLUE_BIAS_EXT                                          = 0x8022,  GL_ALPHA8I_EXT                                   = 0x8D90,
+    GL_POST_CONVOLUTION_ALPHA_BIAS_EXT                                         = 0x8023,  GL_INTENSITY8I_EXT                               = 0x8D91,
+    GL_HISTOGRAM_EXT                                                           = 0x8024,  GL_LUMINANCE8I_EXT                               = 0x8D92,
+    GL_MINMAX_EXT                                                              = 0x802E,  GL_LUMINANCE_ALPHA8I_EXT                         = 0x8D93,
+    GL_POLYGON_OFFSET_FILL                                                     = 0x8037,  GL_DEPTH_COMPONENT32F_NV                         = 0x8DAB,
+    GL_POLYGON_OFFSET_FACTOR                                                   = 0x8038,  GL_DEPTH32F_STENCIL8_NV                          = 0x8DAC,
+    GL_POLYGON_OFFSET_BIAS_EXT                                                 = 0x8039,  GL_COMPRESSED_RED_RGTC1                          = 0x8DBB,
+    GL_RESCALE_NORMAL_EXT                                                      = 0x803A,  GL_COMPRESSED_RED_RGTC1_EXT                      = 0x8DBB,
+    GL_TEXTURE_BINDING_1D                                                      = 0x8068,  GL_COMPRESSED_SIGNED_RED_RGTC1                   = 0x8DBC,
+    GL_TEXTURE_BINDING_2D                                                      = 0x8069,  GL_COMPRESSED_SIGNED_RED_RGTC1_EXT               = 0x8DBC,
+    GL_TEXTURE_3D_BINDING_EXT                                                  = 0x806A,  GL_COMPRESSED_RED_GREEN_RGTC2_EXT                = 0x8DBD,
+    GL_TEXTURE_BINDING_3D                                                      = 0x806A,  GL_COMPRESSED_RG_RGTC2                           = 0x8DBD,
+    GL_PACK_SKIP_IMAGES                                                        = 0x806B,  GL_COMPRESSED_SIGNED_RED_GREEN_RGTC2_EXT         = 0x8DBE,
+    GL_PACK_SKIP_IMAGES_EXT                                                    = 0x806B,  GL_COMPRESSED_SIGNED_RG_RGTC2                    = 0x8DBE,
+    GL_PACK_IMAGE_HEIGHT                                                       = 0x806C,  GL_COMPRESSED_RGBA_BPTC_UNORM                    = 0x8E8C,
+    GL_PACK_IMAGE_HEIGHT_EXT                                                   = 0x806C,  GL_COMPRESSED_RGBA_BPTC_UNORM_ARB                = 0x8E8C,
+    GL_UNPACK_SKIP_IMAGES                                                      = 0x806D,  GL_COMPRESSED_RGBA_BPTC_UNORM_EXT                = 0x8E8C,
+    GL_UNPACK_SKIP_IMAGES_EXT                                                  = 0x806D,  GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM              = 0x8E8D,
+    GL_UNPACK_IMAGE_HEIGHT                                                     = 0x806E,  GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM_ARB          = 0x8E8D,
+    GL_UNPACK_IMAGE_HEIGHT_EXT                                                 = 0x806E,  GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM_EXT          = 0x8E8D,
+    GL_TEXTURE_3D_EXT                                                          = 0x806F,  GL_COMPRESSED_RGB_BPTC_SIGNED_FLOAT              = 0x8E8E,
+    GL_MAX_3D_TEXTURE_SIZE                                                     = 0x8073,  GL_COMPRESSED_RGB_BPTC_SIGNED_FLOAT_ARB          = 0x8E8E,
+    GL_MAX_3D_TEXTURE_SIZE_EXT                                                 = 0x8073,  GL_COMPRESSED_RGB_BPTC_SIGNED_FLOAT_EXT          = 0x8E8E,
+    GL_VERTEX_ARRAY                                                            = 0x8074,  GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT            = 0x8E8F,
+    GL_NORMAL_ARRAY                                                            = 0x8075,  GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT_ARB        = 0x8E8F,
+    GL_COLOR_ARRAY                                                             = 0x8076,  GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT_EXT        = 0x8E8F,
+    GL_INDEX_ARRAY                                                             = 0x8077,  GL_R8_SNORM                                      = 0x8F94,
+    GL_TEXTURE_COORD_ARRAY                                                     = 0x8078,  GL_RG8_SNORM                                     = 0x8F95,
+    GL_EDGE_FLAG_ARRAY                                                         = 0x8079,  GL_RGB8_SNORM                                    = 0x8F96,
+    GL_VERTEX_ARRAY_SIZE                                                       = 0x807A,  GL_RGBA8_SNORM                                   = 0x8F97,
+    GL_VERTEX_ARRAY_TYPE                                                       = 0x807B,  GL_R16_SNORM                                     = 0x8F98,
+    GL_VERTEX_ARRAY_STRIDE                                                     = 0x807C,  GL_R16_SNORM_EXT                                 = 0x8F98,
+    GL_VERTEX_ARRAY_COUNT_EXT                                                  = 0x807D,  GL_RG16_SNORM                                    = 0x8F99,
+    GL_NORMAL_ARRAY_TYPE                                                       = 0x807E,  GL_RG16_SNORM_EXT                                = 0x8F99,
+    GL_NORMAL_ARRAY_STRIDE                                                     = 0x807F,  GL_RGB16_SNORM                                   = 0x8F9A,
+    GL_NORMAL_ARRAY_COUNT_EXT                                                  = 0x8080,  GL_RGB16_SNORM_EXT                               = 0x8F9A,
+    GL_COLOR_ARRAY_SIZE                                                        = 0x8081,  GL_RGBA16_SNORM                                  = 0x8F9B,
+    GL_COLOR_ARRAY_TYPE                                                        = 0x8082,  GL_RGBA16_SNORM_EXT                              = 0x8F9B,
+    GL_COLOR_ARRAY_STRIDE                                                      = 0x8083,  GL_SR8_EXT                                       = 0x8FBD,
+    GL_COLOR_ARRAY_COUNT_EXT                                                   = 0x8084,  GL_SRG8_EXT                                      = 0x8FBE,
+    GL_INDEX_ARRAY_TYPE                                                        = 0x8085,  GL_RGB10_A2UI                                    = 0x906F,
+    GL_INDEX_ARRAY_STRIDE                                                      = 0x8086,  GL_COMPRESSED_R11_EAC                            = 0x9270,
+    GL_INDEX_ARRAY_COUNT_EXT                                                   = 0x8087,  GL_COMPRESSED_R11_EAC_OES                        = 0x9270,
+    GL_TEXTURE_COORD_ARRAY_SIZE                                                = 0x8088,  GL_COMPRESSED_SIGNED_R11_EAC                     = 0x9271,
+    GL_TEXTURE_COORD_ARRAY_TYPE                                                = 0x8089,  GL_COMPRESSED_SIGNED_R11_EAC_OES                 = 0x9271,
+    GL_TEXTURE_COORD_ARRAY_STRIDE                                              = 0x808A,  GL_COMPRESSED_RG11_EAC                           = 0x9272,
+    GL_TEXTURE_COORD_ARRAY_COUNT_EXT                                           = 0x808B,  GL_COMPRESSED_RG11_EAC_OES                       = 0x9272,
+    GL_EDGE_FLAG_ARRAY_STRIDE                                                  = 0x808C,  GL_COMPRESSED_SIGNED_RG11_EAC                    = 0x9273,
+    GL_EDGE_FLAG_ARRAY_COUNT_EXT                                               = 0x808D,  GL_COMPRESSED_SIGNED_RG11_EAC_OES                = 0x9273,
+    GL_INTERLACE_SGIX                                                          = 0x8094,  GL_COMPRESSED_RGB8_ETC2                          = 0x9274,
+    GL_DETAIL_TEXTURE_2D_BINDING_SGIS                                          = 0x8096,  GL_COMPRESSED_RGB8_ETC2_OES                      = 0x9274,
+    GL_MULTISAMPLE_SGIS                                                        = 0x809D,  GL_COMPRESSED_SRGB8_ETC2                         = 0x9275,
+    GL_SAMPLE_ALPHA_TO_MASK_SGIS                                               = 0x809E,  GL_COMPRESSED_SRGB8_ETC2_OES                     = 0x9275,
+    GL_SAMPLE_ALPHA_TO_ONE_SGIS                                                = 0x809F,  GL_COMPRESSED_RGB8_PUNCHTHROUGH_ALPHA1_ETC2      = 0x9276,
+    GL_SAMPLE_MASK_SGIS                                                        = 0x80A0,  GL_COMPRESSED_RGB8_PUNCHTHROUGH_ALPHA1_ETC2_OES  = 0x9276,
+    GL_SAMPLE_BUFFERS                                                          = 0x80A8,  GL_COMPRESSED_SRGB8_PUNCHTHROUGH_ALPHA1_ETC2     = 0x9277,
+    GL_SAMPLE_BUFFERS_SGIS                                                     = 0x80A8,  GL_COMPRESSED_SRGB8_PUNCHTHROUGH_ALPHA1_ETC2_OES = 0x9277,
+    GL_SAMPLES                                                                 = 0x80A9,  GL_COMPRESSED_RGBA8_ETC2_EAC                     = 0x9278,
+    GL_SAMPLES_SGIS                                                            = 0x80A9,  GL_COMPRESSED_RGBA8_ETC2_EAC_OES                 = 0x9278,
+    GL_SAMPLE_COVERAGE_VALUE                                                   = 0x80AA,  GL_COMPRESSED_SRGB8_ALPHA8_ETC2_EAC              = 0x9279,
+    GL_SAMPLE_MASK_VALUE_SGIS                                                  = 0x80AA,  GL_COMPRESSED_SRGB8_ALPHA8_ETC2_EAC_OES          = 0x9279,
+    GL_SAMPLE_COVERAGE_INVERT                                                  = 0x80AB,  GL_COMPRESSED_RGBA_ASTC_4x4                      = 0x93B0,
+    GL_SAMPLE_MASK_INVERT_SGIS                                                 = 0x80AB,  GL_COMPRESSED_RGBA_ASTC_4x4_KHR                  = 0x93B0,
+    GL_SAMPLE_PATTERN_SGIS                                                     = 0x80AC,  GL_COMPRESSED_RGBA_ASTC_5x4                      = 0x93B1,
+    GL_COLOR_MATRIX_SGI                                                        = 0x80B1,  GL_COMPRESSED_RGBA_ASTC_5x4_KHR                  = 0x93B1,
+    GL_COLOR_MATRIX_STACK_DEPTH_SGI                                            = 0x80B2,  GL_COMPRESSED_RGBA_ASTC_5x5                      = 0x93B2,
+    GL_MAX_COLOR_MATRIX_STACK_DEPTH_SGI                                        = 0x80B3,  GL_COMPRESSED_RGBA_ASTC_5x5_KHR                  = 0x93B2,
+    GL_POST_COLOR_MATRIX_RED_SCALE_SGI                                         = 0x80B4,  GL_COMPRESSED_RGBA_ASTC_6x5                      = 0x93B3,
+    GL_POST_COLOR_MATRIX_GREEN_SCALE_SGI                                       = 0x80B5,  GL_COMPRESSED_RGBA_ASTC_6x5_KHR                  = 0x93B3,
+    GL_POST_COLOR_MATRIX_BLUE_SCALE_SGI                                        = 0x80B6,  GL_COMPRESSED_RGBA_ASTC_6x6                      = 0x93B4,
+    GL_POST_COLOR_MATRIX_ALPHA_SCALE_SGI                                       = 0x80B7,  GL_COMPRESSED_RGBA_ASTC_6x6_KHR                  = 0x93B4,
+    GL_POST_COLOR_MATRIX_RED_BIAS_SGI                                          = 0x80B8,  GL_COMPRESSED_RGBA_ASTC_8x5                      = 0x93B5,
+    GL_POST_COLOR_MATRIX_GREEN_BIAS_SGI                                        = 0x80B9,  GL_COMPRESSED_RGBA_ASTC_8x5_KHR                  = 0x93B5,
+    GL_POST_COLOR_MATRIX_BLUE_BIAS_SGI                                         = 0x80BA,  GL_COMPRESSED_RGBA_ASTC_8x6                      = 0x93B6,
+    GL_POST_COLOR_MATRIX_ALPHA_BIAS_SGI                                        = 0x80BB,  GL_COMPRESSED_RGBA_ASTC_8x6_KHR                  = 0x93B6,
+    GL_TEXTURE_COLOR_TABLE_SGI                                                 = 0x80BC,  GL_COMPRESSED_RGBA_ASTC_8x8                      = 0x93B7,
+    GL_BLEND_DST_RGB                                                           = 0x80C8,  GL_COMPRESSED_RGBA_ASTC_8x8_KHR                  = 0x93B7,
+    GL_BLEND_SRC_RGB                                                           = 0x80C9,  GL_COMPRESSED_RGBA_ASTC_10x5                     = 0x93B8,
+    GL_BLEND_DST_ALPHA                                                         = 0x80CA,  GL_COMPRESSED_RGBA_ASTC_10x5_KHR                 = 0x93B8,
+    GL_BLEND_SRC_ALPHA                                                         = 0x80CB,  GL_COMPRESSED_RGBA_ASTC_10x6                     = 0x93B9,
+    GL_COLOR_TABLE_SGI                                                         = 0x80D0,  GL_COMPRESSED_RGBA_ASTC_10x6_KHR                 = 0x93B9,
+    GL_POST_CONVOLUTION_COLOR_TABLE_SGI                                        = 0x80D1,  GL_COMPRESSED_RGBA_ASTC_10x8                     = 0x93BA,
+    GL_POST_COLOR_MATRIX_COLOR_TABLE_SGI                                       = 0x80D2,  GL_COMPRESSED_RGBA_ASTC_10x8_KHR                 = 0x93BA,
+    GL_MAX_ELEMENTS_VERTICES                                                   = 0x80E8,  GL_COMPRESSED_RGBA_ASTC_10x10                    = 0x93BB,
+    GL_MAX_ELEMENTS_INDICES                                                    = 0x80E9,  GL_COMPRESSED_RGBA_ASTC_10x10_KHR                = 0x93BB,
+    GL_POINT_SIZE_MIN                                                          = 0x8126,  GL_COMPRESSED_RGBA_ASTC_12x10                    = 0x93BC,
+    GL_POINT_SIZE_MIN_ARB                                                      = 0x8126,  GL_COMPRESSED_RGBA_ASTC_12x10_KHR                = 0x93BC,
+    GL_POINT_SIZE_MIN_EXT                                                      = 0x8126,  GL_COMPRESSED_RGBA_ASTC_12x12                    = 0x93BD,
+    GL_POINT_SIZE_MIN_SGIS                                                     = 0x8126,  GL_COMPRESSED_RGBA_ASTC_12x12_KHR                = 0x93BD,
+    GL_POINT_SIZE_MAX                                                          = 0x8127,  GL_COMPRESSED_RGBA_ASTC_3x3x3_OES                = 0x93C0,
+    GL_POINT_SIZE_MAX_ARB                                                      = 0x8127,  GL_COMPRESSED_RGBA_ASTC_4x3x3_OES                = 0x93C1,
+    GL_POINT_SIZE_MAX_EXT                                                      = 0x8127,  GL_COMPRESSED_RGBA_ASTC_4x4x3_OES                = 0x93C2,
+    GL_POINT_SIZE_MAX_SGIS                                                     = 0x8127,  GL_COMPRESSED_RGBA_ASTC_4x4x4_OES                = 0x93C3,
+    GL_POINT_FADE_THRESHOLD_SIZE                                               = 0x8128,  GL_COMPRESSED_RGBA_ASTC_5x4x4_OES                = 0x93C4,
+    GL_POINT_FADE_THRESHOLD_SIZE_ARB                                           = 0x8128,  GL_COMPRESSED_RGBA_ASTC_5x5x4_OES                = 0x93C5,
+    GL_POINT_FADE_THRESHOLD_SIZE_EXT                                           = 0x8128,  GL_COMPRESSED_RGBA_ASTC_5x5x5_OES                = 0x93C6,
+    GL_POINT_FADE_THRESHOLD_SIZE_SGIS                                          = 0x8128,  GL_COMPRESSED_RGBA_ASTC_6x5x5_OES                = 0x93C7,
+    GL_DISTANCE_ATTENUATION_EXT                                                = 0x8129,  GL_COMPRESSED_RGBA_ASTC_6x6x5_OES                = 0x93C8,
+    GL_DISTANCE_ATTENUATION_SGIS                                               = 0x8129,  GL_COMPRESSED_RGBA_ASTC_6x6x6_OES                = 0x93C9,
+    GL_POINT_DISTANCE_ATTENUATION                                              = 0x8129,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4              = 0x93D0,
+    GL_POINT_DISTANCE_ATTENUATION_ARB                                          = 0x8129,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR          = 0x93D0,
+    GL_FOG_FUNC_POINTS_SGIS                                                    = 0x812B,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x4              = 0x93D1,
+    GL_MAX_FOG_FUNC_POINTS_SGIS                                                = 0x812C,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x4_KHR          = 0x93D1,
+    GL_PACK_SKIP_VOLUMES_SGIS                                                  = 0x8130,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x5              = 0x93D2,
+    GL_PACK_IMAGE_DEPTH_SGIS                                                   = 0x8131,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x5_KHR          = 0x93D2,
+    GL_UNPACK_SKIP_VOLUMES_SGIS                                                = 0x8132,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x5              = 0x93D3,
+    GL_UNPACK_IMAGE_DEPTH_SGIS                                                 = 0x8133,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x5_KHR          = 0x93D3,
+    GL_TEXTURE_4D_SGIS                                                         = 0x8134,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6              = 0x93D4,
+    GL_MAX_4D_TEXTURE_SIZE_SGIS                                                = 0x8138,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6_KHR          = 0x93D4,
+    GL_PIXEL_TEX_GEN_SGIX                                                      = 0x8139,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x5              = 0x93D5,
+    GL_PIXEL_TILE_BEST_ALIGNMENT_SGIX                                          = 0x813E,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x5_KHR          = 0x93D5,
+    GL_PIXEL_TILE_CACHE_INCREMENT_SGIX                                         = 0x813F,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x6              = 0x93D6,
+    GL_PIXEL_TILE_WIDTH_SGIX                                                   = 0x8140,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x6_KHR          = 0x93D6,
+    GL_PIXEL_TILE_HEIGHT_SGIX                                                  = 0x8141,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x8              = 0x93D7,
+    GL_PIXEL_TILE_GRID_WIDTH_SGIX                                              = 0x8142,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x8_KHR          = 0x93D7,
+    GL_PIXEL_TILE_GRID_HEIGHT_SGIX                                             = 0x8143,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x5             = 0x93D8,
+    GL_PIXEL_TILE_GRID_DEPTH_SGIX                                              = 0x8144,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x5_KHR         = 0x93D8,
+    GL_PIXEL_TILE_CACHE_SIZE_SGIX                                              = 0x8145,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x6             = 0x93D9,
+    GL_SPRITE_SGIX                                                             = 0x8148,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x6_KHR         = 0x93D9,
+    GL_SPRITE_MODE_SGIX                                                        = 0x8149,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x8             = 0x93DA,
+    GL_SPRITE_AXIS_SGIX                                                        = 0x814A,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x8_KHR         = 0x93DA,
+    GL_SPRITE_TRANSLATION_SGIX                                                 = 0x814B,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x10            = 0x93DB,
+    GL_TEXTURE_4D_BINDING_SGIS                                                 = 0x814F,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x10_KHR        = 0x93DB,
+    GL_MAX_CLIPMAP_DEPTH_SGIX                                                  = 0x8177,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x10            = 0x93DC,
+    GL_MAX_CLIPMAP_VIRTUAL_DEPTH_SGIX                                          = 0x8178,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x10_KHR        = 0x93DC,
+    GL_POST_TEXTURE_FILTER_BIAS_RANGE_SGIX                                     = 0x817B,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12            = 0x93DD,
+    GL_POST_TEXTURE_FILTER_SCALE_RANGE_SGIX                                    = 0x817C,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR        = 0x93DD,
+    GL_REFERENCE_PLANE_SGIX                                                    = 0x817D,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_3x3x3_OES        = 0x93E0,
+    GL_REFERENCE_PLANE_EQUATION_SGIX                                           = 0x817E,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x3x3_OES        = 0x93E1,
+    GL_IR_INSTRUMENT1_SGIX                                                     = 0x817F,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4x3_OES        = 0x93E2,
+    GL_INSTRUMENT_MEASUREMENTS_SGIX                                            = 0x8181,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4x4_OES        = 0x93E3,
+    GL_CALLIGRAPHIC_FRAGMENT_SGIX                                              = 0x8183,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x4x4_OES        = 0x93E4,
+    GL_FRAMEZOOM_SGIX                                                          = 0x818B,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x5x4_OES        = 0x93E5,
+    GL_FRAMEZOOM_FACTOR_SGIX                                                   = 0x818C,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x5x5_OES        = 0x93E6,
+    GL_MAX_FRAMEZOOM_FACTOR_SGIX                                               = 0x818D,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x5x5_OES        = 0x93E7,
+    GL_GENERATE_MIPMAP_HINT_SGIS                                               = 0x8192,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6x5_OES        = 0x93E8,
+    GL_DEFORMATIONS_MASK_SGIX                                                  = 0x8196,  GL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6x6_OES        = 0x93E9,
+    GL_FOG_OFFSET_SGIX                                                         = 0x8198,
+    GL_FOG_OFFSET_VALUE_SGIX                                                   = 0x8199,
+    GL_LIGHT_MODEL_COLOR_CONTROL                                               = 0x81F8,
+    GL_SHARED_TEXTURE_PALETTE_EXT                                              = 0x81FB,
+    GL_MAJOR_VERSION                                                           = 0x821B,
+    GL_MINOR_VERSION                                                           = 0x821C,
+    GL_NUM_EXTENSIONS                                                          = 0x821D,
+    GL_CONTEXT_FLAGS                                                           = 0x821E,
+    GL_PROGRAM_PIPELINE_BINDING                                                = 0x825A,
+    GL_MAX_VIEWPORTS                                                           = 0x825B,
+    GL_VIEWPORT_SUBPIXEL_BITS                                                  = 0x825C,
+    GL_VIEWPORT_BOUNDS_RANGE                                                   = 0x825D,
+    GL_LAYER_PROVOKING_VERTEX                                                  = 0x825E,
+    GL_VIEWPORT_INDEX_PROVOKING_VERTEX                                         = 0x825F,
+    GL_MAX_COMPUTE_UNIFORM_COMPONENTS                                          = 0x8263,
+    GL_MAX_COMPUTE_ATOMIC_COUNTER_BUFFERS                                      = 0x8264,
+    GL_MAX_COMPUTE_ATOMIC_COUNTERS                                             = 0x8265,
+    GL_MAX_COMBINED_COMPUTE_UNIFORM_COMPONENTS                                 = 0x8266,
+    GL_MAX_DEBUG_GROUP_STACK_DEPTH                                             = 0x826C,
+    GL_DEBUG_GROUP_STACK_DEPTH                                                 = 0x826D,
+    GL_MAX_UNIFORM_LOCATIONS                                                   = 0x826E,
+    GL_VERTEX_BINDING_DIVISOR                                                  = 0x82D6,
+    GL_VERTEX_BINDING_OFFSET                                                   = 0x82D7,
+    GL_VERTEX_BINDING_STRIDE                                                   = 0x82D8,
+    GL_MAX_VERTEX_ATTRIB_RELATIVE_OFFSET                                       = 0x82D9,
+    GL_MAX_VERTEX_ATTRIB_BINDINGS                                              = 0x82DA,
+    GL_MAX_LABEL_LENGTH                                                        = 0x82E8,
+    GL_CONVOLUTION_HINT_SGIX                                                   = 0x8316,
+    GL_ASYNC_MARKER_SGIX                                                       = 0x8329,
+    GL_PIXEL_TEX_GEN_MODE_SGIX                                                 = 0x832B,
+    GL_ASYNC_HISTOGRAM_SGIX                                                    = 0x832C,
+    GL_MAX_ASYNC_HISTOGRAM_SGIX                                                = 0x832D,
+    GL_PIXEL_TEXTURE_SGIS                                                      = 0x8353,
+    GL_ASYNC_TEX_IMAGE_SGIX                                                    = 0x835C,
+    GL_ASYNC_DRAW_PIXELS_SGIX                                                  = 0x835D,
+    GL_ASYNC_READ_PIXELS_SGIX                                                  = 0x835E,
+    GL_MAX_ASYNC_TEX_IMAGE_SGIX                                                = 0x835F,
+    GL_MAX_ASYNC_DRAW_PIXELS_SGIX                                              = 0x8360,
+    GL_MAX_ASYNC_READ_PIXELS_SGIX                                              = 0x8361,
+    GL_VERTEX_PRECLIP_SGIX                                                     = 0x83EE,
+    GL_VERTEX_PRECLIP_HINT_SGIX                                                = 0x83EF,
+    GL_FRAGMENT_LIGHTING_SGIX                                                  = 0x8400,
+    GL_FRAGMENT_COLOR_MATERIAL_SGIX                                            = 0x8401,
+    GL_FRAGMENT_COLOR_MATERIAL_FACE_SGIX                                       = 0x8402,
+    GL_FRAGMENT_COLOR_MATERIAL_PARAMETER_SGIX                                  = 0x8403,
+    GL_MAX_FRAGMENT_LIGHTS_SGIX                                                = 0x8404,
+    GL_MAX_ACTIVE_LIGHTS_SGIX                                                  = 0x8405,
+    GL_LIGHT_ENV_MODE_SGIX                                                     = 0x8407,
+    GL_FRAGMENT_LIGHT_MODEL_LOCAL_VIEWER_SGIX                                  = 0x8408,
+    GL_FRAGMENT_LIGHT_MODEL_TWO_SIDE_SGIX                                      = 0x8409,
+    GL_FRAGMENT_LIGHT_MODEL_AMBIENT_SGIX                                       = 0x840A,
+    GL_FRAGMENT_LIGHT_MODEL_NORMAL_INTERPOLATION_SGIX                          = 0x840B,
+    GL_FRAGMENT_LIGHT0_SGIX                                                    = 0x840C,
+    GL_PACK_RESAMPLE_SGIX                                                      = 0x842E,
+    GL_UNPACK_RESAMPLE_SGIX                                                    = 0x842F,
+    GL_ALIASED_POINT_SIZE_RANGE                                                = 0x846D,
+    GL_ALIASED_LINE_WIDTH_RANGE                                                = 0x846E,
+    GL_ACTIVE_TEXTURE                                                          = 0x84E0,
+    GL_MAX_RENDERBUFFER_SIZE                                                   = 0x84E8,
+    GL_TEXTURE_COMPRESSION_HINT                                                = 0x84EF,
+    GL_TEXTURE_BINDING_RECTANGLE                                               = 0x84F6,
+    GL_TEXTURE_BINDING_RECTANGLE_ARB                                           = 0x84F6,
+    GL_TEXTURE_BINDING_RECTANGLE_NV                                            = 0x84F6,
+    GL_MAX_RECTANGLE_TEXTURE_SIZE                                              = 0x84F8,
+    GL_MAX_TEXTURE_LOD_BIAS                                                    = 0x84FD,
+    GL_TEXTURE_BINDING_CUBE_MAP                                                = 0x8514,
+    GL_TEXTURE_BINDING_CUBE_MAP_ARB                                            = 0x8514,
+    GL_TEXTURE_BINDING_CUBE_MAP_EXT                                            = 0x8514,
+    GL_TEXTURE_BINDING_CUBE_MAP_OES                                            = 0x8514,
+    GL_MAX_CUBE_MAP_TEXTURE_SIZE                                               = 0x851C,
+    GL_MAX_CUBE_MAP_TEXTURE_SIZE_ARB                                           = 0x851C,
+    GL_MAX_CUBE_MAP_TEXTURE_SIZE_EXT                                           = 0x851C,
+    GL_MAX_CUBE_MAP_TEXTURE_SIZE_OES                                           = 0x851C,
+    GL_PACK_SUBSAMPLE_RATE_SGIX                                                = 0x85A0,
+    GL_UNPACK_SUBSAMPLE_RATE_SGIX                                              = 0x85A1,
+    GL_VERTEX_ARRAY_BINDING                                                    = 0x85B5,
+    GL_PROGRAM_POINT_SIZE                                                      = 0x8642,
+    GL_NUM_COMPRESSED_TEXTURE_FORMATS                                          = 0x86A2,
+    GL_COMPRESSED_TEXTURE_FORMATS                                              = 0x86A3,
+    GL_NUM_PROGRAM_BINARY_FORMATS                                              = 0x87FE,
+    GL_PROGRAM_BINARY_FORMATS                                                  = 0x87FF,
+    GL_STENCIL_BACK_FUNC                                                       = 0x8800,
+    GL_STENCIL_BACK_FAIL                                                       = 0x8801,
+    GL_STENCIL_BACK_PASS_DEPTH_FAIL                                            = 0x8802,
+    GL_STENCIL_BACK_PASS_DEPTH_PASS                                            = 0x8803,
+    GL_MAX_DRAW_BUFFERS                                                        = 0x8824,
+    GL_BLEND_EQUATION_ALPHA                                                    = 0x883D,
+    GL_MAX_VERTEX_ATTRIBS                                                      = 0x8869,
+    GL_MAX_TEXTURE_IMAGE_UNITS                                                 = 0x8872,
+    GL_ARRAY_BUFFER_BINDING                                                    = 0x8894,
+    GL_ELEMENT_ARRAY_BUFFER_BINDING                                            = 0x8895,
+    GL_PIXEL_PACK_BUFFER_BINDING                                               = 0x88ED,
+    GL_PIXEL_UNPACK_BUFFER_BINDING                                             = 0x88EF,
+    GL_MAX_DUAL_SOURCE_DRAW_BUFFERS                                            = 0x88FC,
+    GL_MAX_ARRAY_TEXTURE_LAYERS                                                = 0x88FF,
+    GL_MIN_PROGRAM_TEXEL_OFFSET                                                = 0x8904,
+    GL_MAX_PROGRAM_TEXEL_OFFSET                                                = 0x8905,
+    GL_SAMPLER_BINDING                                                         = 0x8919,
+    GL_FRAGMENT_SHADER_ATI                                                     = 0x8920,
+    GL_UNIFORM_BUFFER_BINDING                                                  = 0x8A28,
+    GL_UNIFORM_BUFFER_START                                                    = 0x8A29,
+    GL_UNIFORM_BUFFER_SIZE                                                     = 0x8A2A,
+    GL_MAX_VERTEX_UNIFORM_BLOCKS                                               = 0x8A2B,
+    GL_MAX_GEOMETRY_UNIFORM_BLOCKS                                             = 0x8A2C,
+    GL_MAX_FRAGMENT_UNIFORM_BLOCKS                                             = 0x8A2D,
+    GL_MAX_COMBINED_UNIFORM_BLOCKS                                             = 0x8A2E,
+    GL_MAX_UNIFORM_BUFFER_BINDINGS                                             = 0x8A2F,
+    GL_MAX_UNIFORM_BLOCK_SIZE                                                  = 0x8A30,
+    GL_MAX_COMBINED_VERTEX_UNIFORM_COMPONENTS                                  = 0x8A31,
+    GL_MAX_COMBINED_GEOMETRY_UNIFORM_COMPONENTS                                = 0x8A32,
+    GL_MAX_COMBINED_FRAGMENT_UNIFORM_COMPONENTS                                = 0x8A33,
+    GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT                                         = 0x8A34,
+    GL_MAX_FRAGMENT_UNIFORM_COMPONENTS                                         = 0x8B49,
+    GL_MAX_VERTEX_UNIFORM_COMPONENTS                                           = 0x8B4A,
+    GL_MAX_VARYING_FLOATS                                                      = 0x8B4B,
+    GL_MAX_VARYING_COMPONENTS                                                  = 0x8B4B,
+    GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS                                          = 0x8B4C,
+    GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS                                        = 0x8B4D,
+    GL_FRAGMENT_SHADER_DERIVATIVE_HINT                                         = 0x8B8B,
+    GL_CURRENT_PROGRAM                                                         = 0x8B8D,
+    GL_IMPLEMENTATION_COLOR_READ_TYPE                                          = 0x8B9A,
+    GL_IMPLEMENTATION_COLOR_READ_FORMAT                                        = 0x8B9B,
+    GL_TEXTURE_BINDING_1D_ARRAY                                                = 0x8C1C,
+    GL_TEXTURE_BINDING_2D_ARRAY                                                = 0x8C1D,
+    GL_MAX_GEOMETRY_TEXTURE_IMAGE_UNITS                                        = 0x8C29,
+    GL_MAX_TEXTURE_BUFFER_SIZE                                                 = 0x8C2B,
+    GL_TEXTURE_BINDING_BUFFER                                                  = 0x8C2C,
+    GL_TRANSFORM_FEEDBACK_BUFFER_START                                         = 0x8C84,
+    GL_TRANSFORM_FEEDBACK_BUFFER_SIZE                                          = 0x8C85,
+    GL_TRANSFORM_FEEDBACK_BUFFER_BINDING                                       = 0x8C8F,
+    GL_MOTION_ESTIMATION_SEARCH_BLOCK_X_QCOM                                   = 0x8C90,
+    GL_MOTION_ESTIMATION_SEARCH_BLOCK_Y_QCOM                                   = 0x8C91,
+    GL_STENCIL_BACK_REF                                                        = 0x8CA3,
+    GL_STENCIL_BACK_VALUE_MASK                                                 = 0x8CA4,
+    GL_STENCIL_BACK_WRITEMASK                                                  = 0x8CA5,
+    GL_DRAW_FRAMEBUFFER_BINDING                                                = 0x8CA6,
+    GL_RENDERBUFFER_BINDING                                                    = 0x8CA7,
+    GL_READ_FRAMEBUFFER_BINDING                                                = 0x8CAA,
+    GL_MAX_COLOR_ATTACHMENTS                                                   = 0x8CDF,
+    GL_MAX_COLOR_ATTACHMENTS_EXT                                               = 0x8CDF,
+    GL_MAX_COLOR_ATTACHMENTS_NV                                                = 0x8CDF,
+    GL_TEXTURE_GEN_STR_OES                                                     = 0x8D60,
+    GL_MAX_ELEMENT_INDEX                                                       = 0x8D6B,
+    GL_MAX_GEOMETRY_UNIFORM_COMPONENTS                                         = 0x8DDF,
+    GL_SHADER_BINARY_FORMATS                                                   = 0x8DF8,
+    GL_NUM_SHADER_BINARY_FORMATS                                               = 0x8DF9,
+    GL_SHADER_COMPILER                                                         = 0x8DFA,
+    GL_MAX_VERTEX_UNIFORM_VECTORS                                              = 0x8DFB,
+    GL_MAX_VARYING_VECTORS                                                     = 0x8DFC,
+    GL_MAX_FRAGMENT_UNIFORM_VECTORS                                            = 0x8DFD,
+    GL_TIMESTAMP                                                               = 0x8E28,
+    GL_TIMESTAMP_EXT                                                           = 0x8E28,
+    GL_PROVOKING_VERTEX                                                        = 0x8E4F,
+    GL_MAX_SAMPLE_MASK_WORDS                                                   = 0x8E59,
+    GL_MAX_TESS_CONTROL_UNIFORM_BLOCKS                                         = 0x8E89,
+    GL_MAX_TESS_EVALUATION_UNIFORM_BLOCKS                                      = 0x8E8A,
+    GL_FETCH_PER_SAMPLE_ARM                                                    = 0x8F65,
+    GL_FRAGMENT_SHADER_FRAMEBUFFER_FETCH_MRT_ARM                               = 0x8F66,
+    GL_FRAGMENT_SHADING_RATE_NON_TRIVIAL_COMBINERS_SUPPORTED_EXT               = 0x8F6F,
+    GL_PRIMITIVE_RESTART_INDEX                                                 = 0x8F9E,
+    GL_MIN_MAP_BUFFER_ALIGNMENT                                                = 0x90BC,
+    GL_SHADER_STORAGE_BUFFER_BINDING                                           = 0x90D3,
+    GL_SHADER_STORAGE_BUFFER_START                                             = 0x90D4,
+    GL_SHADER_STORAGE_BUFFER_SIZE                                              = 0x90D5,
+    GL_MAX_VERTEX_SHADER_STORAGE_BLOCKS                                        = 0x90D6,
+    GL_MAX_GEOMETRY_SHADER_STORAGE_BLOCKS                                      = 0x90D7,
+    GL_MAX_TESS_CONTROL_SHADER_STORAGE_BLOCKS                                  = 0x90D8,
+    GL_MAX_TESS_EVALUATION_SHADER_STORAGE_BLOCKS                               = 0x90D9,
+    GL_MAX_FRAGMENT_SHADER_STORAGE_BLOCKS                                      = 0x90DA,
+    GL_MAX_COMPUTE_SHADER_STORAGE_BLOCKS                                       = 0x90DB,
+    GL_MAX_COMBINED_SHADER_STORAGE_BLOCKS                                      = 0x90DC,
+    GL_MAX_SHADER_STORAGE_BUFFER_BINDINGS                                      = 0x90DD,
+    GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT                                  = 0x90DF,
+    GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS                                      = 0x90EB,
+    GL_DISPATCH_INDIRECT_BUFFER_BINDING                                        = 0x90EF,
+    GL_TEXTURE_BINDING_2D_MULTISAMPLE                                          = 0x9104,
+    GL_TEXTURE_BINDING_2D_MULTISAMPLE_ARRAY                                    = 0x9105,
+    GL_MAX_COLOR_TEXTURE_SAMPLES                                               = 0x910E,
+    GL_MAX_DEPTH_TEXTURE_SAMPLES                                               = 0x910F,
+    GL_MAX_INTEGER_SAMPLES                                                     = 0x9110,
+    GL_MAX_SERVER_WAIT_TIMEOUT                                                 = 0x9111,
+    GL_MAX_VERTEX_OUTPUT_COMPONENTS                                            = 0x9122,
+    GL_MAX_GEOMETRY_INPUT_COMPONENTS                                           = 0x9123,
+    GL_MAX_GEOMETRY_OUTPUT_COMPONENTS                                          = 0x9124,
+    GL_MAX_FRAGMENT_INPUT_COMPONENTS                                           = 0x9125,
+    GL_CONTEXT_PROFILE_MASK                                                    = 0x9126,
+    GL_TEXTURE_BUFFER_OFFSET_ALIGNMENT                                         = 0x919F,
+    GL_MAX_COMPUTE_UNIFORM_BLOCKS                                              = 0x91BB,
+    GL_MAX_COMPUTE_TEXTURE_IMAGE_UNITS                                         = 0x91BC,
+    GL_MAX_COMPUTE_WORK_GROUP_COUNT                                            = 0x91BE,
+    GL_MAX_COMPUTE_WORK_GROUP_SIZE                                             = 0x91BF,
+    GL_MAX_VERTEX_ATOMIC_COUNTERS                                              = 0x92D2,
+    GL_MAX_TESS_CONTROL_ATOMIC_COUNTERS                                        = 0x92D3,
+    GL_MAX_TESS_EVALUATION_ATOMIC_COUNTERS                                     = 0x92D4,
+    GL_MAX_GEOMETRY_ATOMIC_COUNTERS                                            = 0x92D5,
+    GL_MAX_FRAGMENT_ATOMIC_COUNTERS                                            = 0x92D6,
+    GL_MAX_COMBINED_ATOMIC_COUNTERS                                            = 0x92D7,
+    GL_MAX_FRAMEBUFFER_WIDTH                                                   = 0x9315,
+    GL_MAX_FRAMEBUFFER_HEIGHT                                                  = 0x9316,
+    GL_MAX_FRAMEBUFFER_LAYERS                                                  = 0x9317,
+    GL_MAX_FRAMEBUFFER_SAMPLES                                                 = 0x9318,
+    GL_NUM_DEVICE_UUIDS_EXT                                                    = 0x9596,
+    GL_DEVICE_UUID_EXT                                                         = 0x9597,
+    GL_DRIVER_UUID_EXT                                                         = 0x9598,
+    GL_DEVICE_LUID_EXT                                                         = 0x9599,
+    GL_DEVICE_NODE_MASK_EXT                                                    = 0x959A,
+    GL_SHADING_RATE_IMAGE_PER_PRIMITIVE_NV                                     = 0x95B1,
+    GL_SHADING_RATE_IMAGE_PALETTE_COUNT_NV                                     = 0x95B2,
+    GL_MAX_TIMELINE_SEMAPHORE_VALUE_DIFFERENCE_NV                              = 0x95B6,
+    GL_FRAMEBUFFER_FETCH_NONCOHERENT_QCOM                                      = 0x96A2,
+    GL_SHADING_RATE_QCOM                                                       = 0x96A4,
+    GL_SHADING_RATE_EXT                                                        = 0x96D0,
+    GL_MIN_FRAGMENT_SHADING_RATE_ATTACHMENT_TEXEL_WIDTH_EXT                    = 0x96D7,
+    GL_MAX_FRAGMENT_SHADING_RATE_ATTACHMENT_TEXEL_WIDTH_EXT                    = 0x96D8,
+    GL_MIN_FRAGMENT_SHADING_RATE_ATTACHMENT_TEXEL_HEIGHT_EXT                   = 0x96D9,
+    GL_MAX_FRAGMENT_SHADING_RATE_ATTACHMENT_TEXEL_HEIGHT_EXT                   = 0x96DA,
+    GL_MAX_FRAGMENT_SHADING_RATE_ATTACHMENT_TEXEL_ASPECT_RATIO_EXT             = 0x96DB,
+    GL_MAX_FRAGMENT_SHADING_RATE_ATTACHMENT_LAYERS_EXT                         = 0x96DC,
+    GL_FRAGMENT_SHADING_RATE_WITH_SHADER_DEPTH_STENCIL_WRITES_SUPPORTED_EXT    = 0x96DD,
+    GL_FRAGMENT_SHADING_RATE_WITH_SAMPLE_MASK_SUPPORTED_EXT                    = 0x96DE,
+    GL_FRAGMENT_SHADING_RATE_ATTACHMENT_WITH_DEFAULT_FRAMEBUFFER_SUPPORTED_EXT = 0x96DF,
+    GL_SHADER_CORE_COUNT_ARM                                                   = 0x96F0,
+    GL_SHADER_CORE_ACTIVE_COUNT_ARM                                            = 0x96F1,
+    GL_SHADER_CORE_PRESENT_MASK_ARM                                            = 0x96F2,
+    GL_SHADER_CORE_MAX_WARP_COUNT_ARM                                          = 0x96F3,
+    GL_SHADER_CORE_PIXEL_RATE_ARM                                              = 0x96F4,
+    GL_SHADER_CORE_TEXEL_RATE_ARM                                              = 0x96F5,
+    GL_SHADER_CORE_FMA_RATE_ARM                                                = 0x96F6,
+    GL_MAX_TASK_WORK_GROUP_TOTAL_COUNT_EXT                                     = 0x9740,
+    GL_MAX_MESH_WORK_GROUP_TOTAL_COUNT_EXT                                     = 0x9741,
+    GL_MAX_TASK_PAYLOAD_SIZE_EXT                                               = 0x9742,
+    GL_MAX_TASK_SHARED_MEMORY_SIZE_EXT                                         = 0x9743,
+    GL_MAX_MESH_SHARED_MEMORY_SIZE_EXT                                         = 0x9744,
+    GL_MAX_TASK_PAYLOAD_AND_SHARED_MEMORY_SIZE_EXT                             = 0x9745,
+    GL_MAX_MESH_PAYLOAD_AND_SHARED_MEMORY_SIZE_EXT                             = 0x9746,
+    GL_MAX_MESH_OUTPUT_MEMORY_SIZE_EXT                                         = 0x9747,
+    GL_MAX_MESH_PAYLOAD_AND_OUTPUT_MEMORY_SIZE_EXT                             = 0x9748,
+    GL_MAX_MESH_OUTPUT_COMPONENTS_EXT                                          = 0x9749,
+    GL_MAX_MESH_OUTPUT_LAYERS_EXT                                              = 0x974A,
+    GL_MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS_EXT                           = 0x974B,
+    GL_MAX_PREFERRED_MESH_WORK_GROUP_INVOCATIONS_EXT                           = 0x974C,
+    GL_MESH_PREFERS_LOCAL_INVOCATION_VERTEX_OUTPUT_EXT                         = 0x974D,
+    GL_MESH_PREFERS_LOCAL_INVOCATION_PRIMITIVE_OUTPUT_EXT                      = 0x974E,
+    GL_MESH_PREFERS_COMPACT_VERTEX_OUTPUT_EXT                                  = 0x974F,
+    GL_MESH_PREFERS_COMPACT_PRIMITIVE_OUTPUT_EXT                               = 0x9750,
+    GL_MAX_TASK_WORK_GROUP_COUNT_EXT                                           = 0x9751,
+    GL_MAX_MESH_WORK_GROUP_COUNT_EXT                                           = 0x9752,
+    GL_MAX_MESH_OUTPUT_PRIMITIVES_EXT                                          = 0x9756,
+    GL_MAX_MESH_WORK_GROUP_INVOCATIONS_EXT                                     = 0x9757,
+    GL_MAX_MESH_WORK_GROUP_SIZE_EXT                                            = 0x9758,
+    GL_MAX_TASK_WORK_GROUP_INVOCATIONS_EXT                                     = 0x9759,
+    GL_MAX_TASK_WORK_GROUP_SIZE_EXT                                            = 0x975A,
+    /* TextureParameterName */                         /* TextureEnvParameter */        /* InternalFormatPName */
+    GL_TEXTURE_WIDTH                        = 0x1000,  GL_TEXTURE_ENV_MODE   = 0x2200,  GL_INTERNALFORMAT_SUPPORTED                = 0x826F,
+    GL_TEXTURE_HEIGHT                       = 0x1001,  GL_TEXTURE_ENV_COLOR  = 0x2201,  GL_INTERNALFORMAT_PREFERRED                = 0x8270,
+    GL_TEXTURE_INTERNAL_FORMAT              = 0x1003,  GL_TEXTURE_LOD_BIAS   = 0x8501,  GL_INTERNALFORMAT_RED_SIZE                 = 0x8271,
+    GL_TEXTURE_COMPONENTS                   = 0x1003,  GL_COMBINE_ARB        = 0x8570,  GL_INTERNALFORMAT_GREEN_SIZE               = 0x8272,
+    GL_TEXTURE_BORDER_COLOR                 = 0x1004,  GL_COMBINE_EXT        = 0x8570,  GL_INTERNALFORMAT_BLUE_SIZE                = 0x8273,
+    GL_TEXTURE_BORDER_COLOR_NV              = 0x1004,  GL_COMBINE_RGB        = 0x8571,  GL_INTERNALFORMAT_ALPHA_SIZE               = 0x8274,
+    GL_TEXTURE_BORDER                       = 0x1005,  GL_COMBINE_RGB_ARB    = 0x8571,  GL_INTERNALFORMAT_DEPTH_SIZE               = 0x8275,
+    GL_TEXTURE_MAG_FILTER                   = 0x2800,  GL_COMBINE_RGB_EXT    = 0x8571,  GL_INTERNALFORMAT_STENCIL_SIZE             = 0x8276,
+    GL_TEXTURE_MIN_FILTER                   = 0x2801,  GL_COMBINE_ALPHA      = 0x8572,  GL_INTERNALFORMAT_SHARED_SIZE              = 0x8277,
+    GL_TEXTURE_WRAP_S                       = 0x2802,  GL_COMBINE_ALPHA_ARB  = 0x8572,  GL_INTERNALFORMAT_RED_TYPE                 = 0x8278,
+    GL_TEXTURE_WRAP_T                       = 0x2803,  GL_COMBINE_ALPHA_EXT  = 0x8572,  GL_INTERNALFORMAT_GREEN_TYPE               = 0x8279,
+    GL_TEXTURE_RED_SIZE                     = 0x805C,  GL_RGB_SCALE          = 0x8573,  GL_INTERNALFORMAT_BLUE_TYPE                = 0x827A,
+    GL_TEXTURE_GREEN_SIZE                   = 0x805D,  GL_RGB_SCALE_ARB      = 0x8573,  GL_INTERNALFORMAT_ALPHA_TYPE               = 0x827B,
+    GL_TEXTURE_BLUE_SIZE                    = 0x805E,  GL_RGB_SCALE_EXT      = 0x8573,  GL_INTERNALFORMAT_DEPTH_TYPE               = 0x827C,
+    GL_TEXTURE_ALPHA_SIZE                   = 0x805F,  GL_ADD_SIGNED         = 0x8574,  GL_INTERNALFORMAT_STENCIL_TYPE             = 0x827D,
+    GL_TEXTURE_LUMINANCE_SIZE               = 0x8060,  GL_ADD_SIGNED_ARB     = 0x8574,  GL_MAX_WIDTH                               = 0x827E,
+    GL_TEXTURE_INTENSITY_SIZE               = 0x8061,  GL_ADD_SIGNED_EXT     = 0x8574,  GL_MAX_HEIGHT                              = 0x827F,
+    GL_TEXTURE_PRIORITY                     = 0x8066,  GL_INTERPOLATE        = 0x8575,  GL_MAX_DEPTH                               = 0x8280,
+    GL_TEXTURE_PRIORITY_EXT                 = 0x8066,  GL_INTERPOLATE_ARB    = 0x8575,  GL_MAX_LAYERS                              = 0x8281,
+    GL_TEXTURE_RESIDENT                     = 0x8067,  GL_INTERPOLATE_EXT    = 0x8575,  GL_COLOR_COMPONENTS                        = 0x8283,
+    GL_TEXTURE_DEPTH_EXT                    = 0x8071,  GL_CONSTANT_ARB       = 0x8576,  GL_COLOR_RENDERABLE                        = 0x8286,
+    GL_TEXTURE_WRAP_R                       = 0x8072,  GL_CONSTANT_EXT       = 0x8576,  GL_DEPTH_RENDERABLE                        = 0x8287,
+    GL_TEXTURE_WRAP_R_EXT                   = 0x8072,  GL_CONSTANT_NV        = 0x8576,  GL_STENCIL_RENDERABLE                      = 0x8288,
+    GL_TEXTURE_WRAP_R_OES                   = 0x8072,  GL_PREVIOUS           = 0x8578,  GL_FRAMEBUFFER_RENDERABLE                  = 0x8289,
+    GL_DETAIL_TEXTURE_LEVEL_SGIS            = 0x809A,  GL_PREVIOUS_ARB       = 0x8578,  GL_FRAMEBUFFER_RENDERABLE_LAYERED          = 0x828A,
+    GL_DETAIL_TEXTURE_MODE_SGIS             = 0x809B,  GL_PREVIOUS_EXT       = 0x8578,  GL_FRAMEBUFFER_BLEND                       = 0x828B,
+    GL_DETAIL_TEXTURE_FUNC_POINTS_SGIS      = 0x809C,  GL_SOURCE0_RGB        = 0x8580,  GL_READ_PIXELS                             = 0x828C,
+    GL_SHARPEN_TEXTURE_FUNC_POINTS_SGIS     = 0x80B0,  GL_SOURCE0_RGB_ARB    = 0x8580,  GL_READ_PIXELS_FORMAT                      = 0x828D,
+    GL_SHADOW_AMBIENT_SGIX                  = 0x80BF,  GL_SOURCE0_RGB_EXT    = 0x8580,  GL_READ_PIXELS_TYPE                        = 0x828E,
+    GL_DUAL_TEXTURE_SELECT_SGIS             = 0x8124,  GL_SRC0_RGB           = 0x8580,  GL_TEXTURE_IMAGE_FORMAT                    = 0x828F,
+    GL_QUAD_TEXTURE_SELECT_SGIS             = 0x8125,  GL_SOURCE1_RGB        = 0x8581,  GL_TEXTURE_IMAGE_TYPE                      = 0x8290,
+    GL_TEXTURE_4DSIZE_SGIS                  = 0x8136,  GL_SOURCE1_RGB_ARB    = 0x8581,  GL_GET_TEXTURE_IMAGE_FORMAT                = 0x8291,
+    GL_TEXTURE_WRAP_Q_SGIS                  = 0x8137,  GL_SOURCE1_RGB_EXT    = 0x8581,  GL_GET_TEXTURE_IMAGE_TYPE                  = 0x8292,
+    GL_TEXTURE_MIN_LOD                      = 0x813A,  GL_SRC1_RGB           = 0x8581,  GL_MIPMAP                                  = 0x8293,
+    GL_TEXTURE_MIN_LOD_SGIS                 = 0x813A,  GL_SOURCE2_RGB        = 0x8582,  GL_AUTO_GENERATE_MIPMAP                    = 0x8295,
+    GL_TEXTURE_MAX_LOD                      = 0x813B,  GL_SOURCE2_RGB_ARB    = 0x8582,  GL_COLOR_ENCODING                          = 0x8296,
+    GL_TEXTURE_MAX_LOD_SGIS                 = 0x813B,  GL_SOURCE2_RGB_EXT    = 0x8582,  GL_SRGB_READ                               = 0x8297,
+    GL_TEXTURE_BASE_LEVEL                   = 0x813C,  GL_SRC2_RGB           = 0x8582,  GL_SRGB_WRITE                              = 0x8298,
+    GL_TEXTURE_BASE_LEVEL_SGIS              = 0x813C,  GL_SOURCE3_RGB_NV     = 0x8583,  GL_FILTER                                  = 0x829A,
+    GL_TEXTURE_MAX_LEVEL                    = 0x813D,  GL_SOURCE0_ALPHA      = 0x8588,  GL_VERTEX_TEXTURE                          = 0x829B,
+    GL_TEXTURE_MAX_LEVEL_SGIS               = 0x813D,  GL_SOURCE0_ALPHA_ARB  = 0x8588,  GL_TESS_CONTROL_TEXTURE                    = 0x829C,
+    GL_TEXTURE_FILTER4_SIZE_SGIS            = 0x8147,  GL_SOURCE0_ALPHA_EXT  = 0x8588,  GL_TESS_EVALUATION_TEXTURE                 = 0x829D,
+    GL_TEXTURE_CLIPMAP_CENTER_SGIX          = 0x8171,  GL_SRC0_ALPHA         = 0x8588,  GL_GEOMETRY_TEXTURE                        = 0x829E,
+    GL_TEXTURE_CLIPMAP_FRAME_SGIX           = 0x8172,  GL_SOURCE1_ALPHA      = 0x8589,  GL_FRAGMENT_TEXTURE                        = 0x829F,
+    GL_TEXTURE_CLIPMAP_OFFSET_SGIX          = 0x8173,  GL_SOURCE1_ALPHA_ARB  = 0x8589,  GL_COMPUTE_TEXTURE                         = 0x82A0,
+    GL_TEXTURE_CLIPMAP_VIRTUAL_DEPTH_SGIX   = 0x8174,  GL_SOURCE1_ALPHA_EXT  = 0x8589,  GL_TEXTURE_SHADOW                          = 0x82A1,
+    GL_TEXTURE_CLIPMAP_LOD_OFFSET_SGIX      = 0x8175,  GL_SRC1_ALPHA_EXT     = 0x8589,  GL_TEXTURE_GATHER                          = 0x82A2,
+    GL_TEXTURE_CLIPMAP_DEPTH_SGIX           = 0x8176,  GL_SOURCE2_ALPHA      = 0x858A,  GL_TEXTURE_GATHER_SHADOW                   = 0x82A3,
+    GL_POST_TEXTURE_FILTER_BIAS_SGIX        = 0x8179,  GL_SOURCE2_ALPHA_ARB  = 0x858A,  GL_SHADER_IMAGE_LOAD                       = 0x82A4,
+    GL_POST_TEXTURE_FILTER_SCALE_SGIX       = 0x817A,  GL_SOURCE2_ALPHA_EXT  = 0x858A,  GL_SHADER_IMAGE_STORE                      = 0x82A5,
+    GL_TEXTURE_LOD_BIAS_S_SGIX              = 0x818E,  GL_SRC2_ALPHA         = 0x858A,  GL_SHADER_IMAGE_ATOMIC                     = 0x82A6,
+    GL_TEXTURE_LOD_BIAS_T_SGIX              = 0x818F,  GL_SOURCE3_ALPHA_NV   = 0x858B,  GL_IMAGE_TEXEL_SIZE                        = 0x82A7,
+    GL_TEXTURE_LOD_BIAS_R_SGIX              = 0x8190,  GL_OPERAND0_RGB       = 0x8590,  GL_IMAGE_COMPATIBILITY_CLASS               = 0x82A8,
+    GL_GENERATE_MIPMAP                      = 0x8191,  GL_OPERAND0_RGB_ARB   = 0x8590,  GL_IMAGE_PIXEL_FORMAT                      = 0x82A9,
+    GL_GENERATE_MIPMAP_SGIS                 = 0x8191,  GL_OPERAND0_RGB_EXT   = 0x8590,  GL_IMAGE_PIXEL_TYPE                        = 0x82AA,
+    GL_TEXTURE_COMPARE_SGIX                 = 0x819A,  GL_OPERAND1_RGB       = 0x8591,  GL_SIMULTANEOUS_TEXTURE_AND_DEPTH_TEST     = 0x82AC,
+    GL_TEXTURE_COMPARE_OPERATOR_SGIX        = 0x819B,  GL_OPERAND1_RGB_ARB   = 0x8591,  GL_SIMULTANEOUS_TEXTURE_AND_STENCIL_TEST   = 0x82AD,
+    GL_TEXTURE_LEQUAL_R_SGIX                = 0x819C,  GL_OPERAND1_RGB_EXT   = 0x8591,  GL_SIMULTANEOUS_TEXTURE_AND_DEPTH_WRITE    = 0x82AE,
+    GL_TEXTURE_GEQUAL_R_SGIX                = 0x819D,  GL_OPERAND2_RGB       = 0x8592,  GL_SIMULTANEOUS_TEXTURE_AND_STENCIL_WRITE  = 0x82AF,
+    GL_TEXTURE_MAX_CLAMP_S_SGIX             = 0x8369,  GL_OPERAND2_RGB_ARB   = 0x8592,  GL_TEXTURE_COMPRESSED_BLOCK_WIDTH          = 0x82B1,
+    GL_TEXTURE_MAX_CLAMP_T_SGIX             = 0x836A,  GL_OPERAND2_RGB_EXT   = 0x8592,  GL_TEXTURE_COMPRESSED_BLOCK_HEIGHT         = 0x82B2,
+    GL_TEXTURE_MAX_CLAMP_R_SGIX             = 0x836B,  GL_OPERAND3_RGB_NV    = 0x8593,  GL_TEXTURE_COMPRESSED_BLOCK_SIZE           = 0x82B3,
+    GL_TEXTURE_MEMORY_LAYOUT_INTEL          = 0x83FF,  GL_OPERAND0_ALPHA     = 0x8598,  GL_CLEAR_BUFFER                            = 0x82B4,
+    GL_TEXTURE_MAX_ANISOTROPY               = 0x84FE,  GL_OPERAND0_ALPHA_ARB = 0x8598,  GL_TEXTURE_VIEW                            = 0x82B5,
+    GL_TEXTURE_COMPARE_MODE                 = 0x884C,  GL_OPERAND0_ALPHA_EXT = 0x8598,  GL_VIEW_COMPATIBILITY_CLASS                = 0x82B6,
+    GL_TEXTURE_COMPARE_FUNC                 = 0x884D,  GL_OPERAND1_ALPHA     = 0x8599,  GL_TEXTURE_COMPRESSED                      = 0x86A1,
+    GL_TEXTURE_SWIZZLE_R                    = 0x8E42,  GL_OPERAND1_ALPHA_ARB = 0x8599,  GL_NUM_SURFACE_COMPRESSION_FIXED_RATES_EXT = 0x8F6E,
+    GL_TEXTURE_SWIZZLE_G                    = 0x8E43,  GL_OPERAND1_ALPHA_EXT = 0x8599,  GL_IMAGE_FORMAT_COMPATIBILITY_TYPE         = 0x90C7,
+    GL_TEXTURE_SWIZZLE_B                    = 0x8E44,  GL_OPERAND2_ALPHA     = 0x859A,  GL_CLEAR_TEXTURE                           = 0x9365,
+    GL_TEXTURE_SWIZZLE_A                    = 0x8E45,  GL_OPERAND2_ALPHA_ARB = 0x859A,  GL_NUM_SAMPLE_COUNTS                       = 0x9380,
+    GL_TEXTURE_SWIZZLE_RGBA                 = 0x8E46,  GL_OPERAND2_ALPHA_EXT = 0x859A,
+    GL_TEXTURE_UNNORMALIZED_COORDINATES_ARM = 0x8F6A,  GL_OPERAND3_ALPHA_NV  = 0x859B,
+    GL_DEPTH_STENCIL_TEXTURE_MODE           = 0x90EA,  GL_COORD_REPLACE      = 0x8862,
+    GL_TEXTURE_TILING_EXT                   = 0x9580,
+    GL_TEXTURE_FOVEATED_CUTOFF_DENSITY_QCOM = 0x96A0,
+    GL_TEXTURE_Y_DEGAMMA_QCOM               = 0x9710,
+    GL_TEXTURE_CBCR_DEGAMMA_QCOM            = 0x9711,
+    /* FragmentShaderGenericSourceATI */     /* DrawBufferMode */                /* TextureTarget */
+    GL_PRIMARY_COLOR              = 0x8577,  GL_FRONT_LEFT            = 0x0400,  GL_PROXY_TEXTURE_1D                   = 0x8063,
+    GL_PRIMARY_COLOR_ARB          = 0x8577,  GL_FRONT_RIGHT           = 0x0401,  GL_PROXY_TEXTURE_1D_EXT               = 0x8063,
+    GL_PRIMARY_COLOR_EXT          = 0x8577,  GL_BACK_LEFT             = 0x0402,  GL_PROXY_TEXTURE_2D                   = 0x8064,
+    GL_REG_0_ATI                  = 0x8921,  GL_BACK_RIGHT            = 0x0403,  GL_PROXY_TEXTURE_2D_EXT               = 0x8064,
+    GL_REG_1_ATI                  = 0x8922,  GL_FRONT                 = 0x0404,  GL_TEXTURE_3D_OES                     = 0x806F,
+    GL_REG_2_ATI                  = 0x8923,  GL_BACK                  = 0x0405,  GL_PROXY_TEXTURE_3D                   = 0x8070,
+    GL_REG_3_ATI                  = 0x8924,  GL_LEFT                  = 0x0406,  GL_PROXY_TEXTURE_3D_EXT               = 0x8070,
+    GL_REG_4_ATI                  = 0x8925,  GL_RIGHT                 = 0x0407,  GL_DETAIL_TEXTURE_2D_SGIS             = 0x8095,
+    GL_REG_5_ATI                  = 0x8926,  GL_FRONT_AND_BACK        = 0x0408,  GL_PROXY_TEXTURE_4D_SGIS              = 0x8135,
+    GL_REG_6_ATI                  = 0x8927,  GL_AUX0                  = 0x0409,  GL_PROXY_TEXTURE_RECTANGLE            = 0x84F7,
+    GL_REG_7_ATI                  = 0x8928,  GL_AUX1                  = 0x040A,  GL_PROXY_TEXTURE_RECTANGLE_ARB        = 0x84F7,
+    GL_REG_8_ATI                  = 0x8929,  GL_AUX2                  = 0x040B,  GL_PROXY_TEXTURE_RECTANGLE_NV         = 0x84F7,
+    GL_REG_9_ATI                  = 0x892A,  GL_AUX3                  = 0x040C,  GL_TEXTURE_CUBE_MAP_POSITIVE_X        = 0x8515,
+    GL_REG_10_ATI                 = 0x892B,  GL_COLOR_ATTACHMENT0     = 0x8CE0,  GL_TEXTURE_CUBE_MAP_POSITIVE_X_ARB    = 0x8515,
+    GL_REG_11_ATI                 = 0x892C,  GL_COLOR_ATTACHMENT0_NV  = 0x8CE0,  GL_TEXTURE_CUBE_MAP_POSITIVE_X_EXT    = 0x8515,
+    GL_REG_12_ATI                 = 0x892D,  GL_COLOR_ATTACHMENT1     = 0x8CE1,  GL_TEXTURE_CUBE_MAP_POSITIVE_X_OES    = 0x8515,
+    GL_REG_13_ATI                 = 0x892E,  GL_COLOR_ATTACHMENT1_NV  = 0x8CE1,  GL_TEXTURE_CUBE_MAP_NEGATIVE_X        = 0x8516,
+    GL_REG_14_ATI                 = 0x892F,  GL_COLOR_ATTACHMENT2     = 0x8CE2,  GL_TEXTURE_CUBE_MAP_NEGATIVE_X_ARB    = 0x8516,
+    GL_REG_15_ATI                 = 0x8930,  GL_COLOR_ATTACHMENT2_NV  = 0x8CE2,  GL_TEXTURE_CUBE_MAP_NEGATIVE_X_EXT    = 0x8516,
+    GL_REG_16_ATI                 = 0x8931,  GL_COLOR_ATTACHMENT3     = 0x8CE3,  GL_TEXTURE_CUBE_MAP_NEGATIVE_X_OES    = 0x8516,
+    GL_REG_17_ATI                 = 0x8932,  GL_COLOR_ATTACHMENT3_NV  = 0x8CE3,  GL_TEXTURE_CUBE_MAP_POSITIVE_Y        = 0x8517,
+    GL_REG_18_ATI                 = 0x8933,  GL_COLOR_ATTACHMENT4     = 0x8CE4,  GL_TEXTURE_CUBE_MAP_POSITIVE_Y_ARB    = 0x8517,
+    GL_REG_19_ATI                 = 0x8934,  GL_COLOR_ATTACHMENT4_NV  = 0x8CE4,  GL_TEXTURE_CUBE_MAP_POSITIVE_Y_EXT    = 0x8517,
+    GL_REG_20_ATI                 = 0x8935,  GL_COLOR_ATTACHMENT5     = 0x8CE5,  GL_TEXTURE_CUBE_MAP_POSITIVE_Y_OES    = 0x8517,
+    GL_REG_21_ATI                 = 0x8936,  GL_COLOR_ATTACHMENT5_NV  = 0x8CE5,  GL_TEXTURE_CUBE_MAP_NEGATIVE_Y        = 0x8518,
+    GL_REG_22_ATI                 = 0x8937,  GL_COLOR_ATTACHMENT6     = 0x8CE6,  GL_TEXTURE_CUBE_MAP_NEGATIVE_Y_ARB    = 0x8518,
+    GL_REG_23_ATI                 = 0x8938,  GL_COLOR_ATTACHMENT6_NV  = 0x8CE6,  GL_TEXTURE_CUBE_MAP_NEGATIVE_Y_EXT    = 0x8518,
+    GL_REG_24_ATI                 = 0x8939,  GL_COLOR_ATTACHMENT7     = 0x8CE7,  GL_TEXTURE_CUBE_MAP_NEGATIVE_Y_OES    = 0x8518,
+    GL_REG_25_ATI                 = 0x893A,  GL_COLOR_ATTACHMENT7_NV  = 0x8CE7,  GL_TEXTURE_CUBE_MAP_POSITIVE_Z        = 0x8519,
+    GL_REG_26_ATI                 = 0x893B,  GL_COLOR_ATTACHMENT8     = 0x8CE8,  GL_TEXTURE_CUBE_MAP_POSITIVE_Z_ARB    = 0x8519,
+    GL_REG_27_ATI                 = 0x893C,  GL_COLOR_ATTACHMENT8_NV  = 0x8CE8,  GL_TEXTURE_CUBE_MAP_POSITIVE_Z_EXT    = 0x8519,
+    GL_REG_28_ATI                 = 0x893D,  GL_COLOR_ATTACHMENT9     = 0x8CE9,  GL_TEXTURE_CUBE_MAP_POSITIVE_Z_OES    = 0x8519,
+    GL_REG_29_ATI                 = 0x893E,  GL_COLOR_ATTACHMENT9_NV  = 0x8CE9,  GL_TEXTURE_CUBE_MAP_NEGATIVE_Z        = 0x851A,
+    GL_REG_30_ATI                 = 0x893F,  GL_COLOR_ATTACHMENT10    = 0x8CEA,  GL_TEXTURE_CUBE_MAP_NEGATIVE_Z_ARB    = 0x851A,
+    GL_REG_31_ATI                 = 0x8940,  GL_COLOR_ATTACHMENT10_NV = 0x8CEA,  GL_TEXTURE_CUBE_MAP_NEGATIVE_Z_EXT    = 0x851A,
+    GL_CON_0_ATI                  = 0x8941,  GL_COLOR_ATTACHMENT11    = 0x8CEB,  GL_TEXTURE_CUBE_MAP_NEGATIVE_Z_OES    = 0x851A,
+    GL_CON_1_ATI                  = 0x8942,  GL_COLOR_ATTACHMENT11_NV = 0x8CEB,  GL_PROXY_TEXTURE_CUBE_MAP             = 0x851B,
+    GL_CON_2_ATI                  = 0x8943,  GL_COLOR_ATTACHMENT12    = 0x8CEC,  GL_PROXY_TEXTURE_CUBE_MAP_ARB         = 0x851B,
+    GL_CON_3_ATI                  = 0x8944,  GL_COLOR_ATTACHMENT12_NV = 0x8CEC,  GL_PROXY_TEXTURE_CUBE_MAP_EXT         = 0x851B,
+    GL_CON_4_ATI                  = 0x8945,  GL_COLOR_ATTACHMENT13    = 0x8CED,  GL_PROXY_TEXTURE_1D_ARRAY             = 0x8C19,
+    GL_CON_5_ATI                  = 0x8946,  GL_COLOR_ATTACHMENT13_NV = 0x8CED,  GL_PROXY_TEXTURE_1D_ARRAY_EXT         = 0x8C19,
+    GL_CON_6_ATI                  = 0x8947,  GL_COLOR_ATTACHMENT14    = 0x8CEE,  GL_PROXY_TEXTURE_2D_ARRAY             = 0x8C1B,
+    GL_CON_7_ATI                  = 0x8948,  GL_COLOR_ATTACHMENT14_NV = 0x8CEE,  GL_PROXY_TEXTURE_2D_ARRAY_EXT         = 0x8C1B,
+    GL_CON_8_ATI                  = 0x8949,  GL_COLOR_ATTACHMENT15    = 0x8CEF,  GL_TEXTURE_BUFFER                     = 0x8C2A,
+    GL_CON_9_ATI                  = 0x894A,  GL_COLOR_ATTACHMENT15_NV = 0x8CEF,  GL_TEXTURE_CUBE_MAP_ARRAY_ARB         = 0x9009,
+    GL_CON_10_ATI                 = 0x894B,  GL_COLOR_ATTACHMENT16    = 0x8CF0,  GL_TEXTURE_CUBE_MAP_ARRAY_EXT         = 0x9009,
+    GL_CON_11_ATI                 = 0x894C,  GL_COLOR_ATTACHMENT17    = 0x8CF1,  GL_TEXTURE_CUBE_MAP_ARRAY_OES         = 0x9009,
+    GL_CON_12_ATI                 = 0x894D,  GL_COLOR_ATTACHMENT18    = 0x8CF2,  GL_PROXY_TEXTURE_CUBE_MAP_ARRAY       = 0x900B,
+    GL_CON_13_ATI                 = 0x894E,  GL_COLOR_ATTACHMENT19    = 0x8CF3,  GL_PROXY_TEXTURE_CUBE_MAP_ARRAY_ARB   = 0x900B,
+    GL_CON_14_ATI                 = 0x894F,  GL_COLOR_ATTACHMENT20    = 0x8CF4,  GL_PROXY_TEXTURE_2D_MULTISAMPLE       = 0x9101,
+    GL_CON_15_ATI                 = 0x8950,  GL_COLOR_ATTACHMENT21    = 0x8CF5,  GL_PROXY_TEXTURE_2D_MULTISAMPLE_ARRAY = 0x9103,
+    GL_CON_16_ATI                 = 0x8951,  GL_COLOR_ATTACHMENT22    = 0x8CF6,
+    GL_CON_17_ATI                 = 0x8952,  GL_COLOR_ATTACHMENT23    = 0x8CF7,
+    GL_CON_18_ATI                 = 0x8953,  GL_COLOR_ATTACHMENT24    = 0x8CF8,
+    GL_CON_19_ATI                 = 0x8954,  GL_COLOR_ATTACHMENT25    = 0x8CF9,
+    GL_CON_20_ATI                 = 0x8955,  GL_COLOR_ATTACHMENT26    = 0x8CFA,
+    GL_CON_21_ATI                 = 0x8956,  GL_COLOR_ATTACHMENT27    = 0x8CFB,
+    GL_CON_22_ATI                 = 0x8957,  GL_COLOR_ATTACHMENT28    = 0x8CFC,
+    GL_CON_23_ATI                 = 0x8958,  GL_COLOR_ATTACHMENT29    = 0x8CFD,
+    GL_CON_24_ATI                 = 0x8959,  GL_COLOR_ATTACHMENT30    = 0x8CFE,
+    GL_CON_25_ATI                 = 0x895A,  GL_COLOR_ATTACHMENT31    = 0x8CFF,
+    GL_CON_26_ATI                 = 0x895B,
+    GL_CON_27_ATI                 = 0x895C,
+    GL_CON_28_ATI                 = 0x895D,
+    GL_CON_29_ATI                 = 0x895E,
+    GL_CON_30_ATI                 = 0x895F,
+    GL_CON_31_ATI                 = 0x8960,
+    GL_SECONDARY_INTERPOLATOR_ATI = 0x896D,
+    /* PathCoordType */                               /* PixelType */                                  /* EnableCap */
+    GL_CLOSE_PATH_NV                         = 0x00,  GL_HALF_FLOAT                         = 0x140B,  GL_CLIP_DISTANCE0                          = 0x3000,
+    GL_MOVE_TO_NV                            = 0x02,  GL_HALF_FLOAT_ARB                     = 0x140B,  GL_CLIP_DISTANCE1                          = 0x3001,
+    GL_RELATIVE_MOVE_TO_NV                   = 0x03,  GL_HALF_FLOAT_NV                      = 0x140B,  GL_CLIP_DISTANCE2                          = 0x3002,
+    GL_LINE_TO_NV                            = 0x04,  GL_HALF_APPLE                         = 0x140B,  GL_CLIP_DISTANCE3                          = 0x3003,
+    GL_RELATIVE_LINE_TO_NV                   = 0x05,  GL_BITMAP                             = 0x1A00,  GL_CLIP_DISTANCE4                          = 0x3004,
+    GL_HORIZONTAL_LINE_TO_NV                 = 0x06,  GL_UNSIGNED_BYTE_3_3_2                = 0x8032,  GL_CLIP_DISTANCE5                          = 0x3005,
+    GL_RELATIVE_HORIZONTAL_LINE_TO_NV        = 0x07,  GL_UNSIGNED_BYTE_3_3_2_EXT            = 0x8032,  GL_CLIP_DISTANCE6                          = 0x3006,
+    GL_VERTICAL_LINE_TO_NV                   = 0x08,  GL_UNSIGNED_SHORT_4_4_4_4             = 0x8033,  GL_CLIP_DISTANCE7                          = 0x3007,
+    GL_RELATIVE_VERTICAL_LINE_TO_NV          = 0x09,  GL_UNSIGNED_SHORT_4_4_4_4_EXT         = 0x8033,  GL_MULTISAMPLE                             = 0x809D,
+    GL_QUADRATIC_CURVE_TO_NV                 = 0x0A,  GL_UNSIGNED_SHORT_5_5_5_1             = 0x8034,  GL_SAMPLE_ALPHA_TO_COVERAGE                = 0x809E,
+    GL_RELATIVE_QUADRATIC_CURVE_TO_NV        = 0x0B,  GL_UNSIGNED_SHORT_5_5_5_1_EXT         = 0x8034,  GL_SAMPLE_ALPHA_TO_ONE                     = 0x809F,
+    GL_CUBIC_CURVE_TO_NV                     = 0x0C,  GL_UNSIGNED_INT_8_8_8_8               = 0x8035,  GL_SAMPLE_COVERAGE                         = 0x80A0,
+    GL_RELATIVE_CUBIC_CURVE_TO_NV            = 0x0D,  GL_UNSIGNED_INT_8_8_8_8_EXT           = 0x8035,  GL_COLOR_TABLE                             = 0x80D0,
+    GL_SMOOTH_QUADRATIC_CURVE_TO_NV          = 0x0E,  GL_UNSIGNED_INT_10_10_10_2            = 0x8036,  GL_POST_CONVOLUTION_COLOR_TABLE            = 0x80D1,
+    GL_RELATIVE_SMOOTH_QUADRATIC_CURVE_TO_NV = 0x0F,  GL_UNSIGNED_INT_10_10_10_2_EXT        = 0x8036,  GL_POST_COLOR_MATRIX_COLOR_TABLE           = 0x80D2,
+    GL_SMOOTH_CUBIC_CURVE_TO_NV              = 0x10,  GL_UNSIGNED_BYTE_2_3_3_REV            = 0x8362,  GL_DEBUG_OUTPUT_SYNCHRONOUS                = 0x8242,
+    GL_RELATIVE_SMOOTH_CUBIC_CURVE_TO_NV     = 0x11,  GL_UNSIGNED_BYTE_2_3_3_REV_EXT        = 0x8362,  GL_FRAGMENT_LIGHT1_SGIX                    = 0x840D,
+    GL_SMALL_CCW_ARC_TO_NV                   = 0x12,  GL_UNSIGNED_SHORT_5_6_5               = 0x8363,  GL_FRAGMENT_LIGHT2_SGIX                    = 0x840E,
+    GL_RELATIVE_SMALL_CCW_ARC_TO_NV          = 0x13,  GL_UNSIGNED_SHORT_5_6_5_EXT           = 0x8363,  GL_FRAGMENT_LIGHT3_SGIX                    = 0x840F,
+    GL_SMALL_CW_ARC_TO_NV                    = 0x14,  GL_UNSIGNED_SHORT_5_6_5_REV           = 0x8364,  GL_FRAGMENT_LIGHT4_SGIX                    = 0x8410,
+    GL_RELATIVE_SMALL_CW_ARC_TO_NV           = 0x15,  GL_UNSIGNED_SHORT_5_6_5_REV_EXT       = 0x8364,  GL_FRAGMENT_LIGHT5_SGIX                    = 0x8411,
+    GL_LARGE_CCW_ARC_TO_NV                   = 0x16,  GL_UNSIGNED_SHORT_4_4_4_4_REV         = 0x8365,  GL_FRAGMENT_LIGHT6_SGIX                    = 0x8412,
+    GL_RELATIVE_LARGE_CCW_ARC_TO_NV          = 0x17,  GL_UNSIGNED_SHORT_4_4_4_4_REV_EXT     = 0x8365,  GL_FRAGMENT_LIGHT7_SGIX                    = 0x8413,
+    GL_LARGE_CW_ARC_TO_NV                    = 0x18,  GL_UNSIGNED_SHORT_4_4_4_4_REV_IMG     = 0x8365,  GL_TEXTURE_RECTANGLE                       = 0x84F5,
+    GL_RELATIVE_LARGE_CW_ARC_TO_NV           = 0x19,  GL_UNSIGNED_SHORT_1_5_5_5_REV         = 0x8366,  GL_TEXTURE_RECTANGLE_ARB                   = 0x84F5,
+    GL_CONIC_CURVE_TO_NV                     = 0x1A,  GL_UNSIGNED_SHORT_1_5_5_5_REV_EXT     = 0x8366,  GL_TEXTURE_RECTANGLE_NV                    = 0x84F5,
+    GL_RELATIVE_CONIC_CURVE_TO_NV            = 0x1B,  GL_UNSIGNED_INT_8_8_8_8_REV           = 0x8367,  GL_TEXTURE_CUBE_MAP                        = 0x8513,
+    GL_ROUNDED_RECT_NV                       = 0xE8,  GL_UNSIGNED_INT_8_8_8_8_REV_EXT       = 0x8367,  GL_TEXTURE_CUBE_MAP_ARB                    = 0x8513,
+    GL_RELATIVE_ROUNDED_RECT_NV              = 0xE9,  GL_UNSIGNED_INT_2_10_10_10_REV        = 0x8368,  GL_TEXTURE_CUBE_MAP_EXT                    = 0x8513,
+    GL_ROUNDED_RECT2_NV                      = 0xEA,  GL_UNSIGNED_INT_2_10_10_10_REV_EXT    = 0x8368,  GL_TEXTURE_CUBE_MAP_OES                    = 0x8513,
+    GL_RELATIVE_ROUNDED_RECT2_NV             = 0xEB,  GL_UNSIGNED_INT_24_8                  = 0x84FA,  GL_DEPTH_CLAMP                             = 0x864F,
+    GL_ROUNDED_RECT4_NV                      = 0xEC,  GL_UNSIGNED_INT_24_8_EXT              = 0x84FA,  GL_TEXTURE_CUBE_MAP_SEAMLESS               = 0x884F,
+    GL_RELATIVE_ROUNDED_RECT4_NV             = 0xED,  GL_UNSIGNED_INT_24_8_NV               = 0x84FA,  GL_SAMPLE_SHADING                          = 0x8C36,
+    GL_ROUNDED_RECT8_NV                      = 0xEE,  GL_UNSIGNED_INT_24_8_OES              = 0x84FA,  GL_RASTERIZER_DISCARD                      = 0x8C89,
+    GL_RELATIVE_ROUNDED_RECT8_NV             = 0xEF,  GL_UNSIGNED_INT_10F_11F_11F_REV       = 0x8C3B,  GL_PRIMITIVE_RESTART_FIXED_INDEX           = 0x8D69,
+    GL_RESTART_PATH_NV                       = 0xF0,  GL_UNSIGNED_INT_10F_11F_11F_REV_APPLE = 0x8C3B,  GL_FRAMEBUFFER_SRGB                        = 0x8DB9,
+    GL_DUP_FIRST_CUBIC_CURVE_TO_NV           = 0xF2,  GL_UNSIGNED_INT_10F_11F_11F_REV_EXT   = 0x8C3B,  GL_SAMPLE_MASK                             = 0x8E51,
+    GL_DUP_LAST_CUBIC_CURVE_TO_NV            = 0xF4,  GL_UNSIGNED_INT_5_9_9_9_REV           = 0x8C3E,  GL_PRIMITIVE_RESTART                       = 0x8F9D,
+    GL_RECT_NV                               = 0xF6,  GL_UNSIGNED_INT_5_9_9_9_REV_APPLE     = 0x8C3E,  GL_DEBUG_OUTPUT                            = 0x92E0,
+    GL_RELATIVE_RECT_NV                      = 0xF7,  GL_UNSIGNED_INT_5_9_9_9_REV_EXT       = 0x8C3E,  GL_SHADING_RATE_PRESERVE_ASPECT_RATIO_QCOM = 0x96A5,
+    GL_CIRCULAR_CCW_ARC_TO_NV                = 0xF8,  GL_FLOAT_32_UNSIGNED_INT_24_8_REV     = 0x8DAD,
+    GL_CIRCULAR_CW_ARC_TO_NV                 = 0xFA,  GL_FLOAT_32_UNSIGNED_INT_24_8_REV_NV  = 0x8DAD,
+    GL_CIRCULAR_TANGENT_ARC_TO_NV            = 0xFC,
+    GL_ARC_TO_NV                             = 0xFE,
+    GL_RELATIVE_ARC_TO_NV                    = 0xFF,
+    /* HintTarget */                                   /* RenderbufferParameterName */                /* FramebufferAttachmentParameterName */
+    GL_PHONG_HINT_WIN                      = 0x80EB,   GL_RENDERBUFFER_COVERAGE_SAMPLES_NV = 0x8CAB,  GL_FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING              = 0x8210,
+    GL_CLIP_VOLUME_CLIPPING_HINT_EXT       = 0x80F0,   GL_RENDERBUFFER_SAMPLES             = 0x8CAB,  GL_FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING_EXT          = 0x8210,
+    GL_TEXTURE_MULTI_BUFFER_HINT_SGIX      = 0x812E,   GL_RENDERBUFFER_SAMPLES_ANGLE       = 0x8CAB,  GL_FRAMEBUFFER_ATTACHMENT_COMPONENT_TYPE              = 0x8211,
+    GL_GENERATE_MIPMAP_HINT                = 0x8192,   GL_RENDERBUFFER_SAMPLES_APPLE       = 0x8CAB,  GL_FRAMEBUFFER_ATTACHMENT_COMPONENT_TYPE_EXT          = 0x8211,
+    GL_PROGRAM_BINARY_RETRIEVABLE_HINT     = 0x8257,   GL_RENDERBUFFER_SAMPLES_EXT         = 0x8CAB,  GL_FRAMEBUFFER_ATTACHMENT_RED_SIZE                    = 0x8212,
+    GL_SCALEBIAS_HINT_SGIX                 = 0x8322,   GL_RENDERBUFFER_SAMPLES_NV          = 0x8CAB,  GL_FRAMEBUFFER_ATTACHMENT_GREEN_SIZE                  = 0x8213,
+    GL_LINE_QUALITY_HINT_SGIX              = 0x835B,   GL_RENDERBUFFER_WIDTH               = 0x8D42,  GL_FRAMEBUFFER_ATTACHMENT_BLUE_SIZE                   = 0x8214,
+    GL_TEXTURE_COMPRESSION_HINT_ARB        = 0x84EF,   GL_RENDERBUFFER_WIDTH_EXT           = 0x8D42,  GL_FRAMEBUFFER_ATTACHMENT_ALPHA_SIZE                  = 0x8215,
+    GL_VERTEX_ARRAY_STORAGE_HINT_APPLE     = 0x851F,   GL_RENDERBUFFER_WIDTH_OES           = 0x8D42,  GL_FRAMEBUFFER_ATTACHMENT_DEPTH_SIZE                  = 0x8216,
+    GL_MULTISAMPLE_FILTER_HINT_NV          = 0x8534,   GL_RENDERBUFFER_HEIGHT              = 0x8D43,  GL_FRAMEBUFFER_ATTACHMENT_STENCIL_SIZE                = 0x8217,
+    GL_TRANSFORM_HINT_APPLE                = 0x85B1,   GL_RENDERBUFFER_HEIGHT_EXT          = 0x8D43,  GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE                 = 0x8CD0,
+    GL_TEXTURE_STORAGE_HINT_APPLE          = 0x85BC,   GL_RENDERBUFFER_HEIGHT_OES          = 0x8D43,  GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE_EXT             = 0x8CD0,
+    GL_FRAGMENT_SHADER_DERIVATIVE_HINT_ARB = 0x8B8B,   GL_RENDERBUFFER_INTERNAL_FORMAT     = 0x8D44,  GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE_OES             = 0x8CD0,
+    GL_FRAGMENT_SHADER_DERIVATIVE_HINT_OES = 0x8B8B,   GL_RENDERBUFFER_INTERNAL_FORMAT_EXT = 0x8D44,  GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME                 = 0x8CD1,
+    GL_BINNING_CONTROL_HINT_QCOM           = 0x8FB0,   GL_RENDERBUFFER_INTERNAL_FORMAT_OES = 0x8D44,  GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME_EXT             = 0x8CD1,
+    GL_PREFER_DOUBLEBUFFER_HINT_PGI        = 0x1A1F8,  GL_RENDERBUFFER_RED_SIZE            = 0x8D50,  GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME_OES             = 0x8CD1,
+    GL_CONSERVE_MEMORY_HINT_PGI            = 0x1A1FD,  GL_RENDERBUFFER_RED_SIZE_EXT        = 0x8D50,  GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_LEVEL               = 0x8CD2,
+    GL_RECLAIM_MEMORY_HINT_PGI             = 0x1A1FE,  GL_RENDERBUFFER_RED_SIZE_OES        = 0x8D50,  GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_LEVEL_EXT           = 0x8CD2,
+    GL_NATIVE_GRAPHICS_BEGIN_HINT_PGI      = 0x1A203,  GL_RENDERBUFFER_GREEN_SIZE          = 0x8D51,  GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_LEVEL_OES           = 0x8CD2,
+    GL_NATIVE_GRAPHICS_END_HINT_PGI        = 0x1A204,  GL_RENDERBUFFER_GREEN_SIZE_EXT      = 0x8D51,  GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_CUBE_MAP_FACE       = 0x8CD3,
+    GL_ALWAYS_FAST_HINT_PGI                = 0x1A20C,  GL_RENDERBUFFER_GREEN_SIZE_OES      = 0x8D51,  GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_CUBE_MAP_FACE_EXT   = 0x8CD3,
+    GL_ALWAYS_SOFT_HINT_PGI                = 0x1A20D,  GL_RENDERBUFFER_BLUE_SIZE           = 0x8D52,  GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_CUBE_MAP_FACE_OES   = 0x8CD3,
+    GL_ALLOW_DRAW_OBJ_HINT_PGI             = 0x1A20E,  GL_RENDERBUFFER_BLUE_SIZE_EXT       = 0x8D52,  GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_3D_ZOFFSET_EXT      = 0x8CD4,
+    GL_ALLOW_DRAW_WIN_HINT_PGI             = 0x1A20F,  GL_RENDERBUFFER_BLUE_SIZE_OES       = 0x8D52,  GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_3D_ZOFFSET_OES      = 0x8CD4,
+    GL_ALLOW_DRAW_FRG_HINT_PGI             = 0x1A210,  GL_RENDERBUFFER_ALPHA_SIZE          = 0x8D53,  GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_LAYER               = 0x8CD4,
+    GL_ALLOW_DRAW_MEM_HINT_PGI             = 0x1A211,  GL_RENDERBUFFER_ALPHA_SIZE_EXT      = 0x8D53,  GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_LAYER_EXT           = 0x8CD4,
+    GL_STRICT_DEPTHFUNC_HINT_PGI           = 0x1A216,  GL_RENDERBUFFER_ALPHA_SIZE_OES      = 0x8D53,  GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_SAMPLES_EXT         = 0x8D6C,
+    GL_STRICT_LIGHTING_HINT_PGI            = 0x1A217,  GL_RENDERBUFFER_DEPTH_SIZE          = 0x8D54,  GL_FRAMEBUFFER_ATTACHMENT_LAYERED                     = 0x8DA7,
+    GL_STRICT_SCISSOR_HINT_PGI             = 0x1A218,  GL_RENDERBUFFER_DEPTH_SIZE_EXT      = 0x8D54,  GL_FRAMEBUFFER_ATTACHMENT_LAYERED_ARB                 = 0x8DA7,
+    GL_FULL_STIPPLE_HINT_PGI               = 0x1A219,  GL_RENDERBUFFER_DEPTH_SIZE_OES      = 0x8D54,  GL_FRAMEBUFFER_ATTACHMENT_LAYERED_EXT                 = 0x8DA7,
+    GL_CLIP_NEAR_HINT_PGI                  = 0x1A220,  GL_RENDERBUFFER_STENCIL_SIZE        = 0x8D55,  GL_FRAMEBUFFER_ATTACHMENT_LAYERED_OES                 = 0x8DA7,
+    GL_CLIP_FAR_HINT_PGI                   = 0x1A221,  GL_RENDERBUFFER_STENCIL_SIZE_EXT    = 0x8D55,  GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_SCALE_IMG           = 0x913F,
+    GL_WIDE_LINE_HINT_PGI                  = 0x1A222,  GL_RENDERBUFFER_STENCIL_SIZE_OES    = 0x8D55,  GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_NUM_VIEWS_OVR       = 0x9630,
+    GL_BACK_NORMALS_HINT_PGI               = 0x1A223,  GL_RENDERBUFFER_COLOR_SAMPLES_NV    = 0x8E10,  GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_BASE_VIEW_INDEX_OVR = 0x9632,
+    GL_VERTEX_DATA_HINT_PGI                = 0x1A22A,  GL_RENDERBUFFER_SAMPLES_IMG         = 0x9133,
+    GL_VERTEX_CONSISTENT_HINT_PGI          = 0x1A22B,  GL_RENDERBUFFER_STORAGE_SAMPLES_AMD = 0x91B2,
+    GL_MATERIAL_SIDE_HINT_PGI              = 0x1A22C,
+    GL_MAX_VERTEX_HINT_PGI                 = 0x1A22D,
+    /* BufferBitQCOM */                            /* TextureUnit */       /* MemoryBarrierMask */
+    GL_COLOR_BUFFER_BIT0_QCOM       = 0x00000001,  GL_TEXTURE0  = 0x84C0,  GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT      = 0x00000001,
+    GL_COLOR_BUFFER_BIT1_QCOM       = 0x00000002,  GL_TEXTURE1  = 0x84C1,  GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT_EXT  = 0x00000001,
+    GL_COLOR_BUFFER_BIT2_QCOM       = 0x00000004,  GL_TEXTURE2  = 0x84C2,  GL_ELEMENT_ARRAY_BARRIER_BIT            = 0x00000002,
+    GL_COLOR_BUFFER_BIT3_QCOM       = 0x00000008,  GL_TEXTURE3  = 0x84C3,  GL_ELEMENT_ARRAY_BARRIER_BIT_EXT        = 0x00000002,
+    GL_COLOR_BUFFER_BIT4_QCOM       = 0x00000010,  GL_TEXTURE4  = 0x84C4,  GL_UNIFORM_BARRIER_BIT                  = 0x00000004,
+    GL_COLOR_BUFFER_BIT5_QCOM       = 0x00000020,  GL_TEXTURE5  = 0x84C5,  GL_UNIFORM_BARRIER_BIT_EXT              = 0x00000004,
+    GL_COLOR_BUFFER_BIT6_QCOM       = 0x00000040,  GL_TEXTURE6  = 0x84C6,  GL_TEXTURE_FETCH_BARRIER_BIT            = 0x00000008,
+    GL_COLOR_BUFFER_BIT7_QCOM       = 0x00000080,  GL_TEXTURE7  = 0x84C7,  GL_TEXTURE_FETCH_BARRIER_BIT_EXT        = 0x00000008,
+    GL_DEPTH_BUFFER_BIT0_QCOM       = 0x00000100,  GL_TEXTURE8  = 0x84C8,  GL_SHADER_GLOBAL_ACCESS_BARRIER_BIT_NV  = 0x00000010,
+    GL_DEPTH_BUFFER_BIT1_QCOM       = 0x00000200,  GL_TEXTURE9  = 0x84C9,  GL_SHADER_IMAGE_ACCESS_BARRIER_BIT      = 0x00000020,
+    GL_DEPTH_BUFFER_BIT2_QCOM       = 0x00000400,  GL_TEXTURE10 = 0x84CA,  GL_SHADER_IMAGE_ACCESS_BARRIER_BIT_EXT  = 0x00000020,
+    GL_DEPTH_BUFFER_BIT3_QCOM       = 0x00000800,  GL_TEXTURE11 = 0x84CB,  GL_COMMAND_BARRIER_BIT                  = 0x00000040,
+    GL_DEPTH_BUFFER_BIT4_QCOM       = 0x00001000,  GL_TEXTURE12 = 0x84CC,  GL_COMMAND_BARRIER_BIT_EXT              = 0x00000040,
+    GL_DEPTH_BUFFER_BIT5_QCOM       = 0x00002000,  GL_TEXTURE13 = 0x84CD,  GL_PIXEL_BUFFER_BARRIER_BIT             = 0x00000080,
+    GL_DEPTH_BUFFER_BIT6_QCOM       = 0x00004000,  GL_TEXTURE14 = 0x84CE,  GL_PIXEL_BUFFER_BARRIER_BIT_EXT         = 0x00000080,
+    GL_DEPTH_BUFFER_BIT7_QCOM       = 0x00008000,  GL_TEXTURE15 = 0x84CF,  GL_TEXTURE_UPDATE_BARRIER_BIT           = 0x00000100,
+    GL_STENCIL_BUFFER_BIT0_QCOM     = 0x00010000,  GL_TEXTURE16 = 0x84D0,  GL_TEXTURE_UPDATE_BARRIER_BIT_EXT       = 0x00000100,
+    GL_STENCIL_BUFFER_BIT1_QCOM     = 0x00020000,  GL_TEXTURE17 = 0x84D1,  GL_BUFFER_UPDATE_BARRIER_BIT            = 0x00000200,
+    GL_STENCIL_BUFFER_BIT2_QCOM     = 0x00040000,  GL_TEXTURE18 = 0x84D2,  GL_BUFFER_UPDATE_BARRIER_BIT_EXT        = 0x00000200,
+    GL_STENCIL_BUFFER_BIT3_QCOM     = 0x00080000,  GL_TEXTURE19 = 0x84D3,  GL_FRAMEBUFFER_BARRIER_BIT              = 0x00000400,
+    GL_STENCIL_BUFFER_BIT4_QCOM     = 0x00100000,  GL_TEXTURE20 = 0x84D4,  GL_FRAMEBUFFER_BARRIER_BIT_EXT          = 0x00000400,
+    GL_STENCIL_BUFFER_BIT5_QCOM     = 0x00200000,  GL_TEXTURE21 = 0x84D5,  GL_TRANSFORM_FEEDBACK_BARRIER_BIT       = 0x00000800,
+    GL_STENCIL_BUFFER_BIT6_QCOM     = 0x00400000,  GL_TEXTURE22 = 0x84D6,  GL_TRANSFORM_FEEDBACK_BARRIER_BIT_EXT   = 0x00000800,
+    GL_STENCIL_BUFFER_BIT7_QCOM     = 0x00800000,  GL_TEXTURE23 = 0x84D7,  GL_ATOMIC_COUNTER_BARRIER_BIT           = 0x00001000,
+    GL_MULTISAMPLE_BUFFER_BIT0_QCOM = 0x01000000,  GL_TEXTURE24 = 0x84D8,  GL_ATOMIC_COUNTER_BARRIER_BIT_EXT       = 0x00001000,
+    GL_MULTISAMPLE_BUFFER_BIT1_QCOM = 0x02000000,  GL_TEXTURE25 = 0x84D9,  GL_SHADER_STORAGE_BARRIER_BIT           = 0x00002000,
+    GL_MULTISAMPLE_BUFFER_BIT2_QCOM = 0x04000000,  GL_TEXTURE26 = 0x84DA,  GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT     = 0x00004000,
+    GL_MULTISAMPLE_BUFFER_BIT3_QCOM = 0x08000000,  GL_TEXTURE27 = 0x84DB,  GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT_EXT = 0x00004000,
+    GL_MULTISAMPLE_BUFFER_BIT4_QCOM = 0x10000000,  GL_TEXTURE28 = 0x84DC,  GL_QUERY_BUFFER_BARRIER_BIT             = 0x00008000,
+    GL_MULTISAMPLE_BUFFER_BIT5_QCOM = 0x20000000,  GL_TEXTURE29 = 0x84DD,  GL_ALL_BARRIER_BITS                     = 0xFFFFFFFF,
+    GL_MULTISAMPLE_BUFFER_BIT6_QCOM = 0x40000000,  GL_TEXTURE30 = 0x84DE,  GL_ALL_BARRIER_BITS_EXT                 = 0xFFFFFFFF,
+    GL_MULTISAMPLE_BUFFER_BIT7_QCOM = 0x80000000,  GL_TEXTURE31 = 0x84DF,
+    /* ProgramResourceProperty */                      /* AttribMask */                       /* PrimitiveType */
+    GL_IS_PER_PATCH                         = 0x92E7,  GL_CURRENT_BIT          = 0x00000001,  GL_POINTS                       = 0x0000,
+    GL_NAME_LENGTH                          = 0x92F9,  GL_POINT_BIT            = 0x00000002,  GL_LINES                        = 0x0001,
+    GL_TYPE                                 = 0x92FA,  GL_LINE_BIT             = 0x00000004,  GL_LINE_LOOP                    = 0x0002,
+    GL_ARRAY_SIZE                           = 0x92FB,  GL_POLYGON_BIT          = 0x00000008,  GL_LINE_STRIP                   = 0x0003,
+    GL_OFFSET                               = 0x92FC,  GL_POLYGON_STIPPLE_BIT  = 0x00000010,  GL_TRIANGLES                    = 0x0004,
+    GL_BLOCK_INDEX                          = 0x92FD,  GL_PIXEL_MODE_BIT       = 0x00000020,  GL_TRIANGLE_STRIP               = 0x0005,
+    GL_ARRAY_STRIDE                         = 0x92FE,  GL_LIGHTING_BIT         = 0x00000040,  GL_TRIANGLE_FAN                 = 0x0006,
+    GL_MATRIX_STRIDE                        = 0x92FF,  GL_FOG_BIT              = 0x00000080,  GL_QUADS                        = 0x0007,
+    GL_IS_ROW_MAJOR                         = 0x9300,  GL_DEPTH_BUFFER_BIT     = 0x00000100,  GL_QUADS_EXT                    = 0x0007,
+    GL_ATOMIC_COUNTER_BUFFER_INDEX          = 0x9301,  GL_ACCUM_BUFFER_BIT     = 0x00000200,  GL_QUAD_STRIP                   = 0x0008,
+    GL_BUFFER_BINDING                       = 0x9302,  GL_STENCIL_BUFFER_BIT   = 0x00000400,  GL_POLYGON                      = 0x0009,
+    GL_BUFFER_DATA_SIZE                     = 0x9303,  GL_VIEWPORT_BIT         = 0x00000800,  GL_LINES_ADJACENCY              = 0x000A,
+    GL_NUM_ACTIVE_VARIABLES                 = 0x9304,  GL_TRANSFORM_BIT        = 0x00001000,  GL_LINES_ADJACENCY_ARB          = 0x000A,
+    GL_ACTIVE_VARIABLES                     = 0x9305,  GL_ENABLE_BIT           = 0x00002000,  GL_LINES_ADJACENCY_EXT          = 0x000A,
+    GL_REFERENCED_BY_VERTEX_SHADER          = 0x9306,  GL_COLOR_BUFFER_BIT     = 0x00004000,  GL_LINE_STRIP_ADJACENCY         = 0x000B,
+    GL_REFERENCED_BY_TESS_CONTROL_SHADER    = 0x9307,  GL_HINT_BIT             = 0x00008000,  GL_LINE_STRIP_ADJACENCY_ARB     = 0x000B,
+    GL_REFERENCED_BY_TESS_EVALUATION_SHADER = 0x9308,  GL_EVAL_BIT             = 0x00010000,  GL_LINE_STRIP_ADJACENCY_EXT     = 0x000B,
+    GL_REFERENCED_BY_GEOMETRY_SHADER        = 0x9309,  GL_LIST_BIT             = 0x00020000,  GL_TRIANGLES_ADJACENCY          = 0x000C,
+    GL_REFERENCED_BY_FRAGMENT_SHADER        = 0x930A,  GL_TEXTURE_BIT          = 0x00040000,  GL_TRIANGLES_ADJACENCY_ARB      = 0x000C,
+    GL_REFERENCED_BY_COMPUTE_SHADER         = 0x930B,  GL_SCISSOR_BIT          = 0x00080000,  GL_TRIANGLES_ADJACENCY_EXT      = 0x000C,
+    GL_TOP_LEVEL_ARRAY_SIZE                 = 0x930C,  GL_MULTISAMPLE_BIT      = 0x20000000,  GL_TRIANGLE_STRIP_ADJACENCY     = 0x000D,
+    GL_TOP_LEVEL_ARRAY_STRIDE               = 0x930D,  GL_MULTISAMPLE_BIT_ARB  = 0x20000000,  GL_TRIANGLE_STRIP_ADJACENCY_ARB = 0x000D,
+    GL_LOCATION                             = 0x930E,  GL_MULTISAMPLE_BIT_EXT  = 0x20000000,  GL_TRIANGLE_STRIP_ADJACENCY_EXT = 0x000D,
+    GL_LOCATION_INDEX                       = 0x930F,  GL_MULTISAMPLE_BIT_3DFX = 0x20000000,  GL_PATCHES                      = 0x000E,
+    GL_LOCATION_COMPONENT                   = 0x934A,  GL_ALL_ATTRIB_BITS      = 0xFFFFFFFF,  GL_PATCHES_EXT                  = 0x000E,
+    GL_TRANSFORM_FEEDBACK_BUFFER_INDEX      = 0x934B,
+    GL_TRANSFORM_FEEDBACK_BUFFER_STRIDE     = 0x934C,
+    /* PixelFormat */             /* VertexShaderOpEXT */              /* PathMetricMask */
+    GL_COLOR_INDEX     = 0x1900,  GL_OP_INDEX_EXT           = 0x8782,  GL_GLYPH_WIDTH_BIT_NV                      = 0x01,
+    GL_STENCIL_INDEX   = 0x1901,  GL_OP_NEGATE_EXT          = 0x8783,  GL_GLYPH_HEIGHT_BIT_NV                     = 0x02,
+    GL_DEPTH_COMPONENT = 0x1902,  GL_OP_DOT3_EXT            = 0x8784,  GL_GLYPH_HORIZONTAL_BEARING_X_BIT_NV       = 0x04,
+    GL_RED_EXT         = 0x1903,  GL_OP_DOT4_EXT            = 0x8785,  GL_GLYPH_HORIZONTAL_BEARING_Y_BIT_NV       = 0x08,
+    GL_ABGR_EXT        = 0x8000,  GL_OP_MUL_EXT             = 0x8786,  GL_GLYPH_HORIZONTAL_BEARING_ADVANCE_BIT_NV = 0x10,
+    GL_CMYK_EXT        = 0x800C,  GL_OP_ADD_EXT             = 0x8787,  GL_GLYPH_VERTICAL_BEARING_X_BIT_NV         = 0x20,
+    GL_CMYKA_EXT       = 0x800D,  GL_OP_MADD_EXT            = 0x8788,  GL_GLYPH_VERTICAL_BEARING_Y_BIT_NV         = 0x40,
+    GL_BGR             = 0x80E0,  GL_OP_FRAC_EXT            = 0x8789,  GL_GLYPH_VERTICAL_BEARING_ADVANCE_BIT_NV   = 0x80,
+    GL_BGR_EXT         = 0x80E0,  GL_OP_MAX_EXT             = 0x878A,  GL_GLYPH_HAS_KERNING_BIT_NV                = 0x100,
+    GL_BGRA            = 0x80E1,  GL_OP_MIN_EXT             = 0x878B,  GL_FONT_X_MIN_BOUNDS_BIT_NV                = 0x00010000,
+    GL_BGRA_EXT        = 0x80E1,  GL_OP_SET_GE_EXT          = 0x878C,  GL_FONT_Y_MIN_BOUNDS_BIT_NV                = 0x00020000,
+    GL_BGRA_IMG        = 0x80E1,  GL_OP_SET_LT_EXT          = 0x878D,  GL_FONT_X_MAX_BOUNDS_BIT_NV                = 0x00040000,
+    GL_YCRCB_422_SGIX  = 0x81BB,  GL_OP_CLAMP_EXT           = 0x878E,  GL_FONT_Y_MAX_BOUNDS_BIT_NV                = 0x00080000,
+    GL_YCRCB_444_SGIX  = 0x81BC,  GL_OP_FLOOR_EXT           = 0x878F,  GL_FONT_UNITS_PER_EM_BIT_NV                = 0x00100000,
+    GL_RG              = 0x8227,  GL_OP_ROUND_EXT           = 0x8790,  GL_FONT_ASCENDER_BIT_NV                    = 0x00200000,
+    GL_RG_INTEGER      = 0x8228,  GL_OP_EXP_BASE_2_EXT      = 0x8791,  GL_FONT_DESCENDER_BIT_NV                   = 0x00400000,
+    GL_DEPTH_STENCIL   = 0x84F9,  GL_OP_LOG_BASE_2_EXT      = 0x8792,  GL_FONT_HEIGHT_BIT_NV                      = 0x00800000,
+    GL_RED_INTEGER     = 0x8D94,  GL_OP_POWER_EXT           = 0x8793,  GL_FONT_MAX_ADVANCE_WIDTH_BIT_NV           = 0x01000000,
+    GL_GREEN_INTEGER   = 0x8D95,  GL_OP_RECIP_EXT           = 0x8794,  GL_FONT_MAX_ADVANCE_HEIGHT_BIT_NV          = 0x02000000,
+    GL_BLUE_INTEGER    = 0x8D96,  GL_OP_RECIP_SQRT_EXT      = 0x8795,  GL_FONT_UNDERLINE_POSITION_BIT_NV          = 0x04000000,
+    GL_RGB_INTEGER     = 0x8D98,  GL_OP_SUB_EXT             = 0x8796,  GL_FONT_UNDERLINE_THICKNESS_BIT_NV         = 0x08000000,
+    GL_RGBA_INTEGER    = 0x8D99,  GL_OP_CROSS_PRODUCT_EXT   = 0x8797,  GL_FONT_HAS_KERNING_BIT_NV                 = 0x10000000,
+    GL_BGR_INTEGER     = 0x8D9A,  GL_OP_MULTIPLY_MATRIX_EXT = 0x8798,  GL_FONT_NUM_GLYPH_INDICES_BIT_NV           = 0x20000000,
+    GL_BGRA_INTEGER    = 0x8D9B,  GL_OP_MOV_EXT             = 0x8799,
+    /* InvalidateFramebufferAttachment */  /* PathParameter */                       /* UseProgramStageMask */
+    GL_DEPTH_STENCIL_ATTACHMENT = 0x821A,  GL_PATH_STROKE_WIDTH_NV        = 0x9075,  GL_VERTEX_SHADER_BIT              = 0x00000001,
+    GL_COLOR_ATTACHMENT0_EXT    = 0x8CE0,  GL_PATH_END_CAPS_NV            = 0x9076,  GL_VERTEX_SHADER_BIT_EXT          = 0x00000001,
+    GL_COLOR_ATTACHMENT0_OES    = 0x8CE0,  GL_PATH_INITIAL_END_CAP_NV     = 0x9077,  GL_FRAGMENT_SHADER_BIT            = 0x00000002,
+    GL_COLOR_ATTACHMENT1_EXT    = 0x8CE1,  GL_PATH_TERMINAL_END_CAP_NV    = 0x9078,  GL_FRAGMENT_SHADER_BIT_EXT        = 0x00000002,
+    GL_COLOR_ATTACHMENT2_EXT    = 0x8CE2,  GL_PATH_JOIN_STYLE_NV          = 0x9079,  GL_GEOMETRY_SHADER_BIT            = 0x00000004,
+    GL_COLOR_ATTACHMENT3_EXT    = 0x8CE3,  GL_PATH_MITER_LIMIT_NV         = 0x907A,  GL_GEOMETRY_SHADER_BIT_EXT        = 0x00000004,
+    GL_COLOR_ATTACHMENT4_EXT    = 0x8CE4,  GL_PATH_DASH_CAPS_NV           = 0x907B,  GL_GEOMETRY_SHADER_BIT_OES        = 0x00000004,
+    GL_COLOR_ATTACHMENT5_EXT    = 0x8CE5,  GL_PATH_INITIAL_DASH_CAP_NV    = 0x907C,  GL_TESS_CONTROL_SHADER_BIT        = 0x00000008,
+    GL_COLOR_ATTACHMENT6_EXT    = 0x8CE6,  GL_PATH_TERMINAL_DASH_CAP_NV   = 0x907D,  GL_TESS_CONTROL_SHADER_BIT_EXT    = 0x00000008,
+    GL_COLOR_ATTACHMENT7_EXT    = 0x8CE7,  GL_PATH_DASH_OFFSET_NV         = 0x907E,  GL_TESS_CONTROL_SHADER_BIT_OES    = 0x00000008,
+    GL_COLOR_ATTACHMENT8_EXT    = 0x8CE8,  GL_PATH_CLIENT_LENGTH_NV       = 0x907F,  GL_TESS_EVALUATION_SHADER_BIT     = 0x00000010,
+    GL_COLOR_ATTACHMENT9_EXT    = 0x8CE9,  GL_PATH_FILL_MASK_NV           = 0x9081,  GL_TESS_EVALUATION_SHADER_BIT_EXT = 0x00000010,
+    GL_COLOR_ATTACHMENT10_EXT   = 0x8CEA,  GL_PATH_FILL_COVER_MODE_NV     = 0x9082,  GL_TESS_EVALUATION_SHADER_BIT_OES = 0x00000010,
+    GL_COLOR_ATTACHMENT11_EXT   = 0x8CEB,  GL_PATH_STROKE_COVER_MODE_NV   = 0x9083,  GL_COMPUTE_SHADER_BIT             = 0x00000020,
+    GL_COLOR_ATTACHMENT12_EXT   = 0x8CEC,  GL_PATH_STROKE_MASK_NV         = 0x9084,  GL_MESH_SHADER_BIT_NV             = 0x00000040,
+    GL_COLOR_ATTACHMENT13_EXT   = 0x8CED,  GL_PATH_COMMAND_COUNT_NV       = 0x909D,  GL_MESH_SHADER_BIT_EXT            = 0x00000040,
+    GL_COLOR_ATTACHMENT14_EXT   = 0x8CEE,  GL_PATH_COORD_COUNT_NV         = 0x909E,  GL_TASK_SHADER_BIT_NV             = 0x00000080,
+    GL_COLOR_ATTACHMENT15_EXT   = 0x8CEF,  GL_PATH_DASH_ARRAY_COUNT_NV    = 0x909F,  GL_TASK_SHADER_BIT_EXT            = 0x00000080,
+    GL_DEPTH_ATTACHMENT         = 0x8D00,  GL_PATH_COMPUTED_LENGTH_NV     = 0x90A0,  GL_ALL_SHADER_BITS                = 0xFFFFFFFF,
+    GL_DEPTH_ATTACHMENT_EXT     = 0x8D00,  GL_PATH_FILL_BOUNDING_BOX_NV   = 0x90A1,  GL_ALL_SHADER_BITS_EXT            = 0xFFFFFFFF,
+    GL_DEPTH_ATTACHMENT_OES     = 0x8D00,  GL_PATH_STROKE_BOUNDING_BOX_NV = 0x90A2,
+    GL_STENCIL_ATTACHMENT_EXT   = 0x8D20,  GL_PATH_DASH_OFFSET_RESET_NV   = 0x90B4,
+    GL_STENCIL_ATTACHMENT_OES   = 0x8D20,
+    /* ColorTableParameterPName */               /* CommandOpcodesNV */                           /* ProgramPropertyARB */
+    GL_COLOR_TABLE_SCALE              = 0x80D6,  GL_TERMINATE_SEQUENCE_COMMAND_NV      = 0x0000,  GL_COMPUTE_WORK_GROUP_SIZE               = 0x8267,
+    GL_COLOR_TABLE_SCALE_SGI          = 0x80D6,  GL_NOP_COMMAND_NV                     = 0x0001,  GL_PROGRAM_BINARY_LENGTH                 = 0x8741,
+    GL_COLOR_TABLE_BIAS               = 0x80D7,  GL_DRAW_ELEMENTS_COMMAND_NV           = 0x0002,  GL_GEOMETRY_VERTICES_OUT                 = 0x8916,
+    GL_COLOR_TABLE_BIAS_SGI           = 0x80D7,  GL_DRAW_ARRAYS_COMMAND_NV             = 0x0003,  GL_GEOMETRY_INPUT_TYPE                   = 0x8917,
+    GL_COLOR_TABLE_FORMAT             = 0x80D8,  GL_DRAW_ELEMENTS_STRIP_COMMAND_NV     = 0x0004,  GL_GEOMETRY_OUTPUT_TYPE                  = 0x8918,
+    GL_COLOR_TABLE_FORMAT_SGI         = 0x80D8,  GL_DRAW_ARRAYS_STRIP_COMMAND_NV       = 0x0005,  GL_ACTIVE_UNIFORM_BLOCK_MAX_NAME_LENGTH  = 0x8A35,
+    GL_COLOR_TABLE_WIDTH              = 0x80D9,  GL_DRAW_ELEMENTS_INSTANCED_COMMAND_NV = 0x0006,  GL_ACTIVE_UNIFORM_BLOCKS                 = 0x8A36,
+    GL_COLOR_TABLE_WIDTH_SGI          = 0x80D9,  GL_DRAW_ARRAYS_INSTANCED_COMMAND_NV   = 0x0007,  GL_DELETE_STATUS                         = 0x8B80,
+    GL_COLOR_TABLE_RED_SIZE           = 0x80DA,  GL_ELEMENT_ADDRESS_COMMAND_NV         = 0x0008,  GL_LINK_STATUS                           = 0x8B82,
+    GL_COLOR_TABLE_RED_SIZE_SGI       = 0x80DA,  GL_ATTRIBUTE_ADDRESS_COMMAND_NV       = 0x0009,  GL_VALIDATE_STATUS                       = 0x8B83,
+    GL_COLOR_TABLE_GREEN_SIZE         = 0x80DB,  GL_UNIFORM_ADDRESS_COMMAND_NV         = 0x000A,  GL_ATTACHED_SHADERS                      = 0x8B85,
+    GL_COLOR_TABLE_GREEN_SIZE_SGI     = 0x80DB,  GL_BLEND_COLOR_COMMAND_NV             = 0x000B,  GL_ACTIVE_UNIFORMS                       = 0x8B86,
+    GL_COLOR_TABLE_BLUE_SIZE          = 0x80DC,  GL_STENCIL_REF_COMMAND_NV             = 0x000C,  GL_ACTIVE_UNIFORM_MAX_LENGTH             = 0x8B87,
+    GL_COLOR_TABLE_BLUE_SIZE_SGI      = 0x80DC,  GL_LINE_WIDTH_COMMAND_NV              = 0x000D,  GL_ACTIVE_ATTRIBUTES                     = 0x8B89,
+    GL_COLOR_TABLE_ALPHA_SIZE         = 0x80DD,  GL_POLYGON_OFFSET_COMMAND_NV          = 0x000E,  GL_ACTIVE_ATTRIBUTE_MAX_LENGTH           = 0x8B8A,
+    GL_COLOR_TABLE_ALPHA_SIZE_SGI     = 0x80DD,  GL_ALPHA_REF_COMMAND_NV               = 0x000F,  GL_TRANSFORM_FEEDBACK_VARYING_MAX_LENGTH = 0x8C76,
+    GL_COLOR_TABLE_LUMINANCE_SIZE     = 0x80DE,  GL_VIEWPORT_COMMAND_NV                = 0x0010,  GL_TRANSFORM_FEEDBACK_BUFFER_MODE        = 0x8C7F,
+    GL_COLOR_TABLE_LUMINANCE_SIZE_SGI = 0x80DE,  GL_SCISSOR_COMMAND_NV                 = 0x0011,  GL_TRANSFORM_FEEDBACK_VARYINGS           = 0x8C83,
+    GL_COLOR_TABLE_INTENSITY_SIZE     = 0x80DF,  GL_FRONT_FACE_COMMAND_NV              = 0x0012,  GL_ACTIVE_ATOMIC_COUNTER_BUFFERS         = 0x92D9,
+    GL_COLOR_TABLE_INTENSITY_SIZE_SGI = 0x80DF,
+    /* ProgramInterface */                           /* VertexHintsMaskPGI */                          /* BlendingFactor */
+    GL_UNIFORM                            = 0x92E1,  GL_VERTEX23_BIT_PGI                = 0x00000004,  GL_SRC_COLOR                = 0x0300,
+    GL_UNIFORM_BLOCK                      = 0x92E2,  GL_VERTEX4_BIT_PGI                 = 0x00000008,  GL_ONE_MINUS_SRC_COLOR      = 0x0301,
+    GL_PROGRAM_INPUT                      = 0x92E3,  GL_COLOR3_BIT_PGI                  = 0x00010000,  GL_SRC_ALPHA                = 0x0302,
+    GL_PROGRAM_OUTPUT                     = 0x92E4,  GL_COLOR4_BIT_PGI                  = 0x00020000,  GL_ONE_MINUS_SRC_ALPHA      = 0x0303,
+    GL_BUFFER_VARIABLE                    = 0x92E5,  GL_EDGEFLAG_BIT_PGI                = 0x00040000,  GL_DST_ALPHA                = 0x0304,
+    GL_SHADER_STORAGE_BLOCK               = 0x92E6,  GL_INDEX_BIT_PGI                   = 0x00080000,  GL_ONE_MINUS_DST_ALPHA      = 0x0305,
+    GL_VERTEX_SUBROUTINE                  = 0x92E8,  GL_MAT_AMBIENT_BIT_PGI             = 0x00100000,  GL_DST_COLOR                = 0x0306,
+    GL_TESS_CONTROL_SUBROUTINE            = 0x92E9,  GL_MAT_AMBIENT_AND_DIFFUSE_BIT_PGI = 0x00200000,  GL_ONE_MINUS_DST_COLOR      = 0x0307,
+    GL_TESS_EVALUATION_SUBROUTINE         = 0x92EA,  GL_MAT_DIFFUSE_BIT_PGI             = 0x00400000,  GL_SRC_ALPHA_SATURATE       = 0x0308,
+    GL_GEOMETRY_SUBROUTINE                = 0x92EB,  GL_MAT_EMISSION_BIT_PGI            = 0x00800000,  GL_CONSTANT_COLOR           = 0x8001,
+    GL_FRAGMENT_SUBROUTINE                = 0x92EC,  GL_MAT_COLOR_INDEXES_BIT_PGI       = 0x01000000,  GL_ONE_MINUS_CONSTANT_COLOR = 0x8002,
+    GL_COMPUTE_SUBROUTINE                 = 0x92ED,  GL_MAT_SHININESS_BIT_PGI           = 0x02000000,  GL_CONSTANT_ALPHA           = 0x8003,
+    GL_VERTEX_SUBROUTINE_UNIFORM          = 0x92EE,  GL_MAT_SPECULAR_BIT_PGI            = 0x04000000,  GL_ONE_MINUS_CONSTANT_ALPHA = 0x8004,
+    GL_TESS_CONTROL_SUBROUTINE_UNIFORM    = 0x92EF,  GL_NORMAL_BIT_PGI                  = 0x08000000,  GL_SRC1_ALPHA               = 0x8589,
+    GL_TESS_EVALUATION_SUBROUTINE_UNIFORM = 0x92F0,  GL_TEXCOORD1_BIT_PGI               = 0x10000000,  GL_SRC1_COLOR               = 0x88F9,
+    GL_GEOMETRY_SUBROUTINE_UNIFORM        = 0x92F1,  GL_TEXCOORD2_BIT_PGI               = 0x20000000,  GL_ONE_MINUS_SRC1_COLOR     = 0x88FA,
+    GL_FRAGMENT_SUBROUTINE_UNIFORM        = 0x92F2,  GL_TEXCOORD3_BIT_PGI               = 0x40000000,  GL_ONE_MINUS_SRC1_ALPHA     = 0x88FB,
+    GL_COMPUTE_SUBROUTINE_UNIFORM         = 0x92F3,  GL_TEXCOORD4_BIT_PGI               = 0x80000000,
+    GL_TRANSFORM_FEEDBACK_VARYING         = 0x92F4,
+    /* GetPointervPName */                        /* ConvolutionParameter */                 /* BufferStorageMask */
+    GL_FEEDBACK_BUFFER_POINTER         = 0x0DF0,  GL_CONVOLUTION_BORDER_MODE      = 0x8013,  GL_DYNAMIC_STORAGE_BIT           = 0x0100,
+    GL_SELECTION_BUFFER_POINTER        = 0x0DF3,  GL_CONVOLUTION_BORDER_MODE_EXT  = 0x8013,  GL_DYNAMIC_STORAGE_BIT_EXT       = 0x0100,
+    GL_VERTEX_ARRAY_POINTER            = 0x808E,  GL_CONVOLUTION_FILTER_SCALE     = 0x8014,  GL_CLIENT_STORAGE_BIT            = 0x0200,
+    GL_VERTEX_ARRAY_POINTER_EXT        = 0x808E,  GL_CONVOLUTION_FILTER_SCALE_EXT = 0x8014,  GL_CLIENT_STORAGE_BIT_EXT        = 0x0200,
+    GL_NORMAL_ARRAY_POINTER            = 0x808F,  GL_CONVOLUTION_FILTER_BIAS      = 0x8015,  GL_SPARSE_STORAGE_BIT_ARB        = 0x0400,
+    GL_NORMAL_ARRAY_POINTER_EXT        = 0x808F,  GL_CONVOLUTION_FILTER_BIAS_EXT  = 0x8015,  GL_LGPU_SEPARATE_STORAGE_BIT_NVX = 0x0800,
+    GL_COLOR_ARRAY_POINTER             = 0x8090,  GL_CONVOLUTION_FORMAT           = 0x8017,  GL_PER_GPU_STORAGE_BIT_NV        = 0x0800,
+    GL_COLOR_ARRAY_POINTER_EXT         = 0x8090,  GL_CONVOLUTION_FORMAT_EXT       = 0x8017,  GL_EXTERNAL_STORAGE_BIT_NVX      = 0x2000,
+    GL_INDEX_ARRAY_POINTER             = 0x8091,  GL_CONVOLUTION_WIDTH            = 0x8018,  GL_MAP_READ_BIT                  = 0x0001,
+    GL_INDEX_ARRAY_POINTER_EXT         = 0x8091,  GL_CONVOLUTION_WIDTH_EXT        = 0x8018,  GL_MAP_READ_BIT_EXT              = 0x0001,
+    GL_TEXTURE_COORD_ARRAY_POINTER     = 0x8092,  GL_CONVOLUTION_HEIGHT           = 0x8019,  GL_MAP_WRITE_BIT                 = 0x0002,
+    GL_TEXTURE_COORD_ARRAY_POINTER_EXT = 0x8092,  GL_CONVOLUTION_HEIGHT_EXT       = 0x8019,  GL_MAP_WRITE_BIT_EXT             = 0x0002,
+    GL_EDGE_FLAG_ARRAY_POINTER         = 0x8093,  GL_MAX_CONVOLUTION_WIDTH        = 0x801A,  GL_MAP_PERSISTENT_BIT            = 0x0040,
+    GL_EDGE_FLAG_ARRAY_POINTER_EXT     = 0x8093,  GL_MAX_CONVOLUTION_WIDTH_EXT    = 0x801A,  GL_MAP_PERSISTENT_BIT_EXT        = 0x0040,
+    GL_INSTRUMENT_BUFFER_POINTER_SGIX  = 0x8180,  GL_MAX_CONVOLUTION_HEIGHT       = 0x801B,  GL_MAP_COHERENT_BIT              = 0x0080,
+    GL_DEBUG_CALLBACK_FUNCTION         = 0x8244,  GL_MAX_CONVOLUTION_HEIGHT_EXT   = 0x801B,  GL_MAP_COHERENT_BIT_EXT          = 0x0080,
+    GL_DEBUG_CALLBACK_USER_PARAM       = 0x8245,  GL_CONVOLUTION_BORDER_COLOR     = 0x8154,
+    /* PixelTransferParameter */                /* GetHistogramParameterPNameEXT */        /* SpecialNumbers */
+    GL_POST_CONVOLUTION_RED_SCALE    = 0x801C,  GL_HISTOGRAM_WIDTH              = 0x8026,  GL_FALSE                 = 0,
+    GL_POST_CONVOLUTION_GREEN_SCALE  = 0x801D,  GL_HISTOGRAM_WIDTH_EXT          = 0x8026,  GL_NO_ERROR              = 0,
+    GL_POST_CONVOLUTION_BLUE_SCALE   = 0x801E,  GL_HISTOGRAM_FORMAT             = 0x8027,  GL_ZERO                  = 0,
+    GL_POST_CONVOLUTION_ALPHA_SCALE  = 0x801F,  GL_HISTOGRAM_FORMAT_EXT         = 0x8027,  GL_NONE_OES              = 0,
+    GL_POST_CONVOLUTION_RED_BIAS     = 0x8020,  GL_HISTOGRAM_RED_SIZE           = 0x8028,  GL_TRUE                  = 1,
+    GL_POST_CONVOLUTION_GREEN_BIAS   = 0x8021,  GL_HISTOGRAM_RED_SIZE_EXT       = 0x8028,  GL_ONE                   = 1,
+    GL_POST_CONVOLUTION_BLUE_BIAS    = 0x8022,  GL_HISTOGRAM_GREEN_SIZE         = 0x8029,  GL_INVALID_INDEX         = 0xFFFFFFFF,
+    GL_POST_CONVOLUTION_ALPHA_BIAS   = 0x8023,  GL_HISTOGRAM_GREEN_SIZE_EXT     = 0x8029,  GL_ALL_PIXELS_AMD        = 0xFFFFFFFF,
+    GL_POST_COLOR_MATRIX_RED_SCALE   = 0x80B4,  GL_HISTOGRAM_BLUE_SIZE          = 0x802A,  GL_TIMEOUT_IGNORED       = 0xFFFFFFFFFFFFFFFF,
+    GL_POST_COLOR_MATRIX_GREEN_SCALE = 0x80B5,  GL_HISTOGRAM_BLUE_SIZE_EXT      = 0x802A,  GL_TIMEOUT_IGNORED_APPLE = 0xFFFFFFFFFFFFFFFF,
+    GL_POST_COLOR_MATRIX_BLUE_SCALE  = 0x80B6,  GL_HISTOGRAM_ALPHA_SIZE         = 0x802B,  GL_VERSION_ES_CL_1_0     = 1,
+    GL_POST_COLOR_MATRIX_ALPHA_SCALE = 0x80B7,  GL_HISTOGRAM_ALPHA_SIZE_EXT     = 0x802B,  GL_VERSION_ES_CM_1_1     = 1,
+    GL_POST_COLOR_MATRIX_RED_BIAS    = 0x80B8,  GL_HISTOGRAM_LUMINANCE_SIZE     = 0x802C,  GL_VERSION_ES_CL_1_1     = 1,
+    GL_POST_COLOR_MATRIX_GREEN_BIAS  = 0x80B9,  GL_HISTOGRAM_LUMINANCE_SIZE_EXT = 0x802C,  GL_UUID_SIZE_EXT         = 16,
+    GL_POST_COLOR_MATRIX_BLUE_BIAS   = 0x80BA,  GL_HISTOGRAM_SINK               = 0x802D,  GL_LUID_SIZE_EXT         = 8,
+    GL_POST_COLOR_MATRIX_ALPHA_BIAS  = 0x80BB,  GL_HISTOGRAM_SINK_EXT           = 0x802D,
+    /* LogicOp */               /* TextureWrapMode */              /* InterleavedArrayFormat */  /* SamplePatternSGIS */
+    GL_CLEAR         = 0x1500,  GL_CLAMP                = 0x2900,  GL_V2F             = 0x2A20,  GL_1PASS_EXT    = 0x80A1,
+    GL_AND           = 0x1501,  GL_REPEAT               = 0x2901,  GL_V3F             = 0x2A21,  GL_1PASS_SGIS   = 0x80A1,
+    GL_AND_REVERSE   = 0x1502,  GL_CLAMP_TO_BORDER      = 0x812D,  GL_C4UB_V2F        = 0x2A22,  GL_2PASS_0_EXT  = 0x80A2,
+    GL_COPY          = 0x1503,  GL_CLAMP_TO_BORDER_ARB  = 0x812D,  GL_C4UB_V3F        = 0x2A23,  GL_2PASS_0_SGIS = 0x80A2,
+    GL_AND_INVERTED  = 0x1504,  GL_CLAMP_TO_BORDER_EXT  = 0x812D,  GL_C3F_V3F         = 0x2A24,  GL_2PASS_1_EXT  = 0x80A3,
+    GL_NOOP          = 0x1505,  GL_CLAMP_TO_BORDER_NV   = 0x812D,  GL_N3F_V3F         = 0x2A25,  GL_2PASS_1_SGIS = 0x80A3,
+    GL_XOR           = 0x1506,  GL_CLAMP_TO_BORDER_SGIS = 0x812D,  GL_C4F_N3F_V3F     = 0x2A26,  GL_4PASS_0_EXT  = 0x80A4,
+    GL_OR            = 0x1507,  GL_CLAMP_TO_BORDER_OES  = 0x812D,  GL_T2F_V3F         = 0x2A27,  GL_4PASS_0_SGIS = 0x80A4,
+    GL_NOR           = 0x1508,  GL_CLAMP_TO_EDGE        = 0x812F,  GL_T4F_V4F         = 0x2A28,  GL_4PASS_1_EXT  = 0x80A5,
+    GL_EQUIV         = 0x1509,  GL_CLAMP_TO_EDGE_SGIS   = 0x812F,  GL_T2F_C4UB_V3F    = 0x2A29,  GL_4PASS_1_SGIS = 0x80A5,
+    GL_OR_REVERSE    = 0x150B,  GL_MIRRORED_REPEAT      = 0x8370,  GL_T2F_C3F_V3F     = 0x2A2A,  GL_4PASS_2_EXT  = 0x80A6,
+    GL_COPY_INVERTED = 0x150C,  GL_MIRRORED_REPEAT_ARB  = 0x8370,  GL_T2F_N3F_V3F     = 0x2A2B,  GL_4PASS_2_SGIS = 0x80A6,
+    GL_OR_INVERTED   = 0x150D,  GL_MIRRORED_REPEAT_IBM  = 0x8370,  GL_T2F_C4F_N3F_V3F = 0x2A2C,  GL_4PASS_3_EXT  = 0x80A7,
+    GL_NAND          = 0x150E,  GL_MIRRORED_REPEAT_OES  = 0x8370,  GL_T4F_C4F_N3F_V4F = 0x2A2D,  GL_4PASS_3_SGIS = 0x80A7,
+    GL_SET           = 0x150F,
+    /* BufferTargetARB */                   /* TexStorageAttribs */                                  /* BufferPNameARB */
+    GL_PARAMETER_BUFFER          = 0x80EE,  GL_SURFACE_COMPRESSION_FIXED_RATE_NONE_EXT    = 0x96C1,  GL_BUFFER_IMMUTABLE_STORAGE = 0x821F,
+    GL_ARRAY_BUFFER              = 0x8892,  GL_SURFACE_COMPRESSION_FIXED_RATE_DEFAULT_EXT = 0x96C2,  GL_BUFFER_STORAGE_FLAGS     = 0x8220,
+    GL_ELEMENT_ARRAY_BUFFER      = 0x8893,  GL_SURFACE_COMPRESSION_FIXED_RATE_1BPC_EXT    = 0x96C4,  GL_BUFFER_SIZE              = 0x8764,
+    GL_PIXEL_PACK_BUFFER         = 0x88EB,  GL_SURFACE_COMPRESSION_FIXED_RATE_2BPC_EXT    = 0x96C5,  GL_BUFFER_SIZE_ARB          = 0x8764,
+    GL_PIXEL_UNPACK_BUFFER       = 0x88EC,  GL_SURFACE_COMPRESSION_FIXED_RATE_3BPC_EXT    = 0x96C6,  GL_BUFFER_USAGE             = 0x8765,
+    GL_UNIFORM_BUFFER            = 0x8A11,  GL_SURFACE_COMPRESSION_FIXED_RATE_4BPC_EXT    = 0x96C7,  GL_BUFFER_USAGE_ARB         = 0x8765,
+    GL_TRANSFORM_FEEDBACK_BUFFER = 0x8C8E,  GL_SURFACE_COMPRESSION_FIXED_RATE_5BPC_EXT    = 0x96C8,  GL_BUFFER_ACCESS            = 0x88BB,
+    GL_COPY_READ_BUFFER          = 0x8F36,  GL_SURFACE_COMPRESSION_FIXED_RATE_6BPC_EXT    = 0x96C9,  GL_BUFFER_ACCESS_ARB        = 0x88BB,
+    GL_COPY_WRITE_BUFFER         = 0x8F37,  GL_SURFACE_COMPRESSION_FIXED_RATE_7BPC_EXT    = 0x96CA,  GL_BUFFER_MAPPED            = 0x88BC,
+    GL_DRAW_INDIRECT_BUFFER      = 0x8F3F,  GL_SURFACE_COMPRESSION_FIXED_RATE_8BPC_EXT    = 0x96CB,  GL_BUFFER_MAPPED_ARB        = 0x88BC,
+    GL_SHADER_STORAGE_BUFFER     = 0x90D2,  GL_SURFACE_COMPRESSION_FIXED_RATE_9BPC_EXT    = 0x96CC,  GL_BUFFER_ACCESS_FLAGS      = 0x911F,
+    GL_DISPATCH_INDIRECT_BUFFER  = 0x90EE,  GL_SURFACE_COMPRESSION_FIXED_RATE_10BPC_EXT   = 0x96CD,  GL_BUFFER_MAP_LENGTH        = 0x9120,
+    GL_QUERY_BUFFER              = 0x9192,  GL_SURFACE_COMPRESSION_FIXED_RATE_11BPC_EXT   = 0x96CE,  GL_BUFFER_MAP_OFFSET        = 0x9121,
+    GL_ATOMIC_COUNTER_BUFFER     = 0x92C0,  GL_SURFACE_COMPRESSION_FIXED_RATE_12BPC_EXT   = 0x96CF,
+    /* VertexAttribPropertyARB */                    /* QueryTarget */                                   /* ErrorCode */
+    GL_VERTEX_ATTRIB_BINDING              = 0x82D4,  GL_TRANSFORM_FEEDBACK_OVERFLOW           = 0x82EC,  GL_INVALID_ENUM                      = 0x0500,
+    GL_VERTEX_ATTRIB_RELATIVE_OFFSET      = 0x82D5,  GL_VERTICES_SUBMITTED                    = 0x82EE,  GL_INVALID_VALUE                     = 0x0501,
+    GL_VERTEX_ATTRIB_ARRAY_ENABLED        = 0x8622,  GL_PRIMITIVES_SUBMITTED                  = 0x82EF,  GL_INVALID_OPERATION                 = 0x0502,
+    GL_VERTEX_ATTRIB_ARRAY_SIZE           = 0x8623,  GL_VERTEX_SHADER_INVOCATIONS             = 0x82F0,  GL_STACK_OVERFLOW                    = 0x0503,
+    GL_VERTEX_ATTRIB_ARRAY_STRIDE         = 0x8624,  GL_TIME_ELAPSED                          = 0x88BF,  GL_STACK_UNDERFLOW                   = 0x0504,
+    GL_VERTEX_ATTRIB_ARRAY_TYPE           = 0x8625,  GL_SAMPLES_PASSED                        = 0x8914,  GL_OUT_OF_MEMORY                     = 0x0505,
+    GL_CURRENT_VERTEX_ATTRIB              = 0x8626,  GL_ANY_SAMPLES_PASSED                    = 0x8C2F,  GL_INVALID_FRAMEBUFFER_OPERATION     = 0x0506,
+    GL_VERTEX_ATTRIB_ARRAY_LONG           = 0x874E,  GL_PRIMITIVES_GENERATED                  = 0x8C87,  GL_INVALID_FRAMEBUFFER_OPERATION_EXT = 0x0506,
+    GL_VERTEX_ATTRIB_ARRAY_NORMALIZED     = 0x886A,  GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN = 0x8C88,  GL_INVALID_FRAMEBUFFER_OPERATION_OES = 0x0506,
+    GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING = 0x889F,  GL_ANY_SAMPLES_PASSED_CONSERVATIVE       = 0x8D6A,  GL_TABLE_TOO_LARGE_EXT               = 0x8031,
+    GL_VERTEX_ATTRIB_ARRAY_INTEGER        = 0x88FD,  GL_TASK_SHADER_INVOCATIONS_EXT           = 0x9753,  GL_TABLE_TOO_LARGE                   = 0x8031,
+    GL_VERTEX_ATTRIB_ARRAY_INTEGER_EXT    = 0x88FD,  GL_MESH_SHADER_INVOCATIONS_EXT           = 0x9754,  GL_TEXTURE_TOO_LARGE_EXT             = 0x8065,
+    GL_VERTEX_ATTRIB_ARRAY_DIVISOR        = 0x88FE,  GL_MESH_PRIMITIVES_GENERATED_EXT         = 0x9755,
+    /* BlendEquationModeEXT */              /* GetTextureParameter */             /* UniformBlockPName */
+    GL_FUNC_ADD                  = 0x8006,  GL_NORMAL_MAP              = 0x8511,  GL_UNIFORM_BLOCK_REFERENCED_BY_TESS_CONTROL_SHADER    = 0x84F0,
+    GL_FUNC_ADD_EXT              = 0x8006,  GL_NORMAL_MAP_ARB          = 0x8511,  GL_UNIFORM_BLOCK_REFERENCED_BY_TESS_EVALUATION_SHADER = 0x84F1,
+    GL_MIN                       = 0x8007,  GL_NORMAL_MAP_EXT          = 0x8511,  GL_UNIFORM_BLOCK_BINDING                              = 0x8A3F,
+    GL_MIN_EXT                   = 0x8007,  GL_NORMAL_MAP_NV           = 0x8511,  GL_UNIFORM_BLOCK_DATA_SIZE                            = 0x8A40,
+    GL_MAX                       = 0x8008,  GL_NORMAL_MAP_OES          = 0x8511,  GL_UNIFORM_BLOCK_NAME_LENGTH                          = 0x8A41,
+    GL_MAX_EXT                   = 0x8008,  GL_REFLECTION_MAP          = 0x8512,  GL_UNIFORM_BLOCK_ACTIVE_UNIFORMS                      = 0x8A42,
+    GL_FUNC_SUBTRACT             = 0x800A,  GL_REFLECTION_MAP_ARB      = 0x8512,  GL_UNIFORM_BLOCK_ACTIVE_UNIFORM_INDICES               = 0x8A43,
+    GL_FUNC_SUBTRACT_EXT         = 0x800A,  GL_REFLECTION_MAP_EXT      = 0x8512,  GL_UNIFORM_BLOCK_REFERENCED_BY_VERTEX_SHADER          = 0x8A44,
+    GL_FUNC_REVERSE_SUBTRACT     = 0x800B,  GL_REFLECTION_MAP_NV       = 0x8512,  GL_UNIFORM_BLOCK_REFERENCED_BY_GEOMETRY_SHADER        = 0x8A45,
+    GL_FUNC_REVERSE_SUBTRACT_EXT = 0x800B,  GL_REFLECTION_MAP_OES      = 0x8512,  GL_UNIFORM_BLOCK_REFERENCED_BY_FRAGMENT_SHADER        = 0x8A46,
+    GL_ALPHA_MIN_SGIX            = 0x8320,  GL_SURFACE_COMPRESSION_EXT = 0x96C0,  GL_UNIFORM_BLOCK_REFERENCED_BY_COMPUTE_SHADER         = 0x90EC,
+    GL_ALPHA_MAX_SGIX            = 0x8321,
+    /* VertexShaderCoordOutEXT */  /* PixelMap */                 /* LightParameter */                /* ImageTransformPNameHP */
+    GL_X_EXT            = 0x87D5,  GL_PIXEL_MAP_I_TO_I = 0x0C70,  GL_AMBIENT               = 0x1200,  GL_IMAGE_SCALE_X_HP         = 0x8155,
+    GL_Y_EXT            = 0x87D6,  GL_PIXEL_MAP_S_TO_S = 0x0C71,  GL_DIFFUSE               = 0x1201,  GL_IMAGE_SCALE_Y_HP         = 0x8156,
+    GL_Z_EXT            = 0x87D7,  GL_PIXEL_MAP_I_TO_R = 0x0C72,  GL_SPECULAR              = 0x1202,  GL_IMAGE_TRANSLATE_X_HP     = 0x8157,
+    GL_W_EXT            = 0x87D8,  GL_PIXEL_MAP_I_TO_G = 0x0C73,  GL_POSITION              = 0x1203,  GL_IMAGE_TRANSLATE_Y_HP     = 0x8158,
+    GL_NEGATIVE_X_EXT   = 0x87D9,  GL_PIXEL_MAP_I_TO_B = 0x0C74,  GL_SPOT_DIRECTION        = 0x1204,  GL_IMAGE_ROTATE_ANGLE_HP    = 0x8159,
+    GL_NEGATIVE_Y_EXT   = 0x87DA,  GL_PIXEL_MAP_I_TO_A = 0x0C75,  GL_SPOT_EXPONENT         = 0x1205,  GL_IMAGE_ROTATE_ORIGIN_X_HP = 0x815A,
+    GL_NEGATIVE_Z_EXT   = 0x87DB,  GL_PIXEL_MAP_R_TO_R = 0x0C76,  GL_SPOT_CUTOFF           = 0x1206,  GL_IMAGE_ROTATE_ORIGIN_Y_HP = 0x815B,
+    GL_NEGATIVE_W_EXT   = 0x87DC,  GL_PIXEL_MAP_G_TO_G = 0x0C77,  GL_CONSTANT_ATTENUATION  = 0x1207,  GL_IMAGE_MAG_FILTER_HP      = 0x815C,
+    GL_ZERO_EXT         = 0x87DD,  GL_PIXEL_MAP_B_TO_B = 0x0C78,  GL_LINEAR_ATTENUATION    = 0x1208,  GL_IMAGE_MIN_FILTER_HP      = 0x815D,
+    GL_ONE_EXT          = 0x87DE,  GL_PIXEL_MAP_A_TO_A = 0x0C79,  GL_QUADRATIC_ATTENUATION = 0x1209,  GL_IMAGE_CUBIC_WEIGHT_HP    = 0x815E,
+    GL_NEGATIVE_ONE_EXT = 0x87DF,
+    /* AtomicCounterBufferPName */                                           /* SubgroupSupportedFeatures */                             /* DebugType */
+    GL_ATOMIC_COUNTER_BUFFER_REFERENCED_BY_COMPUTE_SHADER         = 0x90ED,  GL_SUBGROUP_FEATURE_BASIC_BIT_KHR            = 0x00000001,  GL_DEBUG_TYPE_ERROR               = 0x824C,
+    GL_ATOMIC_COUNTER_BUFFER_BINDING                              = 0x92C1,  GL_SUBGROUP_FEATURE_VOTE_BIT_KHR             = 0x00000002,  GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR = 0x824D,
+    GL_ATOMIC_COUNTER_BUFFER_DATA_SIZE                            = 0x92C4,  GL_SUBGROUP_FEATURE_ARITHMETIC_BIT_KHR       = 0x00000004,  GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR  = 0x824E,
+    GL_ATOMIC_COUNTER_BUFFER_ACTIVE_ATOMIC_COUNTERS               = 0x92C5,  GL_SUBGROUP_FEATURE_BALLOT_BIT_KHR           = 0x00000008,  GL_DEBUG_TYPE_PORTABILITY         = 0x824F,
+    GL_ATOMIC_COUNTER_BUFFER_ACTIVE_ATOMIC_COUNTER_INDICES        = 0x92C6,  GL_SUBGROUP_FEATURE_SHUFFLE_BIT_KHR          = 0x00000010,  GL_DEBUG_TYPE_PERFORMANCE         = 0x8250,
+    GL_ATOMIC_COUNTER_BUFFER_REFERENCED_BY_VERTEX_SHADER          = 0x92C7,  GL_SUBGROUP_FEATURE_SHUFFLE_RELATIVE_BIT_KHR = 0x00000020,  GL_DEBUG_TYPE_OTHER               = 0x8251,
+    GL_ATOMIC_COUNTER_BUFFER_REFERENCED_BY_TESS_CONTROL_SHADER    = 0x92C8,  GL_SUBGROUP_FEATURE_CLUSTERED_BIT_KHR        = 0x00000040,  GL_DEBUG_TYPE_MARKER              = 0x8268,
+    GL_ATOMIC_COUNTER_BUFFER_REFERENCED_BY_TESS_EVALUATION_SHADER = 0x92C9,  GL_SUBGROUP_FEATURE_QUAD_BIT_KHR             = 0x00000080,  GL_DEBUG_TYPE_PUSH_GROUP          = 0x8269,
+    GL_ATOMIC_COUNTER_BUFFER_REFERENCED_BY_GEOMETRY_SHADER        = 0x92CA,  GL_SUBGROUP_FEATURE_PARTITIONED_BIT_NV       = 0x00000100,  GL_DEBUG_TYPE_POP_GROUP           = 0x826A,
+    GL_ATOMIC_COUNTER_BUFFER_REFERENCED_BY_FRAGMENT_SHADER        = 0x92CB,
+    /* FramebufferStatus */                                 /* BufferUsageARB */       /* UniformPName */
+    GL_FRAMEBUFFER_UNDEFINED                     = 0x8219,  GL_STREAM_DRAW  = 0x88E0,  GL_UNIFORM_TYPE                        = 0x8A37,
+    GL_FRAMEBUFFER_COMPLETE                      = 0x8CD5,  GL_STREAM_READ  = 0x88E1,  GL_UNIFORM_SIZE                        = 0x8A38,
+    GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT         = 0x8CD6,  GL_STREAM_COPY  = 0x88E2,  GL_UNIFORM_NAME_LENGTH                 = 0x8A39,
+    GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT = 0x8CD7,  GL_STATIC_DRAW  = 0x88E4,  GL_UNIFORM_BLOCK_INDEX                 = 0x8A3A,
+    GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER        = 0x8CDB,  GL_STATIC_READ  = 0x88E5,  GL_UNIFORM_OFFSET                      = 0x8A3B,
+    GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER        = 0x8CDC,  GL_STATIC_COPY  = 0x88E6,  GL_UNIFORM_ARRAY_STRIDE                = 0x8A3C,
+    GL_FRAMEBUFFER_UNSUPPORTED                   = 0x8CDD,  GL_DYNAMIC_DRAW = 0x88E8,  GL_UNIFORM_MATRIX_STRIDE               = 0x8A3D,
+    GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE        = 0x8D56,  GL_DYNAMIC_READ = 0x88E9,  GL_UNIFORM_IS_ROW_MAJOR                = 0x8A3E,
+    GL_FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS      = 0x8DA8,  GL_DYNAMIC_COPY = 0x88EA,  GL_UNIFORM_ATOMIC_COUNTER_BUFFER_INDEX = 0x92DA,
+    /* TextureLayout */                                         /* ShadingRateQCOM */                      /* ShadingRate */
+    GL_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_EXT = 0x9530,  GL_SHADING_RATE_1X1_PIXELS_QCOM = 0x96A6,  GL_SHADING_RATE_1X1_PIXELS_EXT = 0x96A6,
+    GL_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_EXT = 0x9531,  GL_SHADING_RATE_1X2_PIXELS_QCOM = 0x96A7,  GL_SHADING_RATE_1X2_PIXELS_EXT = 0x96A7,
+    GL_LAYOUT_GENERAL_EXT                            = 0x958D,  GL_SHADING_RATE_2X1_PIXELS_QCOM = 0x96A8,  GL_SHADING_RATE_2X1_PIXELS_EXT = 0x96A8,
+    GL_LAYOUT_COLOR_ATTACHMENT_EXT                   = 0x958E,  GL_SHADING_RATE_2X2_PIXELS_QCOM = 0x96A9,  GL_SHADING_RATE_2X2_PIXELS_EXT = 0x96A9,
+    GL_LAYOUT_DEPTH_STENCIL_ATTACHMENT_EXT           = 0x958F,  GL_SHADING_RATE_1X4_PIXELS_QCOM = 0x96AA,  GL_SHADING_RATE_1X4_PIXELS_EXT = 0x96AA,
+    GL_LAYOUT_DEPTH_STENCIL_READ_ONLY_EXT            = 0x9590,  GL_SHADING_RATE_4X1_PIXELS_QCOM = 0x96AB,  GL_SHADING_RATE_4X1_PIXELS_EXT = 0x96AB,
+    GL_LAYOUT_SHADER_READ_ONLY_EXT                   = 0x9591,  GL_SHADING_RATE_4X2_PIXELS_QCOM = 0x96AC,  GL_SHADING_RATE_4X2_PIXELS_EXT = 0x96AC,
+    GL_LAYOUT_TRANSFER_SRC_EXT                       = 0x9592,  GL_SHADING_RATE_2X4_PIXELS_QCOM = 0x96AD,  GL_SHADING_RATE_2X4_PIXELS_EXT = 0x96AD,
+    GL_LAYOUT_TRANSFER_DST_EXT                       = 0x9593,  GL_SHADING_RATE_4X4_PIXELS_QCOM = 0x96AE,  GL_SHADING_RATE_4X4_PIXELS_EXT = 0x96AE,
+    /* ContextFlagMask */                                    /* MapBufferAccessMask */                   /* PathTransformType */
+    GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT    = 0x00000001,  GL_MAP_INVALIDATE_RANGE_BIT      = 0x0004,  GL_TRANSLATE_X_NV         = 0x908E,
+    GL_CONTEXT_FLAG_DEBUG_BIT                 = 0x00000002,  GL_MAP_INVALIDATE_RANGE_BIT_EXT  = 0x0004,  GL_TRANSLATE_Y_NV         = 0x908F,
+    GL_CONTEXT_FLAG_DEBUG_BIT_KHR             = 0x00000002,  GL_MAP_INVALIDATE_BUFFER_BIT     = 0x0008,  GL_TRANSLATE_2D_NV        = 0x9090,
+    GL_CONTEXT_FLAG_ROBUST_ACCESS_BIT         = 0x00000004,  GL_MAP_INVALIDATE_BUFFER_BIT_EXT = 0x0008,  GL_TRANSLATE_3D_NV        = 0x9091,
+    GL_CONTEXT_FLAG_ROBUST_ACCESS_BIT_ARB     = 0x00000004,  GL_MAP_FLUSH_EXPLICIT_BIT        = 0x0010,  GL_AFFINE_2D_NV           = 0x9092,
+    GL_CONTEXT_FLAG_NO_ERROR_BIT              = 0x00000008,  GL_MAP_FLUSH_EXPLICIT_BIT_EXT    = 0x0010,  GL_AFFINE_3D_NV           = 0x9094,
+    GL_CONTEXT_FLAG_NO_ERROR_BIT_KHR          = 0x00000008,  GL_MAP_UNSYNCHRONIZED_BIT        = 0x0020,  GL_TRANSPOSE_AFFINE_2D_NV = 0x9096,
+    GL_CONTEXT_FLAG_PROTECTED_CONTENT_BIT_EXT = 0x00000010,  GL_MAP_UNSYNCHRONIZED_BIT_EXT    = 0x0020,  GL_TRANSPOSE_AFFINE_3D_NV = 0x9098,
+    /* StencilFunction */  /* FeedBackToken */              /* ObjectIdentifier */           /* TextureGenParameter */
+    GL_NEVER    = 0x0200,  GL_PASS_THROUGH_TOKEN = 0x0700,  GL_BUFFER             = 0x82E0,  GL_TEXTURE_GEN_MODE     = 0x2500,
+    GL_LESS     = 0x0201,  GL_POINT_TOKEN        = 0x0701,  GL_SHADER             = 0x82E1,  GL_TEXTURE_GEN_MODE_OES = 0x2500,
+    GL_EQUAL    = 0x0202,  GL_LINE_TOKEN         = 0x0702,  GL_PROGRAM            = 0x82E2,  GL_OBJECT_PLANE         = 0x2501,
+    GL_LEQUAL   = 0x0203,  GL_POLYGON_TOKEN      = 0x0703,  GL_QUERY              = 0x82E3,  GL_EYE_PLANE            = 0x2502,
+    GL_GREATER  = 0x0204,  GL_BITMAP_TOKEN       = 0x0704,  GL_PROGRAM_PIPELINE   = 0x82E4,  GL_EYE_POINT_SGIS       = 0x81F4,
+    GL_NOTEQUAL = 0x0205,  GL_DRAW_PIXEL_TOKEN   = 0x0705,  GL_SAMPLER            = 0x82E6,  GL_OBJECT_POINT_SGIS    = 0x81F5,
+    GL_GEQUAL   = 0x0206,  GL_COPY_PIXEL_TOKEN   = 0x0706,  GL_FRAMEBUFFER        = 0x8D40,  GL_EYE_LINE_SGIS        = 0x81F6,
+    GL_ALWAYS   = 0x0207,  GL_LINE_RESET_TOKEN   = 0x0707,  GL_TRANSFORM_FEEDBACK = 0x8E22,  GL_OBJECT_LINE_SGIS     = 0x81F7,
+    /* TextureMinFilter */                     /* CombinerMappingNV */            /* CombinerStageNV */      /* VertexStreamATI */
+    GL_NEAREST_MIPMAP_NEAREST       = 0x2700,  GL_UNSIGNED_IDENTITY_NV = 0x8536,  GL_COMBINER0_NV = 0x8550,  GL_VERTEX_STREAM0_ATI = 0x876C,
+    GL_LINEAR_MIPMAP_NEAREST        = 0x2701,  GL_UNSIGNED_INVERT_NV   = 0x8537,  GL_COMBINER1_NV = 0x8551,  GL_VERTEX_STREAM1_ATI = 0x876D,
+    GL_NEAREST_MIPMAP_LINEAR        = 0x2702,  GL_EXPAND_NORMAL_NV     = 0x8538,  GL_COMBINER2_NV = 0x8552,  GL_VERTEX_STREAM2_ATI = 0x876E,
+    GL_LINEAR_MIPMAP_LINEAR         = 0x2703,  GL_EXPAND_NEGATE_NV     = 0x8539,  GL_COMBINER3_NV = 0x8553,  GL_VERTEX_STREAM3_ATI = 0x876F,
+    GL_LINEAR_CLIPMAP_LINEAR_SGIX   = 0x8170,  GL_HALF_BIAS_NORMAL_NV  = 0x853A,  GL_COMBINER4_NV = 0x8554,  GL_VERTEX_STREAM4_ATI = 0x8770,
+    GL_NEAREST_CLIPMAP_NEAREST_SGIX = 0x844D,  GL_HALF_BIAS_NEGATE_NV  = 0x853B,  GL_COMBINER5_NV = 0x8555,  GL_VERTEX_STREAM5_ATI = 0x8771,
+    GL_NEAREST_CLIPMAP_LINEAR_SGIX  = 0x844E,  GL_SIGNED_IDENTITY_NV   = 0x853C,  GL_COMBINER6_NV = 0x8556,  GL_VERTEX_STREAM6_ATI = 0x8772,
+    GL_LINEAR_CLIPMAP_NEAREST_SGIX  = 0x844F,  GL_SIGNED_NEGATE_NV     = 0x853D,  GL_COMBINER7_NV = 0x8557,  GL_VERTEX_STREAM7_ATI = 0x8773,
+    /* ConditionalRenderMode */                    /* ExternalHandleType */                       /* FragmentShaderDestModMaskATI */
+    GL_QUERY_WAIT                       = 0x8E13,  GL_HANDLE_TYPE_OPAQUE_FD_EXT        = 0x9586,  GL_2X_BIT_ATI       = 0x00000001,
+    GL_QUERY_NO_WAIT                    = 0x8E14,  GL_HANDLE_TYPE_OPAQUE_WIN32_EXT     = 0x9587,  GL_4X_BIT_ATI       = 0x00000002,
+    GL_QUERY_BY_REGION_WAIT             = 0x8E15,  GL_HANDLE_TYPE_OPAQUE_WIN32_KMT_EXT = 0x9588,  GL_8X_BIT_ATI       = 0x00000004,
+    GL_QUERY_BY_REGION_NO_WAIT          = 0x8E16,  GL_HANDLE_TYPE_D3D12_TILEPOOL_EXT   = 0x9589,  GL_HALF_BIT_ATI     = 0x00000008,
+    GL_QUERY_WAIT_INVERTED              = 0x8E17,  GL_HANDLE_TYPE_D3D12_RESOURCE_EXT   = 0x958A,  GL_QUARTER_BIT_ATI  = 0x00000010,
+    GL_QUERY_NO_WAIT_INVERTED           = 0x8E18,  GL_HANDLE_TYPE_D3D11_IMAGE_EXT      = 0x958B,  GL_EIGHTH_BIT_ATI   = 0x00000020,
+    GL_QUERY_BY_REGION_WAIT_INVERTED    = 0x8E19,  GL_HANDLE_TYPE_D3D11_IMAGE_KMT_EXT  = 0x958C,  GL_SATURATE_BIT_ATI = 0x00000040,
+    GL_QUERY_BY_REGION_NO_WAIT_INVERTED = 0x8E1A,  GL_HANDLE_TYPE_D3D12_FENCE_EXT      = 0x9594,
+    /* TraceMaskMESA */                     /* StencilOp */         /* CopyImageSubDataTarget */               /* TextureMagFilter */
+    GL_TRACE_OPERATIONS_BIT_MESA = 0x0001,  GL_INVERT    = 0x150A,  GL_TEXTURE_3D                   = 0x806F,  GL_LINEAR_DETAIL_SGIS        = 0x8097,
+    GL_TRACE_PRIMITIVES_BIT_MESA = 0x0002,  GL_KEEP      = 0x1E00,  GL_TEXTURE_1D_ARRAY             = 0x8C18,  GL_LINEAR_DETAIL_ALPHA_SGIS  = 0x8098,
+    GL_TRACE_ARRAYS_BIT_MESA     = 0x0004,  GL_REPLACE   = 0x1E01,  GL_TEXTURE_2D_ARRAY             = 0x8C1A,  GL_LINEAR_DETAIL_COLOR_SGIS  = 0x8099,
+    GL_TRACE_TEXTURES_BIT_MESA   = 0x0008,  GL_INCR      = 0x1E02,  GL_RENDERBUFFER                 = 0x8D41,  GL_LINEAR_SHARPEN_SGIS       = 0x80AD,
+    GL_TRACE_PIXELS_BIT_MESA     = 0x0010,  GL_DECR      = 0x1E03,  GL_TEXTURE_CUBE_MAP_ARRAY       = 0x9009,  GL_LINEAR_SHARPEN_ALPHA_SGIS = 0x80AE,
+    GL_TRACE_ERRORS_BIT_MESA     = 0x0020,  GL_INCR_WRAP = 0x8507,  GL_TEXTURE_2D_MULTISAMPLE       = 0x9100,  GL_LINEAR_SHARPEN_COLOR_SGIS = 0x80AF,
+    GL_TRACE_ALL_BITS_MESA       = 0xFFFF,  GL_DECR_WRAP = 0x8508,  GL_TEXTURE_2D_MULTISAMPLE_ARRAY = 0x9102,  GL_FILTER4_SGIS              = 0x8146,
+    /* ColorTableTargetSGI */                             /* ProgramTarget */                      /* PipelineParameterName */
+    GL_PROXY_TEXTURE_COLOR_TABLE_SGI           = 0x80BD,  GL_TEXT_FRAGMENT_SHADER_ATI   = 0x8200,  GL_ACTIVE_PROGRAM         = 0x8259,
+    GL_PROXY_COLOR_TABLE                       = 0x80D3,  GL_VERTEX_PROGRAM_ARB         = 0x8620,  GL_FRAGMENT_SHADER        = 0x8B30,
+    GL_PROXY_COLOR_TABLE_SGI                   = 0x80D3,  GL_FRAGMENT_PROGRAM_ARB       = 0x8804,  GL_VERTEX_SHADER          = 0x8B31,
+    GL_PROXY_POST_CONVOLUTION_COLOR_TABLE      = 0x80D4,  GL_TESS_CONTROL_PROGRAM_NV    = 0x891E,  GL_INFO_LOG_LENGTH        = 0x8B84,
+    GL_PROXY_POST_CONVOLUTION_COLOR_TABLE_SGI  = 0x80D4,  GL_TESS_EVALUATION_PROGRAM_NV = 0x891F,  GL_GEOMETRY_SHADER        = 0x8DD9,
+    GL_PROXY_POST_COLOR_MATRIX_COLOR_TABLE     = 0x80D5,  GL_GEOMETRY_PROGRAM_NV        = 0x8C26,  GL_TESS_EVALUATION_SHADER = 0x8E87,
+    GL_PROXY_POST_COLOR_MATRIX_COLOR_TABLE_SGI = 0x80D5,  GL_COMPUTE_PROGRAM_NV         = 0x90FB,  GL_TESS_CONTROL_SHADER    = 0x8E88,
+    /* CombinerRegisterNV */         /* CombinerVariableNV */    /* ShaderBinaryFormat */                  /* TextureEnvMode */
+    GL_TEXTURE0_ARB       = 0x84C0,  GL_VARIABLE_A_NV = 0x8523,  GL_SGX_BINARY_IMG              = 0x8C0A,  GL_BLEND                 = 0x0BE2,
+    GL_TEXTURE1_ARB       = 0x84C1,  GL_VARIABLE_B_NV = 0x8524,  GL_MALI_SHADER_BINARY_ARM      = 0x8F60,  GL_MODULATE              = 0x2100,
+    GL_PRIMARY_COLOR_NV   = 0x852C,  GL_VARIABLE_C_NV = 0x8525,  GL_SHADER_BINARY_VIV           = 0x8FC4,  GL_DECAL                 = 0x2101,
+    GL_SECONDARY_COLOR_NV = 0x852D,  GL_VARIABLE_D_NV = 0x8526,  GL_SHADER_BINARY_DMP           = 0x9250,  GL_REPLACE_EXT           = 0x8062,
+    GL_SPARE0_NV          = 0x852E,  GL_VARIABLE_E_NV = 0x8527,  GL_GCCSO_SHADER_BINARY_FJ      = 0x9260,  GL_TEXTURE_ENV_BIAS_SGIX = 0x80BE,
+    GL_SPARE1_NV          = 0x852F,  GL_VARIABLE_F_NV = 0x8528,  GL_SHADER_BINARY_FORMAT_SPIR_V = 0x9551,  GL_COMBINE               = 0x8570,
+    GL_DISCARD_NV         = 0x8530,  GL_VARIABLE_G_NV = 0x8529,  GL_HUAWEI_SHADER_BINARY        = 0x9770,
+    /* DebugSource */                          /* VertexAttribIType */      /* PrecisionType */        /* OcclusionQueryEventMaskAMD */
+    GL_DEBUG_SOURCE_API             = 0x8246,  GL_BYTE           = 0x1400,  GL_LOW_FLOAT    = 0x8DF0,  GL_QUERY_DEPTH_PASS_EVENT_BIT_AMD        = 0x00000001,
+    GL_DEBUG_SOURCE_WINDOW_SYSTEM   = 0x8247,  GL_UNSIGNED_BYTE  = 0x1401,  GL_MEDIUM_FLOAT = 0x8DF1,  GL_QUERY_DEPTH_FAIL_EVENT_BIT_AMD        = 0x00000002,
+    GL_DEBUG_SOURCE_SHADER_COMPILER = 0x8248,  GL_SHORT          = 0x1402,  GL_HIGH_FLOAT   = 0x8DF2,  GL_QUERY_STENCIL_FAIL_EVENT_BIT_AMD      = 0x00000004,
+    GL_DEBUG_SOURCE_THIRD_PARTY     = 0x8249,  GL_UNSIGNED_SHORT = 0x1403,  GL_LOW_INT      = 0x8DF3,  GL_QUERY_DEPTH_BOUNDS_FAIL_EVENT_BIT_AMD = 0x00000008,
+    GL_DEBUG_SOURCE_APPLICATION     = 0x824A,  GL_INT            = 0x1404,  GL_MEDIUM_INT   = 0x8DF4,  GL_QUERY_ALL_EVENT_BITS_AMD              = 0xFFFFFFFF,
+    GL_DEBUG_SOURCE_OTHER           = 0x824B,  GL_UNSIGNED_INT   = 0x1405,  GL_HIGH_INT     = 0x8DF5,
+    /* TransformFeedbackTokenNV */  /* PathColorFormat */         /* PixelTexGenModeSGIX */                  /* AccumOp */
+    GL_NEXT_BUFFER_NV      = -2,    GL_RGB             = 0x1907,  GL_PIXEL_TEX_GEN_Q_CEILING_SGIX = 0x8184,  GL_ACCUM  = 0x0100,
+    GL_SKIP_COMPONENTS4_NV = -3,    GL_RGBA            = 0x1908,  GL_PIXEL_TEX_GEN_Q_ROUND_SGIX   = 0x8185,  GL_LOAD   = 0x0101,
+    GL_SKIP_COMPONENTS3_NV = -4,    GL_LUMINANCE       = 0x1909,  GL_PIXEL_TEX_GEN_Q_FLOOR_SGIX   = 0x8186,  GL_RETURN = 0x0102,
+    GL_SKIP_COMPONENTS2_NV = -5,    GL_LUMINANCE_ALPHA = 0x190A,  GL_PIXEL_TEX_GEN_ALPHA_LS_SGIX  = 0x8189,  GL_MULT   = 0x0103,
+    GL_SKIP_COMPONENTS1_NV = -6,    GL_INTENSITY       = 0x8049,  GL_PIXEL_TEX_GEN_ALPHA_MS_SGIX  = 0x818A,  GL_ADD    = 0x0104,
+    /* FeedbackType */             /* GetFramebufferParameter */                            /* PixelStoreParameter */
+    GL_2D               = 0x0600,  GL_FRAMEBUFFER_DEFAULT_WIDTH                  = 0x9310,  GL_UNPACK_ROW_LENGTH_EXT  = 0x0CF2,
+    GL_3D               = 0x0601,  GL_FRAMEBUFFER_DEFAULT_HEIGHT                 = 0x9311,  GL_UNPACK_SKIP_ROWS_EXT   = 0x0CF3,
+    GL_3D_COLOR         = 0x0602,  GL_FRAMEBUFFER_DEFAULT_LAYERS                 = 0x9312,  GL_UNPACK_SKIP_PIXELS_EXT = 0x0CF4,
+    GL_3D_COLOR_TEXTURE = 0x0603,  GL_FRAMEBUFFER_DEFAULT_SAMPLES                = 0x9313,  GL_PACK_RESAMPLE_OML      = 0x8984,
+    GL_4D_COLOR_TEXTURE = 0x0604,  GL_FRAMEBUFFER_DEFAULT_FIXED_SAMPLE_LOCATIONS = 0x9314,  GL_UNPACK_RESAMPLE_OML    = 0x8985,
+    /* DebugSeverity */                       /* StringName */                       /* TextureGenMode */
+    GL_DONT_CARE                   = 0x1100,  GL_VENDOR                   = 0x1F00,  GL_SPHERE_MAP                    = 0x2402,
+    GL_DEBUG_SEVERITY_NOTIFICATION = 0x826B,  GL_RENDERER                 = 0x1F01,  GL_EYE_DISTANCE_TO_POINT_SGIS    = 0x81F0,
+    GL_DEBUG_SEVERITY_HIGH         = 0x9146,  GL_VERSION                  = 0x1F02,  GL_OBJECT_DISTANCE_TO_POINT_SGIS = 0x81F1,
+    GL_DEBUG_SEVERITY_MEDIUM       = 0x9147,  GL_EXTENSIONS               = 0x1F03,  GL_EYE_DISTANCE_TO_LINE_SGIS     = 0x81F2,
+    GL_DEBUG_SEVERITY_LOW          = 0x9148,  GL_SHADING_LANGUAGE_VERSION = 0x8B8C,  GL_OBJECT_DISTANCE_TO_LINE_SGIS  = 0x81F3,
+    /* LightTextureModeEXT */           /* FragmentOp2ATI */   /* FragmentOp3ATI */       /* ProgramStagePName */
+    GL_FRAGMENT_MATERIAL_EXT = 0x8349,  GL_ADD_ATI  = 0x8963,  GL_MAD_ATI      = 0x8968,  GL_ACTIVE_SUBROUTINES                   = 0x8DE5,
+    GL_FRAGMENT_NORMAL_EXT   = 0x834A,  GL_MUL_ATI  = 0x8964,  GL_LERP_ATI     = 0x8969,  GL_ACTIVE_SUBROUTINE_UNIFORMS           = 0x8DE6,
+    GL_FRAGMENT_COLOR_EXT    = 0x834C,  GL_SUB_ATI  = 0x8965,  GL_CND_ATI      = 0x896A,  GL_ACTIVE_SUBROUTINE_UNIFORM_LOCATIONS  = 0x8E47,
+    GL_FRAGMENT_DEPTH        = 0x8452,  GL_DOT3_ATI = 0x8966,  GL_CND0_ATI     = 0x896B,  GL_ACTIVE_SUBROUTINE_MAX_LENGTH         = 0x8E48,
+    GL_FRAGMENT_DEPTH_EXT    = 0x8452,  GL_DOT4_ATI = 0x8967,  GL_DOT2_ADD_ATI = 0x896C,  GL_ACTIVE_SUBROUTINE_UNIFORM_MAX_LENGTH = 0x8E49,
+    /* SemaphoreParameterName */              /* ShadingRateCombinerOp */                                 /* FragmentShaderDestMaskATI */  /* TextureSwizzle */
+    GL_D3D12_FENCE_VALUE_EXT       = 0x9595,  GL_FRAGMENT_SHADING_RATE_COMBINER_OP_KEEP_EXT    = 0x96D2,  GL_RED_BIT_ATI   = 0x00000001,   GL_RED   = 0x1903,
+    GL_TIMELINE_SEMAPHORE_VALUE_NV = 0x9595,  GL_FRAGMENT_SHADING_RATE_COMBINER_OP_REPLACE_EXT = 0x96D3,  GL_GREEN_BIT_ATI = 0x00000002,   GL_GREEN = 0x1904,
+    GL_SEMAPHORE_TYPE_NV           = 0x95B3,  GL_FRAGMENT_SHADING_RATE_COMBINER_OP_MIN_EXT     = 0x96D4,  GL_BLUE_BIT_ATI  = 0x00000004,   GL_BLUE  = 0x1905,
+    GL_SEMAPHORE_TYPE_BINARY_NV    = 0x95B4,  GL_FRAGMENT_SHADING_RATE_COMBINER_OP_MAX_EXT     = 0x96D5,  GL_NONE          = 0,            GL_ALPHA = 0x1906,
+    GL_SEMAPHORE_TYPE_TIMELINE_NV  = 0x95B5,  GL_FRAGMENT_SHADING_RATE_COMBINER_OP_MUL_EXT     = 0x96D6,
+    /* PathGenMode */                         /* FogMode */               /* MaterialParameter */           /* VertexAttribPointerType */
+    GL_EYE_LINEAR                  = 0x2400,  GL_EXP           = 0x0800,  GL_EMISSION            = 0x1600,  GL_INT64_ARB          = 0x140E,
+    GL_OBJECT_LINEAR               = 0x2401,  GL_EXP2          = 0x0801,  GL_SHININESS           = 0x1601,  GL_INT64_NV           = 0x140E,
+    GL_CONSTANT                    = 0x8576,  GL_LINEAR        = 0x2601,  GL_AMBIENT_AND_DIFFUSE = 0x1602,  GL_UNSIGNED_INT64_ARB = 0x140F,
+    GL_PATH_OBJECT_BOUNDING_BOX_NV = 0x908A,  GL_FOG_FUNC_SGIS = 0x812A,  GL_COLOR_INDEXES       = 0x1603,  GL_UNSIGNED_INT64_NV  = 0x140F,
+    /* MatrixMode */             /* TextureCoordName */  /* GetMinmaxParameterPNameEXT */  /* LightModelColorControl */
+    GL_MODELVIEW      = 0x1700,  GL_S = 0x2000,          GL_MINMAX_FORMAT     = 0x802F,    GL_SINGLE_COLOR                = 0x81F9,
+    GL_MODELVIEW0_EXT = 0x1700,  GL_T = 0x2001,          GL_MINMAX_FORMAT_EXT = 0x802F,    GL_SINGLE_COLOR_EXT            = 0x81F9,
+    GL_PROJECTION     = 0x1701,  GL_R = 0x2002,          GL_MINMAX_SINK       = 0x8030,    GL_SEPARATE_SPECULAR_COLOR     = 0x81FA,
+    GL_TEXTURE        = 0x1702,  GL_Q = 0x2003,          GL_MINMAX_SINK_EXT   = 0x8030,    GL_SEPARATE_SPECULAR_COLOR_EXT = 0x81FA,
+    /* QueryObjectParameterName */       /* GetTexBumpParameterATI */           /* VertexShaderStorageTypeEXT */  /* GetVariantValueEXT */
+    GL_QUERY_TARGET           = 0x82EA,  GL_BUMP_ROT_MATRIX_ATI      = 0x8775,  GL_VARIANT_EXT        = 0x87C1,   GL_VARIANT_VALUE_EXT        = 0x87E4,
+    GL_QUERY_RESULT           = 0x8866,  GL_BUMP_ROT_MATRIX_SIZE_ATI = 0x8776,  GL_INVARIANT_EXT      = 0x87C2,   GL_VARIANT_DATATYPE_EXT     = 0x87E5,
+    GL_QUERY_RESULT_AVAILABLE = 0x8867,  GL_BUMP_NUM_TEX_UNITS_ATI   = 0x8777,  GL_LOCAL_CONSTANT_EXT = 0x87C3,   GL_VARIANT_ARRAY_STRIDE_EXT = 0x87E6,
+    GL_QUERY_RESULT_NO_WAIT   = 0x9194,  GL_BUMP_TEX_UNITS_ATI       = 0x8778,  GL_LOCAL_EXT          = 0x87C4,   GL_VARIANT_ARRAY_TYPE_EXT   = 0x87E7,
+    /* ClampColorTargetARB */              /* SwizzleOpATI */               /* SyncParameterName */      /* SyncStatus */
+    GL_CLAMP_VERTEX_COLOR_ARB   = 0x891A,  GL_SWIZZLE_STR_ATI    = 0x8976,  GL_OBJECT_TYPE    = 0x9112,  GL_ALREADY_SIGNALED    = 0x911A,
+    GL_CLAMP_FRAGMENT_COLOR_ARB = 0x891B,  GL_SWIZZLE_STQ_ATI    = 0x8977,  GL_SYNC_CONDITION = 0x9113,  GL_TIMEOUT_EXPIRED     = 0x911B,
+    GL_CLAMP_READ_COLOR         = 0x891C,  GL_SWIZZLE_STR_DR_ATI = 0x8978,  GL_SYNC_STATUS    = 0x9114,  GL_CONDITION_SATISFIED = 0x911C,
+    GL_CLAMP_READ_COLOR_ARB     = 0x891C,  GL_SWIZZLE_STQ_DQ_ATI = 0x8979,  GL_SYNC_FLAGS     = 0x9115,  GL_WAIT_FAILED         = 0x911D,
+    /* ProgramInterfacePName */                  /* ClientAttribMask */                    /* FragmentShaderColorModMaskATI */
+    GL_ACTIVE_RESOURCES               = 0x92F5,  GL_CLIENT_PIXEL_STORE_BIT  = 0x00000001,  GL_COMP_BIT_ATI   = 0x00000002,
+    GL_MAX_NAME_LENGTH                = 0x92F6,  GL_CLIENT_VERTEX_ARRAY_BIT = 0x00000002,  GL_NEGATE_BIT_ATI = 0x00000004,
+    GL_MAX_NUM_ACTIVE_VARIABLES       = 0x92F7,  GL_CLIENT_ALL_ATTRIB_BITS  = 0xFFFFFFFF,  GL_BIAS_BIT_ATI   = 0x00000008,
+    GL_MAX_NUM_COMPATIBLE_SUBROUTINES = 0x92F8,
+    /* FoveationConfigBitQCOM */                                  /* MapTextureFormatINTEL */             /* TriangleListSUN */
+    GL_FOVEATION_ENABLE_BIT_QCOM                   = 0x00000001,  GL_LAYOUT_DEFAULT_INTEL           = 0,  GL_RESTART_SUN        = 0x0001,
+    GL_FOVEATION_SCALED_BIN_METHOD_BIT_QCOM        = 0x00000002,  GL_LAYOUT_LINEAR_INTEL            = 1,  GL_REPLACE_MIDDLE_SUN = 0x0002,
+    GL_FOVEATION_SUBSAMPLED_LAYOUT_METHOD_BIT_QCOM = 0x00000004,  GL_LAYOUT_LINEAR_CPU_CACHED_INTEL = 2,  GL_REPLACE_OLDEST_SUN = 0x0003,
+    /* GraphicsResetStatus */            /* CombinerScaleNV */              /* MapQuery */       /* ListNameType */
+    GL_GUILTY_CONTEXT_RESET   = 0x8253,  GL_SCALE_BY_TWO_NV      = 0x853E,  GL_COEFF  = 0x0A00,  GL_2_BYTES = 0x1407,
+    GL_INNOCENT_CONTEXT_RESET = 0x8254,  GL_SCALE_BY_FOUR_NV     = 0x853F,  GL_ORDER  = 0x0A01,  GL_3_BYTES = 0x1408,
+    GL_UNKNOWN_CONTEXT_RESET  = 0x8255,  GL_SCALE_BY_ONE_HALF_NV = 0x8540,  GL_DOMAIN = 0x0A02,  GL_4_BYTES = 0x1409,
+    /* PathFillMode */              /* Buffer */          /* PixelCopyType */       /* PolygonMode */
+    GL_PATH_FILL_MODE_NV = 0x9080,  GL_COLOR   = 0x1800,  GL_COLOR_EXT   = 0x1800,  GL_POINT = 0x1B00,
+    GL_COUNT_UP_NV       = 0x9088,  GL_DEPTH   = 0x1801,  GL_DEPTH_EXT   = 0x1801,  GL_LINE  = 0x1B01,
+    GL_COUNT_DOWN_NV     = 0x9089,  GL_STENCIL = 0x1802,  GL_STENCIL_EXT = 0x1802,  GL_FILL  = 0x1B02,
+    /* RenderingMode */    /* TextureEnvTarget */               /* SpriteModeSGIX */                     /* PixelTransformPNameEXT */
+    GL_RENDER   = 0x1C00,  GL_TEXTURE_ENV            = 0x2300,  GL_SPRITE_AXIAL_SGIX          = 0x814C,  GL_PIXEL_MAG_FILTER_EXT   = 0x8331,
+    GL_FEEDBACK = 0x1C01,  GL_TEXTURE_FILTER_CONTROL = 0x8500,  GL_SPRITE_OBJECT_ALIGNED_SGIX = 0x814D,  GL_PIXEL_MIN_FILTER_EXT   = 0x8332,
+    GL_SELECT   = 0x1C02,  GL_POINT_SPRITE           = 0x8861,  GL_SPRITE_EYE_ALIGNED_SGIX    = 0x814E,  GL_PIXEL_CUBIC_WEIGHT_EXT = 0x8333,
+    /* PerfQueryDataFlags */                  /* PixelStoreResampleMode */          /* FogCoordSrc */                /* CombinerParameterNV */
+    GL_PERFQUERY_DONOT_FLUSH_INTEL = 0x83F9,  GL_RESAMPLE_DECIMATE_SGIX  = 0x8430,  GL_FOG_COORDINATE     = 0x8451,  GL_COMBINER_INPUT_NV           = 0x8542,
+    GL_PERFQUERY_FLUSH_INTEL       = 0x83FA,  GL_RESAMPLE_REPLICATE_SGIX = 0x8433,  GL_FOG_COORDINATE_EXT = 0x8451,  GL_COMBINER_MAPPING_NV         = 0x8543,
+    GL_PERFQUERY_WAIT_INTEL        = 0x83FB,  GL_RESAMPLE_ZERO_FILL_SGIX = 0x8434,  GL_FOG_COORD          = 0x8451,  GL_COMBINER_COMPONENT_USAGE_NV = 0x8544,
+    /* PixelStoreSubsampleRate */           /* VertexArrayPNameAPPLE */        /* DataTypeEXT */        /* PNTrianglesPNameATI */
+    GL_PIXEL_SUBSAMPLE_4444_SGIX = 0x85A2,  GL_STORAGE_CLIENT_APPLE = 0x85B4,  GL_SCALAR_EXT = 0x87BE,  GL_PN_TRIANGLES_POINT_MODE_ATI        = 0x87F2,
+    GL_PIXEL_SUBSAMPLE_2424_SGIX = 0x85A3,  GL_STORAGE_CACHED_APPLE = 0x85BE,  GL_VECTOR_EXT = 0x87BF,  GL_PN_TRIANGLES_NORMAL_MODE_ATI       = 0x87F3,
+    GL_PIXEL_SUBSAMPLE_4242_SGIX = 0x85A4,  GL_STORAGE_SHARED_APPLE = 0x85BF,  GL_MATRIX_EXT = 0x87C0,  GL_PN_TRIANGLES_TESSELATION_LEVEL_ATI = 0x87F4,
+    /* BufferAccessARB */    /* ShaderType */                  /* ShaderParameterName */          /* FramebufferTarget */
+    GL_READ_ONLY  = 0x88B8,  GL_FRAGMENT_SHADER_ARB = 0x8B30,  GL_SHADER_TYPE          = 0x8B4F,  GL_READ_FRAMEBUFFER = 0x8CA8,
+    GL_WRITE_ONLY = 0x88B9,  GL_VERTEX_SHADER_ARB   = 0x8B31,  GL_COMPILE_STATUS       = 0x8B81,  GL_DRAW_FRAMEBUFFER = 0x8CA9,
+    GL_READ_WRITE = 0x88BA,  GL_COMPUTE_SHADER      = 0x91B9,  GL_SHADER_SOURCE_LENGTH = 0x8B88,  GL_FRAMEBUFFER_OES  = 0x8D40,
+    /* GetMultisamplePNameNV */                    /* PatchParameterName */                /* PathFontTarget */
+    GL_SAMPLE_POSITION                  = 0x8E50,  GL_PATCH_VERTICES            = 0x8E72,  GL_STANDARD_FONT_NAME_NV = 0x9072,
+    GL_SAMPLE_LOCATION_ARB              = 0x8E50,  GL_PATCH_DEFAULT_INNER_LEVEL = 0x8E73,  GL_SYSTEM_FONT_NAME_NV   = 0x9073,
+    GL_PROGRAMMABLE_SAMPLE_LOCATION_ARB = 0x9341,  GL_PATCH_DEFAULT_OUTER_LEVEL = 0x8E74,  GL_FILE_NAME_NV          = 0x9074,
+    /* PathListMode */                    /* ContextProfileMask */                            /* SyncObjectMask */
+    GL_ACCUM_ADJACENT_PAIRS_NV = 0x90AD,  GL_CONTEXT_CORE_PROFILE_BIT          = 0x00000001,  GL_SYNC_FLUSH_COMMANDS_BIT       = 0x00000001,
+    GL_ADJACENT_PAIRS_NV       = 0x90AE,  GL_CONTEXT_COMPATIBILITY_PROFILE_BIT = 0x00000002,  GL_SYNC_FLUSH_COMMANDS_BIT_APPLE = 0x00000001,
+    GL_FIRST_TO_REST_NV        = 0x90AF,
+    /* PathFontStyle */       /* PerformanceQueryCapsMaskINTEL */              /* FfdMaskSGIX */                               /* ClampColorModeARB */
+    GL_BOLD_BIT_NV   = 0x01,  GL_PERFQUERY_SINGLE_CONTEXT_INTEL = 0x00000000,  GL_TEXTURE_DEFORMATION_BIT_SGIX  = 0x00000001,  GL_FIXED_ONLY     = 0x891D,
+    GL_ITALIC_BIT_NV = 0x02,  GL_PERFQUERY_GLOBAL_CONTEXT_INTEL = 0x00000001,  GL_GEOMETRY_DEFORMATION_BIT_SGIX = 0x00000002,  GL_FIXED_ONLY_ARB = 0x891D,
+    /* TextureCompareMode */             /* FrontFaceDirection */  /* MapTarget */                         /* HintMode */
+    GL_COMPARE_R_TO_TEXTURE   = 0x884E,  GL_CW  = 0x0900,          GL_GEOMETRY_DEFORMATION_SGIX = 0x8194,  GL_FASTEST = 0x1101,
+    GL_COMPARE_REF_TO_TEXTURE = 0x884E,  GL_CCW = 0x0901,          GL_TEXTURE_DEFORMATION_SGIX  = 0x8195,  GL_NICEST  = 0x1102,
+    /* ListMode */                    /* WeightPointerTypeARB */  /* VertexAttribType */           /* UniformType */
+    GL_COMPILE             = 0x1300,  GL_FLOAT  = 0x1406,         GL_FIXED              = 0x140C,  GL_SAMPLER_1D_ARRAY = 0x8DC0,
+    GL_COMPILE_AND_EXECUTE = 0x1301,  GL_DOUBLE = 0x140A,         GL_INT_2_10_10_10_REV = 0x8D9F,  GL_SAMPLER_2D_ARRAY = 0x8DC1,
+    /* ShadingModel */   /* ConvolutionTarget */      /* ConvolutionBorderModeEXT */  /* HistogramTarget */
+    GL_FLAT   = 0x1D00,  GL_CONVOLUTION_1D = 0x8010,  GL_REDUCE     = 0x8016,         GL_HISTOGRAM       = 0x8024,
+    GL_SMOOTH = 0x1D01,  GL_CONVOLUTION_2D = 0x8011,  GL_REDUCE_EXT = 0x8016,         GL_PROXY_HISTOGRAM = 0x8025,
+    /* CullParameterEXT */                        /* FramebufferAttachment */               /* LightTexturePNameEXT */
+    GL_CULL_VERTEX_EYE_POSITION_EXT    = 0x81AB,  GL_STENCIL_ATTACHMENT          = 0x8D20,  GL_ATTENUATION_EXT        = 0x834D,
+    GL_CULL_VERTEX_OBJECT_POSITION_EXT = 0x81AC,  GL_SHADING_RATE_ATTACHMENT_EXT = 0x96D1,  GL_SHADOW_ATTENUATION_EXT = 0x834E,
+    /* PixelTexGenParameterNameSGIS */             /* FenceParameterNameNV */       /* VertexAttribPointerPropertyARB */
+    GL_PIXEL_FRAGMENT_RGB_SOURCE_SGIS   = 0x8354,  GL_FENCE_STATUS_NV    = 0x84F3,  GL_VERTEX_ATTRIB_ARRAY_POINTER     = 0x8645,
+    GL_PIXEL_FRAGMENT_ALPHA_SOURCE_SGIS = 0x8355,  GL_FENCE_CONDITION_NV = 0x84F4,  GL_VERTEX_ATTRIB_ARRAY_POINTER_ARB = 0x8645,
+    /* EvalTargetNV */                  /* MapAttribParameterNV */          /* ArrayObjectUsageATI */  /* PreserveModeATI */
+    GL_EVAL_2D_NV            = 0x86C0,  GL_MAP_ATTRIB_U_ORDER_NV = 0x86C3,  GL_STATIC_ATI  = 0x8760,   GL_PRESERVE_ATI = 0x8762,
+    GL_EVAL_TRIANGULAR_2D_NV = 0x86C1,  GL_MAP_ATTRIB_V_ORDER_NV = 0x86C4,  GL_DYNAMIC_ATI = 0x8761,   GL_DISCARD_ATI  = 0x8763,
+    /* ArrayObjectPNameATI */             /* ParameterRangeEXT */            /* VertexShaderParameterEXT */   /* QueryParameterName */
+    GL_OBJECT_BUFFER_SIZE_ATI  = 0x8764,  GL_NORMALIZED_RANGE_EXT = 0x87E0,  GL_CURRENT_VERTEX_EXT = 0x87E2,  GL_QUERY_COUNTER_BITS = 0x8864,
+    GL_OBJECT_BUFFER_USAGE_ATI = 0x8765,  GL_FULL_RANGE_EXT       = 0x87E1,  GL_MVP_MATRIX_EXT     = 0x87E3,  GL_CURRENT_QUERY      = 0x8865,
+    /* OcclusionQueryParameterNameNV */    /* PixelDataRangeTargetNV */            /* BufferPointerNameARB */           /* ObjectTypeAPPLE */
+    GL_PIXEL_COUNT_NV           = 0x8866,  GL_WRITE_PIXEL_DATA_RANGE_NV = 0x8878,  GL_BUFFER_MAP_POINTER     = 0x88BD,  GL_DRAW_PIXELS_APPLE = 0x8A0A,
+    GL_PIXEL_COUNT_AVAILABLE_NV = 0x8867,  GL_READ_PIXEL_DATA_RANGE_NV  = 0x8879,  GL_BUFFER_MAP_POINTER_ARB = 0x88BD,  GL_FENCE_APPLE       = 0x8A0B,
+    /* SubroutineParameterName */            /* ContainerType */              /* TransformFeedbackPName */            /* TransformFeedbackBufferMode */
+    GL_NUM_COMPATIBLE_SUBROUTINES = 0x8E4A,  GL_PROGRAM_OBJECT_ARB = 0x8B40,  GL_TRANSFORM_FEEDBACK_PAUSED = 0x8E23,  GL_INTERLEAVED_ATTRIBS = 0x8C8C,
+    GL_COMPATIBLE_SUBROUTINES     = 0x8E4B,  GL_PROGRAM_OBJECT_EXT = 0x8B40,  GL_TRANSFORM_FEEDBACK_ACTIVE = 0x8E24,  GL_SEPARATE_ATTRIBS    = 0x8C8D,
+    /* ClipControlOrigin */  /* VertexProvokingMode */             /* PathStringFormat */           /* PathCoverMode */
+    GL_LOWER_LEFT = 0x8CA1,  GL_FIRST_VERTEX_CONVENTION = 0x8E4D,  GL_PATH_FORMAT_SVG_NV = 0x9070,  GL_CONVEX_HULL_NV  = 0x908B,
+    GL_UPPER_LEFT = 0x8CA2,  GL_LAST_VERTEX_CONVENTION  = 0x8E4E,  GL_PATH_FORMAT_PS_NV  = 0x9071,  GL_BOUNDING_BOX_NV = 0x908D,
+    /* PathElementType */  /* PathHandleMissingGlyphs */       /* ClipControlDepth */            /* MemoryObjectParameterName */
+    GL_UTF8_NV  = 0x909A,  GL_SKIP_MISSING_GLYPH_NV = 0x90A9,  GL_NEGATIVE_ONE_TO_ONE = 0x935E,  GL_DEDICATED_MEMORY_OBJECT_EXT = 0x9581,
+    GL_UTF16_NV = 0x909B,  GL_USE_MISSING_GLYPH_NV  = 0x90AA,  GL_ZERO_TO_ONE         = 0x935F,  GL_PROTECTED_MEMORY_OBJECT_EXT = 0x959B,
+    /* ClearBufferMask */                    /* TextureStorageMaskAMD */                      /* CombinerBiasNV */
+    GL_COVERAGE_BUFFER_BIT_NV = 0x00008000,  GL_TEXTURE_STORAGE_SPARSE_BIT_AMD = 0x00000001,  GL_BIAS_BY_NEGATIVE_ONE_HALF_NV = 0x8541,
+    /* LightModelParameter */                   /* FogPName */              /* TangentPointerTypeEXT */  /* EvalMapsModeNV */
+    GL_LIGHT_MODEL_COLOR_CONTROL_EXT = 0x81F8,  GL_FOG_COORD_SRC = 0x8450,  GL_DOUBLE_EXT = 0x140A,      GL_FILL_NV = 0x1B02,
+    /* BlitFramebufferFilter */  /* SeparableTarget */      /* HistogramTargetEXT */          /* MinmaxTarget */
+    GL_NEAREST = 0x2600,         GL_SEPARABLE_2D = 0x8012,  GL_PROXY_HISTOGRAM_EXT = 0x8025,  GL_MINMAX = 0x802E,
+    /* ImageTransformTargetHP */        /* ListParameterName */          /* ProgramParameterPName */     /* PixelTransformTargetEXT */
+    GL_IMAGE_TRANSFORM_2D_HP = 0x8161,  GL_LIST_PRIORITY_SGIX = 0x8182,  GL_PROGRAM_SEPARABLE = 0x8258,  GL_PIXEL_TRANSFORM_2D_EXT = 0x8330,
+    /* FenceConditionNV */         /* TextureNormalModeEXT */  /* ProgramStringProperty */      /* VertexAttribEnumNV */
+    GL_ALL_COMPLETED_NV = 0x84F2,  GL_PERTURB_EXT = 0x85AE,    GL_PROGRAM_STRING_ARB = 0x8628,  GL_PROGRAM_PARAMETER_NV = 0x8644,
+    /* MapParameterNV */              /* VariantCapEXT */             /* ProgramFormat */                    /* FragmentOp1ATI */
+    GL_MAP_TESSELLATION_NV = 0x86C2,  GL_VARIANT_ARRAY_EXT = 0x87E8,  GL_PROGRAM_FORMAT_ASCII_ARB = 0x8875,  GL_MOV_ATI = 0x8961,
+    /* RenderbufferTarget */       /* InstancedPathCoverMode */                    /* SyncCondition */
+    GL_RENDERBUFFER_OES = 0x8D41,  GL_BOUNDING_BOX_OF_BOUNDING_BOXES_NV = 0x909C,  GL_SYNC_GPU_COMMANDS_COMPLETE = 0x9117,
+};
 #endif // defined(__APPLE__)
 
 #define VD_FW_OPENGL_CORE_FUNCTIONS \
-V(1_0) \
-X(void, glAccum, (GLenum op, GLfloat value)) \
-X(void, glActiveTexture, (GLenum texture)) \
-X(void, glAlphaFunc, (GLenum func, GLfloat ref)) \
-X(void, glAlphaFuncx, (GLenum func, GLfixed ref)) \
-X(void, glBegin, (GLenum mode)) \
-X(void, glBindBuffer, (GLenum target, GLuint buffer)) \
-X(void, glBindTexture, (GLenum target, GLuint texture)) \
-X(void, glBitmap, (GLsizei width, GLsizei height, GLfloat xorig, GLfloat yorig, GLfloat xmove, GLfloat ymove, const GLubyte * bitmap)) \
-X(void, glBlendFunc, (GLenum sfactor, GLenum dfactor)) \
-X(void, glBufferData, (GLenum target, GLsizeiptr size, const void * data, GLenum usage)) \
-X(void, glBufferSubData, (GLenum target, GLintptr offset, GLsizeiptr size, const void * data)) \
-X(void, glCallList, (GLuint list)) \
-X(void, glCallLists, (GLsizei n, GLenum type, const void * lists)) \
-X(void, glClear, (GLbitfield mask)) \
-X(void, glClearAccum, (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha)) \
-X(void, glClearColor, (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha)) \
-X(void, glClearColorx, (GLfixed red, GLfixed green, GLfixed blue, GLfixed alpha)) \
-X(void, glClearDepth, (GLdouble depth)) \
-X(void, glClearDepthf, (GLfloat d)) \
-X(void, glClearDepthx, (GLfixed depth)) \
-X(void, glClearIndex, (GLfloat c)) \
-X(void, glClearStencil, (GLint s)) \
-X(void, glClientActiveTexture, (GLenum texture)) \
-X(void, glClipPlane, (GLenum plane, const GLdouble * equation)) \
-X(void, glClipPlanef, (GLenum p, const GLfloat * eqn)) \
-X(void, glClipPlanex, (GLenum plane, const GLfixed * equation)) \
-X(void, glColor3b, (GLbyte red, GLbyte green, GLbyte blue)) \
-X(void, glColor3bv, (const GLbyte * v)) \
-X(void, glColor3d, (GLdouble red, GLdouble green, GLdouble blue)) \
-X(void, glColor3dv, (const GLdouble * v)) \
-X(void, glColor3f, (GLfloat red, GLfloat green, GLfloat blue)) \
-X(void, glColor3fv, (const GLfloat * v)) \
-X(void, glColor3i, (GLint red, GLint green, GLint blue)) \
-X(void, glColor3iv, (const GLint * v)) \
-X(void, glColor3s, (GLshort red, GLshort green, GLshort blue)) \
-X(void, glColor3sv, (const GLshort * v)) \
-X(void, glColor3ub, (GLubyte red, GLubyte green, GLubyte blue)) \
-X(void, glColor3ubv, (const GLubyte * v)) \
-X(void, glColor3ui, (GLuint red, GLuint green, GLuint blue)) \
-X(void, glColor3uiv, (const GLuint * v)) \
-X(void, glColor3us, (GLushort red, GLushort green, GLushort blue)) \
-X(void, glColor3usv, (const GLushort * v)) \
-X(void, glColor4b, (GLbyte red, GLbyte green, GLbyte blue, GLbyte alpha)) \
-X(void, glColor4bv, (const GLbyte * v)) \
-X(void, glColor4d, (GLdouble red, GLdouble green, GLdouble blue, GLdouble alpha)) \
-X(void, glColor4dv, (const GLdouble * v)) \
-X(void, glColor4f, (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha)) \
-X(void, glColor4fv, (const GLfloat * v)) \
-X(void, glColor4i, (GLint red, GLint green, GLint blue, GLint alpha)) \
-X(void, glColor4iv, (const GLint * v)) \
-X(void, glColor4s, (GLshort red, GLshort green, GLshort blue, GLshort alpha)) \
-X(void, glColor4sv, (const GLshort * v)) \
-X(void, glColor4ub, (GLubyte red, GLubyte green, GLubyte blue, GLubyte alpha)) \
-X(void, glColor4ubv, (const GLubyte * v)) \
-X(void, glColor4ui, (GLuint red, GLuint green, GLuint blue, GLuint alpha)) \
-X(void, glColor4uiv, (const GLuint * v)) \
-X(void, glColor4us, (GLushort red, GLushort green, GLushort blue, GLushort alpha)) \
-X(void, glColor4usv, (const GLushort * v)) \
-X(void, glColor4x, (GLfixed red, GLfixed green, GLfixed blue, GLfixed alpha)) \
-X(void, glColorMask, (GLboolean red, GLboolean green, GLboolean blue, GLboolean alpha)) \
-X(void, glColorMaterial, (GLenum face, GLenum mode)) \
-X(void, glColorPointer, (GLint size, GLenum type, GLsizei stride, const void * pointer)) \
-X(void, glCompressedTexImage2D, (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLint border, GLsizei imageSize, const void * data)) \
-X(void, glCompressedTexSubImage2D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLsizei imageSize, const void * data)) \
-X(void, glCopyPixels, (GLint x, GLint y, GLsizei width, GLsizei height, GLenum type)) \
-X(void, glCopyTexImage2D, (GLenum target, GLint level, GLenum internalformat, GLint x, GLint y, GLsizei width, GLsizei height, GLint border)) \
-X(void, glCopyTexSubImage2D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width, GLsizei height)) \
-X(void, glCullFace, (GLenum mode)) \
-X(void, glDeleteBuffers, (GLsizei n, const GLuint * buffers)) \
-X(void, glDeleteLists, (GLuint list, GLsizei range)) \
-X(void, glDeleteTextures, (GLsizei n, const GLuint * textures)) \
-X(void, glDepthFunc, (GLenum func)) \
-X(void, glDepthMask, (GLboolean flag)) \
-X(void, glDepthRange, (GLdouble n, GLdouble f)) \
-X(void, glDepthRangef, (GLfloat n, GLfloat f)) \
-X(void, glDepthRangex, (GLfixed n, GLfixed f)) \
-X(void, glDisable, (GLenum cap)) \
-X(void, glDisableClientState, (GLenum array)) \
-X(void, glDrawArrays, (GLenum mode, GLint first, GLsizei count)) \
-X(void, glDrawBuffer, (GLenum buf)) \
-X(void, glDrawElements, (GLenum mode, GLsizei count, GLenum type, const void * indices)) \
-X(void, glDrawPixels, (GLsizei width, GLsizei height, GLenum format, GLenum type, const void * pixels)) \
-X(void, glEdgeFlag, (GLboolean flag)) \
-X(void, glEdgeFlagv, (const GLboolean * flag)) \
-X(void, glEnable, (GLenum cap)) \
-X(void, glEnableClientState, (GLenum array)) \
-X(void, glEnd, ()) \
-X(void, glEndList, ()) \
-X(void, glEvalCoord1d, (GLdouble u)) \
-X(void, glEvalCoord1dv, (const GLdouble * u)) \
-X(void, glEvalCoord1f, (GLfloat u)) \
-X(void, glEvalCoord1fv, (const GLfloat * u)) \
-X(void, glEvalCoord2d, (GLdouble u, GLdouble v)) \
-X(void, glEvalCoord2dv, (const GLdouble * u)) \
-X(void, glEvalCoord2f, (GLfloat u, GLfloat v)) \
-X(void, glEvalCoord2fv, (const GLfloat * u)) \
-X(void, glEvalMesh1, (GLenum mode, GLint i1, GLint i2)) \
-X(void, glEvalMesh2, (GLenum mode, GLint i1, GLint i2, GLint j1, GLint j2)) \
-X(void, glEvalPoint1, (GLint i)) \
-X(void, glEvalPoint2, (GLint i, GLint j)) \
-X(void, glFeedbackBuffer, (GLsizei size, GLenum type, GLfloat * buffer)) \
-X(void, glFinish, ()) \
-X(void, glFlush, ()) \
-X(void, glFogf, (GLenum pname, GLfloat param)) \
-X(void, glFogfv, (GLenum pname, const GLfloat * params)) \
-X(void, glFogi, (GLenum pname, GLint param)) \
-X(void, glFogiv, (GLenum pname, const GLint * params)) \
-X(void, glFogx, (GLenum pname, GLfixed param)) \
-X(void, glFogxv, (GLenum pname, const GLfixed * param)) \
-X(void, glFrontFace, (GLenum mode)) \
-X(void, glFrustum, (GLdouble left, GLdouble right, GLdouble bottom, GLdouble top, GLdouble zNear, GLdouble zFar)) \
-X(void, glFrustumf, (GLfloat l, GLfloat r, GLfloat b, GLfloat t, GLfloat n, GLfloat f)) \
-X(void, glFrustumx, (GLfixed l, GLfixed r, GLfixed b, GLfixed t, GLfixed n, GLfixed f)) \
-X(void, glGenBuffers, (GLsizei n, GLuint * buffers)) \
-X(GLuint, glGenLists, (GLsizei range)) \
-X(void, glGenTextures, (GLsizei n, GLuint * textures)) \
-X(void, glGetBooleanv, (GLenum pname, GLboolean * data)) \
-X(void, glGetBufferParameteriv, (GLenum target, GLenum pname, GLint * params)) \
-X(void, glGetClipPlane, (GLenum plane, GLdouble * equation)) \
-X(void, glGetClipPlanef, (GLenum plane, GLfloat * equation)) \
-X(void, glGetClipPlanex, (GLenum plane, GLfixed * equation)) \
-X(void, glGetDoublev, (GLenum pname, GLdouble * data)) \
-X(GLenum, glGetError, ()) \
-X(void, glGetFixedv, (GLenum pname, GLfixed * params)) \
-X(void, glGetFloatv, (GLenum pname, GLfloat * data)) \
-X(void, glGetIntegerv, (GLenum pname, GLint * data)) \
-X(void, glGetLightfv, (GLenum light, GLenum pname, GLfloat * params)) \
-X(void, glGetLightiv, (GLenum light, GLenum pname, GLint * params)) \
-X(void, glGetLightxv, (GLenum light, GLenum pname, GLfixed * params)) \
-X(void, glGetMapdv, (GLenum target, GLenum query, GLdouble * v)) \
-X(void, glGetMapfv, (GLenum target, GLenum query, GLfloat * v)) \
-X(void, glGetMapiv, (GLenum target, GLenum query, GLint * v)) \
-X(void, glGetMaterialfv, (GLenum face, GLenum pname, GLfloat * params)) \
-X(void, glGetMaterialiv, (GLenum face, GLenum pname, GLint * params)) \
-X(void, glGetMaterialxv, (GLenum face, GLenum pname, GLfixed * params)) \
-X(void, glGetPixelMapfv, (GLenum map, GLfloat * values)) \
-X(void, glGetPixelMapuiv, (GLenum map, GLuint * values)) \
-X(void, glGetPixelMapusv, (GLenum map, GLushort * values)) \
-X(void, glGetPointerv, (GLenum pname, void ** params)) \
-X(void, glGetPolygonStipple, (GLubyte * mask)) \
-X(const GLubyte *, glGetString, (GLenum name)) \
-X(void, glGetTexEnvfv, (GLenum target, GLenum pname, GLfloat * params)) \
-X(void, glGetTexEnviv, (GLenum target, GLenum pname, GLint * params)) \
-X(void, glGetTexEnvxv, (GLenum target, GLenum pname, GLfixed * params)) \
-X(void, glGetTexGendv, (GLenum coord, GLenum pname, GLdouble * params)) \
-X(void, glGetTexGenfv, (GLenum coord, GLenum pname, GLfloat * params)) \
-X(void, glGetTexGeniv, (GLenum coord, GLenum pname, GLint * params)) \
-X(void, glGetTexImage, (GLenum target, GLint level, GLenum format, GLenum type, void * pixels)) \
-X(void, glGetTexLevelParameterfv, (GLenum target, GLint level, GLenum pname, GLfloat * params)) \
-X(void, glGetTexLevelParameteriv, (GLenum target, GLint level, GLenum pname, GLint * params)) \
-X(void, glGetTexParameterfv, (GLenum target, GLenum pname, GLfloat * params)) \
-X(void, glGetTexParameteriv, (GLenum target, GLenum pname, GLint * params)) \
-X(void, glGetTexParameterxv, (GLenum target, GLenum pname, GLfixed * params)) \
-X(void, glHint, (GLenum target, GLenum mode)) \
-X(void, glIndexMask, (GLuint mask)) \
-X(void, glIndexd, (GLdouble c)) \
-X(void, glIndexdv, (const GLdouble * c)) \
-X(void, glIndexf, (GLfloat c)) \
-X(void, glIndexfv, (const GLfloat * c)) \
-X(void, glIndexi, (GLint c)) \
-X(void, glIndexiv, (const GLint * c)) \
-X(void, glIndexs, (GLshort c)) \
-X(void, glIndexsv, (const GLshort * c)) \
-X(void, glInitNames, ()) \
-X(GLboolean, glIsBuffer, (GLuint buffer)) \
-X(GLboolean, glIsEnabled, (GLenum cap)) \
-X(GLboolean, glIsList, (GLuint list)) \
-X(GLboolean, glIsTexture, (GLuint texture)) \
-X(void, glLightModelf, (GLenum pname, GLfloat param)) \
-X(void, glLightModelfv, (GLenum pname, const GLfloat * params)) \
-X(void, glLightModeli, (GLenum pname, GLint param)) \
-X(void, glLightModeliv, (GLenum pname, const GLint * params)) \
-X(void, glLightModelx, (GLenum pname, GLfixed param)) \
-X(void, glLightModelxv, (GLenum pname, const GLfixed * param)) \
-X(void, glLightf, (GLenum light, GLenum pname, GLfloat param)) \
-X(void, glLightfv, (GLenum light, GLenum pname, const GLfloat * params)) \
-X(void, glLighti, (GLenum light, GLenum pname, GLint param)) \
-X(void, glLightiv, (GLenum light, GLenum pname, const GLint * params)) \
-X(void, glLightx, (GLenum light, GLenum pname, GLfixed param)) \
-X(void, glLightxv, (GLenum light, GLenum pname, const GLfixed * params)) \
-X(void, glLineStipple, (GLint factor, GLushort pattern)) \
-X(void, glLineWidth, (GLfloat width)) \
-X(void, glLineWidthx, (GLfixed width)) \
-X(void, glListBase, (GLuint base)) \
-X(void, glLoadIdentity, ()) \
-X(void, glLoadMatrixd, (const GLdouble * m)) \
-X(void, glLoadMatrixf, (const GLfloat * m)) \
-X(void, glLoadMatrixx, (const GLfixed * m)) \
-X(void, glLoadName, (GLuint name)) \
-X(void, glLogicOp, (GLenum opcode)) \
-X(void, glMap1d, (GLenum target, GLdouble u1, GLdouble u2, GLint stride, GLint order, const GLdouble * points)) \
-X(void, glMap1f, (GLenum target, GLfloat u1, GLfloat u2, GLint stride, GLint order, const GLfloat * points)) \
-X(void, glMap2d, (GLenum target, GLdouble u1, GLdouble u2, GLint ustride, GLint uorder, GLdouble v1, GLdouble v2, GLint vstride, GLint vorder, const GLdouble * points)) \
-X(void, glMap2f, (GLenum target, GLfloat u1, GLfloat u2, GLint ustride, GLint uorder, GLfloat v1, GLfloat v2, GLint vstride, GLint vorder, const GLfloat * points)) \
-X(void, glMapGrid1d, (GLint un, GLdouble u1, GLdouble u2)) \
-X(void, glMapGrid1f, (GLint un, GLfloat u1, GLfloat u2)) \
-X(void, glMapGrid2d, (GLint un, GLdouble u1, GLdouble u2, GLint vn, GLdouble v1, GLdouble v2)) \
-X(void, glMapGrid2f, (GLint un, GLfloat u1, GLfloat u2, GLint vn, GLfloat v1, GLfloat v2)) \
-X(void, glMaterialf, (GLenum face, GLenum pname, GLfloat param)) \
-X(void, glMaterialfv, (GLenum face, GLenum pname, const GLfloat * params)) \
-X(void, glMateriali, (GLenum face, GLenum pname, GLint param)) \
-X(void, glMaterialiv, (GLenum face, GLenum pname, const GLint * params)) \
-X(void, glMaterialx, (GLenum face, GLenum pname, GLfixed param)) \
-X(void, glMaterialxv, (GLenum face, GLenum pname, const GLfixed * param)) \
-X(void, glMatrixMode, (GLenum mode)) \
-X(void, glMultMatrixd, (const GLdouble * m)) \
-X(void, glMultMatrixf, (const GLfloat * m)) \
-X(void, glMultMatrixx, (const GLfixed * m)) \
-X(void, glMultiTexCoord4f, (GLenum target, GLfloat s, GLfloat t, GLfloat r, GLfloat q)) \
-X(void, glMultiTexCoord4x, (GLenum texture, GLfixed s, GLfixed t, GLfixed r, GLfixed q)) \
-X(void, glNewList, (GLuint list, GLenum mode)) \
-X(void, glNormal3b, (GLbyte nx, GLbyte ny, GLbyte nz)) \
-X(void, glNormal3bv, (const GLbyte * v)) \
-X(void, glNormal3d, (GLdouble nx, GLdouble ny, GLdouble nz)) \
-X(void, glNormal3dv, (const GLdouble * v)) \
-X(void, glNormal3f, (GLfloat nx, GLfloat ny, GLfloat nz)) \
-X(void, glNormal3fv, (const GLfloat * v)) \
-X(void, glNormal3i, (GLint nx, GLint ny, GLint nz)) \
-X(void, glNormal3iv, (const GLint * v)) \
-X(void, glNormal3s, (GLshort nx, GLshort ny, GLshort nz)) \
-X(void, glNormal3sv, (const GLshort * v)) \
-X(void, glNormal3x, (GLfixed nx, GLfixed ny, GLfixed nz)) \
-X(void, glNormalPointer, (GLenum type, GLsizei stride, const void * pointer)) \
-X(void, glOrtho, (GLdouble left, GLdouble right, GLdouble bottom, GLdouble top, GLdouble zNear, GLdouble zFar)) \
-X(void, glOrthof, (GLfloat l, GLfloat r, GLfloat b, GLfloat t, GLfloat n, GLfloat f)) \
-X(void, glOrthox, (GLfixed l, GLfixed r, GLfixed b, GLfixed t, GLfixed n, GLfixed f)) \
-X(void, glPassThrough, (GLfloat token)) \
-X(void, glPixelMapfv, (GLenum map, GLsizei mapsize, const GLfloat * values)) \
-X(void, glPixelMapuiv, (GLenum map, GLsizei mapsize, const GLuint * values)) \
-X(void, glPixelMapusv, (GLenum map, GLsizei mapsize, const GLushort * values)) \
-X(void, glPixelStoref, (GLenum pname, GLfloat param)) \
-X(void, glPixelStorei, (GLenum pname, GLint param)) \
-X(void, glPixelTransferf, (GLenum pname, GLfloat param)) \
-X(void, glPixelTransferi, (GLenum pname, GLint param)) \
-X(void, glPixelZoom, (GLfloat xfactor, GLfloat yfactor)) \
-X(void, glPointParameterf, (GLenum pname, GLfloat param)) \
-X(void, glPointParameterfv, (GLenum pname, const GLfloat * params)) \
-X(void, glPointParameterx, (GLenum pname, GLfixed param)) \
-X(void, glPointParameterxv, (GLenum pname, const GLfixed * params)) \
-X(void, glPointSize, (GLfloat size)) \
-X(void, glPointSizex, (GLfixed size)) \
-X(void, glPolygonMode, (GLenum face, GLenum mode)) \
-X(void, glPolygonOffset, (GLfloat factor, GLfloat units)) \
-X(void, glPolygonOffsetx, (GLfixed factor, GLfixed units)) \
-X(void, glPolygonStipple, (const GLubyte * mask)) \
-X(void, glPopAttrib, ()) \
-X(void, glPopMatrix, ()) \
-X(void, glPopName, ()) \
-X(void, glPushAttrib, (GLbitfield mask)) \
-X(void, glPushMatrix, ()) \
-X(void, glPushName, (GLuint name)) \
-X(void, glRasterPos2d, (GLdouble x, GLdouble y)) \
-X(void, glRasterPos2dv, (const GLdouble * v)) \
-X(void, glRasterPos2f, (GLfloat x, GLfloat y)) \
-X(void, glRasterPos2fv, (const GLfloat * v)) \
-X(void, glRasterPos2i, (GLint x, GLint y)) \
-X(void, glRasterPos2iv, (const GLint * v)) \
-X(void, glRasterPos2s, (GLshort x, GLshort y)) \
-X(void, glRasterPos2sv, (const GLshort * v)) \
-X(void, glRasterPos3d, (GLdouble x, GLdouble y, GLdouble z)) \
-X(void, glRasterPos3dv, (const GLdouble * v)) \
-X(void, glRasterPos3f, (GLfloat x, GLfloat y, GLfloat z)) \
-X(void, glRasterPos3fv, (const GLfloat * v)) \
-X(void, glRasterPos3i, (GLint x, GLint y, GLint z)) \
-X(void, glRasterPos3iv, (const GLint * v)) \
-X(void, glRasterPos3s, (GLshort x, GLshort y, GLshort z)) \
-X(void, glRasterPos3sv, (const GLshort * v)) \
-X(void, glRasterPos4d, (GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
-X(void, glRasterPos4dv, (const GLdouble * v)) \
-X(void, glRasterPos4f, (GLfloat x, GLfloat y, GLfloat z, GLfloat w)) \
-X(void, glRasterPos4fv, (const GLfloat * v)) \
-X(void, glRasterPos4i, (GLint x, GLint y, GLint z, GLint w)) \
-X(void, glRasterPos4iv, (const GLint * v)) \
-X(void, glRasterPos4s, (GLshort x, GLshort y, GLshort z, GLshort w)) \
-X(void, glRasterPos4sv, (const GLshort * v)) \
-X(void, glReadBuffer, (GLenum src)) \
-X(void, glReadPixels, (GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, void * pixels)) \
-X(void, glRectd, (GLdouble x1, GLdouble y1, GLdouble x2, GLdouble y2)) \
-X(void, glRectdv, (const GLdouble * v1, const GLdouble * v2)) \
-X(void, glRectf, (GLfloat x1, GLfloat y1, GLfloat x2, GLfloat y2)) \
-X(void, glRectfv, (const GLfloat * v1, const GLfloat * v2)) \
-X(void, glRecti, (GLint x1, GLint y1, GLint x2, GLint y2)) \
-X(void, glRectiv, (const GLint * v1, const GLint * v2)) \
-X(void, glRects, (GLshort x1, GLshort y1, GLshort x2, GLshort y2)) \
-X(void, glRectsv, (const GLshort * v1, const GLshort * v2)) \
-X(GLint, glRenderMode, (GLenum mode)) \
-X(void, glRotated, (GLdouble angle, GLdouble x, GLdouble y, GLdouble z)) \
-X(void, glRotatef, (GLfloat angle, GLfloat x, GLfloat y, GLfloat z)) \
-X(void, glRotatex, (GLfixed angle, GLfixed x, GLfixed y, GLfixed z)) \
-X(void, glSampleCoverage, (GLfloat value, GLboolean invert)) \
-X(void, glSampleCoveragex, (GLclampx value, GLboolean invert)) \
-X(void, glScaled, (GLdouble x, GLdouble y, GLdouble z)) \
-X(void, glScalef, (GLfloat x, GLfloat y, GLfloat z)) \
-X(void, glScalex, (GLfixed x, GLfixed y, GLfixed z)) \
-X(void, glScissor, (GLint x, GLint y, GLsizei width, GLsizei height)) \
-X(void, glSelectBuffer, (GLsizei size, GLuint * buffer)) \
-X(void, glShadeModel, (GLenum mode)) \
-X(void, glStencilFunc, (GLenum func, GLint ref, GLuint mask)) \
-X(void, glStencilMask, (GLuint mask)) \
-X(void, glStencilOp, (GLenum fail, GLenum zfail, GLenum zpass)) \
-X(void, glTexCoord1d, (GLdouble s)) \
-X(void, glTexCoord1dv, (const GLdouble * v)) \
-X(void, glTexCoord1f, (GLfloat s)) \
-X(void, glTexCoord1fv, (const GLfloat * v)) \
-X(void, glTexCoord1i, (GLint s)) \
-X(void, glTexCoord1iv, (const GLint * v)) \
-X(void, glTexCoord1s, (GLshort s)) \
-X(void, glTexCoord1sv, (const GLshort * v)) \
-X(void, glTexCoord2d, (GLdouble s, GLdouble t)) \
-X(void, glTexCoord2dv, (const GLdouble * v)) \
-X(void, glTexCoord2f, (GLfloat s, GLfloat t)) \
-X(void, glTexCoord2fv, (const GLfloat * v)) \
-X(void, glTexCoord2i, (GLint s, GLint t)) \
-X(void, glTexCoord2iv, (const GLint * v)) \
-X(void, glTexCoord2s, (GLshort s, GLshort t)) \
-X(void, glTexCoord2sv, (const GLshort * v)) \
-X(void, glTexCoord3d, (GLdouble s, GLdouble t, GLdouble r)) \
-X(void, glTexCoord3dv, (const GLdouble * v)) \
-X(void, glTexCoord3f, (GLfloat s, GLfloat t, GLfloat r)) \
-X(void, glTexCoord3fv, (const GLfloat * v)) \
-X(void, glTexCoord3i, (GLint s, GLint t, GLint r)) \
-X(void, glTexCoord3iv, (const GLint * v)) \
-X(void, glTexCoord3s, (GLshort s, GLshort t, GLshort r)) \
-X(void, glTexCoord3sv, (const GLshort * v)) \
-X(void, glTexCoord4d, (GLdouble s, GLdouble t, GLdouble r, GLdouble q)) \
-X(void, glTexCoord4dv, (const GLdouble * v)) \
-X(void, glTexCoord4f, (GLfloat s, GLfloat t, GLfloat r, GLfloat q)) \
-X(void, glTexCoord4fv, (const GLfloat * v)) \
-X(void, glTexCoord4i, (GLint s, GLint t, GLint r, GLint q)) \
-X(void, glTexCoord4iv, (const GLint * v)) \
-X(void, glTexCoord4s, (GLshort s, GLshort t, GLshort r, GLshort q)) \
-X(void, glTexCoord4sv, (const GLshort * v)) \
-X(void, glTexCoordPointer, (GLint size, GLenum type, GLsizei stride, const void * pointer)) \
-X(void, glTexEnvf, (GLenum target, GLenum pname, GLfloat param)) \
-X(void, glTexEnvfv, (GLenum target, GLenum pname, const GLfloat * params)) \
-X(void, glTexEnvi, (GLenum target, GLenum pname, GLint param)) \
-X(void, glTexEnviv, (GLenum target, GLenum pname, const GLint * params)) \
-X(void, glTexEnvx, (GLenum target, GLenum pname, GLfixed param)) \
-X(void, glTexEnvxv, (GLenum target, GLenum pname, const GLfixed * params)) \
-X(void, glTexGend, (GLenum coord, GLenum pname, GLdouble param)) \
-X(void, glTexGendv, (GLenum coord, GLenum pname, const GLdouble * params)) \
-X(void, glTexGenf, (GLenum coord, GLenum pname, GLfloat param)) \
-X(void, glTexGenfv, (GLenum coord, GLenum pname, const GLfloat * params)) \
-X(void, glTexGeni, (GLenum coord, GLenum pname, GLint param)) \
-X(void, glTexGeniv, (GLenum coord, GLenum pname, const GLint * params)) \
-X(void, glTexImage1D, (GLenum target, GLint level, GLint internalformat, GLsizei width, GLint border, GLenum format, GLenum type, const void * pixels)) \
-X(void, glTexImage2D, (GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void * pixels)) \
-X(void, glTexParameterf, (GLenum target, GLenum pname, GLfloat param)) \
-X(void, glTexParameterfv, (GLenum target, GLenum pname, const GLfloat * params)) \
-X(void, glTexParameteri, (GLenum target, GLenum pname, GLint param)) \
-X(void, glTexParameteriv, (GLenum target, GLenum pname, const GLint * params)) \
-X(void, glTexParameterx, (GLenum target, GLenum pname, GLfixed param)) \
-X(void, glTexParameterxv, (GLenum target, GLenum pname, const GLfixed * params)) \
-X(void, glTexSubImage2D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void * pixels)) \
-X(void, glTranslated, (GLdouble x, GLdouble y, GLdouble z)) \
-X(void, glTranslatef, (GLfloat x, GLfloat y, GLfloat z)) \
-X(void, glTranslatex, (GLfixed x, GLfixed y, GLfixed z)) \
-X(void, glVertex2d, (GLdouble x, GLdouble y)) \
-X(void, glVertex2dv, (const GLdouble * v)) \
-X(void, glVertex2f, (GLfloat x, GLfloat y)) \
-X(void, glVertex2fv, (const GLfloat * v)) \
-X(void, glVertex2i, (GLint x, GLint y)) \
-X(void, glVertex2iv, (const GLint * v)) \
-X(void, glVertex2s, (GLshort x, GLshort y)) \
-X(void, glVertex2sv, (const GLshort * v)) \
-X(void, glVertex3d, (GLdouble x, GLdouble y, GLdouble z)) \
-X(void, glVertex3dv, (const GLdouble * v)) \
-X(void, glVertex3f, (GLfloat x, GLfloat y, GLfloat z)) \
-X(void, glVertex3fv, (const GLfloat * v)) \
-X(void, glVertex3i, (GLint x, GLint y, GLint z)) \
-X(void, glVertex3iv, (const GLint * v)) \
-X(void, glVertex3s, (GLshort x, GLshort y, GLshort z)) \
-X(void, glVertex3sv, (const GLshort * v)) \
-X(void, glVertex4d, (GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
-X(void, glVertex4dv, (const GLdouble * v)) \
-X(void, glVertex4f, (GLfloat x, GLfloat y, GLfloat z, GLfloat w)) \
-X(void, glVertex4fv, (const GLfloat * v)) \
-X(void, glVertex4i, (GLint x, GLint y, GLint z, GLint w)) \
-X(void, glVertex4iv, (const GLint * v)) \
-X(void, glVertex4s, (GLshort x, GLshort y, GLshort z, GLshort w)) \
-X(void, glVertex4sv, (const GLshort * v)) \
-X(void, glVertexPointer, (GLint size, GLenum type, GLsizei stride, const void * pointer)) \
-X(void, glViewport, (GLint x, GLint y, GLsizei width, GLsizei height)) \
-VE() \
-V(1_1) \
-X(GLboolean, glAreTexturesResident, (GLsizei n, const GLuint * textures, GLboolean * residences)) \
-X(void, glArrayElement, (GLint i)) \
-X(void, glCopyTexImage1D, (GLenum target, GLint level, GLenum internalformat, GLint x, GLint y, GLsizei width, GLint border)) \
-X(void, glCopyTexSubImage1D, (GLenum target, GLint level, GLint xoffset, GLint x, GLint y, GLsizei width)) \
-X(void, glEdgeFlagPointer, (GLsizei stride, const void * pointer)) \
-X(void, glIndexPointer, (GLenum type, GLsizei stride, const void * pointer)) \
-X(void, glIndexub, (GLubyte c)) \
-X(void, glIndexubv, (const GLubyte * c)) \
-X(void, glInterleavedArrays, (GLenum format, GLsizei stride, const void * pointer)) \
-X(void, glPopClientAttrib, ()) \
-X(void, glPrioritizeTextures, (GLsizei n, const GLuint * textures, const GLfloat * priorities)) \
-X(void, glPushClientAttrib, (GLbitfield mask)) \
-X(void, glTexSubImage1D, (GLenum target, GLint level, GLint xoffset, GLsizei width, GLenum format, GLenum type, const void * pixels)) \
-VE() \
-V(1_2) \
-X(void, glCopyTexSubImage3D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLint x, GLint y, GLsizei width, GLsizei height)) \
-X(void, glDrawRangeElements, (GLenum mode, GLuint start, GLuint end, GLsizei count, GLenum type, const void * indices)) \
-X(void, glTexImage3D, (GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLenum format, GLenum type, const void * pixels)) \
-X(void, glTexSubImage3D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, const void * pixels)) \
-VE() \
-V(1_3) \
-X(void, glCompressedTexImage1D, (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLint border, GLsizei imageSize, const void * data)) \
-X(void, glCompressedTexImage3D, (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLsizei imageSize, const void * data)) \
-X(void, glCompressedTexSubImage1D, (GLenum target, GLint level, GLint xoffset, GLsizei width, GLenum format, GLsizei imageSize, const void * data)) \
-X(void, glCompressedTexSubImage3D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLsizei imageSize, const void * data)) \
-X(void, glGetCompressedTexImage, (GLenum target, GLint level, void * img)) \
-X(void, glLoadTransposeMatrixd, (const GLdouble * m)) \
-X(void, glLoadTransposeMatrixf, (const GLfloat * m)) \
-X(void, glMultTransposeMatrixd, (const GLdouble * m)) \
-X(void, glMultTransposeMatrixf, (const GLfloat * m)) \
-X(void, glMultiTexCoord1d, (GLenum target, GLdouble s)) \
-X(void, glMultiTexCoord1dv, (GLenum target, const GLdouble * v)) \
-X(void, glMultiTexCoord1f, (GLenum target, GLfloat s)) \
-X(void, glMultiTexCoord1fv, (GLenum target, const GLfloat * v)) \
-X(void, glMultiTexCoord1i, (GLenum target, GLint s)) \
-X(void, glMultiTexCoord1iv, (GLenum target, const GLint * v)) \
-X(void, glMultiTexCoord1s, (GLenum target, GLshort s)) \
-X(void, glMultiTexCoord1sv, (GLenum target, const GLshort * v)) \
-X(void, glMultiTexCoord2d, (GLenum target, GLdouble s, GLdouble t)) \
-X(void, glMultiTexCoord2dv, (GLenum target, const GLdouble * v)) \
-X(void, glMultiTexCoord2f, (GLenum target, GLfloat s, GLfloat t)) \
-X(void, glMultiTexCoord2fv, (GLenum target, const GLfloat * v)) \
-X(void, glMultiTexCoord2i, (GLenum target, GLint s, GLint t)) \
-X(void, glMultiTexCoord2iv, (GLenum target, const GLint * v)) \
-X(void, glMultiTexCoord2s, (GLenum target, GLshort s, GLshort t)) \
-X(void, glMultiTexCoord2sv, (GLenum target, const GLshort * v)) \
-X(void, glMultiTexCoord3d, (GLenum target, GLdouble s, GLdouble t, GLdouble r)) \
-X(void, glMultiTexCoord3dv, (GLenum target, const GLdouble * v)) \
-X(void, glMultiTexCoord3f, (GLenum target, GLfloat s, GLfloat t, GLfloat r)) \
-X(void, glMultiTexCoord3fv, (GLenum target, const GLfloat * v)) \
-X(void, glMultiTexCoord3i, (GLenum target, GLint s, GLint t, GLint r)) \
-X(void, glMultiTexCoord3iv, (GLenum target, const GLint * v)) \
-X(void, glMultiTexCoord3s, (GLenum target, GLshort s, GLshort t, GLshort r)) \
-X(void, glMultiTexCoord3sv, (GLenum target, const GLshort * v)) \
-X(void, glMultiTexCoord4d, (GLenum target, GLdouble s, GLdouble t, GLdouble r, GLdouble q)) \
-X(void, glMultiTexCoord4dv, (GLenum target, const GLdouble * v)) \
-X(void, glMultiTexCoord4fv, (GLenum target, const GLfloat * v)) \
-X(void, glMultiTexCoord4i, (GLenum target, GLint s, GLint t, GLint r, GLint q)) \
-X(void, glMultiTexCoord4iv, (GLenum target, const GLint * v)) \
-X(void, glMultiTexCoord4s, (GLenum target, GLshort s, GLshort t, GLshort r, GLshort q)) \
-X(void, glMultiTexCoord4sv, (GLenum target, const GLshort * v)) \
-VE() \
-V(1_4) \
-X(void, glBlendColor, (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha)) \
-X(void, glBlendEquation, (GLenum mode)) \
-X(void, glBlendFuncSeparate, (GLenum sfactorRGB, GLenum dfactorRGB, GLenum sfactorAlpha, GLenum dfactorAlpha)) \
-X(void, glFogCoordPointer, (GLenum type, GLsizei stride, const void * pointer)) \
-X(void, glFogCoordd, (GLdouble coord)) \
-X(void, glFogCoorddv, (const GLdouble * coord)) \
-X(void, glFogCoordf, (GLfloat coord)) \
-X(void, glFogCoordfv, (const GLfloat * coord)) \
-X(void, glMultiDrawArrays, (GLenum mode, const GLint * first, const GLsizei * count, GLsizei drawcount)) \
-X(void, glMultiDrawElements, (GLenum mode, const GLsizei * count, GLenum type, const void *const * indices, GLsizei drawcount)) \
-X(void, glPointParameteri, (GLenum pname, GLint param)) \
-X(void, glPointParameteriv, (GLenum pname, const GLint * params)) \
-X(void, glSecondaryColor3b, (GLbyte red, GLbyte green, GLbyte blue)) \
-X(void, glSecondaryColor3bv, (const GLbyte * v)) \
-X(void, glSecondaryColor3d, (GLdouble red, GLdouble green, GLdouble blue)) \
-X(void, glSecondaryColor3dv, (const GLdouble * v)) \
-X(void, glSecondaryColor3f, (GLfloat red, GLfloat green, GLfloat blue)) \
-X(void, glSecondaryColor3fv, (const GLfloat * v)) \
-X(void, glSecondaryColor3i, (GLint red, GLint green, GLint blue)) \
-X(void, glSecondaryColor3iv, (const GLint * v)) \
-X(void, glSecondaryColor3s, (GLshort red, GLshort green, GLshort blue)) \
-X(void, glSecondaryColor3sv, (const GLshort * v)) \
-X(void, glSecondaryColor3ub, (GLubyte red, GLubyte green, GLubyte blue)) \
-X(void, glSecondaryColor3ubv, (const GLubyte * v)) \
-X(void, glSecondaryColor3ui, (GLuint red, GLuint green, GLuint blue)) \
-X(void, glSecondaryColor3uiv, (const GLuint * v)) \
-X(void, glSecondaryColor3us, (GLushort red, GLushort green, GLushort blue)) \
-X(void, glSecondaryColor3usv, (const GLushort * v)) \
-X(void, glSecondaryColorPointer, (GLint size, GLenum type, GLsizei stride, const void * pointer)) \
-X(void, glWindowPos2d, (GLdouble x, GLdouble y)) \
-X(void, glWindowPos2dv, (const GLdouble * v)) \
-X(void, glWindowPos2f, (GLfloat x, GLfloat y)) \
-X(void, glWindowPos2fv, (const GLfloat * v)) \
-X(void, glWindowPos2i, (GLint x, GLint y)) \
-X(void, glWindowPos2iv, (const GLint * v)) \
-X(void, glWindowPos2s, (GLshort x, GLshort y)) \
-X(void, glWindowPos2sv, (const GLshort * v)) \
-X(void, glWindowPos3d, (GLdouble x, GLdouble y, GLdouble z)) \
-X(void, glWindowPos3dv, (const GLdouble * v)) \
-X(void, glWindowPos3f, (GLfloat x, GLfloat y, GLfloat z)) \
-X(void, glWindowPos3fv, (const GLfloat * v)) \
-X(void, glWindowPos3i, (GLint x, GLint y, GLint z)) \
-X(void, glWindowPos3iv, (const GLint * v)) \
-X(void, glWindowPos3s, (GLshort x, GLshort y, GLshort z)) \
-X(void, glWindowPos3sv, (const GLshort * v)) \
-VE() \
-V(1_5) \
-X(void, glBeginQuery, (GLenum target, GLuint id)) \
-X(void, glDeleteQueries, (GLsizei n, const GLuint * ids)) \
-X(void, glEndQuery, (GLenum target)) \
-X(void, glGenQueries, (GLsizei n, GLuint * ids)) \
-X(void, glGetBufferPointerv, (GLenum target, GLenum pname, void ** params)) \
-X(void, glGetBufferSubData, (GLenum target, GLintptr offset, GLsizeiptr size, void * data)) \
-X(void, glGetQueryObjectiv, (GLuint id, GLenum pname, GLint * params)) \
-X(void, glGetQueryObjectuiv, (GLuint id, GLenum pname, GLuint * params)) \
-X(void, glGetQueryiv, (GLenum target, GLenum pname, GLint * params)) \
-X(GLboolean, glIsQuery, (GLuint id)) \
-X(void *, glMapBuffer, (GLenum target, GLenum access)) \
-X(GLboolean, glUnmapBuffer, (GLenum target)) \
-VE() \
-V(2_0) \
-X(void, glAttachShader, (GLuint program, GLuint shader)) \
-X(void, glBindAttribLocation, (GLuint program, GLuint index, const GLchar * name)) \
-X(void, glBindFramebuffer, (GLenum target, GLuint framebuffer)) \
-X(void, glBindRenderbuffer, (GLenum target, GLuint renderbuffer)) \
-X(void, glBlendEquationSeparate, (GLenum modeRGB, GLenum modeAlpha)) \
-X(GLenum, glCheckFramebufferStatus, (GLenum target)) \
-X(void, glCompileShader, (GLuint shader)) \
-X(GLuint, glCreateProgram, ()) \
-X(GLuint, glCreateShader, (GLenum type)) \
-X(void, glDeleteFramebuffers, (GLsizei n, const GLuint * framebuffers)) \
-X(void, glDeleteProgram, (GLuint program)) \
-X(void, glDeleteRenderbuffers, (GLsizei n, const GLuint * renderbuffers)) \
-X(void, glDeleteShader, (GLuint shader)) \
-X(void, glDetachShader, (GLuint program, GLuint shader)) \
-X(void, glDisableVertexAttribArray, (GLuint index)) \
-X(void, glDrawBuffers, (GLsizei n, const GLenum * bufs)) \
-X(void, glEnableVertexAttribArray, (GLuint index)) \
-X(void, glFramebufferRenderbuffer, (GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer)) \
-X(void, glFramebufferTexture2D, (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level)) \
-X(void, glGenFramebuffers, (GLsizei n, GLuint * framebuffers)) \
-X(void, glGenRenderbuffers, (GLsizei n, GLuint * renderbuffers)) \
-X(void, glGenerateMipmap, (GLenum target)) \
-X(void, glGetActiveAttrib, (GLuint program, GLuint index, GLsizei bufSize, GLsizei * length, GLint * size, GLenum * type, GLchar * name)) \
-X(void, glGetActiveUniform, (GLuint program, GLuint index, GLsizei bufSize, GLsizei * length, GLint * size, GLenum * type, GLchar * name)) \
-X(void, glGetAttachedShaders, (GLuint program, GLsizei maxCount, GLsizei * count, GLuint * shaders)) \
-X(GLint, glGetAttribLocation, (GLuint program, const GLchar * name)) \
-X(void, glGetFramebufferAttachmentParameteriv, (GLenum target, GLenum attachment, GLenum pname, GLint * params)) \
-X(GLenum, glGetGraphicsResetStatus, ()) \
-X(void, glGetProgramInfoLog, (GLuint program, GLsizei bufSize, GLsizei * length, GLchar * infoLog)) \
-X(void, glGetProgramiv, (GLuint program, GLenum pname, GLint * params)) \
-X(void, glGetRenderbufferParameteriv, (GLenum target, GLenum pname, GLint * params)) \
-X(void, glGetShaderInfoLog, (GLuint shader, GLsizei bufSize, GLsizei * length, GLchar * infoLog)) \
-X(void, glGetShaderPrecisionFormat, (GLenum shadertype, GLenum precisiontype, GLint * range, GLint * precision)) \
-X(void, glGetShaderSource, (GLuint shader, GLsizei bufSize, GLsizei * length, GLchar * source)) \
-X(void, glGetShaderiv, (GLuint shader, GLenum pname, GLint * params)) \
-X(GLint, glGetUniformLocation, (GLuint program, const GLchar * name)) \
-X(void, glGetUniformfv, (GLuint program, GLint location, GLfloat * params)) \
-X(void, glGetUniformiv, (GLuint program, GLint location, GLint * params)) \
-X(void, glGetVertexAttribPointerv, (GLuint index, GLenum pname, void ** pointer)) \
-X(void, glGetVertexAttribdv, (GLuint index, GLenum pname, GLdouble * params)) \
-X(void, glGetVertexAttribfv, (GLuint index, GLenum pname, GLfloat * params)) \
-X(void, glGetVertexAttribiv, (GLuint index, GLenum pname, GLint * params)) \
-X(void, glGetnUniformfv, (GLuint program, GLint location, GLsizei bufSize, GLfloat * params)) \
-X(void, glGetnUniformiv, (GLuint program, GLint location, GLsizei bufSize, GLint * params)) \
-X(GLboolean, glIsFramebuffer, (GLuint framebuffer)) \
-X(GLboolean, glIsProgram, (GLuint program)) \
-X(GLboolean, glIsRenderbuffer, (GLuint renderbuffer)) \
-X(GLboolean, glIsShader, (GLuint shader)) \
-X(void, glLinkProgram, (GLuint program)) \
-X(void, glProgramBinary, (GLuint program, GLenum binaryFormat, const void * binary, GLsizei length)) \
-X(void, glReadnPixels, (GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, GLsizei bufSize, void * data)) \
-X(void, glReleaseShaderCompiler, ()) \
-X(void, glRenderbufferStorage, (GLenum target, GLenum internalformat, GLsizei width, GLsizei height)) \
-X(void, glShaderBinary, (GLsizei count, const GLuint * shaders, GLenum binaryFormat, const void * binary, GLsizei length)) \
-X(void, glShaderSource, (GLuint shader, GLsizei count, const GLchar *const * string, const GLint * length)) \
-X(void, glStencilFuncSeparate, (GLenum face, GLenum func, GLint ref, GLuint mask)) \
-X(void, glStencilMaskSeparate, (GLenum face, GLuint mask)) \
-X(void, glStencilOpSeparate, (GLenum face, GLenum sfail, GLenum dpfail, GLenum dppass)) \
-X(void, glTexStorage2D, (GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height)) \
-X(void, glUniform1f, (GLint location, GLfloat v0)) \
-X(void, glUniform1fv, (GLint location, GLsizei count, const GLfloat * value)) \
-X(void, glUniform1i, (GLint location, GLint v0)) \
-X(void, glUniform1iv, (GLint location, GLsizei count, const GLint * value)) \
-X(void, glUniform2f, (GLint location, GLfloat v0, GLfloat v1)) \
-X(void, glUniform2fv, (GLint location, GLsizei count, const GLfloat * value)) \
-X(void, glUniform2i, (GLint location, GLint v0, GLint v1)) \
-X(void, glUniform2iv, (GLint location, GLsizei count, const GLint * value)) \
-X(void, glUniform3f, (GLint location, GLfloat v0, GLfloat v1, GLfloat v2)) \
-X(void, glUniform3fv, (GLint location, GLsizei count, const GLfloat * value)) \
-X(void, glUniform3i, (GLint location, GLint v0, GLint v1, GLint v2)) \
-X(void, glUniform3iv, (GLint location, GLsizei count, const GLint * value)) \
-X(void, glUniform4f, (GLint location, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3)) \
-X(void, glUniform4fv, (GLint location, GLsizei count, const GLfloat * value)) \
-X(void, glUniform4i, (GLint location, GLint v0, GLint v1, GLint v2, GLint v3)) \
-X(void, glUniform4iv, (GLint location, GLsizei count, const GLint * value)) \
-X(void, glUniformMatrix2fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
-X(void, glUniformMatrix3fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
-X(void, glUniformMatrix4fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
-X(void, glUseProgram, (GLuint program)) \
-X(void, glValidateProgram, (GLuint program)) \
-X(void, glVertexAttrib1d, (GLuint index, GLdouble x)) \
-X(void, glVertexAttrib1dv, (GLuint index, const GLdouble * v)) \
-X(void, glVertexAttrib1f, (GLuint index, GLfloat x)) \
-X(void, glVertexAttrib1fv, (GLuint index, const GLfloat * v)) \
-X(void, glVertexAttrib1s, (GLuint index, GLshort x)) \
-X(void, glVertexAttrib1sv, (GLuint index, const GLshort * v)) \
-X(void, glVertexAttrib2d, (GLuint index, GLdouble x, GLdouble y)) \
-X(void, glVertexAttrib2dv, (GLuint index, const GLdouble * v)) \
-X(void, glVertexAttrib2f, (GLuint index, GLfloat x, GLfloat y)) \
-X(void, glVertexAttrib2fv, (GLuint index, const GLfloat * v)) \
-X(void, glVertexAttrib2s, (GLuint index, GLshort x, GLshort y)) \
-X(void, glVertexAttrib2sv, (GLuint index, const GLshort * v)) \
-X(void, glVertexAttrib3d, (GLuint index, GLdouble x, GLdouble y, GLdouble z)) \
-X(void, glVertexAttrib3dv, (GLuint index, const GLdouble * v)) \
-X(void, glVertexAttrib3f, (GLuint index, GLfloat x, GLfloat y, GLfloat z)) \
-X(void, glVertexAttrib3fv, (GLuint index, const GLfloat * v)) \
-X(void, glVertexAttrib3s, (GLuint index, GLshort x, GLshort y, GLshort z)) \
-X(void, glVertexAttrib3sv, (GLuint index, const GLshort * v)) \
-X(void, glVertexAttrib4Nbv, (GLuint index, const GLbyte * v)) \
-X(void, glVertexAttrib4Niv, (GLuint index, const GLint * v)) \
-X(void, glVertexAttrib4Nsv, (GLuint index, const GLshort * v)) \
-X(void, glVertexAttrib4Nub, (GLuint index, GLubyte x, GLubyte y, GLubyte z, GLubyte w)) \
-X(void, glVertexAttrib4Nubv, (GLuint index, const GLubyte * v)) \
-X(void, glVertexAttrib4Nuiv, (GLuint index, const GLuint * v)) \
-X(void, glVertexAttrib4Nusv, (GLuint index, const GLushort * v)) \
-X(void, glVertexAttrib4bv, (GLuint index, const GLbyte * v)) \
-X(void, glVertexAttrib4d, (GLuint index, GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
-X(void, glVertexAttrib4dv, (GLuint index, const GLdouble * v)) \
-X(void, glVertexAttrib4f, (GLuint index, GLfloat x, GLfloat y, GLfloat z, GLfloat w)) \
-X(void, glVertexAttrib4fv, (GLuint index, const GLfloat * v)) \
-X(void, glVertexAttrib4iv, (GLuint index, const GLint * v)) \
-X(void, glVertexAttrib4s, (GLuint index, GLshort x, GLshort y, GLshort z, GLshort w)) \
-X(void, glVertexAttrib4sv, (GLuint index, const GLshort * v)) \
-X(void, glVertexAttrib4ubv, (GLuint index, const GLubyte * v)) \
-X(void, glVertexAttrib4uiv, (GLuint index, const GLuint * v)) \
-X(void, glVertexAttrib4usv, (GLuint index, const GLushort * v)) \
-X(void, glVertexAttribPointer, (GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void * pointer)) \
-VE() \
-V(2_1) \
-X(void, glUniformMatrix2x3fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
-X(void, glUniformMatrix2x4fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
-X(void, glUniformMatrix3x2fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
-X(void, glUniformMatrix3x4fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
-X(void, glUniformMatrix4x2fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
-X(void, glUniformMatrix4x3fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
-VE() \
-V(3_0) \
-X(void, glBeginConditionalRender, (GLuint id, GLenum mode)) \
-X(void, glBeginTransformFeedback, (GLenum primitiveMode)) \
-X(void, glBindBufferBase, (GLenum target, GLuint index, GLuint buffer)) \
-X(void, glBindBufferRange, (GLenum target, GLuint index, GLuint buffer, GLintptr offset, GLsizeiptr size)) \
-X(void, glBindFragDataLocation, (GLuint program, GLuint color, const GLchar * name)) \
-X(void, glBindSampler, (GLuint unit, GLuint sampler)) \
-X(void, glBindTransformFeedback, (GLenum target, GLuint id)) \
-X(void, glBindVertexArray, (GLuint array)) \
-X(void, glBlitFramebuffer, (GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter)) \
-X(void, glClampColor, (GLenum target, GLenum clamp)) \
-X(void, glClearBufferfi, (GLenum buffer, GLint drawbuffer, GLfloat depth, GLint stencil)) \
-X(void, glClearBufferfv, (GLenum buffer, GLint drawbuffer, const GLfloat * value)) \
-X(void, glClearBufferiv, (GLenum buffer, GLint drawbuffer, const GLint * value)) \
-X(void, glClearBufferuiv, (GLenum buffer, GLint drawbuffer, const GLuint * value)) \
-X(GLenum, glClientWaitSync, (GLsync sync, GLbitfield flags, GLuint64 timeout)) \
-X(void, glColorMaski, (GLuint index, GLboolean r, GLboolean g, GLboolean b, GLboolean a)) \
-X(void, glCopyBufferSubData, (GLenum readTarget, GLenum writeTarget, GLintptr readOffset, GLintptr writeOffset, GLsizeiptr size)) \
-X(void, glDeleteSamplers, (GLsizei count, const GLuint * samplers)) \
-X(void, glDeleteSync, (GLsync sync)) \
-X(void, glDeleteTransformFeedbacks, (GLsizei n, const GLuint * ids)) \
-X(void, glDeleteVertexArrays, (GLsizei n, const GLuint * arrays)) \
-X(void, glDisablei, (GLenum target, GLuint index)) \
-X(void, glDrawArraysInstanced, (GLenum mode, GLint first, GLsizei count, GLsizei instancecount)) \
-X(void, glDrawElementsInstanced, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLsizei instancecount)) \
-X(void, glEnablei, (GLenum target, GLuint index)) \
-X(void, glEndConditionalRender, ()) \
-X(void, glEndTransformFeedback, ()) \
-X(GLsync, glFenceSync, (GLenum condition, GLbitfield flags)) \
-X(void, glFlushMappedBufferRange, (GLenum target, GLintptr offset, GLsizeiptr length)) \
-X(void, glFramebufferTexture1D, (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level)) \
-X(void, glFramebufferTexture3D, (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level, GLint zoffset)) \
-X(void, glFramebufferTextureLayer, (GLenum target, GLenum attachment, GLuint texture, GLint level, GLint layer)) \
-X(void, glGenSamplers, (GLsizei count, GLuint * samplers)) \
-X(void, glGenTransformFeedbacks, (GLsizei n, GLuint * ids)) \
-X(void, glGenVertexArrays, (GLsizei n, GLuint * arrays)) \
-X(void, glGetActiveUniformBlockName, (GLuint program, GLuint uniformBlockIndex, GLsizei bufSize, GLsizei * length, GLchar * uniformBlockName)) \
-X(void, glGetActiveUniformBlockiv, (GLuint program, GLuint uniformBlockIndex, GLenum pname, GLint * params)) \
-X(void, glGetActiveUniformsiv, (GLuint program, GLsizei uniformCount, const GLuint * uniformIndices, GLenum pname, GLint * params)) \
-X(void, glGetBooleani_v, (GLenum target, GLuint index, GLboolean * data)) \
-X(void, glGetBufferParameteri64v, (GLenum target, GLenum pname, GLint64 * params)) \
-X(GLint, glGetFragDataLocation, (GLuint program, const GLchar * name)) \
-X(void, glGetInteger64i_v, (GLenum target, GLuint index, GLint64 * data)) \
-X(void, glGetInteger64v, (GLenum pname, GLint64 * data)) \
-X(void, glGetIntegeri_v, (GLenum target, GLuint index, GLint * data)) \
-X(void, glGetInternalformativ, (GLenum target, GLenum internalformat, GLenum pname, GLsizei count, GLint * params)) \
-X(void, glGetProgramBinary, (GLuint program, GLsizei bufSize, GLsizei * length, GLenum * binaryFormat, void * binary)) \
-X(void, glGetSamplerParameterfv, (GLuint sampler, GLenum pname, GLfloat * params)) \
-X(void, glGetSamplerParameteriv, (GLuint sampler, GLenum pname, GLint * params)) \
-X(const GLubyte *, glGetStringi, (GLenum name, GLuint index)) \
-X(void, glGetSynciv, (GLsync sync, GLenum pname, GLsizei count, GLsizei * length, GLint * values)) \
-X(void, glGetTexParameterIiv, (GLenum target, GLenum pname, GLint * params)) \
-X(void, glGetTexParameterIuiv, (GLenum target, GLenum pname, GLuint * params)) \
-X(void, glGetTransformFeedbackVarying, (GLuint program, GLuint index, GLsizei bufSize, GLsizei * length, GLsizei * size, GLenum * type, GLchar * name)) \
-X(GLuint, glGetUniformBlockIndex, (GLuint program, const GLchar * uniformBlockName)) \
-X(void, glGetUniformIndices, (GLuint program, GLsizei uniformCount, const GLchar *const * uniformNames, GLuint * uniformIndices)) \
-X(void, glGetUniformuiv, (GLuint program, GLint location, GLuint * params)) \
-X(void, glGetVertexAttribIiv, (GLuint index, GLenum pname, GLint * params)) \
-X(void, glGetVertexAttribIuiv, (GLuint index, GLenum pname, GLuint * params)) \
-X(void, glInvalidateFramebuffer, (GLenum target, GLsizei numAttachments, const GLenum * attachments)) \
-X(void, glInvalidateSubFramebuffer, (GLenum target, GLsizei numAttachments, const GLenum * attachments, GLint x, GLint y, GLsizei width, GLsizei height)) \
-X(GLboolean, glIsEnabledi, (GLenum target, GLuint index)) \
-X(GLboolean, glIsSampler, (GLuint sampler)) \
-X(GLboolean, glIsSync, (GLsync sync)) \
-X(GLboolean, glIsTransformFeedback, (GLuint id)) \
-X(GLboolean, glIsVertexArray, (GLuint array)) \
-X(void *, glMapBufferRange, (GLenum target, GLintptr offset, GLsizeiptr length, GLbitfield access)) \
-X(void, glPauseTransformFeedback, ()) \
-X(void, glProgramParameteri, (GLuint program, GLenum pname, GLint value)) \
-X(void, glRenderbufferStorageMultisample, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height)) \
-X(void, glResumeTransformFeedback, ()) \
-X(void, glSamplerParameterf, (GLuint sampler, GLenum pname, GLfloat param)) \
-X(void, glSamplerParameterfv, (GLuint sampler, GLenum pname, const GLfloat * param)) \
-X(void, glSamplerParameteri, (GLuint sampler, GLenum pname, GLint param)) \
-X(void, glSamplerParameteriv, (GLuint sampler, GLenum pname, const GLint * param)) \
-X(void, glTexParameterIiv, (GLenum target, GLenum pname, const GLint * params)) \
-X(void, glTexParameterIuiv, (GLenum target, GLenum pname, const GLuint * params)) \
-X(void, glTexStorage3D, (GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth)) \
-X(void, glTransformFeedbackVaryings, (GLuint program, GLsizei count, const GLchar *const * varyings, GLenum bufferMode)) \
-X(void, glUniform1ui, (GLint location, GLuint v0)) \
-X(void, glUniform1uiv, (GLint location, GLsizei count, const GLuint * value)) \
-X(void, glUniform2ui, (GLint location, GLuint v0, GLuint v1)) \
-X(void, glUniform2uiv, (GLint location, GLsizei count, const GLuint * value)) \
-X(void, glUniform3ui, (GLint location, GLuint v0, GLuint v1, GLuint v2)) \
-X(void, glUniform3uiv, (GLint location, GLsizei count, const GLuint * value)) \
-X(void, glUniform4ui, (GLint location, GLuint v0, GLuint v1, GLuint v2, GLuint v3)) \
-X(void, glUniform4uiv, (GLint location, GLsizei count, const GLuint * value)) \
-X(void, glUniformBlockBinding, (GLuint program, GLuint uniformBlockIndex, GLuint uniformBlockBinding)) \
-X(void, glVertexAttribDivisor, (GLuint index, GLuint divisor)) \
-X(void, glVertexAttribI1i, (GLuint index, GLint x)) \
-X(void, glVertexAttribI1iv, (GLuint index, const GLint * v)) \
-X(void, glVertexAttribI1ui, (GLuint index, GLuint x)) \
-X(void, glVertexAttribI1uiv, (GLuint index, const GLuint * v)) \
-X(void, glVertexAttribI2i, (GLuint index, GLint x, GLint y)) \
-X(void, glVertexAttribI2iv, (GLuint index, const GLint * v)) \
-X(void, glVertexAttribI2ui, (GLuint index, GLuint x, GLuint y)) \
-X(void, glVertexAttribI2uiv, (GLuint index, const GLuint * v)) \
-X(void, glVertexAttribI3i, (GLuint index, GLint x, GLint y, GLint z)) \
-X(void, glVertexAttribI3iv, (GLuint index, const GLint * v)) \
-X(void, glVertexAttribI3ui, (GLuint index, GLuint x, GLuint y, GLuint z)) \
-X(void, glVertexAttribI3uiv, (GLuint index, const GLuint * v)) \
-X(void, glVertexAttribI4bv, (GLuint index, const GLbyte * v)) \
-X(void, glVertexAttribI4i, (GLuint index, GLint x, GLint y, GLint z, GLint w)) \
-X(void, glVertexAttribI4iv, (GLuint index, const GLint * v)) \
-X(void, glVertexAttribI4sv, (GLuint index, const GLshort * v)) \
-X(void, glVertexAttribI4ubv, (GLuint index, const GLubyte * v)) \
-X(void, glVertexAttribI4ui, (GLuint index, GLuint x, GLuint y, GLuint z, GLuint w)) \
-X(void, glVertexAttribI4uiv, (GLuint index, const GLuint * v)) \
-X(void, glVertexAttribI4usv, (GLuint index, const GLushort * v)) \
-X(void, glVertexAttribIPointer, (GLuint index, GLint size, GLenum type, GLsizei stride, const void * pointer)) \
-X(void, glWaitSync, (GLsync sync, GLbitfield flags, GLuint64 timeout)) \
-VE() \
-V(3_1) \
-X(void, glActiveShaderProgram, (GLuint pipeline, GLuint program)) \
-X(void, glBindImageTexture, (GLuint unit, GLuint texture, GLint level, GLboolean layered, GLint layer, GLenum access, GLenum format)) \
-X(void, glBindProgramPipeline, (GLuint pipeline)) \
-X(void, glBindVertexBuffer, (GLuint bindingindex, GLuint buffer, GLintptr offset, GLsizei stride)) \
-X(GLuint, glCreateShaderProgramv, (GLenum type, GLsizei count, const GLchar *const * strings)) \
-X(void, glDeleteProgramPipelines, (GLsizei n, const GLuint * pipelines)) \
-X(void, glDispatchCompute, (GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z)) \
-X(void, glDispatchComputeIndirect, (GLintptr indirect)) \
-X(void, glDrawArraysIndirect, (GLenum mode, const void * indirect)) \
-X(void, glDrawElementsIndirect, (GLenum mode, GLenum type, const void * indirect)) \
-X(void, glFramebufferParameteri, (GLenum target, GLenum pname, GLint param)) \
-X(void, glGenProgramPipelines, (GLsizei n, GLuint * pipelines)) \
-X(void, glGetActiveUniformName, (GLuint program, GLuint uniformIndex, GLsizei bufSize, GLsizei * length, GLchar * uniformName)) \
-X(void, glGetFramebufferParameteriv, (GLenum target, GLenum pname, GLint * params)) \
-X(void, glGetMultisamplefv, (GLenum pname, GLuint index, GLfloat * val)) \
-X(void, glGetProgramInterfaceiv, (GLuint program, GLenum programInterface, GLenum pname, GLint * params)) \
-X(void, glGetProgramPipelineInfoLog, (GLuint pipeline, GLsizei bufSize, GLsizei * length, GLchar * infoLog)) \
-X(void, glGetProgramPipelineiv, (GLuint pipeline, GLenum pname, GLint * params)) \
-X(GLuint, glGetProgramResourceIndex, (GLuint program, GLenum programInterface, const GLchar * name)) \
-X(GLint, glGetProgramResourceLocation, (GLuint program, GLenum programInterface, const GLchar * name)) \
-X(void, glGetProgramResourceName, (GLuint program, GLenum programInterface, GLuint index, GLsizei bufSize, GLsizei * length, GLchar * name)) \
-X(void, glGetProgramResourceiv, (GLuint program, GLenum programInterface, GLuint index, GLsizei propCount, const GLenum * props, GLsizei count, GLsizei * length, GLint * params)) \
-X(GLboolean, glIsProgramPipeline, (GLuint pipeline)) \
-X(void, glMemoryBarrier, (GLbitfield barriers)) \
-X(void, glMemoryBarrierByRegion, (GLbitfield barriers)) \
-X(void, glPrimitiveRestartIndex, (GLuint index)) \
-X(void, glProgramUniform1f, (GLuint program, GLint location, GLfloat v0)) \
-X(void, glProgramUniform1fv, (GLuint program, GLint location, GLsizei count, const GLfloat * value)) \
-X(void, glProgramUniform1i, (GLuint program, GLint location, GLint v0)) \
-X(void, glProgramUniform1iv, (GLuint program, GLint location, GLsizei count, const GLint * value)) \
-X(void, glProgramUniform1ui, (GLuint program, GLint location, GLuint v0)) \
-X(void, glProgramUniform1uiv, (GLuint program, GLint location, GLsizei count, const GLuint * value)) \
-X(void, glProgramUniform2f, (GLuint program, GLint location, GLfloat v0, GLfloat v1)) \
-X(void, glProgramUniform2fv, (GLuint program, GLint location, GLsizei count, const GLfloat * value)) \
-X(void, glProgramUniform2i, (GLuint program, GLint location, GLint v0, GLint v1)) \
-X(void, glProgramUniform2iv, (GLuint program, GLint location, GLsizei count, const GLint * value)) \
-X(void, glProgramUniform2ui, (GLuint program, GLint location, GLuint v0, GLuint v1)) \
-X(void, glProgramUniform2uiv, (GLuint program, GLint location, GLsizei count, const GLuint * value)) \
-X(void, glProgramUniform3f, (GLuint program, GLint location, GLfloat v0, GLfloat v1, GLfloat v2)) \
-X(void, glProgramUniform3fv, (GLuint program, GLint location, GLsizei count, const GLfloat * value)) \
-X(void, glProgramUniform3i, (GLuint program, GLint location, GLint v0, GLint v1, GLint v2)) \
-X(void, glProgramUniform3iv, (GLuint program, GLint location, GLsizei count, const GLint * value)) \
-X(void, glProgramUniform3ui, (GLuint program, GLint location, GLuint v0, GLuint v1, GLuint v2)) \
-X(void, glProgramUniform3uiv, (GLuint program, GLint location, GLsizei count, const GLuint * value)) \
-X(void, glProgramUniform4f, (GLuint program, GLint location, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3)) \
-X(void, glProgramUniform4fv, (GLuint program, GLint location, GLsizei count, const GLfloat * value)) \
-X(void, glProgramUniform4i, (GLuint program, GLint location, GLint v0, GLint v1, GLint v2, GLint v3)) \
-X(void, glProgramUniform4iv, (GLuint program, GLint location, GLsizei count, const GLint * value)) \
-X(void, glProgramUniform4ui, (GLuint program, GLint location, GLuint v0, GLuint v1, GLuint v2, GLuint v3)) \
-X(void, glProgramUniform4uiv, (GLuint program, GLint location, GLsizei count, const GLuint * value)) \
-X(void, glProgramUniformMatrix2fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
-X(void, glProgramUniformMatrix2x3fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
-X(void, glProgramUniformMatrix2x4fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
-X(void, glProgramUniformMatrix3fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
-X(void, glProgramUniformMatrix3x2fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
-X(void, glProgramUniformMatrix3x4fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
-X(void, glProgramUniformMatrix4fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
-X(void, glProgramUniformMatrix4x2fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
-X(void, glProgramUniformMatrix4x3fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
-X(void, glSampleMaski, (GLuint maskNumber, GLbitfield mask)) \
-X(void, glTexBuffer, (GLenum target, GLenum internalformat, GLuint buffer)) \
-X(void, glTexStorage2DMultisample, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLboolean fixedsamplelocations)) \
-X(void, glUseProgramStages, (GLuint pipeline, GLbitfield stages, GLuint program)) \
-X(void, glValidateProgramPipeline, (GLuint pipeline)) \
-X(void, glVertexAttribBinding, (GLuint attribindex, GLuint bindingindex)) \
-X(void, glVertexAttribFormat, (GLuint attribindex, GLint size, GLenum type, GLboolean normalized, GLuint relativeoffset)) \
-X(void, glVertexAttribIFormat, (GLuint attribindex, GLint size, GLenum type, GLuint relativeoffset)) \
-X(void, glVertexBindingDivisor, (GLuint bindingindex, GLuint divisor)) \
-VE() \
-V(3_2) \
-X(void, glBlendBarrier, ()) \
-X(void, glBlendEquationSeparatei, (GLuint buf, GLenum modeRGB, GLenum modeAlpha)) \
-X(void, glBlendEquationi, (GLuint buf, GLenum mode)) \
-X(void, glBlendFuncSeparatei, (GLuint buf, GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, GLenum dstAlpha)) \
-X(void, glBlendFunci, (GLuint buf, GLenum src, GLenum dst)) \
-X(void, glCopyImageSubData, (GLuint srcName, GLenum srcTarget, GLint srcLevel, GLint srcX, GLint srcY, GLint srcZ, GLuint dstName, GLenum dstTarget, GLint dstLevel, GLint dstX, GLint dstY, GLint dstZ, GLsizei srcWidth, GLsizei srcHeight, GLsizei srcDepth)) \
-X(void, glDebugMessageCallback, (GLDEBUGPROC callback, const void * userParam)) \
-X(void, glDebugMessageControl, (GLenum source, GLenum type, GLenum severity, GLsizei count, const GLuint * ids, GLboolean enabled)) \
-X(void, glDebugMessageInsert, (GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar * buf)) \
-X(void, glDrawElementsBaseVertex, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLint basevertex)) \
-X(void, glDrawElementsInstancedBaseVertex, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLsizei instancecount, GLint basevertex)) \
-X(void, glDrawRangeElementsBaseVertex, (GLenum mode, GLuint start, GLuint end, GLsizei count, GLenum type, const void * indices, GLint basevertex)) \
-X(void, glFramebufferTexture, (GLenum target, GLenum attachment, GLuint texture, GLint level)) \
-X(GLuint, glGetDebugMessageLog, (GLuint count, GLsizei bufSize, GLenum * sources, GLenum * types, GLuint * ids, GLenum * severities, GLsizei * lengths, GLchar * messageLog)) \
-X(void, glGetObjectLabel, (GLenum identifier, GLuint name, GLsizei bufSize, GLsizei * length, GLchar * label)) \
-X(void, glGetObjectPtrLabel, (const void * ptr, GLsizei bufSize, GLsizei * length, GLchar * label)) \
-X(void, glGetSamplerParameterIiv, (GLuint sampler, GLenum pname, GLint * params)) \
-X(void, glGetSamplerParameterIuiv, (GLuint sampler, GLenum pname, GLuint * params)) \
-X(void, glGetnUniformuiv, (GLuint program, GLint location, GLsizei bufSize, GLuint * params)) \
-X(void, glMinSampleShading, (GLfloat value)) \
-X(void, glMultiDrawElementsBaseVertex, (GLenum mode, const GLsizei * count, GLenum type, const void *const * indices, GLsizei drawcount, const GLint * basevertex)) \
-X(void, glObjectLabel, (GLenum identifier, GLuint name, GLsizei length, const GLchar * label)) \
-X(void, glObjectPtrLabel, (const void * ptr, GLsizei length, const GLchar * label)) \
-X(void, glPatchParameteri, (GLenum pname, GLint value)) \
-X(void, glPopDebugGroup, ()) \
-X(void, glPrimitiveBoundingBox, (GLfloat minX, GLfloat minY, GLfloat minZ, GLfloat minW, GLfloat maxX, GLfloat maxY, GLfloat maxZ, GLfloat maxW)) \
-X(void, glProvokingVertex, (GLenum mode)) \
-X(void, glPushDebugGroup, (GLenum source, GLuint id, GLsizei length, const GLchar * message)) \
-X(void, glSamplerParameterIiv, (GLuint sampler, GLenum pname, const GLint * param)) \
-X(void, glSamplerParameterIuiv, (GLuint sampler, GLenum pname, const GLuint * param)) \
-X(void, glTexBufferRange, (GLenum target, GLenum internalformat, GLuint buffer, GLintptr offset, GLsizeiptr size)) \
-X(void, glTexImage2DMultisample, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLboolean fixedsamplelocations)) \
-X(void, glTexImage3DMultisample, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLboolean fixedsamplelocations)) \
-X(void, glTexStorage3DMultisample, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLboolean fixedsamplelocations)) \
-VE() \
-V(3_3) \
-X(void, glBindFragDataLocationIndexed, (GLuint program, GLuint colorNumber, GLuint index, const GLchar * name)) \
-X(void, glColorP3ui, (GLenum type, GLuint color)) \
-X(void, glColorP3uiv, (GLenum type, const GLuint * color)) \
-X(void, glColorP4ui, (GLenum type, GLuint color)) \
-X(void, glColorP4uiv, (GLenum type, const GLuint * color)) \
-X(GLint, glGetFragDataIndex, (GLuint program, const GLchar * name)) \
-X(void, glGetQueryObjecti64v, (GLuint id, GLenum pname, GLint64 * params)) \
-X(void, glGetQueryObjectui64v, (GLuint id, GLenum pname, GLuint64 * params)) \
-X(void, glMultiTexCoordP1ui, (GLenum texture, GLenum type, GLuint coords)) \
-X(void, glMultiTexCoordP1uiv, (GLenum texture, GLenum type, const GLuint * coords)) \
-X(void, glMultiTexCoordP2ui, (GLenum texture, GLenum type, GLuint coords)) \
-X(void, glMultiTexCoordP2uiv, (GLenum texture, GLenum type, const GLuint * coords)) \
-X(void, glMultiTexCoordP3ui, (GLenum texture, GLenum type, GLuint coords)) \
-X(void, glMultiTexCoordP3uiv, (GLenum texture, GLenum type, const GLuint * coords)) \
-X(void, glMultiTexCoordP4ui, (GLenum texture, GLenum type, GLuint coords)) \
-X(void, glMultiTexCoordP4uiv, (GLenum texture, GLenum type, const GLuint * coords)) \
-X(void, glNormalP3ui, (GLenum type, GLuint coords)) \
-X(void, glNormalP3uiv, (GLenum type, const GLuint * coords)) \
-X(void, glQueryCounter, (GLuint id, GLenum target)) \
-X(void, glSecondaryColorP3ui, (GLenum type, GLuint color)) \
-X(void, glSecondaryColorP3uiv, (GLenum type, const GLuint * color)) \
-X(void, glTexCoordP1ui, (GLenum type, GLuint coords)) \
-X(void, glTexCoordP1uiv, (GLenum type, const GLuint * coords)) \
-X(void, glTexCoordP2ui, (GLenum type, GLuint coords)) \
-X(void, glTexCoordP2uiv, (GLenum type, const GLuint * coords)) \
-X(void, glTexCoordP3ui, (GLenum type, GLuint coords)) \
-X(void, glTexCoordP3uiv, (GLenum type, const GLuint * coords)) \
-X(void, glTexCoordP4ui, (GLenum type, GLuint coords)) \
-X(void, glTexCoordP4uiv, (GLenum type, const GLuint * coords)) \
-X(void, glVertexAttribP1ui, (GLuint index, GLenum type, GLboolean normalized, GLuint value)) \
-X(void, glVertexAttribP1uiv, (GLuint index, GLenum type, GLboolean normalized, const GLuint * value)) \
-X(void, glVertexAttribP2ui, (GLuint index, GLenum type, GLboolean normalized, GLuint value)) \
-X(void, glVertexAttribP2uiv, (GLuint index, GLenum type, GLboolean normalized, const GLuint * value)) \
-X(void, glVertexAttribP3ui, (GLuint index, GLenum type, GLboolean normalized, GLuint value)) \
-X(void, glVertexAttribP3uiv, (GLuint index, GLenum type, GLboolean normalized, const GLuint * value)) \
-X(void, glVertexAttribP4ui, (GLuint index, GLenum type, GLboolean normalized, GLuint value)) \
-X(void, glVertexAttribP4uiv, (GLuint index, GLenum type, GLboolean normalized, const GLuint * value)) \
-X(void, glVertexP2ui, (GLenum type, GLuint value)) \
-X(void, glVertexP2uiv, (GLenum type, const GLuint * value)) \
-X(void, glVertexP3ui, (GLenum type, GLuint value)) \
-X(void, glVertexP3uiv, (GLenum type, const GLuint * value)) \
-X(void, glVertexP4ui, (GLenum type, GLuint value)) \
-X(void, glVertexP4uiv, (GLenum type, const GLuint * value)) \
-VE() \
-V(4_0) \
-X(void, glBeginQueryIndexed, (GLenum target, GLuint index, GLuint id)) \
-X(void, glDrawTransformFeedback, (GLenum mode, GLuint id)) \
-X(void, glDrawTransformFeedbackStream, (GLenum mode, GLuint id, GLuint stream)) \
-X(void, glEndQueryIndexed, (GLenum target, GLuint index)) \
-X(void, glGetActiveSubroutineName, (GLuint program, GLenum shadertype, GLuint index, GLsizei bufSize, GLsizei * length, GLchar * name)) \
-X(void, glGetActiveSubroutineUniformName, (GLuint program, GLenum shadertype, GLuint index, GLsizei bufSize, GLsizei * length, GLchar * name)) \
-X(void, glGetActiveSubroutineUniformiv, (GLuint program, GLenum shadertype, GLuint index, GLenum pname, GLint * values)) \
-X(void, glGetProgramStageiv, (GLuint program, GLenum shadertype, GLenum pname, GLint * values)) \
-X(void, glGetQueryIndexediv, (GLenum target, GLuint index, GLenum pname, GLint * params)) \
-X(GLuint, glGetSubroutineIndex, (GLuint program, GLenum shadertype, const GLchar * name)) \
-X(GLint, glGetSubroutineUniformLocation, (GLuint program, GLenum shadertype, const GLchar * name)) \
-X(void, glGetUniformSubroutineuiv, (GLenum shadertype, GLint location, GLuint * params)) \
-X(void, glGetUniformdv, (GLuint program, GLint location, GLdouble * params)) \
-X(void, glPatchParameterfv, (GLenum pname, const GLfloat * values)) \
-X(void, glUniform1d, (GLint location, GLdouble x)) \
-X(void, glUniform1dv, (GLint location, GLsizei count, const GLdouble * value)) \
-X(void, glUniform2d, (GLint location, GLdouble x, GLdouble y)) \
-X(void, glUniform2dv, (GLint location, GLsizei count, const GLdouble * value)) \
-X(void, glUniform3d, (GLint location, GLdouble x, GLdouble y, GLdouble z)) \
-X(void, glUniform3dv, (GLint location, GLsizei count, const GLdouble * value)) \
-X(void, glUniform4d, (GLint location, GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
-X(void, glUniform4dv, (GLint location, GLsizei count, const GLdouble * value)) \
-X(void, glUniformMatrix2dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
-X(void, glUniformMatrix2x3dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
-X(void, glUniformMatrix2x4dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
-X(void, glUniformMatrix3dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
-X(void, glUniformMatrix3x2dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
-X(void, glUniformMatrix3x4dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
-X(void, glUniformMatrix4dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
-X(void, glUniformMatrix4x2dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
-X(void, glUniformMatrix4x3dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
-X(void, glUniformSubroutinesuiv, (GLenum shadertype, GLsizei count, const GLuint * indices)) \
-VE() \
-V(4_1) \
-X(void, glDepthRangeArrayv, (GLuint first, GLsizei count, const GLdouble * v)) \
-X(void, glDepthRangeIndexed, (GLuint index, GLdouble n, GLdouble f)) \
-X(void, glGetDoublei_v, (GLenum target, GLuint index, GLdouble * data)) \
-X(void, glGetFloati_v, (GLenum target, GLuint index, GLfloat * data)) \
-X(void, glGetVertexAttribLdv, (GLuint index, GLenum pname, GLdouble * params)) \
-X(void, glProgramUniform1d, (GLuint program, GLint location, GLdouble v0)) \
-X(void, glProgramUniform1dv, (GLuint program, GLint location, GLsizei count, const GLdouble * value)) \
-X(void, glProgramUniform2d, (GLuint program, GLint location, GLdouble v0, GLdouble v1)) \
-X(void, glProgramUniform2dv, (GLuint program, GLint location, GLsizei count, const GLdouble * value)) \
-X(void, glProgramUniform3d, (GLuint program, GLint location, GLdouble v0, GLdouble v1, GLdouble v2)) \
-X(void, glProgramUniform3dv, (GLuint program, GLint location, GLsizei count, const GLdouble * value)) \
-X(void, glProgramUniform4d, (GLuint program, GLint location, GLdouble v0, GLdouble v1, GLdouble v2, GLdouble v3)) \
-X(void, glProgramUniform4dv, (GLuint program, GLint location, GLsizei count, const GLdouble * value)) \
-X(void, glProgramUniformMatrix2dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
-X(void, glProgramUniformMatrix2x3dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
-X(void, glProgramUniformMatrix2x4dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
-X(void, glProgramUniformMatrix3dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
-X(void, glProgramUniformMatrix3x2dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
-X(void, glProgramUniformMatrix3x4dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
-X(void, glProgramUniformMatrix4dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
-X(void, glProgramUniformMatrix4x2dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
-X(void, glProgramUniformMatrix4x3dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
-X(void, glScissorArrayv, (GLuint first, GLsizei count, const GLint * v)) \
-X(void, glScissorIndexed, (GLuint index, GLint left, GLint bottom, GLsizei width, GLsizei height)) \
-X(void, glScissorIndexedv, (GLuint index, const GLint * v)) \
-X(void, glVertexAttribL1d, (GLuint index, GLdouble x)) \
-X(void, glVertexAttribL1dv, (GLuint index, const GLdouble * v)) \
-X(void, glVertexAttribL2d, (GLuint index, GLdouble x, GLdouble y)) \
-X(void, glVertexAttribL2dv, (GLuint index, const GLdouble * v)) \
-X(void, glVertexAttribL3d, (GLuint index, GLdouble x, GLdouble y, GLdouble z)) \
-X(void, glVertexAttribL3dv, (GLuint index, const GLdouble * v)) \
-X(void, glVertexAttribL4d, (GLuint index, GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
-X(void, glVertexAttribL4dv, (GLuint index, const GLdouble * v)) \
-X(void, glVertexAttribLPointer, (GLuint index, GLint size, GLenum type, GLsizei stride, const void * pointer)) \
-X(void, glViewportArrayv, (GLuint first, GLsizei count, const GLfloat * v)) \
-X(void, glViewportIndexedf, (GLuint index, GLfloat x, GLfloat y, GLfloat w, GLfloat h)) \
-X(void, glViewportIndexedfv, (GLuint index, const GLfloat * v)) \
-VE() \
-V(4_2) \
-X(void, glDrawArraysInstancedBaseInstance, (GLenum mode, GLint first, GLsizei count, GLsizei instancecount, GLuint baseinstance)) \
-X(void, glDrawElementsInstancedBaseInstance, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLsizei instancecount, GLuint baseinstance)) \
-X(void, glDrawElementsInstancedBaseVertexBaseInstance, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLsizei instancecount, GLint basevertex, GLuint baseinstance)) \
-X(void, glDrawTransformFeedbackInstanced, (GLenum mode, GLuint id, GLsizei instancecount)) \
-X(void, glDrawTransformFeedbackStreamInstanced, (GLenum mode, GLuint id, GLuint stream, GLsizei instancecount)) \
-X(void, glGetActiveAtomicCounterBufferiv, (GLuint program, GLuint bufferIndex, GLenum pname, GLint * params)) \
-X(void, glTexStorage1D, (GLenum target, GLsizei levels, GLenum internalformat, GLsizei width)) \
-VE() \
-V(4_3) \
-X(void, glClearBufferData, (GLenum target, GLenum internalformat, GLenum format, GLenum type, const void * data)) \
-X(void, glClearBufferSubData, (GLenum target, GLenum internalformat, GLintptr offset, GLsizeiptr size, GLenum format, GLenum type, const void * data)) \
-X(void, glGetInternalformati64v, (GLenum target, GLenum internalformat, GLenum pname, GLsizei count, GLint64 * params)) \
-X(GLint, glGetProgramResourceLocationIndex, (GLuint program, GLenum programInterface, const GLchar * name)) \
-X(void, glInvalidateBufferData, (GLuint buffer)) \
-X(void, glInvalidateBufferSubData, (GLuint buffer, GLintptr offset, GLsizeiptr length)) \
-X(void, glInvalidateTexImage, (GLuint texture, GLint level)) \
-X(void, glInvalidateTexSubImage, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth)) \
-X(void, glMultiDrawArraysIndirect, (GLenum mode, const void * indirect, GLsizei drawcount, GLsizei stride)) \
-X(void, glMultiDrawElementsIndirect, (GLenum mode, GLenum type, const void * indirect, GLsizei drawcount, GLsizei stride)) \
-X(void, glShaderStorageBlockBinding, (GLuint program, GLuint storageBlockIndex, GLuint storageBlockBinding)) \
-X(void, glTextureView, (GLuint texture, GLenum target, GLuint origtexture, GLenum internalformat, GLuint minlevel, GLuint numlevels, GLuint minlayer, GLuint numlayers)) \
-X(void, glVertexAttribLFormat, (GLuint attribindex, GLint size, GLenum type, GLuint relativeoffset)) \
-VE() \
-V(4_4) \
-X(void, glBindBuffersBase, (GLenum target, GLuint first, GLsizei count, const GLuint * buffers)) \
-X(void, glBindBuffersRange, (GLenum target, GLuint first, GLsizei count, const GLuint * buffers, const GLintptr * offsets, const GLsizeiptr * sizes)) \
-X(void, glBindImageTextures, (GLuint first, GLsizei count, const GLuint * textures)) \
-X(void, glBindSamplers, (GLuint first, GLsizei count, const GLuint * samplers)) \
-X(void, glBindTextures, (GLuint first, GLsizei count, const GLuint * textures)) \
-X(void, glBindVertexBuffers, (GLuint first, GLsizei count, const GLuint * buffers, const GLintptr * offsets, const GLsizei * strides)) \
-X(void, glBufferStorage, (GLenum target, GLsizeiptr size, const void * data, GLbitfield flags)) \
-X(void, glClearTexImage, (GLuint texture, GLint level, GLenum format, GLenum type, const void * data)) \
-X(void, glClearTexSubImage, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, const void * data)) \
-VE() \
-V(4_5) \
-X(void, glBindTextureUnit, (GLuint unit, GLuint texture)) \
-X(void, glBlitNamedFramebuffer, (GLuint readFramebuffer, GLuint drawFramebuffer, GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter)) \
-X(GLenum, glCheckNamedFramebufferStatus, (GLuint framebuffer, GLenum target)) \
-X(void, glClearNamedBufferData, (GLuint buffer, GLenum internalformat, GLenum format, GLenum type, const void * data)) \
-X(void, glClearNamedBufferSubData, (GLuint buffer, GLenum internalformat, GLintptr offset, GLsizeiptr size, GLenum format, GLenum type, const void * data)) \
-X(void, glClearNamedFramebufferfi, (GLuint framebuffer, GLenum buffer, GLint drawbuffer, GLfloat depth, GLint stencil)) \
-X(void, glClearNamedFramebufferfv, (GLuint framebuffer, GLenum buffer, GLint drawbuffer, const GLfloat * value)) \
-X(void, glClearNamedFramebufferiv, (GLuint framebuffer, GLenum buffer, GLint drawbuffer, const GLint * value)) \
-X(void, glClearNamedFramebufferuiv, (GLuint framebuffer, GLenum buffer, GLint drawbuffer, const GLuint * value)) \
-X(void, glClipControl, (GLenum origin, GLenum depth)) \
-X(void, glCompressedTextureSubImage1D, (GLuint texture, GLint level, GLint xoffset, GLsizei width, GLenum format, GLsizei imageSize, const void * data)) \
-X(void, glCompressedTextureSubImage2D, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLsizei imageSize, const void * data)) \
-X(void, glCompressedTextureSubImage3D, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLsizei imageSize, const void * data)) \
-X(void, glCopyNamedBufferSubData, (GLuint readBuffer, GLuint writeBuffer, GLintptr readOffset, GLintptr writeOffset, GLsizeiptr size)) \
-X(void, glCopyTextureSubImage1D, (GLuint texture, GLint level, GLint xoffset, GLint x, GLint y, GLsizei width)) \
-X(void, glCopyTextureSubImage2D, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width, GLsizei height)) \
-X(void, glCopyTextureSubImage3D, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLint x, GLint y, GLsizei width, GLsizei height)) \
-X(void, glCreateBuffers, (GLsizei n, GLuint * buffers)) \
-X(void, glCreateFramebuffers, (GLsizei n, GLuint * framebuffers)) \
-X(void, glCreateProgramPipelines, (GLsizei n, GLuint * pipelines)) \
-X(void, glCreateQueries, (GLenum target, GLsizei n, GLuint * ids)) \
-X(void, glCreateRenderbuffers, (GLsizei n, GLuint * renderbuffers)) \
-X(void, glCreateSamplers, (GLsizei n, GLuint * samplers)) \
-X(void, glCreateTextures, (GLenum target, GLsizei n, GLuint * textures)) \
-X(void, glCreateTransformFeedbacks, (GLsizei n, GLuint * ids)) \
-X(void, glCreateVertexArrays, (GLsizei n, GLuint * arrays)) \
-X(void, glDisableVertexArrayAttrib, (GLuint vaobj, GLuint index)) \
-X(void, glEnableVertexArrayAttrib, (GLuint vaobj, GLuint index)) \
-X(void, glFlushMappedNamedBufferRange, (GLuint buffer, GLintptr offset, GLsizeiptr length)) \
-X(void, glGenerateTextureMipmap, (GLuint texture)) \
-X(void, glGetCompressedTextureImage, (GLuint texture, GLint level, GLsizei bufSize, void * pixels)) \
-X(void, glGetCompressedTextureSubImage, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLsizei bufSize, void * pixels)) \
-X(void, glGetNamedBufferParameteri64v, (GLuint buffer, GLenum pname, GLint64 * params)) \
-X(void, glGetNamedBufferParameteriv, (GLuint buffer, GLenum pname, GLint * params)) \
-X(void, glGetNamedBufferPointerv, (GLuint buffer, GLenum pname, void ** params)) \
-X(void, glGetNamedBufferSubData, (GLuint buffer, GLintptr offset, GLsizeiptr size, void * data)) \
-X(void, glGetNamedFramebufferAttachmentParameteriv, (GLuint framebuffer, GLenum attachment, GLenum pname, GLint * params)) \
-X(void, glGetNamedFramebufferParameteriv, (GLuint framebuffer, GLenum pname, GLint * param)) \
-X(void, glGetNamedRenderbufferParameteriv, (GLuint renderbuffer, GLenum pname, GLint * params)) \
-X(void, glGetQueryBufferObjecti64v, (GLuint id, GLuint buffer, GLenum pname, GLintptr offset)) \
-X(void, glGetQueryBufferObjectiv, (GLuint id, GLuint buffer, GLenum pname, GLintptr offset)) \
-X(void, glGetQueryBufferObjectui64v, (GLuint id, GLuint buffer, GLenum pname, GLintptr offset)) \
-X(void, glGetQueryBufferObjectuiv, (GLuint id, GLuint buffer, GLenum pname, GLintptr offset)) \
-X(void, glGetTextureImage, (GLuint texture, GLint level, GLenum format, GLenum type, GLsizei bufSize, void * pixels)) \
-X(void, glGetTextureLevelParameterfv, (GLuint texture, GLint level, GLenum pname, GLfloat * params)) \
-X(void, glGetTextureLevelParameteriv, (GLuint texture, GLint level, GLenum pname, GLint * params)) \
-X(void, glGetTextureParameterIiv, (GLuint texture, GLenum pname, GLint * params)) \
-X(void, glGetTextureParameterIuiv, (GLuint texture, GLenum pname, GLuint * params)) \
-X(void, glGetTextureParameterfv, (GLuint texture, GLenum pname, GLfloat * params)) \
-X(void, glGetTextureParameteriv, (GLuint texture, GLenum pname, GLint * params)) \
-X(void, glGetTextureSubImage, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, GLsizei bufSize, void * pixels)) \
-X(void, glGetTransformFeedbacki64_v, (GLuint xfb, GLenum pname, GLuint index, GLint64 * param)) \
-X(void, glGetTransformFeedbacki_v, (GLuint xfb, GLenum pname, GLuint index, GLint * param)) \
-X(void, glGetTransformFeedbackiv, (GLuint xfb, GLenum pname, GLint * param)) \
-X(void, glGetVertexArrayIndexed64iv, (GLuint vaobj, GLuint index, GLenum pname, GLint64 * param)) \
-X(void, glGetVertexArrayIndexediv, (GLuint vaobj, GLuint index, GLenum pname, GLint * param)) \
-X(void, glGetVertexArrayiv, (GLuint vaobj, GLenum pname, GLint * param)) \
-X(void, glGetnColorTable, (GLenum target, GLenum format, GLenum type, GLsizei bufSize, void * table)) \
-X(void, glGetnCompressedTexImage, (GLenum target, GLint lod, GLsizei bufSize, void * pixels)) \
-X(void, glGetnConvolutionFilter, (GLenum target, GLenum format, GLenum type, GLsizei bufSize, void * image)) \
-X(void, glGetnHistogram, (GLenum target, GLboolean reset, GLenum format, GLenum type, GLsizei bufSize, void * values)) \
-X(void, glGetnMapdv, (GLenum target, GLenum query, GLsizei bufSize, GLdouble * v)) \
-X(void, glGetnMapfv, (GLenum target, GLenum query, GLsizei bufSize, GLfloat * v)) \
-X(void, glGetnMapiv, (GLenum target, GLenum query, GLsizei bufSize, GLint * v)) \
-X(void, glGetnMinmax, (GLenum target, GLboolean reset, GLenum format, GLenum type, GLsizei bufSize, void * values)) \
-X(void, glGetnPixelMapfv, (GLenum map, GLsizei bufSize, GLfloat * values)) \
-X(void, glGetnPixelMapuiv, (GLenum map, GLsizei bufSize, GLuint * values)) \
-X(void, glGetnPixelMapusv, (GLenum map, GLsizei bufSize, GLushort * values)) \
-X(void, glGetnPolygonStipple, (GLsizei bufSize, GLubyte * pattern)) \
-X(void, glGetnSeparableFilter, (GLenum target, GLenum format, GLenum type, GLsizei rowBufSize, void * row, GLsizei columnBufSize, void * column, void * span)) \
-X(void, glGetnTexImage, (GLenum target, GLint level, GLenum format, GLenum type, GLsizei bufSize, void * pixels)) \
-X(void, glGetnUniformdv, (GLuint program, GLint location, GLsizei bufSize, GLdouble * params)) \
-X(void, glInvalidateNamedFramebufferData, (GLuint framebuffer, GLsizei numAttachments, const GLenum * attachments)) \
-X(void, glInvalidateNamedFramebufferSubData, (GLuint framebuffer, GLsizei numAttachments, const GLenum * attachments, GLint x, GLint y, GLsizei width, GLsizei height)) \
-X(void *, glMapNamedBuffer, (GLuint buffer, GLenum access)) \
-X(void *, glMapNamedBufferRange, (GLuint buffer, GLintptr offset, GLsizeiptr length, GLbitfield access)) \
-X(void, glNamedBufferData, (GLuint buffer, GLsizeiptr size, const void * data, GLenum usage)) \
-X(void, glNamedBufferStorage, (GLuint buffer, GLsizeiptr size, const void * data, GLbitfield flags)) \
-X(void, glNamedBufferSubData, (GLuint buffer, GLintptr offset, GLsizeiptr size, const void * data)) \
-X(void, glNamedFramebufferDrawBuffer, (GLuint framebuffer, GLenum buf)) \
-X(void, glNamedFramebufferDrawBuffers, (GLuint framebuffer, GLsizei n, const GLenum * bufs)) \
-X(void, glNamedFramebufferParameteri, (GLuint framebuffer, GLenum pname, GLint param)) \
-X(void, glNamedFramebufferReadBuffer, (GLuint framebuffer, GLenum src)) \
-X(void, glNamedFramebufferRenderbuffer, (GLuint framebuffer, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer)) \
-X(void, glNamedFramebufferTexture, (GLuint framebuffer, GLenum attachment, GLuint texture, GLint level)) \
-X(void, glNamedFramebufferTextureLayer, (GLuint framebuffer, GLenum attachment, GLuint texture, GLint level, GLint layer)) \
-X(void, glNamedRenderbufferStorage, (GLuint renderbuffer, GLenum internalformat, GLsizei width, GLsizei height)) \
-X(void, glNamedRenderbufferStorageMultisample, (GLuint renderbuffer, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height)) \
-X(void, glTextureBarrier, ()) \
-X(void, glTextureBuffer, (GLuint texture, GLenum internalformat, GLuint buffer)) \
-X(void, glTextureBufferRange, (GLuint texture, GLenum internalformat, GLuint buffer, GLintptr offset, GLsizeiptr size)) \
-X(void, glTextureParameterIiv, (GLuint texture, GLenum pname, const GLint * params)) \
-X(void, glTextureParameterIuiv, (GLuint texture, GLenum pname, const GLuint * params)) \
-X(void, glTextureParameterf, (GLuint texture, GLenum pname, GLfloat param)) \
-X(void, glTextureParameterfv, (GLuint texture, GLenum pname, const GLfloat * param)) \
-X(void, glTextureParameteri, (GLuint texture, GLenum pname, GLint param)) \
-X(void, glTextureParameteriv, (GLuint texture, GLenum pname, const GLint * param)) \
-X(void, glTextureStorage1D, (GLuint texture, GLsizei levels, GLenum internalformat, GLsizei width)) \
-X(void, glTextureStorage2D, (GLuint texture, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height)) \
-X(void, glTextureStorage2DMultisample, (GLuint texture, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLboolean fixedsamplelocations)) \
-X(void, glTextureStorage3D, (GLuint texture, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth)) \
-X(void, glTextureStorage3DMultisample, (GLuint texture, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLboolean fixedsamplelocations)) \
-X(void, glTextureSubImage1D, (GLuint texture, GLint level, GLint xoffset, GLsizei width, GLenum format, GLenum type, const void * pixels)) \
-X(void, glTextureSubImage2D, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void * pixels)) \
-X(void, glTextureSubImage3D, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, const void * pixels)) \
-X(void, glTransformFeedbackBufferBase, (GLuint xfb, GLuint index, GLuint buffer)) \
-X(void, glTransformFeedbackBufferRange, (GLuint xfb, GLuint index, GLuint buffer, GLintptr offset, GLsizeiptr size)) \
-X(GLboolean, glUnmapNamedBuffer, (GLuint buffer)) \
-X(void, glVertexArrayAttribBinding, (GLuint vaobj, GLuint attribindex, GLuint bindingindex)) \
-X(void, glVertexArrayAttribFormat, (GLuint vaobj, GLuint attribindex, GLint size, GLenum type, GLboolean normalized, GLuint relativeoffset)) \
-X(void, glVertexArrayAttribIFormat, (GLuint vaobj, GLuint attribindex, GLint size, GLenum type, GLuint relativeoffset)) \
-X(void, glVertexArrayAttribLFormat, (GLuint vaobj, GLuint attribindex, GLint size, GLenum type, GLuint relativeoffset)) \
-X(void, glVertexArrayBindingDivisor, (GLuint vaobj, GLuint bindingindex, GLuint divisor)) \
-X(void, glVertexArrayElementBuffer, (GLuint vaobj, GLuint buffer)) \
-X(void, glVertexArrayVertexBuffer, (GLuint vaobj, GLuint bindingindex, GLuint buffer, GLintptr offset, GLsizei stride)) \
-X(void, glVertexArrayVertexBuffers, (GLuint vaobj, GLuint first, GLsizei count, const GLuint * buffers, const GLintptr * offsets, const GLsizei * strides)) \
-VE() \
-V(4_6) \
-X(void, glMultiDrawArraysIndirectCount, (GLenum mode, const void * indirect, GLintptr drawcount, GLsizei maxdrawcount, GLsizei stride)) \
-X(void, glMultiDrawElementsIndirectCount, (GLenum mode, GLenum type, const void * indirect, GLintptr drawcount, GLsizei maxdrawcount, GLsizei stride)) \
-X(void, glPolygonOffsetClamp, (GLfloat factor, GLfloat units, GLfloat clamp)) \
-X(void, glSpecializeShader, (GLuint shader, const GLchar * pEntryPoint, GLuint numSpecializationConstants, const GLuint * pConstantIndex, const GLuint * pConstantValue)) \
-VE() \
+VER_START(1_0) \
+X(void, Accum, (GLenum op, GLfloat value)) \
+X(void, AlphaFunc, (GLenum func, GLfloat ref)) \
+X(void, AlphaFuncx, (GLenum func, GLfixed ref)) \
+X(void, Begin, (GLenum mode)) \
+X(void, Bitmap, (GLsizei width, GLsizei height, GLfloat xorig, GLfloat yorig, GLfloat xmove, GLfloat ymove, const GLubyte * bitmap)) \
+X(void, CallList, (GLuint list)) \
+X(void, CallLists, (GLsizei n, GLenum type, const void * lists)) \
+X(void, ClearAccum, (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha)) \
+X(void, ClearColorx, (GLfixed red, GLfixed green, GLfixed blue, GLfixed alpha)) \
+X(void, ClearDepth, (GLdouble depth)) \
+X(void, ClearDepthx, (GLfixed depth)) \
+X(void, ClearIndex, (GLfloat c)) \
+X(void, ClientActiveTexture, (GLenum texture)) \
+X(void, ClipPlane, (GLenum plane, const GLdouble * equation)) \
+X(void, ClipPlanef, (GLenum p, const GLfloat * eqn)) \
+X(void, ClipPlanex, (GLenum plane, const GLfixed * equation)) \
+X(void, Color3b, (GLbyte red, GLbyte green, GLbyte blue)) \
+X(void, Color3bv, (const GLbyte * v)) \
+X(void, Color3d, (GLdouble red, GLdouble green, GLdouble blue)) \
+X(void, Color3dv, (const GLdouble * v)) \
+X(void, Color3f, (GLfloat red, GLfloat green, GLfloat blue)) \
+X(void, Color3fv, (const GLfloat * v)) \
+X(void, Color3i, (GLint red, GLint green, GLint blue)) \
+X(void, Color3iv, (const GLint * v)) \
+X(void, Color3s, (GLshort red, GLshort green, GLshort blue)) \
+X(void, Color3sv, (const GLshort * v)) \
+X(void, Color3ub, (GLubyte red, GLubyte green, GLubyte blue)) \
+X(void, Color3ubv, (const GLubyte * v)) \
+X(void, Color3ui, (GLuint red, GLuint green, GLuint blue)) \
+X(void, Color3uiv, (const GLuint * v)) \
+X(void, Color3us, (GLushort red, GLushort green, GLushort blue)) \
+X(void, Color3usv, (const GLushort * v)) \
+X(void, Color4b, (GLbyte red, GLbyte green, GLbyte blue, GLbyte alpha)) \
+X(void, Color4bv, (const GLbyte * v)) \
+X(void, Color4d, (GLdouble red, GLdouble green, GLdouble blue, GLdouble alpha)) \
+X(void, Color4dv, (const GLdouble * v)) \
+X(void, Color4f, (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha)) \
+X(void, Color4fv, (const GLfloat * v)) \
+X(void, Color4i, (GLint red, GLint green, GLint blue, GLint alpha)) \
+X(void, Color4iv, (const GLint * v)) \
+X(void, Color4s, (GLshort red, GLshort green, GLshort blue, GLshort alpha)) \
+X(void, Color4sv, (const GLshort * v)) \
+X(void, Color4ub, (GLubyte red, GLubyte green, GLubyte blue, GLubyte alpha)) \
+X(void, Color4ubv, (const GLubyte * v)) \
+X(void, Color4ui, (GLuint red, GLuint green, GLuint blue, GLuint alpha)) \
+X(void, Color4uiv, (const GLuint * v)) \
+X(void, Color4us, (GLushort red, GLushort green, GLushort blue, GLushort alpha)) \
+X(void, Color4usv, (const GLushort * v)) \
+X(void, Color4x, (GLfixed red, GLfixed green, GLfixed blue, GLfixed alpha)) \
+X(void, ColorMaterial, (GLenum face, GLenum mode)) \
+X(void, ColorPointer, (GLint size, GLenum type, GLsizei stride, const void * pointer)) \
+X(void, CopyPixels, (GLint x, GLint y, GLsizei width, GLsizei height, GLenum type)) \
+X(void, DeleteLists, (GLuint list, GLsizei range)) \
+X(void, DepthRange, (GLdouble n, GLdouble f)) \
+X(void, DepthRangex, (GLfixed n, GLfixed f)) \
+X(void, DisableClientState, (GLenum array)) \
+X(void, DrawBuffer, (GLenum buf)) \
+X(void, DrawPixels, (GLsizei width, GLsizei height, GLenum format, GLenum type, const void * pixels)) \
+X(void, EdgeFlag, (GLboolean flag)) \
+X(void, EdgeFlagv, (const GLboolean * flag)) \
+X(void, EnableClientState, (GLenum array)) \
+X(void, End, ()) \
+X(void, EndList, ()) \
+X(void, EvalCoord1d, (GLdouble u)) \
+X(void, EvalCoord1dv, (const GLdouble * u)) \
+X(void, EvalCoord1f, (GLfloat u)) \
+X(void, EvalCoord1fv, (const GLfloat * u)) \
+X(void, EvalCoord2d, (GLdouble u, GLdouble v)) \
+X(void, EvalCoord2dv, (const GLdouble * u)) \
+X(void, EvalCoord2f, (GLfloat u, GLfloat v)) \
+X(void, EvalCoord2fv, (const GLfloat * u)) \
+X(void, EvalMesh1, (GLenum mode, GLint i1, GLint i2)) \
+X(void, EvalMesh2, (GLenum mode, GLint i1, GLint i2, GLint j1, GLint j2)) \
+X(void, EvalPoint1, (GLint i)) \
+X(void, EvalPoint2, (GLint i, GLint j)) \
+X(void, FeedbackBuffer, (GLsizei size, GLenum type, GLfloat * buffer)) \
+X(void, Fogf, (GLenum pname, GLfloat param)) \
+X(void, Fogfv, (GLenum pname, const GLfloat * params)) \
+X(void, Fogi, (GLenum pname, GLint param)) \
+X(void, Fogiv, (GLenum pname, const GLint * params)) \
+X(void, Fogx, (GLenum pname, GLfixed param)) \
+X(void, Fogxv, (GLenum pname, const GLfixed * param)) \
+X(void, Frustum, (GLdouble left, GLdouble right, GLdouble bottom, GLdouble top, GLdouble zNear, GLdouble zFar)) \
+X(void, Frustumf, (GLfloat l, GLfloat r, GLfloat b, GLfloat t, GLfloat n, GLfloat f)) \
+X(void, Frustumx, (GLfixed l, GLfixed r, GLfixed b, GLfixed t, GLfixed n, GLfixed f)) \
+X(GLuint, GenLists, (GLsizei range)) \
+X(void, GetClipPlane, (GLenum plane, GLdouble * equation)) \
+X(void, GetClipPlanef, (GLenum plane, GLfloat * equation)) \
+X(void, GetClipPlanex, (GLenum plane, GLfixed * equation)) \
+X(void, GetDoublev, (GLenum pname, GLdouble * data)) \
+X(void, GetFixedv, (GLenum pname, GLfixed * params)) \
+X(void, GetLightfv, (GLenum light, GLenum pname, GLfloat * params)) \
+X(void, GetLightiv, (GLenum light, GLenum pname, GLint * params)) \
+X(void, GetLightxv, (GLenum light, GLenum pname, GLfixed * params)) \
+X(void, GetMapdv, (GLenum target, GLenum query, GLdouble * v)) \
+X(void, GetMapfv, (GLenum target, GLenum query, GLfloat * v)) \
+X(void, GetMapiv, (GLenum target, GLenum query, GLint * v)) \
+X(void, GetMaterialfv, (GLenum face, GLenum pname, GLfloat * params)) \
+X(void, GetMaterialiv, (GLenum face, GLenum pname, GLint * params)) \
+X(void, GetMaterialxv, (GLenum face, GLenum pname, GLfixed * params)) \
+X(void, GetPixelMapfv, (GLenum map, GLfloat * values)) \
+X(void, GetPixelMapuiv, (GLenum map, GLuint * values)) \
+X(void, GetPixelMapusv, (GLenum map, GLushort * values)) \
+X(void, GetPolygonStipple, (GLubyte * mask)) \
+X(void, GetTexEnvfv, (GLenum target, GLenum pname, GLfloat * params)) \
+X(void, GetTexEnviv, (GLenum target, GLenum pname, GLint * params)) \
+X(void, GetTexEnvxv, (GLenum target, GLenum pname, GLfixed * params)) \
+X(void, GetTexGendv, (GLenum coord, GLenum pname, GLdouble * params)) \
+X(void, GetTexGenfv, (GLenum coord, GLenum pname, GLfloat * params)) \
+X(void, GetTexGeniv, (GLenum coord, GLenum pname, GLint * params)) \
+X(void, GetTexImage, (GLenum target, GLint level, GLenum format, GLenum type, void * pixels)) \
+X(void, GetTexParameterxv, (GLenum target, GLenum pname, GLfixed * params)) \
+X(void, IndexMask, (GLuint mask)) \
+X(void, Indexd, (GLdouble c)) \
+X(void, Indexdv, (const GLdouble * c)) \
+X(void, Indexf, (GLfloat c)) \
+X(void, Indexfv, (const GLfloat * c)) \
+X(void, Indexi, (GLint c)) \
+X(void, Indexiv, (const GLint * c)) \
+X(void, Indexs, (GLshort c)) \
+X(void, Indexsv, (const GLshort * c)) \
+X(void, InitNames, ()) \
+X(GLboolean, IsList, (GLuint list)) \
+X(void, LightModelf, (GLenum pname, GLfloat param)) \
+X(void, LightModelfv, (GLenum pname, const GLfloat * params)) \
+X(void, LightModeli, (GLenum pname, GLint param)) \
+X(void, LightModeliv, (GLenum pname, const GLint * params)) \
+X(void, LightModelx, (GLenum pname, GLfixed param)) \
+X(void, LightModelxv, (GLenum pname, const GLfixed * param)) \
+X(void, Lightf, (GLenum light, GLenum pname, GLfloat param)) \
+X(void, Lightfv, (GLenum light, GLenum pname, const GLfloat * params)) \
+X(void, Lighti, (GLenum light, GLenum pname, GLint param)) \
+X(void, Lightiv, (GLenum light, GLenum pname, const GLint * params)) \
+X(void, Lightx, (GLenum light, GLenum pname, GLfixed param)) \
+X(void, Lightxv, (GLenum light, GLenum pname, const GLfixed * params)) \
+X(void, LineStipple, (GLint factor, GLushort pattern)) \
+X(void, LineWidthx, (GLfixed width)) \
+X(void, ListBase, (GLuint base)) \
+X(void, LoadIdentity, ()) \
+X(void, LoadMatrixd, (const GLdouble * m)) \
+X(void, LoadMatrixf, (const GLfloat * m)) \
+X(void, LoadMatrixx, (const GLfixed * m)) \
+X(void, LoadName, (GLuint name)) \
+X(void, LogicOp, (GLenum opcode)) \
+X(void, Map1d, (GLenum target, GLdouble u1, GLdouble u2, GLint stride, GLint order, const GLdouble * points)) \
+X(void, Map1f, (GLenum target, GLfloat u1, GLfloat u2, GLint stride, GLint order, const GLfloat * points)) \
+X(void, Map2d, (GLenum target, GLdouble u1, GLdouble u2, GLint ustride, GLint uorder, GLdouble v1, GLdouble v2, GLint vstride, GLint vorder, const GLdouble * points)) \
+X(void, Map2f, (GLenum target, GLfloat u1, GLfloat u2, GLint ustride, GLint uorder, GLfloat v1, GLfloat v2, GLint vstride, GLint vorder, const GLfloat * points)) \
+X(void, MapGrid1d, (GLint un, GLdouble u1, GLdouble u2)) \
+X(void, MapGrid1f, (GLint un, GLfloat u1, GLfloat u2)) \
+X(void, MapGrid2d, (GLint un, GLdouble u1, GLdouble u2, GLint vn, GLdouble v1, GLdouble v2)) \
+X(void, MapGrid2f, (GLint un, GLfloat u1, GLfloat u2, GLint vn, GLfloat v1, GLfloat v2)) \
+X(void, Materialf, (GLenum face, GLenum pname, GLfloat param)) \
+X(void, Materialfv, (GLenum face, GLenum pname, const GLfloat * params)) \
+X(void, Materiali, (GLenum face, GLenum pname, GLint param)) \
+X(void, Materialiv, (GLenum face, GLenum pname, const GLint * params)) \
+X(void, Materialx, (GLenum face, GLenum pname, GLfixed param)) \
+X(void, Materialxv, (GLenum face, GLenum pname, const GLfixed * param)) \
+X(void, MatrixMode, (GLenum mode)) \
+X(void, MultMatrixd, (const GLdouble * m)) \
+X(void, MultMatrixf, (const GLfloat * m)) \
+X(void, MultMatrixx, (const GLfixed * m)) \
+X(void, MultiTexCoord4f, (GLenum target, GLfloat s, GLfloat t, GLfloat r, GLfloat q)) \
+X(void, MultiTexCoord4x, (GLenum texture, GLfixed s, GLfixed t, GLfixed r, GLfixed q)) \
+X(void, NewList, (GLuint list, GLenum mode)) \
+X(void, Normal3b, (GLbyte nx, GLbyte ny, GLbyte nz)) \
+X(void, Normal3bv, (const GLbyte * v)) \
+X(void, Normal3d, (GLdouble nx, GLdouble ny, GLdouble nz)) \
+X(void, Normal3dv, (const GLdouble * v)) \
+X(void, Normal3f, (GLfloat nx, GLfloat ny, GLfloat nz)) \
+X(void, Normal3fv, (const GLfloat * v)) \
+X(void, Normal3i, (GLint nx, GLint ny, GLint nz)) \
+X(void, Normal3iv, (const GLint * v)) \
+X(void, Normal3s, (GLshort nx, GLshort ny, GLshort nz)) \
+X(void, Normal3sv, (const GLshort * v)) \
+X(void, Normal3x, (GLfixed nx, GLfixed ny, GLfixed nz)) \
+X(void, NormalPointer, (GLenum type, GLsizei stride, const void * pointer)) \
+X(void, Ortho, (GLdouble left, GLdouble right, GLdouble bottom, GLdouble top, GLdouble zNear, GLdouble zFar)) \
+X(void, Orthof, (GLfloat l, GLfloat r, GLfloat b, GLfloat t, GLfloat n, GLfloat f)) \
+X(void, Orthox, (GLfixed l, GLfixed r, GLfixed b, GLfixed t, GLfixed n, GLfixed f)) \
+X(void, PassThrough, (GLfloat token)) \
+X(void, PixelMapfv, (GLenum map, GLsizei mapsize, const GLfloat * values)) \
+X(void, PixelMapuiv, (GLenum map, GLsizei mapsize, const GLuint * values)) \
+X(void, PixelMapusv, (GLenum map, GLsizei mapsize, const GLushort * values)) \
+X(void, PixelStoref, (GLenum pname, GLfloat param)) \
+X(void, PixelTransferf, (GLenum pname, GLfloat param)) \
+X(void, PixelTransferi, (GLenum pname, GLint param)) \
+X(void, PixelZoom, (GLfloat xfactor, GLfloat yfactor)) \
+X(void, PointParameterf, (GLenum pname, GLfloat param)) \
+X(void, PointParameterfv, (GLenum pname, const GLfloat * params)) \
+X(void, PointParameterx, (GLenum pname, GLfixed param)) \
+X(void, PointParameterxv, (GLenum pname, const GLfixed * params)) \
+X(void, PointSize, (GLfloat size)) \
+X(void, PointSizex, (GLfixed size)) \
+X(void, PolygonMode, (GLenum face, GLenum mode)) \
+X(void, PolygonOffsetx, (GLfixed factor, GLfixed units)) \
+X(void, PolygonStipple, (const GLubyte * mask)) \
+X(void, PopAttrib, ()) \
+X(void, PopMatrix, ()) \
+X(void, PopName, ()) \
+X(void, PushAttrib, (GLbitfield mask)) \
+X(void, PushMatrix, ()) \
+X(void, PushName, (GLuint name)) \
+X(void, RasterPos2d, (GLdouble x, GLdouble y)) \
+X(void, RasterPos2dv, (const GLdouble * v)) \
+X(void, RasterPos2f, (GLfloat x, GLfloat y)) \
+X(void, RasterPos2fv, (const GLfloat * v)) \
+X(void, RasterPos2i, (GLint x, GLint y)) \
+X(void, RasterPos2iv, (const GLint * v)) \
+X(void, RasterPos2s, (GLshort x, GLshort y)) \
+X(void, RasterPos2sv, (const GLshort * v)) \
+X(void, RasterPos3d, (GLdouble x, GLdouble y, GLdouble z)) \
+X(void, RasterPos3dv, (const GLdouble * v)) \
+X(void, RasterPos3f, (GLfloat x, GLfloat y, GLfloat z)) \
+X(void, RasterPos3fv, (const GLfloat * v)) \
+X(void, RasterPos3i, (GLint x, GLint y, GLint z)) \
+X(void, RasterPos3iv, (const GLint * v)) \
+X(void, RasterPos3s, (GLshort x, GLshort y, GLshort z)) \
+X(void, RasterPos3sv, (const GLshort * v)) \
+X(void, RasterPos4d, (GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
+X(void, RasterPos4dv, (const GLdouble * v)) \
+X(void, RasterPos4f, (GLfloat x, GLfloat y, GLfloat z, GLfloat w)) \
+X(void, RasterPos4fv, (const GLfloat * v)) \
+X(void, RasterPos4i, (GLint x, GLint y, GLint z, GLint w)) \
+X(void, RasterPos4iv, (const GLint * v)) \
+X(void, RasterPos4s, (GLshort x, GLshort y, GLshort z, GLshort w)) \
+X(void, RasterPos4sv, (const GLshort * v)) \
+X(void, Rectd, (GLdouble x1, GLdouble y1, GLdouble x2, GLdouble y2)) \
+X(void, Rectdv, (const GLdouble * v1, const GLdouble * v2)) \
+X(void, Rectf, (GLfloat x1, GLfloat y1, GLfloat x2, GLfloat y2)) \
+X(void, Rectfv, (const GLfloat * v1, const GLfloat * v2)) \
+X(void, Recti, (GLint x1, GLint y1, GLint x2, GLint y2)) \
+X(void, Rectiv, (const GLint * v1, const GLint * v2)) \
+X(void, Rects, (GLshort x1, GLshort y1, GLshort x2, GLshort y2)) \
+X(void, Rectsv, (const GLshort * v1, const GLshort * v2)) \
+X(GLint, RenderMode, (GLenum mode)) \
+X(void, Rotated, (GLdouble angle, GLdouble x, GLdouble y, GLdouble z)) \
+X(void, Rotatef, (GLfloat angle, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, Rotatex, (GLfixed angle, GLfixed x, GLfixed y, GLfixed z)) \
+X(void, SampleCoveragex, (GLclampx value, GLboolean invert)) \
+X(void, Scaled, (GLdouble x, GLdouble y, GLdouble z)) \
+X(void, Scalef, (GLfloat x, GLfloat y, GLfloat z)) \
+X(void, Scalex, (GLfixed x, GLfixed y, GLfixed z)) \
+X(void, SelectBuffer, (GLsizei size, GLuint * buffer)) \
+X(void, ShadeModel, (GLenum mode)) \
+X(void, TexCoord1d, (GLdouble s)) \
+X(void, TexCoord1dv, (const GLdouble * v)) \
+X(void, TexCoord1f, (GLfloat s)) \
+X(void, TexCoord1fv, (const GLfloat * v)) \
+X(void, TexCoord1i, (GLint s)) \
+X(void, TexCoord1iv, (const GLint * v)) \
+X(void, TexCoord1s, (GLshort s)) \
+X(void, TexCoord1sv, (const GLshort * v)) \
+X(void, TexCoord2d, (GLdouble s, GLdouble t)) \
+X(void, TexCoord2dv, (const GLdouble * v)) \
+X(void, TexCoord2f, (GLfloat s, GLfloat t)) \
+X(void, TexCoord2fv, (const GLfloat * v)) \
+X(void, TexCoord2i, (GLint s, GLint t)) \
+X(void, TexCoord2iv, (const GLint * v)) \
+X(void, TexCoord2s, (GLshort s, GLshort t)) \
+X(void, TexCoord2sv, (const GLshort * v)) \
+X(void, TexCoord3d, (GLdouble s, GLdouble t, GLdouble r)) \
+X(void, TexCoord3dv, (const GLdouble * v)) \
+X(void, TexCoord3f, (GLfloat s, GLfloat t, GLfloat r)) \
+X(void, TexCoord3fv, (const GLfloat * v)) \
+X(void, TexCoord3i, (GLint s, GLint t, GLint r)) \
+X(void, TexCoord3iv, (const GLint * v)) \
+X(void, TexCoord3s, (GLshort s, GLshort t, GLshort r)) \
+X(void, TexCoord3sv, (const GLshort * v)) \
+X(void, TexCoord4d, (GLdouble s, GLdouble t, GLdouble r, GLdouble q)) \
+X(void, TexCoord4dv, (const GLdouble * v)) \
+X(void, TexCoord4f, (GLfloat s, GLfloat t, GLfloat r, GLfloat q)) \
+X(void, TexCoord4fv, (const GLfloat * v)) \
+X(void, TexCoord4i, (GLint s, GLint t, GLint r, GLint q)) \
+X(void, TexCoord4iv, (const GLint * v)) \
+X(void, TexCoord4s, (GLshort s, GLshort t, GLshort r, GLshort q)) \
+X(void, TexCoord4sv, (const GLshort * v)) \
+X(void, TexCoordPointer, (GLint size, GLenum type, GLsizei stride, const void * pointer)) \
+X(void, TexEnvf, (GLenum target, GLenum pname, GLfloat param)) \
+X(void, TexEnvfv, (GLenum target, GLenum pname, const GLfloat * params)) \
+X(void, TexEnvi, (GLenum target, GLenum pname, GLint param)) \
+X(void, TexEnviv, (GLenum target, GLenum pname, const GLint * params)) \
+X(void, TexEnvx, (GLenum target, GLenum pname, GLfixed param)) \
+X(void, TexEnvxv, (GLenum target, GLenum pname, const GLfixed * params)) \
+X(void, TexGend, (GLenum coord, GLenum pname, GLdouble param)) \
+X(void, TexGendv, (GLenum coord, GLenum pname, const GLdouble * params)) \
+X(void, TexGenf, (GLenum coord, GLenum pname, GLfloat param)) \
+X(void, TexGenfv, (GLenum coord, GLenum pname, const GLfloat * params)) \
+X(void, TexGeni, (GLenum coord, GLenum pname, GLint param)) \
+X(void, TexGeniv, (GLenum coord, GLenum pname, const GLint * params)) \
+X(void, TexImage1D, (GLenum target, GLint level, GLint internalformat, GLsizei width, GLint border, GLenum format, GLenum type, const void * pixels)) \
+X(void, TexParameterx, (GLenum target, GLenum pname, GLfixed param)) \
+X(void, TexParameterxv, (GLenum target, GLenum pname, const GLfixed * params)) \
+X(void, Translated, (GLdouble x, GLdouble y, GLdouble z)) \
+X(void, Translatef, (GLfloat x, GLfloat y, GLfloat z)) \
+X(void, Translatex, (GLfixed x, GLfixed y, GLfixed z)) \
+X(void, Vertex2d, (GLdouble x, GLdouble y)) \
+X(void, Vertex2dv, (const GLdouble * v)) \
+X(void, Vertex2f, (GLfloat x, GLfloat y)) \
+X(void, Vertex2fv, (const GLfloat * v)) \
+X(void, Vertex2i, (GLint x, GLint y)) \
+X(void, Vertex2iv, (const GLint * v)) \
+X(void, Vertex2s, (GLshort x, GLshort y)) \
+X(void, Vertex2sv, (const GLshort * v)) \
+X(void, Vertex3d, (GLdouble x, GLdouble y, GLdouble z)) \
+X(void, Vertex3dv, (const GLdouble * v)) \
+X(void, Vertex3f, (GLfloat x, GLfloat y, GLfloat z)) \
+X(void, Vertex3fv, (const GLfloat * v)) \
+X(void, Vertex3i, (GLint x, GLint y, GLint z)) \
+X(void, Vertex3iv, (const GLint * v)) \
+X(void, Vertex3s, (GLshort x, GLshort y, GLshort z)) \
+X(void, Vertex3sv, (const GLshort * v)) \
+X(void, Vertex4d, (GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
+X(void, Vertex4dv, (const GLdouble * v)) \
+X(void, Vertex4f, (GLfloat x, GLfloat y, GLfloat z, GLfloat w)) \
+X(void, Vertex4fv, (const GLfloat * v)) \
+X(void, Vertex4i, (GLint x, GLint y, GLint z, GLint w)) \
+X(void, Vertex4iv, (const GLint * v)) \
+X(void, Vertex4s, (GLshort x, GLshort y, GLshort z, GLshort w)) \
+X(void, Vertex4sv, (const GLshort * v)) \
+X(void, VertexPointer, (GLint size, GLenum type, GLsizei stride, const void * pointer)) \
+VER_END(1_0) \
+VER_START(1_1) \
+X(GLboolean, AreTexturesResident, (GLsizei n, const GLuint * textures, GLboolean * residences)) \
+X(void, ArrayElement, (GLint i)) \
+X(void, CopyTexImage1D, (GLenum target, GLint level, GLenum internalformat, GLint x, GLint y, GLsizei width, GLint border)) \
+X(void, CopyTexSubImage1D, (GLenum target, GLint level, GLint xoffset, GLint x, GLint y, GLsizei width)) \
+X(void, EdgeFlagPointer, (GLsizei stride, const void * pointer)) \
+X(void, IndexPointer, (GLenum type, GLsizei stride, const void * pointer)) \
+X(void, Indexub, (GLubyte c)) \
+X(void, Indexubv, (const GLubyte * c)) \
+X(void, InterleavedArrays, (GLenum format, GLsizei stride, const void * pointer)) \
+X(void, PopClientAttrib, ()) \
+X(void, PrioritizeTextures, (GLsizei n, const GLuint * textures, const GLfloat * priorities)) \
+X(void, PushClientAttrib, (GLbitfield mask)) \
+X(void, TexSubImage1D, (GLenum target, GLint level, GLint xoffset, GLsizei width, GLenum format, GLenum type, const void * pixels)) \
+VER_END(1_1) \
+VER_START(1_3) \
+X(void, CompressedTexImage1D, (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLint border, GLsizei imageSize, const void * data)) \
+X(void, CompressedTexSubImage1D, (GLenum target, GLint level, GLint xoffset, GLsizei width, GLenum format, GLsizei imageSize, const void * data)) \
+X(void, GetCompressedTexImage, (GLenum target, GLint level, void * img)) \
+X(void, LoadTransposeMatrixd, (const GLdouble * m)) \
+X(void, LoadTransposeMatrixf, (const GLfloat * m)) \
+X(void, MultTransposeMatrixd, (const GLdouble * m)) \
+X(void, MultTransposeMatrixf, (const GLfloat * m)) \
+X(void, MultiTexCoord1d, (GLenum target, GLdouble s)) \
+X(void, MultiTexCoord1dv, (GLenum target, const GLdouble * v)) \
+X(void, MultiTexCoord1f, (GLenum target, GLfloat s)) \
+X(void, MultiTexCoord1fv, (GLenum target, const GLfloat * v)) \
+X(void, MultiTexCoord1i, (GLenum target, GLint s)) \
+X(void, MultiTexCoord1iv, (GLenum target, const GLint * v)) \
+X(void, MultiTexCoord1s, (GLenum target, GLshort s)) \
+X(void, MultiTexCoord1sv, (GLenum target, const GLshort * v)) \
+X(void, MultiTexCoord2d, (GLenum target, GLdouble s, GLdouble t)) \
+X(void, MultiTexCoord2dv, (GLenum target, const GLdouble * v)) \
+X(void, MultiTexCoord2f, (GLenum target, GLfloat s, GLfloat t)) \
+X(void, MultiTexCoord2fv, (GLenum target, const GLfloat * v)) \
+X(void, MultiTexCoord2i, (GLenum target, GLint s, GLint t)) \
+X(void, MultiTexCoord2iv, (GLenum target, const GLint * v)) \
+X(void, MultiTexCoord2s, (GLenum target, GLshort s, GLshort t)) \
+X(void, MultiTexCoord2sv, (GLenum target, const GLshort * v)) \
+X(void, MultiTexCoord3d, (GLenum target, GLdouble s, GLdouble t, GLdouble r)) \
+X(void, MultiTexCoord3dv, (GLenum target, const GLdouble * v)) \
+X(void, MultiTexCoord3f, (GLenum target, GLfloat s, GLfloat t, GLfloat r)) \
+X(void, MultiTexCoord3fv, (GLenum target, const GLfloat * v)) \
+X(void, MultiTexCoord3i, (GLenum target, GLint s, GLint t, GLint r)) \
+X(void, MultiTexCoord3iv, (GLenum target, const GLint * v)) \
+X(void, MultiTexCoord3s, (GLenum target, GLshort s, GLshort t, GLshort r)) \
+X(void, MultiTexCoord3sv, (GLenum target, const GLshort * v)) \
+X(void, MultiTexCoord4d, (GLenum target, GLdouble s, GLdouble t, GLdouble r, GLdouble q)) \
+X(void, MultiTexCoord4dv, (GLenum target, const GLdouble * v)) \
+X(void, MultiTexCoord4fv, (GLenum target, const GLfloat * v)) \
+X(void, MultiTexCoord4i, (GLenum target, GLint s, GLint t, GLint r, GLint q)) \
+X(void, MultiTexCoord4iv, (GLenum target, const GLint * v)) \
+X(void, MultiTexCoord4s, (GLenum target, GLshort s, GLshort t, GLshort r, GLshort q)) \
+X(void, MultiTexCoord4sv, (GLenum target, const GLshort * v)) \
+VER_END(1_3) \
+VER_START(1_4) \
+X(void, FogCoordPointer, (GLenum type, GLsizei stride, const void * pointer)) \
+X(void, FogCoordd, (GLdouble coord)) \
+X(void, FogCoorddv, (const GLdouble * coord)) \
+X(void, FogCoordf, (GLfloat coord)) \
+X(void, FogCoordfv, (const GLfloat * coord)) \
+X(void, MultiDrawArrays, (GLenum mode, const GLint * first, const GLsizei * count, GLsizei drawcount)) \
+X(void, MultiDrawElements, (GLenum mode, const GLsizei * count, GLenum type, const void *const* indices, GLsizei drawcount)) \
+X(void, PointParameteri, (GLenum pname, GLint param)) \
+X(void, PointParameteriv, (GLenum pname, const GLint * params)) \
+X(void, SecondaryColor3b, (GLbyte red, GLbyte green, GLbyte blue)) \
+X(void, SecondaryColor3bv, (const GLbyte * v)) \
+X(void, SecondaryColor3d, (GLdouble red, GLdouble green, GLdouble blue)) \
+X(void, SecondaryColor3dv, (const GLdouble * v)) \
+X(void, SecondaryColor3f, (GLfloat red, GLfloat green, GLfloat blue)) \
+X(void, SecondaryColor3fv, (const GLfloat * v)) \
+X(void, SecondaryColor3i, (GLint red, GLint green, GLint blue)) \
+X(void, SecondaryColor3iv, (const GLint * v)) \
+X(void, SecondaryColor3s, (GLshort red, GLshort green, GLshort blue)) \
+X(void, SecondaryColor3sv, (const GLshort * v)) \
+X(void, SecondaryColor3ub, (GLubyte red, GLubyte green, GLubyte blue)) \
+X(void, SecondaryColor3ubv, (const GLubyte * v)) \
+X(void, SecondaryColor3ui, (GLuint red, GLuint green, GLuint blue)) \
+X(void, SecondaryColor3uiv, (const GLuint * v)) \
+X(void, SecondaryColor3us, (GLushort red, GLushort green, GLushort blue)) \
+X(void, SecondaryColor3usv, (const GLushort * v)) \
+X(void, SecondaryColorPointer, (GLint size, GLenum type, GLsizei stride, const void * pointer)) \
+X(void, WindowPos2d, (GLdouble x, GLdouble y)) \
+X(void, WindowPos2dv, (const GLdouble * v)) \
+X(void, WindowPos2f, (GLfloat x, GLfloat y)) \
+X(void, WindowPos2fv, (const GLfloat * v)) \
+X(void, WindowPos2i, (GLint x, GLint y)) \
+X(void, WindowPos2iv, (const GLint * v)) \
+X(void, WindowPos2s, (GLshort x, GLshort y)) \
+X(void, WindowPos2sv, (const GLshort * v)) \
+X(void, WindowPos3d, (GLdouble x, GLdouble y, GLdouble z)) \
+X(void, WindowPos3dv, (const GLdouble * v)) \
+X(void, WindowPos3f, (GLfloat x, GLfloat y, GLfloat z)) \
+X(void, WindowPos3fv, (const GLfloat * v)) \
+X(void, WindowPos3i, (GLint x, GLint y, GLint z)) \
+X(void, WindowPos3iv, (const GLint * v)) \
+X(void, WindowPos3s, (GLshort x, GLshort y, GLshort z)) \
+X(void, WindowPos3sv, (const GLshort * v)) \
+VER_END(1_4) \
+VER_START(1_5) \
+X(void, GetBufferSubData, (GLenum target, GLintptr offset, GLsizeiptr size, void * data)) \
+X(void, GetQueryObjectiv, (GLuint id, GLenum pname, GLint * params)) \
+X(void *, MapBuffer, (GLenum target, GLenum access)) \
+VER_END(1_5) \
+VER_START(2_0) \
+X(void, ActiveTexture, (GLenum texture)) \
+X(void, AttachShader, (GLuint program, GLuint shader)) \
+X(void, BindAttribLocation, (GLuint program, GLuint index, const GLchar * name)) \
+X(void, BindBuffer, (GLenum target, GLuint buffer)) \
+X(void, BindFramebuffer, (GLenum target, GLuint framebuffer)) \
+X(void, BindRenderbuffer, (GLenum target, GLuint renderbuffer)) \
+X(void, BindTexture, (GLenum target, GLuint texture)) \
+X(void, BlendColor, (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha)) \
+X(void, BlendEquation, (GLenum mode)) \
+X(void, BlendEquationSeparate, (GLenum modeRGB, GLenum modeAlpha)) \
+X(void, BlendFunc, (GLenum sfactor, GLenum dfactor)) \
+X(void, BlendFuncSeparate, (GLenum sfactorRGB, GLenum dfactorRGB, GLenum sfactorAlpha, GLenum dfactorAlpha)) \
+X(void, BufferData, (GLenum target, GLsizeiptr size, const void * data, GLenum usage)) \
+X(void, BufferSubData, (GLenum target, GLintptr offset, GLsizeiptr size, const void * data)) \
+X(GLenum, CheckFramebufferStatus, (GLenum target)) \
+X(void, Clear, (GLbitfield mask)) \
+X(void, ClearColor, (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha)) \
+X(void, ClearDepthf, (GLfloat d)) \
+X(void, ClearStencil, (GLint s)) \
+X(void, ColorMask, (GLboolean red, GLboolean green, GLboolean blue, GLboolean alpha)) \
+X(void, CompileShader, (GLuint shader)) \
+X(void, CompressedTexImage2D, (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLint border, GLsizei imageSize, const void * data)) \
+X(void, CompressedTexSubImage2D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLsizei imageSize, const void * data)) \
+X(void, CopyTexImage2D, (GLenum target, GLint level, GLenum internalformat, GLint x, GLint y, GLsizei width, GLsizei height, GLint border)) \
+X(void, CopyTexSubImage2D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width, GLsizei height)) \
+X(GLuint, CreateProgram, ()) \
+X(GLuint, CreateShader, (GLenum type)) \
+X(void, CullFace, (GLenum mode)) \
+X(void, DeleteBuffers, (GLsizei n, const GLuint * buffers)) \
+X(void, DeleteFramebuffers, (GLsizei n, const GLuint * framebuffers)) \
+X(void, DeleteProgram, (GLuint program)) \
+X(void, DeleteRenderbuffers, (GLsizei n, const GLuint * renderbuffers)) \
+X(void, DeleteShader, (GLuint shader)) \
+X(void, DeleteTextures, (GLsizei n, const GLuint * textures)) \
+X(void, DepthFunc, (GLenum func)) \
+X(void, DepthMask, (GLboolean flag)) \
+X(void, DepthRangef, (GLfloat n, GLfloat f)) \
+X(void, DetachShader, (GLuint program, GLuint shader)) \
+X(void, Disable, (GLenum cap)) \
+X(void, DisableVertexAttribArray, (GLuint index)) \
+X(void, DrawArrays, (GLenum mode, GLint first, GLsizei count)) \
+X(void, DrawElements, (GLenum mode, GLsizei count, GLenum type, const void * indices)) \
+X(void, DrawRangeElements, (GLenum mode, GLuint start, GLuint end, GLsizei count, GLenum type, const void * indices)) \
+X(void, Enable, (GLenum cap)) \
+X(void, EnableVertexAttribArray, (GLuint index)) \
+X(void, Finish, ()) \
+X(void, Flush, ()) \
+X(void, FramebufferRenderbuffer, (GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer)) \
+X(void, FramebufferTexture2D, (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level)) \
+X(void, FrontFace, (GLenum mode)) \
+X(void, GenBuffers, (GLsizei n, GLuint * buffers)) \
+X(void, GenFramebuffers, (GLsizei n, GLuint * framebuffers)) \
+X(void, GenRenderbuffers, (GLsizei n, GLuint * renderbuffers)) \
+X(void, GenTextures, (GLsizei n, GLuint * textures)) \
+X(void, GenerateMipmap, (GLenum target)) \
+X(void, GetActiveAttrib, (GLuint program, GLuint index, GLsizei bufSize, GLsizei * length, GLint * size, GLenum * type, GLchar * name)) \
+X(void, GetActiveUniform, (GLuint program, GLuint index, GLsizei bufSize, GLsizei * length, GLint * size, GLenum * type, GLchar * name)) \
+X(void, GetAttachedShaders, (GLuint program, GLsizei maxCount, GLsizei * count, GLuint * shaders)) \
+X(GLint, GetAttribLocation, (GLuint program, const GLchar * name)) \
+X(void, GetBooleanv, (GLenum pname, GLboolean * data)) \
+X(void, GetBufferParameteriv, (GLenum target, GLenum pname, GLint * params)) \
+X(GLenum, GetError, ()) \
+X(void, GetFloatv, (GLenum pname, GLfloat * data)) \
+X(void, GetFramebufferAttachmentParameteriv, (GLenum target, GLenum attachment, GLenum pname, GLint * params)) \
+X(GLenum, GetGraphicsResetStatus, ()) \
+X(void, GetIntegerv, (GLenum pname, GLint * data)) \
+X(void, GetProgramInfoLog, (GLuint program, GLsizei bufSize, GLsizei * length, GLchar * infoLog)) \
+X(void, GetProgramiv, (GLuint program, GLenum pname, GLint * params)) \
+X(void, GetRenderbufferParameteriv, (GLenum target, GLenum pname, GLint * params)) \
+X(void, GetShaderInfoLog, (GLuint shader, GLsizei bufSize, GLsizei * length, GLchar * infoLog)) \
+X(void, GetShaderPrecisionFormat, (GLenum shadertype, GLenum precisiontype, GLint * range, GLint * precision)) \
+X(void, GetShaderSource, (GLuint shader, GLsizei bufSize, GLsizei * length, GLchar * source)) \
+X(void, GetShaderiv, (GLuint shader, GLenum pname, GLint * params)) \
+X(const GLubyte *, GetString, (GLenum name)) \
+X(void, GetTexParameterfv, (GLenum target, GLenum pname, GLfloat * params)) \
+X(void, GetTexParameteriv, (GLenum target, GLenum pname, GLint * params)) \
+X(GLint, GetUniformLocation, (GLuint program, const GLchar * name)) \
+X(void, GetUniformfv, (GLuint program, GLint location, GLfloat * params)) \
+X(void, GetUniformiv, (GLuint program, GLint location, GLint * params)) \
+X(void, GetVertexAttribPointerv, (GLuint index, GLenum pname, void ** pointer)) \
+X(void, GetVertexAttribdv, (GLuint index, GLenum pname, GLdouble * params)) \
+X(void, GetVertexAttribfv, (GLuint index, GLenum pname, GLfloat * params)) \
+X(void, GetVertexAttribiv, (GLuint index, GLenum pname, GLint * params)) \
+X(void, GetnUniformfv, (GLuint program, GLint location, GLsizei bufSize, GLfloat * params)) \
+X(void, GetnUniformiv, (GLuint program, GLint location, GLsizei bufSize, GLint * params)) \
+X(void, Hint, (GLenum target, GLenum mode)) \
+X(GLboolean, IsBuffer, (GLuint buffer)) \
+X(GLboolean, IsEnabled, (GLenum cap)) \
+X(GLboolean, IsFramebuffer, (GLuint framebuffer)) \
+X(GLboolean, IsProgram, (GLuint program)) \
+X(GLboolean, IsRenderbuffer, (GLuint renderbuffer)) \
+X(GLboolean, IsShader, (GLuint shader)) \
+X(GLboolean, IsTexture, (GLuint texture)) \
+X(void, LineWidth, (GLfloat width)) \
+X(void, LinkProgram, (GLuint program)) \
+X(void, PixelStorei, (GLenum pname, GLint param)) \
+X(void, PolygonOffset, (GLfloat factor, GLfloat units)) \
+X(void, ProgramBinary, (GLuint program, GLenum binaryFormat, const void * binary, GLsizei length)) \
+X(void, ReadPixels, (GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, void * pixels)) \
+X(void, ReadnPixels, (GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, GLsizei bufSize, void * data)) \
+X(void, ReleaseShaderCompiler, ()) \
+X(void, RenderbufferStorage, (GLenum target, GLenum internalformat, GLsizei width, GLsizei height)) \
+X(void, SampleCoverage, (GLfloat value, GLboolean invert)) \
+X(void, Scissor, (GLint x, GLint y, GLsizei width, GLsizei height)) \
+X(void, ShaderBinary, (GLsizei count, const GLuint * shaders, GLenum binaryFormat, const void * binary, GLsizei length)) \
+X(void, ShaderSource, (GLuint shader, GLsizei count, const GLchar *const* string, const GLint * length)) \
+X(void, StencilFunc, (GLenum func, GLint ref, GLuint mask)) \
+X(void, StencilFuncSeparate, (GLenum face, GLenum func, GLint ref, GLuint mask)) \
+X(void, StencilMask, (GLuint mask)) \
+X(void, StencilMaskSeparate, (GLenum face, GLuint mask)) \
+X(void, StencilOp, (GLenum fail, GLenum zfail, GLenum zpass)) \
+X(void, StencilOpSeparate, (GLenum face, GLenum sfail, GLenum dpfail, GLenum dppass)) \
+X(void, TexImage2D, (GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void * pixels)) \
+X(void, TexParameterf, (GLenum target, GLenum pname, GLfloat param)) \
+X(void, TexParameterfv, (GLenum target, GLenum pname, const GLfloat * params)) \
+X(void, TexParameteri, (GLenum target, GLenum pname, GLint param)) \
+X(void, TexParameteriv, (GLenum target, GLenum pname, const GLint * params)) \
+X(void, TexStorage2D, (GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height)) \
+X(void, TexSubImage2D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void * pixels)) \
+X(void, Uniform1f, (GLint location, GLfloat v0)) \
+X(void, Uniform1fv, (GLint location, GLsizei count, const GLfloat * value)) \
+X(void, Uniform1i, (GLint location, GLint v0)) \
+X(void, Uniform1iv, (GLint location, GLsizei count, const GLint * value)) \
+X(void, Uniform2f, (GLint location, GLfloat v0, GLfloat v1)) \
+X(void, Uniform2fv, (GLint location, GLsizei count, const GLfloat * value)) \
+X(void, Uniform2i, (GLint location, GLint v0, GLint v1)) \
+X(void, Uniform2iv, (GLint location, GLsizei count, const GLint * value)) \
+X(void, Uniform3f, (GLint location, GLfloat v0, GLfloat v1, GLfloat v2)) \
+X(void, Uniform3fv, (GLint location, GLsizei count, const GLfloat * value)) \
+X(void, Uniform3i, (GLint location, GLint v0, GLint v1, GLint v2)) \
+X(void, Uniform3iv, (GLint location, GLsizei count, const GLint * value)) \
+X(void, Uniform4f, (GLint location, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3)) \
+X(void, Uniform4fv, (GLint location, GLsizei count, const GLfloat * value)) \
+X(void, Uniform4i, (GLint location, GLint v0, GLint v1, GLint v2, GLint v3)) \
+X(void, Uniform4iv, (GLint location, GLsizei count, const GLint * value)) \
+X(void, UniformMatrix2fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, UniformMatrix3fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, UniformMatrix4fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, UseProgram, (GLuint program)) \
+X(void, ValidateProgram, (GLuint program)) \
+X(void, VertexAttrib1d, (GLuint index, GLdouble x)) \
+X(void, VertexAttrib1dv, (GLuint index, const GLdouble * v)) \
+X(void, VertexAttrib1f, (GLuint index, GLfloat x)) \
+X(void, VertexAttrib1fv, (GLuint index, const GLfloat * v)) \
+X(void, VertexAttrib1s, (GLuint index, GLshort x)) \
+X(void, VertexAttrib1sv, (GLuint index, const GLshort * v)) \
+X(void, VertexAttrib2d, (GLuint index, GLdouble x, GLdouble y)) \
+X(void, VertexAttrib2dv, (GLuint index, const GLdouble * v)) \
+X(void, VertexAttrib2f, (GLuint index, GLfloat x, GLfloat y)) \
+X(void, VertexAttrib2fv, (GLuint index, const GLfloat * v)) \
+X(void, VertexAttrib2s, (GLuint index, GLshort x, GLshort y)) \
+X(void, VertexAttrib2sv, (GLuint index, const GLshort * v)) \
+X(void, VertexAttrib3d, (GLuint index, GLdouble x, GLdouble y, GLdouble z)) \
+X(void, VertexAttrib3dv, (GLuint index, const GLdouble * v)) \
+X(void, VertexAttrib3f, (GLuint index, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, VertexAttrib3fv, (GLuint index, const GLfloat * v)) \
+X(void, VertexAttrib3s, (GLuint index, GLshort x, GLshort y, GLshort z)) \
+X(void, VertexAttrib3sv, (GLuint index, const GLshort * v)) \
+X(void, VertexAttrib4Nbv, (GLuint index, const GLbyte * v)) \
+X(void, VertexAttrib4Niv, (GLuint index, const GLint * v)) \
+X(void, VertexAttrib4Nsv, (GLuint index, const GLshort * v)) \
+X(void, VertexAttrib4Nub, (GLuint index, GLubyte x, GLubyte y, GLubyte z, GLubyte w)) \
+X(void, VertexAttrib4Nubv, (GLuint index, const GLubyte * v)) \
+X(void, VertexAttrib4Nuiv, (GLuint index, const GLuint * v)) \
+X(void, VertexAttrib4Nusv, (GLuint index, const GLushort * v)) \
+X(void, VertexAttrib4bv, (GLuint index, const GLbyte * v)) \
+X(void, VertexAttrib4d, (GLuint index, GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
+X(void, VertexAttrib4dv, (GLuint index, const GLdouble * v)) \
+X(void, VertexAttrib4f, (GLuint index, GLfloat x, GLfloat y, GLfloat z, GLfloat w)) \
+X(void, VertexAttrib4fv, (GLuint index, const GLfloat * v)) \
+X(void, VertexAttrib4iv, (GLuint index, const GLint * v)) \
+X(void, VertexAttrib4s, (GLuint index, GLshort x, GLshort y, GLshort z, GLshort w)) \
+X(void, VertexAttrib4sv, (GLuint index, const GLshort * v)) \
+X(void, VertexAttrib4ubv, (GLuint index, const GLubyte * v)) \
+X(void, VertexAttrib4uiv, (GLuint index, const GLuint * v)) \
+X(void, VertexAttrib4usv, (GLuint index, const GLushort * v)) \
+X(void, VertexAttribPointer, (GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void * pointer)) \
+X(void, Viewport, (GLint x, GLint y, GLsizei width, GLsizei height)) \
+VER_END(2_0) \
+VER_START(3_0) \
+X(void, BeginConditionalRender, (GLuint id, GLenum mode)) \
+X(void, BeginQuery, (GLenum target, GLuint id)) \
+X(void, BeginTransformFeedback, (GLenum primitiveMode)) \
+X(void, BindBufferBase, (GLenum target, GLuint index, GLuint buffer)) \
+X(void, BindBufferRange, (GLenum target, GLuint index, GLuint buffer, GLintptr offset, GLsizeiptr size)) \
+X(void, BindFragDataLocation, (GLuint program, GLuint color, const GLchar * name)) \
+X(void, BindSampler, (GLuint unit, GLuint sampler)) \
+X(void, BindTransformFeedback, (GLenum target, GLuint id)) \
+X(void, BindVertexArray, (GLuint array)) \
+X(void, BlitFramebuffer, (GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter)) \
+X(void, ClampColor, (GLenum target, GLenum clamp)) \
+X(void, ClearBufferfi, (GLenum buffer, GLint drawbuffer, GLfloat depth, GLint stencil)) \
+X(void, ClearBufferfv, (GLenum buffer, GLint drawbuffer, const GLfloat * value)) \
+X(void, ClearBufferiv, (GLenum buffer, GLint drawbuffer, const GLint * value)) \
+X(void, ClearBufferuiv, (GLenum buffer, GLint drawbuffer, const GLuint * value)) \
+X(GLenum, ClientWaitSync, (GLsync sync, GLbitfield flags, GLuint64 timeout)) \
+X(void, CompressedTexImage3D, (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLsizei imageSize, const void * data)) \
+X(void, CompressedTexSubImage3D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLsizei imageSize, const void * data)) \
+X(void, CopyBufferSubData, (GLenum readTarget, GLenum writeTarget, GLintptr readOffset, GLintptr writeOffset, GLsizeiptr size)) \
+X(void, CopyTexSubImage3D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLint x, GLint y, GLsizei width, GLsizei height)) \
+X(void, DeleteQueries, (GLsizei n, const GLuint * ids)) \
+X(void, DeleteSamplers, (GLsizei count, const GLuint * samplers)) \
+X(void, DeleteSync, (GLsync sync)) \
+X(void, DeleteTransformFeedbacks, (GLsizei n, const GLuint * ids)) \
+X(void, DeleteVertexArrays, (GLsizei n, const GLuint * arrays)) \
+X(void, DrawArraysInstanced, (GLenum mode, GLint first, GLsizei count, GLsizei instancecount)) \
+X(void, DrawBuffers, (GLsizei n, const GLenum * bufs)) \
+X(void, DrawElementsInstanced, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLsizei instancecount)) \
+X(void, EndConditionalRender, ()) \
+X(void, EndQuery, (GLenum target)) \
+X(void, EndTransformFeedback, ()) \
+X(GLsync, FenceSync, (GLenum condition, GLbitfield flags)) \
+X(void, FlushMappedBufferRange, (GLenum target, GLintptr offset, GLsizeiptr length)) \
+X(void, FramebufferTexture1D, (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level)) \
+X(void, FramebufferTexture3D, (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level, GLint zoffset)) \
+X(void, FramebufferTextureLayer, (GLenum target, GLenum attachment, GLuint texture, GLint level, GLint layer)) \
+X(void, GenQueries, (GLsizei n, GLuint * ids)) \
+X(void, GenSamplers, (GLsizei count, GLuint * samplers)) \
+X(void, GenTransformFeedbacks, (GLsizei n, GLuint * ids)) \
+X(void, GenVertexArrays, (GLsizei n, GLuint * arrays)) \
+X(void, GetActiveUniformBlockName, (GLuint program, GLuint uniformBlockIndex, GLsizei bufSize, GLsizei * length, GLchar * uniformBlockName)) \
+X(void, GetActiveUniformBlockiv, (GLuint program, GLuint uniformBlockIndex, GLenum pname, GLint * params)) \
+X(void, GetActiveUniformsiv, (GLuint program, GLsizei uniformCount, const GLuint * uniformIndices, GLenum pname, GLint * params)) \
+X(void, GetBufferParameteri64v, (GLenum target, GLenum pname, GLint64 * params)) \
+X(void, GetBufferPointerv, (GLenum target, GLenum pname, void ** params)) \
+X(GLint, GetFragDataLocation, (GLuint program, const GLchar * name)) \
+X(void, GetInteger64i_v, (GLenum target, GLuint index, GLint64 * data)) \
+X(void, GetInteger64v, (GLenum pname, GLint64 * data)) \
+X(void, GetIntegeri_v, (GLenum target, GLuint index, GLint * data)) \
+X(void, GetInternalformativ, (GLenum target, GLenum internalformat, GLenum pname, GLsizei count, GLint * params)) \
+X(void, GetProgramBinary, (GLuint program, GLsizei bufSize, GLsizei * length, GLenum * binaryFormat, void * binary)) \
+X(void, GetQueryObjectuiv, (GLuint id, GLenum pname, GLuint * params)) \
+X(void, GetQueryiv, (GLenum target, GLenum pname, GLint * params)) \
+X(void, GetSamplerParameterfv, (GLuint sampler, GLenum pname, GLfloat * params)) \
+X(void, GetSamplerParameteriv, (GLuint sampler, GLenum pname, GLint * params)) \
+X(const GLubyte *, GetStringi, (GLenum name, GLuint index)) \
+X(void, GetSynciv, (GLsync sync, GLenum pname, GLsizei count, GLsizei * length, GLint * values)) \
+X(void, GetTransformFeedbackVarying, (GLuint program, GLuint index, GLsizei bufSize, GLsizei * length, GLsizei * size, GLenum * type, GLchar * name)) \
+X(GLuint, GetUniformBlockIndex, (GLuint program, const GLchar * uniformBlockName)) \
+X(void, GetUniformIndices, (GLuint program, GLsizei uniformCount, const GLchar *const* uniformNames, GLuint * uniformIndices)) \
+X(void, GetUniformuiv, (GLuint program, GLint location, GLuint * params)) \
+X(void, GetVertexAttribIiv, (GLuint index, GLenum pname, GLint * params)) \
+X(void, GetVertexAttribIuiv, (GLuint index, GLenum pname, GLuint * params)) \
+X(void, InvalidateFramebuffer, (GLenum target, GLsizei numAttachments, const GLenum * attachments)) \
+X(void, InvalidateSubFramebuffer, (GLenum target, GLsizei numAttachments, const GLenum * attachments, GLint x, GLint y, GLsizei width, GLsizei height)) \
+X(GLboolean, IsQuery, (GLuint id)) \
+X(GLboolean, IsSampler, (GLuint sampler)) \
+X(GLboolean, IsSync, (GLsync sync)) \
+X(GLboolean, IsTransformFeedback, (GLuint id)) \
+X(GLboolean, IsVertexArray, (GLuint array)) \
+X(void *, MapBufferRange, (GLenum target, GLintptr offset, GLsizeiptr length, GLbitfield access)) \
+X(void, PauseTransformFeedback, ()) \
+X(void, ProgramParameteri, (GLuint program, GLenum pname, GLint value)) \
+X(void, ReadBuffer, (GLenum src)) \
+X(void, RenderbufferStorageMultisample, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height)) \
+X(void, ResumeTransformFeedback, ()) \
+X(void, SamplerParameterf, (GLuint sampler, GLenum pname, GLfloat param)) \
+X(void, SamplerParameterfv, (GLuint sampler, GLenum pname, const GLfloat * param)) \
+X(void, SamplerParameteri, (GLuint sampler, GLenum pname, GLint param)) \
+X(void, SamplerParameteriv, (GLuint sampler, GLenum pname, const GLint * param)) \
+X(void, TexImage3D, (GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLenum format, GLenum type, const void * pixels)) \
+X(void, TexStorage3D, (GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth)) \
+X(void, TexSubImage3D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, const void * pixels)) \
+X(void, TransformFeedbackVaryings, (GLuint program, GLsizei count, const GLchar *const* varyings, GLenum bufferMode)) \
+X(void, Uniform1ui, (GLint location, GLuint v0)) \
+X(void, Uniform1uiv, (GLint location, GLsizei count, const GLuint * value)) \
+X(void, Uniform2ui, (GLint location, GLuint v0, GLuint v1)) \
+X(void, Uniform2uiv, (GLint location, GLsizei count, const GLuint * value)) \
+X(void, Uniform3ui, (GLint location, GLuint v0, GLuint v1, GLuint v2)) \
+X(void, Uniform3uiv, (GLint location, GLsizei count, const GLuint * value)) \
+X(void, Uniform4ui, (GLint location, GLuint v0, GLuint v1, GLuint v2, GLuint v3)) \
+X(void, Uniform4uiv, (GLint location, GLsizei count, const GLuint * value)) \
+X(void, UniformBlockBinding, (GLuint program, GLuint uniformBlockIndex, GLuint uniformBlockBinding)) \
+X(void, UniformMatrix2x3fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, UniformMatrix2x4fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, UniformMatrix3x2fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, UniformMatrix3x4fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, UniformMatrix4x2fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, UniformMatrix4x3fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(GLboolean, UnmapBuffer, (GLenum target)) \
+X(void, VertexAttribDivisor, (GLuint index, GLuint divisor)) \
+X(void, VertexAttribI1i, (GLuint index, GLint x)) \
+X(void, VertexAttribI1iv, (GLuint index, const GLint * v)) \
+X(void, VertexAttribI1ui, (GLuint index, GLuint x)) \
+X(void, VertexAttribI1uiv, (GLuint index, const GLuint * v)) \
+X(void, VertexAttribI2i, (GLuint index, GLint x, GLint y)) \
+X(void, VertexAttribI2iv, (GLuint index, const GLint * v)) \
+X(void, VertexAttribI2ui, (GLuint index, GLuint x, GLuint y)) \
+X(void, VertexAttribI2uiv, (GLuint index, const GLuint * v)) \
+X(void, VertexAttribI3i, (GLuint index, GLint x, GLint y, GLint z)) \
+X(void, VertexAttribI3iv, (GLuint index, const GLint * v)) \
+X(void, VertexAttribI3ui, (GLuint index, GLuint x, GLuint y, GLuint z)) \
+X(void, VertexAttribI3uiv, (GLuint index, const GLuint * v)) \
+X(void, VertexAttribI4bv, (GLuint index, const GLbyte * v)) \
+X(void, VertexAttribI4i, (GLuint index, GLint x, GLint y, GLint z, GLint w)) \
+X(void, VertexAttribI4iv, (GLuint index, const GLint * v)) \
+X(void, VertexAttribI4sv, (GLuint index, const GLshort * v)) \
+X(void, VertexAttribI4ubv, (GLuint index, const GLubyte * v)) \
+X(void, VertexAttribI4ui, (GLuint index, GLuint x, GLuint y, GLuint z, GLuint w)) \
+X(void, VertexAttribI4uiv, (GLuint index, const GLuint * v)) \
+X(void, VertexAttribI4usv, (GLuint index, const GLushort * v)) \
+X(void, VertexAttribIPointer, (GLuint index, GLint size, GLenum type, GLsizei stride, const void * pointer)) \
+X(void, WaitSync, (GLsync sync, GLbitfield flags, GLuint64 timeout)) \
+VER_END(3_0) \
+VER_START(3_1) \
+X(void, ActiveShaderProgram, (GLuint pipeline, GLuint program)) \
+X(void, BindImageTexture, (GLuint unit, GLuint texture, GLint level, GLboolean layered, GLint layer, GLenum access, GLenum format)) \
+X(void, BindProgramPipeline, (GLuint pipeline)) \
+X(void, BindVertexBuffer, (GLuint bindingindex, GLuint buffer, GLintptr offset, GLsizei stride)) \
+X(GLuint, CreateShaderProgramv, (GLenum type, GLsizei count, const GLchar *const* strings)) \
+X(void, DeleteProgramPipelines, (GLsizei n, const GLuint * pipelines)) \
+X(void, DispatchCompute, (GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z)) \
+X(void, DispatchComputeIndirect, (GLintptr indirect)) \
+X(void, DrawArraysIndirect, (GLenum mode, const void * indirect)) \
+X(void, DrawElementsIndirect, (GLenum mode, GLenum type, const void * indirect)) \
+X(void, FramebufferParameteri, (GLenum target, GLenum pname, GLint param)) \
+X(void, GenProgramPipelines, (GLsizei n, GLuint * pipelines)) \
+X(void, GetActiveUniformName, (GLuint program, GLuint uniformIndex, GLsizei bufSize, GLsizei * length, GLchar * uniformName)) \
+X(void, GetBooleani_v, (GLenum target, GLuint index, GLboolean * data)) \
+X(void, GetFramebufferParameteriv, (GLenum target, GLenum pname, GLint * params)) \
+X(void, GetMultisamplefv, (GLenum pname, GLuint index, GLfloat * val)) \
+X(void, GetProgramInterfaceiv, (GLuint program, GLenum programInterface, GLenum pname, GLint * params)) \
+X(void, GetProgramPipelineInfoLog, (GLuint pipeline, GLsizei bufSize, GLsizei * length, GLchar * infoLog)) \
+X(void, GetProgramPipelineiv, (GLuint pipeline, GLenum pname, GLint * params)) \
+X(GLuint, GetProgramResourceIndex, (GLuint program, GLenum programInterface, const GLchar * name)) \
+X(GLint, GetProgramResourceLocation, (GLuint program, GLenum programInterface, const GLchar * name)) \
+X(void, GetProgramResourceName, (GLuint program, GLenum programInterface, GLuint index, GLsizei bufSize, GLsizei * length, GLchar * name)) \
+X(void, GetProgramResourceiv, (GLuint program, GLenum programInterface, GLuint index, GLsizei propCount, const GLenum * props, GLsizei count, GLsizei * length, GLint * params)) \
+X(void, GetTexLevelParameterfv, (GLenum target, GLint level, GLenum pname, GLfloat * params)) \
+X(void, GetTexLevelParameteriv, (GLenum target, GLint level, GLenum pname, GLint * params)) \
+X(GLboolean, IsProgramPipeline, (GLuint pipeline)) \
+X(void, MemoryBarrier, (GLbitfield barriers)) \
+X(void, MemoryBarrierByRegion, (GLbitfield barriers)) \
+X(void, PrimitiveRestartIndex, (GLuint index)) \
+X(void, ProgramUniform1f, (GLuint program, GLint location, GLfloat v0)) \
+X(void, ProgramUniform1fv, (GLuint program, GLint location, GLsizei count, const GLfloat * value)) \
+X(void, ProgramUniform1i, (GLuint program, GLint location, GLint v0)) \
+X(void, ProgramUniform1iv, (GLuint program, GLint location, GLsizei count, const GLint * value)) \
+X(void, ProgramUniform1ui, (GLuint program, GLint location, GLuint v0)) \
+X(void, ProgramUniform1uiv, (GLuint program, GLint location, GLsizei count, const GLuint * value)) \
+X(void, ProgramUniform2f, (GLuint program, GLint location, GLfloat v0, GLfloat v1)) \
+X(void, ProgramUniform2fv, (GLuint program, GLint location, GLsizei count, const GLfloat * value)) \
+X(void, ProgramUniform2i, (GLuint program, GLint location, GLint v0, GLint v1)) \
+X(void, ProgramUniform2iv, (GLuint program, GLint location, GLsizei count, const GLint * value)) \
+X(void, ProgramUniform2ui, (GLuint program, GLint location, GLuint v0, GLuint v1)) \
+X(void, ProgramUniform2uiv, (GLuint program, GLint location, GLsizei count, const GLuint * value)) \
+X(void, ProgramUniform3f, (GLuint program, GLint location, GLfloat v0, GLfloat v1, GLfloat v2)) \
+X(void, ProgramUniform3fv, (GLuint program, GLint location, GLsizei count, const GLfloat * value)) \
+X(void, ProgramUniform3i, (GLuint program, GLint location, GLint v0, GLint v1, GLint v2)) \
+X(void, ProgramUniform3iv, (GLuint program, GLint location, GLsizei count, const GLint * value)) \
+X(void, ProgramUniform3ui, (GLuint program, GLint location, GLuint v0, GLuint v1, GLuint v2)) \
+X(void, ProgramUniform3uiv, (GLuint program, GLint location, GLsizei count, const GLuint * value)) \
+X(void, ProgramUniform4f, (GLuint program, GLint location, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3)) \
+X(void, ProgramUniform4fv, (GLuint program, GLint location, GLsizei count, const GLfloat * value)) \
+X(void, ProgramUniform4i, (GLuint program, GLint location, GLint v0, GLint v1, GLint v2, GLint v3)) \
+X(void, ProgramUniform4iv, (GLuint program, GLint location, GLsizei count, const GLint * value)) \
+X(void, ProgramUniform4ui, (GLuint program, GLint location, GLuint v0, GLuint v1, GLuint v2, GLuint v3)) \
+X(void, ProgramUniform4uiv, (GLuint program, GLint location, GLsizei count, const GLuint * value)) \
+X(void, ProgramUniformMatrix2fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, ProgramUniformMatrix2x3fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, ProgramUniformMatrix2x4fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, ProgramUniformMatrix3fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, ProgramUniformMatrix3x2fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, ProgramUniformMatrix3x4fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, ProgramUniformMatrix4fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, ProgramUniformMatrix4x2fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, ProgramUniformMatrix4x3fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, SampleMaski, (GLuint maskNumber, GLbitfield mask)) \
+X(void, TexStorage2DMultisample, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLboolean fixedsamplelocations)) \
+X(void, UseProgramStages, (GLuint pipeline, GLbitfield stages, GLuint program)) \
+X(void, ValidateProgramPipeline, (GLuint pipeline)) \
+X(void, VertexAttribBinding, (GLuint attribindex, GLuint bindingindex)) \
+X(void, VertexAttribFormat, (GLuint attribindex, GLint size, GLenum type, GLboolean normalized, GLuint relativeoffset)) \
+X(void, VertexAttribIFormat, (GLuint attribindex, GLint size, GLenum type, GLuint relativeoffset)) \
+X(void, VertexBindingDivisor, (GLuint bindingindex, GLuint divisor)) \
+VER_END(3_1) \
+VER_START(3_2) \
+X(void, BlendBarrier, ()) \
+X(void, BlendEquationSeparatei, (GLuint buf, GLenum modeRGB, GLenum modeAlpha)) \
+X(void, BlendEquationi, (GLuint buf, GLenum mode)) \
+X(void, BlendFuncSeparatei, (GLuint buf, GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, GLenum dstAlpha)) \
+X(void, BlendFunci, (GLuint buf, GLenum src, GLenum dst)) \
+X(void, ColorMaski, (GLuint index, GLboolean r, GLboolean g, GLboolean b, GLboolean a)) \
+X(void, CopyImageSubData, (GLuint srcName, GLenum srcTarget, GLint srcLevel, GLint srcX, GLint srcY, GLint srcZ, GLuint dstName, GLenum dstTarget, GLint dstLevel, GLint dstX, GLint dstY, GLint dstZ, GLsizei srcWidth, GLsizei srcHeight, GLsizei srcDepth)) \
+X(void, DebugMessageCallback, (GLDEBUGPROC callback, const void * userParam)) \
+X(void, DebugMessageControl, (GLenum source, GLenum type, GLenum severity, GLsizei count, const GLuint * ids, GLboolean enabled)) \
+X(void, DebugMessageInsert, (GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar * buf)) \
+X(void, Disablei, (GLenum target, GLuint index)) \
+X(void, DrawElementsBaseVertex, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLint basevertex)) \
+X(void, DrawElementsInstancedBaseVertex, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLsizei instancecount, GLint basevertex)) \
+X(void, DrawRangeElementsBaseVertex, (GLenum mode, GLuint start, GLuint end, GLsizei count, GLenum type, const void * indices, GLint basevertex)) \
+X(void, Enablei, (GLenum target, GLuint index)) \
+X(void, FramebufferTexture, (GLenum target, GLenum attachment, GLuint texture, GLint level)) \
+X(GLuint, GetDebugMessageLog, (GLuint count, GLsizei bufSize, GLenum * sources, GLenum * types, GLuint * ids, GLenum * severities, GLsizei * lengths, GLchar * messageLog)) \
+X(void, GetObjectLabel, (GLenum identifier, GLuint name, GLsizei bufSize, GLsizei * length, GLchar * label)) \
+X(void, GetObjectPtrLabel, (const void * ptr, GLsizei bufSize, GLsizei * length, GLchar * label)) \
+X(void, GetPointerv, (GLenum pname, void ** params)) \
+X(void, GetSamplerParameterIiv, (GLuint sampler, GLenum pname, GLint * params)) \
+X(void, GetSamplerParameterIuiv, (GLuint sampler, GLenum pname, GLuint * params)) \
+X(void, GetTexParameterIiv, (GLenum target, GLenum pname, GLint * params)) \
+X(void, GetTexParameterIuiv, (GLenum target, GLenum pname, GLuint * params)) \
+X(void, GetnUniformuiv, (GLuint program, GLint location, GLsizei bufSize, GLuint * params)) \
+X(GLboolean, IsEnabledi, (GLenum target, GLuint index)) \
+X(void, MinSampleShading, (GLfloat value)) \
+X(void, MultiDrawElementsBaseVertex, (GLenum mode, const GLsizei * count, GLenum type, const void *const* indices, GLsizei drawcount, const GLint * basevertex)) \
+X(void, ObjectLabel, (GLenum identifier, GLuint name, GLsizei length, const GLchar * label)) \
+X(void, ObjectPtrLabel, (const void * ptr, GLsizei length, const GLchar * label)) \
+X(void, PatchParameteri, (GLenum pname, GLint value)) \
+X(void, PopDebugGroup, ()) \
+X(void, PrimitiveBoundingBox, (GLfloat minX, GLfloat minY, GLfloat minZ, GLfloat minW, GLfloat maxX, GLfloat maxY, GLfloat maxZ, GLfloat maxW)) \
+X(void, ProvokingVertex, (GLenum mode)) \
+X(void, PushDebugGroup, (GLenum source, GLuint id, GLsizei length, const GLchar * message)) \
+X(void, SamplerParameterIiv, (GLuint sampler, GLenum pname, const GLint * param)) \
+X(void, SamplerParameterIuiv, (GLuint sampler, GLenum pname, const GLuint * param)) \
+X(void, TexBuffer, (GLenum target, GLenum internalformat, GLuint buffer)) \
+X(void, TexBufferRange, (GLenum target, GLenum internalformat, GLuint buffer, GLintptr offset, GLsizeiptr size)) \
+X(void, TexImage2DMultisample, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLboolean fixedsamplelocations)) \
+X(void, TexImage3DMultisample, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLboolean fixedsamplelocations)) \
+X(void, TexParameterIiv, (GLenum target, GLenum pname, const GLint * params)) \
+X(void, TexParameterIuiv, (GLenum target, GLenum pname, const GLuint * params)) \
+X(void, TexStorage3DMultisample, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLboolean fixedsamplelocations)) \
+VER_END(3_2) \
+VER_START(3_3) \
+X(void, BindFragDataLocationIndexed, (GLuint program, GLuint colorNumber, GLuint index, const GLchar * name)) \
+X(void, ColorP3ui, (GLenum type, GLuint color)) \
+X(void, ColorP3uiv, (GLenum type, const GLuint * color)) \
+X(void, ColorP4ui, (GLenum type, GLuint color)) \
+X(void, ColorP4uiv, (GLenum type, const GLuint * color)) \
+X(GLint, GetFragDataIndex, (GLuint program, const GLchar * name)) \
+X(void, GetQueryObjecti64v, (GLuint id, GLenum pname, GLint64 * params)) \
+X(void, GetQueryObjectui64v, (GLuint id, GLenum pname, GLuint64 * params)) \
+X(void, MultiTexCoordP1ui, (GLenum texture, GLenum type, GLuint coords)) \
+X(void, MultiTexCoordP1uiv, (GLenum texture, GLenum type, const GLuint * coords)) \
+X(void, MultiTexCoordP2ui, (GLenum texture, GLenum type, GLuint coords)) \
+X(void, MultiTexCoordP2uiv, (GLenum texture, GLenum type, const GLuint * coords)) \
+X(void, MultiTexCoordP3ui, (GLenum texture, GLenum type, GLuint coords)) \
+X(void, MultiTexCoordP3uiv, (GLenum texture, GLenum type, const GLuint * coords)) \
+X(void, MultiTexCoordP4ui, (GLenum texture, GLenum type, GLuint coords)) \
+X(void, MultiTexCoordP4uiv, (GLenum texture, GLenum type, const GLuint * coords)) \
+X(void, NormalP3ui, (GLenum type, GLuint coords)) \
+X(void, NormalP3uiv, (GLenum type, const GLuint * coords)) \
+X(void, QueryCounter, (GLuint id, GLenum target)) \
+X(void, SecondaryColorP3ui, (GLenum type, GLuint color)) \
+X(void, SecondaryColorP3uiv, (GLenum type, const GLuint * color)) \
+X(void, TexCoordP1ui, (GLenum type, GLuint coords)) \
+X(void, TexCoordP1uiv, (GLenum type, const GLuint * coords)) \
+X(void, TexCoordP2ui, (GLenum type, GLuint coords)) \
+X(void, TexCoordP2uiv, (GLenum type, const GLuint * coords)) \
+X(void, TexCoordP3ui, (GLenum type, GLuint coords)) \
+X(void, TexCoordP3uiv, (GLenum type, const GLuint * coords)) \
+X(void, TexCoordP4ui, (GLenum type, GLuint coords)) \
+X(void, TexCoordP4uiv, (GLenum type, const GLuint * coords)) \
+X(void, VertexAttribP1ui, (GLuint index, GLenum type, GLboolean normalized, GLuint value)) \
+X(void, VertexAttribP1uiv, (GLuint index, GLenum type, GLboolean normalized, const GLuint * value)) \
+X(void, VertexAttribP2ui, (GLuint index, GLenum type, GLboolean normalized, GLuint value)) \
+X(void, VertexAttribP2uiv, (GLuint index, GLenum type, GLboolean normalized, const GLuint * value)) \
+X(void, VertexAttribP3ui, (GLuint index, GLenum type, GLboolean normalized, GLuint value)) \
+X(void, VertexAttribP3uiv, (GLuint index, GLenum type, GLboolean normalized, const GLuint * value)) \
+X(void, VertexAttribP4ui, (GLuint index, GLenum type, GLboolean normalized, GLuint value)) \
+X(void, VertexAttribP4uiv, (GLuint index, GLenum type, GLboolean normalized, const GLuint * value)) \
+X(void, VertexP2ui, (GLenum type, GLuint value)) \
+X(void, VertexP2uiv, (GLenum type, const GLuint * value)) \
+X(void, VertexP3ui, (GLenum type, GLuint value)) \
+X(void, VertexP3uiv, (GLenum type, const GLuint * value)) \
+X(void, VertexP4ui, (GLenum type, GLuint value)) \
+X(void, VertexP4uiv, (GLenum type, const GLuint * value)) \
+VER_END(3_3) \
+VER_START(4_0) \
+X(void, BeginQueryIndexed, (GLenum target, GLuint index, GLuint id)) \
+X(void, DrawTransformFeedback, (GLenum mode, GLuint id)) \
+X(void, DrawTransformFeedbackStream, (GLenum mode, GLuint id, GLuint stream)) \
+X(void, EndQueryIndexed, (GLenum target, GLuint index)) \
+X(void, GetActiveSubroutineName, (GLuint program, GLenum shadertype, GLuint index, GLsizei bufSize, GLsizei * length, GLchar * name)) \
+X(void, GetActiveSubroutineUniformName, (GLuint program, GLenum shadertype, GLuint index, GLsizei bufSize, GLsizei * length, GLchar * name)) \
+X(void, GetActiveSubroutineUniformiv, (GLuint program, GLenum shadertype, GLuint index, GLenum pname, GLint * values)) \
+X(void, GetProgramStageiv, (GLuint program, GLenum shadertype, GLenum pname, GLint * values)) \
+X(void, GetQueryIndexediv, (GLenum target, GLuint index, GLenum pname, GLint * params)) \
+X(GLuint, GetSubroutineIndex, (GLuint program, GLenum shadertype, const GLchar * name)) \
+X(GLint, GetSubroutineUniformLocation, (GLuint program, GLenum shadertype, const GLchar * name)) \
+X(void, GetUniformSubroutineuiv, (GLenum shadertype, GLint location, GLuint * params)) \
+X(void, GetUniformdv, (GLuint program, GLint location, GLdouble * params)) \
+X(void, PatchParameterfv, (GLenum pname, const GLfloat * values)) \
+X(void, Uniform1d, (GLint location, GLdouble x)) \
+X(void, Uniform1dv, (GLint location, GLsizei count, const GLdouble * value)) \
+X(void, Uniform2d, (GLint location, GLdouble x, GLdouble y)) \
+X(void, Uniform2dv, (GLint location, GLsizei count, const GLdouble * value)) \
+X(void, Uniform3d, (GLint location, GLdouble x, GLdouble y, GLdouble z)) \
+X(void, Uniform3dv, (GLint location, GLsizei count, const GLdouble * value)) \
+X(void, Uniform4d, (GLint location, GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
+X(void, Uniform4dv, (GLint location, GLsizei count, const GLdouble * value)) \
+X(void, UniformMatrix2dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, UniformMatrix2x3dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, UniformMatrix2x4dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, UniformMatrix3dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, UniformMatrix3x2dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, UniformMatrix3x4dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, UniformMatrix4dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, UniformMatrix4x2dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, UniformMatrix4x3dv, (GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, UniformSubroutinesuiv, (GLenum shadertype, GLsizei count, const GLuint * indices)) \
+VER_END(4_0) \
+VER_START(4_1) \
+X(void, DepthRangeArrayv, (GLuint first, GLsizei count, const GLdouble * v)) \
+X(void, DepthRangeIndexed, (GLuint index, GLdouble n, GLdouble f)) \
+X(void, GetDoublei_v, (GLenum target, GLuint index, GLdouble * data)) \
+X(void, GetFloati_v, (GLenum target, GLuint index, GLfloat * data)) \
+X(void, GetVertexAttribLdv, (GLuint index, GLenum pname, GLdouble * params)) \
+X(void, ProgramUniform1d, (GLuint program, GLint location, GLdouble v0)) \
+X(void, ProgramUniform1dv, (GLuint program, GLint location, GLsizei count, const GLdouble * value)) \
+X(void, ProgramUniform2d, (GLuint program, GLint location, GLdouble v0, GLdouble v1)) \
+X(void, ProgramUniform2dv, (GLuint program, GLint location, GLsizei count, const GLdouble * value)) \
+X(void, ProgramUniform3d, (GLuint program, GLint location, GLdouble v0, GLdouble v1, GLdouble v2)) \
+X(void, ProgramUniform3dv, (GLuint program, GLint location, GLsizei count, const GLdouble * value)) \
+X(void, ProgramUniform4d, (GLuint program, GLint location, GLdouble v0, GLdouble v1, GLdouble v2, GLdouble v3)) \
+X(void, ProgramUniform4dv, (GLuint program, GLint location, GLsizei count, const GLdouble * value)) \
+X(void, ProgramUniformMatrix2dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, ProgramUniformMatrix2x3dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, ProgramUniformMatrix2x4dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, ProgramUniformMatrix3dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, ProgramUniformMatrix3x2dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, ProgramUniformMatrix3x4dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, ProgramUniformMatrix4dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, ProgramUniformMatrix4x2dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, ProgramUniformMatrix4x3dv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, ScissorArrayv, (GLuint first, GLsizei count, const GLint * v)) \
+X(void, ScissorIndexed, (GLuint index, GLint left, GLint bottom, GLsizei width, GLsizei height)) \
+X(void, ScissorIndexedv, (GLuint index, const GLint * v)) \
+X(void, VertexAttribL1d, (GLuint index, GLdouble x)) \
+X(void, VertexAttribL1dv, (GLuint index, const GLdouble * v)) \
+X(void, VertexAttribL2d, (GLuint index, GLdouble x, GLdouble y)) \
+X(void, VertexAttribL2dv, (GLuint index, const GLdouble * v)) \
+X(void, VertexAttribL3d, (GLuint index, GLdouble x, GLdouble y, GLdouble z)) \
+X(void, VertexAttribL3dv, (GLuint index, const GLdouble * v)) \
+X(void, VertexAttribL4d, (GLuint index, GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
+X(void, VertexAttribL4dv, (GLuint index, const GLdouble * v)) \
+X(void, VertexAttribLPointer, (GLuint index, GLint size, GLenum type, GLsizei stride, const void * pointer)) \
+X(void, ViewportArrayv, (GLuint first, GLsizei count, const GLfloat * v)) \
+X(void, ViewportIndexedf, (GLuint index, GLfloat x, GLfloat y, GLfloat w, GLfloat h)) \
+X(void, ViewportIndexedfv, (GLuint index, const GLfloat * v)) \
+VER_END(4_1) \
+VER_START(4_2) \
+X(void, DrawArraysInstancedBaseInstance, (GLenum mode, GLint first, GLsizei count, GLsizei instancecount, GLuint baseinstance)) \
+X(void, DrawElementsInstancedBaseInstance, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLsizei instancecount, GLuint baseinstance)) \
+X(void, DrawElementsInstancedBaseVertexBaseInstance, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLsizei instancecount, GLint basevertex, GLuint baseinstance)) \
+X(void, DrawTransformFeedbackInstanced, (GLenum mode, GLuint id, GLsizei instancecount)) \
+X(void, DrawTransformFeedbackStreamInstanced, (GLenum mode, GLuint id, GLuint stream, GLsizei instancecount)) \
+X(void, GetActiveAtomicCounterBufferiv, (GLuint program, GLuint bufferIndex, GLenum pname, GLint * params)) \
+X(void, TexStorage1D, (GLenum target, GLsizei levels, GLenum internalformat, GLsizei width)) \
+VER_END(4_2) \
+VER_START(4_3) \
+X(void, ClearBufferData, (GLenum target, GLenum internalformat, GLenum format, GLenum type, const void * data)) \
+X(void, ClearBufferSubData, (GLenum target, GLenum internalformat, GLintptr offset, GLsizeiptr size, GLenum format, GLenum type, const void * data)) \
+X(void, GetInternalformati64v, (GLenum target, GLenum internalformat, GLenum pname, GLsizei count, GLint64 * params)) \
+X(GLint, GetProgramResourceLocationIndex, (GLuint program, GLenum programInterface, const GLchar * name)) \
+X(void, InvalidateBufferData, (GLuint buffer)) \
+X(void, InvalidateBufferSubData, (GLuint buffer, GLintptr offset, GLsizeiptr length)) \
+X(void, InvalidateTexImage, (GLuint texture, GLint level)) \
+X(void, InvalidateTexSubImage, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth)) \
+X(void, MultiDrawArraysIndirect, (GLenum mode, const void * indirect, GLsizei drawcount, GLsizei stride)) \
+X(void, MultiDrawElementsIndirect, (GLenum mode, GLenum type, const void * indirect, GLsizei drawcount, GLsizei stride)) \
+X(void, ShaderStorageBlockBinding, (GLuint program, GLuint storageBlockIndex, GLuint storageBlockBinding)) \
+X(void, TextureView, (GLuint texture, GLenum target, GLuint origtexture, GLenum internalformat, GLuint minlevel, GLuint numlevels, GLuint minlayer, GLuint numlayers)) \
+X(void, VertexAttribLFormat, (GLuint attribindex, GLint size, GLenum type, GLuint relativeoffset)) \
+VER_END(4_3) \
+VER_START(4_4) \
+X(void, BindBuffersBase, (GLenum target, GLuint first, GLsizei count, const GLuint * buffers)) \
+X(void, BindBuffersRange, (GLenum target, GLuint first, GLsizei count, const GLuint * buffers, const GLintptr * offsets, const GLsizeiptr * sizes)) \
+X(void, BindImageTextures, (GLuint first, GLsizei count, const GLuint * textures)) \
+X(void, BindSamplers, (GLuint first, GLsizei count, const GLuint * samplers)) \
+X(void, BindTextures, (GLuint first, GLsizei count, const GLuint * textures)) \
+X(void, BindVertexBuffers, (GLuint first, GLsizei count, const GLuint * buffers, const GLintptr * offsets, const GLsizei * strides)) \
+X(void, BufferStorage, (GLenum target, GLsizeiptr size, const void * data, GLbitfield flags)) \
+X(void, ClearTexImage, (GLuint texture, GLint level, GLenum format, GLenum type, const void * data)) \
+X(void, ClearTexSubImage, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, const void * data)) \
+VER_END(4_4) \
+VER_START(4_5) \
+X(void, BindTextureUnit, (GLuint unit, GLuint texture)) \
+X(void, BlitNamedFramebuffer, (GLuint readFramebuffer, GLuint drawFramebuffer, GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter)) \
+X(GLenum, CheckNamedFramebufferStatus, (GLuint framebuffer, GLenum target)) \
+X(void, ClearNamedBufferData, (GLuint buffer, GLenum internalformat, GLenum format, GLenum type, const void * data)) \
+X(void, ClearNamedBufferSubData, (GLuint buffer, GLenum internalformat, GLintptr offset, GLsizeiptr size, GLenum format, GLenum type, const void * data)) \
+X(void, ClearNamedFramebufferfi, (GLuint framebuffer, GLenum buffer, GLint drawbuffer, GLfloat depth, GLint stencil)) \
+X(void, ClearNamedFramebufferfv, (GLuint framebuffer, GLenum buffer, GLint drawbuffer, const GLfloat * value)) \
+X(void, ClearNamedFramebufferiv, (GLuint framebuffer, GLenum buffer, GLint drawbuffer, const GLint * value)) \
+X(void, ClearNamedFramebufferuiv, (GLuint framebuffer, GLenum buffer, GLint drawbuffer, const GLuint * value)) \
+X(void, ClipControl, (GLenum origin, GLenum depth)) \
+X(void, CompressedTextureSubImage1D, (GLuint texture, GLint level, GLint xoffset, GLsizei width, GLenum format, GLsizei imageSize, const void * data)) \
+X(void, CompressedTextureSubImage2D, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLsizei imageSize, const void * data)) \
+X(void, CompressedTextureSubImage3D, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLsizei imageSize, const void * data)) \
+X(void, CopyNamedBufferSubData, (GLuint readBuffer, GLuint writeBuffer, GLintptr readOffset, GLintptr writeOffset, GLsizeiptr size)) \
+X(void, CopyTextureSubImage1D, (GLuint texture, GLint level, GLint xoffset, GLint x, GLint y, GLsizei width)) \
+X(void, CopyTextureSubImage2D, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width, GLsizei height)) \
+X(void, CopyTextureSubImage3D, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLint x, GLint y, GLsizei width, GLsizei height)) \
+X(void, CreateBuffers, (GLsizei n, GLuint * buffers)) \
+X(void, CreateFramebuffers, (GLsizei n, GLuint * framebuffers)) \
+X(void, CreateProgramPipelines, (GLsizei n, GLuint * pipelines)) \
+X(void, CreateQueries, (GLenum target, GLsizei n, GLuint * ids)) \
+X(void, CreateRenderbuffers, (GLsizei n, GLuint * renderbuffers)) \
+X(void, CreateSamplers, (GLsizei n, GLuint * samplers)) \
+X(void, CreateTextures, (GLenum target, GLsizei n, GLuint * textures)) \
+X(void, CreateTransformFeedbacks, (GLsizei n, GLuint * ids)) \
+X(void, CreateVertexArrays, (GLsizei n, GLuint * arrays)) \
+X(void, DisableVertexArrayAttrib, (GLuint vaobj, GLuint index)) \
+X(void, EnableVertexArrayAttrib, (GLuint vaobj, GLuint index)) \
+X(void, FlushMappedNamedBufferRange, (GLuint buffer, GLintptr offset, GLsizeiptr length)) \
+X(void, GenerateTextureMipmap, (GLuint texture)) \
+X(void, GetCompressedTextureImage, (GLuint texture, GLint level, GLsizei bufSize, void * pixels)) \
+X(void, GetCompressedTextureSubImage, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLsizei bufSize, void * pixels)) \
+X(void, GetNamedBufferParameteri64v, (GLuint buffer, GLenum pname, GLint64 * params)) \
+X(void, GetNamedBufferParameteriv, (GLuint buffer, GLenum pname, GLint * params)) \
+X(void, GetNamedBufferPointerv, (GLuint buffer, GLenum pname, void ** params)) \
+X(void, GetNamedBufferSubData, (GLuint buffer, GLintptr offset, GLsizeiptr size, void * data)) \
+X(void, GetNamedFramebufferAttachmentParameteriv, (GLuint framebuffer, GLenum attachment, GLenum pname, GLint * params)) \
+X(void, GetNamedFramebufferParameteriv, (GLuint framebuffer, GLenum pname, GLint * param)) \
+X(void, GetNamedRenderbufferParameteriv, (GLuint renderbuffer, GLenum pname, GLint * params)) \
+X(void, GetQueryBufferObjecti64v, (GLuint id, GLuint buffer, GLenum pname, GLintptr offset)) \
+X(void, GetQueryBufferObjectiv, (GLuint id, GLuint buffer, GLenum pname, GLintptr offset)) \
+X(void, GetQueryBufferObjectui64v, (GLuint id, GLuint buffer, GLenum pname, GLintptr offset)) \
+X(void, GetQueryBufferObjectuiv, (GLuint id, GLuint buffer, GLenum pname, GLintptr offset)) \
+X(void, GetTextureImage, (GLuint texture, GLint level, GLenum format, GLenum type, GLsizei bufSize, void * pixels)) \
+X(void, GetTextureLevelParameterfv, (GLuint texture, GLint level, GLenum pname, GLfloat * params)) \
+X(void, GetTextureLevelParameteriv, (GLuint texture, GLint level, GLenum pname, GLint * params)) \
+X(void, GetTextureParameterIiv, (GLuint texture, GLenum pname, GLint * params)) \
+X(void, GetTextureParameterIuiv, (GLuint texture, GLenum pname, GLuint * params)) \
+X(void, GetTextureParameterfv, (GLuint texture, GLenum pname, GLfloat * params)) \
+X(void, GetTextureParameteriv, (GLuint texture, GLenum pname, GLint * params)) \
+X(void, GetTextureSubImage, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, GLsizei bufSize, void * pixels)) \
+X(void, GetTransformFeedbacki64_v, (GLuint xfb, GLenum pname, GLuint index, GLint64 * param)) \
+X(void, GetTransformFeedbacki_v, (GLuint xfb, GLenum pname, GLuint index, GLint * param)) \
+X(void, GetTransformFeedbackiv, (GLuint xfb, GLenum pname, GLint * param)) \
+X(void, GetVertexArrayIndexed64iv, (GLuint vaobj, GLuint index, GLenum pname, GLint64 * param)) \
+X(void, GetVertexArrayIndexediv, (GLuint vaobj, GLuint index, GLenum pname, GLint * param)) \
+X(void, GetVertexArrayiv, (GLuint vaobj, GLenum pname, GLint * param)) \
+X(void, GetnColorTable, (GLenum target, GLenum format, GLenum type, GLsizei bufSize, void * table)) \
+X(void, GetnCompressedTexImage, (GLenum target, GLint lod, GLsizei bufSize, void * pixels)) \
+X(void, GetnConvolutionFilter, (GLenum target, GLenum format, GLenum type, GLsizei bufSize, void * image)) \
+X(void, GetnHistogram, (GLenum target, GLboolean reset, GLenum format, GLenum type, GLsizei bufSize, void * values)) \
+X(void, GetnMapdv, (GLenum target, GLenum query, GLsizei bufSize, GLdouble * v)) \
+X(void, GetnMapfv, (GLenum target, GLenum query, GLsizei bufSize, GLfloat * v)) \
+X(void, GetnMapiv, (GLenum target, GLenum query, GLsizei bufSize, GLint * v)) \
+X(void, GetnMinmax, (GLenum target, GLboolean reset, GLenum format, GLenum type, GLsizei bufSize, void * values)) \
+X(void, GetnPixelMapfv, (GLenum map, GLsizei bufSize, GLfloat * values)) \
+X(void, GetnPixelMapuiv, (GLenum map, GLsizei bufSize, GLuint * values)) \
+X(void, GetnPixelMapusv, (GLenum map, GLsizei bufSize, GLushort * values)) \
+X(void, GetnPolygonStipple, (GLsizei bufSize, GLubyte * pattern)) \
+X(void, GetnSeparableFilter, (GLenum target, GLenum format, GLenum type, GLsizei rowBufSize, void * row, GLsizei columnBufSize, void * column, void * span)) \
+X(void, GetnTexImage, (GLenum target, GLint level, GLenum format, GLenum type, GLsizei bufSize, void * pixels)) \
+X(void, GetnUniformdv, (GLuint program, GLint location, GLsizei bufSize, GLdouble * params)) \
+X(void, InvalidateNamedFramebufferData, (GLuint framebuffer, GLsizei numAttachments, const GLenum * attachments)) \
+X(void, InvalidateNamedFramebufferSubData, (GLuint framebuffer, GLsizei numAttachments, const GLenum * attachments, GLint x, GLint y, GLsizei width, GLsizei height)) \
+X(void *, MapNamedBuffer, (GLuint buffer, GLenum access)) \
+X(void *, MapNamedBufferRange, (GLuint buffer, GLintptr offset, GLsizeiptr length, GLbitfield access)) \
+X(void, NamedBufferData, (GLuint buffer, GLsizeiptr size, const void * data, GLenum usage)) \
+X(void, NamedBufferStorage, (GLuint buffer, GLsizeiptr size, const void * data, GLbitfield flags)) \
+X(void, NamedBufferSubData, (GLuint buffer, GLintptr offset, GLsizeiptr size, const void * data)) \
+X(void, NamedFramebufferDrawBuffer, (GLuint framebuffer, GLenum buf)) \
+X(void, NamedFramebufferDrawBuffers, (GLuint framebuffer, GLsizei n, const GLenum * bufs)) \
+X(void, NamedFramebufferParameteri, (GLuint framebuffer, GLenum pname, GLint param)) \
+X(void, NamedFramebufferReadBuffer, (GLuint framebuffer, GLenum src)) \
+X(void, NamedFramebufferRenderbuffer, (GLuint framebuffer, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer)) \
+X(void, NamedFramebufferTexture, (GLuint framebuffer, GLenum attachment, GLuint texture, GLint level)) \
+X(void, NamedFramebufferTextureLayer, (GLuint framebuffer, GLenum attachment, GLuint texture, GLint level, GLint layer)) \
+X(void, NamedRenderbufferStorage, (GLuint renderbuffer, GLenum internalformat, GLsizei width, GLsizei height)) \
+X(void, NamedRenderbufferStorageMultisample, (GLuint renderbuffer, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height)) \
+X(void, TextureBarrier, ()) \
+X(void, TextureBuffer, (GLuint texture, GLenum internalformat, GLuint buffer)) \
+X(void, TextureBufferRange, (GLuint texture, GLenum internalformat, GLuint buffer, GLintptr offset, GLsizeiptr size)) \
+X(void, TextureParameterIiv, (GLuint texture, GLenum pname, const GLint * params)) \
+X(void, TextureParameterIuiv, (GLuint texture, GLenum pname, const GLuint * params)) \
+X(void, TextureParameterf, (GLuint texture, GLenum pname, GLfloat param)) \
+X(void, TextureParameterfv, (GLuint texture, GLenum pname, const GLfloat * param)) \
+X(void, TextureParameteri, (GLuint texture, GLenum pname, GLint param)) \
+X(void, TextureParameteriv, (GLuint texture, GLenum pname, const GLint * param)) \
+X(void, TextureStorage1D, (GLuint texture, GLsizei levels, GLenum internalformat, GLsizei width)) \
+X(void, TextureStorage2D, (GLuint texture, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height)) \
+X(void, TextureStorage2DMultisample, (GLuint texture, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLboolean fixedsamplelocations)) \
+X(void, TextureStorage3D, (GLuint texture, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth)) \
+X(void, TextureStorage3DMultisample, (GLuint texture, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLboolean fixedsamplelocations)) \
+X(void, TextureSubImage1D, (GLuint texture, GLint level, GLint xoffset, GLsizei width, GLenum format, GLenum type, const void * pixels)) \
+X(void, TextureSubImage2D, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void * pixels)) \
+X(void, TextureSubImage3D, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, const void * pixels)) \
+X(void, TransformFeedbackBufferBase, (GLuint xfb, GLuint index, GLuint buffer)) \
+X(void, TransformFeedbackBufferRange, (GLuint xfb, GLuint index, GLuint buffer, GLintptr offset, GLsizeiptr size)) \
+X(GLboolean, UnmapNamedBuffer, (GLuint buffer)) \
+X(void, VertexArrayAttribBinding, (GLuint vaobj, GLuint attribindex, GLuint bindingindex)) \
+X(void, VertexArrayAttribFormat, (GLuint vaobj, GLuint attribindex, GLint size, GLenum type, GLboolean normalized, GLuint relativeoffset)) \
+X(void, VertexArrayAttribIFormat, (GLuint vaobj, GLuint attribindex, GLint size, GLenum type, GLuint relativeoffset)) \
+X(void, VertexArrayAttribLFormat, (GLuint vaobj, GLuint attribindex, GLint size, GLenum type, GLuint relativeoffset)) \
+X(void, VertexArrayBindingDivisor, (GLuint vaobj, GLuint bindingindex, GLuint divisor)) \
+X(void, VertexArrayElementBuffer, (GLuint vaobj, GLuint buffer)) \
+X(void, VertexArrayVertexBuffer, (GLuint vaobj, GLuint bindingindex, GLuint buffer, GLintptr offset, GLsizei stride)) \
+X(void, VertexArrayVertexBuffers, (GLuint vaobj, GLuint first, GLsizei count, const GLuint * buffers, const GLintptr * offsets, const GLsizei * strides)) \
+VER_END(4_5) \
+VER_START(4_6) \
+X(void, MultiDrawArraysIndirectCount, (GLenum mode, const void * indirect, GLintptr drawcount, GLsizei maxdrawcount, GLsizei stride)) \
+X(void, MultiDrawElementsIndirectCount, (GLenum mode, GLenum type, const void * indirect, GLintptr drawcount, GLsizei maxdrawcount, GLsizei stride)) \
+X(void, PolygonOffsetClamp, (GLfloat factor, GLfloat units, GLfloat clamp)) \
+X(void, SpecializeShader, (GLuint shader, const GLchar * pEntryPoint, GLuint numSpecializationConstants, const GLuint * pConstantIndex, const GLuint * pConstantValue)) \
+VER_END(4_6) \
+EXT_START("GL_3DFX_tbuffer") \
+X(void, TbufferMask3DFX, (GLuint mask)) \
+EXT_END() \
+EXT_START("GL_AMD_debug_output") \
+X(void, DebugMessageCallbackAMD, (GLDEBUGPROCAMD callback, void * userParam)) \
+X(void, DebugMessageEnableAMD, (GLenum category, GLenum severity, GLsizei count, const GLuint * ids, GLboolean enabled)) \
+X(void, DebugMessageInsertAMD, (GLenum category, GLenum severity, GLuint id, GLsizei length, const GLchar * buf)) \
+X(GLuint, GetDebugMessageLogAMD, (GLuint count, GLsizei bufSize, GLenum * categories, GLenum * severities, GLuint * ids, GLsizei * lengths, GLchar * message)) \
+EXT_END() \
+EXT_START("GL_AMD_draw_buffers_blend") \
+X(void, BlendEquationIndexedAMD, (GLuint buf, GLenum mode)) \
+X(void, BlendEquationSeparateIndexedAMD, (GLuint buf, GLenum modeRGB, GLenum modeAlpha)) \
+X(void, BlendFuncIndexedAMD, (GLuint buf, GLenum src, GLenum dst)) \
+X(void, BlendFuncSeparateIndexedAMD, (GLuint buf, GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, GLenum dstAlpha)) \
+EXT_END() \
+EXT_START("GL_AMD_framebuffer_multisample_advanced") \
+X(void, NamedRenderbufferStorageMultisampleAdvancedAMD, (GLuint renderbuffer, GLsizei samples, GLsizei storageSamples, GLenum internalformat, GLsizei width, GLsizei height)) \
+X(void, RenderbufferStorageMultisampleAdvancedAMD, (GLenum target, GLsizei samples, GLsizei storageSamples, GLenum internalformat, GLsizei width, GLsizei height)) \
+EXT_END() \
+EXT_START("GL_AMD_framebuffer_sample_positions") \
+X(void, FramebufferSamplePositionsfvAMD, (GLenum target, GLuint numsamples, GLuint pixelindex, const GLfloat * values)) \
+X(void, GetFramebufferParameterfvAMD, (GLenum target, GLenum pname, GLuint numsamples, GLuint pixelindex, GLsizei size, GLfloat * values)) \
+X(void, GetNamedFramebufferParameterfvAMD, (GLuint framebuffer, GLenum pname, GLuint numsamples, GLuint pixelindex, GLsizei size, GLfloat * values)) \
+X(void, NamedFramebufferSamplePositionsfvAMD, (GLuint framebuffer, GLuint numsamples, GLuint pixelindex, const GLfloat * values)) \
+EXT_END() \
+EXT_START("GL_AMD_gpu_shader_int64") \
+X(void, GetUniformi64vNV, (GLuint program, GLint location, GLint64EXT * params)) \
+X(void, GetUniformui64vNV, (GLuint program, GLint location, GLuint64EXT * params)) \
+X(void, ProgramUniform1i64NV, (GLuint program, GLint location, GLint64EXT x)) \
+X(void, ProgramUniform1i64vNV, (GLuint program, GLint location, GLsizei count, const GLint64EXT * value)) \
+X(void, ProgramUniform1ui64NV, (GLuint program, GLint location, GLuint64EXT x)) \
+X(void, ProgramUniform1ui64vNV, (GLuint program, GLint location, GLsizei count, const GLuint64EXT * value)) \
+X(void, ProgramUniform2i64NV, (GLuint program, GLint location, GLint64EXT x, GLint64EXT y)) \
+X(void, ProgramUniform2i64vNV, (GLuint program, GLint location, GLsizei count, const GLint64EXT * value)) \
+X(void, ProgramUniform2ui64NV, (GLuint program, GLint location, GLuint64EXT x, GLuint64EXT y)) \
+X(void, ProgramUniform2ui64vNV, (GLuint program, GLint location, GLsizei count, const GLuint64EXT * value)) \
+X(void, ProgramUniform3i64NV, (GLuint program, GLint location, GLint64EXT x, GLint64EXT y, GLint64EXT z)) \
+X(void, ProgramUniform3i64vNV, (GLuint program, GLint location, GLsizei count, const GLint64EXT * value)) \
+X(void, ProgramUniform3ui64NV, (GLuint program, GLint location, GLuint64EXT x, GLuint64EXT y, GLuint64EXT z)) \
+X(void, ProgramUniform3ui64vNV, (GLuint program, GLint location, GLsizei count, const GLuint64EXT * value)) \
+X(void, ProgramUniform4i64NV, (GLuint program, GLint location, GLint64EXT x, GLint64EXT y, GLint64EXT z, GLint64EXT w)) \
+X(void, ProgramUniform4i64vNV, (GLuint program, GLint location, GLsizei count, const GLint64EXT * value)) \
+X(void, ProgramUniform4ui64NV, (GLuint program, GLint location, GLuint64EXT x, GLuint64EXT y, GLuint64EXT z, GLuint64EXT w)) \
+X(void, ProgramUniform4ui64vNV, (GLuint program, GLint location, GLsizei count, const GLuint64EXT * value)) \
+X(void, Uniform1i64NV, (GLint location, GLint64EXT x)) \
+X(void, Uniform1i64vNV, (GLint location, GLsizei count, const GLint64EXT * value)) \
+X(void, Uniform1ui64NV, (GLint location, GLuint64EXT x)) \
+X(void, Uniform1ui64vNV, (GLint location, GLsizei count, const GLuint64EXT * value)) \
+X(void, Uniform2i64NV, (GLint location, GLint64EXT x, GLint64EXT y)) \
+X(void, Uniform2i64vNV, (GLint location, GLsizei count, const GLint64EXT * value)) \
+X(void, Uniform2ui64NV, (GLint location, GLuint64EXT x, GLuint64EXT y)) \
+X(void, Uniform2ui64vNV, (GLint location, GLsizei count, const GLuint64EXT * value)) \
+X(void, Uniform3i64NV, (GLint location, GLint64EXT x, GLint64EXT y, GLint64EXT z)) \
+X(void, Uniform3i64vNV, (GLint location, GLsizei count, const GLint64EXT * value)) \
+X(void, Uniform3ui64NV, (GLint location, GLuint64EXT x, GLuint64EXT y, GLuint64EXT z)) \
+X(void, Uniform3ui64vNV, (GLint location, GLsizei count, const GLuint64EXT * value)) \
+X(void, Uniform4i64NV, (GLint location, GLint64EXT x, GLint64EXT y, GLint64EXT z, GLint64EXT w)) \
+X(void, Uniform4i64vNV, (GLint location, GLsizei count, const GLint64EXT * value)) \
+X(void, Uniform4ui64NV, (GLint location, GLuint64EXT x, GLuint64EXT y, GLuint64EXT z, GLuint64EXT w)) \
+X(void, Uniform4ui64vNV, (GLint location, GLsizei count, const GLuint64EXT * value)) \
+EXT_END() \
+EXT_START("GL_AMD_interleaved_elements") \
+X(void, VertexAttribParameteriAMD, (GLuint index, GLenum pname, GLint param)) \
+EXT_END() \
+EXT_START("GL_AMD_multi_draw_indirect") \
+X(void, MultiDrawArraysIndirectAMD, (GLenum mode, const void * indirect, GLsizei primcount, GLsizei stride)) \
+X(void, MultiDrawElementsIndirectAMD, (GLenum mode, GLenum type, const void * indirect, GLsizei primcount, GLsizei stride)) \
+EXT_END() \
+EXT_START("GL_AMD_name_gen_delete") \
+X(void, DeleteNamesAMD, (GLenum identifier, GLuint num, const GLuint * names)) \
+X(void, GenNamesAMD, (GLenum identifier, GLuint num, GLuint * names)) \
+X(GLboolean, IsNameAMD, (GLenum identifier, GLuint name)) \
+EXT_END() \
+EXT_START("GL_AMD_occlusion_query_event") \
+X(void, QueryObjectParameteruiAMD, (GLenum target, GLuint id, GLenum pname, GLuint param)) \
+EXT_END() \
+EXT_START("GL_AMD_performance_monitor") \
+X(void, BeginPerfMonitorAMD, (GLuint monitor)) \
+X(void, DeletePerfMonitorsAMD, (GLsizei n, GLuint * monitors)) \
+X(void, EndPerfMonitorAMD, (GLuint monitor)) \
+X(void, GenPerfMonitorsAMD, (GLsizei n, GLuint * monitors)) \
+X(void, GetPerfMonitorCounterDataAMD, (GLuint monitor, GLenum pname, GLsizei dataSize, GLuint * data, GLint * bytesWritten)) \
+X(void, GetPerfMonitorCounterInfoAMD, (GLuint group, GLuint counter, GLenum pname, void * data)) \
+X(void, GetPerfMonitorCounterStringAMD, (GLuint group, GLuint counter, GLsizei bufSize, GLsizei * length, GLchar * counterString)) \
+X(void, GetPerfMonitorCountersAMD, (GLuint group, GLint * numCounters, GLint * maxActiveCounters, GLsizei counterSize, GLuint * counters)) \
+X(void, GetPerfMonitorGroupStringAMD, (GLuint group, GLsizei bufSize, GLsizei * length, GLchar * groupString)) \
+X(void, GetPerfMonitorGroupsAMD, (GLint * numGroups, GLsizei groupsSize, GLuint * groups)) \
+X(void, SelectPerfMonitorCountersAMD, (GLuint monitor, GLboolean enable, GLuint group, GLint numCounters, GLuint * counterList)) \
+EXT_END() \
+EXT_START("GL_AMD_sample_positions") \
+X(void, SetMultisamplefvAMD, (GLenum pname, GLuint index, const GLfloat * val)) \
+EXT_END() \
+EXT_START("GL_AMD_sparse_texture") \
+X(void, TexStorageSparseAMD, (GLenum target, GLenum internalFormat, GLsizei width, GLsizei height, GLsizei depth, GLsizei layers, GLbitfield flags)) \
+X(void, TextureStorageSparseAMD, (GLuint texture, GLenum target, GLenum internalFormat, GLsizei width, GLsizei height, GLsizei depth, GLsizei layers, GLbitfield flags)) \
+EXT_END() \
+EXT_START("GL_AMD_stencil_operation_extended") \
+X(void, StencilOpValueAMD, (GLenum face, GLuint value)) \
+EXT_END() \
+EXT_START("GL_AMD_vertex_shader_tessellator") \
+X(void, TessellationFactorAMD, (GLfloat factor)) \
+X(void, TessellationModeAMD, (GLenum mode)) \
+EXT_END() \
+EXT_START("GL_ANGLE_framebuffer_blit") \
+X(void, BlitFramebufferANGLE, (GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter)) \
+EXT_END() \
+EXT_START("GL_ANGLE_framebuffer_multisample") \
+X(void, RenderbufferStorageMultisampleANGLE, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height)) \
+EXT_END() \
+EXT_START("GL_ANGLE_instanced_arrays") \
+X(void, DrawArraysInstancedANGLE, (GLenum mode, GLint first, GLsizei count, GLsizei primcount)) \
+X(void, DrawElementsInstancedANGLE, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLsizei primcount)) \
+X(void, VertexAttribDivisorANGLE, (GLuint index, GLuint divisor)) \
+EXT_END() \
+EXT_START("GL_ANGLE_translated_shader_source") \
+X(void, GetTranslatedShaderSourceANGLE, (GLuint shader, GLsizei bufSize, GLsizei * length, GLchar * source)) \
+EXT_END() \
+EXT_START("GL_APPLE_copy_texture_levels") \
+X(void, CopyTextureLevelsAPPLE, (GLuint destinationTexture, GLuint sourceTexture, GLint sourceBaseLevel, GLsizei sourceLevelCount)) \
+EXT_END() \
+EXT_START("GL_APPLE_element_array") \
+X(void, DrawElementArrayAPPLE, (GLenum mode, GLint first, GLsizei count)) \
+X(void, DrawRangeElementArrayAPPLE, (GLenum mode, GLuint start, GLuint end, GLint first, GLsizei count)) \
+X(void, ElementPointerAPPLE, (GLenum type, const void * pointer)) \
+X(void, MultiDrawElementArrayAPPLE, (GLenum mode, const GLint * first, const GLsizei * count, GLsizei primcount)) \
+X(void, MultiDrawRangeElementArrayAPPLE, (GLenum mode, GLuint start, GLuint end, const GLint * first, const GLsizei * count, GLsizei primcount)) \
+EXT_END() \
+EXT_START("GL_APPLE_fence") \
+X(void, DeleteFencesAPPLE, (GLsizei n, const GLuint * fences)) \
+X(void, FinishFenceAPPLE, (GLuint fence)) \
+X(void, FinishObjectAPPLE, (GLenum object, GLint name)) \
+X(void, GenFencesAPPLE, (GLsizei n, GLuint * fences)) \
+X(GLboolean, IsFenceAPPLE, (GLuint fence)) \
+X(void, SetFenceAPPLE, (GLuint fence)) \
+X(GLboolean, TestFenceAPPLE, (GLuint fence)) \
+X(GLboolean, TestObjectAPPLE, (GLenum object, GLuint name)) \
+EXT_END() \
+EXT_START("GL_APPLE_flush_buffer_range") \
+X(void, BufferParameteriAPPLE, (GLenum target, GLenum pname, GLint param)) \
+X(void, FlushMappedBufferRangeAPPLE, (GLenum target, GLintptr offset, GLsizeiptr size)) \
+EXT_END() \
+EXT_START("GL_APPLE_framebuffer_multisample") \
+X(void, RenderbufferStorageMultisampleAPPLE, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height)) \
+X(void, ResolveMultisampleFramebufferAPPLE, ()) \
+EXT_END() \
+EXT_START("GL_APPLE_object_purgeable") \
+X(void, GetObjectParameterivAPPLE, (GLenum objectType, GLuint name, GLenum pname, GLint * params)) \
+X(GLenum, ObjectPurgeableAPPLE, (GLenum objectType, GLuint name, GLenum option)) \
+X(GLenum, ObjectUnpurgeableAPPLE, (GLenum objectType, GLuint name, GLenum option)) \
+EXT_END() \
+EXT_START("GL_APPLE_sync") \
+X(GLenum, ClientWaitSyncAPPLE, (GLsync sync, GLbitfield flags, GLuint64 timeout)) \
+X(void, DeleteSyncAPPLE, (GLsync sync)) \
+X(GLsync, FenceSyncAPPLE, (GLenum condition, GLbitfield flags)) \
+X(void, GetInteger64vAPPLE, (GLenum pname, GLint64 * params)) \
+X(void, GetSyncivAPPLE, (GLsync sync, GLenum pname, GLsizei count, GLsizei * length, GLint * values)) \
+X(GLboolean, IsSyncAPPLE, (GLsync sync)) \
+X(void, WaitSyncAPPLE, (GLsync sync, GLbitfield flags, GLuint64 timeout)) \
+EXT_END() \
+EXT_START("GL_APPLE_texture_range") \
+X(void, GetTexParameterPointervAPPLE, (GLenum target, GLenum pname, void ** params)) \
+X(void, TextureRangeAPPLE, (GLenum target, GLsizei length, const void * pointer)) \
+EXT_END() \
+EXT_START("GL_APPLE_vertex_array_object") \
+X(void, BindVertexArrayAPPLE, (GLuint array)) \
+X(void, DeleteVertexArraysAPPLE, (GLsizei n, const GLuint * arrays)) \
+X(void, GenVertexArraysAPPLE, (GLsizei n, GLuint * arrays)) \
+X(GLboolean, IsVertexArrayAPPLE, (GLuint array)) \
+EXT_END() \
+EXT_START("GL_APPLE_vertex_array_range") \
+X(void, FlushVertexArrayRangeAPPLE, (GLsizei length, void * pointer)) \
+X(void, VertexArrayParameteriAPPLE, (GLenum pname, GLint param)) \
+X(void, VertexArrayRangeAPPLE, (GLsizei length, void * pointer)) \
+EXT_END() \
+EXT_START("GL_APPLE_vertex_program_evaluators") \
+X(void, DisableVertexAttribAPPLE, (GLuint index, GLenum pname)) \
+X(void, EnableVertexAttribAPPLE, (GLuint index, GLenum pname)) \
+X(GLboolean, IsVertexAttribEnabledAPPLE, (GLuint index, GLenum pname)) \
+X(void, MapVertexAttrib1dAPPLE, (GLuint index, GLuint size, GLdouble u1, GLdouble u2, GLint stride, GLint order, const GLdouble * points)) \
+X(void, MapVertexAttrib1fAPPLE, (GLuint index, GLuint size, GLfloat u1, GLfloat u2, GLint stride, GLint order, const GLfloat * points)) \
+X(void, MapVertexAttrib2dAPPLE, (GLuint index, GLuint size, GLdouble u1, GLdouble u2, GLint ustride, GLint uorder, GLdouble v1, GLdouble v2, GLint vstride, GLint vorder, const GLdouble * points)) \
+X(void, MapVertexAttrib2fAPPLE, (GLuint index, GLuint size, GLfloat u1, GLfloat u2, GLint ustride, GLint uorder, GLfloat v1, GLfloat v2, GLint vstride, GLint vorder, const GLfloat * points)) \
+EXT_END() \
+EXT_START("GL_ARB_ES3_2_compatibility") \
+X(void, PrimitiveBoundingBoxARB, (GLfloat minX, GLfloat minY, GLfloat minZ, GLfloat minW, GLfloat maxX, GLfloat maxY, GLfloat maxZ, GLfloat maxW)) \
+EXT_END() \
+EXT_START("GL_ARB_bindless_texture") \
+X(GLuint64, GetImageHandleARB, (GLuint texture, GLint level, GLboolean layered, GLint layer, GLenum format)) \
+X(GLuint64, GetTextureHandleARB, (GLuint texture)) \
+X(GLuint64, GetTextureSamplerHandleARB, (GLuint texture, GLuint sampler)) \
+X(void, GetVertexAttribLui64vARB, (GLuint index, GLenum pname, GLuint64EXT * params)) \
+X(GLboolean, IsImageHandleResidentARB, (GLuint64 handle)) \
+X(GLboolean, IsTextureHandleResidentARB, (GLuint64 handle)) \
+X(void, MakeImageHandleNonResidentARB, (GLuint64 handle)) \
+X(void, MakeImageHandleResidentARB, (GLuint64 handle, GLenum access)) \
+X(void, MakeTextureHandleNonResidentARB, (GLuint64 handle)) \
+X(void, MakeTextureHandleResidentARB, (GLuint64 handle)) \
+X(void, ProgramUniformHandleui64ARB, (GLuint program, GLint location, GLuint64 value)) \
+X(void, ProgramUniformHandleui64vARB, (GLuint program, GLint location, GLsizei count, const GLuint64 * values)) \
+X(void, UniformHandleui64ARB, (GLint location, GLuint64 value)) \
+X(void, UniformHandleui64vARB, (GLint location, GLsizei count, const GLuint64 * value)) \
+X(void, VertexAttribL1ui64ARB, (GLuint index, GLuint64EXT x)) \
+X(void, VertexAttribL1ui64vARB, (GLuint index, const GLuint64EXT * v)) \
+EXT_END() \
+EXT_START("GL_ARB_cl_event") \
+X(GLsync, CreateSyncFromCLeventARB, (struct _cl_context * context, struct _cl_event * event, GLbitfield flags)) \
+EXT_END() \
+EXT_START("GL_ARB_color_buffer_float") \
+X(void, ClampColorARB, (GLenum target, GLenum clamp)) \
+EXT_END() \
+EXT_START("GL_ARB_compute_variable_group_size") \
+X(void, DispatchComputeGroupSizeARB, (GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z, GLuint group_size_x, GLuint group_size_y, GLuint group_size_z)) \
+EXT_END() \
+EXT_START("GL_ARB_debug_output") \
+X(void, DebugMessageCallbackARB, (GLDEBUGPROCARB callback, const void * userParam)) \
+X(void, DebugMessageControlARB, (GLenum source, GLenum type, GLenum severity, GLsizei count, const GLuint * ids, GLboolean enabled)) \
+X(void, DebugMessageInsertARB, (GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar * buf)) \
+X(GLuint, GetDebugMessageLogARB, (GLuint count, GLsizei bufSize, GLenum * sources, GLenum * types, GLuint * ids, GLenum * severities, GLsizei * lengths, GLchar * messageLog)) \
+EXT_END() \
+EXT_START("GL_ARB_draw_buffers") \
+X(void, DrawBuffersARB, (GLsizei n, const GLenum * bufs)) \
+EXT_END() \
+EXT_START("GL_ARB_draw_buffers_blend") \
+X(void, BlendEquationSeparateiARB, (GLuint buf, GLenum modeRGB, GLenum modeAlpha)) \
+X(void, BlendEquationiARB, (GLuint buf, GLenum mode)) \
+X(void, BlendFuncSeparateiARB, (GLuint buf, GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, GLenum dstAlpha)) \
+X(void, BlendFunciARB, (GLuint buf, GLenum src, GLenum dst)) \
+EXT_END() \
+EXT_START("GL_ARB_draw_instanced") \
+X(void, DrawArraysInstancedARB, (GLenum mode, GLint first, GLsizei count, GLsizei primcount)) \
+X(void, DrawElementsInstancedARB, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLsizei primcount)) \
+EXT_END() \
+EXT_START("GL_ARB_fragment_program") \
+X(void, BindProgramARB, (GLenum target, GLuint program)) \
+X(void, DeleteProgramsARB, (GLsizei n, const GLuint * programs)) \
+X(void, GenProgramsARB, (GLsizei n, GLuint * programs)) \
+X(void, GetProgramEnvParameterdvARB, (GLenum target, GLuint index, GLdouble * params)) \
+X(void, GetProgramEnvParameterfvARB, (GLenum target, GLuint index, GLfloat * params)) \
+X(void, GetProgramLocalParameterdvARB, (GLenum target, GLuint index, GLdouble * params)) \
+X(void, GetProgramLocalParameterfvARB, (GLenum target, GLuint index, GLfloat * params)) \
+X(void, GetProgramStringARB, (GLenum target, GLenum pname, void * string)) \
+X(void, GetProgramivARB, (GLenum target, GLenum pname, GLint * params)) \
+X(GLboolean, IsProgramARB, (GLuint program)) \
+X(void, ProgramEnvParameter4dARB, (GLenum target, GLuint index, GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
+X(void, ProgramEnvParameter4dvARB, (GLenum target, GLuint index, const GLdouble * params)) \
+X(void, ProgramEnvParameter4fARB, (GLenum target, GLuint index, GLfloat x, GLfloat y, GLfloat z, GLfloat w)) \
+X(void, ProgramEnvParameter4fvARB, (GLenum target, GLuint index, const GLfloat * params)) \
+X(void, ProgramLocalParameter4dARB, (GLenum target, GLuint index, GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
+X(void, ProgramLocalParameter4dvARB, (GLenum target, GLuint index, const GLdouble * params)) \
+X(void, ProgramLocalParameter4fARB, (GLenum target, GLuint index, GLfloat x, GLfloat y, GLfloat z, GLfloat w)) \
+X(void, ProgramLocalParameter4fvARB, (GLenum target, GLuint index, const GLfloat * params)) \
+X(void, ProgramStringARB, (GLenum target, GLenum format, GLsizei len, const void * string)) \
+EXT_END() \
+EXT_START("GL_ARB_geometry_shader4") \
+X(void, FramebufferTextureARB, (GLenum target, GLenum attachment, GLuint texture, GLint level)) \
+X(void, FramebufferTextureFaceARB, (GLenum target, GLenum attachment, GLuint texture, GLint level, GLenum face)) \
+X(void, FramebufferTextureLayerARB, (GLenum target, GLenum attachment, GLuint texture, GLint level, GLint layer)) \
+X(void, ProgramParameteriARB, (GLuint program, GLenum pname, GLint value)) \
+EXT_END() \
+EXT_START("GL_ARB_gl_spirv") \
+X(void, SpecializeShaderARB, (GLuint shader, const GLchar * pEntryPoint, GLuint numSpecializationConstants, const GLuint * pConstantIndex, const GLuint * pConstantValue)) \
+EXT_END() \
+EXT_START("GL_ARB_gpu_shader_int64") \
+X(void, GetUniformi64vARB, (GLuint program, GLint location, GLint64 * params)) \
+X(void, GetUniformui64vARB, (GLuint program, GLint location, GLuint64 * params)) \
+X(void, GetnUniformi64vARB, (GLuint program, GLint location, GLsizei bufSize, GLint64 * params)) \
+X(void, GetnUniformui64vARB, (GLuint program, GLint location, GLsizei bufSize, GLuint64 * params)) \
+X(void, ProgramUniform1i64ARB, (GLuint program, GLint location, GLint64 x)) \
+X(void, ProgramUniform1i64vARB, (GLuint program, GLint location, GLsizei count, const GLint64 * value)) \
+X(void, ProgramUniform1ui64ARB, (GLuint program, GLint location, GLuint64 x)) \
+X(void, ProgramUniform1ui64vARB, (GLuint program, GLint location, GLsizei count, const GLuint64 * value)) \
+X(void, ProgramUniform2i64ARB, (GLuint program, GLint location, GLint64 x, GLint64 y)) \
+X(void, ProgramUniform2i64vARB, (GLuint program, GLint location, GLsizei count, const GLint64 * value)) \
+X(void, ProgramUniform2ui64ARB, (GLuint program, GLint location, GLuint64 x, GLuint64 y)) \
+X(void, ProgramUniform2ui64vARB, (GLuint program, GLint location, GLsizei count, const GLuint64 * value)) \
+X(void, ProgramUniform3i64ARB, (GLuint program, GLint location, GLint64 x, GLint64 y, GLint64 z)) \
+X(void, ProgramUniform3i64vARB, (GLuint program, GLint location, GLsizei count, const GLint64 * value)) \
+X(void, ProgramUniform3ui64ARB, (GLuint program, GLint location, GLuint64 x, GLuint64 y, GLuint64 z)) \
+X(void, ProgramUniform3ui64vARB, (GLuint program, GLint location, GLsizei count, const GLuint64 * value)) \
+X(void, ProgramUniform4i64ARB, (GLuint program, GLint location, GLint64 x, GLint64 y, GLint64 z, GLint64 w)) \
+X(void, ProgramUniform4i64vARB, (GLuint program, GLint location, GLsizei count, const GLint64 * value)) \
+X(void, ProgramUniform4ui64ARB, (GLuint program, GLint location, GLuint64 x, GLuint64 y, GLuint64 z, GLuint64 w)) \
+X(void, ProgramUniform4ui64vARB, (GLuint program, GLint location, GLsizei count, const GLuint64 * value)) \
+X(void, Uniform1i64ARB, (GLint location, GLint64 x)) \
+X(void, Uniform1i64vARB, (GLint location, GLsizei count, const GLint64 * value)) \
+X(void, Uniform1ui64ARB, (GLint location, GLuint64 x)) \
+X(void, Uniform1ui64vARB, (GLint location, GLsizei count, const GLuint64 * value)) \
+X(void, Uniform2i64ARB, (GLint location, GLint64 x, GLint64 y)) \
+X(void, Uniform2i64vARB, (GLint location, GLsizei count, const GLint64 * value)) \
+X(void, Uniform2ui64ARB, (GLint location, GLuint64 x, GLuint64 y)) \
+X(void, Uniform2ui64vARB, (GLint location, GLsizei count, const GLuint64 * value)) \
+X(void, Uniform3i64ARB, (GLint location, GLint64 x, GLint64 y, GLint64 z)) \
+X(void, Uniform3i64vARB, (GLint location, GLsizei count, const GLint64 * value)) \
+X(void, Uniform3ui64ARB, (GLint location, GLuint64 x, GLuint64 y, GLuint64 z)) \
+X(void, Uniform3ui64vARB, (GLint location, GLsizei count, const GLuint64 * value)) \
+X(void, Uniform4i64ARB, (GLint location, GLint64 x, GLint64 y, GLint64 z, GLint64 w)) \
+X(void, Uniform4i64vARB, (GLint location, GLsizei count, const GLint64 * value)) \
+X(void, Uniform4ui64ARB, (GLint location, GLuint64 x, GLuint64 y, GLuint64 z, GLuint64 w)) \
+X(void, Uniform4ui64vARB, (GLint location, GLsizei count, const GLuint64 * value)) \
+EXT_END() \
+EXT_START("GL_ARB_imaging") \
+X(void, ColorSubTable, (GLenum target, GLsizei start, GLsizei count, GLenum format, GLenum type, const void * data)) \
+X(void, ColorTable, (GLenum target, GLenum internalformat, GLsizei width, GLenum format, GLenum type, const void * table)) \
+X(void, ColorTableParameterfv, (GLenum target, GLenum pname, const GLfloat * params)) \
+X(void, ColorTableParameteriv, (GLenum target, GLenum pname, const GLint * params)) \
+X(void, ConvolutionFilter1D, (GLenum target, GLenum internalformat, GLsizei width, GLenum format, GLenum type, const void * image)) \
+X(void, ConvolutionFilter2D, (GLenum target, GLenum internalformat, GLsizei width, GLsizei height, GLenum format, GLenum type, const void * image)) \
+X(void, ConvolutionParameterf, (GLenum target, GLenum pname, GLfloat params)) \
+X(void, ConvolutionParameterfv, (GLenum target, GLenum pname, const GLfloat * params)) \
+X(void, ConvolutionParameteri, (GLenum target, GLenum pname, GLint params)) \
+X(void, ConvolutionParameteriv, (GLenum target, GLenum pname, const GLint * params)) \
+X(void, CopyColorSubTable, (GLenum target, GLsizei start, GLint x, GLint y, GLsizei width)) \
+X(void, CopyColorTable, (GLenum target, GLenum internalformat, GLint x, GLint y, GLsizei width)) \
+X(void, CopyConvolutionFilter1D, (GLenum target, GLenum internalformat, GLint x, GLint y, GLsizei width)) \
+X(void, CopyConvolutionFilter2D, (GLenum target, GLenum internalformat, GLint x, GLint y, GLsizei width, GLsizei height)) \
+X(void, GetColorTable, (GLenum target, GLenum format, GLenum type, void * table)) \
+X(void, GetColorTableParameterfv, (GLenum target, GLenum pname, GLfloat * params)) \
+X(void, GetColorTableParameteriv, (GLenum target, GLenum pname, GLint * params)) \
+X(void, GetConvolutionFilter, (GLenum target, GLenum format, GLenum type, void * image)) \
+X(void, GetConvolutionParameterfv, (GLenum target, GLenum pname, GLfloat * params)) \
+X(void, GetConvolutionParameteriv, (GLenum target, GLenum pname, GLint * params)) \
+X(void, GetHistogram, (GLenum target, GLboolean reset, GLenum format, GLenum type, void * values)) \
+X(void, GetHistogramParameterfv, (GLenum target, GLenum pname, GLfloat * params)) \
+X(void, GetHistogramParameteriv, (GLenum target, GLenum pname, GLint * params)) \
+X(void, GetMinmax, (GLenum target, GLboolean reset, GLenum format, GLenum type, void * values)) \
+X(void, GetMinmaxParameterfv, (GLenum target, GLenum pname, GLfloat * params)) \
+X(void, GetMinmaxParameteriv, (GLenum target, GLenum pname, GLint * params)) \
+X(void, GetSeparableFilter, (GLenum target, GLenum format, GLenum type, void * row, void * column, void * span)) \
+X(void, Histogram, (GLenum target, GLsizei width, GLenum internalformat, GLboolean sink)) \
+X(void, Minmax, (GLenum target, GLenum internalformat, GLboolean sink)) \
+X(void, ResetHistogram, (GLenum target)) \
+X(void, ResetMinmax, (GLenum target)) \
+X(void, SeparableFilter2D, (GLenum target, GLenum internalformat, GLsizei width, GLsizei height, GLenum format, GLenum type, const void * row, const void * column)) \
+EXT_END() \
+EXT_START("GL_ARB_indirect_parameters") \
+X(void, MultiDrawArraysIndirectCountARB, (GLenum mode, const void * indirect, GLintptr drawcount, GLsizei maxdrawcount, GLsizei stride)) \
+X(void, MultiDrawElementsIndirectCountARB, (GLenum mode, GLenum type, const void * indirect, GLintptr drawcount, GLsizei maxdrawcount, GLsizei stride)) \
+EXT_END() \
+EXT_START("GL_ARB_instanced_arrays") \
+X(void, VertexAttribDivisorARB, (GLuint index, GLuint divisor)) \
+EXT_END() \
+EXT_START("GL_ARB_matrix_palette") \
+X(void, CurrentPaletteMatrixARB, (GLint index)) \
+X(void, MatrixIndexPointerARB, (GLint size, GLenum type, GLsizei stride, const void * pointer)) \
+X(void, MatrixIndexubvARB, (GLint size, const GLubyte * indices)) \
+X(void, MatrixIndexuivARB, (GLint size, const GLuint * indices)) \
+X(void, MatrixIndexusvARB, (GLint size, const GLushort * indices)) \
+EXT_END() \
+EXT_START("GL_ARB_multisample") \
+X(void, SampleCoverageARB, (GLfloat value, GLboolean invert)) \
+EXT_END() \
+EXT_START("GL_ARB_multitexture") \
+X(void, ActiveTextureARB, (GLenum texture)) \
+X(void, ClientActiveTextureARB, (GLenum texture)) \
+X(void, MultiTexCoord1dARB, (GLenum target, GLdouble s)) \
+X(void, MultiTexCoord1dvARB, (GLenum target, const GLdouble * v)) \
+X(void, MultiTexCoord1fARB, (GLenum target, GLfloat s)) \
+X(void, MultiTexCoord1fvARB, (GLenum target, const GLfloat * v)) \
+X(void, MultiTexCoord1iARB, (GLenum target, GLint s)) \
+X(void, MultiTexCoord1ivARB, (GLenum target, const GLint * v)) \
+X(void, MultiTexCoord1sARB, (GLenum target, GLshort s)) \
+X(void, MultiTexCoord1svARB, (GLenum target, const GLshort * v)) \
+X(void, MultiTexCoord2dARB, (GLenum target, GLdouble s, GLdouble t)) \
+X(void, MultiTexCoord2dvARB, (GLenum target, const GLdouble * v)) \
+X(void, MultiTexCoord2fARB, (GLenum target, GLfloat s, GLfloat t)) \
+X(void, MultiTexCoord2fvARB, (GLenum target, const GLfloat * v)) \
+X(void, MultiTexCoord2iARB, (GLenum target, GLint s, GLint t)) \
+X(void, MultiTexCoord2ivARB, (GLenum target, const GLint * v)) \
+X(void, MultiTexCoord2sARB, (GLenum target, GLshort s, GLshort t)) \
+X(void, MultiTexCoord2svARB, (GLenum target, const GLshort * v)) \
+X(void, MultiTexCoord3dARB, (GLenum target, GLdouble s, GLdouble t, GLdouble r)) \
+X(void, MultiTexCoord3dvARB, (GLenum target, const GLdouble * v)) \
+X(void, MultiTexCoord3fARB, (GLenum target, GLfloat s, GLfloat t, GLfloat r)) \
+X(void, MultiTexCoord3fvARB, (GLenum target, const GLfloat * v)) \
+X(void, MultiTexCoord3iARB, (GLenum target, GLint s, GLint t, GLint r)) \
+X(void, MultiTexCoord3ivARB, (GLenum target, const GLint * v)) \
+X(void, MultiTexCoord3sARB, (GLenum target, GLshort s, GLshort t, GLshort r)) \
+X(void, MultiTexCoord3svARB, (GLenum target, const GLshort * v)) \
+X(void, MultiTexCoord4dARB, (GLenum target, GLdouble s, GLdouble t, GLdouble r, GLdouble q)) \
+X(void, MultiTexCoord4dvARB, (GLenum target, const GLdouble * v)) \
+X(void, MultiTexCoord4fARB, (GLenum target, GLfloat s, GLfloat t, GLfloat r, GLfloat q)) \
+X(void, MultiTexCoord4fvARB, (GLenum target, const GLfloat * v)) \
+X(void, MultiTexCoord4iARB, (GLenum target, GLint s, GLint t, GLint r, GLint q)) \
+X(void, MultiTexCoord4ivARB, (GLenum target, const GLint * v)) \
+X(void, MultiTexCoord4sARB, (GLenum target, GLshort s, GLshort t, GLshort r, GLshort q)) \
+X(void, MultiTexCoord4svARB, (GLenum target, const GLshort * v)) \
+EXT_END() \
+EXT_START("GL_ARB_occlusion_query") \
+X(void, BeginQueryARB, (GLenum target, GLuint id)) \
+X(void, DeleteQueriesARB, (GLsizei n, const GLuint * ids)) \
+X(void, EndQueryARB, (GLenum target)) \
+X(void, GenQueriesARB, (GLsizei n, GLuint * ids)) \
+X(void, GetQueryObjectivARB, (GLuint id, GLenum pname, GLint * params)) \
+X(void, GetQueryObjectuivARB, (GLuint id, GLenum pname, GLuint * params)) \
+X(void, GetQueryivARB, (GLenum target, GLenum pname, GLint * params)) \
+X(GLboolean, IsQueryARB, (GLuint id)) \
+EXT_END() \
+EXT_START("GL_ARB_parallel_shader_compile") \
+X(void, MaxShaderCompilerThreadsARB, (GLuint count)) \
+EXT_END() \
+EXT_START("GL_ARB_point_parameters") \
+X(void, PointParameterfARB, (GLenum pname, GLfloat param)) \
+X(void, PointParameterfvARB, (GLenum pname, const GLfloat * params)) \
+EXT_END() \
+EXT_START("GL_ARB_robustness") \
+X(GLenum, GetGraphicsResetStatusARB, ()) \
+X(void, GetnColorTableARB, (GLenum target, GLenum format, GLenum type, GLsizei bufSize, void * table)) \
+X(void, GetnCompressedTexImageARB, (GLenum target, GLint lod, GLsizei bufSize, void * img)) \
+X(void, GetnConvolutionFilterARB, (GLenum target, GLenum format, GLenum type, GLsizei bufSize, void * image)) \
+X(void, GetnHistogramARB, (GLenum target, GLboolean reset, GLenum format, GLenum type, GLsizei bufSize, void * values)) \
+X(void, GetnMapdvARB, (GLenum target, GLenum query, GLsizei bufSize, GLdouble * v)) \
+X(void, GetnMapfvARB, (GLenum target, GLenum query, GLsizei bufSize, GLfloat * v)) \
+X(void, GetnMapivARB, (GLenum target, GLenum query, GLsizei bufSize, GLint * v)) \
+X(void, GetnMinmaxARB, (GLenum target, GLboolean reset, GLenum format, GLenum type, GLsizei bufSize, void * values)) \
+X(void, GetnPixelMapfvARB, (GLenum map, GLsizei bufSize, GLfloat * values)) \
+X(void, GetnPixelMapuivARB, (GLenum map, GLsizei bufSize, GLuint * values)) \
+X(void, GetnPixelMapusvARB, (GLenum map, GLsizei bufSize, GLushort * values)) \
+X(void, GetnPolygonStippleARB, (GLsizei bufSize, GLubyte * pattern)) \
+X(void, GetnSeparableFilterARB, (GLenum target, GLenum format, GLenum type, GLsizei rowBufSize, void * row, GLsizei columnBufSize, void * column, void * span)) \
+X(void, GetnTexImageARB, (GLenum target, GLint level, GLenum format, GLenum type, GLsizei bufSize, void * img)) \
+X(void, GetnUniformdvARB, (GLuint program, GLint location, GLsizei bufSize, GLdouble * params)) \
+X(void, GetnUniformfvARB, (GLuint program, GLint location, GLsizei bufSize, GLfloat * params)) \
+X(void, GetnUniformivARB, (GLuint program, GLint location, GLsizei bufSize, GLint * params)) \
+X(void, GetnUniformuivARB, (GLuint program, GLint location, GLsizei bufSize, GLuint * params)) \
+X(void, ReadnPixelsARB, (GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, GLsizei bufSize, void * data)) \
+EXT_END() \
+EXT_START("GL_ARB_sample_locations") \
+X(void, EvaluateDepthValuesARB, ()) \
+X(void, FramebufferSampleLocationsfvARB, (GLenum target, GLuint start, GLsizei count, const GLfloat * v)) \
+X(void, NamedFramebufferSampleLocationsfvARB, (GLuint framebuffer, GLuint start, GLsizei count, const GLfloat * v)) \
+EXT_END() \
+EXT_START("GL_ARB_sample_shading") \
+X(void, MinSampleShadingARB, (GLfloat value)) \
+EXT_END() \
+EXT_START("GL_ARB_shader_objects") \
+X(void, AttachObjectARB, (GLhandleARB containerObj, GLhandleARB obj)) \
+X(void, CompileShaderARB, (GLhandleARB shaderObj)) \
+X(GLhandleARB, CreateProgramObjectARB, ()) \
+X(GLhandleARB, CreateShaderObjectARB, (GLenum shaderType)) \
+X(void, DeleteObjectARB, (GLhandleARB obj)) \
+X(void, DetachObjectARB, (GLhandleARB containerObj, GLhandleARB attachedObj)) \
+X(void, GetActiveUniformARB, (GLhandleARB programObj, GLuint index, GLsizei maxLength, GLsizei * length, GLint * size, GLenum * type, GLcharARB * name)) \
+X(void, GetAttachedObjectsARB, (GLhandleARB containerObj, GLsizei maxCount, GLsizei * count, GLhandleARB * obj)) \
+X(GLhandleARB, GetHandleARB, (GLenum pname)) \
+X(void, GetInfoLogARB, (GLhandleARB obj, GLsizei maxLength, GLsizei * length, GLcharARB * infoLog)) \
+X(void, GetObjectParameterfvARB, (GLhandleARB obj, GLenum pname, GLfloat * params)) \
+X(void, GetObjectParameterivARB, (GLhandleARB obj, GLenum pname, GLint * params)) \
+X(void, GetShaderSourceARB, (GLhandleARB obj, GLsizei maxLength, GLsizei * length, GLcharARB * source)) \
+X(GLint, GetUniformLocationARB, (GLhandleARB programObj, const GLcharARB * name)) \
+X(void, GetUniformfvARB, (GLhandleARB programObj, GLint location, GLfloat * params)) \
+X(void, GetUniformivARB, (GLhandleARB programObj, GLint location, GLint * params)) \
+X(void, LinkProgramARB, (GLhandleARB programObj)) \
+X(void, ShaderSourceARB, (GLhandleARB shaderObj, GLsizei count, const GLcharARB ** string, const GLint * length)) \
+X(void, Uniform1fARB, (GLint location, GLfloat v0)) \
+X(void, Uniform1fvARB, (GLint location, GLsizei count, const GLfloat * value)) \
+X(void, Uniform1iARB, (GLint location, GLint v0)) \
+X(void, Uniform1ivARB, (GLint location, GLsizei count, const GLint * value)) \
+X(void, Uniform2fARB, (GLint location, GLfloat v0, GLfloat v1)) \
+X(void, Uniform2fvARB, (GLint location, GLsizei count, const GLfloat * value)) \
+X(void, Uniform2iARB, (GLint location, GLint v0, GLint v1)) \
+X(void, Uniform2ivARB, (GLint location, GLsizei count, const GLint * value)) \
+X(void, Uniform3fARB, (GLint location, GLfloat v0, GLfloat v1, GLfloat v2)) \
+X(void, Uniform3fvARB, (GLint location, GLsizei count, const GLfloat * value)) \
+X(void, Uniform3iARB, (GLint location, GLint v0, GLint v1, GLint v2)) \
+X(void, Uniform3ivARB, (GLint location, GLsizei count, const GLint * value)) \
+X(void, Uniform4fARB, (GLint location, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3)) \
+X(void, Uniform4fvARB, (GLint location, GLsizei count, const GLfloat * value)) \
+X(void, Uniform4iARB, (GLint location, GLint v0, GLint v1, GLint v2, GLint v3)) \
+X(void, Uniform4ivARB, (GLint location, GLsizei count, const GLint * value)) \
+X(void, UniformMatrix2fvARB, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, UniformMatrix3fvARB, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, UniformMatrix4fvARB, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, UseProgramObjectARB, (GLhandleARB programObj)) \
+X(void, ValidateProgramARB, (GLhandleARB programObj)) \
+EXT_END() \
+EXT_START("GL_ARB_shading_language_include") \
+X(void, CompileShaderIncludeARB, (GLuint shader, GLsizei count, const GLchar *const* path, const GLint * length)) \
+X(void, DeleteNamedStringARB, (GLint namelen, const GLchar * name)) \
+X(void, GetNamedStringARB, (GLint namelen, const GLchar * name, GLsizei bufSize, GLint * stringlen, GLchar * string)) \
+X(void, GetNamedStringivARB, (GLint namelen, const GLchar * name, GLenum pname, GLint * params)) \
+X(GLboolean, IsNamedStringARB, (GLint namelen, const GLchar * name)) \
+X(void, NamedStringARB, (GLenum type, GLint namelen, const GLchar * name, GLint stringlen, const GLchar * string)) \
+EXT_END() \
+EXT_START("GL_ARB_sparse_buffer") \
+X(void, BufferPageCommitmentARB, (GLenum target, GLintptr offset, GLsizeiptr size, GLboolean commit)) \
+X(void, NamedBufferPageCommitmentARB, (GLuint buffer, GLintptr offset, GLsizeiptr size, GLboolean commit)) \
+X(void, NamedBufferPageCommitmentEXT, (GLuint buffer, GLintptr offset, GLsizeiptr size, GLboolean commit)) \
+EXT_END() \
+EXT_START("GL_ARB_sparse_texture") \
+X(void, TexPageCommitmentARB, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLboolean commit)) \
+EXT_END() \
+EXT_START("GL_ARB_texture_buffer_object") \
+X(void, TexBufferARB, (GLenum target, GLenum internalformat, GLuint buffer)) \
+EXT_END() \
+EXT_START("GL_ARB_texture_compression") \
+X(void, CompressedTexImage1DARB, (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLint border, GLsizei imageSize, const void * data)) \
+X(void, CompressedTexImage2DARB, (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLint border, GLsizei imageSize, const void * data)) \
+X(void, CompressedTexImage3DARB, (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLsizei imageSize, const void * data)) \
+X(void, CompressedTexSubImage1DARB, (GLenum target, GLint level, GLint xoffset, GLsizei width, GLenum format, GLsizei imageSize, const void * data)) \
+X(void, CompressedTexSubImage2DARB, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLsizei imageSize, const void * data)) \
+X(void, CompressedTexSubImage3DARB, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLsizei imageSize, const void * data)) \
+X(void, GetCompressedTexImageARB, (GLenum target, GLint level, void * img)) \
+EXT_END() \
+EXT_START("GL_ARB_transpose_matrix") \
+X(void, LoadTransposeMatrixdARB, (const GLdouble * m)) \
+X(void, LoadTransposeMatrixfARB, (const GLfloat * m)) \
+X(void, MultTransposeMatrixdARB, (const GLdouble * m)) \
+X(void, MultTransposeMatrixfARB, (const GLfloat * m)) \
+EXT_END() \
+EXT_START("GL_ARB_vertex_blend") \
+X(void, VertexBlendARB, (GLint count)) \
+X(void, WeightPointerARB, (GLint size, GLenum type, GLsizei stride, const void * pointer)) \
+X(void, WeightbvARB, (GLint size, const GLbyte * weights)) \
+X(void, WeightdvARB, (GLint size, const GLdouble * weights)) \
+X(void, WeightfvARB, (GLint size, const GLfloat * weights)) \
+X(void, WeightivARB, (GLint size, const GLint * weights)) \
+X(void, WeightsvARB, (GLint size, const GLshort * weights)) \
+X(void, WeightubvARB, (GLint size, const GLubyte * weights)) \
+X(void, WeightuivARB, (GLint size, const GLuint * weights)) \
+X(void, WeightusvARB, (GLint size, const GLushort * weights)) \
+EXT_END() \
+EXT_START("GL_ARB_vertex_buffer_object") \
+X(void, BindBufferARB, (GLenum target, GLuint buffer)) \
+X(void, BufferDataARB, (GLenum target, GLsizeiptrARB size, const void * data, GLenum usage)) \
+X(void, BufferSubDataARB, (GLenum target, GLintptrARB offset, GLsizeiptrARB size, const void * data)) \
+X(void, DeleteBuffersARB, (GLsizei n, const GLuint * buffers)) \
+X(void, GenBuffersARB, (GLsizei n, GLuint * buffers)) \
+X(void, GetBufferParameterivARB, (GLenum target, GLenum pname, GLint * params)) \
+X(void, GetBufferPointervARB, (GLenum target, GLenum pname, void ** params)) \
+X(void, GetBufferSubDataARB, (GLenum target, GLintptrARB offset, GLsizeiptrARB size, void * data)) \
+X(GLboolean, IsBufferARB, (GLuint buffer)) \
+X(void *, MapBufferARB, (GLenum target, GLenum access)) \
+X(GLboolean, UnmapBufferARB, (GLenum target)) \
+EXT_END() \
+EXT_START("GL_ARB_vertex_program") \
+X(void, DisableVertexAttribArrayARB, (GLuint index)) \
+X(void, EnableVertexAttribArrayARB, (GLuint index)) \
+X(void, GetVertexAttribPointervARB, (GLuint index, GLenum pname, void ** pointer)) \
+X(void, GetVertexAttribdvARB, (GLuint index, GLenum pname, GLdouble * params)) \
+X(void, GetVertexAttribfvARB, (GLuint index, GLenum pname, GLfloat * params)) \
+X(void, GetVertexAttribivARB, (GLuint index, GLenum pname, GLint * params)) \
+X(void, VertexAttrib1dARB, (GLuint index, GLdouble x)) \
+X(void, VertexAttrib1dvARB, (GLuint index, const GLdouble * v)) \
+X(void, VertexAttrib1fARB, (GLuint index, GLfloat x)) \
+X(void, VertexAttrib1fvARB, (GLuint index, const GLfloat * v)) \
+X(void, VertexAttrib1sARB, (GLuint index, GLshort x)) \
+X(void, VertexAttrib1svARB, (GLuint index, const GLshort * v)) \
+X(void, VertexAttrib2dARB, (GLuint index, GLdouble x, GLdouble y)) \
+X(void, VertexAttrib2dvARB, (GLuint index, const GLdouble * v)) \
+X(void, VertexAttrib2fARB, (GLuint index, GLfloat x, GLfloat y)) \
+X(void, VertexAttrib2fvARB, (GLuint index, const GLfloat * v)) \
+X(void, VertexAttrib2sARB, (GLuint index, GLshort x, GLshort y)) \
+X(void, VertexAttrib2svARB, (GLuint index, const GLshort * v)) \
+X(void, VertexAttrib3dARB, (GLuint index, GLdouble x, GLdouble y, GLdouble z)) \
+X(void, VertexAttrib3dvARB, (GLuint index, const GLdouble * v)) \
+X(void, VertexAttrib3fARB, (GLuint index, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, VertexAttrib3fvARB, (GLuint index, const GLfloat * v)) \
+X(void, VertexAttrib3sARB, (GLuint index, GLshort x, GLshort y, GLshort z)) \
+X(void, VertexAttrib3svARB, (GLuint index, const GLshort * v)) \
+X(void, VertexAttrib4NbvARB, (GLuint index, const GLbyte * v)) \
+X(void, VertexAttrib4NivARB, (GLuint index, const GLint * v)) \
+X(void, VertexAttrib4NsvARB, (GLuint index, const GLshort * v)) \
+X(void, VertexAttrib4NubARB, (GLuint index, GLubyte x, GLubyte y, GLubyte z, GLubyte w)) \
+X(void, VertexAttrib4NubvARB, (GLuint index, const GLubyte * v)) \
+X(void, VertexAttrib4NuivARB, (GLuint index, const GLuint * v)) \
+X(void, VertexAttrib4NusvARB, (GLuint index, const GLushort * v)) \
+X(void, VertexAttrib4bvARB, (GLuint index, const GLbyte * v)) \
+X(void, VertexAttrib4dARB, (GLuint index, GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
+X(void, VertexAttrib4dvARB, (GLuint index, const GLdouble * v)) \
+X(void, VertexAttrib4fARB, (GLuint index, GLfloat x, GLfloat y, GLfloat z, GLfloat w)) \
+X(void, VertexAttrib4fvARB, (GLuint index, const GLfloat * v)) \
+X(void, VertexAttrib4ivARB, (GLuint index, const GLint * v)) \
+X(void, VertexAttrib4sARB, (GLuint index, GLshort x, GLshort y, GLshort z, GLshort w)) \
+X(void, VertexAttrib4svARB, (GLuint index, const GLshort * v)) \
+X(void, VertexAttrib4ubvARB, (GLuint index, const GLubyte * v)) \
+X(void, VertexAttrib4uivARB, (GLuint index, const GLuint * v)) \
+X(void, VertexAttrib4usvARB, (GLuint index, const GLushort * v)) \
+X(void, VertexAttribPointerARB, (GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void * pointer)) \
+EXT_END() \
+EXT_START("GL_ARB_vertex_shader") \
+X(void, BindAttribLocationARB, (GLhandleARB programObj, GLuint index, const GLcharARB * name)) \
+X(void, GetActiveAttribARB, (GLhandleARB programObj, GLuint index, GLsizei maxLength, GLsizei * length, GLint * size, GLenum * type, GLcharARB * name)) \
+X(GLint, GetAttribLocationARB, (GLhandleARB programObj, const GLcharARB * name)) \
+EXT_END() \
+EXT_START("GL_ARB_viewport_array") \
+X(void, DepthRangeArraydvNV, (GLuint first, GLsizei count, const GLdouble * v)) \
+X(void, DepthRangeIndexeddNV, (GLuint index, GLdouble n, GLdouble f)) \
+EXT_END() \
+EXT_START("GL_ARB_window_pos") \
+X(void, WindowPos2dARB, (GLdouble x, GLdouble y)) \
+X(void, WindowPos2dvARB, (const GLdouble * v)) \
+X(void, WindowPos2fARB, (GLfloat x, GLfloat y)) \
+X(void, WindowPos2fvARB, (const GLfloat * v)) \
+X(void, WindowPos2iARB, (GLint x, GLint y)) \
+X(void, WindowPos2ivARB, (const GLint * v)) \
+X(void, WindowPos2sARB, (GLshort x, GLshort y)) \
+X(void, WindowPos2svARB, (const GLshort * v)) \
+X(void, WindowPos3dARB, (GLdouble x, GLdouble y, GLdouble z)) \
+X(void, WindowPos3dvARB, (const GLdouble * v)) \
+X(void, WindowPos3fARB, (GLfloat x, GLfloat y, GLfloat z)) \
+X(void, WindowPos3fvARB, (const GLfloat * v)) \
+X(void, WindowPos3iARB, (GLint x, GLint y, GLint z)) \
+X(void, WindowPos3ivARB, (const GLint * v)) \
+X(void, WindowPos3sARB, (GLshort x, GLshort y, GLshort z)) \
+X(void, WindowPos3svARB, (const GLshort * v)) \
+EXT_END() \
+EXT_START("GL_ARM_shader_core_properties") \
+X(void, MaxActiveShaderCoresARM, (GLuint count)) \
+EXT_END() \
+EXT_START("GL_ATI_draw_buffers") \
+X(void, DrawBuffersATI, (GLsizei n, const GLenum * bufs)) \
+EXT_END() \
+EXT_START("GL_ATI_element_array") \
+X(void, DrawElementArrayATI, (GLenum mode, GLsizei count)) \
+X(void, DrawRangeElementArrayATI, (GLenum mode, GLuint start, GLuint end, GLsizei count)) \
+X(void, ElementPointerATI, (GLenum type, const void * pointer)) \
+EXT_END() \
+EXT_START("GL_ATI_envmap_bumpmap") \
+X(void, GetTexBumpParameterfvATI, (GLenum pname, GLfloat * param)) \
+X(void, GetTexBumpParameterivATI, (GLenum pname, GLint * param)) \
+X(void, TexBumpParameterfvATI, (GLenum pname, const GLfloat * param)) \
+X(void, TexBumpParameterivATI, (GLenum pname, const GLint * param)) \
+EXT_END() \
+EXT_START("GL_ATI_fragment_shader") \
+X(void, AlphaFragmentOp1ATI, (GLenum op, GLuint dst, GLuint dstMod, GLuint arg1, GLuint arg1Rep, GLuint arg1Mod)) \
+X(void, AlphaFragmentOp2ATI, (GLenum op, GLuint dst, GLuint dstMod, GLuint arg1, GLuint arg1Rep, GLuint arg1Mod, GLuint arg2, GLuint arg2Rep, GLuint arg2Mod)) \
+X(void, AlphaFragmentOp3ATI, (GLenum op, GLuint dst, GLuint dstMod, GLuint arg1, GLuint arg1Rep, GLuint arg1Mod, GLuint arg2, GLuint arg2Rep, GLuint arg2Mod, GLuint arg3, GLuint arg3Rep, GLuint arg3Mod)) \
+X(void, BeginFragmentShaderATI, ()) \
+X(void, BindFragmentShaderATI, (GLuint id)) \
+X(void, ColorFragmentOp1ATI, (GLenum op, GLuint dst, GLuint dstMask, GLuint dstMod, GLuint arg1, GLuint arg1Rep, GLuint arg1Mod)) \
+X(void, ColorFragmentOp2ATI, (GLenum op, GLuint dst, GLuint dstMask, GLuint dstMod, GLuint arg1, GLuint arg1Rep, GLuint arg1Mod, GLuint arg2, GLuint arg2Rep, GLuint arg2Mod)) \
+X(void, ColorFragmentOp3ATI, (GLenum op, GLuint dst, GLuint dstMask, GLuint dstMod, GLuint arg1, GLuint arg1Rep, GLuint arg1Mod, GLuint arg2, GLuint arg2Rep, GLuint arg2Mod, GLuint arg3, GLuint arg3Rep, GLuint arg3Mod)) \
+X(void, DeleteFragmentShaderATI, (GLuint id)) \
+X(void, EndFragmentShaderATI, ()) \
+X(GLuint, GenFragmentShadersATI, (GLuint range)) \
+X(void, PassTexCoordATI, (GLuint dst, GLuint coord, GLenum swizzle)) \
+X(void, SampleMapATI, (GLuint dst, GLuint interp, GLenum swizzle)) \
+X(void, SetFragmentShaderConstantATI, (GLuint dst, const GLfloat * value)) \
+EXT_END() \
+EXT_START("GL_ATI_map_object_buffer") \
+X(void *, MapObjectBufferATI, (GLuint buffer)) \
+X(void, UnmapObjectBufferATI, (GLuint buffer)) \
+EXT_END() \
+EXT_START("GL_ATI_pn_triangles") \
+X(void, PNTrianglesfATI, (GLenum pname, GLfloat param)) \
+X(void, PNTrianglesiATI, (GLenum pname, GLint param)) \
+EXT_END() \
+EXT_START("GL_ATI_separate_stencil") \
+X(void, StencilFuncSeparateATI, (GLenum frontfunc, GLenum backfunc, GLint ref, GLuint mask)) \
+X(void, StencilOpSeparateATI, (GLenum face, GLenum sfail, GLenum dpfail, GLenum dppass)) \
+EXT_END() \
+EXT_START("GL_ATI_vertex_array_object") \
+X(void, ArrayObjectATI, (GLenum array, GLint size, GLenum type, GLsizei stride, GLuint buffer, GLuint offset)) \
+X(void, FreeObjectBufferATI, (GLuint buffer)) \
+X(void, GetArrayObjectfvATI, (GLenum array, GLenum pname, GLfloat * params)) \
+X(void, GetArrayObjectivATI, (GLenum array, GLenum pname, GLint * params)) \
+X(void, GetObjectBufferfvATI, (GLuint buffer, GLenum pname, GLfloat * params)) \
+X(void, GetObjectBufferivATI, (GLuint buffer, GLenum pname, GLint * params)) \
+X(void, GetVariantArrayObjectfvATI, (GLuint id, GLenum pname, GLfloat * params)) \
+X(void, GetVariantArrayObjectivATI, (GLuint id, GLenum pname, GLint * params)) \
+X(GLboolean, IsObjectBufferATI, (GLuint buffer)) \
+X(GLuint, NewObjectBufferATI, (GLsizei size, const void * pointer, GLenum usage)) \
+X(void, UpdateObjectBufferATI, (GLuint buffer, GLuint offset, GLsizei size, const void * pointer, GLenum preserve)) \
+X(void, VariantArrayObjectATI, (GLuint id, GLenum type, GLsizei stride, GLuint buffer, GLuint offset)) \
+EXT_END() \
+EXT_START("GL_ATI_vertex_attrib_array_object") \
+X(void, GetVertexAttribArrayObjectfvATI, (GLuint index, GLenum pname, GLfloat * params)) \
+X(void, GetVertexAttribArrayObjectivATI, (GLuint index, GLenum pname, GLint * params)) \
+X(void, VertexAttribArrayObjectATI, (GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, GLuint buffer, GLuint offset)) \
+EXT_END() \
+EXT_START("GL_ATI_vertex_streams") \
+X(void, ClientActiveVertexStreamATI, (GLenum stream)) \
+X(void, NormalStream3bATI, (GLenum stream, GLbyte nx, GLbyte ny, GLbyte nz)) \
+X(void, NormalStream3bvATI, (GLenum stream, const GLbyte * coords)) \
+X(void, NormalStream3dATI, (GLenum stream, GLdouble nx, GLdouble ny, GLdouble nz)) \
+X(void, NormalStream3dvATI, (GLenum stream, const GLdouble * coords)) \
+X(void, NormalStream3fATI, (GLenum stream, GLfloat nx, GLfloat ny, GLfloat nz)) \
+X(void, NormalStream3fvATI, (GLenum stream, const GLfloat * coords)) \
+X(void, NormalStream3iATI, (GLenum stream, GLint nx, GLint ny, GLint nz)) \
+X(void, NormalStream3ivATI, (GLenum stream, const GLint * coords)) \
+X(void, NormalStream3sATI, (GLenum stream, GLshort nx, GLshort ny, GLshort nz)) \
+X(void, NormalStream3svATI, (GLenum stream, const GLshort * coords)) \
+X(void, VertexBlendEnvfATI, (GLenum pname, GLfloat param)) \
+X(void, VertexBlendEnviATI, (GLenum pname, GLint param)) \
+X(void, VertexStream1dATI, (GLenum stream, GLdouble x)) \
+X(void, VertexStream1dvATI, (GLenum stream, const GLdouble * coords)) \
+X(void, VertexStream1fATI, (GLenum stream, GLfloat x)) \
+X(void, VertexStream1fvATI, (GLenum stream, const GLfloat * coords)) \
+X(void, VertexStream1iATI, (GLenum stream, GLint x)) \
+X(void, VertexStream1ivATI, (GLenum stream, const GLint * coords)) \
+X(void, VertexStream1sATI, (GLenum stream, GLshort x)) \
+X(void, VertexStream1svATI, (GLenum stream, const GLshort * coords)) \
+X(void, VertexStream2dATI, (GLenum stream, GLdouble x, GLdouble y)) \
+X(void, VertexStream2dvATI, (GLenum stream, const GLdouble * coords)) \
+X(void, VertexStream2fATI, (GLenum stream, GLfloat x, GLfloat y)) \
+X(void, VertexStream2fvATI, (GLenum stream, const GLfloat * coords)) \
+X(void, VertexStream2iATI, (GLenum stream, GLint x, GLint y)) \
+X(void, VertexStream2ivATI, (GLenum stream, const GLint * coords)) \
+X(void, VertexStream2sATI, (GLenum stream, GLshort x, GLshort y)) \
+X(void, VertexStream2svATI, (GLenum stream, const GLshort * coords)) \
+X(void, VertexStream3dATI, (GLenum stream, GLdouble x, GLdouble y, GLdouble z)) \
+X(void, VertexStream3dvATI, (GLenum stream, const GLdouble * coords)) \
+X(void, VertexStream3fATI, (GLenum stream, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, VertexStream3fvATI, (GLenum stream, const GLfloat * coords)) \
+X(void, VertexStream3iATI, (GLenum stream, GLint x, GLint y, GLint z)) \
+X(void, VertexStream3ivATI, (GLenum stream, const GLint * coords)) \
+X(void, VertexStream3sATI, (GLenum stream, GLshort x, GLshort y, GLshort z)) \
+X(void, VertexStream3svATI, (GLenum stream, const GLshort * coords)) \
+X(void, VertexStream4dATI, (GLenum stream, GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
+X(void, VertexStream4dvATI, (GLenum stream, const GLdouble * coords)) \
+X(void, VertexStream4fATI, (GLenum stream, GLfloat x, GLfloat y, GLfloat z, GLfloat w)) \
+X(void, VertexStream4fvATI, (GLenum stream, const GLfloat * coords)) \
+X(void, VertexStream4iATI, (GLenum stream, GLint x, GLint y, GLint z, GLint w)) \
+X(void, VertexStream4ivATI, (GLenum stream, const GLint * coords)) \
+X(void, VertexStream4sATI, (GLenum stream, GLshort x, GLshort y, GLshort z, GLshort w)) \
+X(void, VertexStream4svATI, (GLenum stream, const GLshort * coords)) \
+EXT_END() \
+EXT_START("GL_EXT_EGL_image_storage") \
+X(void, EGLImageTargetTexStorageEXT, (GLenum target, GLeglImageOES image, const GLint * attrib_list)) \
+X(void, EGLImageTargetTextureStorageEXT, (GLuint texture, GLeglImageOES image, const GLint * attrib_list)) \
+EXT_END() \
+EXT_START("GL_EXT_base_instance") \
+X(void, DrawArraysInstancedBaseInstanceEXT, (GLenum mode, GLint first, GLsizei count, GLsizei instancecount, GLuint baseinstance)) \
+X(void, DrawElementsInstancedBaseInstanceEXT, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLsizei instancecount, GLuint baseinstance)) \
+X(void, DrawElementsInstancedBaseVertexBaseInstanceEXT, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLsizei instancecount, GLint basevertex, GLuint baseinstance)) \
+EXT_END() \
+EXT_START("GL_EXT_bindable_uniform") \
+X(GLint, GetUniformBufferSizeEXT, (GLuint program, GLint location)) \
+X(GLintptr, GetUniformOffsetEXT, (GLuint program, GLint location)) \
+X(void, UniformBufferEXT, (GLuint program, GLint location, GLuint buffer)) \
+EXT_END() \
+EXT_START("GL_EXT_blend_color") \
+X(void, BlendColorEXT, (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha)) \
+EXT_END() \
+EXT_START("GL_EXT_blend_equation_separate") \
+X(void, BlendEquationSeparateEXT, (GLenum modeRGB, GLenum modeAlpha)) \
+EXT_END() \
+EXT_START("GL_EXT_blend_func_extended") \
+X(void, BindFragDataLocationEXT, (GLuint program, GLuint color, const GLchar * name)) \
+X(void, BindFragDataLocationIndexedEXT, (GLuint program, GLuint colorNumber, GLuint index, const GLchar * name)) \
+X(GLint, GetFragDataIndexEXT, (GLuint program, const GLchar * name)) \
+X(GLint, GetProgramResourceLocationIndexEXT, (GLuint program, GLenum programInterface, const GLchar * name)) \
+EXT_END() \
+EXT_START("GL_EXT_blend_func_separate") \
+X(void, BlendFuncSeparateEXT, (GLenum sfactorRGB, GLenum dfactorRGB, GLenum sfactorAlpha, GLenum dfactorAlpha)) \
+EXT_END() \
+EXT_START("GL_EXT_blend_minmax") \
+X(void, BlendEquationEXT, (GLenum mode)) \
+EXT_END() \
+EXT_START("GL_EXT_buffer_storage") \
+X(void, BufferStorageEXT, (GLenum target, GLsizeiptr size, const void * data, GLbitfield flags)) \
+EXT_END() \
+EXT_START("GL_EXT_clear_texture") \
+X(void, ClearTexImageEXT, (GLuint texture, GLint level, GLenum format, GLenum type, const void * data)) \
+X(void, ClearTexSubImageEXT, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, const void * data)) \
+EXT_END() \
+EXT_START("GL_EXT_clip_control") \
+X(void, ClipControlEXT, (GLenum origin, GLenum depth)) \
+EXT_END() \
+EXT_START("GL_EXT_color_subtable") \
+X(void, ColorSubTableEXT, (GLenum target, GLsizei start, GLsizei count, GLenum format, GLenum type, const void * data)) \
+X(void, CopyColorSubTableEXT, (GLenum target, GLsizei start, GLint x, GLint y, GLsizei width)) \
+EXT_END() \
+EXT_START("GL_EXT_compiled_vertex_array") \
+X(void, LockArraysEXT, (GLint first, GLsizei count)) \
+X(void, UnlockArraysEXT, ()) \
+EXT_END() \
+EXT_START("GL_EXT_convolution") \
+X(void, ConvolutionFilter1DEXT, (GLenum target, GLenum internalformat, GLsizei width, GLenum format, GLenum type, const void * image)) \
+X(void, ConvolutionFilter2DEXT, (GLenum target, GLenum internalformat, GLsizei width, GLsizei height, GLenum format, GLenum type, const void * image)) \
+X(void, ConvolutionParameterfEXT, (GLenum target, GLenum pname, GLfloat params)) \
+X(void, ConvolutionParameterfvEXT, (GLenum target, GLenum pname, const GLfloat * params)) \
+X(void, ConvolutionParameteriEXT, (GLenum target, GLenum pname, GLint params)) \
+X(void, ConvolutionParameterivEXT, (GLenum target, GLenum pname, const GLint * params)) \
+X(void, CopyConvolutionFilter1DEXT, (GLenum target, GLenum internalformat, GLint x, GLint y, GLsizei width)) \
+X(void, CopyConvolutionFilter2DEXT, (GLenum target, GLenum internalformat, GLint x, GLint y, GLsizei width, GLsizei height)) \
+X(void, GetConvolutionFilterEXT, (GLenum target, GLenum format, GLenum type, void * image)) \
+X(void, GetConvolutionParameterfvEXT, (GLenum target, GLenum pname, GLfloat * params)) \
+X(void, GetConvolutionParameterivEXT, (GLenum target, GLenum pname, GLint * params)) \
+X(void, GetSeparableFilterEXT, (GLenum target, GLenum format, GLenum type, void * row, void * column, void * span)) \
+X(void, SeparableFilter2DEXT, (GLenum target, GLenum internalformat, GLsizei width, GLsizei height, GLenum format, GLenum type, const void * row, const void * column)) \
+EXT_END() \
+EXT_START("GL_EXT_coordinate_frame") \
+X(void, Binormal3bEXT, (GLbyte bx, GLbyte by, GLbyte bz)) \
+X(void, Binormal3bvEXT, (const GLbyte * v)) \
+X(void, Binormal3dEXT, (GLdouble bx, GLdouble by, GLdouble bz)) \
+X(void, Binormal3dvEXT, (const GLdouble * v)) \
+X(void, Binormal3fEXT, (GLfloat bx, GLfloat by, GLfloat bz)) \
+X(void, Binormal3fvEXT, (const GLfloat * v)) \
+X(void, Binormal3iEXT, (GLint bx, GLint by, GLint bz)) \
+X(void, Binormal3ivEXT, (const GLint * v)) \
+X(void, Binormal3sEXT, (GLshort bx, GLshort by, GLshort bz)) \
+X(void, Binormal3svEXT, (const GLshort * v)) \
+X(void, BinormalPointerEXT, (GLenum type, GLsizei stride, const void * pointer)) \
+X(void, Tangent3bEXT, (GLbyte tx, GLbyte ty, GLbyte tz)) \
+X(void, Tangent3bvEXT, (const GLbyte * v)) \
+X(void, Tangent3dEXT, (GLdouble tx, GLdouble ty, GLdouble tz)) \
+X(void, Tangent3dvEXT, (const GLdouble * v)) \
+X(void, Tangent3fEXT, (GLfloat tx, GLfloat ty, GLfloat tz)) \
+X(void, Tangent3fvEXT, (const GLfloat * v)) \
+X(void, Tangent3iEXT, (GLint tx, GLint ty, GLint tz)) \
+X(void, Tangent3ivEXT, (const GLint * v)) \
+X(void, Tangent3sEXT, (GLshort tx, GLshort ty, GLshort tz)) \
+X(void, Tangent3svEXT, (const GLshort * v)) \
+X(void, TangentPointerEXT, (GLenum type, GLsizei stride, const void * pointer)) \
+EXT_END() \
+EXT_START("GL_EXT_copy_image") \
+X(void, CopyImageSubDataEXT, (GLuint srcName, GLenum srcTarget, GLint srcLevel, GLint srcX, GLint srcY, GLint srcZ, GLuint dstName, GLenum dstTarget, GLint dstLevel, GLint dstX, GLint dstY, GLint dstZ, GLsizei srcWidth, GLsizei srcHeight, GLsizei srcDepth)) \
+EXT_END() \
+EXT_START("GL_EXT_copy_texture") \
+X(void, CopyTexImage1DEXT, (GLenum target, GLint level, GLenum internalformat, GLint x, GLint y, GLsizei width, GLint border)) \
+X(void, CopyTexImage2DEXT, (GLenum target, GLint level, GLenum internalformat, GLint x, GLint y, GLsizei width, GLsizei height, GLint border)) \
+X(void, CopyTexSubImage1DEXT, (GLenum target, GLint level, GLint xoffset, GLint x, GLint y, GLsizei width)) \
+X(void, CopyTexSubImage2DEXT, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width, GLsizei height)) \
+X(void, CopyTexSubImage3DEXT, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLint x, GLint y, GLsizei width, GLsizei height)) \
+EXT_END() \
+EXT_START("GL_EXT_cull_vertex") \
+X(void, CullParameterdvEXT, (GLenum pname, GLdouble * params)) \
+X(void, CullParameterfvEXT, (GLenum pname, GLfloat * params)) \
+EXT_END() \
+EXT_START("GL_EXT_debug_label") \
+X(void, GetObjectLabelEXT, (GLenum type, GLuint object, GLsizei bufSize, GLsizei * length, GLchar * label)) \
+X(void, LabelObjectEXT, (GLenum type, GLuint object, GLsizei length, const GLchar * label)) \
+EXT_END() \
+EXT_START("GL_EXT_debug_marker") \
+X(void, InsertEventMarkerEXT, (GLsizei length, const GLchar * marker)) \
+X(void, PopGroupMarkerEXT, ()) \
+X(void, PushGroupMarkerEXT, (GLsizei length, const GLchar * marker)) \
+EXT_END() \
+EXT_START("GL_EXT_depth_bounds_test") \
+X(void, DepthBoundsEXT, (GLclampd zmin, GLclampd zmax)) \
+EXT_END() \
+EXT_START("GL_EXT_direct_state_access") \
+X(void, BindMultiTextureEXT, (GLenum texunit, GLenum target, GLuint texture)) \
+X(GLenum, CheckNamedFramebufferStatusEXT, (GLuint framebuffer, GLenum target)) \
+X(void, ClearNamedBufferDataEXT, (GLuint buffer, GLenum internalformat, GLenum format, GLenum type, const void * data)) \
+X(void, ClearNamedBufferSubDataEXT, (GLuint buffer, GLenum internalformat, GLsizeiptr offset, GLsizeiptr size, GLenum format, GLenum type, const void * data)) \
+X(void, ClientAttribDefaultEXT, (GLbitfield mask)) \
+X(void, CompressedMultiTexImage1DEXT, (GLenum texunit, GLenum target, GLint level, GLenum internalformat, GLsizei width, GLint border, GLsizei imageSize, const void * bits)) \
+X(void, CompressedMultiTexImage2DEXT, (GLenum texunit, GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLint border, GLsizei imageSize, const void * bits)) \
+X(void, CompressedMultiTexImage3DEXT, (GLenum texunit, GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLsizei imageSize, const void * bits)) \
+X(void, CompressedMultiTexSubImage1DEXT, (GLenum texunit, GLenum target, GLint level, GLint xoffset, GLsizei width, GLenum format, GLsizei imageSize, const void * bits)) \
+X(void, CompressedMultiTexSubImage2DEXT, (GLenum texunit, GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLsizei imageSize, const void * bits)) \
+X(void, CompressedMultiTexSubImage3DEXT, (GLenum texunit, GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLsizei imageSize, const void * bits)) \
+X(void, CompressedTextureImage1DEXT, (GLuint texture, GLenum target, GLint level, GLenum internalformat, GLsizei width, GLint border, GLsizei imageSize, const void * bits)) \
+X(void, CompressedTextureImage2DEXT, (GLuint texture, GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLint border, GLsizei imageSize, const void * bits)) \
+X(void, CompressedTextureImage3DEXT, (GLuint texture, GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLsizei imageSize, const void * bits)) \
+X(void, CompressedTextureSubImage1DEXT, (GLuint texture, GLenum target, GLint level, GLint xoffset, GLsizei width, GLenum format, GLsizei imageSize, const void * bits)) \
+X(void, CompressedTextureSubImage2DEXT, (GLuint texture, GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLsizei imageSize, const void * bits)) \
+X(void, CompressedTextureSubImage3DEXT, (GLuint texture, GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLsizei imageSize, const void * bits)) \
+X(void, CopyMultiTexImage1DEXT, (GLenum texunit, GLenum target, GLint level, GLenum internalformat, GLint x, GLint y, GLsizei width, GLint border)) \
+X(void, CopyMultiTexImage2DEXT, (GLenum texunit, GLenum target, GLint level, GLenum internalformat, GLint x, GLint y, GLsizei width, GLsizei height, GLint border)) \
+X(void, CopyMultiTexSubImage1DEXT, (GLenum texunit, GLenum target, GLint level, GLint xoffset, GLint x, GLint y, GLsizei width)) \
+X(void, CopyMultiTexSubImage2DEXT, (GLenum texunit, GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width, GLsizei height)) \
+X(void, CopyMultiTexSubImage3DEXT, (GLenum texunit, GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLint x, GLint y, GLsizei width, GLsizei height)) \
+X(void, CopyTextureImage1DEXT, (GLuint texture, GLenum target, GLint level, GLenum internalformat, GLint x, GLint y, GLsizei width, GLint border)) \
+X(void, CopyTextureImage2DEXT, (GLuint texture, GLenum target, GLint level, GLenum internalformat, GLint x, GLint y, GLsizei width, GLsizei height, GLint border)) \
+X(void, CopyTextureSubImage1DEXT, (GLuint texture, GLenum target, GLint level, GLint xoffset, GLint x, GLint y, GLsizei width)) \
+X(void, CopyTextureSubImage2DEXT, (GLuint texture, GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width, GLsizei height)) \
+X(void, CopyTextureSubImage3DEXT, (GLuint texture, GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLint x, GLint y, GLsizei width, GLsizei height)) \
+X(void, DisableClientStateIndexedEXT, (GLenum array, GLuint index)) \
+X(void, DisableClientStateiEXT, (GLenum array, GLuint index)) \
+X(void, DisableIndexedEXT, (GLenum target, GLuint index)) \
+X(void, DisableVertexArrayAttribEXT, (GLuint vaobj, GLuint index)) \
+X(void, DisableVertexArrayEXT, (GLuint vaobj, GLenum array)) \
+X(void, EnableClientStateIndexedEXT, (GLenum array, GLuint index)) \
+X(void, EnableClientStateiEXT, (GLenum array, GLuint index)) \
+X(void, EnableIndexedEXT, (GLenum target, GLuint index)) \
+X(void, EnableVertexArrayAttribEXT, (GLuint vaobj, GLuint index)) \
+X(void, EnableVertexArrayEXT, (GLuint vaobj, GLenum array)) \
+X(void, FlushMappedNamedBufferRangeEXT, (GLuint buffer, GLintptr offset, GLsizeiptr length)) \
+X(void, FramebufferDrawBufferEXT, (GLuint framebuffer, GLenum mode)) \
+X(void, FramebufferDrawBuffersEXT, (GLuint framebuffer, GLsizei n, const GLenum * bufs)) \
+X(void, FramebufferReadBufferEXT, (GLuint framebuffer, GLenum mode)) \
+X(void, GenerateMultiTexMipmapEXT, (GLenum texunit, GLenum target)) \
+X(void, GenerateTextureMipmapEXT, (GLuint texture, GLenum target)) \
+X(void, GetBooleanIndexedvEXT, (GLenum target, GLuint index, GLboolean * data)) \
+X(void, GetCompressedMultiTexImageEXT, (GLenum texunit, GLenum target, GLint lod, void * img)) \
+X(void, GetCompressedTextureImageEXT, (GLuint texture, GLenum target, GLint lod, void * img)) \
+X(void, GetDoubleIndexedvEXT, (GLenum target, GLuint index, GLdouble * data)) \
+X(void, GetDoublei_vEXT, (GLenum pname, GLuint index, GLdouble * params)) \
+X(void, GetFloatIndexedvEXT, (GLenum target, GLuint index, GLfloat * data)) \
+X(void, GetFloati_vEXT, (GLenum pname, GLuint index, GLfloat * params)) \
+X(void, GetFramebufferParameterivEXT, (GLuint framebuffer, GLenum pname, GLint * params)) \
+X(void, GetIntegerIndexedvEXT, (GLenum target, GLuint index, GLint * data)) \
+X(void, GetMultiTexEnvfvEXT, (GLenum texunit, GLenum target, GLenum pname, GLfloat * params)) \
+X(void, GetMultiTexEnvivEXT, (GLenum texunit, GLenum target, GLenum pname, GLint * params)) \
+X(void, GetMultiTexGendvEXT, (GLenum texunit, GLenum coord, GLenum pname, GLdouble * params)) \
+X(void, GetMultiTexGenfvEXT, (GLenum texunit, GLenum coord, GLenum pname, GLfloat * params)) \
+X(void, GetMultiTexGenivEXT, (GLenum texunit, GLenum coord, GLenum pname, GLint * params)) \
+X(void, GetMultiTexImageEXT, (GLenum texunit, GLenum target, GLint level, GLenum format, GLenum type, void * pixels)) \
+X(void, GetMultiTexLevelParameterfvEXT, (GLenum texunit, GLenum target, GLint level, GLenum pname, GLfloat * params)) \
+X(void, GetMultiTexLevelParameterivEXT, (GLenum texunit, GLenum target, GLint level, GLenum pname, GLint * params)) \
+X(void, GetMultiTexParameterIivEXT, (GLenum texunit, GLenum target, GLenum pname, GLint * params)) \
+X(void, GetMultiTexParameterIuivEXT, (GLenum texunit, GLenum target, GLenum pname, GLuint * params)) \
+X(void, GetMultiTexParameterfvEXT, (GLenum texunit, GLenum target, GLenum pname, GLfloat * params)) \
+X(void, GetMultiTexParameterivEXT, (GLenum texunit, GLenum target, GLenum pname, GLint * params)) \
+X(void, GetNamedBufferParameterivEXT, (GLuint buffer, GLenum pname, GLint * params)) \
+X(void, GetNamedBufferPointervEXT, (GLuint buffer, GLenum pname, void ** params)) \
+X(void, GetNamedBufferSubDataEXT, (GLuint buffer, GLintptr offset, GLsizeiptr size, void * data)) \
+X(void, GetNamedFramebufferAttachmentParameterivEXT, (GLuint framebuffer, GLenum attachment, GLenum pname, GLint * params)) \
+X(void, GetNamedFramebufferParameterivEXT, (GLuint framebuffer, GLenum pname, GLint * params)) \
+X(void, GetNamedProgramLocalParameterIivEXT, (GLuint program, GLenum target, GLuint index, GLint * params)) \
+X(void, GetNamedProgramLocalParameterIuivEXT, (GLuint program, GLenum target, GLuint index, GLuint * params)) \
+X(void, GetNamedProgramLocalParameterdvEXT, (GLuint program, GLenum target, GLuint index, GLdouble * params)) \
+X(void, GetNamedProgramLocalParameterfvEXT, (GLuint program, GLenum target, GLuint index, GLfloat * params)) \
+X(void, GetNamedProgramStringEXT, (GLuint program, GLenum target, GLenum pname, void * string)) \
+X(void, GetNamedProgramivEXT, (GLuint program, GLenum target, GLenum pname, GLint * params)) \
+X(void, GetNamedRenderbufferParameterivEXT, (GLuint renderbuffer, GLenum pname, GLint * params)) \
+X(void, GetPointerIndexedvEXT, (GLenum target, GLuint index, void ** data)) \
+X(void, GetPointeri_vEXT, (GLenum pname, GLuint index, void ** params)) \
+X(void, GetTextureImageEXT, (GLuint texture, GLenum target, GLint level, GLenum format, GLenum type, void * pixels)) \
+X(void, GetTextureLevelParameterfvEXT, (GLuint texture, GLenum target, GLint level, GLenum pname, GLfloat * params)) \
+X(void, GetTextureLevelParameterivEXT, (GLuint texture, GLenum target, GLint level, GLenum pname, GLint * params)) \
+X(void, GetTextureParameterIivEXT, (GLuint texture, GLenum target, GLenum pname, GLint * params)) \
+X(void, GetTextureParameterIuivEXT, (GLuint texture, GLenum target, GLenum pname, GLuint * params)) \
+X(void, GetTextureParameterfvEXT, (GLuint texture, GLenum target, GLenum pname, GLfloat * params)) \
+X(void, GetTextureParameterivEXT, (GLuint texture, GLenum target, GLenum pname, GLint * params)) \
+X(void, GetVertexArrayIntegeri_vEXT, (GLuint vaobj, GLuint index, GLenum pname, GLint * param)) \
+X(void, GetVertexArrayIntegervEXT, (GLuint vaobj, GLenum pname, GLint * param)) \
+X(void, GetVertexArrayPointeri_vEXT, (GLuint vaobj, GLuint index, GLenum pname, void ** param)) \
+X(void, GetVertexArrayPointervEXT, (GLuint vaobj, GLenum pname, void ** param)) \
+X(GLboolean, IsEnabledIndexedEXT, (GLenum target, GLuint index)) \
+X(void *, MapNamedBufferEXT, (GLuint buffer, GLenum access)) \
+X(void *, MapNamedBufferRangeEXT, (GLuint buffer, GLintptr offset, GLsizeiptr length, GLbitfield access)) \
+X(void, MatrixFrustumEXT, (GLenum mode, GLdouble left, GLdouble right, GLdouble bottom, GLdouble top, GLdouble zNear, GLdouble zFar)) \
+X(void, MatrixLoadIdentityEXT, (GLenum mode)) \
+X(void, MatrixLoadTransposedEXT, (GLenum mode, const GLdouble * m)) \
+X(void, MatrixLoadTransposefEXT, (GLenum mode, const GLfloat * m)) \
+X(void, MatrixLoaddEXT, (GLenum mode, const GLdouble * m)) \
+X(void, MatrixLoadfEXT, (GLenum mode, const GLfloat * m)) \
+X(void, MatrixMultTransposedEXT, (GLenum mode, const GLdouble * m)) \
+X(void, MatrixMultTransposefEXT, (GLenum mode, const GLfloat * m)) \
+X(void, MatrixMultdEXT, (GLenum mode, const GLdouble * m)) \
+X(void, MatrixMultfEXT, (GLenum mode, const GLfloat * m)) \
+X(void, MatrixOrthoEXT, (GLenum mode, GLdouble left, GLdouble right, GLdouble bottom, GLdouble top, GLdouble zNear, GLdouble zFar)) \
+X(void, MatrixPopEXT, (GLenum mode)) \
+X(void, MatrixPushEXT, (GLenum mode)) \
+X(void, MatrixRotatedEXT, (GLenum mode, GLdouble angle, GLdouble x, GLdouble y, GLdouble z)) \
+X(void, MatrixRotatefEXT, (GLenum mode, GLfloat angle, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, MatrixScaledEXT, (GLenum mode, GLdouble x, GLdouble y, GLdouble z)) \
+X(void, MatrixScalefEXT, (GLenum mode, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, MatrixTranslatedEXT, (GLenum mode, GLdouble x, GLdouble y, GLdouble z)) \
+X(void, MatrixTranslatefEXT, (GLenum mode, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, MultiTexBufferEXT, (GLenum texunit, GLenum target, GLenum internalformat, GLuint buffer)) \
+X(void, MultiTexCoordPointerEXT, (GLenum texunit, GLint size, GLenum type, GLsizei stride, const void * pointer)) \
+X(void, MultiTexEnvfEXT, (GLenum texunit, GLenum target, GLenum pname, GLfloat param)) \
+X(void, MultiTexEnvfvEXT, (GLenum texunit, GLenum target, GLenum pname, const GLfloat * params)) \
+X(void, MultiTexEnviEXT, (GLenum texunit, GLenum target, GLenum pname, GLint param)) \
+X(void, MultiTexEnvivEXT, (GLenum texunit, GLenum target, GLenum pname, const GLint * params)) \
+X(void, MultiTexGendEXT, (GLenum texunit, GLenum coord, GLenum pname, GLdouble param)) \
+X(void, MultiTexGendvEXT, (GLenum texunit, GLenum coord, GLenum pname, const GLdouble * params)) \
+X(void, MultiTexGenfEXT, (GLenum texunit, GLenum coord, GLenum pname, GLfloat param)) \
+X(void, MultiTexGenfvEXT, (GLenum texunit, GLenum coord, GLenum pname, const GLfloat * params)) \
+X(void, MultiTexGeniEXT, (GLenum texunit, GLenum coord, GLenum pname, GLint param)) \
+X(void, MultiTexGenivEXT, (GLenum texunit, GLenum coord, GLenum pname, const GLint * params)) \
+X(void, MultiTexImage1DEXT, (GLenum texunit, GLenum target, GLint level, GLint internalformat, GLsizei width, GLint border, GLenum format, GLenum type, const void * pixels)) \
+X(void, MultiTexImage2DEXT, (GLenum texunit, GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void * pixels)) \
+X(void, MultiTexImage3DEXT, (GLenum texunit, GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLenum format, GLenum type, const void * pixels)) \
+X(void, MultiTexParameterIivEXT, (GLenum texunit, GLenum target, GLenum pname, const GLint * params)) \
+X(void, MultiTexParameterIuivEXT, (GLenum texunit, GLenum target, GLenum pname, const GLuint * params)) \
+X(void, MultiTexParameterfEXT, (GLenum texunit, GLenum target, GLenum pname, GLfloat param)) \
+X(void, MultiTexParameterfvEXT, (GLenum texunit, GLenum target, GLenum pname, const GLfloat * params)) \
+X(void, MultiTexParameteriEXT, (GLenum texunit, GLenum target, GLenum pname, GLint param)) \
+X(void, MultiTexParameterivEXT, (GLenum texunit, GLenum target, GLenum pname, const GLint * params)) \
+X(void, MultiTexRenderbufferEXT, (GLenum texunit, GLenum target, GLuint renderbuffer)) \
+X(void, MultiTexSubImage1DEXT, (GLenum texunit, GLenum target, GLint level, GLint xoffset, GLsizei width, GLenum format, GLenum type, const void * pixels)) \
+X(void, MultiTexSubImage2DEXT, (GLenum texunit, GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void * pixels)) \
+X(void, MultiTexSubImage3DEXT, (GLenum texunit, GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, const void * pixels)) \
+X(void, NamedBufferDataEXT, (GLuint buffer, GLsizeiptr size, const void * data, GLenum usage)) \
+X(void, NamedBufferStorageEXT, (GLuint buffer, GLsizeiptr size, const void * data, GLbitfield flags)) \
+X(void, NamedBufferSubDataEXT, (GLuint buffer, GLintptr offset, GLsizeiptr size, const void * data)) \
+X(void, NamedCopyBufferSubDataEXT, (GLuint readBuffer, GLuint writeBuffer, GLintptr readOffset, GLintptr writeOffset, GLsizeiptr size)) \
+X(void, NamedFramebufferParameteriEXT, (GLuint framebuffer, GLenum pname, GLint param)) \
+X(void, NamedFramebufferRenderbufferEXT, (GLuint framebuffer, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer)) \
+X(void, NamedFramebufferTexture1DEXT, (GLuint framebuffer, GLenum attachment, GLenum textarget, GLuint texture, GLint level)) \
+X(void, NamedFramebufferTexture2DEXT, (GLuint framebuffer, GLenum attachment, GLenum textarget, GLuint texture, GLint level)) \
+X(void, NamedFramebufferTexture3DEXT, (GLuint framebuffer, GLenum attachment, GLenum textarget, GLuint texture, GLint level, GLint zoffset)) \
+X(void, NamedFramebufferTextureEXT, (GLuint framebuffer, GLenum attachment, GLuint texture, GLint level)) \
+X(void, NamedFramebufferTextureFaceEXT, (GLuint framebuffer, GLenum attachment, GLuint texture, GLint level, GLenum face)) \
+X(void, NamedFramebufferTextureLayerEXT, (GLuint framebuffer, GLenum attachment, GLuint texture, GLint level, GLint layer)) \
+X(void, NamedProgramLocalParameter4dEXT, (GLuint program, GLenum target, GLuint index, GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
+X(void, NamedProgramLocalParameter4dvEXT, (GLuint program, GLenum target, GLuint index, const GLdouble * params)) \
+X(void, NamedProgramLocalParameter4fEXT, (GLuint program, GLenum target, GLuint index, GLfloat x, GLfloat y, GLfloat z, GLfloat w)) \
+X(void, NamedProgramLocalParameter4fvEXT, (GLuint program, GLenum target, GLuint index, const GLfloat * params)) \
+X(void, NamedProgramLocalParameterI4iEXT, (GLuint program, GLenum target, GLuint index, GLint x, GLint y, GLint z, GLint w)) \
+X(void, NamedProgramLocalParameterI4ivEXT, (GLuint program, GLenum target, GLuint index, const GLint * params)) \
+X(void, NamedProgramLocalParameterI4uiEXT, (GLuint program, GLenum target, GLuint index, GLuint x, GLuint y, GLuint z, GLuint w)) \
+X(void, NamedProgramLocalParameterI4uivEXT, (GLuint program, GLenum target, GLuint index, const GLuint * params)) \
+X(void, NamedProgramLocalParameters4fvEXT, (GLuint program, GLenum target, GLuint index, GLsizei count, const GLfloat * params)) \
+X(void, NamedProgramLocalParametersI4ivEXT, (GLuint program, GLenum target, GLuint index, GLsizei count, const GLint * params)) \
+X(void, NamedProgramLocalParametersI4uivEXT, (GLuint program, GLenum target, GLuint index, GLsizei count, const GLuint * params)) \
+X(void, NamedProgramStringEXT, (GLuint program, GLenum target, GLenum format, GLsizei len, const void * string)) \
+X(void, NamedRenderbufferStorageEXT, (GLuint renderbuffer, GLenum internalformat, GLsizei width, GLsizei height)) \
+X(void, NamedRenderbufferStorageMultisampleCoverageEXT, (GLuint renderbuffer, GLsizei coverageSamples, GLsizei colorSamples, GLenum internalformat, GLsizei width, GLsizei height)) \
+X(void, NamedRenderbufferStorageMultisampleEXT, (GLuint renderbuffer, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height)) \
+X(void, ProgramUniform1dEXT, (GLuint program, GLint location, GLdouble x)) \
+X(void, ProgramUniform1dvEXT, (GLuint program, GLint location, GLsizei count, const GLdouble * value)) \
+X(void, ProgramUniform1fEXT, (GLuint program, GLint location, GLfloat v0)) \
+X(void, ProgramUniform1fvEXT, (GLuint program, GLint location, GLsizei count, const GLfloat * value)) \
+X(void, ProgramUniform1iEXT, (GLuint program, GLint location, GLint v0)) \
+X(void, ProgramUniform1ivEXT, (GLuint program, GLint location, GLsizei count, const GLint * value)) \
+X(void, ProgramUniform1uiEXT, (GLuint program, GLint location, GLuint v0)) \
+X(void, ProgramUniform1uivEXT, (GLuint program, GLint location, GLsizei count, const GLuint * value)) \
+X(void, ProgramUniform2dEXT, (GLuint program, GLint location, GLdouble x, GLdouble y)) \
+X(void, ProgramUniform2dvEXT, (GLuint program, GLint location, GLsizei count, const GLdouble * value)) \
+X(void, ProgramUniform2fEXT, (GLuint program, GLint location, GLfloat v0, GLfloat v1)) \
+X(void, ProgramUniform2fvEXT, (GLuint program, GLint location, GLsizei count, const GLfloat * value)) \
+X(void, ProgramUniform2iEXT, (GLuint program, GLint location, GLint v0, GLint v1)) \
+X(void, ProgramUniform2ivEXT, (GLuint program, GLint location, GLsizei count, const GLint * value)) \
+X(void, ProgramUniform2uiEXT, (GLuint program, GLint location, GLuint v0, GLuint v1)) \
+X(void, ProgramUniform2uivEXT, (GLuint program, GLint location, GLsizei count, const GLuint * value)) \
+X(void, ProgramUniform3dEXT, (GLuint program, GLint location, GLdouble x, GLdouble y, GLdouble z)) \
+X(void, ProgramUniform3dvEXT, (GLuint program, GLint location, GLsizei count, const GLdouble * value)) \
+X(void, ProgramUniform3fEXT, (GLuint program, GLint location, GLfloat v0, GLfloat v1, GLfloat v2)) \
+X(void, ProgramUniform3fvEXT, (GLuint program, GLint location, GLsizei count, const GLfloat * value)) \
+X(void, ProgramUniform3iEXT, (GLuint program, GLint location, GLint v0, GLint v1, GLint v2)) \
+X(void, ProgramUniform3ivEXT, (GLuint program, GLint location, GLsizei count, const GLint * value)) \
+X(void, ProgramUniform3uiEXT, (GLuint program, GLint location, GLuint v0, GLuint v1, GLuint v2)) \
+X(void, ProgramUniform3uivEXT, (GLuint program, GLint location, GLsizei count, const GLuint * value)) \
+X(void, ProgramUniform4dEXT, (GLuint program, GLint location, GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
+X(void, ProgramUniform4dvEXT, (GLuint program, GLint location, GLsizei count, const GLdouble * value)) \
+X(void, ProgramUniform4fEXT, (GLuint program, GLint location, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3)) \
+X(void, ProgramUniform4fvEXT, (GLuint program, GLint location, GLsizei count, const GLfloat * value)) \
+X(void, ProgramUniform4iEXT, (GLuint program, GLint location, GLint v0, GLint v1, GLint v2, GLint v3)) \
+X(void, ProgramUniform4ivEXT, (GLuint program, GLint location, GLsizei count, const GLint * value)) \
+X(void, ProgramUniform4uiEXT, (GLuint program, GLint location, GLuint v0, GLuint v1, GLuint v2, GLuint v3)) \
+X(void, ProgramUniform4uivEXT, (GLuint program, GLint location, GLsizei count, const GLuint * value)) \
+X(void, ProgramUniformMatrix2dvEXT, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, ProgramUniformMatrix2fvEXT, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, ProgramUniformMatrix2x3dvEXT, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, ProgramUniformMatrix2x3fvEXT, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, ProgramUniformMatrix2x4dvEXT, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, ProgramUniformMatrix2x4fvEXT, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, ProgramUniformMatrix3dvEXT, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, ProgramUniformMatrix3fvEXT, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, ProgramUniformMatrix3x2dvEXT, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, ProgramUniformMatrix3x2fvEXT, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, ProgramUniformMatrix3x4dvEXT, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, ProgramUniformMatrix3x4fvEXT, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, ProgramUniformMatrix4dvEXT, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, ProgramUniformMatrix4fvEXT, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, ProgramUniformMatrix4x2dvEXT, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, ProgramUniformMatrix4x2fvEXT, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, ProgramUniformMatrix4x3dvEXT, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLdouble * value)) \
+X(void, ProgramUniformMatrix4x3fvEXT, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, PushClientAttribDefaultEXT, (GLbitfield mask)) \
+X(void, TextureBufferEXT, (GLuint texture, GLenum target, GLenum internalformat, GLuint buffer)) \
+X(void, TextureBufferRangeEXT, (GLuint texture, GLenum target, GLenum internalformat, GLuint buffer, GLintptr offset, GLsizeiptr size)) \
+X(void, TextureImage1DEXT, (GLuint texture, GLenum target, GLint level, GLint internalformat, GLsizei width, GLint border, GLenum format, GLenum type, const void * pixels)) \
+X(void, TextureImage2DEXT, (GLuint texture, GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void * pixels)) \
+X(void, TextureImage3DEXT, (GLuint texture, GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLenum format, GLenum type, const void * pixels)) \
+X(void, TexturePageCommitmentEXT, (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLboolean commit)) \
+X(void, TextureParameterIivEXT, (GLuint texture, GLenum target, GLenum pname, const GLint * params)) \
+X(void, TextureParameterIuivEXT, (GLuint texture, GLenum target, GLenum pname, const GLuint * params)) \
+X(void, TextureParameterfEXT, (GLuint texture, GLenum target, GLenum pname, GLfloat param)) \
+X(void, TextureParameterfvEXT, (GLuint texture, GLenum target, GLenum pname, const GLfloat * params)) \
+X(void, TextureParameteriEXT, (GLuint texture, GLenum target, GLenum pname, GLint param)) \
+X(void, TextureParameterivEXT, (GLuint texture, GLenum target, GLenum pname, const GLint * params)) \
+X(void, TextureRenderbufferEXT, (GLuint texture, GLenum target, GLuint renderbuffer)) \
+X(void, TextureStorage1DEXT, (GLuint texture, GLenum target, GLsizei levels, GLenum internalformat, GLsizei width)) \
+X(void, TextureStorage2DEXT, (GLuint texture, GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height)) \
+X(void, TextureStorage2DMultisampleEXT, (GLuint texture, GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLboolean fixedsamplelocations)) \
+X(void, TextureStorage3DEXT, (GLuint texture, GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth)) \
+X(void, TextureStorage3DMultisampleEXT, (GLuint texture, GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLboolean fixedsamplelocations)) \
+X(void, TextureSubImage1DEXT, (GLuint texture, GLenum target, GLint level, GLint xoffset, GLsizei width, GLenum format, GLenum type, const void * pixels)) \
+X(void, TextureSubImage2DEXT, (GLuint texture, GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void * pixels)) \
+X(void, TextureSubImage3DEXT, (GLuint texture, GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, const void * pixels)) \
+X(GLboolean, UnmapNamedBufferEXT, (GLuint buffer)) \
+X(void, VertexArrayBindVertexBufferEXT, (GLuint vaobj, GLuint bindingindex, GLuint buffer, GLintptr offset, GLsizei stride)) \
+X(void, VertexArrayColorOffsetEXT, (GLuint vaobj, GLuint buffer, GLint size, GLenum type, GLsizei stride, GLintptr offset)) \
+X(void, VertexArrayEdgeFlagOffsetEXT, (GLuint vaobj, GLuint buffer, GLsizei stride, GLintptr offset)) \
+X(void, VertexArrayFogCoordOffsetEXT, (GLuint vaobj, GLuint buffer, GLenum type, GLsizei stride, GLintptr offset)) \
+X(void, VertexArrayIndexOffsetEXT, (GLuint vaobj, GLuint buffer, GLenum type, GLsizei stride, GLintptr offset)) \
+X(void, VertexArrayMultiTexCoordOffsetEXT, (GLuint vaobj, GLuint buffer, GLenum texunit, GLint size, GLenum type, GLsizei stride, GLintptr offset)) \
+X(void, VertexArrayNormalOffsetEXT, (GLuint vaobj, GLuint buffer, GLenum type, GLsizei stride, GLintptr offset)) \
+X(void, VertexArraySecondaryColorOffsetEXT, (GLuint vaobj, GLuint buffer, GLint size, GLenum type, GLsizei stride, GLintptr offset)) \
+X(void, VertexArrayTexCoordOffsetEXT, (GLuint vaobj, GLuint buffer, GLint size, GLenum type, GLsizei stride, GLintptr offset)) \
+X(void, VertexArrayVertexAttribBindingEXT, (GLuint vaobj, GLuint attribindex, GLuint bindingindex)) \
+X(void, VertexArrayVertexAttribDivisorEXT, (GLuint vaobj, GLuint index, GLuint divisor)) \
+X(void, VertexArrayVertexAttribFormatEXT, (GLuint vaobj, GLuint attribindex, GLint size, GLenum type, GLboolean normalized, GLuint relativeoffset)) \
+X(void, VertexArrayVertexAttribIFormatEXT, (GLuint vaobj, GLuint attribindex, GLint size, GLenum type, GLuint relativeoffset)) \
+X(void, VertexArrayVertexAttribIOffsetEXT, (GLuint vaobj, GLuint buffer, GLuint index, GLint size, GLenum type, GLsizei stride, GLintptr offset)) \
+X(void, VertexArrayVertexAttribLFormatEXT, (GLuint vaobj, GLuint attribindex, GLint size, GLenum type, GLuint relativeoffset)) \
+X(void, VertexArrayVertexAttribLOffsetEXT, (GLuint vaobj, GLuint buffer, GLuint index, GLint size, GLenum type, GLsizei stride, GLintptr offset)) \
+X(void, VertexArrayVertexAttribOffsetEXT, (GLuint vaobj, GLuint buffer, GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, GLintptr offset)) \
+X(void, VertexArrayVertexBindingDivisorEXT, (GLuint vaobj, GLuint bindingindex, GLuint divisor)) \
+X(void, VertexArrayVertexOffsetEXT, (GLuint vaobj, GLuint buffer, GLint size, GLenum type, GLsizei stride, GLintptr offset)) \
+EXT_END() \
+EXT_START("GL_EXT_discard_framebuffer") \
+X(void, DiscardFramebufferEXT, (GLenum target, GLsizei numAttachments, const GLenum * attachments)) \
+EXT_END() \
+EXT_START("GL_EXT_disjoint_timer_query") \
+X(void, BeginQueryEXT, (GLenum target, GLuint id)) \
+X(void, DeleteQueriesEXT, (GLsizei n, const GLuint * ids)) \
+X(void, EndQueryEXT, (GLenum target)) \
+X(void, GenQueriesEXT, (GLsizei n, GLuint * ids)) \
+X(void, GetInteger64vEXT, (GLenum pname, GLint64 * data)) \
+X(void, GetQueryObjecti64vEXT, (GLuint id, GLenum pname, GLint64 * params)) \
+X(void, GetQueryObjectivEXT, (GLuint id, GLenum pname, GLint * params)) \
+X(void, GetQueryObjectui64vEXT, (GLuint id, GLenum pname, GLuint64 * params)) \
+X(void, GetQueryObjectuivEXT, (GLuint id, GLenum pname, GLuint * params)) \
+X(void, GetQueryivEXT, (GLenum target, GLenum pname, GLint * params)) \
+X(GLboolean, IsQueryEXT, (GLuint id)) \
+X(void, QueryCounterEXT, (GLuint id, GLenum target)) \
+EXT_END() \
+EXT_START("GL_EXT_draw_buffers") \
+X(void, DrawBuffersEXT, (GLsizei n, const GLenum * bufs)) \
+EXT_END() \
+EXT_START("GL_EXT_draw_buffers2") \
+X(void, ColorMaskIndexedEXT, (GLuint index, GLboolean r, GLboolean g, GLboolean b, GLboolean a)) \
+EXT_END() \
+EXT_START("GL_EXT_draw_buffers_indexed") \
+X(void, BlendEquationSeparateiEXT, (GLuint buf, GLenum modeRGB, GLenum modeAlpha)) \
+X(void, BlendEquationiEXT, (GLuint buf, GLenum mode)) \
+X(void, BlendFuncSeparateiEXT, (GLuint buf, GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, GLenum dstAlpha)) \
+X(void, BlendFunciEXT, (GLuint buf, GLenum src, GLenum dst)) \
+X(void, ColorMaskiEXT, (GLuint index, GLboolean r, GLboolean g, GLboolean b, GLboolean a)) \
+X(void, DisableiEXT, (GLenum target, GLuint index)) \
+X(void, EnableiEXT, (GLenum target, GLuint index)) \
+X(GLboolean, IsEnablediEXT, (GLenum target, GLuint index)) \
+EXT_END() \
+EXT_START("GL_EXT_draw_elements_base_vertex") \
+X(void, DrawElementsBaseVertexEXT, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLint basevertex)) \
+X(void, DrawElementsInstancedBaseVertexEXT, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLsizei instancecount, GLint basevertex)) \
+X(void, DrawRangeElementsBaseVertexEXT, (GLenum mode, GLuint start, GLuint end, GLsizei count, GLenum type, const void * indices, GLint basevertex)) \
+X(void, MultiDrawElementsBaseVertexEXT, (GLenum mode, const GLsizei * count, GLenum type, const void *const* indices, GLsizei drawcount, const GLint * basevertex)) \
+EXT_END() \
+EXT_START("GL_EXT_draw_instanced") \
+X(void, DrawArraysInstancedEXT, (GLenum mode, GLint start, GLsizei count, GLsizei primcount)) \
+X(void, DrawElementsInstancedEXT, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLsizei primcount)) \
+EXT_END() \
+EXT_START("GL_EXT_draw_range_elements") \
+X(void, DrawRangeElementsEXT, (GLenum mode, GLuint start, GLuint end, GLsizei count, GLenum type, const void * indices)) \
+EXT_END() \
+EXT_START("GL_EXT_draw_transform_feedback") \
+X(void, DrawTransformFeedbackEXT, (GLenum mode, GLuint id)) \
+X(void, DrawTransformFeedbackInstancedEXT, (GLenum mode, GLuint id, GLsizei instancecount)) \
+EXT_END() \
+EXT_START("GL_EXT_external_buffer") \
+X(void, BufferStorageExternalEXT, (GLenum target, GLintptr offset, GLsizeiptr size, GLeglClientBufferEXT clientBuffer, GLbitfield flags)) \
+X(void, NamedBufferStorageExternalEXT, (GLuint buffer, GLintptr offset, GLsizeiptr size, GLeglClientBufferEXT clientBuffer, GLbitfield flags)) \
+EXT_END() \
+EXT_START("GL_EXT_fog_coord") \
+X(void, FogCoordPointerEXT, (GLenum type, GLsizei stride, const void * pointer)) \
+X(void, FogCoorddEXT, (GLdouble coord)) \
+X(void, FogCoorddvEXT, (const GLdouble * coord)) \
+X(void, FogCoordfEXT, (GLfloat coord)) \
+X(void, FogCoordfvEXT, (const GLfloat * coord)) \
+EXT_END() \
+EXT_START("GL_EXT_fragment_shading_rate") \
+X(void, FramebufferShadingRateEXT, (GLenum target, GLenum attachment, GLuint texture, GLint baseLayer, GLsizei numLayers, GLsizei texelWidth, GLsizei texelHeight)) \
+X(void, GetFragmentShadingRatesEXT, (GLsizei samples, GLsizei maxCount, GLsizei * count, GLenum * shadingRates)) \
+X(void, ShadingRateCombinerOpsEXT, (GLenum combinerOp0, GLenum combinerOp1)) \
+X(void, ShadingRateEXT, (GLenum rate)) \
+EXT_END() \
+EXT_START("GL_EXT_framebuffer_blit") \
+X(void, BlitFramebufferEXT, (GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter)) \
+EXT_END() \
+EXT_START("GL_EXT_framebuffer_blit_layers") \
+X(void, BlitFramebufferLayerEXT, (GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint srcLayer, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLint dstLayer, GLbitfield mask, GLenum filter)) \
+X(void, BlitFramebufferLayersEXT, (GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter)) \
+EXT_END() \
+EXT_START("GL_EXT_framebuffer_multisample") \
+X(void, RenderbufferStorageMultisampleEXT, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height)) \
+EXT_END() \
+EXT_START("GL_EXT_framebuffer_object") \
+X(void, BindFramebufferEXT, (GLenum target, GLuint framebuffer)) \
+X(void, BindRenderbufferEXT, (GLenum target, GLuint renderbuffer)) \
+X(GLenum, CheckFramebufferStatusEXT, (GLenum target)) \
+X(void, DeleteFramebuffersEXT, (GLsizei n, const GLuint * framebuffers)) \
+X(void, DeleteRenderbuffersEXT, (GLsizei n, const GLuint * renderbuffers)) \
+X(void, FramebufferRenderbufferEXT, (GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer)) \
+X(void, FramebufferTexture1DEXT, (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level)) \
+X(void, FramebufferTexture2DEXT, (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level)) \
+X(void, FramebufferTexture3DEXT, (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level, GLint zoffset)) \
+X(void, GenFramebuffersEXT, (GLsizei n, GLuint * framebuffers)) \
+X(void, GenRenderbuffersEXT, (GLsizei n, GLuint * renderbuffers)) \
+X(void, GenerateMipmapEXT, (GLenum target)) \
+X(void, GetFramebufferAttachmentParameterivEXT, (GLenum target, GLenum attachment, GLenum pname, GLint * params)) \
+X(void, GetRenderbufferParameterivEXT, (GLenum target, GLenum pname, GLint * params)) \
+X(GLboolean, IsFramebufferEXT, (GLuint framebuffer)) \
+X(GLboolean, IsRenderbufferEXT, (GLuint renderbuffer)) \
+X(void, RenderbufferStorageEXT, (GLenum target, GLenum internalformat, GLsizei width, GLsizei height)) \
+EXT_END() \
+EXT_START("GL_EXT_geometry_shader") \
+X(void, FramebufferTextureEXT, (GLenum target, GLenum attachment, GLuint texture, GLint level)) \
+EXT_END() \
+EXT_START("GL_EXT_geometry_shader4") \
+X(void, ProgramParameteriEXT, (GLuint program, GLenum pname, GLint value)) \
+EXT_END() \
+EXT_START("GL_EXT_gpu_program_parameters") \
+X(void, ProgramEnvParameters4fvEXT, (GLenum target, GLuint index, GLsizei count, const GLfloat * params)) \
+X(void, ProgramLocalParameters4fvEXT, (GLenum target, GLuint index, GLsizei count, const GLfloat * params)) \
+EXT_END() \
+EXT_START("GL_EXT_gpu_shader4") \
+X(GLint, GetFragDataLocationEXT, (GLuint program, const GLchar * name)) \
+X(void, GetUniformuivEXT, (GLuint program, GLint location, GLuint * params)) \
+X(void, GetVertexAttribIivEXT, (GLuint index, GLenum pname, GLint * params)) \
+X(void, GetVertexAttribIuivEXT, (GLuint index, GLenum pname, GLuint * params)) \
+X(void, Uniform1uiEXT, (GLint location, GLuint v0)) \
+X(void, Uniform1uivEXT, (GLint location, GLsizei count, const GLuint * value)) \
+X(void, Uniform2uiEXT, (GLint location, GLuint v0, GLuint v1)) \
+X(void, Uniform2uivEXT, (GLint location, GLsizei count, const GLuint * value)) \
+X(void, Uniform3uiEXT, (GLint location, GLuint v0, GLuint v1, GLuint v2)) \
+X(void, Uniform3uivEXT, (GLint location, GLsizei count, const GLuint * value)) \
+X(void, Uniform4uiEXT, (GLint location, GLuint v0, GLuint v1, GLuint v2, GLuint v3)) \
+X(void, Uniform4uivEXT, (GLint location, GLsizei count, const GLuint * value)) \
+X(void, VertexAttribI1iEXT, (GLuint index, GLint x)) \
+X(void, VertexAttribI1ivEXT, (GLuint index, const GLint * v)) \
+X(void, VertexAttribI1uiEXT, (GLuint index, GLuint x)) \
+X(void, VertexAttribI1uivEXT, (GLuint index, const GLuint * v)) \
+X(void, VertexAttribI2iEXT, (GLuint index, GLint x, GLint y)) \
+X(void, VertexAttribI2ivEXT, (GLuint index, const GLint * v)) \
+X(void, VertexAttribI2uiEXT, (GLuint index, GLuint x, GLuint y)) \
+X(void, VertexAttribI2uivEXT, (GLuint index, const GLuint * v)) \
+X(void, VertexAttribI3iEXT, (GLuint index, GLint x, GLint y, GLint z)) \
+X(void, VertexAttribI3ivEXT, (GLuint index, const GLint * v)) \
+X(void, VertexAttribI3uiEXT, (GLuint index, GLuint x, GLuint y, GLuint z)) \
+X(void, VertexAttribI3uivEXT, (GLuint index, const GLuint * v)) \
+X(void, VertexAttribI4bvEXT, (GLuint index, const GLbyte * v)) \
+X(void, VertexAttribI4iEXT, (GLuint index, GLint x, GLint y, GLint z, GLint w)) \
+X(void, VertexAttribI4ivEXT, (GLuint index, const GLint * v)) \
+X(void, VertexAttribI4svEXT, (GLuint index, const GLshort * v)) \
+X(void, VertexAttribI4ubvEXT, (GLuint index, const GLubyte * v)) \
+X(void, VertexAttribI4uiEXT, (GLuint index, GLuint x, GLuint y, GLuint z, GLuint w)) \
+X(void, VertexAttribI4uivEXT, (GLuint index, const GLuint * v)) \
+X(void, VertexAttribI4usvEXT, (GLuint index, const GLushort * v)) \
+X(void, VertexAttribIPointerEXT, (GLuint index, GLint size, GLenum type, GLsizei stride, const void * pointer)) \
+EXT_END() \
+EXT_START("GL_EXT_histogram") \
+X(void, GetHistogramEXT, (GLenum target, GLboolean reset, GLenum format, GLenum type, void * values)) \
+X(void, GetHistogramParameterfvEXT, (GLenum target, GLenum pname, GLfloat * params)) \
+X(void, GetHistogramParameterivEXT, (GLenum target, GLenum pname, GLint * params)) \
+X(void, GetMinmaxEXT, (GLenum target, GLboolean reset, GLenum format, GLenum type, void * values)) \
+X(void, GetMinmaxParameterfvEXT, (GLenum target, GLenum pname, GLfloat * params)) \
+X(void, GetMinmaxParameterivEXT, (GLenum target, GLenum pname, GLint * params)) \
+X(void, HistogramEXT, (GLenum target, GLsizei width, GLenum internalformat, GLboolean sink)) \
+X(void, MinmaxEXT, (GLenum target, GLenum internalformat, GLboolean sink)) \
+X(void, ResetHistogramEXT, (GLenum target)) \
+X(void, ResetMinmaxEXT, (GLenum target)) \
+EXT_END() \
+EXT_START("GL_EXT_index_func") \
+X(void, IndexFuncEXT, (GLenum func, GLclampf ref)) \
+EXT_END() \
+EXT_START("GL_EXT_index_material") \
+X(void, IndexMaterialEXT, (GLenum face, GLenum mode)) \
+EXT_END() \
+EXT_START("GL_EXT_instanced_arrays") \
+X(void, VertexAttribDivisorEXT, (GLuint index, GLuint divisor)) \
+EXT_END() \
+EXT_START("GL_EXT_light_texture") \
+X(void, ApplyTextureEXT, (GLenum mode)) \
+X(void, TextureLightEXT, (GLenum pname)) \
+X(void, TextureMaterialEXT, (GLenum face, GLenum mode)) \
+EXT_END() \
+EXT_START("GL_EXT_map_buffer_range") \
+X(void, FlushMappedBufferRangeEXT, (GLenum target, GLintptr offset, GLsizeiptr length)) \
+X(void *, MapBufferRangeEXT, (GLenum target, GLintptr offset, GLsizeiptr length, GLbitfield access)) \
+EXT_END() \
+EXT_START("GL_EXT_memory_object") \
+X(void, BufferStorageMemEXT, (GLenum target, GLsizeiptr size, GLuint memory, GLuint64 offset)) \
+X(void, CreateMemoryObjectsEXT, (GLsizei n, GLuint * memoryObjects)) \
+X(void, DeleteMemoryObjectsEXT, (GLsizei n, const GLuint * memoryObjects)) \
+X(void, GetMemoryObjectParameterivEXT, (GLuint memoryObject, GLenum pname, GLint * params)) \
+X(void, GetUnsignedBytei_vEXT, (GLenum target, GLuint index, GLubyte * data)) \
+X(void, GetUnsignedBytevEXT, (GLenum pname, GLubyte * data)) \
+X(GLboolean, IsMemoryObjectEXT, (GLuint memoryObject)) \
+X(void, MemoryObjectParameterivEXT, (GLuint memoryObject, GLenum pname, const GLint * params)) \
+X(void, NamedBufferStorageMemEXT, (GLuint buffer, GLsizeiptr size, GLuint memory, GLuint64 offset)) \
+X(void, TexStorageMem1DEXT, (GLenum target, GLsizei levels, GLenum internalFormat, GLsizei width, GLuint memory, GLuint64 offset)) \
+X(void, TexStorageMem2DEXT, (GLenum target, GLsizei levels, GLenum internalFormat, GLsizei width, GLsizei height, GLuint memory, GLuint64 offset)) \
+X(void, TexStorageMem2DMultisampleEXT, (GLenum target, GLsizei samples, GLenum internalFormat, GLsizei width, GLsizei height, GLboolean fixedSampleLocations, GLuint memory, GLuint64 offset)) \
+X(void, TexStorageMem3DEXT, (GLenum target, GLsizei levels, GLenum internalFormat, GLsizei width, GLsizei height, GLsizei depth, GLuint memory, GLuint64 offset)) \
+X(void, TexStorageMem3DMultisampleEXT, (GLenum target, GLsizei samples, GLenum internalFormat, GLsizei width, GLsizei height, GLsizei depth, GLboolean fixedSampleLocations, GLuint memory, GLuint64 offset)) \
+X(void, TextureStorageMem1DEXT, (GLuint texture, GLsizei levels, GLenum internalFormat, GLsizei width, GLuint memory, GLuint64 offset)) \
+X(void, TextureStorageMem2DEXT, (GLuint texture, GLsizei levels, GLenum internalFormat, GLsizei width, GLsizei height, GLuint memory, GLuint64 offset)) \
+X(void, TextureStorageMem2DMultisampleEXT, (GLuint texture, GLsizei samples, GLenum internalFormat, GLsizei width, GLsizei height, GLboolean fixedSampleLocations, GLuint memory, GLuint64 offset)) \
+X(void, TextureStorageMem3DEXT, (GLuint texture, GLsizei levels, GLenum internalFormat, GLsizei width, GLsizei height, GLsizei depth, GLuint memory, GLuint64 offset)) \
+X(void, TextureStorageMem3DMultisampleEXT, (GLuint texture, GLsizei samples, GLenum internalFormat, GLsizei width, GLsizei height, GLsizei depth, GLboolean fixedSampleLocations, GLuint memory, GLuint64 offset)) \
+EXT_END() \
+EXT_START("GL_EXT_memory_object_fd") \
+X(void, ImportMemoryFdEXT, (GLuint memory, GLuint64 size, GLenum handleType, GLint fd)) \
+EXT_END() \
+EXT_START("GL_EXT_memory_object_win32") \
+X(void, ImportMemoryWin32HandleEXT, (GLuint memory, GLuint64 size, GLenum handleType, void * handle)) \
+X(void, ImportMemoryWin32NameEXT, (GLuint memory, GLuint64 size, GLenum handleType, const void * name)) \
+EXT_END() \
+EXT_START("GL_EXT_mesh_shader") \
+X(void, DrawMeshTasksEXT, (GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z)) \
+X(void, DrawMeshTasksIndirectEXT, (GLintptr indirect)) \
+X(void, MultiDrawMeshTasksIndirectCountEXT, (GLintptr indirect, GLintptr drawcount, GLsizei maxdrawcount, GLsizei stride)) \
+X(void, MultiDrawMeshTasksIndirectEXT, (GLintptr indirect, GLsizei drawcount, GLsizei stride)) \
+EXT_END() \
+EXT_START("GL_EXT_multi_draw_arrays") \
+X(void, MultiDrawArraysEXT, (GLenum mode, const GLint * first, const GLsizei * count, GLsizei primcount)) \
+X(void, MultiDrawElementsEXT, (GLenum mode, const GLsizei * count, GLenum type, const void *const* indices, GLsizei primcount)) \
+EXT_END() \
+EXT_START("GL_EXT_multi_draw_indirect") \
+X(void, MultiDrawArraysIndirectEXT, (GLenum mode, const void * indirect, GLsizei drawcount, GLsizei stride)) \
+X(void, MultiDrawElementsIndirectEXT, (GLenum mode, GLenum type, const void * indirect, GLsizei drawcount, GLsizei stride)) \
+EXT_END() \
+EXT_START("GL_EXT_multisample") \
+X(void, SampleMaskEXT, (GLclampf value, GLboolean invert)) \
+X(void, SamplePatternEXT, (GLenum pattern)) \
+EXT_END() \
+EXT_START("GL_EXT_multisampled_render_to_texture") \
+X(void, FramebufferTexture2DMultisampleEXT, (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level, GLsizei samples)) \
+EXT_END() \
+EXT_START("GL_EXT_multiview_draw_buffers") \
+X(void, DrawBuffersIndexedEXT, (GLint n, const GLenum * location, const GLint * indices)) \
+X(void, GetIntegeri_vEXT, (GLenum target, GLuint index, GLint * data)) \
+X(void, ReadBufferIndexedEXT, (GLenum src, GLint index)) \
+EXT_END() \
+EXT_START("GL_EXT_paletted_texture") \
+X(void, ColorTableEXT, (GLenum target, GLenum internalFormat, GLsizei width, GLenum format, GLenum type, const void * table)) \
+X(void, GetColorTableEXT, (GLenum target, GLenum format, GLenum type, void * data)) \
+X(void, GetColorTableParameterfvEXT, (GLenum target, GLenum pname, GLfloat * params)) \
+X(void, GetColorTableParameterivEXT, (GLenum target, GLenum pname, GLint * params)) \
+EXT_END() \
+EXT_START("GL_EXT_pixel_transform") \
+X(void, GetPixelTransformParameterfvEXT, (GLenum target, GLenum pname, GLfloat * params)) \
+X(void, GetPixelTransformParameterivEXT, (GLenum target, GLenum pname, GLint * params)) \
+X(void, PixelTransformParameterfEXT, (GLenum target, GLenum pname, GLfloat param)) \
+X(void, PixelTransformParameterfvEXT, (GLenum target, GLenum pname, const GLfloat * params)) \
+X(void, PixelTransformParameteriEXT, (GLenum target, GLenum pname, GLint param)) \
+X(void, PixelTransformParameterivEXT, (GLenum target, GLenum pname, const GLint * params)) \
+EXT_END() \
+EXT_START("GL_EXT_point_parameters") \
+X(void, PointParameterfEXT, (GLenum pname, GLfloat param)) \
+X(void, PointParameterfvEXT, (GLenum pname, const GLfloat * params)) \
+EXT_END() \
+EXT_START("GL_EXT_polygon_offset") \
+X(void, PolygonOffsetEXT, (GLfloat factor, GLfloat bias)) \
+EXT_END() \
+EXT_START("GL_EXT_polygon_offset_clamp") \
+X(void, PolygonOffsetClampEXT, (GLfloat factor, GLfloat units, GLfloat clamp)) \
+EXT_END() \
+EXT_START("GL_EXT_primitive_bounding_box") \
+X(void, PrimitiveBoundingBoxEXT, (GLfloat minX, GLfloat minY, GLfloat minZ, GLfloat minW, GLfloat maxX, GLfloat maxY, GLfloat maxZ, GLfloat maxW)) \
+EXT_END() \
+EXT_START("GL_EXT_provoking_vertex") \
+X(void, ProvokingVertexEXT, (GLenum mode)) \
+EXT_END() \
+EXT_START("GL_EXT_raster_multisample") \
+X(void, RasterSamplesEXT, (GLuint samples, GLboolean fixedsamplelocations)) \
+EXT_END() \
+EXT_START("GL_EXT_robustness") \
+X(GLenum, GetGraphicsResetStatusEXT, ()) \
+X(void, GetnUniformfvEXT, (GLuint program, GLint location, GLsizei bufSize, GLfloat * params)) \
+X(void, GetnUniformivEXT, (GLuint program, GLint location, GLsizei bufSize, GLint * params)) \
+X(void, ReadnPixelsEXT, (GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, GLsizei bufSize, void * data)) \
+EXT_END() \
+EXT_START("GL_EXT_secondary_color") \
+X(void, SecondaryColor3bEXT, (GLbyte red, GLbyte green, GLbyte blue)) \
+X(void, SecondaryColor3bvEXT, (const GLbyte * v)) \
+X(void, SecondaryColor3dEXT, (GLdouble red, GLdouble green, GLdouble blue)) \
+X(void, SecondaryColor3dvEXT, (const GLdouble * v)) \
+X(void, SecondaryColor3fEXT, (GLfloat red, GLfloat green, GLfloat blue)) \
+X(void, SecondaryColor3fvEXT, (const GLfloat * v)) \
+X(void, SecondaryColor3iEXT, (GLint red, GLint green, GLint blue)) \
+X(void, SecondaryColor3ivEXT, (const GLint * v)) \
+X(void, SecondaryColor3sEXT, (GLshort red, GLshort green, GLshort blue)) \
+X(void, SecondaryColor3svEXT, (const GLshort * v)) \
+X(void, SecondaryColor3ubEXT, (GLubyte red, GLubyte green, GLubyte blue)) \
+X(void, SecondaryColor3ubvEXT, (const GLubyte * v)) \
+X(void, SecondaryColor3uiEXT, (GLuint red, GLuint green, GLuint blue)) \
+X(void, SecondaryColor3uivEXT, (const GLuint * v)) \
+X(void, SecondaryColor3usEXT, (GLushort red, GLushort green, GLushort blue)) \
+X(void, SecondaryColor3usvEXT, (const GLushort * v)) \
+X(void, SecondaryColorPointerEXT, (GLint size, GLenum type, GLsizei stride, const void * pointer)) \
+EXT_END() \
+EXT_START("GL_EXT_semaphore") \
+X(void, DeleteSemaphoresEXT, (GLsizei n, const GLuint * semaphores)) \
+X(void, GenSemaphoresEXT, (GLsizei n, GLuint * semaphores)) \
+X(void, GetSemaphoreParameterui64vEXT, (GLuint semaphore, GLenum pname, GLuint64 * params)) \
+X(GLboolean, IsSemaphoreEXT, (GLuint semaphore)) \
+X(void, SemaphoreParameterui64vEXT, (GLuint semaphore, GLenum pname, const GLuint64 * params)) \
+X(void, SignalSemaphoreEXT, (GLuint semaphore, GLuint numBufferBarriers, const GLuint * buffers, GLuint numTextureBarriers, const GLuint * textures, const GLenum * dstLayouts)) \
+X(void, WaitSemaphoreEXT, (GLuint semaphore, GLuint numBufferBarriers, const GLuint * buffers, GLuint numTextureBarriers, const GLuint * textures, const GLenum * srcLayouts)) \
+EXT_END() \
+EXT_START("GL_EXT_semaphore_fd") \
+X(void, ImportSemaphoreFdEXT, (GLuint semaphore, GLenum handleType, GLint fd)) \
+EXT_END() \
+EXT_START("GL_EXT_semaphore_win32") \
+X(void, ImportSemaphoreWin32HandleEXT, (GLuint semaphore, GLenum handleType, void * handle)) \
+X(void, ImportSemaphoreWin32NameEXT, (GLuint semaphore, GLenum handleType, const void * name)) \
+EXT_END() \
+EXT_START("GL_EXT_separate_shader_objects") \
+X(void, ActiveProgramEXT, (GLuint program)) \
+X(void, ActiveShaderProgramEXT, (GLuint pipeline, GLuint program)) \
+X(void, BindProgramPipelineEXT, (GLuint pipeline)) \
+X(GLuint, CreateShaderProgramEXT, (GLenum type, const GLchar * string)) \
+X(GLuint, CreateShaderProgramvEXT, (GLenum type, GLsizei count, const GLchar *const* strings)) \
+X(void, DeleteProgramPipelinesEXT, (GLsizei n, const GLuint * pipelines)) \
+X(void, GenProgramPipelinesEXT, (GLsizei n, GLuint * pipelines)) \
+X(void, GetProgramPipelineInfoLogEXT, (GLuint pipeline, GLsizei bufSize, GLsizei * length, GLchar * infoLog)) \
+X(void, GetProgramPipelineivEXT, (GLuint pipeline, GLenum pname, GLint * params)) \
+X(GLboolean, IsProgramPipelineEXT, (GLuint pipeline)) \
+X(void, UseProgramStagesEXT, (GLuint pipeline, GLbitfield stages, GLuint program)) \
+X(void, UseShaderProgramEXT, (GLenum type, GLuint program)) \
+X(void, ValidateProgramPipelineEXT, (GLuint pipeline)) \
+EXT_END() \
+EXT_START("GL_EXT_shader_framebuffer_fetch_non_coherent") \
+X(void, FramebufferFetchBarrierEXT, ()) \
+EXT_END() \
+EXT_START("GL_EXT_shader_image_load_store") \
+X(void, BindImageTextureEXT, (GLuint index, GLuint texture, GLint level, GLboolean layered, GLint layer, GLenum access, GLint format)) \
+X(void, MemoryBarrierEXT, (GLbitfield barriers)) \
+EXT_END() \
+EXT_START("GL_EXT_shader_pixel_local_storage2") \
+X(void, ClearPixelLocalStorageuiEXT, (GLsizei offset, GLsizei n, const GLuint * values)) \
+X(void, FramebufferPixelLocalStorageSizeEXT, (GLuint target, GLsizei size)) \
+X(GLsizei, GetFramebufferPixelLocalStorageSizeEXT, (GLuint target)) \
+EXT_END() \
+EXT_START("GL_EXT_sparse_texture") \
+X(void, TexPageCommitmentEXT, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLboolean commit)) \
+EXT_END() \
+EXT_START("GL_EXT_stencil_clear_tag") \
+X(void, StencilClearTagEXT, (GLsizei stencilTagBits, GLuint stencilClearTag)) \
+EXT_END() \
+EXT_START("GL_EXT_stencil_two_side") \
+X(void, ActiveStencilFaceEXT, (GLenum face)) \
+EXT_END() \
+EXT_START("GL_EXT_subtexture") \
+X(void, TexSubImage1DEXT, (GLenum target, GLint level, GLint xoffset, GLsizei width, GLenum format, GLenum type, const void * pixels)) \
+X(void, TexSubImage2DEXT, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void * pixels)) \
+EXT_END() \
+EXT_START("GL_EXT_tessellation_shader") \
+X(void, PatchParameteriEXT, (GLenum pname, GLint value)) \
+EXT_END() \
+EXT_START("GL_EXT_texture3D") \
+X(void, TexImage3DEXT, (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLenum format, GLenum type, const void * pixels)) \
+X(void, TexSubImage3DEXT, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, const void * pixels)) \
+EXT_END() \
+EXT_START("GL_EXT_texture_array") \
+X(void, FramebufferTextureLayerEXT, (GLenum target, GLenum attachment, GLuint texture, GLint level, GLint layer)) \
+EXT_END() \
+EXT_START("GL_EXT_texture_border_clamp") \
+X(void, GetSamplerParameterIivEXT, (GLuint sampler, GLenum pname, GLint * params)) \
+X(void, GetSamplerParameterIuivEXT, (GLuint sampler, GLenum pname, GLuint * params)) \
+X(void, GetTexParameterIivEXT, (GLenum target, GLenum pname, GLint * params)) \
+X(void, GetTexParameterIuivEXT, (GLenum target, GLenum pname, GLuint * params)) \
+X(void, SamplerParameterIivEXT, (GLuint sampler, GLenum pname, const GLint * param)) \
+X(void, SamplerParameterIuivEXT, (GLuint sampler, GLenum pname, const GLuint * param)) \
+X(void, TexParameterIivEXT, (GLenum target, GLenum pname, const GLint * params)) \
+X(void, TexParameterIuivEXT, (GLenum target, GLenum pname, const GLuint * params)) \
+EXT_END() \
+EXT_START("GL_EXT_texture_buffer") \
+X(void, TexBufferEXT, (GLenum target, GLenum internalformat, GLuint buffer)) \
+X(void, TexBufferRangeEXT, (GLenum target, GLenum internalformat, GLuint buffer, GLintptr offset, GLsizeiptr size)) \
+EXT_END() \
+EXT_START("GL_EXT_texture_integer") \
+X(void, ClearColorIiEXT, (GLint red, GLint green, GLint blue, GLint alpha)) \
+X(void, ClearColorIuiEXT, (GLuint red, GLuint green, GLuint blue, GLuint alpha)) \
+EXT_END() \
+EXT_START("GL_EXT_texture_object") \
+X(GLboolean, AreTexturesResidentEXT, (GLsizei n, const GLuint * textures, GLboolean * residences)) \
+X(void, BindTextureEXT, (GLenum target, GLuint texture)) \
+X(void, DeleteTexturesEXT, (GLsizei n, const GLuint * textures)) \
+X(void, GenTexturesEXT, (GLsizei n, GLuint * textures)) \
+X(GLboolean, IsTextureEXT, (GLuint texture)) \
+X(void, PrioritizeTexturesEXT, (GLsizei n, const GLuint * textures, const GLclampf * priorities)) \
+EXT_END() \
+EXT_START("GL_EXT_texture_perturb_normal") \
+X(void, TextureNormalEXT, (GLenum mode)) \
+EXT_END() \
+EXT_START("GL_EXT_texture_storage") \
+X(void, TexStorage1DEXT, (GLenum target, GLsizei levels, GLenum internalformat, GLsizei width)) \
+X(void, TexStorage2DEXT, (GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height)) \
+X(void, TexStorage3DEXT, (GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth)) \
+EXT_END() \
+EXT_START("GL_EXT_texture_storage_compression") \
+X(void, TexStorageAttribs2DEXT, (GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height, const GLint * attrib_list)) \
+X(void, TexStorageAttribs3DEXT, (GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, const GLint * attrib_list)) \
+EXT_END() \
+EXT_START("GL_EXT_texture_view") \
+X(void, TextureViewEXT, (GLuint texture, GLenum target, GLuint origtexture, GLenum internalformat, GLuint minlevel, GLuint numlevels, GLuint minlayer, GLuint numlayers)) \
+EXT_END() \
+EXT_START("GL_EXT_transform_feedback") \
+X(void, BeginTransformFeedbackEXT, (GLenum primitiveMode)) \
+X(void, BindBufferBaseEXT, (GLenum target, GLuint index, GLuint buffer)) \
+X(void, BindBufferOffsetEXT, (GLenum target, GLuint index, GLuint buffer, GLintptr offset)) \
+X(void, BindBufferRangeEXT, (GLenum target, GLuint index, GLuint buffer, GLintptr offset, GLsizeiptr size)) \
+X(void, EndTransformFeedbackEXT, ()) \
+X(void, GetTransformFeedbackVaryingEXT, (GLuint program, GLuint index, GLsizei bufSize, GLsizei * length, GLsizei * size, GLenum * type, GLchar * name)) \
+X(void, TransformFeedbackVaryingsEXT, (GLuint program, GLsizei count, const GLchar *const* varyings, GLenum bufferMode)) \
+EXT_END() \
+EXT_START("GL_EXT_vertex_array") \
+X(void, ArrayElementEXT, (GLint i)) \
+X(void, ColorPointerEXT, (GLint size, GLenum type, GLsizei stride, GLsizei count, const void * pointer)) \
+X(void, DrawArraysEXT, (GLenum mode, GLint first, GLsizei count)) \
+X(void, EdgeFlagPointerEXT, (GLsizei stride, GLsizei count, const GLboolean * pointer)) \
+X(void, GetPointervEXT, (GLenum pname, void ** params)) \
+X(void, IndexPointerEXT, (GLenum type, GLsizei stride, GLsizei count, const void * pointer)) \
+X(void, NormalPointerEXT, (GLenum type, GLsizei stride, GLsizei count, const void * pointer)) \
+X(void, TexCoordPointerEXT, (GLint size, GLenum type, GLsizei stride, GLsizei count, const void * pointer)) \
+X(void, VertexPointerEXT, (GLint size, GLenum type, GLsizei stride, GLsizei count, const void * pointer)) \
+EXT_END() \
+EXT_START("GL_EXT_vertex_attrib_64bit") \
+X(void, GetVertexAttribLdvEXT, (GLuint index, GLenum pname, GLdouble * params)) \
+X(void, VertexAttribL1dEXT, (GLuint index, GLdouble x)) \
+X(void, VertexAttribL1dvEXT, (GLuint index, const GLdouble * v)) \
+X(void, VertexAttribL2dEXT, (GLuint index, GLdouble x, GLdouble y)) \
+X(void, VertexAttribL2dvEXT, (GLuint index, const GLdouble * v)) \
+X(void, VertexAttribL3dEXT, (GLuint index, GLdouble x, GLdouble y, GLdouble z)) \
+X(void, VertexAttribL3dvEXT, (GLuint index, const GLdouble * v)) \
+X(void, VertexAttribL4dEXT, (GLuint index, GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
+X(void, VertexAttribL4dvEXT, (GLuint index, const GLdouble * v)) \
+X(void, VertexAttribLPointerEXT, (GLuint index, GLint size, GLenum type, GLsizei stride, const void * pointer)) \
+EXT_END() \
+EXT_START("GL_EXT_vertex_shader") \
+X(void, BeginVertexShaderEXT, ()) \
+X(GLuint, BindLightParameterEXT, (GLenum light, GLenum value)) \
+X(GLuint, BindMaterialParameterEXT, (GLenum face, GLenum value)) \
+X(GLuint, BindParameterEXT, (GLenum value)) \
+X(GLuint, BindTexGenParameterEXT, (GLenum unit, GLenum coord, GLenum value)) \
+X(GLuint, BindTextureUnitParameterEXT, (GLenum unit, GLenum value)) \
+X(void, BindVertexShaderEXT, (GLuint id)) \
+X(void, DeleteVertexShaderEXT, (GLuint id)) \
+X(void, DisableVariantClientStateEXT, (GLuint id)) \
+X(void, EnableVariantClientStateEXT, (GLuint id)) \
+X(void, EndVertexShaderEXT, ()) \
+X(void, ExtractComponentEXT, (GLuint res, GLuint src, GLuint num)) \
+X(GLuint, GenSymbolsEXT, (GLenum datatype, GLenum storagetype, GLenum range, GLuint components)) \
+X(GLuint, GenVertexShadersEXT, (GLuint range)) \
+X(void, GetInvariantBooleanvEXT, (GLuint id, GLenum value, GLboolean * data)) \
+X(void, GetInvariantFloatvEXT, (GLuint id, GLenum value, GLfloat * data)) \
+X(void, GetInvariantIntegervEXT, (GLuint id, GLenum value, GLint * data)) \
+X(void, GetLocalConstantBooleanvEXT, (GLuint id, GLenum value, GLboolean * data)) \
+X(void, GetLocalConstantFloatvEXT, (GLuint id, GLenum value, GLfloat * data)) \
+X(void, GetLocalConstantIntegervEXT, (GLuint id, GLenum value, GLint * data)) \
+X(void, GetVariantBooleanvEXT, (GLuint id, GLenum value, GLboolean * data)) \
+X(void, GetVariantFloatvEXT, (GLuint id, GLenum value, GLfloat * data)) \
+X(void, GetVariantIntegervEXT, (GLuint id, GLenum value, GLint * data)) \
+X(void, GetVariantPointervEXT, (GLuint id, GLenum value, void ** data)) \
+X(void, InsertComponentEXT, (GLuint res, GLuint src, GLuint num)) \
+X(GLboolean, IsVariantEnabledEXT, (GLuint id, GLenum cap)) \
+X(void, SetInvariantEXT, (GLuint id, GLenum type, const void * addr)) \
+X(void, SetLocalConstantEXT, (GLuint id, GLenum type, const void * addr)) \
+X(void, ShaderOp1EXT, (GLenum op, GLuint res, GLuint arg1)) \
+X(void, ShaderOp2EXT, (GLenum op, GLuint res, GLuint arg1, GLuint arg2)) \
+X(void, ShaderOp3EXT, (GLenum op, GLuint res, GLuint arg1, GLuint arg2, GLuint arg3)) \
+X(void, SwizzleEXT, (GLuint res, GLuint in, GLenum outX, GLenum outY, GLenum outZ, GLenum outW)) \
+X(void, VariantPointerEXT, (GLuint id, GLenum type, GLuint stride, const void * addr)) \
+X(void, VariantbvEXT, (GLuint id, const GLbyte * addr)) \
+X(void, VariantdvEXT, (GLuint id, const GLdouble * addr)) \
+X(void, VariantfvEXT, (GLuint id, const GLfloat * addr)) \
+X(void, VariantivEXT, (GLuint id, const GLint * addr)) \
+X(void, VariantsvEXT, (GLuint id, const GLshort * addr)) \
+X(void, VariantubvEXT, (GLuint id, const GLubyte * addr)) \
+X(void, VariantuivEXT, (GLuint id, const GLuint * addr)) \
+X(void, VariantusvEXT, (GLuint id, const GLushort * addr)) \
+X(void, WriteMaskEXT, (GLuint res, GLuint in, GLenum outX, GLenum outY, GLenum outZ, GLenum outW)) \
+EXT_END() \
+EXT_START("GL_EXT_vertex_weighting") \
+X(void, VertexWeightPointerEXT, (GLint size, GLenum type, GLsizei stride, const void * pointer)) \
+X(void, VertexWeightfEXT, (GLfloat weight)) \
+X(void, VertexWeightfvEXT, (const GLfloat * weight)) \
+EXT_END() \
+EXT_START("GL_EXT_win32_keyed_mutex") \
+X(GLboolean, AcquireKeyedMutexWin32EXT, (GLuint memory, GLuint64 key, GLuint timeout)) \
+X(GLboolean, ReleaseKeyedMutexWin32EXT, (GLuint memory, GLuint64 key)) \
+EXT_END() \
+EXT_START("GL_EXT_window_rectangles") \
+X(void, WindowRectanglesEXT, (GLenum mode, GLsizei count, const GLint * box)) \
+EXT_END() \
+EXT_START("GL_EXT_x11_sync_object") \
+X(GLsync, ImportSyncEXT, (GLenum external_sync_type, GLintptr external_sync, GLbitfield flags)) \
+EXT_END() \
+EXT_START("GL_GREMEDY_frame_terminator") \
+X(void, FrameTerminatorGREMEDY, ()) \
+EXT_END() \
+EXT_START("GL_GREMEDY_string_marker") \
+X(void, StringMarkerGREMEDY, (GLsizei len, const void * string)) \
+EXT_END() \
+EXT_START("GL_HP_image_transform") \
+X(void, GetImageTransformParameterfvHP, (GLenum target, GLenum pname, GLfloat * params)) \
+X(void, GetImageTransformParameterivHP, (GLenum target, GLenum pname, GLint * params)) \
+X(void, ImageTransformParameterfHP, (GLenum target, GLenum pname, GLfloat param)) \
+X(void, ImageTransformParameterfvHP, (GLenum target, GLenum pname, const GLfloat * params)) \
+X(void, ImageTransformParameteriHP, (GLenum target, GLenum pname, GLint param)) \
+X(void, ImageTransformParameterivHP, (GLenum target, GLenum pname, const GLint * params)) \
+EXT_END() \
+EXT_START("GL_IBM_multimode_draw_arrays") \
+X(void, MultiModeDrawArraysIBM, (const GLenum * mode, const GLint * first, const GLsizei * count, GLsizei primcount, GLint modestride)) \
+X(void, MultiModeDrawElementsIBM, (const GLenum * mode, const GLsizei * count, GLenum type, const void *const* indices, GLsizei primcount, GLint modestride)) \
+EXT_END() \
+EXT_START("GL_IBM_static_data") \
+X(void, FlushStaticDataIBM, (GLenum target)) \
+EXT_END() \
+EXT_START("GL_IBM_vertex_array_lists") \
+X(void, ColorPointerListIBM, (GLint size, GLenum type, GLint stride, const void ** pointer, GLint ptrstride)) \
+X(void, EdgeFlagPointerListIBM, (GLint stride, const GLboolean ** pointer, GLint ptrstride)) \
+X(void, FogCoordPointerListIBM, (GLenum type, GLint stride, const void ** pointer, GLint ptrstride)) \
+X(void, IndexPointerListIBM, (GLenum type, GLint stride, const void ** pointer, GLint ptrstride)) \
+X(void, NormalPointerListIBM, (GLenum type, GLint stride, const void ** pointer, GLint ptrstride)) \
+X(void, SecondaryColorPointerListIBM, (GLint size, GLenum type, GLint stride, const void ** pointer, GLint ptrstride)) \
+X(void, TexCoordPointerListIBM, (GLint size, GLenum type, GLint stride, const void ** pointer, GLint ptrstride)) \
+X(void, VertexPointerListIBM, (GLint size, GLenum type, GLint stride, const void ** pointer, GLint ptrstride)) \
+EXT_END() \
+EXT_START("GL_IMG_bindless_texture") \
+X(GLuint64, GetTextureHandleIMG, (GLuint texture)) \
+X(GLuint64, GetTextureSamplerHandleIMG, (GLuint texture, GLuint sampler)) \
+X(void, ProgramUniformHandleui64IMG, (GLuint program, GLint location, GLuint64 value)) \
+X(void, ProgramUniformHandleui64vIMG, (GLuint program, GLint location, GLsizei count, const GLuint64 * values)) \
+X(void, UniformHandleui64IMG, (GLint location, GLuint64 value)) \
+X(void, UniformHandleui64vIMG, (GLint location, GLsizei count, const GLuint64 * value)) \
+EXT_END() \
+EXT_START("GL_IMG_framebuffer_downsample") \
+X(void, FramebufferTexture2DDownsampleIMG, (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level, GLint xscale, GLint yscale)) \
+X(void, FramebufferTextureLayerDownsampleIMG, (GLenum target, GLenum attachment, GLuint texture, GLint level, GLint layer, GLint xscale, GLint yscale)) \
+EXT_END() \
+EXT_START("GL_IMG_multisampled_render_to_texture") \
+X(void, FramebufferTexture2DMultisampleIMG, (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level, GLsizei samples)) \
+X(void, RenderbufferStorageMultisampleIMG, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height)) \
+EXT_END() \
+EXT_START("GL_IMG_user_clip_plane") \
+X(void, ClipPlanefIMG, (GLenum p, const GLfloat * eqn)) \
+X(void, ClipPlanexIMG, (GLenum p, const GLfixed * eqn)) \
+EXT_END() \
+EXT_START("GL_INGR_blend_func_separate") \
+X(void, BlendFuncSeparateINGR, (GLenum sfactorRGB, GLenum dfactorRGB, GLenum sfactorAlpha, GLenum dfactorAlpha)) \
+EXT_END() \
+EXT_START("GL_INTEL_framebuffer_CMAA") \
+X(void, ApplyFramebufferAttachmentCMAAINTEL, ()) \
+EXT_END() \
+EXT_START("GL_INTEL_map_texture") \
+X(void *, MapTexture2DINTEL, (GLuint texture, GLint level, GLbitfield access, GLint * stride, GLenum * layout)) \
+X(void, SyncTextureINTEL, (GLuint texture)) \
+X(void, UnmapTexture2DINTEL, (GLuint texture, GLint level)) \
+EXT_END() \
+EXT_START("GL_INTEL_parallel_arrays") \
+X(void, ColorPointervINTEL, (GLint size, GLenum type, const void ** pointer)) \
+X(void, NormalPointervINTEL, (GLenum type, const void ** pointer)) \
+X(void, TexCoordPointervINTEL, (GLint size, GLenum type, const void ** pointer)) \
+X(void, VertexPointervINTEL, (GLint size, GLenum type, const void ** pointer)) \
+EXT_END() \
+EXT_START("GL_INTEL_performance_query") \
+X(void, BeginPerfQueryINTEL, (GLuint queryHandle)) \
+X(void, CreatePerfQueryINTEL, (GLuint queryId, GLuint * queryHandle)) \
+X(void, DeletePerfQueryINTEL, (GLuint queryHandle)) \
+X(void, EndPerfQueryINTEL, (GLuint queryHandle)) \
+X(void, GetFirstPerfQueryIdINTEL, (GLuint * queryId)) \
+X(void, GetNextPerfQueryIdINTEL, (GLuint queryId, GLuint * nextQueryId)) \
+X(void, GetPerfCounterInfoINTEL, (GLuint queryId, GLuint counterId, GLuint counterNameLength, GLchar * counterName, GLuint counterDescLength, GLchar * counterDesc, GLuint * counterOffset, GLuint * counterDataSize, GLuint * counterTypeEnum, GLuint * counterDataTypeEnum, GLuint64 * rawCounterMaxValue)) \
+X(void, GetPerfQueryDataINTEL, (GLuint queryHandle, GLuint flags, GLsizei dataSize, void * data, GLuint * bytesWritten)) \
+X(void, GetPerfQueryIdByNameINTEL, (GLchar * queryName, GLuint * queryId)) \
+X(void, GetPerfQueryInfoINTEL, (GLuint queryId, GLuint queryNameLength, GLchar * queryName, GLuint * dataSize, GLuint * noCounters, GLuint * noInstances, GLuint * capsMask)) \
+EXT_END() \
+EXT_START("GL_KHR_blend_equation_advanced") \
+X(void, BlendBarrierKHR, ()) \
+EXT_END() \
+EXT_START("GL_KHR_debug") \
+X(void, DebugMessageCallbackKHR, (GLDEBUGPROCKHR callback, const void * userParam)) \
+X(void, DebugMessageControlKHR, (GLenum source, GLenum type, GLenum severity, GLsizei count, const GLuint * ids, GLboolean enabled)) \
+X(void, DebugMessageInsertKHR, (GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar * buf)) \
+X(GLuint, GetDebugMessageLogKHR, (GLuint count, GLsizei bufSize, GLenum * sources, GLenum * types, GLuint * ids, GLenum * severities, GLsizei * lengths, GLchar * messageLog)) \
+X(void, GetObjectLabelKHR, (GLenum identifier, GLuint name, GLsizei bufSize, GLsizei * length, GLchar * label)) \
+X(void, GetObjectPtrLabelKHR, (const void * ptr, GLsizei bufSize, GLsizei * length, GLchar * label)) \
+X(void, GetPointervKHR, (GLenum pname, void ** params)) \
+X(void, ObjectLabelKHR, (GLenum identifier, GLuint name, GLsizei length, const GLchar * label)) \
+X(void, ObjectPtrLabelKHR, (const void * ptr, GLsizei length, const GLchar * label)) \
+X(void, PopDebugGroupKHR, ()) \
+X(void, PushDebugGroupKHR, (GLenum source, GLuint id, GLsizei length, const GLchar * message)) \
+EXT_END() \
+EXT_START("GL_KHR_parallel_shader_compile") \
+X(void, MaxShaderCompilerThreadsKHR, (GLuint count)) \
+EXT_END() \
+EXT_START("GL_KHR_robustness") \
+X(GLenum, GetGraphicsResetStatusKHR, ()) \
+X(void, GetnUniformfvKHR, (GLuint program, GLint location, GLsizei bufSize, GLfloat * params)) \
+X(void, GetnUniformivKHR, (GLuint program, GLint location, GLsizei bufSize, GLint * params)) \
+X(void, GetnUniformuivKHR, (GLuint program, GLint location, GLsizei bufSize, GLuint * params)) \
+X(void, ReadnPixelsKHR, (GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, GLsizei bufSize, void * data)) \
+EXT_END() \
+EXT_START("GL_MESA_framebuffer_flip_y") \
+X(void, FramebufferParameteriMESA, (GLenum target, GLenum pname, GLint param)) \
+X(void, GetFramebufferParameterivMESA, (GLenum target, GLenum pname, GLint * params)) \
+EXT_END() \
+EXT_START("GL_MESA_resize_buffers") \
+X(void, ResizeBuffersMESA, ()) \
+EXT_END() \
+EXT_START("GL_MESA_window_pos") \
+X(void, WindowPos2dMESA, (GLdouble x, GLdouble y)) \
+X(void, WindowPos2dvMESA, (const GLdouble * v)) \
+X(void, WindowPos2fMESA, (GLfloat x, GLfloat y)) \
+X(void, WindowPos2fvMESA, (const GLfloat * v)) \
+X(void, WindowPos2iMESA, (GLint x, GLint y)) \
+X(void, WindowPos2ivMESA, (const GLint * v)) \
+X(void, WindowPos2sMESA, (GLshort x, GLshort y)) \
+X(void, WindowPos2svMESA, (const GLshort * v)) \
+X(void, WindowPos3dMESA, (GLdouble x, GLdouble y, GLdouble z)) \
+X(void, WindowPos3dvMESA, (const GLdouble * v)) \
+X(void, WindowPos3fMESA, (GLfloat x, GLfloat y, GLfloat z)) \
+X(void, WindowPos3fvMESA, (const GLfloat * v)) \
+X(void, WindowPos3iMESA, (GLint x, GLint y, GLint z)) \
+X(void, WindowPos3ivMESA, (const GLint * v)) \
+X(void, WindowPos3sMESA, (GLshort x, GLshort y, GLshort z)) \
+X(void, WindowPos3svMESA, (const GLshort * v)) \
+X(void, WindowPos4dMESA, (GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
+X(void, WindowPos4dvMESA, (const GLdouble * v)) \
+X(void, WindowPos4fMESA, (GLfloat x, GLfloat y, GLfloat z, GLfloat w)) \
+X(void, WindowPos4fvMESA, (const GLfloat * v)) \
+X(void, WindowPos4iMESA, (GLint x, GLint y, GLint z, GLint w)) \
+X(void, WindowPos4ivMESA, (const GLint * v)) \
+X(void, WindowPos4sMESA, (GLshort x, GLshort y, GLshort z, GLshort w)) \
+X(void, WindowPos4svMESA, (const GLshort * v)) \
+EXT_END() \
+EXT_START("GL_NVX_conditional_render") \
+X(void, BeginConditionalRenderNVX, (GLuint id)) \
+X(void, EndConditionalRenderNVX, ()) \
+EXT_END() \
+EXT_START("GL_NVX_gpu_multicast2") \
+X(GLuint, AsyncCopyBufferSubDataNVX, (GLsizei waitSemaphoreCount, const GLuint * waitSemaphoreArray, const GLuint64 * fenceValueArray, GLuint readGpu, GLbitfield writeGpuMask, GLuint readBuffer, GLuint writeBuffer, GLintptr readOffset, GLintptr writeOffset, GLsizeiptr size, GLsizei signalSemaphoreCount, const GLuint * signalSemaphoreArray, const GLuint64 * signalValueArray)) \
+X(GLuint, AsyncCopyImageSubDataNVX, (GLsizei waitSemaphoreCount, const GLuint * waitSemaphoreArray, const GLuint64 * waitValueArray, GLuint srcGpu, GLbitfield dstGpuMask, GLuint srcName, GLenum srcTarget, GLint srcLevel, GLint srcX, GLint srcY, GLint srcZ, GLuint dstName, GLenum dstTarget, GLint dstLevel, GLint dstX, GLint dstY, GLint dstZ, GLsizei srcWidth, GLsizei srcHeight, GLsizei srcDepth, GLsizei signalSemaphoreCount, const GLuint * signalSemaphoreArray, const GLuint64 * signalValueArray)) \
+X(void, MulticastScissorArrayvNVX, (GLuint gpu, GLuint first, GLsizei count, const GLint * v)) \
+X(void, MulticastViewportArrayvNVX, (GLuint gpu, GLuint first, GLsizei count, const GLfloat * v)) \
+X(void, MulticastViewportPositionWScaleNVX, (GLuint gpu, GLuint index, GLfloat xcoeff, GLfloat ycoeff)) \
+X(void, UploadGpuMaskNVX, (GLbitfield mask)) \
+EXT_END() \
+EXT_START("GL_NVX_linked_gpu_multicast") \
+X(void, LGPUCopyImageSubDataNVX, (GLuint sourceGpu, GLbitfield destinationGpuMask, GLuint srcName, GLenum srcTarget, GLint srcLevel, GLint srcX, GLint srxY, GLint srcZ, GLuint dstName, GLenum dstTarget, GLint dstLevel, GLint dstX, GLint dstY, GLint dstZ, GLsizei width, GLsizei height, GLsizei depth)) \
+X(void, LGPUInterlockNVX, ()) \
+X(void, LGPUNamedBufferSubDataNVX, (GLbitfield gpuMask, GLuint buffer, GLintptr offset, GLsizeiptr size, const void * data)) \
+EXT_END() \
+EXT_START("GL_NVX_progress_fence") \
+X(void, ClientWaitSemaphoreui64NVX, (GLsizei fenceObjectCount, const GLuint * semaphoreArray, const GLuint64 * fenceValueArray)) \
+X(GLuint, CreateProgressFenceNVX, ()) \
+X(void, SignalSemaphoreui64NVX, (GLuint signalGpu, GLsizei fenceObjectCount, const GLuint * semaphoreArray, const GLuint64 * fenceValueArray)) \
+X(void, WaitSemaphoreui64NVX, (GLuint waitGpu, GLsizei fenceObjectCount, const GLuint * semaphoreArray, const GLuint64 * fenceValueArray)) \
+EXT_END() \
+EXT_START("GL_NV_alpha_to_coverage_dither_control") \
+X(void, AlphaToCoverageDitherControlNV, (GLenum mode)) \
+EXT_END() \
+EXT_START("GL_NV_bindless_multi_draw_indirect") \
+X(void, MultiDrawArraysIndirectBindlessNV, (GLenum mode, const void * indirect, GLsizei drawCount, GLsizei stride, GLint vertexBufferCount)) \
+X(void, MultiDrawElementsIndirectBindlessNV, (GLenum mode, GLenum type, const void * indirect, GLsizei drawCount, GLsizei stride, GLint vertexBufferCount)) \
+EXT_END() \
+EXT_START("GL_NV_bindless_multi_draw_indirect_count") \
+X(void, MultiDrawArraysIndirectBindlessCountNV, (GLenum mode, const void * indirect, GLsizei drawCount, GLsizei maxDrawCount, GLsizei stride, GLint vertexBufferCount)) \
+X(void, MultiDrawElementsIndirectBindlessCountNV, (GLenum mode, GLenum type, const void * indirect, GLsizei drawCount, GLsizei maxDrawCount, GLsizei stride, GLint vertexBufferCount)) \
+EXT_END() \
+EXT_START("GL_NV_bindless_texture") \
+X(GLuint64, GetImageHandleNV, (GLuint texture, GLint level, GLboolean layered, GLint layer, GLenum format)) \
+X(GLuint64, GetTextureHandleNV, (GLuint texture)) \
+X(GLuint64, GetTextureSamplerHandleNV, (GLuint texture, GLuint sampler)) \
+X(GLboolean, IsImageHandleResidentNV, (GLuint64 handle)) \
+X(GLboolean, IsTextureHandleResidentNV, (GLuint64 handle)) \
+X(void, MakeImageHandleNonResidentNV, (GLuint64 handle)) \
+X(void, MakeImageHandleResidentNV, (GLuint64 handle, GLenum access)) \
+X(void, MakeTextureHandleNonResidentNV, (GLuint64 handle)) \
+X(void, MakeTextureHandleResidentNV, (GLuint64 handle)) \
+X(void, ProgramUniformHandleui64NV, (GLuint program, GLint location, GLuint64 value)) \
+X(void, ProgramUniformHandleui64vNV, (GLuint program, GLint location, GLsizei count, const GLuint64 * values)) \
+X(void, UniformHandleui64NV, (GLint location, GLuint64 value)) \
+X(void, UniformHandleui64vNV, (GLint location, GLsizei count, const GLuint64 * value)) \
+EXT_END() \
+EXT_START("GL_NV_blend_equation_advanced") \
+X(void, BlendBarrierNV, ()) \
+X(void, BlendParameteriNV, (GLenum pname, GLint value)) \
+EXT_END() \
+EXT_START("GL_NV_clip_space_w_scaling") \
+X(void, ViewportPositionWScaleNV, (GLuint index, GLfloat xcoeff, GLfloat ycoeff)) \
+EXT_END() \
+EXT_START("GL_NV_command_list") \
+X(void, CallCommandListNV, (GLuint list)) \
+X(void, CommandListSegmentsNV, (GLuint list, GLuint segments)) \
+X(void, CompileCommandListNV, (GLuint list)) \
+X(void, CreateCommandListsNV, (GLsizei n, GLuint * lists)) \
+X(void, CreateStatesNV, (GLsizei n, GLuint * states)) \
+X(void, DeleteCommandListsNV, (GLsizei n, const GLuint * lists)) \
+X(void, DeleteStatesNV, (GLsizei n, const GLuint * states)) \
+X(void, DrawCommandsAddressNV, (GLenum primitiveMode, const GLuint64 * indirects, const GLsizei * sizes, GLuint count)) \
+X(void, DrawCommandsNV, (GLenum primitiveMode, GLuint buffer, const GLintptr * indirects, const GLsizei * sizes, GLuint count)) \
+X(void, DrawCommandsStatesAddressNV, (const GLuint64 * indirects, const GLsizei * sizes, const GLuint * states, const GLuint * fbos, GLuint count)) \
+X(void, DrawCommandsStatesNV, (GLuint buffer, const GLintptr * indirects, const GLsizei * sizes, const GLuint * states, const GLuint * fbos, GLuint count)) \
+X(GLuint, GetCommandHeaderNV, (GLenum tokenID, GLuint size)) \
+X(GLushort, GetStageIndexNV, (GLenum shadertype)) \
+X(GLboolean, IsCommandListNV, (GLuint list)) \
+X(GLboolean, IsStateNV, (GLuint state)) \
+X(void, ListDrawCommandsStatesClientNV, (GLuint list, GLuint segment, const void ** indirects, const GLsizei * sizes, const GLuint * states, const GLuint * fbos, GLuint count)) \
+X(void, StateCaptureNV, (GLuint state, GLenum mode)) \
+EXT_END() \
+EXT_START("GL_NV_conditional_render") \
+X(void, BeginConditionalRenderNV, (GLuint id, GLenum mode)) \
+X(void, EndConditionalRenderNV, ()) \
+EXT_END() \
+EXT_START("GL_NV_conservative_raster") \
+X(void, SubpixelPrecisionBiasNV, (GLuint xbits, GLuint ybits)) \
+EXT_END() \
+EXT_START("GL_NV_conservative_raster_dilate") \
+X(void, ConservativeRasterParameterfNV, (GLenum pname, GLfloat value)) \
+EXT_END() \
+EXT_START("GL_NV_conservative_raster_pre_snap_triangles") \
+X(void, ConservativeRasterParameteriNV, (GLenum pname, GLint param)) \
+EXT_END() \
+EXT_START("GL_NV_copy_buffer") \
+X(void, CopyBufferSubDataNV, (GLenum readTarget, GLenum writeTarget, GLintptr readOffset, GLintptr writeOffset, GLsizeiptr size)) \
+EXT_END() \
+EXT_START("GL_NV_copy_image") \
+X(void, CopyImageSubDataNV, (GLuint srcName, GLenum srcTarget, GLint srcLevel, GLint srcX, GLint srcY, GLint srcZ, GLuint dstName, GLenum dstTarget, GLint dstLevel, GLint dstX, GLint dstY, GLint dstZ, GLsizei width, GLsizei height, GLsizei depth)) \
+EXT_END() \
+EXT_START("GL_NV_coverage_sample") \
+X(void, CoverageMaskNV, (GLboolean mask)) \
+X(void, CoverageOperationNV, (GLenum operation)) \
+EXT_END() \
+EXT_START("GL_NV_depth_buffer_float") \
+X(void, ClearDepthdNV, (GLdouble depth)) \
+X(void, DepthBoundsdNV, (GLdouble zmin, GLdouble zmax)) \
+X(void, DepthRangedNV, (GLdouble zNear, GLdouble zFar)) \
+EXT_END() \
+EXT_START("GL_NV_draw_buffers") \
+X(void, DrawBuffersNV, (GLsizei n, const GLenum * bufs)) \
+EXT_END() \
+EXT_START("GL_NV_draw_instanced") \
+X(void, DrawArraysInstancedNV, (GLenum mode, GLint first, GLsizei count, GLsizei primcount)) \
+X(void, DrawElementsInstancedNV, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLsizei primcount)) \
+EXT_END() \
+EXT_START("GL_NV_draw_texture") \
+X(void, DrawTextureNV, (GLuint texture, GLuint sampler, GLfloat x0, GLfloat y0, GLfloat x1, GLfloat y1, GLfloat z, GLfloat s0, GLfloat t0, GLfloat s1, GLfloat t1)) \
+EXT_END() \
+EXT_START("GL_NV_draw_vulkan_image") \
+X(void, DrawVkImageNV, (GLuint64 vkImage, GLuint sampler, GLfloat x0, GLfloat y0, GLfloat x1, GLfloat y1, GLfloat z, GLfloat s0, GLfloat t0, GLfloat s1, GLfloat t1)) \
+X(GLVULKANPROCNV, GetVkProcAddrNV, (const GLchar * name)) \
+X(void, SignalVkFenceNV, (GLuint64 vkFence)) \
+X(void, SignalVkSemaphoreNV, (GLuint64 vkSemaphore)) \
+X(void, WaitVkSemaphoreNV, (GLuint64 vkSemaphore)) \
+EXT_END() \
+EXT_START("GL_NV_evaluators") \
+X(void, EvalMapsNV, (GLenum target, GLenum mode)) \
+X(void, GetMapAttribParameterfvNV, (GLenum target, GLuint index, GLenum pname, GLfloat * params)) \
+X(void, GetMapAttribParameterivNV, (GLenum target, GLuint index, GLenum pname, GLint * params)) \
+X(void, GetMapControlPointsNV, (GLenum target, GLuint index, GLenum type, GLsizei ustride, GLsizei vstride, GLboolean packed, void * points)) \
+X(void, GetMapParameterfvNV, (GLenum target, GLenum pname, GLfloat * params)) \
+X(void, GetMapParameterivNV, (GLenum target, GLenum pname, GLint * params)) \
+X(void, MapControlPointsNV, (GLenum target, GLuint index, GLenum type, GLsizei ustride, GLsizei vstride, GLint uorder, GLint vorder, GLboolean packed, const void * points)) \
+X(void, MapParameterfvNV, (GLenum target, GLenum pname, const GLfloat * params)) \
+X(void, MapParameterivNV, (GLenum target, GLenum pname, const GLint * params)) \
+EXT_END() \
+EXT_START("GL_NV_explicit_multisample") \
+X(void, GetMultisamplefvNV, (GLenum pname, GLuint index, GLfloat * val)) \
+X(void, SampleMaskIndexedNV, (GLuint index, GLbitfield mask)) \
+X(void, TexRenderbufferNV, (GLenum target, GLuint renderbuffer)) \
+EXT_END() \
+EXT_START("GL_NV_fence") \
+X(void, DeleteFencesNV, (GLsizei n, const GLuint * fences)) \
+X(void, FinishFenceNV, (GLuint fence)) \
+X(void, GenFencesNV, (GLsizei n, GLuint * fences)) \
+X(void, GetFenceivNV, (GLuint fence, GLenum pname, GLint * params)) \
+X(GLboolean, IsFenceNV, (GLuint fence)) \
+X(void, SetFenceNV, (GLuint fence, GLenum condition)) \
+X(GLboolean, TestFenceNV, (GLuint fence)) \
+EXT_END() \
+EXT_START("GL_NV_fragment_coverage_to_color") \
+X(void, FragmentCoverageColorNV, (GLuint color)) \
+EXT_END() \
+EXT_START("GL_NV_fragment_program") \
+X(void, GetProgramNamedParameterdvNV, (GLuint id, GLsizei len, const GLubyte * name, GLdouble * params)) \
+X(void, GetProgramNamedParameterfvNV, (GLuint id, GLsizei len, const GLubyte * name, GLfloat * params)) \
+X(void, ProgramNamedParameter4dNV, (GLuint id, GLsizei len, const GLubyte * name, GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
+X(void, ProgramNamedParameter4dvNV, (GLuint id, GLsizei len, const GLubyte * name, const GLdouble * v)) \
+X(void, ProgramNamedParameter4fNV, (GLuint id, GLsizei len, const GLubyte * name, GLfloat x, GLfloat y, GLfloat z, GLfloat w)) \
+X(void, ProgramNamedParameter4fvNV, (GLuint id, GLsizei len, const GLubyte * name, const GLfloat * v)) \
+EXT_END() \
+EXT_START("GL_NV_framebuffer_blit") \
+X(void, BlitFramebufferNV, (GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter)) \
+EXT_END() \
+EXT_START("GL_NV_framebuffer_mixed_samples") \
+X(void, CoverageModulationNV, (GLenum components)) \
+X(void, CoverageModulationTableNV, (GLsizei n, const GLfloat * v)) \
+X(void, GetCoverageModulationTableNV, (GLsizei bufSize, GLfloat * v)) \
+EXT_END() \
+EXT_START("GL_NV_framebuffer_multisample") \
+X(void, RenderbufferStorageMultisampleNV, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height)) \
+EXT_END() \
+EXT_START("GL_NV_framebuffer_multisample_coverage") \
+X(void, RenderbufferStorageMultisampleCoverageNV, (GLenum target, GLsizei coverageSamples, GLsizei colorSamples, GLenum internalformat, GLsizei width, GLsizei height)) \
+EXT_END() \
+EXT_START("GL_NV_geometry_program4") \
+X(void, FramebufferTextureFaceEXT, (GLenum target, GLenum attachment, GLuint texture, GLint level, GLenum face)) \
+X(void, ProgramVertexLimitNV, (GLenum target, GLint limit)) \
+EXT_END() \
+EXT_START("GL_NV_gpu_multicast") \
+X(void, MulticastBarrierNV, ()) \
+X(void, MulticastBlitFramebufferNV, (GLuint srcGpu, GLuint dstGpu, GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter)) \
+X(void, MulticastBufferSubDataNV, (GLbitfield gpuMask, GLuint buffer, GLintptr offset, GLsizeiptr size, const void * data)) \
+X(void, MulticastCopyBufferSubDataNV, (GLuint readGpu, GLbitfield writeGpuMask, GLuint readBuffer, GLuint writeBuffer, GLintptr readOffset, GLintptr writeOffset, GLsizeiptr size)) \
+X(void, MulticastCopyImageSubDataNV, (GLuint srcGpu, GLbitfield dstGpuMask, GLuint srcName, GLenum srcTarget, GLint srcLevel, GLint srcX, GLint srcY, GLint srcZ, GLuint dstName, GLenum dstTarget, GLint dstLevel, GLint dstX, GLint dstY, GLint dstZ, GLsizei srcWidth, GLsizei srcHeight, GLsizei srcDepth)) \
+X(void, MulticastFramebufferSampleLocationsfvNV, (GLuint gpu, GLuint framebuffer, GLuint start, GLsizei count, const GLfloat * v)) \
+X(void, MulticastGetQueryObjecti64vNV, (GLuint gpu, GLuint id, GLenum pname, GLint64 * params)) \
+X(void, MulticastGetQueryObjectivNV, (GLuint gpu, GLuint id, GLenum pname, GLint * params)) \
+X(void, MulticastGetQueryObjectui64vNV, (GLuint gpu, GLuint id, GLenum pname, GLuint64 * params)) \
+X(void, MulticastGetQueryObjectuivNV, (GLuint gpu, GLuint id, GLenum pname, GLuint * params)) \
+X(void, MulticastWaitSyncNV, (GLuint signalGpu, GLbitfield waitGpuMask)) \
+X(void, RenderGpuMaskNV, (GLbitfield mask)) \
+EXT_END() \
+EXT_START("GL_NV_gpu_program4") \
+X(void, GetProgramEnvParameterIivNV, (GLenum target, GLuint index, GLint * params)) \
+X(void, GetProgramEnvParameterIuivNV, (GLenum target, GLuint index, GLuint * params)) \
+X(void, GetProgramLocalParameterIivNV, (GLenum target, GLuint index, GLint * params)) \
+X(void, GetProgramLocalParameterIuivNV, (GLenum target, GLuint index, GLuint * params)) \
+X(void, ProgramEnvParameterI4iNV, (GLenum target, GLuint index, GLint x, GLint y, GLint z, GLint w)) \
+X(void, ProgramEnvParameterI4ivNV, (GLenum target, GLuint index, const GLint * params)) \
+X(void, ProgramEnvParameterI4uiNV, (GLenum target, GLuint index, GLuint x, GLuint y, GLuint z, GLuint w)) \
+X(void, ProgramEnvParameterI4uivNV, (GLenum target, GLuint index, const GLuint * params)) \
+X(void, ProgramEnvParametersI4ivNV, (GLenum target, GLuint index, GLsizei count, const GLint * params)) \
+X(void, ProgramEnvParametersI4uivNV, (GLenum target, GLuint index, GLsizei count, const GLuint * params)) \
+X(void, ProgramLocalParameterI4iNV, (GLenum target, GLuint index, GLint x, GLint y, GLint z, GLint w)) \
+X(void, ProgramLocalParameterI4ivNV, (GLenum target, GLuint index, const GLint * params)) \
+X(void, ProgramLocalParameterI4uiNV, (GLenum target, GLuint index, GLuint x, GLuint y, GLuint z, GLuint w)) \
+X(void, ProgramLocalParameterI4uivNV, (GLenum target, GLuint index, const GLuint * params)) \
+X(void, ProgramLocalParametersI4ivNV, (GLenum target, GLuint index, GLsizei count, const GLint * params)) \
+X(void, ProgramLocalParametersI4uivNV, (GLenum target, GLuint index, GLsizei count, const GLuint * params)) \
+EXT_END() \
+EXT_START("GL_NV_gpu_program5") \
+X(void, GetProgramSubroutineParameteruivNV, (GLenum target, GLuint index, GLuint * param)) \
+X(void, ProgramSubroutineParametersuivNV, (GLenum target, GLsizei count, const GLuint * params)) \
+EXT_END() \
+EXT_START("GL_NV_half_float") \
+X(void, Color3hNV, (GLhalfNV red, GLhalfNV green, GLhalfNV blue)) \
+X(void, Color3hvNV, (const GLhalfNV * v)) \
+X(void, Color4hNV, (GLhalfNV red, GLhalfNV green, GLhalfNV blue, GLhalfNV alpha)) \
+X(void, Color4hvNV, (const GLhalfNV * v)) \
+X(void, FogCoordhNV, (GLhalfNV fog)) \
+X(void, FogCoordhvNV, (const GLhalfNV * fog)) \
+X(void, MultiTexCoord1hNV, (GLenum target, GLhalfNV s)) \
+X(void, MultiTexCoord1hvNV, (GLenum target, const GLhalfNV * v)) \
+X(void, MultiTexCoord2hNV, (GLenum target, GLhalfNV s, GLhalfNV t)) \
+X(void, MultiTexCoord2hvNV, (GLenum target, const GLhalfNV * v)) \
+X(void, MultiTexCoord3hNV, (GLenum target, GLhalfNV s, GLhalfNV t, GLhalfNV r)) \
+X(void, MultiTexCoord3hvNV, (GLenum target, const GLhalfNV * v)) \
+X(void, MultiTexCoord4hNV, (GLenum target, GLhalfNV s, GLhalfNV t, GLhalfNV r, GLhalfNV q)) \
+X(void, MultiTexCoord4hvNV, (GLenum target, const GLhalfNV * v)) \
+X(void, Normal3hNV, (GLhalfNV nx, GLhalfNV ny, GLhalfNV nz)) \
+X(void, Normal3hvNV, (const GLhalfNV * v)) \
+X(void, SecondaryColor3hNV, (GLhalfNV red, GLhalfNV green, GLhalfNV blue)) \
+X(void, SecondaryColor3hvNV, (const GLhalfNV * v)) \
+X(void, TexCoord1hNV, (GLhalfNV s)) \
+X(void, TexCoord1hvNV, (const GLhalfNV * v)) \
+X(void, TexCoord2hNV, (GLhalfNV s, GLhalfNV t)) \
+X(void, TexCoord2hvNV, (const GLhalfNV * v)) \
+X(void, TexCoord3hNV, (GLhalfNV s, GLhalfNV t, GLhalfNV r)) \
+X(void, TexCoord3hvNV, (const GLhalfNV * v)) \
+X(void, TexCoord4hNV, (GLhalfNV s, GLhalfNV t, GLhalfNV r, GLhalfNV q)) \
+X(void, TexCoord4hvNV, (const GLhalfNV * v)) \
+X(void, Vertex2hNV, (GLhalfNV x, GLhalfNV y)) \
+X(void, Vertex2hvNV, (const GLhalfNV * v)) \
+X(void, Vertex3hNV, (GLhalfNV x, GLhalfNV y, GLhalfNV z)) \
+X(void, Vertex3hvNV, (const GLhalfNV * v)) \
+X(void, Vertex4hNV, (GLhalfNV x, GLhalfNV y, GLhalfNV z, GLhalfNV w)) \
+X(void, Vertex4hvNV, (const GLhalfNV * v)) \
+X(void, VertexAttrib1hNV, (GLuint index, GLhalfNV x)) \
+X(void, VertexAttrib1hvNV, (GLuint index, const GLhalfNV * v)) \
+X(void, VertexAttrib2hNV, (GLuint index, GLhalfNV x, GLhalfNV y)) \
+X(void, VertexAttrib2hvNV, (GLuint index, const GLhalfNV * v)) \
+X(void, VertexAttrib3hNV, (GLuint index, GLhalfNV x, GLhalfNV y, GLhalfNV z)) \
+X(void, VertexAttrib3hvNV, (GLuint index, const GLhalfNV * v)) \
+X(void, VertexAttrib4hNV, (GLuint index, GLhalfNV x, GLhalfNV y, GLhalfNV z, GLhalfNV w)) \
+X(void, VertexAttrib4hvNV, (GLuint index, const GLhalfNV * v)) \
+X(void, VertexAttribs1hvNV, (GLuint index, GLsizei n, const GLhalfNV * v)) \
+X(void, VertexAttribs2hvNV, (GLuint index, GLsizei n, const GLhalfNV * v)) \
+X(void, VertexAttribs3hvNV, (GLuint index, GLsizei n, const GLhalfNV * v)) \
+X(void, VertexAttribs4hvNV, (GLuint index, GLsizei n, const GLhalfNV * v)) \
+X(void, VertexWeighthNV, (GLhalfNV weight)) \
+X(void, VertexWeighthvNV, (const GLhalfNV * weight)) \
+EXT_END() \
+EXT_START("GL_NV_instanced_arrays") \
+X(void, VertexAttribDivisorNV, (GLuint index, GLuint divisor)) \
+EXT_END() \
+EXT_START("GL_NV_internalformat_sample_query") \
+X(void, GetInternalformatSampleivNV, (GLenum target, GLenum internalformat, GLsizei samples, GLenum pname, GLsizei count, GLint * params)) \
+EXT_END() \
+EXT_START("GL_NV_memory_attachment") \
+X(void, BufferAttachMemoryNV, (GLenum target, GLuint memory, GLuint64 offset)) \
+X(void, GetMemoryObjectDetachedResourcesuivNV, (GLuint memory, GLenum pname, GLint first, GLsizei count, GLuint * params)) \
+X(void, NamedBufferAttachMemoryNV, (GLuint buffer, GLuint memory, GLuint64 offset)) \
+X(void, ResetMemoryObjectParameterNV, (GLuint memory, GLenum pname)) \
+X(void, TexAttachMemoryNV, (GLenum target, GLuint memory, GLuint64 offset)) \
+X(void, TextureAttachMemoryNV, (GLuint texture, GLuint memory, GLuint64 offset)) \
+EXT_END() \
+EXT_START("GL_NV_memory_object_sparse") \
+X(void, BufferPageCommitmentMemNV, (GLenum target, GLintptr offset, GLsizeiptr size, GLuint memory, GLuint64 memOffset, GLboolean commit)) \
+X(void, NamedBufferPageCommitmentMemNV, (GLuint buffer, GLintptr offset, GLsizeiptr size, GLuint memory, GLuint64 memOffset, GLboolean commit)) \
+X(void, TexPageCommitmentMemNV, (GLenum target, GLint layer, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLuint memory, GLuint64 offset, GLboolean commit)) \
+X(void, TexturePageCommitmentMemNV, (GLuint texture, GLint layer, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLuint memory, GLuint64 offset, GLboolean commit)) \
+EXT_END() \
+EXT_START("GL_NV_mesh_shader") \
+X(void, DrawMeshTasksIndirectNV, (GLintptr indirect)) \
+X(void, DrawMeshTasksNV, (GLuint first, GLuint count)) \
+X(void, MultiDrawMeshTasksIndirectCountNV, (GLintptr indirect, GLintptr drawcount, GLsizei maxdrawcount, GLsizei stride)) \
+X(void, MultiDrawMeshTasksIndirectNV, (GLintptr indirect, GLsizei drawcount, GLsizei stride)) \
+EXT_END() \
+EXT_START("GL_NV_non_square_matrices") \
+X(void, UniformMatrix2x3fvNV, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, UniformMatrix2x4fvNV, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, UniformMatrix3x2fvNV, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, UniformMatrix3x4fvNV, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, UniformMatrix4x2fvNV, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, UniformMatrix4x3fvNV, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+EXT_END() \
+EXT_START("GL_NV_occlusion_query") \
+X(void, BeginOcclusionQueryNV, (GLuint id)) \
+X(void, DeleteOcclusionQueriesNV, (GLsizei n, const GLuint * ids)) \
+X(void, EndOcclusionQueryNV, ()) \
+X(void, GenOcclusionQueriesNV, (GLsizei n, GLuint * ids)) \
+X(void, GetOcclusionQueryivNV, (GLuint id, GLenum pname, GLint * params)) \
+X(void, GetOcclusionQueryuivNV, (GLuint id, GLenum pname, GLuint * params)) \
+X(GLboolean, IsOcclusionQueryNV, (GLuint id)) \
+EXT_END() \
+EXT_START("GL_NV_parameter_buffer_object") \
+X(void, ProgramBufferParametersIivNV, (GLenum target, GLuint bindingIndex, GLuint wordIndex, GLsizei count, const GLint * params)) \
+X(void, ProgramBufferParametersIuivNV, (GLenum target, GLuint bindingIndex, GLuint wordIndex, GLsizei count, const GLuint * params)) \
+X(void, ProgramBufferParametersfvNV, (GLenum target, GLuint bindingIndex, GLuint wordIndex, GLsizei count, const GLfloat * params)) \
+EXT_END() \
+EXT_START("GL_NV_path_rendering") \
+X(void, CopyPathNV, (GLuint resultPath, GLuint srcPath)) \
+X(void, CoverFillPathInstancedNV, (GLsizei numPaths, GLenum pathNameType, const void * paths, GLuint pathBase, GLenum coverMode, GLenum transformType, const GLfloat * transformValues)) \
+X(void, CoverFillPathNV, (GLuint path, GLenum coverMode)) \
+X(void, CoverStrokePathInstancedNV, (GLsizei numPaths, GLenum pathNameType, const void * paths, GLuint pathBase, GLenum coverMode, GLenum transformType, const GLfloat * transformValues)) \
+X(void, CoverStrokePathNV, (GLuint path, GLenum coverMode)) \
+X(void, DeletePathsNV, (GLuint path, GLsizei range)) \
+X(GLuint, GenPathsNV, (GLsizei range)) \
+X(void, GetPathColorGenfvNV, (GLenum color, GLenum pname, GLfloat * value)) \
+X(void, GetPathColorGenivNV, (GLenum color, GLenum pname, GLint * value)) \
+X(void, GetPathCommandsNV, (GLuint path, GLubyte * commands)) \
+X(void, GetPathCoordsNV, (GLuint path, GLfloat * coords)) \
+X(void, GetPathDashArrayNV, (GLuint path, GLfloat * dashArray)) \
+X(GLfloat, GetPathLengthNV, (GLuint path, GLsizei startSegment, GLsizei numSegments)) \
+X(void, GetPathMetricRangeNV, (GLbitfield metricQueryMask, GLuint firstPathName, GLsizei numPaths, GLsizei stride, GLfloat * metrics)) \
+X(void, GetPathMetricsNV, (GLbitfield metricQueryMask, GLsizei numPaths, GLenum pathNameType, const void * paths, GLuint pathBase, GLsizei stride, GLfloat * metrics)) \
+X(void, GetPathParameterfvNV, (GLuint path, GLenum pname, GLfloat * value)) \
+X(void, GetPathParameterivNV, (GLuint path, GLenum pname, GLint * value)) \
+X(void, GetPathSpacingNV, (GLenum pathListMode, GLsizei numPaths, GLenum pathNameType, const void * paths, GLuint pathBase, GLfloat advanceScale, GLfloat kerningScale, GLenum transformType, GLfloat * returnedSpacing)) \
+X(void, GetPathTexGenfvNV, (GLenum texCoordSet, GLenum pname, GLfloat * value)) \
+X(void, GetPathTexGenivNV, (GLenum texCoordSet, GLenum pname, GLint * value)) \
+X(void, GetProgramResourcefvNV, (GLuint program, GLenum programInterface, GLuint index, GLsizei propCount, const GLenum * props, GLsizei count, GLsizei * length, GLfloat * params)) \
+X(void, InterpolatePathsNV, (GLuint resultPath, GLuint pathA, GLuint pathB, GLfloat weight)) \
+X(GLboolean, IsPathNV, (GLuint path)) \
+X(GLboolean, IsPointInFillPathNV, (GLuint path, GLuint mask, GLfloat x, GLfloat y)) \
+X(GLboolean, IsPointInStrokePathNV, (GLuint path, GLfloat x, GLfloat y)) \
+X(void, MatrixLoad3x2fNV, (GLenum matrixMode, const GLfloat * m)) \
+X(void, MatrixLoad3x3fNV, (GLenum matrixMode, const GLfloat * m)) \
+X(void, MatrixLoadTranspose3x3fNV, (GLenum matrixMode, const GLfloat * m)) \
+X(void, MatrixMult3x2fNV, (GLenum matrixMode, const GLfloat * m)) \
+X(void, MatrixMult3x3fNV, (GLenum matrixMode, const GLfloat * m)) \
+X(void, MatrixMultTranspose3x3fNV, (GLenum matrixMode, const GLfloat * m)) \
+X(void, PathColorGenNV, (GLenum color, GLenum genMode, GLenum colorFormat, const GLfloat * coeffs)) \
+X(void, PathCommandsNV, (GLuint path, GLsizei numCommands, const GLubyte * commands, GLsizei numCoords, GLenum coordType, const void * coords)) \
+X(void, PathCoordsNV, (GLuint path, GLsizei numCoords, GLenum coordType, const void * coords)) \
+X(void, PathCoverDepthFuncNV, (GLenum func)) \
+X(void, PathDashArrayNV, (GLuint path, GLsizei dashCount, const GLfloat * dashArray)) \
+X(void, PathFogGenNV, (GLenum genMode)) \
+X(GLenum, PathGlyphIndexArrayNV, (GLuint firstPathName, GLenum fontTarget, const void * fontName, GLbitfield fontStyle, GLuint firstGlyphIndex, GLsizei numGlyphs, GLuint pathParameterTemplate, GLfloat emScale)) \
+X(GLenum, PathGlyphIndexRangeNV, (GLenum fontTarget, const void * fontName, GLbitfield fontStyle, GLuint pathParameterTemplate, GLfloat emScale, GLuint * baseAndCount)) \
+X(void, PathGlyphRangeNV, (GLuint firstPathName, GLenum fontTarget, const void * fontName, GLbitfield fontStyle, GLuint firstGlyph, GLsizei numGlyphs, GLenum handleMissingGlyphs, GLuint pathParameterTemplate, GLfloat emScale)) \
+X(void, PathGlyphsNV, (GLuint firstPathName, GLenum fontTarget, const void * fontName, GLbitfield fontStyle, GLsizei numGlyphs, GLenum type, const void * charcodes, GLenum handleMissingGlyphs, GLuint pathParameterTemplate, GLfloat emScale)) \
+X(GLenum, PathMemoryGlyphIndexArrayNV, (GLuint firstPathName, GLenum fontTarget, GLsizeiptr fontSize, const void * fontData, GLsizei faceIndex, GLuint firstGlyphIndex, GLsizei numGlyphs, GLuint pathParameterTemplate, GLfloat emScale)) \
+X(void, PathParameterfNV, (GLuint path, GLenum pname, GLfloat value)) \
+X(void, PathParameterfvNV, (GLuint path, GLenum pname, const GLfloat * value)) \
+X(void, PathParameteriNV, (GLuint path, GLenum pname, GLint value)) \
+X(void, PathParameterivNV, (GLuint path, GLenum pname, const GLint * value)) \
+X(void, PathStencilDepthOffsetNV, (GLfloat factor, GLfloat units)) \
+X(void, PathStencilFuncNV, (GLenum func, GLint ref, GLuint mask)) \
+X(void, PathStringNV, (GLuint path, GLenum format, GLsizei length, const void * pathString)) \
+X(void, PathSubCommandsNV, (GLuint path, GLsizei commandStart, GLsizei commandsToDelete, GLsizei numCommands, const GLubyte * commands, GLsizei numCoords, GLenum coordType, const void * coords)) \
+X(void, PathSubCoordsNV, (GLuint path, GLsizei coordStart, GLsizei numCoords, GLenum coordType, const void * coords)) \
+X(void, PathTexGenNV, (GLenum texCoordSet, GLenum genMode, GLint components, const GLfloat * coeffs)) \
+X(GLboolean, PointAlongPathNV, (GLuint path, GLsizei startSegment, GLsizei numSegments, GLfloat distance, GLfloat * x, GLfloat * y, GLfloat * tangentX, GLfloat * tangentY)) \
+X(void, ProgramPathFragmentInputGenNV, (GLuint program, GLint location, GLenum genMode, GLint components, const GLfloat * coeffs)) \
+X(void, StencilFillPathInstancedNV, (GLsizei numPaths, GLenum pathNameType, const void * paths, GLuint pathBase, GLenum fillMode, GLuint mask, GLenum transformType, const GLfloat * transformValues)) \
+X(void, StencilFillPathNV, (GLuint path, GLenum fillMode, GLuint mask)) \
+X(void, StencilStrokePathInstancedNV, (GLsizei numPaths, GLenum pathNameType, const void * paths, GLuint pathBase, GLint reference, GLuint mask, GLenum transformType, const GLfloat * transformValues)) \
+X(void, StencilStrokePathNV, (GLuint path, GLint reference, GLuint mask)) \
+X(void, StencilThenCoverFillPathInstancedNV, (GLsizei numPaths, GLenum pathNameType, const void * paths, GLuint pathBase, GLenum fillMode, GLuint mask, GLenum coverMode, GLenum transformType, const GLfloat * transformValues)) \
+X(void, StencilThenCoverFillPathNV, (GLuint path, GLenum fillMode, GLuint mask, GLenum coverMode)) \
+X(void, StencilThenCoverStrokePathInstancedNV, (GLsizei numPaths, GLenum pathNameType, const void * paths, GLuint pathBase, GLint reference, GLuint mask, GLenum coverMode, GLenum transformType, const GLfloat * transformValues)) \
+X(void, StencilThenCoverStrokePathNV, (GLuint path, GLint reference, GLuint mask, GLenum coverMode)) \
+X(void, TransformPathNV, (GLuint resultPath, GLuint srcPath, GLenum transformType, const GLfloat * transformValues)) \
+X(void, WeightPathsNV, (GLuint resultPath, GLsizei numPaths, const GLuint * paths, const GLfloat * weights)) \
+EXT_END() \
+EXT_START("GL_NV_pixel_data_range") \
+X(void, FlushPixelDataRangeNV, (GLenum target)) \
+X(void, PixelDataRangeNV, (GLenum target, GLsizei length, const void * pointer)) \
+EXT_END() \
+EXT_START("GL_NV_point_sprite") \
+X(void, PointParameteriNV, (GLenum pname, GLint param)) \
+X(void, PointParameterivNV, (GLenum pname, const GLint * params)) \
+EXT_END() \
+EXT_START("GL_NV_polygon_mode") \
+X(void, PolygonModeNV, (GLenum face, GLenum mode)) \
+EXT_END() \
+EXT_START("GL_NV_present_video") \
+X(void, GetVideoi64vNV, (GLuint video_slot, GLenum pname, GLint64EXT * params)) \
+X(void, GetVideoivNV, (GLuint video_slot, GLenum pname, GLint * params)) \
+X(void, GetVideoui64vNV, (GLuint video_slot, GLenum pname, GLuint64EXT * params)) \
+X(void, GetVideouivNV, (GLuint video_slot, GLenum pname, GLuint * params)) \
+X(void, PresentFrameDualFillNV, (GLuint video_slot, GLuint64EXT minPresentTime, GLuint beginPresentTimeId, GLuint presentDurationId, GLenum type, GLenum target0, GLuint fill0, GLenum target1, GLuint fill1, GLenum target2, GLuint fill2, GLenum target3, GLuint fill3)) \
+X(void, PresentFrameKeyedNV, (GLuint video_slot, GLuint64EXT minPresentTime, GLuint beginPresentTimeId, GLuint presentDurationId, GLenum type, GLenum target0, GLuint fill0, GLuint key0, GLenum target1, GLuint fill1, GLuint key1)) \
+EXT_END() \
+EXT_START("GL_NV_primitive_restart") \
+X(void, PrimitiveRestartIndexNV, (GLuint index)) \
+X(void, PrimitiveRestartNV, ()) \
+EXT_END() \
+EXT_START("GL_NV_query_resource") \
+X(GLint, QueryResourceNV, (GLenum queryType, GLint tagId, GLuint count, GLint * buffer)) \
+EXT_END() \
+EXT_START("GL_NV_query_resource_tag") \
+X(void, DeleteQueryResourceTagNV, (GLsizei n, const GLint * tagIds)) \
+X(void, GenQueryResourceTagNV, (GLsizei n, GLint * tagIds)) \
+X(void, QueryResourceTagNV, (GLint tagId, const GLchar * tagString)) \
+EXT_END() \
+EXT_START("GL_NV_read_buffer") \
+X(void, ReadBufferNV, (GLenum mode)) \
+EXT_END() \
+EXT_START("GL_NV_register_combiners") \
+X(void, CombinerInputNV, (GLenum stage, GLenum portion, GLenum variable, GLenum input, GLenum mapping, GLenum componentUsage)) \
+X(void, CombinerOutputNV, (GLenum stage, GLenum portion, GLenum abOutput, GLenum cdOutput, GLenum sumOutput, GLenum scale, GLenum bias, GLboolean abDotProduct, GLboolean cdDotProduct, GLboolean muxSum)) \
+X(void, CombinerParameterfNV, (GLenum pname, GLfloat param)) \
+X(void, CombinerParameterfvNV, (GLenum pname, const GLfloat * params)) \
+X(void, CombinerParameteriNV, (GLenum pname, GLint param)) \
+X(void, CombinerParameterivNV, (GLenum pname, const GLint * params)) \
+X(void, FinalCombinerInputNV, (GLenum variable, GLenum input, GLenum mapping, GLenum componentUsage)) \
+X(void, GetCombinerInputParameterfvNV, (GLenum stage, GLenum portion, GLenum variable, GLenum pname, GLfloat * params)) \
+X(void, GetCombinerInputParameterivNV, (GLenum stage, GLenum portion, GLenum variable, GLenum pname, GLint * params)) \
+X(void, GetCombinerOutputParameterfvNV, (GLenum stage, GLenum portion, GLenum pname, GLfloat * params)) \
+X(void, GetCombinerOutputParameterivNV, (GLenum stage, GLenum portion, GLenum pname, GLint * params)) \
+X(void, GetFinalCombinerInputParameterfvNV, (GLenum variable, GLenum pname, GLfloat * params)) \
+X(void, GetFinalCombinerInputParameterivNV, (GLenum variable, GLenum pname, GLint * params)) \
+EXT_END() \
+EXT_START("GL_NV_register_combiners2") \
+X(void, CombinerStageParameterfvNV, (GLenum stage, GLenum pname, const GLfloat * params)) \
+X(void, GetCombinerStageParameterfvNV, (GLenum stage, GLenum pname, GLfloat * params)) \
+EXT_END() \
+EXT_START("GL_NV_sample_locations") \
+X(void, FramebufferSampleLocationsfvNV, (GLenum target, GLuint start, GLsizei count, const GLfloat * v)) \
+X(void, NamedFramebufferSampleLocationsfvNV, (GLuint framebuffer, GLuint start, GLsizei count, const GLfloat * v)) \
+X(void, ResolveDepthValuesNV, ()) \
+EXT_END() \
+EXT_START("GL_NV_scissor_exclusive") \
+X(void, ScissorExclusiveArrayvNV, (GLuint first, GLsizei count, const GLint * v)) \
+X(void, ScissorExclusiveNV, (GLint x, GLint y, GLsizei width, GLsizei height)) \
+EXT_END() \
+EXT_START("GL_NV_shader_buffer_load") \
+X(void, GetBufferParameterui64vNV, (GLenum target, GLenum pname, GLuint64EXT * params)) \
+X(void, GetIntegerui64vNV, (GLenum value, GLuint64EXT * result)) \
+X(void, GetNamedBufferParameterui64vNV, (GLuint buffer, GLenum pname, GLuint64EXT * params)) \
+X(GLboolean, IsBufferResidentNV, (GLenum target)) \
+X(GLboolean, IsNamedBufferResidentNV, (GLuint buffer)) \
+X(void, MakeBufferNonResidentNV, (GLenum target)) \
+X(void, MakeBufferResidentNV, (GLenum target, GLenum access)) \
+X(void, MakeNamedBufferNonResidentNV, (GLuint buffer)) \
+X(void, MakeNamedBufferResidentNV, (GLuint buffer, GLenum access)) \
+X(void, ProgramUniformui64NV, (GLuint program, GLint location, GLuint64EXT value)) \
+X(void, ProgramUniformui64vNV, (GLuint program, GLint location, GLsizei count, const GLuint64EXT * value)) \
+X(void, Uniformui64NV, (GLint location, GLuint64EXT value)) \
+X(void, Uniformui64vNV, (GLint location, GLsizei count, const GLuint64EXT * value)) \
+EXT_END() \
+EXT_START("GL_NV_shading_rate_image") \
+X(void, BindShadingRateImageNV, (GLuint texture)) \
+X(void, GetShadingRateImagePaletteNV, (GLuint viewport, GLuint entry, GLenum * rate)) \
+X(void, GetShadingRateSampleLocationivNV, (GLenum rate, GLuint samples, GLuint index, GLint * location)) \
+X(void, ShadingRateImageBarrierNV, (GLboolean synchronize)) \
+X(void, ShadingRateImagePaletteNV, (GLuint viewport, GLuint first, GLsizei count, const GLenum * rates)) \
+X(void, ShadingRateSampleOrderCustomNV, (GLenum rate, GLuint samples, const GLint * locations)) \
+X(void, ShadingRateSampleOrderNV, (GLenum order)) \
+EXT_END() \
+EXT_START("GL_NV_texture_barrier") \
+X(void, TextureBarrierNV, ()) \
+EXT_END() \
+EXT_START("GL_NV_texture_multisample") \
+X(void, TexImage2DMultisampleCoverageNV, (GLenum target, GLsizei coverageSamples, GLsizei colorSamples, GLint internalFormat, GLsizei width, GLsizei height, GLboolean fixedSampleLocations)) \
+X(void, TexImage3DMultisampleCoverageNV, (GLenum target, GLsizei coverageSamples, GLsizei colorSamples, GLint internalFormat, GLsizei width, GLsizei height, GLsizei depth, GLboolean fixedSampleLocations)) \
+X(void, TextureImage2DMultisampleCoverageNV, (GLuint texture, GLenum target, GLsizei coverageSamples, GLsizei colorSamples, GLint internalFormat, GLsizei width, GLsizei height, GLboolean fixedSampleLocations)) \
+X(void, TextureImage2DMultisampleNV, (GLuint texture, GLenum target, GLsizei samples, GLint internalFormat, GLsizei width, GLsizei height, GLboolean fixedSampleLocations)) \
+X(void, TextureImage3DMultisampleCoverageNV, (GLuint texture, GLenum target, GLsizei coverageSamples, GLsizei colorSamples, GLint internalFormat, GLsizei width, GLsizei height, GLsizei depth, GLboolean fixedSampleLocations)) \
+X(void, TextureImage3DMultisampleNV, (GLuint texture, GLenum target, GLsizei samples, GLint internalFormat, GLsizei width, GLsizei height, GLsizei depth, GLboolean fixedSampleLocations)) \
+EXT_END() \
+EXT_START("GL_NV_timeline_semaphore") \
+X(void, CreateSemaphoresNV, (GLsizei n, GLuint * semaphores)) \
+X(void, GetSemaphoreParameterivNV, (GLuint semaphore, GLenum pname, GLint * params)) \
+X(void, SemaphoreParameterivNV, (GLuint semaphore, GLenum pname, const GLint * params)) \
+EXT_END() \
+EXT_START("GL_NV_transform_feedback") \
+X(void, ActiveVaryingNV, (GLuint program, const GLchar * name)) \
+X(void, BeginTransformFeedbackNV, (GLenum primitiveMode)) \
+X(void, BindBufferBaseNV, (GLenum target, GLuint index, GLuint buffer)) \
+X(void, BindBufferOffsetNV, (GLenum target, GLuint index, GLuint buffer, GLintptr offset)) \
+X(void, BindBufferRangeNV, (GLenum target, GLuint index, GLuint buffer, GLintptr offset, GLsizeiptr size)) \
+X(void, EndTransformFeedbackNV, ()) \
+X(void, GetActiveVaryingNV, (GLuint program, GLuint index, GLsizei bufSize, GLsizei * length, GLsizei * size, GLenum * type, GLchar * name)) \
+X(void, GetTransformFeedbackVaryingNV, (GLuint program, GLuint index, GLint * location)) \
+X(GLint, GetVaryingLocationNV, (GLuint program, const GLchar * name)) \
+X(void, TransformFeedbackAttribsNV, (GLsizei count, const GLint * attribs, GLenum bufferMode)) \
+X(void, TransformFeedbackStreamAttribsNV, (GLsizei count, const GLint * attribs, GLsizei nbuffers, const GLint * bufstreams, GLenum bufferMode)) \
+X(void, TransformFeedbackVaryingsNV, (GLuint program, GLsizei count, const GLint * locations, GLenum bufferMode)) \
+EXT_END() \
+EXT_START("GL_NV_transform_feedback2") \
+X(void, BindTransformFeedbackNV, (GLenum target, GLuint id)) \
+X(void, DeleteTransformFeedbacksNV, (GLsizei n, const GLuint * ids)) \
+X(void, DrawTransformFeedbackNV, (GLenum mode, GLuint id)) \
+X(void, GenTransformFeedbacksNV, (GLsizei n, GLuint * ids)) \
+X(GLboolean, IsTransformFeedbackNV, (GLuint id)) \
+X(void, PauseTransformFeedbackNV, ()) \
+X(void, ResumeTransformFeedbackNV, ()) \
+EXT_END() \
+EXT_START("GL_NV_vdpau_interop") \
+X(void, VDPAUFiniNV, ()) \
+X(void, VDPAUGetSurfaceivNV, (GLvdpauSurfaceNV surface, GLenum pname, GLsizei count, GLsizei * length, GLint * values)) \
+X(void, VDPAUInitNV, (const void * vdpDevice, const void * getProcAddress)) \
+X(GLboolean, VDPAUIsSurfaceNV, (GLvdpauSurfaceNV surface)) \
+X(void, VDPAUMapSurfacesNV, (GLsizei numSurfaces, const GLvdpauSurfaceNV * surfaces)) \
+X(GLvdpauSurfaceNV, VDPAURegisterOutputSurfaceNV, (const void * vdpSurface, GLenum target, GLsizei numTextureNames, const GLuint * textureNames)) \
+X(GLvdpauSurfaceNV, VDPAURegisterVideoSurfaceNV, (const void * vdpSurface, GLenum target, GLsizei numTextureNames, const GLuint * textureNames)) \
+X(void, VDPAUSurfaceAccessNV, (GLvdpauSurfaceNV surface, GLenum access)) \
+X(void, VDPAUUnmapSurfacesNV, (GLsizei numSurface, const GLvdpauSurfaceNV * surfaces)) \
+X(void, VDPAUUnregisterSurfaceNV, (GLvdpauSurfaceNV surface)) \
+EXT_END() \
+EXT_START("GL_NV_vdpau_interop2") \
+X(GLvdpauSurfaceNV, VDPAURegisterVideoSurfaceWithPictureStructureNV, (const void * vdpSurface, GLenum target, GLsizei numTextureNames, const GLuint * textureNames, GLboolean isFrameStructure)) \
+EXT_END() \
+EXT_START("GL_NV_vertex_array_range") \
+X(void, FlushVertexArrayRangeNV, ()) \
+X(void, VertexArrayRangeNV, (GLsizei length, const void * pointer)) \
+EXT_END() \
+EXT_START("GL_NV_vertex_attrib_integer_64bit") \
+X(void, GetVertexAttribLi64vNV, (GLuint index, GLenum pname, GLint64EXT * params)) \
+X(void, GetVertexAttribLui64vNV, (GLuint index, GLenum pname, GLuint64EXT * params)) \
+X(void, VertexAttribL1i64NV, (GLuint index, GLint64EXT x)) \
+X(void, VertexAttribL1i64vNV, (GLuint index, const GLint64EXT * v)) \
+X(void, VertexAttribL1ui64NV, (GLuint index, GLuint64EXT x)) \
+X(void, VertexAttribL1ui64vNV, (GLuint index, const GLuint64EXT * v)) \
+X(void, VertexAttribL2i64NV, (GLuint index, GLint64EXT x, GLint64EXT y)) \
+X(void, VertexAttribL2i64vNV, (GLuint index, const GLint64EXT * v)) \
+X(void, VertexAttribL2ui64NV, (GLuint index, GLuint64EXT x, GLuint64EXT y)) \
+X(void, VertexAttribL2ui64vNV, (GLuint index, const GLuint64EXT * v)) \
+X(void, VertexAttribL3i64NV, (GLuint index, GLint64EXT x, GLint64EXT y, GLint64EXT z)) \
+X(void, VertexAttribL3i64vNV, (GLuint index, const GLint64EXT * v)) \
+X(void, VertexAttribL3ui64NV, (GLuint index, GLuint64EXT x, GLuint64EXT y, GLuint64EXT z)) \
+X(void, VertexAttribL3ui64vNV, (GLuint index, const GLuint64EXT * v)) \
+X(void, VertexAttribL4i64NV, (GLuint index, GLint64EXT x, GLint64EXT y, GLint64EXT z, GLint64EXT w)) \
+X(void, VertexAttribL4i64vNV, (GLuint index, const GLint64EXT * v)) \
+X(void, VertexAttribL4ui64NV, (GLuint index, GLuint64EXT x, GLuint64EXT y, GLuint64EXT z, GLuint64EXT w)) \
+X(void, VertexAttribL4ui64vNV, (GLuint index, const GLuint64EXT * v)) \
+X(void, VertexAttribLFormatNV, (GLuint index, GLint size, GLenum type, GLsizei stride)) \
+EXT_END() \
+EXT_START("GL_NV_vertex_buffer_unified_memory") \
+X(void, BufferAddressRangeNV, (GLenum pname, GLuint index, GLuint64EXT address, GLsizeiptr length)) \
+X(void, ColorFormatNV, (GLint size, GLenum type, GLsizei stride)) \
+X(void, EdgeFlagFormatNV, (GLsizei stride)) \
+X(void, FogCoordFormatNV, (GLenum type, GLsizei stride)) \
+X(void, GetIntegerui64i_vNV, (GLenum value, GLuint index, GLuint64EXT * result)) \
+X(void, IndexFormatNV, (GLenum type, GLsizei stride)) \
+X(void, NormalFormatNV, (GLenum type, GLsizei stride)) \
+X(void, SecondaryColorFormatNV, (GLint size, GLenum type, GLsizei stride)) \
+X(void, TexCoordFormatNV, (GLint size, GLenum type, GLsizei stride)) \
+X(void, VertexAttribFormatNV, (GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride)) \
+X(void, VertexAttribIFormatNV, (GLuint index, GLint size, GLenum type, GLsizei stride)) \
+X(void, VertexFormatNV, (GLint size, GLenum type, GLsizei stride)) \
+EXT_END() \
+EXT_START("GL_NV_vertex_program") \
+X(GLboolean, AreProgramsResidentNV, (GLsizei n, const GLuint * programs, GLboolean * residences)) \
+X(void, BindProgramNV, (GLenum target, GLuint id)) \
+X(void, DeleteProgramsNV, (GLsizei n, const GLuint * programs)) \
+X(void, ExecuteProgramNV, (GLenum target, GLuint id, const GLfloat * params)) \
+X(void, GenProgramsNV, (GLsizei n, GLuint * programs)) \
+X(void, GetProgramParameterdvNV, (GLenum target, GLuint index, GLenum pname, GLdouble * params)) \
+X(void, GetProgramParameterfvNV, (GLenum target, GLuint index, GLenum pname, GLfloat * params)) \
+X(void, GetProgramStringNV, (GLuint id, GLenum pname, GLubyte * program)) \
+X(void, GetProgramivNV, (GLuint id, GLenum pname, GLint * params)) \
+X(void, GetTrackMatrixivNV, (GLenum target, GLuint address, GLenum pname, GLint * params)) \
+X(void, GetVertexAttribPointervNV, (GLuint index, GLenum pname, void ** pointer)) \
+X(void, GetVertexAttribdvNV, (GLuint index, GLenum pname, GLdouble * params)) \
+X(void, GetVertexAttribfvNV, (GLuint index, GLenum pname, GLfloat * params)) \
+X(void, GetVertexAttribivNV, (GLuint index, GLenum pname, GLint * params)) \
+X(GLboolean, IsProgramNV, (GLuint id)) \
+X(void, LoadProgramNV, (GLenum target, GLuint id, GLsizei len, const GLubyte * program)) \
+X(void, ProgramParameter4dNV, (GLenum target, GLuint index, GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
+X(void, ProgramParameter4dvNV, (GLenum target, GLuint index, const GLdouble * v)) \
+X(void, ProgramParameter4fNV, (GLenum target, GLuint index, GLfloat x, GLfloat y, GLfloat z, GLfloat w)) \
+X(void, ProgramParameter4fvNV, (GLenum target, GLuint index, const GLfloat * v)) \
+X(void, ProgramParameters4dvNV, (GLenum target, GLuint index, GLsizei count, const GLdouble * v)) \
+X(void, ProgramParameters4fvNV, (GLenum target, GLuint index, GLsizei count, const GLfloat * v)) \
+X(void, RequestResidentProgramsNV, (GLsizei n, const GLuint * programs)) \
+X(void, TrackMatrixNV, (GLenum target, GLuint address, GLenum matrix, GLenum transform)) \
+X(void, VertexAttrib1dNV, (GLuint index, GLdouble x)) \
+X(void, VertexAttrib1dvNV, (GLuint index, const GLdouble * v)) \
+X(void, VertexAttrib1fNV, (GLuint index, GLfloat x)) \
+X(void, VertexAttrib1fvNV, (GLuint index, const GLfloat * v)) \
+X(void, VertexAttrib1sNV, (GLuint index, GLshort x)) \
+X(void, VertexAttrib1svNV, (GLuint index, const GLshort * v)) \
+X(void, VertexAttrib2dNV, (GLuint index, GLdouble x, GLdouble y)) \
+X(void, VertexAttrib2dvNV, (GLuint index, const GLdouble * v)) \
+X(void, VertexAttrib2fNV, (GLuint index, GLfloat x, GLfloat y)) \
+X(void, VertexAttrib2fvNV, (GLuint index, const GLfloat * v)) \
+X(void, VertexAttrib2sNV, (GLuint index, GLshort x, GLshort y)) \
+X(void, VertexAttrib2svNV, (GLuint index, const GLshort * v)) \
+X(void, VertexAttrib3dNV, (GLuint index, GLdouble x, GLdouble y, GLdouble z)) \
+X(void, VertexAttrib3dvNV, (GLuint index, const GLdouble * v)) \
+X(void, VertexAttrib3fNV, (GLuint index, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, VertexAttrib3fvNV, (GLuint index, const GLfloat * v)) \
+X(void, VertexAttrib3sNV, (GLuint index, GLshort x, GLshort y, GLshort z)) \
+X(void, VertexAttrib3svNV, (GLuint index, const GLshort * v)) \
+X(void, VertexAttrib4dNV, (GLuint index, GLdouble x, GLdouble y, GLdouble z, GLdouble w)) \
+X(void, VertexAttrib4dvNV, (GLuint index, const GLdouble * v)) \
+X(void, VertexAttrib4fNV, (GLuint index, GLfloat x, GLfloat y, GLfloat z, GLfloat w)) \
+X(void, VertexAttrib4fvNV, (GLuint index, const GLfloat * v)) \
+X(void, VertexAttrib4sNV, (GLuint index, GLshort x, GLshort y, GLshort z, GLshort w)) \
+X(void, VertexAttrib4svNV, (GLuint index, const GLshort * v)) \
+X(void, VertexAttrib4ubNV, (GLuint index, GLubyte x, GLubyte y, GLubyte z, GLubyte w)) \
+X(void, VertexAttrib4ubvNV, (GLuint index, const GLubyte * v)) \
+X(void, VertexAttribPointerNV, (GLuint index, GLint fsize, GLenum type, GLsizei stride, const void * pointer)) \
+X(void, VertexAttribs1dvNV, (GLuint index, GLsizei count, const GLdouble * v)) \
+X(void, VertexAttribs1fvNV, (GLuint index, GLsizei count, const GLfloat * v)) \
+X(void, VertexAttribs1svNV, (GLuint index, GLsizei count, const GLshort * v)) \
+X(void, VertexAttribs2dvNV, (GLuint index, GLsizei count, const GLdouble * v)) \
+X(void, VertexAttribs2fvNV, (GLuint index, GLsizei count, const GLfloat * v)) \
+X(void, VertexAttribs2svNV, (GLuint index, GLsizei count, const GLshort * v)) \
+X(void, VertexAttribs3dvNV, (GLuint index, GLsizei count, const GLdouble * v)) \
+X(void, VertexAttribs3fvNV, (GLuint index, GLsizei count, const GLfloat * v)) \
+X(void, VertexAttribs3svNV, (GLuint index, GLsizei count, const GLshort * v)) \
+X(void, VertexAttribs4dvNV, (GLuint index, GLsizei count, const GLdouble * v)) \
+X(void, VertexAttribs4fvNV, (GLuint index, GLsizei count, const GLfloat * v)) \
+X(void, VertexAttribs4svNV, (GLuint index, GLsizei count, const GLshort * v)) \
+X(void, VertexAttribs4ubvNV, (GLuint index, GLsizei count, const GLubyte * v)) \
+EXT_END() \
+EXT_START("GL_NV_video_capture") \
+X(void, BeginVideoCaptureNV, (GLuint video_capture_slot)) \
+X(void, BindVideoCaptureStreamBufferNV, (GLuint video_capture_slot, GLuint stream, GLenum frame_region, GLintptrARB offset)) \
+X(void, BindVideoCaptureStreamTextureNV, (GLuint video_capture_slot, GLuint stream, GLenum frame_region, GLenum target, GLuint texture)) \
+X(void, EndVideoCaptureNV, (GLuint video_capture_slot)) \
+X(void, GetVideoCaptureStreamdvNV, (GLuint video_capture_slot, GLuint stream, GLenum pname, GLdouble * params)) \
+X(void, GetVideoCaptureStreamfvNV, (GLuint video_capture_slot, GLuint stream, GLenum pname, GLfloat * params)) \
+X(void, GetVideoCaptureStreamivNV, (GLuint video_capture_slot, GLuint stream, GLenum pname, GLint * params)) \
+X(void, GetVideoCaptureivNV, (GLuint video_capture_slot, GLenum pname, GLint * params)) \
+X(GLenum, VideoCaptureNV, (GLuint video_capture_slot, GLuint * sequence_num, GLuint64EXT * capture_time)) \
+X(void, VideoCaptureStreamParameterdvNV, (GLuint video_capture_slot, GLuint stream, GLenum pname, const GLdouble * params)) \
+X(void, VideoCaptureStreamParameterfvNV, (GLuint video_capture_slot, GLuint stream, GLenum pname, const GLfloat * params)) \
+X(void, VideoCaptureStreamParameterivNV, (GLuint video_capture_slot, GLuint stream, GLenum pname, const GLint * params)) \
+EXT_END() \
+EXT_START("GL_NV_viewport_array") \
+X(void, DepthRangeArrayfvNV, (GLuint first, GLsizei count, const GLfloat * v)) \
+X(void, DepthRangeIndexedfNV, (GLuint index, GLfloat n, GLfloat f)) \
+X(void, DisableiNV, (GLenum target, GLuint index)) \
+X(void, EnableiNV, (GLenum target, GLuint index)) \
+X(void, GetFloati_vNV, (GLenum target, GLuint index, GLfloat * data)) \
+X(GLboolean, IsEnablediNV, (GLenum target, GLuint index)) \
+X(void, ScissorArrayvNV, (GLuint first, GLsizei count, const GLint * v)) \
+X(void, ScissorIndexedNV, (GLuint index, GLint left, GLint bottom, GLsizei width, GLsizei height)) \
+X(void, ScissorIndexedvNV, (GLuint index, const GLint * v)) \
+X(void, ViewportArrayvNV, (GLuint first, GLsizei count, const GLfloat * v)) \
+X(void, ViewportIndexedfNV, (GLuint index, GLfloat x, GLfloat y, GLfloat w, GLfloat h)) \
+X(void, ViewportIndexedfvNV, (GLuint index, const GLfloat * v)) \
+EXT_END() \
+EXT_START("GL_NV_viewport_swizzle") \
+X(void, ViewportSwizzleNV, (GLuint index, GLenum swizzlex, GLenum swizzley, GLenum swizzlez, GLenum swizzlew)) \
+EXT_END() \
+EXT_START("GL_OES_EGL_image") \
+X(void, EGLImageTargetRenderbufferStorageOES, (GLenum target, GLeglImageOES image)) \
+X(void, EGLImageTargetTexture2DOES, (GLenum target, GLeglImageOES image)) \
+EXT_END() \
+EXT_START("GL_OES_blend_equation_separate") \
+X(void, BlendEquationSeparateOES, (GLenum modeRGB, GLenum modeAlpha)) \
+EXT_END() \
+EXT_START("GL_OES_blend_func_separate") \
+X(void, BlendFuncSeparateOES, (GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, GLenum dstAlpha)) \
+EXT_END() \
+EXT_START("GL_OES_blend_subtract") \
+X(void, BlendEquationOES, (GLenum mode)) \
+EXT_END() \
+EXT_START("GL_OES_byte_coordinates") \
+X(void, MultiTexCoord1bOES, (GLenum texture, GLbyte s)) \
+X(void, MultiTexCoord1bvOES, (GLenum texture, const GLbyte * coords)) \
+X(void, MultiTexCoord2bOES, (GLenum texture, GLbyte s, GLbyte t)) \
+X(void, MultiTexCoord2bvOES, (GLenum texture, const GLbyte * coords)) \
+X(void, MultiTexCoord3bOES, (GLenum texture, GLbyte s, GLbyte t, GLbyte r)) \
+X(void, MultiTexCoord3bvOES, (GLenum texture, const GLbyte * coords)) \
+X(void, MultiTexCoord4bOES, (GLenum texture, GLbyte s, GLbyte t, GLbyte r, GLbyte q)) \
+X(void, MultiTexCoord4bvOES, (GLenum texture, const GLbyte * coords)) \
+X(void, TexCoord1bOES, (GLbyte s)) \
+X(void, TexCoord1bvOES, (const GLbyte * coords)) \
+X(void, TexCoord2bOES, (GLbyte s, GLbyte t)) \
+X(void, TexCoord2bvOES, (const GLbyte * coords)) \
+X(void, TexCoord3bOES, (GLbyte s, GLbyte t, GLbyte r)) \
+X(void, TexCoord3bvOES, (const GLbyte * coords)) \
+X(void, TexCoord4bOES, (GLbyte s, GLbyte t, GLbyte r, GLbyte q)) \
+X(void, TexCoord4bvOES, (const GLbyte * coords)) \
+X(void, Vertex2bOES, (GLbyte x, GLbyte y)) \
+X(void, Vertex2bvOES, (const GLbyte * coords)) \
+X(void, Vertex3bOES, (GLbyte x, GLbyte y, GLbyte z)) \
+X(void, Vertex3bvOES, (const GLbyte * coords)) \
+X(void, Vertex4bOES, (GLbyte x, GLbyte y, GLbyte z, GLbyte w)) \
+X(void, Vertex4bvOES, (const GLbyte * coords)) \
+EXT_END() \
+EXT_START("GL_OES_copy_image") \
+X(void, CopyImageSubDataOES, (GLuint srcName, GLenum srcTarget, GLint srcLevel, GLint srcX, GLint srcY, GLint srcZ, GLuint dstName, GLenum dstTarget, GLint dstLevel, GLint dstX, GLint dstY, GLint dstZ, GLsizei srcWidth, GLsizei srcHeight, GLsizei srcDepth)) \
+EXT_END() \
+EXT_START("GL_OES_draw_buffers_indexed") \
+X(void, BlendEquationSeparateiOES, (GLuint buf, GLenum modeRGB, GLenum modeAlpha)) \
+X(void, BlendEquationiOES, (GLuint buf, GLenum mode)) \
+X(void, BlendFuncSeparateiOES, (GLuint buf, GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, GLenum dstAlpha)) \
+X(void, BlendFunciOES, (GLuint buf, GLenum src, GLenum dst)) \
+X(void, ColorMaskiOES, (GLuint index, GLboolean r, GLboolean g, GLboolean b, GLboolean a)) \
+X(void, DisableiOES, (GLenum target, GLuint index)) \
+X(void, EnableiOES, (GLenum target, GLuint index)) \
+X(GLboolean, IsEnablediOES, (GLenum target, GLuint index)) \
+EXT_END() \
+EXT_START("GL_OES_draw_elements_base_vertex") \
+X(void, DrawElementsBaseVertexOES, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLint basevertex)) \
+X(void, DrawElementsInstancedBaseVertexOES, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLsizei instancecount, GLint basevertex)) \
+X(void, DrawRangeElementsBaseVertexOES, (GLenum mode, GLuint start, GLuint end, GLsizei count, GLenum type, const void * indices, GLint basevertex)) \
+EXT_END() \
+EXT_START("GL_OES_draw_texture") \
+X(void, DrawTexfOES, (GLfloat x, GLfloat y, GLfloat z, GLfloat width, GLfloat height)) \
+X(void, DrawTexfvOES, (const GLfloat * coords)) \
+X(void, DrawTexiOES, (GLint x, GLint y, GLint z, GLint width, GLint height)) \
+X(void, DrawTexivOES, (const GLint * coords)) \
+X(void, DrawTexsOES, (GLshort x, GLshort y, GLshort z, GLshort width, GLshort height)) \
+X(void, DrawTexsvOES, (const GLshort * coords)) \
+X(void, DrawTexxOES, (GLfixed x, GLfixed y, GLfixed z, GLfixed width, GLfixed height)) \
+X(void, DrawTexxvOES, (const GLfixed * coords)) \
+EXT_END() \
+EXT_START("GL_OES_fixed_point") \
+X(void, AccumxOES, (GLenum op, GLfixed value)) \
+X(void, AlphaFuncxOES, (GLenum func, GLfixed ref)) \
+X(void, BitmapxOES, (GLsizei width, GLsizei height, GLfixed xorig, GLfixed yorig, GLfixed xmove, GLfixed ymove, const GLubyte * bitmap)) \
+X(void, BlendColorxOES, (GLfixed red, GLfixed green, GLfixed blue, GLfixed alpha)) \
+X(void, ClearAccumxOES, (GLfixed red, GLfixed green, GLfixed blue, GLfixed alpha)) \
+X(void, ClearColorxOES, (GLfixed red, GLfixed green, GLfixed blue, GLfixed alpha)) \
+X(void, ClearDepthxOES, (GLfixed depth)) \
+X(void, ClipPlanexOES, (GLenum plane, const GLfixed * equation)) \
+X(void, Color3xOES, (GLfixed red, GLfixed green, GLfixed blue)) \
+X(void, Color3xvOES, (const GLfixed * components)) \
+X(void, Color4xOES, (GLfixed red, GLfixed green, GLfixed blue, GLfixed alpha)) \
+X(void, Color4xvOES, (const GLfixed * components)) \
+X(void, ConvolutionParameterxOES, (GLenum target, GLenum pname, GLfixed param)) \
+X(void, ConvolutionParameterxvOES, (GLenum target, GLenum pname, const GLfixed * params)) \
+X(void, DepthRangexOES, (GLfixed n, GLfixed f)) \
+X(void, EvalCoord1xOES, (GLfixed u)) \
+X(void, EvalCoord1xvOES, (const GLfixed * coords)) \
+X(void, EvalCoord2xOES, (GLfixed u, GLfixed v)) \
+X(void, EvalCoord2xvOES, (const GLfixed * coords)) \
+X(void, FeedbackBufferxOES, (GLsizei n, GLenum type, const GLfixed * buffer)) \
+X(void, FogxOES, (GLenum pname, GLfixed param)) \
+X(void, FogxvOES, (GLenum pname, const GLfixed * param)) \
+X(void, FrustumxOES, (GLfixed l, GLfixed r, GLfixed b, GLfixed t, GLfixed n, GLfixed f)) \
+X(void, GetClipPlanexOES, (GLenum plane, GLfixed * equation)) \
+X(void, GetConvolutionParameterxvOES, (GLenum target, GLenum pname, GLfixed * params)) \
+X(void, GetFixedvOES, (GLenum pname, GLfixed * params)) \
+X(void, GetHistogramParameterxvOES, (GLenum target, GLenum pname, GLfixed * params)) \
+X(void, GetLightxOES, (GLenum light, GLenum pname, GLfixed * params)) \
+X(void, GetLightxvOES, (GLenum light, GLenum pname, GLfixed * params)) \
+X(void, GetMapxvOES, (GLenum target, GLenum query, GLfixed * v)) \
+X(void, GetMaterialxOES, (GLenum face, GLenum pname, GLfixed param)) \
+X(void, GetMaterialxvOES, (GLenum face, GLenum pname, GLfixed * params)) \
+X(void, GetPixelMapxv, (GLenum map, GLint size, GLfixed * values)) \
+X(void, GetTexEnvxvOES, (GLenum target, GLenum pname, GLfixed * params)) \
+X(void, GetTexGenxvOES, (GLenum coord, GLenum pname, GLfixed * params)) \
+X(void, GetTexLevelParameterxvOES, (GLenum target, GLint level, GLenum pname, GLfixed * params)) \
+X(void, GetTexParameterxvOES, (GLenum target, GLenum pname, GLfixed * params)) \
+X(void, IndexxOES, (GLfixed component)) \
+X(void, IndexxvOES, (const GLfixed * component)) \
+X(void, LightModelxOES, (GLenum pname, GLfixed param)) \
+X(void, LightModelxvOES, (GLenum pname, const GLfixed * param)) \
+X(void, LightxOES, (GLenum light, GLenum pname, GLfixed param)) \
+X(void, LightxvOES, (GLenum light, GLenum pname, const GLfixed * params)) \
+X(void, LineWidthxOES, (GLfixed width)) \
+X(void, LoadMatrixxOES, (const GLfixed * m)) \
+X(void, LoadTransposeMatrixxOES, (const GLfixed * m)) \
+X(void, Map1xOES, (GLenum target, GLfixed u1, GLfixed u2, GLint stride, GLint order, GLfixed points)) \
+X(void, Map2xOES, (GLenum target, GLfixed u1, GLfixed u2, GLint ustride, GLint uorder, GLfixed v1, GLfixed v2, GLint vstride, GLint vorder, GLfixed points)) \
+X(void, MapGrid1xOES, (GLint n, GLfixed u1, GLfixed u2)) \
+X(void, MapGrid2xOES, (GLint n, GLfixed u1, GLfixed u2, GLfixed v1, GLfixed v2)) \
+X(void, MaterialxOES, (GLenum face, GLenum pname, GLfixed param)) \
+X(void, MaterialxvOES, (GLenum face, GLenum pname, const GLfixed * param)) \
+X(void, MultMatrixxOES, (const GLfixed * m)) \
+X(void, MultTransposeMatrixxOES, (const GLfixed * m)) \
+X(void, MultiTexCoord1xOES, (GLenum texture, GLfixed s)) \
+X(void, MultiTexCoord1xvOES, (GLenum texture, const GLfixed * coords)) \
+X(void, MultiTexCoord2xOES, (GLenum texture, GLfixed s, GLfixed t)) \
+X(void, MultiTexCoord2xvOES, (GLenum texture, const GLfixed * coords)) \
+X(void, MultiTexCoord3xOES, (GLenum texture, GLfixed s, GLfixed t, GLfixed r)) \
+X(void, MultiTexCoord3xvOES, (GLenum texture, const GLfixed * coords)) \
+X(void, MultiTexCoord4xOES, (GLenum texture, GLfixed s, GLfixed t, GLfixed r, GLfixed q)) \
+X(void, MultiTexCoord4xvOES, (GLenum texture, const GLfixed * coords)) \
+X(void, Normal3xOES, (GLfixed nx, GLfixed ny, GLfixed nz)) \
+X(void, Normal3xvOES, (const GLfixed * coords)) \
+X(void, OrthoxOES, (GLfixed l, GLfixed r, GLfixed b, GLfixed t, GLfixed n, GLfixed f)) \
+X(void, PassThroughxOES, (GLfixed token)) \
+X(void, PixelMapx, (GLenum map, GLint size, const GLfixed * values)) \
+X(void, PixelStorex, (GLenum pname, GLfixed param)) \
+X(void, PixelTransferxOES, (GLenum pname, GLfixed param)) \
+X(void, PixelZoomxOES, (GLfixed xfactor, GLfixed yfactor)) \
+X(void, PointParameterxOES, (GLenum pname, GLfixed param)) \
+X(void, PointParameterxvOES, (GLenum pname, const GLfixed * params)) \
+X(void, PointSizexOES, (GLfixed size)) \
+X(void, PolygonOffsetxOES, (GLfixed factor, GLfixed units)) \
+X(void, PrioritizeTexturesxOES, (GLsizei n, const GLuint * textures, const GLfixed * priorities)) \
+X(void, RasterPos2xOES, (GLfixed x, GLfixed y)) \
+X(void, RasterPos2xvOES, (const GLfixed * coords)) \
+X(void, RasterPos3xOES, (GLfixed x, GLfixed y, GLfixed z)) \
+X(void, RasterPos3xvOES, (const GLfixed * coords)) \
+X(void, RasterPos4xOES, (GLfixed x, GLfixed y, GLfixed z, GLfixed w)) \
+X(void, RasterPos4xvOES, (const GLfixed * coords)) \
+X(void, RectxOES, (GLfixed x1, GLfixed y1, GLfixed x2, GLfixed y2)) \
+X(void, RectxvOES, (const GLfixed * v1, const GLfixed * v2)) \
+X(void, RotatexOES, (GLfixed angle, GLfixed x, GLfixed y, GLfixed z)) \
+X(void, SampleCoveragexOES, (GLclampx value, GLboolean invert)) \
+X(void, ScalexOES, (GLfixed x, GLfixed y, GLfixed z)) \
+X(void, TexCoord1xOES, (GLfixed s)) \
+X(void, TexCoord1xvOES, (const GLfixed * coords)) \
+X(void, TexCoord2xOES, (GLfixed s, GLfixed t)) \
+X(void, TexCoord2xvOES, (const GLfixed * coords)) \
+X(void, TexCoord3xOES, (GLfixed s, GLfixed t, GLfixed r)) \
+X(void, TexCoord3xvOES, (const GLfixed * coords)) \
+X(void, TexCoord4xOES, (GLfixed s, GLfixed t, GLfixed r, GLfixed q)) \
+X(void, TexCoord4xvOES, (const GLfixed * coords)) \
+X(void, TexEnvxOES, (GLenum target, GLenum pname, GLfixed param)) \
+X(void, TexEnvxvOES, (GLenum target, GLenum pname, const GLfixed * params)) \
+X(void, TexGenxOES, (GLenum coord, GLenum pname, GLfixed param)) \
+X(void, TexGenxvOES, (GLenum coord, GLenum pname, const GLfixed * params)) \
+X(void, TexParameterxOES, (GLenum target, GLenum pname, GLfixed param)) \
+X(void, TexParameterxvOES, (GLenum target, GLenum pname, const GLfixed * params)) \
+X(void, TranslatexOES, (GLfixed x, GLfixed y, GLfixed z)) \
+X(void, Vertex2xOES, (GLfixed x)) \
+X(void, Vertex2xvOES, (const GLfixed * coords)) \
+X(void, Vertex3xOES, (GLfixed x, GLfixed y)) \
+X(void, Vertex3xvOES, (const GLfixed * coords)) \
+X(void, Vertex4xOES, (GLfixed x, GLfixed y, GLfixed z)) \
+X(void, Vertex4xvOES, (const GLfixed * coords)) \
+EXT_END() \
+EXT_START("GL_OES_framebuffer_object") \
+X(void, BindFramebufferOES, (GLenum target, GLuint framebuffer)) \
+X(void, BindRenderbufferOES, (GLenum target, GLuint renderbuffer)) \
+X(GLenum, CheckFramebufferStatusOES, (GLenum target)) \
+X(void, DeleteFramebuffersOES, (GLsizei n, const GLuint * framebuffers)) \
+X(void, DeleteRenderbuffersOES, (GLsizei n, const GLuint * renderbuffers)) \
+X(void, FramebufferRenderbufferOES, (GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer)) \
+X(void, FramebufferTexture2DOES, (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level)) \
+X(void, GenFramebuffersOES, (GLsizei n, GLuint * framebuffers)) \
+X(void, GenRenderbuffersOES, (GLsizei n, GLuint * renderbuffers)) \
+X(void, GenerateMipmapOES, (GLenum target)) \
+X(void, GetFramebufferAttachmentParameterivOES, (GLenum target, GLenum attachment, GLenum pname, GLint * params)) \
+X(void, GetRenderbufferParameterivOES, (GLenum target, GLenum pname, GLint * params)) \
+X(GLboolean, IsFramebufferOES, (GLuint framebuffer)) \
+X(GLboolean, IsRenderbufferOES, (GLuint renderbuffer)) \
+X(void, RenderbufferStorageOES, (GLenum target, GLenum internalformat, GLsizei width, GLsizei height)) \
+EXT_END() \
+EXT_START("GL_OES_geometry_shader") \
+X(void, FramebufferTextureOES, (GLenum target, GLenum attachment, GLuint texture, GLint level)) \
+EXT_END() \
+EXT_START("GL_OES_get_program_binary") \
+X(void, GetProgramBinaryOES, (GLuint program, GLsizei bufSize, GLsizei * length, GLenum * binaryFormat, void * binary)) \
+X(void, ProgramBinaryOES, (GLuint program, GLenum binaryFormat, const void * binary, GLint length)) \
+EXT_END() \
+EXT_START("GL_OES_mapbuffer") \
+X(void, GetBufferPointervOES, (GLenum target, GLenum pname, void ** params)) \
+X(void *, MapBufferOES, (GLenum target, GLenum access)) \
+X(GLboolean, UnmapBufferOES, (GLenum target)) \
+EXT_END() \
+EXT_START("GL_OES_matrix_palette") \
+X(void, CurrentPaletteMatrixOES, (GLuint matrixpaletteindex)) \
+X(void, LoadPaletteFromModelViewMatrixOES, ()) \
+X(void, MatrixIndexPointerOES, (GLint size, GLenum type, GLsizei stride, const void * pointer)) \
+X(void, WeightPointerOES, (GLint size, GLenum type, GLsizei stride, const void * pointer)) \
+EXT_END() \
+EXT_START("GL_OES_point_size_array") \
+X(void, PointSizePointerOES, (GLenum type, GLsizei stride, const void * pointer)) \
+EXT_END() \
+EXT_START("GL_OES_primitive_bounding_box") \
+X(void, PrimitiveBoundingBoxOES, (GLfloat minX, GLfloat minY, GLfloat minZ, GLfloat minW, GLfloat maxX, GLfloat maxY, GLfloat maxZ, GLfloat maxW)) \
+EXT_END() \
+EXT_START("GL_OES_query_matrix") \
+X(GLbitfield, QueryMatrixxOES, (GLfixed * mantissa, GLint * exponent)) \
+EXT_END() \
+EXT_START("GL_OES_sample_shading") \
+X(void, MinSampleShadingOES, (GLfloat value)) \
+EXT_END() \
+EXT_START("GL_OES_single_precision") \
+X(void, ClearDepthfOES, (GLclampf depth)) \
+X(void, ClipPlanefOES, (GLenum plane, const GLfloat * equation)) \
+X(void, DepthRangefOES, (GLclampf n, GLclampf f)) \
+X(void, FrustumfOES, (GLfloat l, GLfloat r, GLfloat b, GLfloat t, GLfloat n, GLfloat f)) \
+X(void, GetClipPlanefOES, (GLenum plane, GLfloat * equation)) \
+X(void, OrthofOES, (GLfloat l, GLfloat r, GLfloat b, GLfloat t, GLfloat n, GLfloat f)) \
+EXT_END() \
+EXT_START("GL_OES_tessellation_shader") \
+X(void, PatchParameteriOES, (GLenum pname, GLint value)) \
+EXT_END() \
+EXT_START("GL_OES_texture_3D") \
+X(void, CompressedTexImage3DOES, (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLsizei imageSize, const void * data)) \
+X(void, CompressedTexSubImage3DOES, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLsizei imageSize, const void * data)) \
+X(void, CopyTexSubImage3DOES, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLint x, GLint y, GLsizei width, GLsizei height)) \
+X(void, FramebufferTexture3DOES, (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level, GLint zoffset)) \
+X(void, TexImage3DOES, (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLenum format, GLenum type, const void * pixels)) \
+X(void, TexSubImage3DOES, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, const void * pixels)) \
+EXT_END() \
+EXT_START("GL_OES_texture_border_clamp") \
+X(void, GetSamplerParameterIivOES, (GLuint sampler, GLenum pname, GLint * params)) \
+X(void, GetSamplerParameterIuivOES, (GLuint sampler, GLenum pname, GLuint * params)) \
+X(void, GetTexParameterIivOES, (GLenum target, GLenum pname, GLint * params)) \
+X(void, GetTexParameterIuivOES, (GLenum target, GLenum pname, GLuint * params)) \
+X(void, SamplerParameterIivOES, (GLuint sampler, GLenum pname, const GLint * param)) \
+X(void, SamplerParameterIuivOES, (GLuint sampler, GLenum pname, const GLuint * param)) \
+X(void, TexParameterIivOES, (GLenum target, GLenum pname, const GLint * params)) \
+X(void, TexParameterIuivOES, (GLenum target, GLenum pname, const GLuint * params)) \
+EXT_END() \
+EXT_START("GL_OES_texture_buffer") \
+X(void, TexBufferOES, (GLenum target, GLenum internalformat, GLuint buffer)) \
+X(void, TexBufferRangeOES, (GLenum target, GLenum internalformat, GLuint buffer, GLintptr offset, GLsizeiptr size)) \
+EXT_END() \
+EXT_START("GL_OES_texture_cube_map") \
+X(void, GetTexGenfvOES, (GLenum coord, GLenum pname, GLfloat * params)) \
+X(void, GetTexGenivOES, (GLenum coord, GLenum pname, GLint * params)) \
+X(void, TexGenfOES, (GLenum coord, GLenum pname, GLfloat param)) \
+X(void, TexGenfvOES, (GLenum coord, GLenum pname, const GLfloat * params)) \
+X(void, TexGeniOES, (GLenum coord, GLenum pname, GLint param)) \
+X(void, TexGenivOES, (GLenum coord, GLenum pname, const GLint * params)) \
+EXT_END() \
+EXT_START("GL_OES_texture_storage_multisample_2d_array") \
+X(void, TexStorage3DMultisampleOES, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLboolean fixedsamplelocations)) \
+EXT_END() \
+EXT_START("GL_OES_texture_view") \
+X(void, TextureViewOES, (GLuint texture, GLenum target, GLuint origtexture, GLenum internalformat, GLuint minlevel, GLuint numlevels, GLuint minlayer, GLuint numlayers)) \
+EXT_END() \
+EXT_START("GL_OES_vertex_array_object") \
+X(void, BindVertexArrayOES, (GLuint array)) \
+X(void, DeleteVertexArraysOES, (GLsizei n, const GLuint * arrays)) \
+X(void, GenVertexArraysOES, (GLsizei n, GLuint * arrays)) \
+X(GLboolean, IsVertexArrayOES, (GLuint array)) \
+EXT_END() \
+EXT_START("GL_OES_viewport_array") \
+X(void, DepthRangeArrayfvOES, (GLuint first, GLsizei count, const GLfloat * v)) \
+X(void, DepthRangeIndexedfOES, (GLuint index, GLfloat n, GLfloat f)) \
+X(void, GetFloati_vOES, (GLenum target, GLuint index, GLfloat * data)) \
+X(void, ScissorArrayvOES, (GLuint first, GLsizei count, const GLint * v)) \
+X(void, ScissorIndexedOES, (GLuint index, GLint left, GLint bottom, GLsizei width, GLsizei height)) \
+X(void, ScissorIndexedvOES, (GLuint index, const GLint * v)) \
+X(void, ViewportArrayvOES, (GLuint first, GLsizei count, const GLfloat * v)) \
+X(void, ViewportIndexedfOES, (GLuint index, GLfloat x, GLfloat y, GLfloat w, GLfloat h)) \
+X(void, ViewportIndexedfvOES, (GLuint index, const GLfloat * v)) \
+EXT_END() \
+EXT_START("GL_OVR_multiview") \
+X(void, FramebufferTextureMultiviewOVR, (GLenum target, GLenum attachment, GLuint texture, GLint level, GLint baseViewIndex, GLsizei numViews)) \
+X(void, NamedFramebufferTextureMultiviewOVR, (GLuint framebuffer, GLenum attachment, GLuint texture, GLint level, GLint baseViewIndex, GLsizei numViews)) \
+EXT_END() \
+EXT_START("GL_OVR_multiview_multisampled_render_to_texture") \
+X(void, FramebufferTextureMultisampleMultiviewOVR, (GLenum target, GLenum attachment, GLuint texture, GLint level, GLsizei samples, GLint baseViewIndex, GLsizei numViews)) \
+EXT_END() \
+EXT_START("GL_PGI_misc_hints") \
+X(void, HintPGI, (GLenum target, GLint mode)) \
+EXT_END() \
+EXT_START("GL_QCOM_alpha_test") \
+X(void, AlphaFuncQCOM, (GLenum func, GLclampf ref)) \
+EXT_END() \
+EXT_START("GL_QCOM_driver_control") \
+X(void, DisableDriverControlQCOM, (GLuint driverControl)) \
+X(void, EnableDriverControlQCOM, (GLuint driverControl)) \
+X(void, GetDriverControlStringQCOM, (GLuint driverControl, GLsizei bufSize, GLsizei * length, GLchar * driverControlString)) \
+X(void, GetDriverControlsQCOM, (GLint * num, GLsizei size, GLuint * driverControls)) \
+EXT_END() \
+EXT_START("GL_QCOM_extended_get") \
+X(void, ExtGetBufferPointervQCOM, (GLenum target, void ** params)) \
+X(void, ExtGetBuffersQCOM, (GLuint * buffers, GLint maxBuffers, GLint * numBuffers)) \
+X(void, ExtGetFramebuffersQCOM, (GLuint * framebuffers, GLint maxFramebuffers, GLint * numFramebuffers)) \
+X(void, ExtGetRenderbuffersQCOM, (GLuint * renderbuffers, GLint maxRenderbuffers, GLint * numRenderbuffers)) \
+X(void, ExtGetTexLevelParameterivQCOM, (GLuint texture, GLenum face, GLint level, GLenum pname, GLint * params)) \
+X(void, ExtGetTexSubImageQCOM, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, void * texels)) \
+X(void, ExtGetTexturesQCOM, (GLuint * textures, GLint maxTextures, GLint * numTextures)) \
+X(void, ExtTexObjectStateOverrideiQCOM, (GLenum target, GLenum pname, GLint param)) \
+EXT_END() \
+EXT_START("GL_QCOM_extended_get2") \
+X(void, ExtGetProgramBinarySourceQCOM, (GLuint program, GLenum shadertype, GLchar * source, GLint * length)) \
+X(void, ExtGetProgramsQCOM, (GLuint * programs, GLint maxPrograms, GLint * numPrograms)) \
+X(void, ExtGetShadersQCOM, (GLuint * shaders, GLint maxShaders, GLint * numShaders)) \
+X(GLboolean, ExtIsProgramBinaryQCOM, (GLuint program)) \
+EXT_END() \
+EXT_START("GL_QCOM_frame_extrapolation") \
+X(void, ExtrapolateTex2DQCOM, (GLuint src1, GLuint src2, GLuint output, GLfloat scaleFactor)) \
+EXT_END() \
+EXT_START("GL_QCOM_framebuffer_foveated") \
+X(void, FramebufferFoveationConfigQCOM, (GLuint framebuffer, GLuint numLayers, GLuint focalPointsPerLayer, GLuint requestedFeatures, GLuint * providedFeatures)) \
+X(void, FramebufferFoveationParametersQCOM, (GLuint framebuffer, GLuint layer, GLuint focalPoint, GLfloat focalX, GLfloat focalY, GLfloat gainX, GLfloat gainY, GLfloat foveaArea)) \
+EXT_END() \
+EXT_START("GL_QCOM_motion_estimation") \
+X(void, TexEstimateMotionQCOM, (GLuint ref, GLuint target, GLuint output)) \
+X(void, TexEstimateMotionRegionsQCOM, (GLuint ref, GLuint target, GLuint output, GLuint mask)) \
+EXT_END() \
+EXT_START("GL_QCOM_shader_framebuffer_fetch_noncoherent") \
+X(void, FramebufferFetchBarrierQCOM, ()) \
+EXT_END() \
+EXT_START("GL_QCOM_shading_rate") \
+X(void, ShadingRateQCOM, (GLenum rate)) \
+EXT_END() \
+EXT_START("GL_QCOM_texture_foveated") \
+X(void, TextureFoveationParametersQCOM, (GLuint texture, GLuint layer, GLuint focalPoint, GLfloat focalX, GLfloat focalY, GLfloat gainX, GLfloat gainY, GLfloat foveaArea)) \
+EXT_END() \
+EXT_START("GL_QCOM_tiled_rendering") \
+X(void, EndTilingQCOM, (GLbitfield preserveMask)) \
+X(void, StartTilingQCOM, (GLuint x, GLuint y, GLuint width, GLuint height, GLbitfield preserveMask)) \
+EXT_END() \
+EXT_START("GL_SGIS_detail_texture") \
+X(void, DetailTexFuncSGIS, (GLenum target, GLsizei n, const GLfloat * points)) \
+X(void, GetDetailTexFuncSGIS, (GLenum target, GLfloat * points)) \
+EXT_END() \
+EXT_START("GL_SGIS_fog_function") \
+X(void, FogFuncSGIS, (GLsizei n, const GLfloat * points)) \
+X(void, GetFogFuncSGIS, (GLfloat * points)) \
+EXT_END() \
+EXT_START("GL_SGIS_multisample") \
+X(void, SampleMaskSGIS, (GLclampf value, GLboolean invert)) \
+X(void, SamplePatternSGIS, (GLenum pattern)) \
+EXT_END() \
+EXT_START("GL_SGIS_pixel_texture") \
+X(void, GetPixelTexGenParameterfvSGIS, (GLenum pname, GLfloat * params)) \
+X(void, GetPixelTexGenParameterivSGIS, (GLenum pname, GLint * params)) \
+X(void, PixelTexGenParameterfSGIS, (GLenum pname, GLfloat param)) \
+X(void, PixelTexGenParameterfvSGIS, (GLenum pname, const GLfloat * params)) \
+X(void, PixelTexGenParameteriSGIS, (GLenum pname, GLint param)) \
+X(void, PixelTexGenParameterivSGIS, (GLenum pname, const GLint * params)) \
+EXT_END() \
+EXT_START("GL_SGIS_point_parameters") \
+X(void, PointParameterfSGIS, (GLenum pname, GLfloat param)) \
+X(void, PointParameterfvSGIS, (GLenum pname, const GLfloat * params)) \
+EXT_END() \
+EXT_START("GL_SGIS_sharpen_texture") \
+X(void, GetSharpenTexFuncSGIS, (GLenum target, GLfloat * points)) \
+X(void, SharpenTexFuncSGIS, (GLenum target, GLsizei n, const GLfloat * points)) \
+EXT_END() \
+EXT_START("GL_SGIS_texture4D") \
+X(void, TexImage4DSGIS, (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLsizei size4d, GLint border, GLenum format, GLenum type, const void * pixels)) \
+X(void, TexSubImage4DSGIS, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLint woffset, GLsizei width, GLsizei height, GLsizei depth, GLsizei size4d, GLenum format, GLenum type, const void * pixels)) \
+EXT_END() \
+EXT_START("GL_SGIS_texture_color_mask") \
+X(void, TextureColorMaskSGIS, (GLboolean red, GLboolean green, GLboolean blue, GLboolean alpha)) \
+EXT_END() \
+EXT_START("GL_SGIS_texture_filter4") \
+X(void, GetTexFilterFuncSGIS, (GLenum target, GLenum filter, GLfloat * weights)) \
+X(void, TexFilterFuncSGIS, (GLenum target, GLenum filter, GLsizei n, const GLfloat * weights)) \
+EXT_END() \
+EXT_START("GL_SGIX_async") \
+X(void, AsyncMarkerSGIX, (GLuint marker)) \
+X(void, DeleteAsyncMarkersSGIX, (GLuint marker, GLsizei range)) \
+X(GLint, FinishAsyncSGIX, (GLuint * markerp)) \
+X(GLuint, GenAsyncMarkersSGIX, (GLsizei range)) \
+X(GLboolean, IsAsyncMarkerSGIX, (GLuint marker)) \
+X(GLint, PollAsyncSGIX, (GLuint * markerp)) \
+EXT_END() \
+EXT_START("GL_SGIX_flush_raster") \
+X(void, FlushRasterSGIX, ()) \
+EXT_END() \
+EXT_START("GL_SGIX_fragment_lighting") \
+X(void, FragmentColorMaterialSGIX, (GLenum face, GLenum mode)) \
+X(void, FragmentLightModelfSGIX, (GLenum pname, GLfloat param)) \
+X(void, FragmentLightModelfvSGIX, (GLenum pname, const GLfloat * params)) \
+X(void, FragmentLightModeliSGIX, (GLenum pname, GLint param)) \
+X(void, FragmentLightModelivSGIX, (GLenum pname, const GLint * params)) \
+X(void, FragmentLightfSGIX, (GLenum light, GLenum pname, GLfloat param)) \
+X(void, FragmentLightfvSGIX, (GLenum light, GLenum pname, const GLfloat * params)) \
+X(void, FragmentLightiSGIX, (GLenum light, GLenum pname, GLint param)) \
+X(void, FragmentLightivSGIX, (GLenum light, GLenum pname, const GLint * params)) \
+X(void, FragmentMaterialfSGIX, (GLenum face, GLenum pname, GLfloat param)) \
+X(void, FragmentMaterialfvSGIX, (GLenum face, GLenum pname, const GLfloat * params)) \
+X(void, FragmentMaterialiSGIX, (GLenum face, GLenum pname, GLint param)) \
+X(void, FragmentMaterialivSGIX, (GLenum face, GLenum pname, const GLint * params)) \
+X(void, GetFragmentLightfvSGIX, (GLenum light, GLenum pname, GLfloat * params)) \
+X(void, GetFragmentLightivSGIX, (GLenum light, GLenum pname, GLint * params)) \
+X(void, GetFragmentMaterialfvSGIX, (GLenum face, GLenum pname, GLfloat * params)) \
+X(void, GetFragmentMaterialivSGIX, (GLenum face, GLenum pname, GLint * params)) \
+X(void, LightEnviSGIX, (GLenum pname, GLint param)) \
+EXT_END() \
+EXT_START("GL_SGIX_framezoom") \
+X(void, FrameZoomSGIX, (GLint factor)) \
+EXT_END() \
+EXT_START("GL_SGIX_igloo_interface") \
+X(void, IglooInterfaceSGIX, (GLenum pname, const void * params)) \
+EXT_END() \
+EXT_START("GL_SGIX_instruments") \
+X(GLint, GetInstrumentsSGIX, ()) \
+X(void, InstrumentsBufferSGIX, (GLsizei size, GLint * buffer)) \
+X(GLint, PollInstrumentsSGIX, (GLint * marker_p)) \
+X(void, ReadInstrumentsSGIX, (GLint marker)) \
+X(void, StartInstrumentsSGIX, ()) \
+X(void, StopInstrumentsSGIX, (GLint marker)) \
+EXT_END() \
+EXT_START("GL_SGIX_list_priority") \
+X(void, GetListParameterfvSGIX, (GLuint list, GLenum pname, GLfloat * params)) \
+X(void, GetListParameterivSGIX, (GLuint list, GLenum pname, GLint * params)) \
+X(void, ListParameterfSGIX, (GLuint list, GLenum pname, GLfloat param)) \
+X(void, ListParameterfvSGIX, (GLuint list, GLenum pname, const GLfloat * params)) \
+X(void, ListParameteriSGIX, (GLuint list, GLenum pname, GLint param)) \
+X(void, ListParameterivSGIX, (GLuint list, GLenum pname, const GLint * params)) \
+EXT_END() \
+EXT_START("GL_SGIX_pixel_texture") \
+X(void, PixelTexGenSGIX, (GLenum mode)) \
+EXT_END() \
+EXT_START("GL_SGIX_polynomial_ffd") \
+X(void, DeformSGIX, (GLbitfield mask)) \
+X(void, DeformationMap3dSGIX, (GLenum target, GLdouble u1, GLdouble u2, GLint ustride, GLint uorder, GLdouble v1, GLdouble v2, GLint vstride, GLint vorder, GLdouble w1, GLdouble w2, GLint wstride, GLint worder, const GLdouble * points)) \
+X(void, DeformationMap3fSGIX, (GLenum target, GLfloat u1, GLfloat u2, GLint ustride, GLint uorder, GLfloat v1, GLfloat v2, GLint vstride, GLint vorder, GLfloat w1, GLfloat w2, GLint wstride, GLint worder, const GLfloat * points)) \
+X(void, LoadIdentityDeformationMapSGIX, (GLbitfield mask)) \
+EXT_END() \
+EXT_START("GL_SGIX_reference_plane") \
+X(void, ReferencePlaneSGIX, (const GLdouble * equation)) \
+EXT_END() \
+EXT_START("GL_SGIX_sprite") \
+X(void, SpriteParameterfSGIX, (GLenum pname, GLfloat param)) \
+X(void, SpriteParameterfvSGIX, (GLenum pname, const GLfloat * params)) \
+X(void, SpriteParameteriSGIX, (GLenum pname, GLint param)) \
+X(void, SpriteParameterivSGIX, (GLenum pname, const GLint * params)) \
+EXT_END() \
+EXT_START("GL_SGIX_tag_sample_buffer") \
+X(void, TagSampleBufferSGIX, ()) \
+EXT_END() \
+EXT_START("GL_SGI_color_table") \
+X(void, ColorTableParameterfvSGI, (GLenum target, GLenum pname, const GLfloat * params)) \
+X(void, ColorTableParameterivSGI, (GLenum target, GLenum pname, const GLint * params)) \
+X(void, ColorTableSGI, (GLenum target, GLenum internalformat, GLsizei width, GLenum format, GLenum type, const void * table)) \
+X(void, CopyColorTableSGI, (GLenum target, GLenum internalformat, GLint x, GLint y, GLsizei width)) \
+X(void, GetColorTableParameterfvSGI, (GLenum target, GLenum pname, GLfloat * params)) \
+X(void, GetColorTableParameterivSGI, (GLenum target, GLenum pname, GLint * params)) \
+X(void, GetColorTableSGI, (GLenum target, GLenum format, GLenum type, void * table)) \
+EXT_END() \
+EXT_START("GL_SUNX_constant_data") \
+X(void, FinishTextureSUNX, ()) \
+EXT_END() \
+EXT_START("GL_SUN_global_alpha") \
+X(void, GlobalAlphaFactorbSUN, (GLbyte factor)) \
+X(void, GlobalAlphaFactordSUN, (GLdouble factor)) \
+X(void, GlobalAlphaFactorfSUN, (GLfloat factor)) \
+X(void, GlobalAlphaFactoriSUN, (GLint factor)) \
+X(void, GlobalAlphaFactorsSUN, (GLshort factor)) \
+X(void, GlobalAlphaFactorubSUN, (GLubyte factor)) \
+X(void, GlobalAlphaFactoruiSUN, (GLuint factor)) \
+X(void, GlobalAlphaFactorusSUN, (GLushort factor)) \
+EXT_END() \
+EXT_START("GL_SUN_mesh_array") \
+X(void, DrawMeshArraysSUN, (GLenum mode, GLint first, GLsizei count, GLsizei width)) \
+EXT_END() \
+EXT_START("GL_SUN_triangle_list") \
+X(void, ReplacementCodePointerSUN, (GLenum type, GLsizei stride, const void ** pointer)) \
+X(void, ReplacementCodeubSUN, (GLubyte code)) \
+X(void, ReplacementCodeubvSUN, (const GLubyte * code)) \
+X(void, ReplacementCodeuiSUN, (GLuint code)) \
+X(void, ReplacementCodeuivSUN, (const GLuint * code)) \
+X(void, ReplacementCodeusSUN, (GLushort code)) \
+X(void, ReplacementCodeusvSUN, (const GLushort * code)) \
+EXT_END() \
+EXT_START("GL_SUN_vertex") \
+X(void, Color3fVertex3fSUN, (GLfloat r, GLfloat g, GLfloat b, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, Color3fVertex3fvSUN, (const GLfloat * c, const GLfloat * v)) \
+X(void, Color4fNormal3fVertex3fSUN, (GLfloat r, GLfloat g, GLfloat b, GLfloat a, GLfloat nx, GLfloat ny, GLfloat nz, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, Color4fNormal3fVertex3fvSUN, (const GLfloat * c, const GLfloat * n, const GLfloat * v)) \
+X(void, Color4ubVertex2fSUN, (GLubyte r, GLubyte g, GLubyte b, GLubyte a, GLfloat x, GLfloat y)) \
+X(void, Color4ubVertex2fvSUN, (const GLubyte * c, const GLfloat * v)) \
+X(void, Color4ubVertex3fSUN, (GLubyte r, GLubyte g, GLubyte b, GLubyte a, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, Color4ubVertex3fvSUN, (const GLubyte * c, const GLfloat * v)) \
+X(void, Normal3fVertex3fSUN, (GLfloat nx, GLfloat ny, GLfloat nz, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, Normal3fVertex3fvSUN, (const GLfloat * n, const GLfloat * v)) \
+X(void, ReplacementCodeuiColor3fVertex3fSUN, (GLuint rc, GLfloat r, GLfloat g, GLfloat b, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, ReplacementCodeuiColor3fVertex3fvSUN, (const GLuint * rc, const GLfloat * c, const GLfloat * v)) \
+X(void, ReplacementCodeuiColor4fNormal3fVertex3fSUN, (GLuint rc, GLfloat r, GLfloat g, GLfloat b, GLfloat a, GLfloat nx, GLfloat ny, GLfloat nz, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, ReplacementCodeuiColor4fNormal3fVertex3fvSUN, (const GLuint * rc, const GLfloat * c, const GLfloat * n, const GLfloat * v)) \
+X(void, ReplacementCodeuiColor4ubVertex3fSUN, (GLuint rc, GLubyte r, GLubyte g, GLubyte b, GLubyte a, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, ReplacementCodeuiColor4ubVertex3fvSUN, (const GLuint * rc, const GLubyte * c, const GLfloat * v)) \
+X(void, ReplacementCodeuiNormal3fVertex3fSUN, (GLuint rc, GLfloat nx, GLfloat ny, GLfloat nz, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, ReplacementCodeuiNormal3fVertex3fvSUN, (const GLuint * rc, const GLfloat * n, const GLfloat * v)) \
+X(void, ReplacementCodeuiTexCoord2fColor4fNormal3fVertex3fSUN, (GLuint rc, GLfloat s, GLfloat t, GLfloat r, GLfloat g, GLfloat b, GLfloat a, GLfloat nx, GLfloat ny, GLfloat nz, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, ReplacementCodeuiTexCoord2fColor4fNormal3fVertex3fvSUN, (const GLuint * rc, const GLfloat * tc, const GLfloat * c, const GLfloat * n, const GLfloat * v)) \
+X(void, ReplacementCodeuiTexCoord2fNormal3fVertex3fSUN, (GLuint rc, GLfloat s, GLfloat t, GLfloat nx, GLfloat ny, GLfloat nz, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, ReplacementCodeuiTexCoord2fNormal3fVertex3fvSUN, (const GLuint * rc, const GLfloat * tc, const GLfloat * n, const GLfloat * v)) \
+X(void, ReplacementCodeuiTexCoord2fVertex3fSUN, (GLuint rc, GLfloat s, GLfloat t, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, ReplacementCodeuiTexCoord2fVertex3fvSUN, (const GLuint * rc, const GLfloat * tc, const GLfloat * v)) \
+X(void, ReplacementCodeuiVertex3fSUN, (GLuint rc, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, ReplacementCodeuiVertex3fvSUN, (const GLuint * rc, const GLfloat * v)) \
+X(void, TexCoord2fColor3fVertex3fSUN, (GLfloat s, GLfloat t, GLfloat r, GLfloat g, GLfloat b, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, TexCoord2fColor3fVertex3fvSUN, (const GLfloat * tc, const GLfloat * c, const GLfloat * v)) \
+X(void, TexCoord2fColor4fNormal3fVertex3fSUN, (GLfloat s, GLfloat t, GLfloat r, GLfloat g, GLfloat b, GLfloat a, GLfloat nx, GLfloat ny, GLfloat nz, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, TexCoord2fColor4fNormal3fVertex3fvSUN, (const GLfloat * tc, const GLfloat * c, const GLfloat * n, const GLfloat * v)) \
+X(void, TexCoord2fColor4ubVertex3fSUN, (GLfloat s, GLfloat t, GLubyte r, GLubyte g, GLubyte b, GLubyte a, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, TexCoord2fColor4ubVertex3fvSUN, (const GLfloat * tc, const GLubyte * c, const GLfloat * v)) \
+X(void, TexCoord2fNormal3fVertex3fSUN, (GLfloat s, GLfloat t, GLfloat nx, GLfloat ny, GLfloat nz, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, TexCoord2fNormal3fVertex3fvSUN, (const GLfloat * tc, const GLfloat * n, const GLfloat * v)) \
+X(void, TexCoord2fVertex3fSUN, (GLfloat s, GLfloat t, GLfloat x, GLfloat y, GLfloat z)) \
+X(void, TexCoord2fVertex3fvSUN, (const GLfloat * tc, const GLfloat * v)) \
+X(void, TexCoord4fColor4fNormal3fVertex4fSUN, (GLfloat s, GLfloat t, GLfloat p, GLfloat q, GLfloat r, GLfloat g, GLfloat b, GLfloat a, GLfloat nx, GLfloat ny, GLfloat nz, GLfloat x, GLfloat y, GLfloat z, GLfloat w)) \
+X(void, TexCoord4fColor4fNormal3fVertex4fvSUN, (const GLfloat * tc, const GLfloat * c, const GLfloat * n, const GLfloat * v)) \
+X(void, TexCoord4fVertex4fSUN, (GLfloat s, GLfloat t, GLfloat p, GLfloat q, GLfloat x, GLfloat y, GLfloat z, GLfloat w)) \
+X(void, TexCoord4fVertex4fvSUN, (const GLfloat * tc, const GLfloat * v)) \
+EXT_END() \
 
 #if !defined(__APPLE__)
 /* ----TYPEDEFS------------------------------------------------------------------------------------------------------ */
 #define X(retval, name, params) typedef retval (*VdFwProcGL_##name)params;
-#define V(v)
-#define VE()
+#define VER_START(v)
+#define VER_END(v)
+#define EXT_START(name)
+#define EXT_END()
 VD_FW_OPENGL_CORE_FUNCTIONS
 #undef X
-#undef V
-#undef VE
+#undef VER_START
+#undef VER_END
+#undef EXT_START
+#undef EXT_END
 
 /* ----EXTERNS------------------------------------------------------------------------------------------------------- */
-#define X(retval, name, params) extern VdFwProcGL_##name name;
-#define V(v)
-#define VE()
+#define X(retval, name, params) extern VdFwProcGL_##name gl##name;
+#define VER_START(v)
+#define VER_END(v)
+#define EXT_START(name)
+#define EXT_END()
 VD_FW_OPENGL_CORE_FUNCTIONS
 #undef X
-#undef V
-#undef VE
+#undef VER_START
+#undef VER_END
+#undef EXT_START
+#undef EXT_END
 #endif // !defined(__APPLE__)
 
 #if defined(__APPLE__)
@@ -4295,7 +7244,8 @@ typedef struct VdFw__GamepadState {
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #endif
 
-static void vd_fw__load_opengl(VdFwGlVersion version);
+static int vd_fw__load_opengl(VdFwGlConfig *config);
+static int vd_fw__lookup_gl_extension(const char *q, VdFwGlConfig *config);
 
 #ifdef _WIN32
 
@@ -5463,6 +8413,19 @@ typedef VdFwBOOL  (*VdFwProcwglChoosePixelFormatARB)(VdFwHDC hdc, const int* piA
 #define WGL_TYPE_RGBA_ARB                           0x202B
 #define WGL_PIXEL_TYPE_ARB                          0x2013
 #define WGL_COLOR_BITS_ARB                          0x2014
+#define WGL_RED_BITS_ARB                            0x2015
+#define WGL_RED_SHIFT_ARB                           0x2016
+#define WGL_GREEN_BITS_ARB                          0x2017
+#define WGL_GREEN_SHIFT_ARB                         0x2018
+#define WGL_BLUE_BITS_ARB                           0x2019
+#define WGL_BLUE_SHIFT_ARB                          0x201A
+#define WGL_ALPHA_BITS_ARB                          0x201B
+#define WGL_ALPHA_SHIFT_ARB                         0x201C
+#define WGL_ACCUM_BITS_ARB                          0x201D
+#define WGL_ACCUM_RED_BITS_ARB                      0x201E
+#define WGL_ACCUM_GREEN_BITS_ARB                    0x201F
+#define WGL_ACCUM_BLUE_BITS_ARB                     0x2020
+#define WGL_ACCUM_ALPHA_BITS_ARB                    0x2021
 #define WGL_ALPHA_BITS_ARB                          0x201B
 #define WGL_DEPTH_BITS_ARB                          0x2022
 #define WGL_STENCIL_BITS_ARB                        0x2023
@@ -6165,33 +9128,6 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         VD_FW_G.draw_decorations = !info->window_options.borderless;
     }
 
-    if (info != NULL) {
-#if (VD_FW_WIN32_SUBSYSTEM == VD_FW_WIN32_SUBSYSTEM_WINDOWS)
-        if (info->gl.debug_on) {
-            AllocConsole();
-            AttachConsole(GetCurrentProcessId());
-            DWORD written;
-            SetConsoleTitle(TEXT("DEBUG CONSOLE"));
-            TCHAR *msg = TEXT("Console allocated for debugging\n");
-            SIZE_T len = vd_fw__tcslen(msg);
-            WriteConsole(
-                GetStdHandle(STD_OUTPUT_HANDLE),
-                msg,
-                (DWORD)len,
-                &written,
-                0);
-#if !VD_FW_NO_CRT
-            freopen("conin$","r",stdin);
-            freopen("conout$","w",stdout);
-            freopen("conout$","w",stderr);
-#endif // !VD_FW_NO_CRT
-
-        }
-#endif
-    }
-
-    SetConsoleOutputCP(CP_UTF8);
-
     {
 
         TCHAR *buf = (TCHAR*)vd_fw__realloc_mem(NULL, sizeof(TCHAR) * MAX_PATH);
@@ -6377,7 +9313,7 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
     // @note(mdodis): For Raw Input mouse handling, instead of using the message queue
     // We use two sinks with an atomic write index.
     {
-        VD_FW_WIN32_PROFILE_BEGIN(read_all_input);
+        // VD_FW_WIN32_PROFILE_BEGIN(read_all_input);
         VD_FW_G.mouse_delta[0] = VD_FW_G.winthread_mouse_delta[0];
         VD_FW_G.mouse_delta[1] = VD_FW_G.winthread_mouse_delta[1];
         VD_FW_G.winthread_mouse_delta[0] = 0.f;
@@ -6389,7 +9325,7 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
             VD_FW_G.gamepad_curr_states[i] = VD_FW_G.winthread_gamepad_curr_states[i];
         }
         LeaveCriticalSection(&VD_FW_G.input_critical_section);
-        VD_FW_WIN32_PROFILE_END(read_all_input);
+        // VD_FW_WIN32_PROFILE_END(read_all_input);
     }
 
     if (VD_FW_G.mouse_is_locked && VD_FW_G.focused) {
@@ -6463,8 +9399,10 @@ VD_FW_API VdFwPlatform vd_fw_get_platform(void)
     return VD_FW_PLATFORM_WINDOWS;
 }
 
-VD_FW_API void vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_options)
+VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_options)
 {
+    VD_FW_WIN32_PROFILE_BEGIN(vd_fw_set_graphics_api);
+    int result = 1;
 
     WakeConditionVariable(&VD_FW_G.cond_var);
 
@@ -6534,6 +9472,17 @@ VD_FW_API void vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl
     switch (api) {
         case VD_FW_GRAPHICS_API_OPENGL: {
 
+            VD_FW_WIN32_PROFILE_BEGIN(create_temp_context);
+            VdFwGlConfig      default_configs[2] = {0};
+            default_configs[0].version = VD_FW_GL_VERSION_3_3;
+
+            VdFwOpenGLOptions default_options = {0};
+            default_options.configs = default_configs;
+
+            if (!gl_options || (gl_options->configs == 0) || (gl_options->configs[0].version == VD_FW_GL_VERSION_BASIC)) {
+                gl_options = &default_options;
+            }
+
             VD_FW_G.hdc = VdFwGetDC(VD_FW_G.hwnd);
 
             // Temp context flags
@@ -6557,123 +9506,182 @@ VD_FW_API void vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl
               0,                                // Reserved
               0, 0, 0                           // Layer Masks Ignored
             };
+            VD_FW_WIN32_PROFILE_BEGIN(temp_pixel_format);
             int pf = VdFwChoosePixelFormat(VD_FW_G.hdc, &pfd);
             VD_FW__CHECK_NONZERO(pf);
             VD_FW__CHECK_TRUE(VdFwSetPixelFormat(VD_FW_G.hdc, pf, &pfd));
+            VD_FW_WIN32_PROFILE_END(temp_pixel_format);
 
+            VD_FW_WIN32_PROFILE_BEGIN(make_temp_current);
             VdFwHGLRC temp_context = VdFwwglCreateContext(VD_FW_G.hdc);
             VD_FW__CHECK_NULL(temp_context);
             VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(VD_FW_G.hdc, temp_context));
-
-            int major = 3;
-            int minor = 3;
-
-            if (gl_options && gl_options->version != VD_FW_GL_VERSION_BASIC) {
-                switch (gl_options->version) {
-                    case VD_FW_GL_VERSION_1_0: major = 1; minor = 0; break;
-                    case VD_FW_GL_VERSION_1_2: major = 1; minor = 2; break;
-                    case VD_FW_GL_VERSION_1_3: major = 1; minor = 3; break;
-                    case VD_FW_GL_VERSION_1_4: major = 1; minor = 4; break;
-                    case VD_FW_GL_VERSION_1_5: major = 1; minor = 5; break;
-                    case VD_FW_GL_VERSION_2_0: major = 2; minor = 0; break;
-                    case VD_FW_GL_VERSION_2_1: major = 2; minor = 1; break;
-                    case VD_FW_GL_VERSION_3_0: major = 3; minor = 0; break;
-                    case VD_FW_GL_VERSION_3_1: major = 3; minor = 1; break;
-                    case VD_FW_GL_VERSION_3_2: major = 3; minor = 2; break;
-                    case VD_FW_GL_VERSION_3_3: major = 3; minor = 3; break;
-                    case VD_FW_GL_VERSION_4_0: major = 4; minor = 0; break;
-                    case VD_FW_GL_VERSION_4_1: major = 4; minor = 1; break;
-                    case VD_FW_GL_VERSION_4_2: major = 4; minor = 2; break;
-                    case VD_FW_GL_VERSION_4_3: major = 4; minor = 3; break;
-                    case VD_FW_GL_VERSION_4_4: major = 4; minor = 4; break;
-                    case VD_FW_GL_VERSION_4_5: major = 4; minor = 5; break;
-                    case VD_FW_GL_VERSION_4_6: major = 4; minor = 6; break;
-                    default: break;
-                }
-            }
-
-            // Context attributes
-            int attribs[] = {
-                WGL_CONTEXT_MAJOR_VERSION_ARB, major,
-                WGL_CONTEXT_MINOR_VERSION_ARB, minor,
-                WGL_CONTEXT_PROFILE_MASK_ARB,  WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
-                WGL_CONTEXT_FLAGS_ARB,         WGL_CONTEXT_DEBUG_BIT_ARB,
-                0
-            };
+            VD_FW_WIN32_PROFILE_END(make_temp_current);
 
             VdFwProcwglCreateContextAttribsARB wglCreateContextAttribsARB =
                 (VdFwProcwglCreateContextAttribsARB) VdFwwglGetProcAddress("wglCreateContextAttribsARB");
 
             VdFwProcwglChoosePixelFormatARB wglChoosePixelFormatARB =
                 (VdFwProcwglChoosePixelFormatARB)VdFwwglGetProcAddress("wglChoosePixelFormatARB");
+            VD_FW_WIN32_PROFILE_END(create_temp_context);
 
-            int pixel_attribs[] = {
-                WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
-                WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
-                WGL_DOUBLE_BUFFER_ARB,  GL_TRUE,
-                WGL_ACCELERATION_ARB,   WGL_FULL_ACCELERATION_ARB,
+            VD_FW_WIN32_PROFILE_BEGIN(attempt_configs);
+            int index = 0;
+            while (gl_options->configs && gl_options->configs[index].version != 0) {
+                int minor        = gl_options->configs[index].version % 10;
+                int major        = gl_options->configs[index].version / 10;
+                int debug        = gl_options->configs[index].debug;
+                int compat       = gl_options->configs[index].compat;
+                int pixel_format = gl_options->configs[index].pixel_format;
+                int depth_format = gl_options->configs[index].depth_format;
+                int msaa         = gl_options->configs[index].msaa;
 
-                WGL_PIXEL_TYPE_ARB,     WGL_TYPE_RGBA_ARB,
-                WGL_COLOR_BITS_ARB,     24,
-                WGL_ALPHA_BITS_ARB,     8,
-                WGL_DEPTH_BITS_ARB,     24,
-                WGL_STENCIL_BITS_ARB,   8,
+                // Context attributes
+                int attribs[] = {
+                    WGL_CONTEXT_MAJOR_VERSION_ARB, major,
+                    WGL_CONTEXT_MINOR_VERSION_ARB, minor,
+                    WGL_CONTEXT_PROFILE_MASK_ARB,  (compat) ? WGL_CONTEXT_CORE_PROFILE_BIT_ARB : WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB,
+                    WGL_CONTEXT_FLAGS_ARB,         (debug)  ? WGL_CONTEXT_DEBUG_BIT_ARB : 0,
+                    0
+                };
 
-                WGL_SAMPLE_BUFFERS_ARB, 1,
-                WGL_SAMPLES_ARB,        4,
-                0,
-            };
+                int running_attrib = 0;
+                int pixel_attribs[32] = {0};
+                pixel_attribs[running_attrib++] = WGL_PIXEL_TYPE_ARB;
+                pixel_attribs[running_attrib++] = WGL_TYPE_RGBA_ARB;
 
-            int pixel_format;
-            VdFwUINT num_formats;
+                pixel_attribs[running_attrib++] = WGL_DRAW_TO_WINDOW_ARB;
+                pixel_attribs[running_attrib++] = 1;
 
-            VD_FW__CHECK_TRUE(wglChoosePixelFormatARB(VD_FW_G.hdc, pixel_attribs, NULL, 1, &pixel_format, &num_formats));
+                pixel_attribs[running_attrib++] = WGL_SUPPORT_OPENGL_ARB;
+                pixel_attribs[running_attrib++] = 1;
 
-            VdFwPIXELFORMATDESCRIPTOR pfdchosen;
-            VD_FW__CHECK_NONZERO(VdFwDescribePixelFormat(VD_FW_G.hdc, pixel_format, sizeof(pfdchosen), &pfdchosen));
-            VD_FW__CHECK_TRUE(VdFwSetPixelFormat(VD_FW_G.hdc, pf, &pfdchosen));
+                pixel_attribs[running_attrib++] = WGL_DOUBLE_BUFFER_ARB;
+                pixel_attribs[running_attrib++] = 1;
 
-            VD_FW_G.hglrc = wglCreateContextAttribsARB(VD_FW_G.hdc, 0, attribs);
+                pixel_attribs[running_attrib++] = WGL_ACCELERATION_ARB;
+                pixel_attribs[running_attrib++] = WGL_FULL_ACCELERATION_ARB;
 
-            VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(NULL, NULL));
-            VD_FW__CHECK_TRUE(VdFwwglDeleteContext(temp_context));
+                switch (pixel_format) {
+                    case VD_FW_GL_PIXEL_FORMAT_R8G8B8A8: {
+                        pixel_attribs[running_attrib++] = WGL_COLOR_BITS_ARB;
+                        pixel_attribs[running_attrib++] = 24;
 
-            VD_FW__CHECK_NULL(VD_FW_G.hglrc);
-            VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(VD_FW_G.hdc, VD_FW_G.hglrc));
+                        pixel_attribs[running_attrib++] = WGL_RED_BITS_ARB;
+                        pixel_attribs[running_attrib++] = 8;
 
-            VD_FW_G.proc_swapInterval = (VdFwProcwglSwapIntervalExt)VdFwwglGetProcAddress("wglSwapIntervalEXT");
+                        pixel_attribs[running_attrib++] = WGL_GREEN_BITS_ARB;
+                        pixel_attribs[running_attrib++] = 8;
 
-            VdFwGlVersion version = VD_FW_GL_VERSION_3_3;
-            if (gl_options && gl_options->version != VD_FW_GL_VERSION_BASIC) {
-                version = gl_options->version;
-            }
-            vd_fw__load_opengl(version);
+                        pixel_attribs[running_attrib++] = WGL_BLUE_BITS_ARB;
+                        pixel_attribs[running_attrib++] = 8;
 
-            if (gl_options && gl_options->debug_on && version > VD_FW_GL_VERSION_3_0) {
-                VdFwProcGL_glDebugMessageCallback glDebugMessageCallback_proc = (VdFwProcGL_glDebugMessageCallback)VdFwwglGetProcAddress("glDebugMessageCallback");
+                        pixel_attribs[running_attrib++] = WGL_ALPHA_BITS_ARB;
+                        pixel_attribs[running_attrib++] = 8;
+                    } break;
 
-                if (glDebugMessageCallback_proc == 0) {
-                    DWORD written;
+                    case VD_FW_GL_PIXEL_FORMAT_R8G8B8: {
+                        pixel_attribs[running_attrib++] = WGL_COLOR_BITS_ARB;
+                        pixel_attribs[running_attrib++] = 24;
 
-                    TCHAR *msg = TEXT("ERROR: Failed to load glDebugMessageCallback!\n");
-                    SIZE_T len = vd_fw__tcslen(msg);
-                    WriteConsole(
-                        GetStdHandle(STD_OUTPUT_HANDLE),
-                        msg,
-                        (DWORD)len,
-                        &written,
-                        0);
-                } else {
-                    glEnable(0x92E0 /* GL_DEBUG_OUTPUT */);
-                    glDebugMessageCallback_proc(vd_fw__gl_debug_message_callback, 0);
+                        pixel_attribs[running_attrib++] = WGL_RED_BITS_ARB;
+                        pixel_attribs[running_attrib++] = 8;
+
+                        pixel_attribs[running_attrib++] = WGL_GREEN_BITS_ARB;
+                        pixel_attribs[running_attrib++] = 8;
+
+                        pixel_attribs[running_attrib++] = WGL_BLUE_BITS_ARB;
+                        pixel_attribs[running_attrib++] = 8;
+                    } break;
+
+                    default: break;
                 }
+
+                switch (depth_format) {
+                    case VD_FW_GL_DEPTH_FORMAT_D32: {
+                        pixel_attribs[running_attrib++] = WGL_DEPTH_BITS_ARB;
+                        pixel_attribs[running_attrib++] = 32;
+                    } break;
+
+                    case VD_FW_GL_DEPTH_FORMAT_D24S8: {
+                        pixel_attribs[running_attrib++] = WGL_DEPTH_BITS_ARB;
+                        pixel_attribs[running_attrib++] = 24;
+
+                        pixel_attribs[running_attrib++] = WGL_STENCIL_BITS_ARB;
+                        pixel_attribs[running_attrib++] = 8;
+                    } break;
+
+                    default: break;
+                }
+
+                switch (msaa) {
+
+                    case VD_FW_GL_MSAA_ENABLED_2X: {
+                        pixel_attribs[running_attrib++] = WGL_SAMPLES_ARB;
+                        pixel_attribs[running_attrib++] = 2;
+                    } break;
+
+                    case VD_FW_GL_MSAA_ENABLED_4X: {
+                        pixel_attribs[running_attrib++] = WGL_SAMPLES_ARB;
+                        pixel_attribs[running_attrib++] = 4;
+                    } break;
+
+                    case VD_FW_GL_MSAA_ENABLED_8X: {
+                        pixel_attribs[running_attrib++] = WGL_SAMPLES_ARB;
+                        pixel_attribs[running_attrib++] = 8;
+                    } break;
+
+                    default: break;
+                }
+
+                int wpixel_format;
+                VdFwUINT num_formats;
+
+                if (!wglChoosePixelFormatARB(VD_FW_G.hdc, pixel_attribs, NULL, 1, &wpixel_format, &num_formats)) {
+                    goto LOOP_END;                   
+                }
+
+                VdFwPIXELFORMATDESCRIPTOR pfdchosen;
+                VD_FW__CHECK_NONZERO(VdFwDescribePixelFormat(VD_FW_G.hdc, wpixel_format, sizeof(pfdchosen), &pfdchosen));
+                VD_FW__CHECK_TRUE(VdFwSetPixelFormat(VD_FW_G.hdc, pf, &pfdchosen));
+
+                VD_FW_G.hglrc = wglCreateContextAttribsARB(VD_FW_G.hdc, 0, attribs);
+                if (VD_FW_G.hglrc == 0) {
+                    goto LOOP_END;
+                }
+
+                VD_FW__CHECK_NULL(VD_FW_G.hglrc);
+                VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(VD_FW_G.hdc, VD_FW_G.hglrc));
+
+                VD_FW_G.proc_swapInterval = (VdFwProcwglSwapIntervalExt)VdFwwglGetProcAddress("wglSwapIntervalEXT");
+
+                if (vd_fw__load_opengl(&gl_options->configs[index])) {
+                    break;
+                } else {
+                    VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(NULL, NULL));
+                    VD_FW__CHECK_TRUE(VdFwwglDeleteContext(VD_FW_G.hglrc));
+                }
+LOOP_END:
+                index++;
             }
+            VD_FW_WIN32_PROFILE_END(attempt_configs);
+
+            if (!gl_options->configs[index].version) {
+                result = 0;
+                break;
+            }
+
+            VD_FW__CHECK_TRUE(VdFwwglDeleteContext(temp_context));
+            gl_options->selected_config = index;
+
         } break;
 
         default: break;
     }
 
     VD_FW_G.graphics_api = api;
+    VD_FW_WIN32_PROFILE_END(vd_fw_set_graphics_api);
+    return result;
 }
 
 VD_FW_API int vd_fw_get_size(int *w, int *h)
@@ -8683,7 +11691,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             if (!VD_FW_G.draw_decorations) {
 
                 if (wparam == VK_F4) {
-                    OutputDebugStringA("SYSKEY\n");
                     VdFwPostMessage(hwnd, WM_CLOSE, 0, 0);
                 }
             } else {
@@ -11751,18 +14758,48 @@ VD_FW_API void vd_fw__free_mem(void *memory)
 
 #if !defined(__APPLE__)
 /* ----EXTERNS DEFINITIONS------------------------------------------------------------------------------------------- */
-#define X(retval, name, params) VdFwProcGL_##name name;
-#define V(v)
-#define VE()
+#define X(retval, name, params) VdFwProcGL_##name  gl##name;
+#define VER_START(v)
+#define VER_END(v)
+#define EXT_START(name)
+#define EXT_END()
 VD_FW_OPENGL_CORE_FUNCTIONS
 #undef X
-#undef V
-#undef VE
+#undef VER_START
+#undef VER_END
+#undef EXT_START
+#undef EXT_END
 
 #endif // !defined(__APPLE__)
 
-static void vd_fw__load_opengl(VdFwGlVersion version)
+static int vd_fw__lookup_gl_extension(const char *q, VdFwGlConfig *config)
 {
+    VdFwGlExtension *extensions = config->req_extensions;
+    int i = 0;
+    while (extensions && (extensions[i].name != 0)) {
+        if (vd_fw__strcmp(extensions[i].name, q) == 0) {
+            extensions[i].available = 1;
+            return 1;
+        }
+        i++;
+    }
+
+    extensions = config->opt_extensions;
+    i = 0;
+    while (extensions && (extensions[i].name != 0)) {
+        if (vd_fw__strcmp(extensions[i].name, q) == 0) {
+            extensions[i].available = 1;
+            return 1;
+        }
+        i++;
+    }
+
+    return 0;
+}
+
+static int vd_fw__load_opengl(VdFwGlConfig *config)
+{
+    VD_FW_WIN32_PROFILE_BEGIN(load_opengl);
 #if defined(__APPLE__)
     // @todo(mdodis): This check
     // if (version > VD_FW_GL_VERION_4_1) {
@@ -11771,16 +14808,34 @@ static void vd_fw__load_opengl(VdFwGlVersion version)
 #else
 #define LOAD(p, s) s = (p)vd_fw__gl_get_proc_address(#s)
 /* ----LOADING------------------------------------------------------------------------------------------------------- */
-#define X(retval, name, params) LOAD(VdFwProcGL_##name, name);
-#define V(v) if (version >= VD_FW_GL_VERSION_##v) {
-#define VE() }
+#define X(retval, name, params) LOAD(VdFwProcGL_##name, gl##name);
+#define VER_START(v) if (config->version >= VD_FW_GL_VERSION_##v) {
+#define VER_END(v) }
+#define EXT_START(name) if (vd_fw__lookup_gl_extension(name, config)) {
+#define EXT_END() }
 VD_FW_OPENGL_CORE_FUNCTIONS
 #undef X
-#undef V
-#undef VE
+#undef VER_START
+#undef VER_END
+#undef EXT_START
+#undef EXT_END
 
 #undef LOAD
 #endif  // defined(__APPLE__)
+    
+    int result = 1;
+    // Check required extensions 
+    int i = 0;
+    while (config->req_extensions && (config->req_extensions[i].name != 0)) {
+        if (!config->req_extensions[i].available) {
+            result = 0;
+            break;
+        }
+        i++;
+    }
+
+    VD_FW_WIN32_PROFILE_END(load_opengl);
+    return result;
 }
 
 VD_FW_API unsigned int vd_fw_compile_shader(unsigned int type, const char *source)
