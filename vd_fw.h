@@ -204,6 +204,7 @@
 #   define VdFwI32  int32_t
 #   define VdFwSz   size_t
 #   define VdFwU64  uint64_t
+#   define VdFwI64  int64_t
 #endif // !VD_FW_CUSTOM_TYPEDEFS
 
 #ifndef VD_FW_GAMEPAD_COUNT_MAX
@@ -14634,6 +14635,10 @@ static void vd_fw__mac_hid_value_callback(void *context, IOReturn result, void *
 #include <X11/Xutil.h>
 #include <X11/Xatom.h>
 #include <X11/extensions/syncconst.h>
+#include <time.h>
+#include <dlfcn.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 enum {
     VD_FW_GLX_DRAWABLE_TYPE = 0x8010,
@@ -14660,11 +14665,13 @@ enum {
     VD_FW_GLX_CONTEXT_CORE_PROFILE_BIT_ARB = 0x00000001,
     VD_FW_GLX_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB = 0x00000002,
     VD_FW_GLX_CONTEXT_PROFILE_MASK_ARB = 0x9126,
+    VD_FW_GLX_SWAP_INTERVAL_EXT = 0x20F1,
 };
 
 typedef struct __GlxContextInternal* __GlxContext;
 typedef struct __GlxFbConfigInternal* __GlxFbConfig;
 typedef __GlxContext (*VdFwProc__glXCreateContextAttribsARB)(Display *dpy, __GlxFbConfig config, __GlxContext share_context, Bool direct, const int *attrib_list);
+typedef void (*VdFwProc__glXSwapIntervalEXT)(Display *dpy, XID drawable, int interval);
 
 #define VD_FW_X11_FUNCTIONS \
     XBEGIN_MODULE(xlib) \
@@ -14702,6 +14709,7 @@ typedef __GlxContext (*VdFwProc__glXCreateContextAttribsARB)(Display *dpy, __Glx
     XSYM(glx, Bool, glXMakeCurrent, (Display *display, XID drawable, __GlxContext ctx)) \
     XSYM(glx, void, glXDestroyContext, (Display *display, __GlxContext ctx)) \
     XSYM(glx, void, glXSwapBuffers, (Display *display, XID drawable)) \
+    XSYM(glx, int,  glXQueryDrawable, (Display *display, XID draw, int attribute, unsigned int * value)) \
     XEND_MODULE() \
 
 #define XBEGIN_MODULE(name)
@@ -14714,79 +14722,53 @@ VD_FW_X11_FUNCTIONS
 #undef XSYM
 #undef XEND_MODULE
 
-#include <dlfcn.h>
-#include <stdio.h>
-#include <stdlib.h>
-
 typedef struct {
-    void                        *handle_xlib;
-    int                         has_xlib;
-    void                        *handle_xext;
-    int                         has_xext;
-    int                         xlib_supports_xsync;
+    void                            *handle_xlib;
+    int                             has_xlib;
+    void                            *handle_xext;
+    int                             has_xext;
+    int                             xlib_supports_xsync;
 
-    void                        *handle_glx;
-    int                         has_glx;
+    void                            *handle_glx;
+    int                             has_glx;
 
-    __GlxContext                glx_context;
+    __GlxContext                    glx_context;
+    VdFwProc__glXSwapIntervalEXT    glx_swap_interval_ext;
 
-    Display                     *display;
-    Window                      root_window;
-    Window                      window;
-    int                         screen;
-    XVisualInfo                 visual_info;
-    Atom                        wm_delete_window;
-    Atom                        wm_sync_request;
-    Atom                        wm_sync_request_counter;
-    Atom                        wm_protocols;
-    XID                         sync_counter;
-    VdFwU64                     sync_counter_value;
-    int                         sync_redraw;
-    int                         size_changed;
-    int                         width, height;
+    Display                         *display;
+    Window                          root_window;
+    Window                          window;
+    int                             screen;
+    XVisualInfo                     visual_info;
+    Atom                            wm_delete_window;
+    Atom                            wm_sync_request;
+    Atom                            wm_sync_request_counter;
+    Atom                            wm_protocols;
+    XID                             sync_counter;
+    VdFwU64                         sync_counter_value;
+    int                             sync_redraw;
+    int                             size_changed;
+    int                             width, height;
 
-    int                         window_open;
-    int                         close_request;
-    int                         quit_request;
-    VdFwGraphicsApi             graphics_api;
+    int                             window_open;
+    int                             close_request;
+    int                             quit_request;
+    VdFwGraphicsApi                 graphics_api;
 
-    int                         has_initialized;
-    int                         cap_gamepad_db_entries;
-    int                         num_gamepad_db_entries;
-    VdFwGamepadDBEntry          *gamepad_db_entries;
+    int                             has_initialized;
+    int                             cap_gamepad_db_entries;
+    int                             num_gamepad_db_entries;
+    VdFwGamepadDBEntry              *gamepad_db_entries;
+    struct timespec                 time_last;
+    VdFwU64                         delta_ns;
 } VdFw__LinuxInternalData;
 
 VdFw__LinuxInternalData VdFw__Globals = {0};
 
 #define VD_FW_G VdFw__Globals
 
-static int vd_fw__x11_extension_supported(const char *extList, const char *extension)
-{
-    const char *start;
-    const char *where, *terminator;
-    
-    where = strchr(extension, ' ');
-    if (where || *extension == '\0')
-        return 0;
-    
-    for (start=extList;;) {
-        where = strstr(start, extension);
-        
-        if (!where)
-            break;
-        
-        terminator = where + strlen(extension);
-        
-        if ( where == start || *(where - 1) == ' ' )
-            if ( *terminator == ' ' || *terminator == '\0' )
-            return 1;
-        
-        start = terminator;
-    }
-    
-    return 0;
-}
-
+static struct timespec vd_fw__linux_timespec_diff(struct timespec a, struct timespec b);
+static int vd_fw__x11_extension_supported(const char *extList, const char *extension);
 void *vd_fw__gl_get_proc_address(const char *name)
 {
     void *result = VdFwglXGetProcAddress((const GLubyte*) name);
@@ -14920,6 +14902,11 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     return 1;
 }
 
+VD_FW_API unsigned long long vd_fw_delta_ns(void)
+{
+    return VD_FW_G.delta_ns;
+}
+
 VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_options)
 {
     int result = 1;
@@ -14946,7 +14933,7 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
             const char *glx_exts = VdFwglXQueryExtensionsString(VD_FW_G.display, VD_FW_G.screen);
             VdFwProc__glXCreateContextAttribsARB glXCreateContextAttribsARB = (VdFwProc__glXCreateContextAttribsARB)
                 VdFwglXGetProcAddress((const GLubyte*)"glXCreateContextAttribsARB");
-
+            VD_FW_G.glx_swap_interval_ext = (VdFwProc__glXSwapIntervalEXT)VdFwglXGetProcAddress((const GLubyte*)"glXCreateContextAttribsARB");
 
             int use_old_style_context = 0;
             if (!vd_fw__x11_extension_supported(glx_exts, "GLX_ARB_create_context") || !glXCreateContextAttribsARB) {
@@ -15176,6 +15163,13 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
 
     }
 
+    struct timespec now;
+    struct timespec delta_timespec;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    delta_timespec = vd_fw__linux_timespec_diff(now, VD_FW_G.time_last);
+    VD_FW_G.time_last = now;
+    VD_FW_G.delta_ns = delta_timespec.tv_nsec;
+
     if (count) *count = 0;
     return 0;
 }
@@ -15215,6 +15209,14 @@ VD_FW_API void vd_fw_unlock(void)
 
 VD_FW_API int vd_fw_set_vsync_on(int on)
 {
+    // if (VD_FW_G.glx_swap_interval_ext) {
+    //     VD_FW_G.glx_swap_interval_ext(VD_FW_G.display, VD_FW_G.window, on);
+
+    //     unsigned int value;
+    //     VdFwglXQueryDrawable(VD_FW_G.display, VD_FW_G.window, VD_FW_GLX_SWAP_INTERVAL_EXT, &value);
+    //     return on == value;
+    // }
+
     return 0;
 }
 
@@ -15284,6 +15286,48 @@ VD_FW_API void *vd_fw__realloc_mem(void *prev_ptr, size_t size)
     return realloc(prev_ptr, size);
 }
 
+static struct timespec vd_fw__linux_timespec_diff(struct timespec a, struct timespec b)
+{
+    struct timespec result;
+    VdFwI64 nsec_diff = a.tv_nsec - b.tv_nsec;
+    VdFwI64 sec_diff  = a.tv_sec  - b.tv_sec;
+    if (nsec_diff < 0) {
+        result.tv_sec = sec_diff - 1;
+        result.tv_nsec = 1000000000 + nsec_diff;
+    } else {
+        result.tv_nsec = nsec_diff;
+        result.tv_sec = sec_diff;
+    }
+
+    return result;
+}
+
+static int vd_fw__x11_extension_supported(const char *extList, const char *extension)
+{
+    const char *start;
+    const char *where, *terminator;
+    
+    where = strchr(extension, ' ');
+    if (where || *extension == '\0')
+        return 0;
+    
+    for (start=extList;;) {
+        where = strstr(start, extension);
+        
+        if (!where)
+            break;
+        
+        terminator = where + strlen(extension);
+        
+        if ( where == start || *(where - 1) == ' ' )
+            if ( *terminator == ' ' || *terminator == '\0' )
+            return 1;
+        
+        start = terminator;
+    }
+    
+    return 0;
+}
 
 #endif // _WIN32, __APPLE__, __linux__
 
