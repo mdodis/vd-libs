@@ -74,6 +74,8 @@
  * - Should vd_fw_set_receive_ncmouse be default 0 or 1?
  *   - Actually, consider removing it entirely
  * - set window unresizable
+ * - Linux: Kb/Mouse Input
+ * - Linux: X11 _NET_WM_MOVERESIZE
  * - MacOS: simple flag to disable cocoa main thread requirement workaround
  * - MacOS: vd_fw_get_last_key_pressed
  * - MacOS: vd_fw_get_executable_dir()
@@ -14673,6 +14675,14 @@ typedef struct __GlxFbConfigInternal* __GlxFbConfig;
 typedef __GlxContext (*VdFwProc__glXCreateContextAttribsARB)(Display *dpy, __GlxFbConfig config, __GlxContext share_context, Bool direct, const int *attrib_list);
 typedef void (*VdFwProc__glXSwapIntervalEXT)(Display *dpy, XID drawable, int interval);
 
+typedef struct {
+    unsigned long flags;
+    unsigned long functions;
+    unsigned long decorations;
+    long input_mode;
+    unsigned long status;
+} VdFw__X11MotifWmHints;
+
 #define VD_FW_X11_FUNCTIONS \
     XBEGIN_MODULE(xlib) \
     XSYM(xlib, Display*, XOpenDisplay, (const char *name)) \
@@ -14693,6 +14703,7 @@ typedef void (*VdFwProc__glXSwapIntervalEXT)(Display *dpy, XID drawable, int int
     XSYM(xlib, int, XSetWindowColormap, (Display *display, Window w, Colormap colormap)) \
     XSYM(xlib, Bool, XQueryExtension, (Display *display, char *name, int *major_opcode_return, int *first_event_return, int *first_error_return)) \
     XSYM(xlib, int, XChangeProperty, (Display *display, Window w, Atom property, Atom type, int format, int mode, unsigned char *data, int nelements)) \
+    XSYM(xlib, int, XSetClassHint, (Display *display, Window window, XClassHint *hint)) \
     XEND_MODULE() \
     XBEGIN_MODULE(xext) \
     XSYM(xext, Status, XSyncQueryExtension, (Display *display, int *event_base_return, int *error_base_return)) \
@@ -14744,6 +14755,7 @@ typedef struct {
     Atom                            wm_sync_request;
     Atom                            wm_sync_request_counter;
     Atom                            wm_protocols;
+    Atom                            wm_motif;
     XID                             sync_counter;
     VdFwU64                         sync_counter_value;
     int                             sync_redraw;
@@ -14836,6 +14848,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         }
     }
 
+    VD_FW_G.wm_motif = VdFwXInternAtom(VD_FW_G.display, "_MOTIF_WM_HINTS", 0);
     VD_FW_G.wm_protocols = VdFwXInternAtom(VD_FW_G.display, "WM_PROTOCOLS", 0);
     VD_FW_G.wm_delete_window = VdFwXInternAtom(VD_FW_G.display, "WM_DELETE_WINDOW", 0);
 
@@ -14853,8 +14866,8 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     VD_FW_G.visual_info = visual_info;
 
     XSetWindowAttributes window_attributes = {0};
-    window_attributes.bit_gravity = ForgetGravity;
-    // window_attributes.bit_gravity = StaticGravity;
+    // window_attributes.bit_gravity = ForgetGravity;
+    window_attributes.bit_gravity = StaticGravity;
     window_attributes.background_pixel = 0;
     window_attributes.colormap = VdFwXCreateColormap(VD_FW_G.display, VD_FW_G.root_window, visual_info.visual, AllocNone);
     window_attributes.event_mask = StructureNotifyMask | ExposureMask | KeyPressMask | KeyReleaseMask;
@@ -14868,12 +14881,26 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
                                        visual_info.depth, InputOutput,
                                        visual_info.visual, attribute_mask, &window_attributes);
 
+    XClassHint class_hint = {"fw_window", "popup"};
+    VdFwXSetClassHint(VD_FW_G.display, VD_FW_G.window, &class_hint);
+
     if (!VD_FW_G.window) {
         return 0;
     }
 
     VdFwXStoreName(VD_FW_G.display, VD_FW_G.window, "FW Window");
-    // VdFwXFlush(VD_FW_G.display);
+
+    if (info && info->window_options.borderless) {
+        VdFw__X11MotifWmHints hints = {0};
+        hints.flags = 2;
+        hints.decorations = 0;
+        VdFwXChangeProperty(VD_FW_G.display, VD_FW_G.window,
+                            VD_FW_G.wm_motif,
+                            VD_FW_G.wm_motif, 32,
+                            PropModeReplace,
+                            (unsigned char*) &hints,
+                            sizeof(hints) / sizeof(long));
+    }
 
     VD_FW_G.window_open = 1;
 
