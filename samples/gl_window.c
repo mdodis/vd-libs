@@ -9,7 +9,12 @@ int main(int argc, char const *argv[])
 
     vd_fw_init(& (VdFwInitInfo) {
         .gl = {
-            .version = VD_FW_GL_VERSION_3_3,
+            .configs = (VdFwGlConfig[]) {
+                {
+                    .version = VD_FW_GL_VERSION_3_3,
+                },
+                0,
+            },
         },
         .window_options = {
             .borderless = 0,
@@ -36,7 +41,6 @@ int main(int argc, char const *argv[])
 
         vd_fw_unlock();
     }
-
     return 0;
 }
 
