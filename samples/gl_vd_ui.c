@@ -27,11 +27,6 @@ int main(int argc, char const *argv[])
     vd_ui_debug_set_layout_recompute_vis_on(0);
 
     vd_fw_init(& (VdFwInitInfo) {
-        .gl = {
-            .debug_on = 1,
-            .version = VD_FW_GL_VERSION_3_3,
-        },
-
         .window_options = {
             .borderless = 1,
         },

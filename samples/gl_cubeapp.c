@@ -85,10 +85,6 @@ int main(int argc, char const *argv[])
     (void)argv;
 
     vd_fw_init(& (VdFwInitInfo) {
-        .gl = {
-            .version = VD_FW_GL_VERSION_3_3,
-            .debug_on = 0,
-        },
         .window_options = {
             .borderless = 1,
         }
@@ -145,47 +141,59 @@ int main(int argc, char const *argv[])
     glEnableVertexAttribArray(0);
 
     float vertices3d[] = {
-        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
-         0.5f, -0.5f, -0.5f,  1.0f, 0.0f,
-         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
+        // Front (+Z)
+        -0.5f,-0.5f, 0.5f,  0.0f,0.0f,
+         0.5f,-0.5f, 0.5f,  1.0f,0.0f,
+         0.5f, 0.5f, 0.5f,  1.0f,1.0f,
 
-        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-         0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
-        -0.5f,  0.5f,  0.5f,  0.0f, 1.0f,
-        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+         0.5f, 0.5f, 0.5f,  1.0f,1.0f,
+        -0.5f, 0.5f, 0.5f,  0.0f,1.0f,
+        -0.5f,-0.5f, 0.5f,  0.0f,0.0f,
 
-        -0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-        -0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-        -0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+        // Back (-Z)
+        -0.5f,-0.5f,-0.5f,  1.0f,0.0f,
+        -0.5f, 0.5f,-0.5f,  1.0f,1.0f,
+         0.5f, 0.5f,-0.5f,  0.0f,1.0f,
 
-         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-         0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-         0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-         0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+         0.5f, 0.5f,-0.5f,  0.0f,1.0f,
+         0.5f,-0.5f,-0.5f,  0.0f,0.0f,
+        -0.5f,-0.5f,-0.5f,  1.0f,0.0f,
 
-        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-         0.5f, -0.5f, -0.5f,  1.0f, 1.0f,
-         0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-         0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+        // Left (-X)
+        -0.5f,-0.5f,-0.5f,  0.0f,0.0f,
+        -0.5f,-0.5f, 0.5f,  1.0f,0.0f,
+        -0.5f, 0.5f, 0.5f,  1.0f,1.0f,
 
-        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
-         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-        -0.5f,  0.5f,  0.5f,  0.0f, 0.0f,
-        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f
+         -0.5f, 0.5f, 0.5f, 1.0f,1.0f,
+         -0.5f, 0.5f,-0.5f, 0.0f,1.0f,
+         -0.5f,-0.5f,-0.5f, 0.0f,0.0f,
+
+        // Right (+X)
+         0.5f,-0.5f, 0.5f,  0.0f,0.0f,
+         0.5f,-0.5f,-0.5f,  1.0f,0.0f,
+         0.5f, 0.5f,-0.5f,  1.0f,1.0f,
+
+         0.5f, 0.5f,-0.5f,  1.0f,1.0f,
+         0.5f, 0.5f, 0.5f,  0.0f,1.0f,
+         0.5f,-0.5f, 0.5f,  0.0f,0.0f,
+
+        // Bottom (-Y)
+        -0.5f,-0.5f,-0.5f,  0.0f,1.0f,
+         0.5f,-0.5f,-0.5f,  1.0f,1.0f,
+         0.5f,-0.5f, 0.5f,  1.0f,0.0f,
+
+         0.5f,-0.5f, 0.5f,  1.0f,0.0f,
+        -0.5f,-0.5f, 0.5f,  0.0f,0.0f,
+        -0.5f,-0.5f,-0.5f,  0.0f,1.0f,
+
+        // Top (+Y)
+        -0.5f, 0.5f,-0.5f,  0.0f,1.0f,
+        -0.5f, 0.5f, 0.5f,  0.0f,0.0f,
+         0.5f, 0.5f, 0.5f,  1.0f,0.0f,
+
+         0.5f, 0.5f, 0.5f,  1.0f,0.0f,
+         0.5f, 0.5f,-0.5f,  1.0f,1.0f,
+        -0.5f, 0.5f,-0.5f,  0.0f,1.0f,
     };
 
     unsigned int VBO3D, VAO3D;
@@ -387,16 +395,21 @@ int main(int argc, char const *argv[])
         }
 
         glEnable(GL_DEPTH_TEST);
+        glEnable(GL_CULL_FACE);
+        glFrontFace(GL_CW);
+        glCullFace(GL_BACK);
+
         {
             float fw = (float)w;
             float fh = (float)h;
 
             if (vd_fw_get_mouse_locked()) {
+            // if (1) {
                 float mouse_delta_x, mouse_delta_y;
                 vd_fw_get_mouse_delta(&mouse_delta_x, &mouse_delta_y);
 
-                camera_yaw   += mouse_delta_x;
-                camera_pitch -= mouse_delta_y;
+                camera_yaw   += mouse_delta_x * 0.2f;
+                camera_pitch -= mouse_delta_y * 0.2f;
             } else if (vd_fw_get_gamepad_count() > 0) {
                 float right_stick_raw[2];
                 float right_stick[2];
