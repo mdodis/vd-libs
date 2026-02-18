@@ -14843,6 +14843,7 @@ typedef struct {
     Atom                            wm_max_v;
     Atom                            wm_hidden;
     Atom                            wm_fullscreen;
+    Atom                            wm_icon;
     XID                             sync_counter;
     VdFwU64                         sync_counter_value;
     int                             sync_redraw;
@@ -15037,6 +15038,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     VD_FW_G.wm_max_v = VdFwXInternAtom(VD_FW_G.display, "_NET_WM_STATE_MAXIMIZED_VERT", 0);
     VD_FW_G.wm_hidden = VdFwXInternAtom(VD_FW_G.display, "_NET_WM_STATE_HIDDEN", 0);
     VD_FW_G.wm_fullscreen = VdFwXInternAtom(VD_FW_G.display, "_NET_WM_STATE_FULLSCREEN", 0);
+    VD_FW_G.wm_icon = VdFwXInternAtom(VD_FW_G.display, "_NET_WM_ICON", False);
 
     if (VD_FW_G.xlib_supports_xsync) {
         VD_FW_G.wm_sync_request = VdFwXInternAtom(VD_FW_G.display, "_NET_WM_SYNC_REQUEST", 0);
@@ -15541,6 +15543,7 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
             case ButtonPress: {
 
                 int handled = 1;
+                int btn = 0;
                 {
                     const float wheel_delta = 1.f;
 
@@ -15550,10 +15553,10 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
                     fw_event.data.mouse_scroll.dy = 0.f;
 
                     switch (evt.xbutton.button) {
-                        case 4: fw_event.data.mouse_scroll.dx -= wheel_delta; break;
-                        case 5: fw_event.data.mouse_scroll.dx += wheel_delta; break;
-                        case 6: fw_event.data.mouse_scroll.dy -= wheel_delta; break;
-                        case 7: fw_event.data.mouse_scroll.dy += wheel_delta; break;
+                        case 4: fw_event.data.mouse_scroll.dy += wheel_delta; break;
+                        case 5: fw_event.data.mouse_scroll.dy -= wheel_delta; break;
+                        case 6: fw_event.data.mouse_scroll.dx += wheel_delta; break;
+                        case 7: fw_event.data.mouse_scroll.dx -= wheel_delta; break;
                         default: handled = 0; break;
                     }
 
@@ -15566,11 +15569,10 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
                     }
                 }
 
-                if (handled) {
-                    break;
+                if (!handled) {
+                    btn = vd_fw__x11_translate_mouse_button(evt.xbutton.button);
                 }
 
-                int btn = vd_fw__x11_translate_mouse_button(evt.xbutton.button);
                 if (btn) {
                     VdFwEvent fw_event = {0};
                     fw_event.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN;
@@ -15802,6 +15804,25 @@ VD_FW_API int vd_fw_get_gamepad_axis(int index, int axis, float *out)
 
 VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
 {
+    int count = 2 + width * height;
+    unsigned long *data = vd_fw__realloc_mem(0, count * sizeof(unsigned long));
+
+    data[0] = width;
+    data[1] = height;
+
+    for (int i = 0; i < width * height; i++) {
+        data[2 + i] = ((VdFwU32*)pixels)[i];
+    }
+
+    VdFwXChangeProperty(VD_FW_G.display, VD_FW_G.window,
+                        VD_FW_G.wm_icon,
+                        XA_CARDINAL,
+                        32,
+                        PropModeReplace,
+                        (unsigned char*)data,
+                        count);
+
+    vd_fw__free_mem(data);
 }
 
 VD_FW_API int vd_fw_get_size(int *w, int *h)
@@ -16255,8 +16276,8 @@ static int vd_fw__x11_translate_mouse_button(unsigned int button)
         case Button1: return VD_FW_MOUSE_BUTTON_LEFT;
         case Button2: return VD_FW_MOUSE_BUTTON_MIDDLE;
         case Button3: return VD_FW_MOUSE_BUTTON_RIGHT;
-        case Button4: return VD_FW_MOUSE_BUTTON_M1;
-        case Button5: return VD_FW_MOUSE_BUTTON_M2;
+        case 8: return VD_FW_MOUSE_BUTTON_M1;
+        case 9: return VD_FW_MOUSE_BUTTON_M2;
         default: return 0;
     }    
 }
