@@ -14758,6 +14758,9 @@ typedef struct {
     XSYM(xlib, Status, XGetWindowAttributes, (Display *display, Window w, XWindowAttributes *attrs))\
     XSYM(xlib, int, XDefineCursor, (Display *display, Window w, XID cursor)) \
     XSYM(xlib, int, XUndefineCursor, (Display *display, Window w)) \
+    XSYM(xlib, int, XResizeWindow, (Display *display, Window w, int width, int height)) \
+    XSYM(xlib, void, XSetWMNormalHints, (Display *display, Window w, XSizeHints *hints)) \
+    XSYM(xlib, void, XSetWMSizeHints, (Display *display, Window w, XSizeHints *hints, Atom property)) \
     XEND_MODULE() \
     XBEGIN_MODULE(xext) \
     XSYM(xext, Status, XSyncQueryExtension, (Display *display, int *event_base_return, int *error_base_return)) \
@@ -14853,6 +14856,7 @@ typedef struct {
     int                             window_state_changed;
     int                             is_fullscreen;
     int                             focus_changed;
+    int                             window_min[2], window_max[2];
     int                             is_focused;
 
     int                             window_open;
@@ -14880,6 +14884,8 @@ typedef struct {
 
     unsigned char                   curr_key_states[VD_FW_KEY_MAX];
     unsigned char                   prev_key_states[VD_FW_KEY_MAX];
+    VdFwKey                         last_key;
+
     int                             prev_mouse_state;
     int                             mouse_state;
     int                             prev_mouse[2];
@@ -14921,6 +14927,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     VD_FW_G.scale = 1.f;
     VD_FW_G.graphics_api = VD_FW_GRAPHICS_API_INVALID;
     VD_FW_G.borderless = 0;
+    VD_FW_G.window_max[0] = VD_FW_G.window_max[1] = 99999;
 
     if (info) {
         VD_FW_G.borderless = info->window_options.borderless;
@@ -15295,6 +15302,7 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
     VD_FW_G.focus_changed = 0;
     VD_FW_G.wheel[0] = VD_FW_G.wheel[1] = 0.f;
     VD_FW_G.wheel_moved = 0;
+    VD_FW_G.last_key = VD_FW_KEY_UNKNOWN;
 
     for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
         VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
@@ -15432,6 +15440,8 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
                 fw_event.data.key_down.key = vd_fw__x11_translate_keycode(&evt);
                 
                 VD_FW_G.curr_key_states[fw_event.data.key_down.key] = 1;
+
+                VD_FW_G.last_key = fw_event.data.key_down.key;
                 VD_FW_G.evtbuf[VD_FW_G.num_evts++] = fw_event;
             } break;
 
@@ -15726,6 +15736,11 @@ VD_FW_API int vd_fw_get_key_pressed(int key)
     return !VD_FW_G.prev_key_states[key] && VD_FW_G.curr_key_states[key];
 }
 
+VD_FW_API int vd_fw_get_last_key_pressed(void)
+{
+    return VD_FW_G.last_key;
+}
+
 VD_FW_API int vd_fw_get_key_released(int key)
 {
     return VD_FW_G.prev_key_states[key] && !VD_FW_G.curr_key_states[key];
@@ -15836,6 +15851,61 @@ VD_FW_API int vd_fw_get_size(int *w, int *h)
     }
 
     return VD_FW_G.size_changed;
+}
+
+VD_FW_API void vd_fw_set_size(int w, int h)
+{
+    VdFwXResizeWindow(VD_FW_G.display, VD_FW_G.window, w, h);    
+}
+
+VD_FW_API void vd_fw_set_size_min(int w, int h)
+{
+    if (w != 0) {
+        VD_FW_G.window_min[0] = w;
+    } else {
+        VD_FW_G.window_min[0] = 0;
+    }
+
+    if (h != 0) {
+        VD_FW_G.window_min[1] = h;
+    } else {
+        VD_FW_G.window_min[1] = 0;
+    }
+
+    XSizeHints hints = {};
+    hints.flags |= PMinSize;
+    hints.min_width = VD_FW_G.window_min[0];
+    hints.min_height = VD_FW_G.window_min[1];
+    hints.flags |= PMaxSize;
+    hints.max_width = VD_FW_G.window_max[0];
+    hints.max_height = VD_FW_G.window_max[1];
+
+    VdFwXSetWMNormalHints(VD_FW_G.display, VD_FW_G.window, &hints);
+}
+
+VD_FW_API void vd_fw_set_size_max(int w, int h)
+{
+    if (w != 0) {
+        VD_FW_G.window_max[0] = w;
+    } else {
+        VD_FW_G.window_max[0] = 999999;
+    }
+
+    if (h != 0) {
+        VD_FW_G.window_max[1] = h;
+    } else {
+        VD_FW_G.window_max[1] = 999999;
+    }
+
+    XSizeHints hints = {};
+    hints.flags |= PMinSize;
+    hints.min_width = VD_FW_G.window_min[0];
+    hints.min_height = VD_FW_G.window_min[1];
+    hints.flags |= PMaxSize;
+    hints.max_width = VD_FW_G.window_max[0];
+    hints.max_height = VD_FW_G.window_max[1];
+
+    VdFwXSetWMNormalHints(VD_FW_G.display, VD_FW_G.window, &hints);
 }
 
 VD_FW_API int vd_fw_get_focused(int *focused)
@@ -16069,7 +16139,7 @@ VD_FW_API float vd_fw_get_scale(void)
 
 VD_FW_API void vd_fw_set_title(const char *title)
 {
-    VdFwXStoreName(VD_FW_G.display, VD_FW_G.window, title);
+    VdFwXStoreName(VD_FW_G.display, VD_FW_G.window, (char*)title);
 }
 
 VD_FW_API char *vd_fw__debug_dump_file_text(const char *path)
