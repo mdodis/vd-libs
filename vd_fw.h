@@ -14641,6 +14641,7 @@ static void vd_fw__mac_hid_value_callback(void *context, IOReturn result, void *
 #include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 enum {
     VD_FW_GLX_DRAWABLE_TYPE = 0x8010,
@@ -14704,6 +14705,7 @@ typedef struct {
     XSYM(xlib, Bool, XQueryExtension, (Display *display, char *name, int *major_opcode_return, int *first_event_return, int *first_error_return)) \
     XSYM(xlib, int, XChangeProperty, (Display *display, Window w, Atom property, Atom type, int format, int mode, unsigned char *data, int nelements)) \
     XSYM(xlib, int, XSetClassHint, (Display *display, Window window, XClassHint *hint)) \
+    XSYM(xlib, KeySym, XLookupKeysym, (XKeyEvent *key_event, int index))\
     XEND_MODULE() \
     XBEGIN_MODULE(xext) \
     XSYM(xext, Status, XSyncQueryExtension, (Display *display, int *event_base_return, int *error_base_return)) \
@@ -14767,6 +14769,12 @@ typedef struct {
     int                             quit_request;
     VdFwGraphicsApi                 graphics_api;
 
+    int                             num_evts;
+    VdFwEvent                       evtbuf[VD_FW_EVENT_COUNT_MAX];
+
+    unsigned char                   curr_key_states[VD_FW_KEY_MAX];
+    unsigned char                   prev_key_states[VD_FW_KEY_MAX];
+
     int                             has_initialized;
     int                             cap_gamepad_db_entries;
     int                             num_gamepad_db_entries;
@@ -14780,7 +14788,9 @@ VdFw__LinuxInternalData VdFw__Globals = {0};
 #define VD_FW_G VdFw__Globals
 
 static struct timespec vd_fw__linux_timespec_diff(struct timespec a, struct timespec b);
-static int vd_fw__x11_extension_supported(const char *extList, const char *extension);
+static int             vd_fw__x11_extension_supported(const char *extList, const char *extension);
+static VdFwKey         vd_fw__x11_translate_keycode(XEvent *evt);
+
 void *vd_fw__gl_get_proc_address(const char *name)
 {
     void *result = VdFwglXGetProcAddress((const GLubyte*) name);
@@ -15146,9 +15156,14 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
 {
     VD_FW_G.size_changed = 0;
     VD_FW_G.close_request = 0;
+    VD_FW_G.num_evts = 0;
+
+    for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
+        VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
+    }
 
     XEvent evt = {};
-    while (VdFwXPending(VD_FW_G.display) > 0) {
+    while ((VdFwXPending(VD_FW_G.display) > 0) && (VD_FW_G.num_evts < VD_FW_EVENT_COUNT_MAX)) {
         VdFwXNextEvent(VD_FW_G.display, &evt);
 
         switch (evt.type) {
@@ -15163,7 +15178,7 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
             } break;
 
             case ClientMessage: {
-                XClientMessageEvent* e = &evt.xclient;
+                XClientMessageEvent *e = &evt.xclient;
 
                 if(e->message_type == VD_FW_G.wm_protocols) {
                     if (e->data.l[0] == VD_FW_G.wm_delete_window) {
@@ -15176,6 +15191,22 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
                     }
                 }
 
+            } break;
+
+            case KeyPress: {
+                VdFwEvent fw_event = {0};
+                fw_event.type = VD_FW_EVENT_TYPE_KEY_DOWN;
+                fw_event.data.key_down.key = vd_fw__x11_translate_keycode(&evt);
+                
+                VD_FW_G.curr_key_states[fw_event.data.key_down.key] = 1;
+            } break;
+
+            case KeyRelease: {
+                VdFwEvent fw_event = {0};
+                fw_event.type = VD_FW_EVENT_TYPE_KEY_UP;
+                fw_event.data.key_up.key = vd_fw__x11_translate_keycode(&evt);
+                
+                VD_FW_G.curr_key_states[fw_event.data.key_down.key] = 0;
             } break;
 
             case ConfigureNotify: {
@@ -15199,6 +15230,21 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
 
     if (count) *count = 0;
     return 0;
+}
+
+VD_FW_API int vd_fw_get_key_down(int key)
+{
+    return VD_FW_G.curr_key_states[key];
+}
+
+VD_FW_API int vd_fw_get_key_pressed(int key)
+{
+    return !VD_FW_G.prev_key_states[key] && VD_FW_G.curr_key_states[key];
+}
+
+VD_FW_API int vd_fw_get_key_released(int key)
+{
+    return VD_FW_G.prev_key_states[key] && !VD_FW_G.curr_key_states[key];
 }
 
 VD_FW_API int vd_fw_close_requested(void)
@@ -15247,6 +15293,35 @@ VD_FW_API int vd_fw_set_vsync_on(int on)
     return 0;
 }
 
+VD_FW_API int vd_fw_get_gamepad_count(void)
+{
+    return 0;
+}
+
+VD_FW_API VdFwU64 vd_fw_get_gamepad_button_state(int index)
+{
+    return 0;
+}
+
+VD_FW_API int vd_fw_get_gamepad_down(int index, int button)
+{
+    return 0;
+}
+
+VD_FW_API int vd_fw_get_gamepad_pressed(int index, int button)
+{
+    return 0;
+}
+
+VD_FW_API int vd_fw_get_gamepad_axis(int index, int axis, float *out)
+{
+    return 0;
+}
+
+VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
+{
+}
+
 VD_FW_API int vd_fw_get_size(int *w, int *h)
 {
     if (w) {
@@ -15258,6 +15333,27 @@ VD_FW_API int vd_fw_get_size(int *w, int *h)
     }
 
     return VD_FW_G.size_changed;
+}
+
+VD_FW_API void vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4])
+{
+
+}
+
+VD_FW_API void vd_fw_set_receive_ncmouse(int on)
+{
+}
+
+VD_FW_API int vd_fw_get_mouse_clicked(int button)
+{
+    // return !(VD_FW_G.prev_mouse_state & button) && (VD_FW_G.mouse_state & button);
+    return 0;
+}
+
+VD_FW_API int vd_fw_get_mouse_released(int button)
+{
+    // return (VD_FW_G.prev_mouse_state & button) && !(VD_FW_G.mouse_state & button);
+    return 0;
 }
 
 VD_FW_API int vd_fw__any_time_higher(int num_files, const char **files, unsigned long long *check_against)
@@ -15354,6 +15450,118 @@ static int vd_fw__x11_extension_supported(const char *extList, const char *exten
     }
     
     return 0;
+}
+
+static VdFwKey vd_fw__x11_translate_keycode(XEvent *evt)
+{
+    KeySym keysym = VdFwXLookupKeysym((XKeyEvent*)evt, 0);
+    switch (keysym) {
+        default: return VD_FW_KEY_UNKNOWN; break;
+
+        case XK_F1:             return VD_FW_KEY_F1;
+        case XK_F2:             return VD_FW_KEY_F2;
+        case XK_F3:             return VD_FW_KEY_F3;
+        case XK_F4:             return VD_FW_KEY_F4;
+        case XK_F5:             return VD_FW_KEY_F5;
+        case XK_F6:             return VD_FW_KEY_F6;
+        case XK_F7:             return VD_FW_KEY_F7;
+        case XK_F8:             return VD_FW_KEY_F8;
+        case XK_F9:             return VD_FW_KEY_F9;
+        case XK_F10:            return VD_FW_KEY_F10;
+        case XK_F11:            return VD_FW_KEY_F11;
+        case XK_F12:            return VD_FW_KEY_F12;
+        case XK_F13:            return VD_FW_KEY_F13;
+        case XK_F14:            return VD_FW_KEY_F14;
+        case XK_F15:            return VD_FW_KEY_F15;
+        case XK_F16:            return VD_FW_KEY_F16;
+        case XK_F17:            return VD_FW_KEY_F17;
+        case XK_F18:            return VD_FW_KEY_F18;
+        case XK_F19:            return VD_FW_KEY_F19;
+        case XK_F20:            return VD_FW_KEY_F20;
+        case XK_F21:            return VD_FW_KEY_F21;
+        case XK_F22:            return VD_FW_KEY_F22;
+        case XK_F23:            return VD_FW_KEY_F23;
+        case XK_F24:            return VD_FW_KEY_F24;
+        case XK_BackSpace:      return VD_FW_KEY_BACKSPACE;
+        case XK_Insert:         return VD_FW_KEY_INS;
+        case XK_Home:           return VD_FW_KEY_HOME;
+        case XK_Page_Up:        return VD_FW_KEY_PGUP;
+        case XK_Delete:         return VD_FW_KEY_DEL;
+        case XK_End:            return VD_FW_KEY_END;
+        case XK_Page_Down:      return VD_FW_KEY_PGDN;
+        case XK_space:          return VD_FW_KEY_SPACE;
+        case XK_Control_L:      return VD_FW_KEY_LCONTROL;
+        case XK_Control_R:      return VD_FW_KEY_RCONTROL;
+        case XK_Alt_L:          return VD_FW_KEY_LALT;
+        case XK_Alt_R:          return VD_FW_KEY_RALT;
+        case XK_Shift_L:        return VD_FW_KEY_LSHIFT;
+        case XK_Shift_R:        return VD_FW_KEY_RSHIFT;
+        case XK_apostrophe:     return VD_FW_KEY_QUOTE;
+        case XK_Up:             return VD_FW_KEY_ARROW_UP;
+        case XK_Left:           return VD_FW_KEY_ARROW_LEFT;
+        case XK_Down:           return VD_FW_KEY_ARROW_DOWN;
+        case XK_Right:          return VD_FW_KEY_ARROW_RIGHT;
+        case XK_comma:          return VD_FW_KEY_COMMA;
+        case XK_minus:          return VD_FW_KEY_MINUS;
+        case XK_period:         return VD_FW_KEY_DOT;
+        case XK_slash:          return VD_FW_KEY_SLASH_FORWARD;
+        case XK_0:              return VD_FW_KEY_0;
+        case XK_1:              return VD_FW_KEY_1;
+        case XK_2:              return VD_FW_KEY_2;
+        case XK_3:              return VD_FW_KEY_3;
+        case XK_4:              return VD_FW_KEY_4;
+        case XK_5:              return VD_FW_KEY_5;
+        case XK_6:              return VD_FW_KEY_6;
+        case XK_7:              return VD_FW_KEY_7;
+        case XK_8:              return VD_FW_KEY_8;
+        case XK_9:              return VD_FW_KEY_9;
+        case XK_Return:         return VD_FW_KEY_ENTER;
+        case XK_semicolon:      return VD_FW_KEY_SEMICOLON;
+        case XK_Tab:            return VD_FW_KEY_TAB;
+        case XK_equal:          return VD_FW_KEY_EQUALS;
+        case XK_Caps_Lock:      return VD_FW_KEY_CAPITAL;
+        case XK_Escape:         return VD_FW_KEY_ESCAPE;
+        case XK_a:              return VD_FW_KEY_A;
+        case XK_b:              return VD_FW_KEY_B;
+        case XK_c:              return VD_FW_KEY_C;
+        case XK_d:              return VD_FW_KEY_D;
+        case XK_e:              return VD_FW_KEY_E;
+        case XK_f:              return VD_FW_KEY_F;
+        case XK_g:              return VD_FW_KEY_G;
+        case XK_h:              return VD_FW_KEY_H;
+        case XK_i:              return VD_FW_KEY_I;
+        case XK_j:              return VD_FW_KEY_J;
+        case XK_k:              return VD_FW_KEY_K;
+        case XK_l:              return VD_FW_KEY_L;
+        case XK_m:              return VD_FW_KEY_M;
+        case XK_n:              return VD_FW_KEY_N;
+        case XK_o:              return VD_FW_KEY_O;
+        case XK_p:              return VD_FW_KEY_P;
+        case XK_q:              return VD_FW_KEY_Q;
+        case XK_r:              return VD_FW_KEY_R;
+        case XK_s:              return VD_FW_KEY_S;
+        case XK_t:              return VD_FW_KEY_T;
+        case XK_u:              return VD_FW_KEY_U;
+        case XK_v:              return VD_FW_KEY_V;
+        case XK_w:              return VD_FW_KEY_W;
+        case XK_x:              return VD_FW_KEY_X;
+        case XK_y:              return VD_FW_KEY_Y;
+        case XK_z:              return VD_FW_KEY_Z;
+        case XK_bracketleft:    return VD_FW_KEY_BRACKET_OPEN;
+        case XK_backslash:      return VD_FW_KEY_SLASH_BACK;
+        case XK_bracketright:   return VD_FW_KEY_BRACKET_CLOSE;
+        case XK_asciitilde:     return VD_FW_KEY_BACKTICK;
+        case XK_KP_0:           return VD_FW_KEY_0;
+        case XK_KP_1:           return VD_FW_KEY_1;
+        case XK_KP_2:           return VD_FW_KEY_2;
+        case XK_KP_3:           return VD_FW_KEY_3;
+        case XK_KP_4:           return VD_FW_KEY_4;
+        case XK_KP_5:           return VD_FW_KEY_5;
+        case XK_KP_6:           return VD_FW_KEY_6;
+        case XK_KP_7:           return VD_FW_KEY_7;
+        case XK_KP_8:           return VD_FW_KEY_8;
+        case XK_KP_9:           return VD_FW_KEY_9;
+    }
 }
 
 #endif // _WIN32, __APPLE__, __linux__
