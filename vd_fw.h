@@ -14635,9 +14635,36 @@ static void vd_fw__mac_hid_value_callback(void *context, IOReturn result, void *
 #include <X11/Xatom.h>
 #include <X11/extensions/syncconst.h>
 
-// @note(mdodis): Defined to stop glx from including opengl functions
-#define __gl_h_
-#include <GL/glx.h>
+enum {
+    VD_FW_GLX_DRAWABLE_TYPE = 0x8010,
+    VD_FW_GLX_X_RENDERABLE = 0x8012,
+    VD_FW_GLX_WINDOW_BIT = 0x00000001,
+    VD_FW_GLX_RENDER_TYPE = 0x8011,
+    VD_FW_GLX_RGBA_BIT = 0x00000001,
+    VD_FW_GLX_X_VISUAL_TYPE = 0x22,
+    VD_FW_GLX_TRUE_COLOR = 0x8002,
+    VD_FW_GLX_DOUBLEBUFFER = 5,
+    VD_FW_GLX_RED_SIZE = 8,
+    VD_FW_GLX_GREEN_SIZE = 9,
+    VD_FW_GLX_BLUE_SIZE = 10,
+    VD_FW_GLX_ALPHA_SIZE = 11,
+    VD_FW_GLX_DEPTH_SIZE = 12,
+    VD_FW_GLX_STENCIL_SIZE = 13,
+    VD_FW_GLX_SAMPLE_BUFFERS = 0x186a0, /*100000*/
+    VD_FW_GLX_SAMPLES = 0x186a1, /*100001*/
+    VD_FW_GLX_CONTEXT_DEBUG_BIT_ARB = 0x00000001,
+    VD_FW_GLX_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB = 0x00000002,
+    VD_FW_GLX_CONTEXT_MAJOR_VERSION_ARB = 0x2091,
+    VD_FW_GLX_CONTEXT_MINOR_VERSION_ARB = 0x2092,
+    VD_FW_GLX_CONTEXT_FLAGS_ARB = 0x2094,
+    VD_FW_GLX_CONTEXT_CORE_PROFILE_BIT_ARB = 0x00000001,
+    VD_FW_GLX_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB = 0x00000002,
+    VD_FW_GLX_CONTEXT_PROFILE_MASK_ARB = 0x9126,
+};
+
+typedef struct __GlxContextInternal* __GlxContext;
+typedef struct __GlxFbConfigInternal* __GlxFbConfig;
+typedef __GlxContext (*VdFwProc__glXCreateContextAttribsARB)(Display *dpy, __GlxFbConfig config, __GlxContext share_context, Bool direct, const int *attrib_list);
 
 #define VD_FW_X11_FUNCTIONS \
     XBEGIN_MODULE(xlib) \
@@ -14668,13 +14695,13 @@ static void vd_fw__mac_hid_value_callback(void *context, IOReturn result, void *
     XSYM(xext, Status, XSyncSetCounter, (Display *dpy, XSyncCounter counter, XSyncValue value)) \
     XEND_MODULE() \
     XBEGIN_MODULE(glx) \
-    XSYM(glx, GLXFBConfig*, glXChooseFBConfig, (Display *display, int screen, const int *attrib_list, int *nelements)) \
-    XSYM(glx, XVisualInfo*, glXGetVisualFromFBConfig, (Display *display, GLXFBConfig config)) \
+    XSYM(glx, __GlxFbConfig*, glXChooseFBConfig, (Display *display, int screen, const int *attrib_list, int *nelements)) \
+    XSYM(glx, XVisualInfo*, glXGetVisualFromFBConfig, (Display *display, __GlxFbConfig config)) \
     XSYM(glx, const char*, glXQueryExtensionsString, (Display *display, int screen)) \
     XSYM(glx, void*, glXGetProcAddress, (const GLubyte *procName))\
-    XSYM(glx, Bool, glXMakeCurrent, (Display *display, GLXDrawable drawable, GLXContext ctx)) \
-    XSYM(glx, void, glXDestroyContext, (Display *display, GLXContext ctx)) \
-    XSYM(glx, void, glXSwapBuffers, (Display *display, GLXDrawable drawable)) \
+    XSYM(glx, Bool, glXMakeCurrent, (Display *display, XID drawable, __GlxContext ctx)) \
+    XSYM(glx, void, glXDestroyContext, (Display *display, __GlxContext ctx)) \
+    XSYM(glx, void, glXSwapBuffers, (Display *display, XID drawable)) \
     XEND_MODULE() \
 
 #define XBEGIN_MODULE(name)
@@ -14701,7 +14728,7 @@ typedef struct {
     void                        *handle_glx;
     int                         has_glx;
 
-    GLXContext                  glx_context;
+    __GlxContext                glx_context;
 
     Display                     *display;
     Window                      root_window;
@@ -14917,7 +14944,7 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
             }
 
             const char *glx_exts = VdFwglXQueryExtensionsString(VD_FW_G.display, VD_FW_G.screen);
-            PFNGLXCREATECONTEXTATTRIBSARBPROC glXCreateContextAttribsARB = (PFNGLXCREATECONTEXTATTRIBSARBPROC)
+            VdFwProc__glXCreateContextAttribsARB glXCreateContextAttribsARB = (VdFwProc__glXCreateContextAttribsARB)
                 VdFwglXGetProcAddress((const GLubyte*)"glXCreateContextAttribsARB");
 
 
@@ -14938,44 +14965,44 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
 
                 int running_attrib = 0;
                 GLint pixel_attribs[32] = {0};
-                pixel_attribs[running_attrib++] = GLX_X_RENDERABLE;
+                pixel_attribs[running_attrib++] = VD_FW_GLX_X_RENDERABLE;
                 pixel_attribs[running_attrib++] = 1;
 
-                pixel_attribs[running_attrib++] = GLX_DRAWABLE_TYPE;
-                pixel_attribs[running_attrib++] = GLX_WINDOW_BIT;
+                pixel_attribs[running_attrib++] = VD_FW_GLX_DRAWABLE_TYPE;
+                pixel_attribs[running_attrib++] = VD_FW_GLX_WINDOW_BIT;
 
-                pixel_attribs[running_attrib++] = GLX_RENDER_TYPE;
-                pixel_attribs[running_attrib++] = GLX_RGBA_BIT;
+                pixel_attribs[running_attrib++] = VD_FW_GLX_RENDER_TYPE;
+                pixel_attribs[running_attrib++] = VD_FW_GLX_RGBA_BIT;
 
-                pixel_attribs[running_attrib++] = GLX_X_VISUAL_TYPE;
-                pixel_attribs[running_attrib++] = GLX_TRUE_COLOR;
+                pixel_attribs[running_attrib++] = VD_FW_GLX_X_VISUAL_TYPE;
+                pixel_attribs[running_attrib++] = VD_FW_GLX_TRUE_COLOR;
 
-                pixel_attribs[running_attrib++] = GLX_DOUBLEBUFFER;
+                pixel_attribs[running_attrib++] = VD_FW_GLX_DOUBLEBUFFER;
                 pixel_attribs[running_attrib++] = 1;
 
                 switch (pixel_format) {
                     case VD_FW_GL_PIXEL_FORMAT_R8G8B8A8: {
-                        pixel_attribs[running_attrib++] = GLX_RED_SIZE;
+                        pixel_attribs[running_attrib++] = VD_FW_GLX_RED_SIZE;
                         pixel_attribs[running_attrib++] = 8;
 
-                        pixel_attribs[running_attrib++] = GLX_GREEN_SIZE;
+                        pixel_attribs[running_attrib++] = VD_FW_GLX_GREEN_SIZE;
                         pixel_attribs[running_attrib++] = 8;
 
-                        pixel_attribs[running_attrib++] = GLX_BLUE_SIZE;
+                        pixel_attribs[running_attrib++] = VD_FW_GLX_BLUE_SIZE;
                         pixel_attribs[running_attrib++] = 8;
 
-                        pixel_attribs[running_attrib++] = GLX_ALPHA_SIZE;
+                        pixel_attribs[running_attrib++] = VD_FW_GLX_ALPHA_SIZE;
                         pixel_attribs[running_attrib++] = 8;
                     } break;
 
                     case VD_FW_GL_PIXEL_FORMAT_R8G8B8: {
-                        pixel_attribs[running_attrib++] = GLX_RED_SIZE;
+                        pixel_attribs[running_attrib++] = VD_FW_GLX_RED_SIZE;
                         pixel_attribs[running_attrib++] = 8;
 
-                        pixel_attribs[running_attrib++] = GLX_GREEN_SIZE;
+                        pixel_attribs[running_attrib++] = VD_FW_GLX_GREEN_SIZE;
                         pixel_attribs[running_attrib++] = 8;
 
-                        pixel_attribs[running_attrib++] = GLX_BLUE_SIZE;
+                        pixel_attribs[running_attrib++] = VD_FW_GLX_BLUE_SIZE;
                         pixel_attribs[running_attrib++] = 8;
                     } break;
 
@@ -14984,15 +15011,15 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
 
                 switch (depth_format) {
                     case VD_FW_GL_DEPTH_FORMAT_D32: {
-                        pixel_attribs[running_attrib++] = GLX_DEPTH_SIZE;
+                        pixel_attribs[running_attrib++] = VD_FW_GLX_DEPTH_SIZE;
                         pixel_attribs[running_attrib++] = 32;
                     } break;
 
                     case VD_FW_GL_DEPTH_FORMAT_D24S8: {
-                        pixel_attribs[running_attrib++] = GLX_DEPTH_SIZE;
+                        pixel_attribs[running_attrib++] = VD_FW_GLX_DEPTH_SIZE;
                         pixel_attribs[running_attrib++] = 24;
 
-                        pixel_attribs[running_attrib++] = GLX_STENCIL_SIZE;
+                        pixel_attribs[running_attrib++] = VD_FW_GLX_STENCIL_SIZE;
                         pixel_attribs[running_attrib++] = 8;
                     } break;
 
@@ -15001,17 +15028,17 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
 
                 switch (msaa) {
                     case VD_FW_GL_MSAA_ENABLED_2X: {
-                        pixel_attribs[running_attrib++] = GLX_SAMPLES;
+                        pixel_attribs[running_attrib++] = VD_FW_GLX_SAMPLES;
                         pixel_attribs[running_attrib++] = 2;
                     } break;
 
                     case VD_FW_GL_MSAA_ENABLED_4X: {
-                        pixel_attribs[running_attrib++] = GLX_SAMPLES;
+                        pixel_attribs[running_attrib++] = VD_FW_GLX_SAMPLES;
                         pixel_attribs[running_attrib++] = 4;
                     } break;
 
                     case VD_FW_GL_MSAA_ENABLED_8X: {
-                        pixel_attribs[running_attrib++] = GLX_SAMPLES;
+                        pixel_attribs[running_attrib++] = VD_FW_GLX_SAMPLES;
                         pixel_attribs[running_attrib++] = 8;
                     } break;
 
@@ -15019,14 +15046,14 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
                 }
 
                 int nelements;
-                GLXFBConfig *fbs = VdFwglXChooseFBConfig(VD_FW_G.display, VD_FW_G.screen, pixel_attribs, &nelements);
+                __GlxFbConfig *fbs = VdFwglXChooseFBConfig(VD_FW_G.display, VD_FW_G.screen, pixel_attribs, &nelements);
 
                 if (!fbs || nelements < 1) {
                     VdFwXFree(fbs);
                     goto LOOP_END;
                 }
 
-                GLXFBConfig fb_cfg = fbs[0];
+                __GlxFbConfig fb_cfg = fbs[0];
                 VdFwXFree(fbs);
 
                 // XVisualInfo *vi_info = VdFwglXGetVisualFromFBConfig(VD_FW_G.display, fb_cfg);
@@ -15042,20 +15069,20 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
                 int prf_flags = 0;
 
                 if (debug) {
-                    ctx_flags |= GLX_CONTEXT_DEBUG_BIT_ARB;
+                    ctx_flags |= VD_FW_GLX_CONTEXT_DEBUG_BIT_ARB;
                 }
 
                 if (compat) {
-                    prf_flags |= GLX_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
+                    prf_flags |= VD_FW_GLX_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
                 } else {
-                    prf_flags |= GLX_CONTEXT_CORE_PROFILE_BIT_ARB;
+                    prf_flags |= VD_FW_GLX_CONTEXT_CORE_PROFILE_BIT_ARB;
                 }
 
                 int context_attribs[] = {
-                    GLX_CONTEXT_MAJOR_VERSION_ARB, major,
-                    GLX_CONTEXT_MINOR_VERSION_ARB, minor,
-                    GLX_CONTEXT_PROFILE_MASK_ARB,  prf_flags,
-                    GLX_CONTEXT_FLAGS_ARB,         ctx_flags,
+                    VD_FW_GLX_CONTEXT_MAJOR_VERSION_ARB, major,
+                    VD_FW_GLX_CONTEXT_MINOR_VERSION_ARB, minor,
+                    VD_FW_GLX_CONTEXT_PROFILE_MASK_ARB,  prf_flags,
+                    VD_FW_GLX_CONTEXT_FLAGS_ARB,         ctx_flags,
                     0
                 };
 
