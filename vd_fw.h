@@ -14633,6 +14633,8 @@ static void vd_fw__mac_hid_value_callback(void *context, IOReturn result, void *
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/Xatom.h>
+#include <X11/extensions/syncconst.h>
+
 // @note(mdodis): Defined to stop glx from including opengl functions
 #define __gl_h_
 #include <GL/glx.h>
@@ -14655,6 +14657,15 @@ static void vd_fw__mac_hid_value_callback(void *context, IOReturn result, void *
     XSYM(xlib, Status, XSetWMProtocols, (Display *display, Window w, Atom *protocols, int count)) \
     XSYM(xlib, int, XDestroyWindow, (Display *display, Window w)) \
     XSYM(xlib, int, XSetWindowColormap, (Display *display, Window w, Colormap colormap)) \
+    XSYM(xlib, Bool, XQueryExtension, (Display *display, char *name, int *major_opcode_return, int *first_event_return, int *first_error_return)) \
+    XSYM(xlib, int, XChangeProperty, (Display *display, Window w, Atom property, Atom type, int format, int mode, unsigned char *data, int nelements)) \
+    XEND_MODULE() \
+    XBEGIN_MODULE(xext) \
+    XSYM(xext, Status, XSyncQueryExtension, (Display *display, int *event_base_return, int *error_base_return)) \
+    XSYM(xext, Status, XSyncInitialize, (Display *dpy, int *major_version_return, int *minor_version_return)) \
+    XSYM(xext, void, XSyncIntToValue, (XSyncValue *pv, int i)) \
+    XSYM(xext, XSyncCounter, XSyncCreateCounter, (Display *dpy, XSyncValue initial_value)) \
+    XSYM(xext, Status, XSyncSetCounter, (Display *dpy, XSyncCounter counter, XSyncValue value)) \
     XEND_MODULE() \
     XBEGIN_MODULE(glx) \
     XSYM(glx, GLXFBConfig*, glXChooseFBConfig, (Display *display, int screen, const int *attrib_list, int *nelements)) \
@@ -14683,6 +14694,10 @@ VD_FW_X11_FUNCTIONS
 typedef struct {
     void                        *handle_xlib;
     int                         has_xlib;
+    void                        *handle_xext;
+    int                         has_xext;
+    int                         xlib_supports_xsync;
+
     void                        *handle_glx;
     int                         has_glx;
 
@@ -14694,10 +14709,18 @@ typedef struct {
     int                         screen;
     XVisualInfo                 visual_info;
     Atom                        wm_delete_window;
+    Atom                        wm_sync_request;
+    Atom                        wm_sync_request_counter;
+    Atom                        wm_protocols;
+    XID                         sync_counter;
+    VdFwU64                     sync_counter_value;
+    int                         sync_redraw;
     int                         size_changed;
     int                         width, height;
 
     int                         window_open;
+    int                         close_request;
+    int                         quit_request;
     VdFwGraphicsApi             graphics_api;
 
     int                         has_initialized;
@@ -14751,6 +14774,9 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         VD_FW_G.handle_xlib = dlopen("libX11.so.6", RTLD_NOW | RTLD_GLOBAL);
         VD_FW_G.has_xlib    = VD_FW_G.handle_xlib != NULL;
 
+        VD_FW_G.handle_xext = dlopen("libXext.so", RTLD_NOW | RTLD_GLOBAL);
+        VD_FW_G.has_xext    = VD_FW_G.handle_xext != NULL;
+
         const char *glx_libs[] = {
             "libGLX.so.0",
             "libGL.so.1",
@@ -14784,9 +14810,29 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     VD_FW_G.screen = DefaultScreen(VD_FW_G.display);
     VD_FW_G.root_window = DefaultRootWindow(VD_FW_G.display);
 
+    // Sync Extension
+    {
+        int major_opcode, first_event, first_error;
+        if (VdFwXQueryExtension(VD_FW_G.display, "SYNC", &major_opcode, &first_event, &first_error)) {
+            int version = 0;
+            {
+                int major, minor;
+                VdFwXSyncInitialize(VD_FW_G.display, &major, &minor);
+                version = major * 1000 + minor;
+            }
 
-    if (VD_FW_G.display) {
-        VD_FW_LOG("Opened default display");
+            if (version >= 3000) {
+                VD_FW_G.xlib_supports_xsync = 1;
+            }
+        }
+    }
+
+    VD_FW_G.wm_protocols = VdFwXInternAtom(VD_FW_G.display, "WM_PROTOCOLS", 0);
+    VD_FW_G.wm_delete_window = VdFwXInternAtom(VD_FW_G.display, "WM_DELETE_WINDOW", 0);
+
+    if (VD_FW_G.xlib_supports_xsync) {
+        VD_FW_G.wm_sync_request = VdFwXInternAtom(VD_FW_G.display, "_NET_WM_SYNC_REQUEST", 0);
+        VD_FW_G.wm_sync_request_counter = VdFwXInternAtom(VD_FW_G.display, "_NET_WM_SYNC_REQUEST_COUNTER", 0);
     }
 
     int screen_bits = 24;
@@ -14817,13 +14863,22 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         return 0;
     }
 
-    VdFwXMapWindow(VD_FW_G.display, VD_FW_G.window);
     VdFwXStoreName(VD_FW_G.display, VD_FW_G.window, "FW Window");
-    VdFwXFlush(VD_FW_G.display);
+    // VdFwXFlush(VD_FW_G.display);
 
     VD_FW_G.window_open = 1;
 
-    VD_FW_G.wm_delete_window = VdFwXInternAtom(VD_FW_G.display, "WM_DELETE_WINDOW", 0);
+    if (VD_FW_G.xlib_supports_xsync) {
+        VdFwXSetWMProtocols(VD_FW_G.display, VD_FW_G.window, &VD_FW_G.wm_sync_request, 1);
+
+        XSyncValue initial_value;
+        VdFwXSyncIntToValue(&initial_value, 0);
+        VD_FW_G.sync_counter = VdFwXSyncCreateCounter(VD_FW_G.display, initial_value);
+
+        VdFwXChangeProperty(VD_FW_G.display, VD_FW_G.window, VD_FW_G.wm_sync_request_counter, XA_CARDINAL, 32, PropModeReplace, (uint8_t*)&VD_FW_G.sync_counter, 1);
+    }
+    VdFwXMapWindow(VD_FW_G.display, VD_FW_G.window);
+
     VdFwXSetWMProtocols(VD_FW_G.display, VD_FW_G.window, &VD_FW_G.wm_delete_window, 1);
 
     VdFwOpenGLOptions *gl_options = 0;
@@ -15049,6 +15104,7 @@ VD_FW_API int vd_fw_running(void)
 VD_FW_API VdFwEvent *vd_fw_poll(int *count)
 {
     VD_FW_G.size_changed = 0;
+    VD_FW_G.close_request = 0;
 
     XEvent evt = {};
     while (VdFwXPending(VD_FW_G.display) > 0) {
@@ -15059,13 +15115,24 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
                 VD_FW_G.window_open = 0;
             } break;
 
-            case ClientMessage: {
-                XClientMessageEvent* e = (XClientMessageEvent*)&evt;
+            case Expose: {
+                if (VD_FW_G.xlib_supports_xsync) {
+                    VD_FW_G.sync_redraw = 1;
+                }
+            } break;
 
-                if((Atom)e->data.l[0] == VD_FW_G.wm_delete_window)
-                {
-                    VdFwXDestroyWindow(VD_FW_G.display, VD_FW_G.window);
-                    VD_FW_G.window_open = 0;
+            case ClientMessage: {
+                XClientMessageEvent* e = &evt.xclient;
+
+                if(e->message_type == VD_FW_G.wm_protocols) {
+                    if (e->data.l[0] == VD_FW_G.wm_delete_window) {
+                        VD_FW_G.close_request = 1;
+                    } else if (e->data.l[0] == VD_FW_G.wm_sync_request) {
+                        VD_FW_G.sync_counter_value = 0;
+                        VD_FW_G.sync_counter_value |= e->data.l[2];
+                        VD_FW_G.sync_counter_value |= e->data.l[3] << 32;
+                        VD_FW_G.sync_redraw = 1;
+                    }
                 }
 
             } break;
@@ -15088,11 +15155,12 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
 
 VD_FW_API int vd_fw_close_requested(void)
 {
-    return 1;
+    return VD_FW_G.close_request;
 }
 
 VD_FW_API void vd_fw_quit(void)
 {
+    VD_FW_G.quit_request = 1;
 }
 
 VD_FW_API void vd_fw_lock(void)
@@ -15103,6 +15171,18 @@ VD_FW_API void vd_fw_unlock(void)
 {
     if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
         VdFwglXSwapBuffers(VD_FW_G.display, VD_FW_G.window);
+    }
+
+    if (VD_FW_G.sync_redraw) {
+        XSyncValue value;
+        VdFwXSyncIntToValue(&value, VD_FW_G.sync_counter_value);
+        VdFwXSyncSetCounter(VD_FW_G.display, VD_FW_G.sync_counter, value);
+        VD_FW_G.sync_redraw = 0;
+    }
+
+    if (VD_FW_G.quit_request) {
+        VdFwXDestroyWindow(VD_FW_G.display, VD_FW_G.window);
+        VD_FW_G.window_open = 0;
     }
 }
 
