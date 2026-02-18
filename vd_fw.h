@@ -14774,6 +14774,11 @@ typedef struct {
 
     unsigned char                   curr_key_states[VD_FW_KEY_MAX];
     unsigned char                   prev_key_states[VD_FW_KEY_MAX];
+    int                             prev_mouse_state;
+    int                             mouse_state;
+    int                             prev_mouse[2];
+    int                             mouse[2];
+    float                           mouse_delta[2];
 
     int                             has_initialized;
     int                             cap_gamepad_db_entries;
@@ -14790,6 +14795,7 @@ VdFw__LinuxInternalData VdFw__Globals = {0};
 static struct timespec vd_fw__linux_timespec_diff(struct timespec a, struct timespec b);
 static int             vd_fw__x11_extension_supported(const char *extList, const char *extension);
 static VdFwKey         vd_fw__x11_translate_keycode(XEvent *evt);
+static int             vd_fw__x11_translate_mouse_button(unsigned int button);
 
 void *vd_fw__gl_get_proc_address(const char *name)
 {
@@ -14880,7 +14886,10 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     window_attributes.bit_gravity = StaticGravity;
     window_attributes.background_pixel = 0;
     window_attributes.colormap = VdFwXCreateColormap(VD_FW_G.display, VD_FW_G.root_window, visual_info.visual, AllocNone);
-    window_attributes.event_mask = StructureNotifyMask | ExposureMask | KeyPressMask | KeyReleaseMask;
+    window_attributes.event_mask = StructureNotifyMask | ExposureMask |
+                                   KeyPressMask | KeyReleaseMask |
+                                   ButtonPressMask | ButtonReleaseMask | PointerMotionMask;
+
     unsigned long attribute_mask = CWBitGravity | CWBackPixel | CWColormap | CWEventMask;
 
     int width = 640;
@@ -15157,6 +15166,8 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
     VD_FW_G.size_changed = 0;
     VD_FW_G.close_request = 0;
     VD_FW_G.num_evts = 0;
+    VD_FW_G.prev_mouse_state = VD_FW_G.mouse_state;
+    VD_FW_G.mouse_delta[0] = VD_FW_G.mouse_delta[1] = 0.f;
 
     for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
         VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
@@ -15199,6 +15210,7 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
                 fw_event.data.key_down.key = vd_fw__x11_translate_keycode(&evt);
                 
                 VD_FW_G.curr_key_states[fw_event.data.key_down.key] = 1;
+                VD_FW_G.evtbuf[VD_FW_G.num_evts++] = fw_event;
             } break;
 
             case KeyRelease: {
@@ -15207,6 +15219,54 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
                 fw_event.data.key_up.key = vd_fw__x11_translate_keycode(&evt);
                 
                 VD_FW_G.curr_key_states[fw_event.data.key_down.key] = 0;
+                VD_FW_G.evtbuf[VD_FW_G.num_evts++] = fw_event;
+            } break;
+
+            case MotionNotify: {
+                VD_FW_G.mouse_delta[0] += (VD_FW_G.mouse[0] - VD_FW_G.prev_mouse[0]);
+                VD_FW_G.mouse_delta[1] += (VD_FW_G.mouse[1] - VD_FW_G.prev_mouse[1]);
+                VD_FW_G.prev_mouse[0] = VD_FW_G.mouse[0];
+                VD_FW_G.prev_mouse[1] = VD_FW_G.mouse[1];
+                VD_FW_G.mouse[0] = evt.xmotion.x;
+                VD_FW_G.mouse[1] = evt.xmotion.y;
+
+                {
+                    VdFwEvent fw_event;
+                    fw_event.type = VD_FW_EVENT_TYPE_MOUSE_MOVE;
+                    fw_event.data.mouse_move.x = VD_FW_G.mouse[0];
+                    fw_event.data.mouse_move.y = VD_FW_G.mouse[1];
+                    VD_FW_G.evtbuf[VD_FW_G.num_evts++] = fw_event;
+                }
+
+                {
+                    VdFwEvent fw_event;
+                    fw_event.type = VD_FW_EVENT_TYPE_MOUSE_DELTA;
+                    fw_event.data.mouse_delta.dx = VD_FW_G.mouse_delta[0];
+                    fw_event.data.mouse_delta.dy = VD_FW_G.mouse_delta[1];
+                    VD_FW_G.evtbuf[VD_FW_G.num_evts++] = fw_event;
+                }
+            } break;
+
+            case ButtonPress: {
+                int btn = vd_fw__x11_translate_mouse_button(evt.xbutton.button);
+                if (btn) {
+                    VdFwEvent fw_event = {0};
+                    fw_event.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN;
+                    fw_event.data.mouse_button_down.button = btn;
+
+                    VD_FW_G.mouse_state |= btn;
+                }
+            } break;
+
+            case ButtonRelease: {
+                int btn = vd_fw__x11_translate_mouse_button(evt.xbutton.button);
+                if (btn) {
+                    VdFwEvent fw_event = {0};
+                    fw_event.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN;
+                    fw_event.data.mouse_button_down.button = btn;
+
+                    VD_FW_G.mouse_state &= ~btn;
+                }
             } break;
 
             case ConfigureNotify: {
@@ -15344,16 +15404,73 @@ VD_FW_API void vd_fw_set_receive_ncmouse(int on)
 {
 }
 
+VD_FW_API int vd_fw_get_minimized(int *minimized)
+{
+    return 0;
+}
+
+VD_FW_API void vd_fw_minimize(void)
+{
+}
+
+VD_FW_API int vd_fw_get_maximized(int *maximized)
+{
+    return 0;
+}
+
+VD_FW_API void vd_fw_maximize(void)
+{
+}
+
+VD_FW_API void vd_fw_normalize(void)
+{
+}
+
+VD_FW_API void vd_fw_set_fullscreen(int on)
+{
+}
+
+VD_FW_API int vd_fw_get_fullscreen(void)
+{
+    return 0;
+}
+
+VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
+{
+    int result = VD_FW_G.mouse_state;
+    if (x) *x = VD_FW_G.mouse[0];
+    if (y) *y = VD_FW_G.mouse[1];
+    return result;
+}
+
+VD_FW_API void vd_fw_get_mouse_delta(float *dx, float *dy)
+{
+    if (dx) *dx = VD_FW_G.mouse_delta[0];
+    if (dy) *dy = VD_FW_G.mouse_delta[1];
+}
+
+VD_FW_API void vd_fw_set_mouse_locked(int locked)
+{
+}
+
+VD_FW_API int vd_fw_get_mouse_locked(void)
+{
+    return 0;
+}
+
+VD_FW_API int vd_fw_get_mouse_wheel(float *dx, float *dy)
+{
+    return 0;
+}
+
 VD_FW_API int vd_fw_get_mouse_clicked(int button)
 {
-    // return !(VD_FW_G.prev_mouse_state & button) && (VD_FW_G.mouse_state & button);
-    return 0;
+    return !(VD_FW_G.prev_mouse_state & button) && (VD_FW_G.mouse_state & button);
 }
 
 VD_FW_API int vd_fw_get_mouse_released(int button)
 {
-    // return (VD_FW_G.prev_mouse_state & button) && !(VD_FW_G.mouse_state & button);
-    return 0;
+    return (VD_FW_G.prev_mouse_state & button) && !(VD_FW_G.mouse_state & button);
 }
 
 VD_FW_API int vd_fw__any_time_higher(int num_files, const char **files, unsigned long long *check_against)
@@ -15562,6 +15679,18 @@ static VdFwKey vd_fw__x11_translate_keycode(XEvent *evt)
         case XK_KP_8:           return VD_FW_KEY_8;
         case XK_KP_9:           return VD_FW_KEY_9;
     }
+}
+
+static int vd_fw__x11_translate_mouse_button(unsigned int button)
+{
+    switch (button) {
+        case Button1: return VD_FW_MOUSE_BUTTON_LEFT;
+        case Button2: return VD_FW_MOUSE_BUTTON_MIDDLE;
+        case Button3: return VD_FW_MOUSE_BUTTON_RIGHT;
+        case Button4: return VD_FW_MOUSE_BUTTON_M1;
+        case Button5: return VD_FW_MOUSE_BUTTON_M2;
+        default: return 0;
+    }    
 }
 
 #endif // _WIN32, __APPLE__, __linux__
