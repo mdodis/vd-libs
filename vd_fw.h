@@ -15519,9 +15519,24 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
             } break;
 
             case KeyPress: {
+                XKeyPressedEvent *key_event = &evt.xkey;
+
                 VdFwEvent fw_event = {0};
                 fw_event.type = VD_FW_EVENT_TYPE_KEY_DOWN;
                 fw_event.data.key_down.key = vd_fw__x11_translate_keycode(&evt);
+                fw_event.data.key_down.modifiers = 0;
+
+                if (key_event->state & ControlMask) {
+                    fw_event.data.key_down.modifiers |= VD_FW_MOD_CONTROL;
+                }
+
+                if (key_event->state & ShiftMask) {
+                    fw_event.data.key_down.modifiers |= VD_FW_MOD_SHIFT;
+                }
+
+                if (key_event->state & Mod1Mask) {
+                    fw_event.data.key_down.modifiers |= VD_FW_MOD_ALT;
+                }
                 
                 VD_FW_G.curr_key_states[fw_event.data.key_down.key] = 1;
 
@@ -15532,7 +15547,6 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
                 if (VD_FW_G.input_method && VD_FW_G.input_style) {
                     char buf[5] = {0};
                     Status status = 0;
-                    XKeyPressedEvent *key_event = &evt.xkey;
                     VdFwXutf8LookupString(VD_FW_G.input_context, key_event, buf, 4, 0, &status);
 
                     if (status == XLookupChars) {
