@@ -35,6 +35,7 @@ if [ -n "$PROGRAM_TO_COMPILE" ]; then
         -pthread \
         $CFLAGS \
         $PRJ_DIR/programs/$PROGRAM_TO_COMPILE.c \
+        -lm \
         -o $PROGRAM_TO_COMPILE
 fi
 
@@ -44,6 +45,7 @@ if [ -n "$SAMPLE_TO_COMPILE" ]; then
         -pthread \
         $CFLAGS \
         $PRJ_DIR/samples/$SAMPLE_TO_COMPILE.c \
+        -lm \
         -o $SAMPLE_TO_COMPILE
 fi
 

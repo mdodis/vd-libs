@@ -1594,6 +1594,7 @@ VD_FW_INL int      vd_fw__strlen(const char *s);
 VD_FW_INL size_t   vd_fw__strlcpy(char *dst, const char *src, size_t maxlen);
 VD_FW_INL VdFwU32  vd_fw__gcd(VdFwU32 a, VdFwU32 b);
 VD_FW_INL int      vd_fw__strcmp(const char *a, const char *b);
+VD_FW_INL int      vd_fw__utf8_to_utf32(unsigned char *buf, size_t len, VdFwU32 *codepoint);
 
 VD_FW_INL int vd_fw__compare_string_wide_nullsep_case_insensitive(const wchar_t *str1, const wchar_t *str2);
 
@@ -1662,6 +1663,57 @@ VD_FW_INL VdFwU32 vd_fw__gcd(VdFwU32 a, VdFwU32 b)
     }
 
     return a;
+}
+
+VD_FW_INL int vd_fw__utf8_to_utf32(unsigned char *buf, size_t len, VdFwU32 *codepoint)
+{
+    if (len == 0) return -1;
+
+    unsigned char b0 = buf[0];
+
+    // 1-byte sequence
+    if (b0 <= 0x7F) {
+        *codepoint = b0;
+        return 1;
+    }
+
+    // 2-byte sequence
+    if ((b0 & 0xE0) == 0xC0) {
+        if (len < 2) return -1;
+        if ((buf[1] & 0xC0) != 0x80) return -1;
+
+        *codepoint = ((b0 & 0x1F) << 6) |
+                     (buf[1] & 0x3F);
+        return 2;
+    }
+
+    // 3-byte sequence
+    if ((b0 & 0xF0) == 0xE0) {
+        if (len < 3) return -1;
+        if ((buf[1] & 0xC0) != 0x80 ||
+            (buf[2] & 0xC0) != 0x80) return -1;
+
+        *codepoint = ((b0 & 0x0F) << 12) |
+                     ((buf[1] & 0x3F) << 6) |
+                     (buf[2] & 0x3F);
+        return 3;
+    }
+
+    // 4-byte sequence
+    if ((b0 & 0xF8) == 0xF0) {
+        if (len < 4) return -1;
+        if ((buf[1] & 0xC0) != 0x80 ||
+            (buf[2] & 0xC0) != 0x80 ||
+            (buf[3] & 0xC0) != 0x80) return -1;
+
+        *codepoint = ((b0 & 0x07) << 18) |
+                     ((buf[1] & 0x3F) << 12) |
+                     ((buf[2] & 0x3F) << 6) |
+                     (buf[3] & 0x3F);
+        return 4;
+    }
+
+    return -1;
 }
 
 VD_FW_INL int vd_fw__strcmp(const char *a, const char *b)
@@ -14761,6 +14813,11 @@ typedef struct {
     XSYM(xlib, int, XResizeWindow, (Display *display, Window w, int width, int height)) \
     XSYM(xlib, void, XSetWMNormalHints, (Display *display, Window w, XSizeHints *hints)) \
     XSYM(xlib, void, XSetWMSizeHints, (Display *display, Window w, XSizeHints *hints, Atom property)) \
+    XSYM(xlib, XIM, XOpenIM, (Display *display, struct _XrmHashBucketRec *rdb, char *res_name, char *res_class)) \
+    XSYM(xlib, char*, XGetIMValues, (XIM im, ...)) \
+    XSYM(xlib, XIC, XCreateIC, (XIM im, ...)) \
+    XSYM(xlib, void, XDestroyIC, (XIC ic)) \
+    XSYM(xlib, int, Xutf8LookupString, (XIC ic, XKeyPressedEvent *event, char *buffer_return, int bytes_buffer, KeySym *keysym_return, Status *status_return)) \
     XEND_MODULE() \
     XBEGIN_MODULE(xext) \
     XSYM(xext, Status, XSyncQueryExtension, (Display *display, int *event_base_return, int *error_base_return)) \
@@ -14835,6 +14892,9 @@ typedef struct {
     Display                         *display;
     Window                          root_window;
     Window                          window;
+    XIMStyle                        input_style;
+    XIC                             input_context;
+    XIM                             input_method;
     int                             screen;
     Atom                            wm_delete_window;
     Atom                            wm_sync_request;
@@ -15035,6 +15095,30 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         }
 
         VD_FW_G.xi_opcode = major_opcode;
+    }
+
+    // Character Input
+    {
+        XIM input_method = VdFwXOpenIM(VD_FW_G.display, 0, 0, 0);
+        if (input_method) {
+            XIMStyles *styles = 0;
+            if ((VdFwXGetIMValues(input_method, XNQueryInputStyle, &styles, NULL) == 0) && styles) {
+
+                XIMStyle best_match_style = 0;
+                for (int i = 0; i < styles->count_styles; ++i) {
+
+                    XIMStyle style = styles->supported_styles[i];
+                    if (style == (XIMPreeditNothing | XIMStatusNothing)) {
+                        best_match_style = style;
+                        break;
+                    }
+                }
+
+                VdFwXFree(styles);
+                VD_FW_G.input_style = best_match_style;
+                VD_FW_G.input_method = input_method;
+            }
+        }
     }
 
     VD_FW_G.wm_motif = VdFwXInternAtom(VD_FW_G.display, "_MOTIF_WM_HINTS", 0);
@@ -15443,6 +15527,32 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
 
                 VD_FW_G.last_key = fw_event.data.key_down.key;
                 VD_FW_G.evtbuf[VD_FW_G.num_evts++] = fw_event;
+
+                // Character Input
+                if (VD_FW_G.input_method && VD_FW_G.input_style) {
+                    char buf[5] = {0};
+                    Status status = 0;
+                    XKeyPressedEvent *key_event = &evt.xkey;
+                    VdFwXutf8LookupString(VD_FW_G.input_context, key_event, buf, 4, 0, &status);
+
+                    if (status == XLookupChars) {
+                        int len = 0;
+                        char *b = buf;
+                        while (*b) {
+                            len++;
+                            b++;
+                        }
+
+                        VdFwU32 codepoint = 0;
+                        int l = vd_fw__utf8_to_utf32((unsigned char*)buf, len, &codepoint);
+
+                        if (l != -1) {
+                            fw_event.type = VD_FW_EVENT_TYPE_CHARACTER;
+                            fw_event.data.character.codepoint = codepoint;
+                            VD_FW_G.evtbuf[VD_FW_G.num_evts++] = fw_event;
+                        }
+                    }
+                }
             } break;
 
             case KeyRelease: {
@@ -16421,6 +16531,16 @@ static int vd_fw__x11_recreate_window(Colormap colormap, XVisualInfo *vi_info)
         em.mask_len = sizeof(mask);
         em.mask = mask;
         VdFwXISelectEvents(VD_FW_G.display, DefaultRootWindow(VD_FW_G.display), &em, 1);
+    }
+
+    // Character Input
+    {
+        if (VD_FW_G.input_method && VD_FW_G.input_style) {
+            VD_FW_G.input_context = VdFwXCreateIC(VD_FW_G.input_method, XNInputStyle, VD_FW_G.input_style,
+                                                  XNClientWindow, VD_FW_G.window,
+                                                  XNFocusWindow, VD_FW_G.window,
+                                                  NULL);
+        }
     }
 
     return 1;
