@@ -1150,7 +1150,22 @@ VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_char(VdUiTextPoint pt, char *bu
         } else {
             new_pt.c++;
         }
-        new_pt.b++;
+
+        int codepoint_len = 0;
+        if ((buf[new_pt.b] & 0x80) == 0) {
+            codepoint_len = 1;
+        } else if ((buf[new_pt.b] & 0xE0) == 0xC0) {
+            codepoint_len = 2;
+        } else if ((buf[new_pt.b] & 0xF0) == 0xE0) {
+            codepoint_len = 3;
+        } else if ((buf[new_pt.b] & 0xF8) == 0xF0) {
+            codepoint_len = 4;
+        }
+
+        if ((new_pt.b + codepoint_len) <= len) {
+            new_pt.b += codepoint_len;
+        }
+
     } else if (new_pt.b > 0) {
 
         if (buf[new_pt.b - 1] == '\n') {
@@ -1169,6 +1184,21 @@ VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_char(VdUiTextPoint pt, char *bu
         }
 
         new_pt.b--;
+        int on_start_byte = 0;
+        while ((new_pt.b > 0) && !on_start_byte) {
+            if ((buf[new_pt.b] & 0x80) == 0) {
+                // ASCII codepoint
+                on_start_byte = 1;
+                break;
+            } else {
+                if ((buf[new_pt.b] & 0xf8) == 0xc0) {
+                    // Leading multibyte
+                    on_start_byte = 1;
+                    break;
+                }
+            }
+            new_pt.b--;
+        }
     }
 
     return new_pt;
@@ -1546,6 +1576,8 @@ static VdUiF4       vd_ui__lerp4(VdUiF4 a, VdUiF4 b, float t);
 static VdUiGradient vd_ui__lerpgrad(VdUiGradient a, VdUiGradient b, float t);
 static float        vd_ui__lerp_normal_hot_active1(float normal, float active, float hot, float hot_t, float active_t);
 static int          vd_ui__utf8decs(VdUiStr *str, unsigned int *out);
+static int          vd_ui__utf8decs2(VdUiStr *str, unsigned int *out);
+static size_t       vd_ui__utf32_to_utf8(uint32_t codepoint, unsigned char *out);
 
 static void         vd_ui__do_inspector(VdUiContext *ctx);
 static void         vd_ui__size_changed(VdUiContext *ctx, VdUiDiv *div);
@@ -1934,10 +1966,14 @@ VD_UI_API VdUiTextOp vd_ui_text_op_from_keystroke(VdUiKeyStroke keystroke, VdUiT
 
     if (keystroke.flags & VD_UI_KEYSTROKE_FLAG_CHAR) {
         // @todo(mdodis): unicode
-        char *s = (char*)vd_ui_mem_push(sizeof(char));
+        char buf[4];
+        int l = (int)vd_ui__utf32_to_utf8(keystroke.codepoint, (unsigned char*)buf);
+
+        char *s = (char*)vd_ui_mem_push(sizeof(char) * l);
         *s = (char)keystroke.codepoint;
         op.replace_str.s = s;
-        op.replace_str.l = 1;
+        op.replace_str.l = l;
+        printf("Codepoint is %.*s\n", l, buf);
 
         for (int j = 0; j < op.replace_str.l; ++j) {
             if (op.replace_str.s[j] == '\r') {
@@ -2054,7 +2090,7 @@ VD_UI_API void vd_ui_text_op_exec(VdUiTextOp op, VdUiSel *sel, char *buf, size_t
     if (op.replace_str.l > 0) {
         size_t space_remaining = capacity - (*len);
         if (op.replace_str.l > space_remaining) {
-            op.replace_str.l = space_remaining;
+            op.replace_str.l = (int)space_remaining;
         }
 
         if (space_remaining == 0) {
@@ -2554,8 +2590,12 @@ VD_UI_DRAW_PROC(vd_ui_text_box_draw)
     float caret_len = 16.f;
     float caret_h_len = caret_len * 0.5f;
 
-    for (int char_index = 0; char_index < (draw_data->str.l); ++char_index) {
-        unsigned int codepoint = (unsigned int)draw_data->str.s[char_index];
+    VdUiStr str = draw_data->str;
+    unsigned int codepoint = 0;
+
+    long long char_index = 0;
+    int last_l = 0;
+    while ((last_l = vd_ui__utf8decs2(&str, &codepoint)) != 0) {
 
         if (char_index == draw_data->sel.c.b) {
             caret_start[0] = rx;
@@ -2609,6 +2649,7 @@ VD_UI_DRAW_PROC(vd_ui_text_box_draw)
             }
         }
 
+        char_index += last_l;
 
         if (codepoint == '\n') {
             continue;
@@ -2692,7 +2733,7 @@ VD_UI_DRAW_PROC(vd_ui_text_box_draw)
 VD_UI_API int vd_ui_textbox(VdUiStr label, char *buf, size_t *len, size_t capacity)
 {
     VdUiContext *ctx = vd_ui_context_get();
-    VdUiColoring cursor_style = vd_ui_coloring_all4(vd_ui_f4(0.0, 0.7f, 1.f, 1.f));
+    // VdUiColoring cursor_style = vd_ui_coloring_all4(vd_ui_f4(0.0, 0.7f, 1.f, 1.f));
 
     VdUiDiv *box = vd_ui_div_new(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_CLICKABLE | VD_UI_FLAG_CLIP_CONTENT, label);
     box->style.padding[VD_UI_TOP] = 4.f;
@@ -2719,7 +2760,7 @@ VD_UI_API int vd_ui_textbox(VdUiStr label, char *buf, size_t *len, size_t capaci
     // ----
 
     VdUi__TextBoxDrawData *draw_data = (VdUi__TextBoxDrawData*)vd_ui_mem_push(sizeof(VdUi__TextBoxDrawData));
-    draw_data->str = vd_ui_str(buf, *len);
+    draw_data->str = vd_ui_str(buf, (int)*len);
     draw_data->sel = *sel;
 
     // Count newlines
@@ -3482,7 +3523,7 @@ VD_UI_API int vd_ui_demo(void)
 
             vd_ui_labelf(u8"Some unicode: ă x ă");
 
-            static char buf[64] = "a text \nbox";
+            static char buf[64] = u8"a ă x ă text \nbox";
             static size_t buf_len = 11;
             vd_ui_textbox(VD_UI_LIT("TextBox"), buf, &buf_len, sizeof(buf));
 
@@ -4773,6 +4814,62 @@ static int vd_ui__utf8decs(VdUiStr *str, unsigned int *out)
     return 1;
 }
 
+static int vd_ui__utf8decs2(VdUiStr *str, unsigned int *out)
+{
+    if (!str || str->l <= 0) return 0;
+
+    const unsigned char *s = (const unsigned char*)str->s;
+    unsigned char c = *s;
+    unsigned int cp;
+    int len;
+
+    if      ((c & 0x80) == 0x00) { len = 1; cp = c;        } // 1 (ASCII)
+    else if ((c & 0xe0) == 0xc0) { len = 2; cp = c & 0x1f; } // 2
+    else if ((c & 0xf0) == 0xe0) { len = 3; cp = c & 0x0f; } // 3
+    else if ((c & 0xf8) == 0xf0) { len = 4; cp = c & 0x07; } // 4
+    else                         { return 0;               } // Invalid leading byte
+
+    if (len > str->l) return 0;
+
+    for (int i = 1; i < len; ++i) {
+        unsigned char cc = s[i];
+        if ((cc & 0xc0) != 0x80) return 0;
+        cp = (cp << 6) | (cc & 0x3f);
+    }
+
+    str->s += len;
+    str->l -= len;
+    *out = cp;
+    return len;
+}
+
+static size_t vd_ui__utf32_to_utf8(uint32_t codepoint, unsigned char *out) {
+    if (codepoint <= 0x7F) {
+        out[0] = (unsigned char)codepoint;
+        return 1;
+    }
+    else if (codepoint <= 0x7FF) {
+        out[0] = 0xC0 | (unsigned char)(codepoint >> 6);
+        out[1] = 0x80 | (unsigned char)(codepoint & 0x3F);
+        return 2;
+    }
+    else if (codepoint <= 0xFFFF) {
+        out[0] = 0xE0 | (unsigned char)(codepoint >> 12);
+        out[1] = 0x80 | (unsigned char)((codepoint >> 6) & 0x3F);
+        out[2] = 0x80 | (unsigned char)(codepoint & 0x3F);
+        return 3;
+    }
+    else if (codepoint <= 0x10FFFF) {
+        out[0] = 0xF0 | (unsigned char)(codepoint >> 18);
+        out[1] = 0x80 | (unsigned char)((codepoint >> 12) & 0x3F);
+        out[2] = 0x80 | (unsigned char)((codepoint >> 6) & 0x3F);
+        out[3] = 0x80 | (unsigned char)(codepoint & 0x3F);
+        return 4;
+    }
+
+    return 0; // Invalid code point
+}
+
 /* ----CONTEXT CREATION IMPL----------------------------------------------------------------------------------------- */
 VD_UI_API void vd_ui_init(void)
 {
@@ -5921,6 +6018,7 @@ VD_UI_API int vd_ui_ws_nc_area_get(int nc_area_rect[4],
 
 static void vd_ui__size_changed(VdUiContext *ctx, VdUiDiv *div)
 {
+    (void)ctx;
     div->size_changed = 1;
     div->size_timeout_t = 1.f;
 }
