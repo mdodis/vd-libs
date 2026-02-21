@@ -63,7 +63,6 @@
  * - MacOS: Event Queue
  * - MacOS: vd_fw_get_key_released: Gets if the key was released this frame
  * - raw hat states
- * - OpenGL anti-alias setting
  * - OBS Studio breaks ChoosePixelFormat
  * - Make sure we can export functions properly for C++
  * - Expose customizable function pointer if the user needs to do something platform-specific before/after winthread has initialized or before vd_fw_init returns anyways.
@@ -468,21 +467,25 @@ typedef struct {
 } VdFwEventMouseDeltaData;
 
 typedef struct {
-    int     button;
+    int button;
 } VdFwEventMouseButtonDownData;
 
 typedef struct {
-    int     button;
+    int button;
 } VdFwEventMouseButtonUpData;
 
 typedef struct {
-    float   dx, dy;
+    float dx, dy;
 } VdFwEventMouseScrollData;
 
 typedef struct {
     int flag;
     int value;
 } VdFwEventWindowStateChangeData;
+
+typedef struct {
+    int connected;
+} VdFwEventGamepadStatusData;
 
 typedef union {
     VdFwEventCloseRequestData      close_request;
@@ -1346,15 +1349,17 @@ VD_FW_INL float vd_fw_tan(float x)
 
 VD_FW_INL float vd_fw_sqrt(float x)
 {
-    if (x <= 0.0f) return 0.0f; // Handle non-positive inputs safely
+    float g;
+
+    if (x <= 0.0f) {
+        return 0.0f;
+    }
 
     // Initial guess using bit manipulation
-    union { float f; unsigned int i; } u = { x };
-    u.i = (u.i >> 1) + 0x1fc00000; // Approximate initial guess for sqrt
+    unsigned int i = *(unsigned int*)(&x);
+    i = (i >> 1) + 0x1fc00000;
 
-    // One Newton–Raphson refinement step
-    // g = u.f is our initial guess
-    float g = u.f;
+    g = *(float*)(&i);
     g = 0.5f * (g + x / g);
 
     return g; 
@@ -1385,26 +1390,28 @@ VD_FW_INL void vd_fw_u_perspective(float fov, float aspect, float near, float fa
 
 VD_FW_INL void vd_fw_u_lookat(float eye[3], float target[3], float updir[3], float out[16])
 {
-    // Forward vector (camera looks along -Z)
-    float forward[3] = { target[0] - eye[0], target[1] - eye[1], target[2] - eye[2] };
+    float forward[3];
+    forward[0] = target[0] - eye[0];
+    forward[1] = target[1] - eye[1];
+    forward[2] = target[2] - eye[2];
+
     float f_len = VD_FW_SQRT(forward[0]*forward[0] + forward[1]*forward[1] + forward[2]*forward[2]);
     forward[0]/=f_len; forward[1]/=f_len; forward[2]/=f_len;
 
     // Left vector
-    float left[3] = {
-        updir[1]*forward[2] - updir[2]*forward[1],
-        updir[2]*forward[0] - updir[0]*forward[2],
-        updir[0]*forward[1] - updir[1]*forward[0]
-    };
+    float left[3];
+    left[0] = updir[1]*forward[2] - updir[2]*forward[1];
+    left[1] = updir[2]*forward[0] - updir[0]*forward[2];
+    left[2] = updir[0]*forward[1] - updir[1]*forward[0];
+
     float l_len = VD_FW_SQRT(left[0]*left[0] + left[1]*left[1] + left[2]*left[2]);
     left[0]/=l_len; left[1]/=l_len; left[2]/=l_len;
 
     // Recompute up vector
-    float up[3] = {
-        forward[1]*left[2] - forward[2]*left[1],
-        forward[2]*left[0] - forward[0]*left[2],
-        forward[0]*left[1] - forward[1]*left[0]
-    };
+    float up[3];
+    up[0] = forward[1]*left[2] - forward[2]*left[1];
+    up[1] = forward[2]*left[0] - forward[0]*left[2];
+    up[2] = forward[0]*left[1] - forward[1]*left[0];
 
     // Column-major matrix
     out[0] = left[0];      out[4] = left[1];     out[8]  = left[2];     out[12] = - (left[0]    * eye[0] + left[1]    * eye[1] + left[2]    * eye[2]);
@@ -1855,6 +1862,18 @@ typedef void *GLeglClientBufferEXT;
 typedef unsigned short GLhalfNV;
 
 /* ----GL CONSTANTS-------------------------------------------------------------------------------------------------- */
+#define GL_ALL_BARRIER_BITS 0xFFFFFFFF
+#define GL_ALL_BARRIER_BITS_EXT 0xFFFFFFFF
+#define GL_MULTISAMPLE_BUFFER_BIT7_QCOM 0x80000000
+#define GL_ALL_ATTRIB_BITS 0xFFFFFFFF
+#define GL_ALL_SHADER_BITS 0xFFFFFFFF
+#define GL_ALL_SHADER_BITS_EXT 0xFFFFFFFF
+#define GL_TEXCOORD4_BIT_PGI 0x80000000
+#define GL_INVALID_INDEX 0xFFFFFFFF
+#define GL_ALL_PIXELS_AMD 0xFFFFFFFF
+#define GL_QUERY_ALL_EVENT_BITS_AMD 0xFFFFFFFF
+#define GL_CLIENT_ALL_ATTRIB_BITS 0xFFFFFFFF
+
 enum {
     /* GetPName */                                                                        /* InternalFormat */                                        /* AttributeType */
     GL_CURRENT_COLOR                                                           = 0x0B00,  GL_STENCIL_INDEX_OES                             = 0x1901,  GL_FLOAT_VEC2                                = 0x8B50,
@@ -2755,9 +2774,9 @@ enum {
     GL_MULTISAMPLE_BUFFER_BIT2_QCOM = 0x04000000,  GL_TEXTURE26 = 0x84DA,  GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT     = 0x00004000,
     GL_MULTISAMPLE_BUFFER_BIT3_QCOM = 0x08000000,  GL_TEXTURE27 = 0x84DB,  GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT_EXT = 0x00004000,
     GL_MULTISAMPLE_BUFFER_BIT4_QCOM = 0x10000000,  GL_TEXTURE28 = 0x84DC,  GL_QUERY_BUFFER_BARRIER_BIT             = 0x00008000,
-    GL_MULTISAMPLE_BUFFER_BIT5_QCOM = 0x20000000,  GL_TEXTURE29 = 0x84DD,  GL_ALL_BARRIER_BITS                     = 0xFFFFFFFF,
-    GL_MULTISAMPLE_BUFFER_BIT6_QCOM = 0x40000000,  GL_TEXTURE30 = 0x84DE,  GL_ALL_BARRIER_BITS_EXT                 = 0xFFFFFFFF,
-    GL_MULTISAMPLE_BUFFER_BIT7_QCOM = 0x80000000,  GL_TEXTURE31 = 0x84DF,
+    GL_MULTISAMPLE_BUFFER_BIT5_QCOM = 0x20000000,  GL_TEXTURE29 = 0x84DD,  
+    GL_MULTISAMPLE_BUFFER_BIT6_QCOM = 0x40000000,  GL_TEXTURE30 = 0x84DE,  
+                                                   GL_TEXTURE31 = 0x84DF,
     /* ProgramResourceProperty */                      /* AttribMask */                       /* PrimitiveType */
     GL_IS_PER_PATCH                         = 0x92E7,  GL_CURRENT_BIT          = 0x00000001,  GL_POINTS                       = 0x0000,
     GL_NAME_LENGTH                          = 0x92F9,  GL_POINT_BIT            = 0x00000002,  GL_LINES                        = 0x0001,
@@ -2783,7 +2802,7 @@ enum {
     GL_TOP_LEVEL_ARRAY_STRIDE               = 0x930D,  GL_MULTISAMPLE_BIT_ARB  = 0x20000000,  GL_TRIANGLE_STRIP_ADJACENCY_ARB = 0x000D,
     GL_LOCATION                             = 0x930E,  GL_MULTISAMPLE_BIT_EXT  = 0x20000000,  GL_TRIANGLE_STRIP_ADJACENCY_EXT = 0x000D,
     GL_LOCATION_INDEX                       = 0x930F,  GL_MULTISAMPLE_BIT_3DFX = 0x20000000,  GL_PATCHES                      = 0x000E,
-    GL_LOCATION_COMPONENT                   = 0x934A,  GL_ALL_ATTRIB_BITS      = 0xFFFFFFFF,  GL_PATCHES_EXT                  = 0x000E,
+    GL_LOCATION_COMPONENT                   = 0x934A,                                         GL_PATCHES_EXT                  = 0x000E,
     GL_TRANSFORM_FEEDBACK_BUFFER_INDEX      = 0x934B,
     GL_TRANSFORM_FEEDBACK_BUFFER_STRIDE     = 0x934C,
     /* PixelFormat */             /* VertexShaderOpEXT */              /* PathMetricMask */
@@ -2830,8 +2849,8 @@ enum {
     GL_COLOR_ATTACHMENT13_EXT   = 0x8CED,  GL_PATH_COMMAND_COUNT_NV       = 0x909D,  GL_MESH_SHADER_BIT_EXT            = 0x00000040,
     GL_COLOR_ATTACHMENT14_EXT   = 0x8CEE,  GL_PATH_COORD_COUNT_NV         = 0x909E,  GL_TASK_SHADER_BIT_NV             = 0x00000080,
     GL_COLOR_ATTACHMENT15_EXT   = 0x8CEF,  GL_PATH_DASH_ARRAY_COUNT_NV    = 0x909F,  GL_TASK_SHADER_BIT_EXT            = 0x00000080,
-    GL_DEPTH_ATTACHMENT         = 0x8D00,  GL_PATH_COMPUTED_LENGTH_NV     = 0x90A0,  GL_ALL_SHADER_BITS                = 0xFFFFFFFF,
-    GL_DEPTH_ATTACHMENT_EXT     = 0x8D00,  GL_PATH_FILL_BOUNDING_BOX_NV   = 0x90A1,  GL_ALL_SHADER_BITS_EXT            = 0xFFFFFFFF,
+    GL_DEPTH_ATTACHMENT         = 0x8D00,  GL_PATH_COMPUTED_LENGTH_NV     = 0x90A0,  
+    GL_DEPTH_ATTACHMENT_EXT     = 0x8D00,  GL_PATH_FILL_BOUNDING_BOX_NV   = 0x90A1,  
     GL_DEPTH_ATTACHMENT_OES     = 0x8D00,  GL_PATH_STROKE_BOUNDING_BOX_NV = 0x90A2,
     GL_STENCIL_ATTACHMENT_EXT   = 0x8D20,  GL_PATH_DASH_OFFSET_RESET_NV   = 0x90B4,
     GL_STENCIL_ATTACHMENT_OES   = 0x8D20,
@@ -2874,7 +2893,7 @@ enum {
     GL_TESS_EVALUATION_SUBROUTINE_UNIFORM = 0x92F0,  GL_TEXCOORD1_BIT_PGI               = 0x10000000,  GL_SRC1_COLOR               = 0x88F9,
     GL_GEOMETRY_SUBROUTINE_UNIFORM        = 0x92F1,  GL_TEXCOORD2_BIT_PGI               = 0x20000000,  GL_ONE_MINUS_SRC1_COLOR     = 0x88FA,
     GL_FRAGMENT_SUBROUTINE_UNIFORM        = 0x92F2,  GL_TEXCOORD3_BIT_PGI               = 0x40000000,  GL_ONE_MINUS_SRC1_ALPHA     = 0x88FB,
-    GL_COMPUTE_SUBROUTINE_UNIFORM         = 0x92F3,  GL_TEXCOORD4_BIT_PGI               = 0x80000000,
+    GL_COMPUTE_SUBROUTINE_UNIFORM         = 0x92F3,
     GL_TRANSFORM_FEEDBACK_VARYING         = 0x92F4,
     /* GetPointervPName */                        /* ConvolutionParameter */                 /* BufferStorageMask */
     GL_FEEDBACK_BUFFER_POINTER         = 0x0DF0,  GL_CONVOLUTION_BORDER_MODE      = 0x8013,  GL_DYNAMIC_STORAGE_BIT           = 0x0100,
@@ -2901,8 +2920,8 @@ enum {
     GL_POST_CONVOLUTION_ALPHA_SCALE  = 0x801F,  GL_HISTOGRAM_FORMAT_EXT         = 0x8027,  GL_NONE_OES              = 0,
     GL_POST_CONVOLUTION_RED_BIAS     = 0x8020,  GL_HISTOGRAM_RED_SIZE           = 0x8028,  GL_TRUE                  = 1,
     GL_POST_CONVOLUTION_GREEN_BIAS   = 0x8021,  GL_HISTOGRAM_RED_SIZE_EXT       = 0x8028,  GL_ONE                   = 1,
-    GL_POST_CONVOLUTION_BLUE_BIAS    = 0x8022,  GL_HISTOGRAM_GREEN_SIZE         = 0x8029,  GL_INVALID_INDEX         = 0xFFFFFFFF,
-    GL_POST_CONVOLUTION_ALPHA_BIAS   = 0x8023,  GL_HISTOGRAM_GREEN_SIZE_EXT     = 0x8029,  GL_ALL_PIXELS_AMD        = 0xFFFFFFFF,
+    GL_POST_CONVOLUTION_BLUE_BIAS    = 0x8022,  GL_HISTOGRAM_GREEN_SIZE         = 0x8029,  
+    GL_POST_CONVOLUTION_ALPHA_BIAS   = 0x8023,  GL_HISTOGRAM_GREEN_SIZE_EXT     = 0x8029,  
     GL_POST_COLOR_MATRIX_RED_SCALE   = 0x80B4,  GL_HISTOGRAM_BLUE_SIZE          = 0x802A,  GL_TIMEOUT_IGNORED       = 0xFFFFFFFFFFFFFFFF,
     GL_POST_COLOR_MATRIX_GREEN_SCALE = 0x80B5,  GL_HISTOGRAM_BLUE_SIZE_EXT      = 0x802A,  GL_TIMEOUT_IGNORED_APPLE = 0xFFFFFFFFFFFFFFFF,
     GL_POST_COLOR_MATRIX_BLUE_SCALE  = 0x80B6,  GL_HISTOGRAM_ALPHA_SIZE         = 0x802B,  GL_VERSION_ES_CL_1_0     = 1,
@@ -3077,7 +3096,7 @@ enum {
     GL_DEBUG_SOURCE_WINDOW_SYSTEM   = 0x8247,  GL_UNSIGNED_BYTE  = 0x1401,  GL_MEDIUM_FLOAT = 0x8DF1,  GL_QUERY_DEPTH_FAIL_EVENT_BIT_AMD        = 0x00000002,
     GL_DEBUG_SOURCE_SHADER_COMPILER = 0x8248,  GL_SHORT          = 0x1402,  GL_HIGH_FLOAT   = 0x8DF2,  GL_QUERY_STENCIL_FAIL_EVENT_BIT_AMD      = 0x00000004,
     GL_DEBUG_SOURCE_THIRD_PARTY     = 0x8249,  GL_UNSIGNED_SHORT = 0x1403,  GL_LOW_INT      = 0x8DF3,  GL_QUERY_DEPTH_BOUNDS_FAIL_EVENT_BIT_AMD = 0x00000008,
-    GL_DEBUG_SOURCE_APPLICATION     = 0x824A,  GL_INT            = 0x1404,  GL_MEDIUM_INT   = 0x8DF4,  GL_QUERY_ALL_EVENT_BITS_AMD              = 0xFFFFFFFF,
+    GL_DEBUG_SOURCE_APPLICATION     = 0x824A,  GL_INT            = 0x1404,  GL_MEDIUM_INT   = 0x8DF4,  
     GL_DEBUG_SOURCE_OTHER           = 0x824B,  GL_UNSIGNED_INT   = 0x1405,  GL_HIGH_INT     = 0x8DF5,
     /* TransformFeedbackTokenNV */  /* PathColorFormat */         /* PixelTexGenModeSGIX */                  /* AccumOp */
     GL_NEXT_BUFFER_NV      = -2,    GL_RGB             = 0x1907,  GL_PIXEL_TEX_GEN_Q_CEILING_SGIX = 0x8184,  GL_ACCUM  = 0x0100,
@@ -3132,7 +3151,7 @@ enum {
     /* ProgramInterfacePName */                  /* ClientAttribMask */                    /* FragmentShaderColorModMaskATI */
     GL_ACTIVE_RESOURCES               = 0x92F5,  GL_CLIENT_PIXEL_STORE_BIT  = 0x00000001,  GL_COMP_BIT_ATI   = 0x00000002,
     GL_MAX_NAME_LENGTH                = 0x92F6,  GL_CLIENT_VERTEX_ARRAY_BIT = 0x00000002,  GL_NEGATE_BIT_ATI = 0x00000004,
-    GL_MAX_NUM_ACTIVE_VARIABLES       = 0x92F7,  GL_CLIENT_ALL_ATTRIB_BITS  = 0xFFFFFFFF,  GL_BIAS_BIT_ATI   = 0x00000008,
+    GL_MAX_NUM_ACTIVE_VARIABLES       = 0x92F7,                                            GL_BIAS_BIT_ATI   = 0x00000008,
     GL_MAX_NUM_COMPATIBLE_SUBROUTINES = 0x92F8,
     /* FoveationConfigBitQCOM */                                  /* MapTextureFormatINTEL */             /* TriangleListSUN */
     GL_FOVEATION_ENABLE_BIT_QCOM                   = 0x00000001,  GL_LAYOUT_DEFAULT_INTEL           = 0,  GL_RESTART_SUN        = 0x0001,
@@ -9592,13 +9611,12 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
                 int msaa         = gl_options->configs[index].msaa;
 
                 // Context attributes
-                int attribs[] = {
-                    WGL_CONTEXT_MAJOR_VERSION_ARB, major,
-                    WGL_CONTEXT_MINOR_VERSION_ARB, minor,
-                    WGL_CONTEXT_PROFILE_MASK_ARB,  (compat) ? WGL_CONTEXT_CORE_PROFILE_BIT_ARB : WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB,
-                    WGL_CONTEXT_FLAGS_ARB,         (debug)  ? WGL_CONTEXT_DEBUG_BIT_ARB : 0,
-                    0
-                };
+                int attribs[9];
+                attribs[0] = WGL_CONTEXT_MAJOR_VERSION_ARB; attribs[1] = major;
+                attribs[2] = WGL_CONTEXT_MINOR_VERSION_ARB; attribs[3] = minor;
+                attribs[4] = WGL_CONTEXT_PROFILE_MASK_ARB;  attribs[5] = (compat) ? WGL_CONTEXT_CORE_PROFILE_BIT_ARB : WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
+                attribs[6] = WGL_CONTEXT_FLAGS_ARB;         attribs[7] = (debug)  ? WGL_CONTEXT_DEBUG_BIT_ARB : 0;
+                attribs[8] = 0;
 
                 int running_attrib = 0;
                 int pixel_attribs[32] = {0};
@@ -10488,12 +10506,11 @@ static int vd_fw__hit_test(int x, int y)
 
         if (inside_caption) {
             for (int ri = 0; ri < VD_FW_G.ncrect_count; ++ri) {
-                int rect[4] = {
-                    VD_FW_G.ncrects[ri][0],
-                    VD_FW_G.ncrects[ri][1],
-                    VD_FW_G.ncrects[ri][2],
-                    VD_FW_G.ncrects[ri][3],
-                };
+                int rect[4];
+                rect[0] = VD_FW_G.ncrects[ri][0];
+                rect[1] = VD_FW_G.ncrects[ri][1];
+                rect[2] = VD_FW_G.ncrects[ri][2];
+                rect[3] = VD_FW_G.ncrects[ri][3];
 
                 int inside =
                     ((mouse.x >= rect[0]) && (mouse.x <= rect[2])) &&
@@ -11342,7 +11359,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             VdFwHANDLE device_handle = (VdFwHANDLE)lparam;
 
             if (wparam == GIDC_ARRIVAL) {
-                RID_DEVICE_INFO device_info;
+                VdFwRID_DEVICE_INFO device_info;
                 device_info.cbSize = sizeof(device_info);
                 UINT cb_size = sizeof(device_info);
                 UINT device_info_result = VdFwGetRawInputDeviceInfoA(
@@ -11440,9 +11457,9 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 VdFwGuid guid;
                 char *manufacturer_string = 0;
                 char *product_string = 0;
-                VdFwU16 vendor_id    = (VdFwU16)device_info.hid.dwVendorId;
-                VdFwU16 product_id   = (VdFwU16)device_info.hid.dwProductId;
-                VdFwU16 version      = (VdFwU16)device_info.hid.dwVersionNumber;
+                VdFwU16 vendor_id    = (VdFwU16)device_info.v.hid.dwVendorId;
+                VdFwU16 product_id   = (VdFwU16)device_info.v.hid.dwProductId;
+                VdFwU16 version      = (VdFwU16)device_info.v.hid.dwVersionNumber;
 
                 // Get Manufacturer String & Product String
                 {
@@ -16720,10 +16737,9 @@ VD_FW_API int vd_fw_compile_or_hotload_program(unsigned int *program, unsigned l
         needs_recompile = 1;
     }
 
-    const char *files[2] = {
-        vertex_file_path,
-        fragment_file_path,
-    };
+    const char *files[2];
+    files[0] = vertex_file_path;
+    files[1] = fragment_file_path;
 
     if (vd_fw__any_time_higher(2, files, last_compile)) {
         needs_recompile = 1;
