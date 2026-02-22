@@ -8443,14 +8443,6 @@ typedef VdFwBOOL  (*VdFwProcwglChoosePixelFormatARB)(VdFwHDC hdc, const int* piA
 #undef NOPROXYSTUB
 #undef NOIMAGE
 #undef NOTAPE
-#ifdef min
-#undef min
-#endif
-#ifdef max
-#undef max
-#endif
-#define min min
-#define max max
 #ifdef FAILED
 #undef FAILED
 #endif
@@ -10810,10 +10802,6 @@ static void vd_fw__win32_correlate_xinput_triggers(VdFw__Win32GamepadInfo *gamep
                 VD_FW_LOG("Gamepad correlated to XInput dwUserIndex: %d", i);
                 break;
             }
-        }
-
-        if (gamepad_info->xinput_index == -1) {
-            VD_FW_LOG("Failed to correlate game pad to xinput devices %d/4", total_xinput_devices_connected);
         }
     }
 
