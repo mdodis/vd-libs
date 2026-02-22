@@ -25,7 +25,7 @@
 #define VD_FC_H
 #define VD_FC_VERSION_MAJOR    0
 #define VD_FC_VERSION_MINOR    0
-#define VD_FC_VERSION_PATCH    2
+#define VD_FC_VERSION_PATCH    1
 #define VD_FC_VERSION          ((VD_FC_VERSION_MAJOR << 16) | (VD_FC_VERSION_MINOR << 8) | (VD_FC_VERSION_PATCH))
 
 #ifndef VD_FC_API
@@ -40,6 +40,8 @@
 #   define VD_FC_INL static inline
 #endif // VD_FC_INL
 
+#include <stdint.h>
+
 typedef enum {
     VD_FC_TYPE_INVALID = -1,
     VD_FC_TYPE_CONTROLLER = 0,
@@ -48,6 +50,7 @@ typedef enum {
 } VdFcType;
 
 typedef enum {
+    VD_FC_CLASS_INVALID = -1,
     VD_FC_CLASS_NES,
     // class:megadrive    | 1 PoV, 3 Control, 1 System
     VD_FC_CLASS_MEGADRIVE,
@@ -81,6 +84,21 @@ typedef enum {
     VD_FC_FACE_MAX,
 } VdFcFace;
 
+typedef union {
+    uint8_t dat[16];
+    struct {
+        uint16_t bus;
+        uint16_t crc;
+        uint16_t vendor_id;
+        uint16_t reserved0;
+        uint16_t product_id;
+        uint16_t reserved1;
+        uint16_t version;
+        uint8_t  driver_signature;
+        uint8_t  driver_data;
+    } parts;
+} VdFcGuid;
+
 /**
  * @brief Initialize the library.
  */
@@ -98,27 +116,117 @@ VD_FC_API void          vd_fc_poll(void);
 VD_FC_API int           vd_fc_count(void);
 
 /* ----DEVICE CHANGES------------------------------------------------------------------------------------------------ */
+/**
+ * @brief Get which device IDs where lost or disconnected
+ * @param  count (Optional) Count of IDs
+ * @return       The lost devices array
+ */
 VD_FC_API int*          vd_fc_dropped(int *count);
+
+/**
+ * @brief Get which device IDs where connected
+ * @param  count (Optional) Count of IDs
+ * @return       The connected devices array
+ */
 VD_FC_API int*          vd_fc_arrived(int *count);
 
 /* ----DEVICE PROPERTIES--------------------------------------------------------------------------------------------- */
+VD_FC_API VdFcGuid      vd_fc_guid(int id);
 VD_FC_API VdFcType      vd_fc_type(int id);
+VD_FC_API VdFcClass     vd_fc_class(int id);
 VD_FC_API int           vd_fc_button_count(int id);
 VD_FC_API int           vd_fc_hat_count(int id);
 VD_FC_API int           vd_fc_axis_count(int id);
 
-/* ----DEVICE INPUTS------------------------------------------------------------------------------------------------- */
-VD_FC_API unsigned int  vd_fc_raw_button_down(int id, int button_id);
-VD_FC_API unsigned int  vd_fc_raw_hat_value(int id, int hat_id);
-VD_FC_API unsigned int  vd_fc_raw_axis_value(int id, int axis_id);
+/* ----SYMBOLIC INPUTS----------------------------------------------------------------------------------------------- */
+typedef struct {
+    float         axes[34];
+    unsigned char buttons[136];
+} VdFcState;
 
 VD_FC_API int           vd_fc_button_down(int id, int sym_button_id);
 VD_FC_API unsigned int  vd_fc_button_press_count(int id, int sym_button_id);
 VD_FC_API float         vd_fc_axis_value(int id, int axis_id);
 
+/* ----RAW INPUTS---------------------------------------------------------------------------------------------------- */
+VD_FC_API unsigned int  vd_fc_raw_button_down(int id, int button_id);
+VD_FC_API unsigned int  vd_fc_raw_hat_value(int id, int hat_id);
+VD_FC_API long long     vd_fc_raw_axis_value(int id, int axis_id);
+
+/* ----MAPPINGS------------------------------------------------------------------------------------------------------ */
+typedef enum {
+    VD_FC_INPUT_TYPE_INVALID,
+
+    // Read as 0 - 1, Written as 0 - 1
+    VD_FC_INPUT_TYPE_BUTTON,
+
+    // Read as [min, max], Written as 0.f - 1.f
+    VD_FC_INPUT_TYPE_AXIS,
+
+    // Read based on op
+    // We only ever get input from here, and put it in the other two
+    VD_FC_INPUT_TYPE_HAT,
+} VdFcInputType;
+
+typedef enum {
+    VD_FC_OP_NONE = 0,
+    VD_FC_OP_INVERT = 1 << 0,
+} VdFcOp;
+
+typedef struct {
+    VdFcInputType type;       // Where to get/put the input (button, hat, axis)
+    int           index;      // At which index to get/put the input [0, 128)
+    long long     min_value;  // Min value of the reading
+    long long     max_value;  // Max value of the reading
+    VdFcOp        op;         // Additional processing
+} VdFcInputDesc;
+
+typedef struct {
+    VdFcInputType type;       // Where to get/put the input (button, hat, axis)
+    int           index;      // At which index to get/put the input [0, 128)
+} VdFcOutputDesc;
+
+typedef struct {
+    VdFcInputDesc  src;
+    VdFcOutputDesc dst;
+} VdFcMappingEntry;
+
+typedef struct {
+    int              num_entries;
+    VdFcMappingEntry entries[170];
+} VdFcMapping;
+
+typedef struct {
+    VdFcGuid    guid;
+    VdFcMapping map;
+} VdFcDbMapping;
+
+VD_FC_API void          vd_fc_mapping_add(VdFcMapping *mapping);
+
 #endif // !VD_FC_H
 
 #ifdef VD_FC_IMPL
+
+#define VD_FC_ENDIANNESS_LE 1
+#define VD_FC_ENDIANNESS_BE 0
+#ifndef VD_FC_ENDIANNESS
+#   if defined(_MSC_VER)
+#       if defined(_M_IX86) || defined(_M_X64) || defined(_M_ARM) || defined(_M_ARM64)
+#           define VD_FC_ENDIANNESS VD_FC_ENDIANNESS_LE
+#       else
+#           define VD_FC_ENDIANNESS VD_FC_ENDIANNESS_BE
+#       endif
+#   elif defined(__APPLE__)
+#       define VD_FC_ENDIANNESS VD_FC_ENDIANNESS_LE
+#   endif
+#endif // VD_FC_ENDIANESS
+
+#define VD_FC_SWAP16(x) ((uint16_t)((uint8_t)(x << 8) | (uint8_t)(x >> 8)))
+#if VD_FC_ENDIANNESS == VD_FC_ENDIANNESS_LE
+#   define VD_FC_SWAP16LE(x) (x)
+#else
+#   define VD_FC_SWAP16LE(x) VD_FC_SWAP16(x)
+#endif
 
 #ifndef VD_FC_LOG
 #   include <stdio.h>
@@ -753,54 +861,6 @@ struct VdFc__Win32_IDirectInputDevice8W { const VdFc__Win32_IDirectInputDevice8W
 #define VD_FC__WIN32_DIPROP_USERNAME                 VD_FC__WIN32_MAKEDIPROP(25)
 #define VD_FC__WIN32_DIPROP_TYPENAME                 VD_FC__WIN32_MAKEDIPROP(26)
 
-
-static VdFc__Win32_DIOBJECTDATAFORMAT Vd_Fc__Win32ObjectDataFormats[] = {
-    { &Vd_Fc__Win32_Guid_XAxis,               VD_FC__WIN32_DIJOFS_X,         VD_FC__WIN32_DIDFT_AXIS    |VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,VD_FC__WIN32_DIDOI_ASPECTPOSITION },
-    { &Vd_Fc__Win32_Guid_YAxis,               VD_FC__WIN32_DIJOFS_Y,         VD_FC__WIN32_DIDFT_AXIS    |VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,VD_FC__WIN32_DIDOI_ASPECTPOSITION },
-    { &Vd_Fc__Win32_Guid_ZAxis,               VD_FC__WIN32_DIJOFS_Z,         VD_FC__WIN32_DIDFT_AXIS    |VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,VD_FC__WIN32_DIDOI_ASPECTPOSITION },
-    { &Vd_Fc__Win32_Guid_RxAxis,              VD_FC__WIN32_DIJOFS_RX,        VD_FC__WIN32_DIDFT_AXIS    |VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,VD_FC__WIN32_DIDOI_ASPECTPOSITION },
-    { &Vd_Fc__Win32_Guid_RyAxis,              VD_FC__WIN32_DIJOFS_RY,        VD_FC__WIN32_DIDFT_AXIS    |VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,VD_FC__WIN32_DIDOI_ASPECTPOSITION },
-    { &Vd_Fc__Win32_Guid_RzAxis,              VD_FC__WIN32_DIJOFS_RZ,        VD_FC__WIN32_DIDFT_AXIS    |VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,VD_FC__WIN32_DIDOI_ASPECTPOSITION },
-    { &Vd_Fc__Win32_Guid_Slider,              VD_FC__WIN32_DIJOFS_SLIDER(0), VD_FC__WIN32_DIDFT_AXIS    |VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,VD_FC__WIN32_DIDOI_ASPECTPOSITION },
-    { &Vd_Fc__Win32_Guid_Slider,              VD_FC__WIN32_DIJOFS_SLIDER(1), VD_FC__WIN32_DIDFT_AXIS    |VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,VD_FC__WIN32_DIDOI_ASPECTPOSITION },
-    { &Vd_Fc__Win32_Guid_PoV,                 VD_FC__WIN32_DIJOFS_POV(0),    VD_FC__WIN32_DIDFT_POV     |VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { &Vd_Fc__Win32_Guid_PoV,                 VD_FC__WIN32_DIJOFS_POV(1),    VD_FC__WIN32_DIDFT_POV     |VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { &Vd_Fc__Win32_Guid_PoV,                 VD_FC__WIN32_DIJOFS_POV(2),    VD_FC__WIN32_DIDFT_POV     |VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { &Vd_Fc__Win32_Guid_PoV,                 VD_FC__WIN32_DIJOFS_POV(3),    VD_FC__WIN32_DIDFT_POV     |VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(0),     VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(1),     VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(2),     VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(3),     VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(4),     VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(5),     VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(6),     VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(7),     VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(8),     VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(9),     VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(10),    VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(11),    VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(12),    VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(13),    VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(14),    VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(15),    VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(16),    VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(17),    VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(18),    VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(19),    VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(20),    VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(21),    VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(22),    VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(23),    VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(24),    VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(25),    VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(26),    VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(27),    VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(28),    VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(29),    VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(30),    VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-    { NULL,VD_FC__WIN32_DIJOFS_BUTTON(31),    VD_FC__WIN32_DIDFT_BUTTON|     VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_ANYINSTANCE,0 },
-};
-
 static VdFc__Win32_DIOBJECTDATAFORMAT Vd_Fc__Win32_DIJOYSTATE2_Data_Formats[] = {
   { &Vd_Fc__Win32_Guid_XAxis,VD_FC__WIN32_DIJOFS_X,VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_AXIS|VD_FC__WIN32_DIDFT_ANYINSTANCE,0},
   { &Vd_Fc__Win32_Guid_YAxis,VD_FC__WIN32_DIJOFS_Y,VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_AXIS|VD_FC__WIN32_DIDFT_ANYINSTANCE,0},
@@ -968,6 +1028,41 @@ static VdFc__Win32_DIOBJECTDATAFORMAT Vd_Fc__Win32_DIJOYSTATE2_Data_Formats[] = 
   { &Vd_Fc__Win32_Guid_Slider,VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,rglFSlider[1]),VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_AXIS|VD_FC__WIN32_DIDFT_ANYINSTANCE,0},
 };
 
+static unsigned int Vd_Fc__Win32_DIJOYSTATE2_AxisOffsets[] = {
+  VD_FC__WIN32_DIJOFS_X,
+  VD_FC__WIN32_DIJOFS_Y,
+  VD_FC__WIN32_DIJOFS_Z,
+  VD_FC__WIN32_DIJOFS_RX,
+  VD_FC__WIN32_DIJOFS_RY,
+  VD_FC__WIN32_DIJOFS_RZ,
+  VD_FC__WIN32_DIJOFS_SLIDER(0),
+  VD_FC__WIN32_DIJOFS_SLIDER(1),
+  VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lVX),
+  VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lVY),
+  VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lVZ),
+  VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lVRx),
+  VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lVRy),
+  VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lVRz),
+  VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,rglVSlider[0]),
+  VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,rglVSlider[1]),
+  VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lAX),
+  VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lAY),
+  VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lAZ),
+  VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lARx),
+  VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lARy),
+  VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lARz),
+  VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,rglASlider[0]),
+  VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,rglASlider[1]),
+  VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lFX),
+  VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lFY),
+  VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lFZ),
+  VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lFRx),
+  VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lFRy),
+  VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lFRz),
+  VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,rglFSlider[0]),
+  VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,rglFSlider[1]),
+};
+
 static VdFc__Win32_DIDATAFORMAT Vd_Fc__Win32_DIJOYSTATE2_Data_Format = {
     sizeof(VdFc__Win32_DIDATAFORMAT),
     sizeof(VdFc__Win32_DIOBJECTDATAFORMAT),
@@ -990,6 +1085,7 @@ struct VdFc__Device {
     int                                 num_name;
     char                                name[VD_FC_DEVICE_NAME_MAX];
 
+    VdFcGuid                            guid;
     VdFcClass                           klass;
 };
 
@@ -1136,6 +1232,17 @@ VD_FC_API int *vd_fc_arrived(int *count)
     return Vd_Fc_G.devices_arrived;
 }
 
+VD_FC_API VdFcGuid vd_fc_guid(int id)
+{
+    VdFcGuid result = {0};
+
+    if (id < Vd_Fc_G.num_devices) {
+        result = Vd_Fc_G.devices[id].guid;
+    }
+
+    return result;
+}
+
 VD_FC_API VdFcType vd_fc_type(int id)
 {
     if (id < Vd_Fc_G.num_devices) {
@@ -1145,11 +1252,55 @@ VD_FC_API VdFcType vd_fc_type(int id)
     }
 }
 
+VD_FC_API VdFcClass vd_fc_class(int id)
+{
+    if (id < Vd_Fc_G.num_devices) {
+        return Vd_Fc_G.devices[id].klass;
+    } else {
+        return VD_FC_CLASS_INVALID;
+    }
+}
+
 VD_FC_API unsigned int vd_fc_raw_button_down(int id, int button_id)
 {
-    VdFc__Device *dev = &Vd_Fc_G.devices[id];
-    if (button_id < 128) {
-        return dev->state.rgbButtons[button_id];
+    if (id < Vd_Fc_G.num_devices) {
+        VdFc__Device *dev = &Vd_Fc_G.devices[id];
+        if (button_id < 128) {
+            return dev->state.rgbButtons[button_id];
+        } else {
+            return 0;
+        }
+    } else {
+        return 0;
+    }
+}
+
+VD_FC_API unsigned int vd_fc_raw_hat_value(int id, int hat_id)
+{
+    if (id < Vd_Fc_G.num_devices) {
+        VdFc__Device *dev = &Vd_Fc_G.devices[id];
+        if (hat_id < dev->num_hats) {
+            return dev->state.rgdwPOV[hat_id];
+        } else {
+            return 8;
+        }
+    } else {
+        return 8;
+    }
+}
+
+VD_FC_API long long vd_fc_raw_axis_value(int id, int axis_id)
+{
+    if (id < Vd_Fc_G.num_devices) {
+        VdFc__Device *dev = &Vd_Fc_G.devices[id];
+
+        if (axis_id < dev->num_axes) {
+            VdFcLONG *rd_value = (VdFcLONG*)(((unsigned char*)&dev->state) + Vd_Fc__Win32_DIJOYSTATE2_AxisOffsets[axis_id]);
+            return *rd_value;
+        } else {
+            return 0;
+        }
+
     } else {
         return 0;
     }
@@ -1191,12 +1342,14 @@ static VdFcBOOL vd_fc__win32_dinput_enum_devices(VdFc__Win32_LPDIDEVICEINSTANCEW
 
                     if (device->lpVtbl->Acquire(device) == 0) {
                         int id;
-                        VdFc__Device *fc_device  = vd_fc__win32_alloc_device(&id);
-                        fc_device->dinput_device = device;
-                        fc_device->num_buttons   = caps.dwButtons;
-                        fc_device->num_hats      = caps.dwPOVs;
-                        fc_device->num_axes      = caps.dwAxes;
-                        fc_device->present       = 1;
+                        VdFcGuid guid;
+                        VdFc__Device *fc_device         = vd_fc__win32_alloc_device(&id);
+                        fc_device->dinput_device        = device;
+                        fc_device->num_buttons          = caps.dwButtons;
+                        fc_device->num_hats             = caps.dwPOVs;
+                        fc_device->num_axes             = caps.dwAxes;
+                        fc_device->present              = 1;
+                        fc_device->dinput_instance_guid = inst->guidInstance;
 
                         fc_device->num_name = WideCharToMultiByte(65001 /*CP_UTF8*/, 0,
                                                                   inst->tszInstanceName, -1,
@@ -1206,19 +1359,45 @@ static VdFcBOOL vd_fc__win32_dinput_enum_devices(VdFc__Win32_LPDIDEVICEINSTANCEW
                             VD_FC_MEMCPY(fc_device->name, "Unknown Device", 14);
                             fc_device->num_name = 14;
                         }
-
-                        fc_device->dinput_instance_guid = inst->guidInstance;
                         fc_device->name[fc_device->num_name] = 0;
+
+                        if (VD_FC_MEMCMP(&inst->guidProduct.Data4[2], "PIDVID", 6) == 0) {
+                            uint16_t vid = (inst->guidProduct.Data1 & 0x0000FFFF);
+                            uint16_t pid = (inst->guidProduct.Data1 & 0xFFFF0000) >> 16;
+                            uint16_t bus = 0x03;
+                            guid.parts.bus              = VD_FC_SWAP16LE(bus);
+                            guid.parts.crc              = 0x0000;
+                            guid.parts.vendor_id        = VD_FC_SWAP16LE(vid);
+                            guid.parts.reserved0        = 0x0000;
+                            guid.parts.product_id       = VD_FC_SWAP16LE(pid);
+                            guid.parts.reserved1        = 0x0000;
+                            guid.parts.version          = 0x0000;
+                            guid.parts.driver_signature = 0x00;
+                            guid.parts.driver_data      = 0x00;
+                        } else {
+                            uint16_t bus = 0x05;
+                            guid.parts.bus = VD_FC_SWAP16LE(bus);
+                            guid.parts.crc = 0x0000;
+                            for (int i = 0; i < 11; ++i) {
+                                guid.dat[4 + i] = fc_device->name[i];
+                            }
+                        }
+                        fc_device->guid = guid;
 
                         vd_fc_device_classify_auto(fc_device);
 
                         Vd_Fc_G.devices_arrived[Vd_Fc_G.num_devices_arrived++] = id;
 
-                        VD_FC_LOG("Device initialized: %S %S", inst->tszProductName, inst->tszInstanceName);
+                        VD_FC_LOG("Device initialized: '%s'", fc_device->name);
                         VD_FC_LOG("           Buttons: %d", caps.dwButtons);
                         VD_FC_LOG("              Hats: %d", caps.dwPOVs);
                         VD_FC_LOG("              Axes: %d", caps.dwAxes);
                         VD_FC_LOG("             class: %s", vd_fc_class_str(fc_device->klass));
+                        VD_FC_LOG("              GUID: %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+                                                       guid.dat[0],  guid.dat[1],  guid.dat[2],  guid.dat[3],
+                                                       guid.dat[4],  guid.dat[5],  guid.dat[6],  guid.dat[7],
+                                                       guid.dat[8],  guid.dat[9],  guid.dat[10], guid.dat[11],
+                                                       guid.dat[12], guid.dat[13], guid.dat[14], guid.dat[15]);
                     } else {
                         VD_FC_LOG("Error. Device could not be acquired.");
                     }
