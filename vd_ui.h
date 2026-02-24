@@ -683,10 +683,17 @@ VD_UI_API void             vd_ui_style_size_push(VdUiAxis axis, VdUiSizeMode mod
 VD_UI_API VdUiSize*        vd_ui_style_size_get(VdUiAxis axis);
 VD_UI_API void             vd_ui_style_size_pop(VdUiAxis axis);
 
+VD_UI_API void             vd_ui_style_padding_push(int pos, float value);
+VD_UI_API void             vd_ui_style_padding_push4(float left, float top, float right, float bottom);
+VD_UI_API void             vd_ui_style_padding_all(float value);
+VD_UI_API float            vd_ui_style_padding_get(int pos);
+VD_UI_API void             vd_ui_style_padding_pop(int pos);
+VD_UI_API void             vd_ui_style_padding_pop_all(void);
+
 VD_UI_INL void             vd_ui_style_size_push_all(VdUiSizeMode mode, float value, float niceness);
 VD_UI_INL void             vd_ui_style_size_pop_all(void);
 
-VD_UI_API void             vd_ui_style_coloring_push(VdUiFlags mask, VdUiColoring *coloring);
+VD_UI_API void             vd_ui_style_coloring_push(VdUiFlags mask, VdUiColoring coloring);
 VD_UI_API VdUiColoring*    vd_ui_style_coloring_get(VdUiFlags mask);
 VD_UI_API void             vd_ui_style_coloring_pop(VdUiFlags mask);
 VD_UI_API VdUiColoring     vd_ui_coloring(VdUiGradient normal, VdUiGradient hot, VdUiGradient active);
@@ -1495,6 +1502,10 @@ static VdUiColoring  Vd_Ui__Coloring_Tx_Default;
 #   define VD_UI_STYLE_FONT_SIZE_STACK_COUNT    32
 #endif // !VD_UI_STYLE_FONT_SIZE_STACK_COUNT
 
+#ifndef VD_UI_STYLE_PADDING_STACK_COUNT
+#   define VD_UI_STYLE_PADDING_STACK_COUNT      32
+#endif // !VD_UI_STYLE_PADDING_STACK_COUNT
+
 #ifndef VD_UI_KEYSTROKES_MAX
 #   define VD_UI_KEYSTROKES_MAX 16
 #endif // !VD_UI_KEYSTROKES_MAX
@@ -1772,6 +1783,9 @@ struct VdUiContext {
 
     unsigned int            font_size_stack_count;
     float                   font_size_stack[VD_UI_STYLE_FONT_SIZE_STACK_COUNT];    // Text Font Size
+
+    unsigned int            padding_stack_count[4];
+    float                   padding_stack[4][VD_UI_STYLE_PADDING_STACK_COUNT];
 
     // Stored to differentiate between passes
     VdUiTextureId          *current_texture_id;
@@ -3180,18 +3194,22 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     }
 
     // Resolve styles
-    result->style.size[VD_UI_AXISH] = *vd_ui_style_size_get(VD_UI_AXISH);
-    result->style.size[VD_UI_AXISV] = *vd_ui_style_size_get(VD_UI_AXISV);
-    result->style.background.normal = vd_ui_style_coloring_get(VD_UI_FLAG_BACKGROUND)->normal;
-    result->style.background.hot    = vd_ui_style_coloring_get(VD_UI_FLAG_BACKGROUND)->hot;
-    result->style.background.active = vd_ui_style_coloring_get(VD_UI_FLAG_BACKGROUND)->active;
-    result->style.border.normal     = vd_ui_style_coloring_get(VD_UI_FLAG_BORDER)->normal;
-    result->style.border.hot        = vd_ui_style_coloring_get(VD_UI_FLAG_BORDER)->hot;
-    result->style.border.active     = vd_ui_style_coloring_get(VD_UI_FLAG_BORDER)->active;
-    result->style.text.normal       = vd_ui_style_coloring_get(VD_UI_FLAG_TEXT)->normal;
-    result->style.text.hot          = vd_ui_style_coloring_get(VD_UI_FLAG_TEXT)->hot;
-    result->style.text.active       = vd_ui_style_coloring_get(VD_UI_FLAG_TEXT)->active;
-    result->style.text.font_size    = vd_ui_style_font_size_get() * ctx->dpi_scale;
+    result->style.size[VD_UI_AXISH]     = *vd_ui_style_size_get(VD_UI_AXISH);
+    result->style.size[VD_UI_AXISV]     = *vd_ui_style_size_get(VD_UI_AXISV);
+    result->style.background.normal     = vd_ui_style_coloring_get(VD_UI_FLAG_BACKGROUND)->normal;
+    result->style.background.hot        = vd_ui_style_coloring_get(VD_UI_FLAG_BACKGROUND)->hot;
+    result->style.background.active     = vd_ui_style_coloring_get(VD_UI_FLAG_BACKGROUND)->active;
+    result->style.border.normal         = vd_ui_style_coloring_get(VD_UI_FLAG_BORDER)->normal;
+    result->style.border.hot            = vd_ui_style_coloring_get(VD_UI_FLAG_BORDER)->hot;
+    result->style.border.active         = vd_ui_style_coloring_get(VD_UI_FLAG_BORDER)->active;
+    result->style.text.normal           = vd_ui_style_coloring_get(VD_UI_FLAG_TEXT)->normal;
+    result->style.text.hot              = vd_ui_style_coloring_get(VD_UI_FLAG_TEXT)->hot;
+    result->style.text.active           = vd_ui_style_coloring_get(VD_UI_FLAG_TEXT)->active;
+    result->style.text.font_size        = vd_ui_style_font_size_get() * ctx->dpi_scale;
+    result->style.padding[VD_UI_LEFT]   = vd_ui_style_padding_get(VD_UI_LEFT);
+    result->style.padding[VD_UI_TOP]    = vd_ui_style_padding_get(VD_UI_TOP);
+    result->style.padding[VD_UI_RIGHT]  = vd_ui_style_padding_get(VD_UI_RIGHT);
+    result->style.padding[VD_UI_BOTTOM] = vd_ui_style_padding_get(VD_UI_BOTTOM);
     return result;
 }
 
@@ -3361,23 +3379,87 @@ VD_UI_API void vd_ui_style_size_pop(VdUiAxis axis)
     (*stack_count)--;
 }
 
-VD_UI_API void vd_ui_style_coloring_push(VdUiFlags mask, VdUiColoring *coloring)
+VD_UI_API void vd_ui_style_padding_push(int pos, float value)
+{
+    VD_UI_ASSERT((pos >= 0) && (pos < 4));
+
+    VdUiContext *ctx = vd_ui_context_get();
+    unsigned int *stack_count = &ctx->padding_stack_count[pos];
+    float *stack              = ctx->padding_stack[pos];
+
+    VD_UI_ASSERT((*stack_count) < VD_UI_STYLE_PADDING_STACK_COUNT);
+
+    stack[(*stack_count)] = value;
+    (*stack_count)++;
+}
+
+VD_UI_API void vd_ui_style_padding_push4(float left, float top, float right, float bottom)
+{
+    vd_ui_style_padding_push(VD_UI_LEFT, left);
+    vd_ui_style_padding_push(VD_UI_TOP, top);
+    vd_ui_style_padding_push(VD_UI_RIGHT, right);
+    vd_ui_style_padding_push(VD_UI_BOTTOM, bottom);
+
+}
+
+VD_UI_API void vd_ui_style_padding_all(float value)
+{
+    vd_ui_style_padding_push(VD_UI_LEFT, value);
+    vd_ui_style_padding_push(VD_UI_TOP, value);
+    vd_ui_style_padding_push(VD_UI_RIGHT, value);
+    vd_ui_style_padding_push(VD_UI_BOTTOM, value);
+}
+
+VD_UI_API float vd_ui_style_padding_get(int pos)
+{
+    VD_UI_ASSERT((pos >= 0) && (pos < 4));
+
+    VdUiContext *ctx = vd_ui_context_get();
+    unsigned int *stack_count = &ctx->padding_stack_count[pos];
+    float *stack              = ctx->padding_stack[pos];
+
+    if ((*stack_count) > 0) {
+        return stack[(*stack_count) - 1];
+    } else {
+        return 0.f;
+    }
+}
+
+VD_UI_API void vd_ui_style_padding_pop(int pos)
+{
+    VD_UI_ASSERT((pos >= 0) && (pos < 4));
+    VdUiContext *ctx = vd_ui_context_get();
+    unsigned int *stack_count = &ctx->padding_stack_count[pos];
+
+    VD_UI_ASSERT((*stack_count) > 0);
+    (*stack_count)--;
+}
+
+VD_UI_API void vd_ui_style_padding_pop_all(void)
+{
+    vd_ui_style_padding_pop(VD_UI_LEFT);
+    vd_ui_style_padding_pop(VD_UI_RIGHT);
+    vd_ui_style_padding_pop(VD_UI_TOP);
+    vd_ui_style_padding_pop(VD_UI_BOTTOM);
+}
+
+VD_UI_API void vd_ui_style_coloring_push(VdUiFlags mask, VdUiColoring coloring)
 {
     VdUiContext *ctx = vd_ui_context_get();
 
     if (mask & VD_UI_FLAG_BACKGROUND) {
         VD_UI_ASSERT(ctx->coloring_bg_stack_count < VD_UI_STYLE_COLORING_STACK_COUNT);
-        ctx->coloring_bg_stack[ctx->coloring_bg_stack_count++] = *coloring;
+        ctx->coloring_bg_stack[ctx->coloring_bg_stack_count++] = coloring;
     }
 
     if (mask & VD_UI_FLAG_BORDER) {
         VD_UI_ASSERT(ctx->coloring_bd_stack_count < VD_UI_STYLE_COLORING_STACK_COUNT);
-        ctx->coloring_bd_stack[ctx->coloring_bd_stack_count++] = *coloring;
+        ctx->coloring_bd_stack[ctx->coloring_bd_stack_count++] = coloring;
     }
 
     if (mask & VD_UI_FLAG_TEXT) {
         VD_UI_ASSERT(ctx->coloring_tx_stack_count < VD_UI_STYLE_COLORING_STACK_COUNT);
-        ctx->coloring_tx_stack[ctx->coloring_tx_stack_count++] = *coloring;
+        ctx->coloring_tx_stack[ctx->coloring_tx_stack_count++] = coloring;
     }
 }
 
@@ -3761,6 +3843,8 @@ static void vd_ui__calc_dyn_size_down(VdUiContext *ctx, VdUiDiv *curr)
         switch (curr->style.size[i].mode) {
 
             case VD_UI_SIZE_MODE_CONTAIN_CHILDREN: {
+
+                full_size[i] += curr->style.padding[i] + curr->style.padding[i * 2];
 
                 if (!vd_ui__float_eq(curr->comp_size[i], full_size[i])) {
                     vd_ui__size_changed(ctx, curr);
@@ -6241,7 +6325,7 @@ int vd_ui__arena_free(VdUi__Arena *a, void *memory, size_t size)
 }
 
 /* ----INTEGRATION - OPENGL IMPL------------------------------------------------------------------------------------- */
-#define VD_UI_GL_VERTEX_SHADER_SOURCE                                                                                  \
+#define VD_UI_GL_VERTEX_SHADER_SOURCE \
 "#version 330 core                                                                                                 \n" \
 "layout (location = 0) in vec2 a_p0;                                                                               \n" \
 "layout (location = 1) in vec2 a_p1;                                                                               \n" \
@@ -6297,112 +6381,60 @@ int vd_ui__arena_free(VdUi__Arena *a, void *memory, size_t size)
 "    f_border_thickness = a_border_thickness;                                                                      \n" \
 "}                                                                                                                 \n" \
 
-#define VD_UI_GL_FRAGMENT_SHADER_SOURCE                                                                                  \
-"#version 330 core                                                                                                   \n" \
-"in vec4 f_color;                                                                                                    \n" \
-"in vec2 f_uv;                                                                                                       \n" \
-"in float f_amix;                                                                                                    \n" \
-"in vec2  f_dp;                                                                                                      \n" \
-"in vec2  f_dc;                                                                                                      \n" \
-"in vec2  f_dhs;                                                                                                     \n" \
-"in float f_corner_radius;                                                                                           \n" \
-"in float f_edge_softness;                                                                                           \n" \
-"in float f_border_thickness;                                                                                        \n" \
-"                                                                                                                    \n" \
-"uniform sampler2D uTexture;                                                                                         \n" \
-"uniform vec2 uResolution;                                                                                           \n" \
-"uniform vec2 uMouse;                                                                                                \n" \
-"                                                                                                                    \n" \
-"out vec4 FragColor;                                                                                                 \n" \
-"                                                                                                                    \n" \
-"float sdf_rounded_rect(vec2 sample_pos, vec2 rect_center, vec2 rect_half_size, float r) {                           \n" \
-"    vec2 d2 = (abs(rect_center - sample_pos) - rect_half_size + vec2(r, r));                                        \n" \
-"    return min(max(d2.x, d2.y), 0.0) + length(max(d2, 0.0)) - r;                                                    \n" \
-"}                                                                                                                   \n" \
-"                                                                                                                    \n" \
-"float smoothFalloff(float distance, float radius, float softness) {                                                 \n" \
-"    return 1.0 - smoothstep(radius - softness, radius + softness, distance);                                        \n" \
-"}                                                                                                                   \n" \
-"                                                                                                                    \n" \
-"float radialGlow(vec2 fragPos, vec2 glowCenter, float radius, float intensity) {                                    \n" \
-"    float dist = length(fragPos - glowCenter);                                                                      \n" \
-"    return intensity * exp(-dist * dist / (radius * radius));                                                       \n" \
-"}                                                                                                                   \n" \
-"                                                                                                                    \n" \
-"void main()                                                                                                         \n" \
-"{                                                                                                                   \n" \
-"    // === Tunable parameters ===                                                                                   \n" \
-"    float softnessScale       = 2.0;    // Multiplier for edge softness padding                                     \n" \
-"    float glowInnerFactor     = 0.2;    // Inner glow radius relative to rect size                                  \n" \
-"    float glowOuterFactor     = 0.3;    // Outer glow radius relative to rect size                                  \n" \
-"    float glowInnerIntensity  = 0.4;    // Strength of inner glow                                                   \n" \
-"    float glowOuterIntensity  = 0.2;    // Strength of outer glow                                                   \n" \
-"    float edgeEnhanceScale    = 0.1;    // Scale for edge distance normalization                                    \n" \
-"    float edgeEnhanceBoost    = 0.5;    // Boost factor for edge proximity effect                                   \n" \
-"    float glowColorBlendScale = 0.3;    // How much warm/cool glow mix varies                                       \n" \
-"    float glowStrength        = 0.1;    // Overall glow strength multiplier                                         \n" \
-"    float colorTempShift      = 0.2;    // Subtle color temperature mix factor                                      \n" \
-"    float brightnessBoost     = 0.1;    // Brightness boost based on glow intensity                                 \n" \
-"                                                                                                                    \n" \
-"    vec3 coolGlow = vec3(0.9, 0.95, 1.0);                                                                           \n" \
-"    vec3 warmGlow = vec3(1.0, 0.9, 0.8);                                                                            \n" \
-"                                                                                                                    \n" \
-"    // === Rounded rect SDF with edge softness ===                                                                  \n" \
-"    vec2 softness_padding = vec2(max(0, f_edge_softness * 2 - 1.0));                                                \n" \
-"    float dist = sdf_rounded_rect(f_dp, f_dc, f_dhs - softness_padding, f_corner_radius);                           \n" \
-"    float border_factor = 1.0;                                                                                      \n" \
-"    if (f_border_thickness != 0.0) {                                                                                \n" \
-"        vec2 interior_hs = f_dhs - vec2(f_border_thickness);                                                        \n" \
-"                                                                                                                    \n" \
-"        float interior_radius_reduce_f = min(interior_hs.x / f_dhs.x, interior_hs.y / f_dhs.y);                     \n" \
-"        float interior_corner_radius = f_corner_radius * interior_radius_reduce_f * interior_radius_reduce_f;       \n" \
-"                                                                                                                    \n" \
-"        float inside_d = sdf_rounded_rect(f_dp, f_dc, interior_hs - softness_padding, interior_corner_radius);      \n" \
-"                                                                                                                    \n" \
-"        float inside_f = smoothstep(0, 2 * f_edge_softness, inside_d);                                              \n" \
-"        border_factor = inside_f;                                                                                   \n" \
-"    }                                                                                                               \n" \
-"    float sdf = 1.0 - smoothstep(0.0, 2.0 * f_edge_softness, dist);                                                 \n" \
-"                                                                                                                    \n" \
-"                                                                                                                    \n" \
-"    // === Base color sampling and mask ===                                                                         \n" \
-"    vec4 sample = texture(uTexture, f_uv);                                                                          \n" \
-"    vec4 normal_color = sample * f_color;                                                                           \n" \
-"    vec4 mask_color = vec4(f_color.rgb, f_color.a * sample.r);                                                      \n" \
-"    vec4 color = mix(normal_color, mask_color, f_amix);                                                             \n" \
-"                                                                                                                    \n" \
-"    // === Mouse inside check ===                                                                                   \n" \
-"    vec2 mouseLocal = uMouse - f_dc;                                                                                \n" \
-"    float insideX = step(abs(mouseLocal.x), f_dhs.x);                                                               \n" \
-"    float insideY = step(abs(mouseLocal.y), f_dhs.y);                                                               \n" \
-"    float mouseInside = insideX * insideY;                                                                          \n" \
-"                                                                                                                    \n" \
-"    // === Glow calculations ===                                                                                    \n" \
-"    float glowRadius1 = length(f_dhs) * glowInnerFactor;                                                            \n" \
-"    float glowRadius2 = length(f_dhs) * glowOuterFactor;                                                            \n" \
-"    float glow1 = radialGlow(f_dp, uMouse, glowRadius1, glowInnerIntensity);                                        \n" \
-"    float glow2 = radialGlow(f_dp, uMouse, glowRadius2, glowOuterIntensity);                                        \n" \
-"    float combinedGlow = glow1 + glow2;                                                                             \n" \
-"                                                                                                                    \n" \
-"    float mouseDistance = length(f_dp - uMouse);                                                                    \n" \
-"    float maxDistance = length(f_dhs);                                                                              \n" \
-"    float proximityFactor = 1.0 - clamp(mouseDistance / maxDistance, 0.0, 1.0);                                     \n" \
-"                                                                                                                    \n" \
-"    float edgeDistance = sdf_rounded_rect(f_dp, f_dc, f_dhs, f_corner_radius);                                      \n" \
-"    float edgeFactor = 1.0 - clamp(abs(edgeDistance) / (length(f_dhs) * edgeEnhanceScale), 0.0, 1.0);               \n" \
-"                                                                                                                    \n" \
-"    float finalGlowIntensity = combinedGlow * proximityFactor * (1.0 + edgeFactor * edgeEnhanceBoost) * mouseInside;\n" \
-"                                                                                                                    \n" \
-"    float colorMix = sin(atan(mouseLocal.y, mouseLocal.x) * 2.0) * 0.5 + 0.5;                                       \n" \
-"    vec3 finalGlowColor = mix(coolGlow, warmGlow, colorMix * glowColorBlendScale);                                  \n" \
-"                                                                                                                    \n" \
-"    // Apply glow and color effects                                                                                 \n" \
-"    color.rgb += finalGlowColor * finalGlowIntensity * glowStrength;                                                \n" \
-"    color.rgb = mix(color.rgb, color.rgb * vec3(1.05, 1.0, 0.95), finalGlowIntensity * colorTempShift);             \n" \
-"    color.rgb *= (1.0 + finalGlowIntensity * brightnessBoost);                                                      \n" \
-"                                                                                                                    \n" \
-"    FragColor = color * sdf * border_factor;                                                                        \n" \
-"}                                                                                                                   \n" \
+#define VD_UI_GL_FRAGMENT_SHADER_SOURCE \
+"#version 330 core                                                                                                 \n" \
+"in vec4 f_color;                                                                                                  \n" \
+"in vec2 f_uv;                                                                                                     \n" \
+"in float f_amix;                                                                                                  \n" \
+"in vec2  f_dp;                                                                                                    \n" \
+"in vec2  f_dc;                                                                                                    \n" \
+"in vec2  f_dhs;                                                                                                   \n" \
+"in float f_corner_radius;                                                                                         \n" \
+"in float f_edge_softness;                                                                                         \n" \
+"in float f_border_thickness;                                                                                      \n" \
+"                                                                                                                  \n" \
+"uniform sampler2D uTexture;                                                                                       \n" \
+"uniform vec2 uResolution;                                                                                         \n" \
+"uniform vec2 uMouse;                                                                                              \n" \
+"                                                                                                                  \n" \
+"out vec4 FragColor;                                                                                               \n" \
+"                                                                                                                  \n" \
+"float sdf_rounded_rect(vec2 sample_pos, vec2 rect_center, vec2 rect_half_size, float r) {                         \n" \
+"    vec2 d2 = (abs(rect_center - sample_pos) - rect_half_size + vec2(r, r));                                      \n" \
+"    return min(max(d2.x, d2.y), 0.0) + length(max(d2, 0.0)) - r;                                                  \n" \
+"}                                                                                                                 \n" \
+"                                                                                                                  \n" \
+"float smoothFalloff(float distance, float radius, float softness) {                                               \n" \
+"    return 1.0 - smoothstep(radius - softness, radius + softness, distance);                                      \n" \
+"}                                                                                                                 \n" \
+"                                                                                                                  \n" \
+"void main()                                                                                                       \n" \
+"{                                                                                                                 \n" \
+"    vec2 softness_padding = vec2(max(0, f_edge_softness * 2 - 1.0));                                              \n" \
+"    float dist = sdf_rounded_rect(f_dp, f_dc, f_dhs - softness_padding, f_corner_radius);                         \n" \
+"    float border_factor = 1.0;                                                                                    \n" \
+"    if (f_border_thickness != 0.0) {                                                                              \n" \
+"        vec2 interior_hs = f_dhs - vec2(f_border_thickness);                                                      \n" \
+"                                                                                                                  \n" \
+"        float interior_radius_reduce_f = min(interior_hs.x / f_dhs.x, interior_hs.y / f_dhs.y);                   \n" \
+"        float interior_corner_radius = f_corner_radius * interior_radius_reduce_f * interior_radius_reduce_f;     \n" \
+"                                                                                                                  \n" \
+"        float inside_d = sdf_rounded_rect(f_dp, f_dc, interior_hs - softness_padding, interior_corner_radius);    \n" \
+"                                                                                                                  \n" \
+"        float inside_f = smoothstep(0, 2 * f_edge_softness, inside_d);                                            \n" \
+"        border_factor = inside_f;                                                                                 \n" \
+"    }                                                                                                             \n" \
+"    float sdf = 1.0 - smoothstep(0.0, 2.0 * f_edge_softness, dist);                                               \n" \
+"                                                                                                                  \n" \
+"                                                                                                                  \n" \
+"    // === Base color sampling and mask ===                                                                       \n" \
+"    vec4 sample = texture(uTexture, f_uv);                                                                        \n" \
+"    vec4 normal_color = sample * f_color;                                                                         \n" \
+"    vec4 mask_color = vec4(f_color.rgb, f_color.a * sample.r);                                                    \n" \
+"    vec4 color = mix(normal_color, mask_color, f_amix);                                                           \n" \
+"                                                                                                                  \n" \
+"    FragColor = color * sdf * border_factor;                                                                      \n" \
+"}                                                                                                                 \n" \
 
 VD_UI_API void vd_ui_gl_get_default_shader_sources(const char **const vertex_shader, size_t *vertex_shader_len,
                                          const char **const fragment_shader, size_t *fragment_shader_len)

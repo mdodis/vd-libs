@@ -330,7 +330,7 @@ static uint64_t                 vd_fc__uid_next(void);
 static float                    vd_fc__clampf(float v, float m, float x);
 static int                      vd_fc__approxeq(float a, float b);
 static int                      vd_fc__approxeq_rumble(VdFcRumbleState *a, VdFcRumbleState *b);
-static VdFc__CommonDeviceData   vd_fc__device_get_common_data(uint16_t vendor_id, uint16_t product_id);
+static VdFc__CommonDeviceData   vd_fc__device_get_common_data(uint16_t vendor_id, uint16_t product_id, uint32_t output_report_size);
 
 #ifdef _WIN32
 #ifndef _MINWINDEF_
@@ -837,6 +837,7 @@ typedef struct VdFc_DEV_BROADCAST_DEVICEINTERFACE_A {
     X(VdFcBOOLEAN,  HidD_GetProductString, (VdFcHANDLE HidDeviceObject, void *Buffer, VdFcULONG BufferLength)) \
     X(VdFcBOOLEAN,  HidD_SetFeature, (VdFcHANDLE HidDeviceObject, void *ReportBuffer, VdFcULONG ReportBufferLength)) \
     X(VdFcBOOLEAN,  HidD_SetOutputReport, (VdFcHANDLE HidDeviceObject, void *ReportBuffer, VdFcULONG ReportBufferLength)) \
+    X(VdFcBOOLEAN,  HidD_GetPreparsedData, (VdFcHANDLE HidDeviceObject, VdFcPHIDP_PREPARSED_DATA *PreparsedData)) \
     VE() \
 
 #define V(dllpath)
@@ -1503,11 +1504,11 @@ typedef enum {
 } VdFc__Win32DeviceDriver;
 
 typedef enum {
-    VD_FC__WIN32_RUMBLE_METHOD_NONE = 0,
-    VD_FC__WIN32_RUMBLE_METHOD_XBOX_DEVICE_IO_CONTROL,
-    VD_FC__WIN32_RUMBLE_METHOD_XINPUT_SET_STATE,
-    VD_FC__WIN32_RUMBLE_METHOD_DUALSHOCK_WRITE_FILE,
-} VdFc__Win32RumbleMethod;
+    VD_FC__WIN32_OUTPUT_METHOD_NONE = 0,
+    VD_FC__WIN32_OUTPUT_METHOD_XBOX_DEVICE_IO_CONTROL,
+    VD_FC__WIN32_OUTPUT_METHOD_XINPUT_SET_STATE,
+    VD_FC__WIN32_OUTPUT_METHOD_DUALSHOCK_WRITE_FILE,
+} VdFc__Win32OutputMethod;
 
 typedef struct {
     VdFcXINPUT_STATE state;
@@ -1569,7 +1570,7 @@ struct VdFc__Device {
 
     VdFcOVERLAPPED                      overlapped;
     VdFcHANDLE                          write_handle;
-    VdFc__Win32RumbleMethod             rumble_method;
+    VdFc__Win32OutputMethod             output_method;
 
     // Data Unions based on .driver
     VdFc__Win32DeviceData               data;
@@ -1626,7 +1627,7 @@ static VdFc__Device*            vd_fc__win32_alloc_device(int *id);
 static VdFcLRESULT              vd_fc__win32_wndproc(VdFcHWND hwnd, VdFcUINT msg, VdFcWPARAM wparam, VdFcLPARAM lparam);
 static void                     vd_fc__win32_remove_dropped_devices(void);
 static VdFcBOOL                 vd_fc__win32_dinput_enum_devices(VdFc__Win32_LPDIDEVICEINSTANCEW inst, void *usr);
-static int                      vd_fc__win32_xinput_supported(VdFcGUID *guid);
+static int                      vd_fc__win32_xinput_supported(VdFcGUID *guid, uint32_t *out_opt_report_size);
 static int                      vd_fc__win32_xinput_supported_handle(VdFcHANDLE devhandle);
 static int                      vd_fc__win32_xinput_supported_instance_path(const char *name, VdFcUINT len);
 static int                      vd_fc__win32_rawinput_handle_gidc_arrival(VdFcHANDLE devhandle);
@@ -1637,7 +1638,7 @@ static void                     vd_fc__win32_rawinput_xinput_poll(void);
 static void                     vd_fc__win32_rawinput_xinput_correlate(VdFc__Device *device);
 static void                     vd_fc__win32_rawinput_xinput_clear_correlation(void);
 static int                      vd_fc__win32_device_is_xbox(uint16_t vid, uint16_t pid);
-static VdFc__Win32RumbleMethod  vd_fc__win32_rumble_method_from_device(VdFc__Win32DeviceDriver driver, int is_xbox, int correlation_idx);
+static VdFc__Win32OutputMethod  vd_fc__win32_output_method_from_device(VdFc__Win32DeviceDriver driver, int is_xbox, int correlation_idx);
 
 VD_FC_API void vd_fc_init(void)
 {
@@ -1811,8 +1812,8 @@ VD_FC_API void vd_fc_poll(void)
             (void)left_trigger;
             (void)right_trigger;
 
-            switch (dev->rumble_method) {
-                case VD_FC__WIN32_RUMBLE_METHOD_XBOX_DEVICE_IO_CONTROL: {
+            switch (dev->output_method) {
+                case VD_FC__WIN32_OUTPUT_METHOD_XBOX_DEVICE_IO_CONTROL: {
                     // @note(mdodis): We should only get DeviceIoControl rumble method from an xbox device,
                     //                since they're all XInput.
                     VD_FC_ASSERT(dev->driver == VD_FC__WIN32_DEVICE_DRIVER_RINPUT);
@@ -1845,7 +1846,7 @@ VD_FC_API void vd_fc_poll(void)
 
                 } break;
 
-                case VD_FC__WIN32_RUMBLE_METHOD_XINPUT_SET_STATE: {
+                case VD_FC__WIN32_OUTPUT_METHOD_XINPUT_SET_STATE: {
                     VD_FC_ASSERT(dev->driver == VD_FC__WIN32_DEVICE_DRIVER_RINPUT);
                     VD_FC_ASSERT(dev->data.rinput.correlation_idx != -1);
                     uint16_t left_motor_freq  = (uint16_t)(vd_fc__clampf(left_motor  * 65535.f, 0, 65535));
@@ -1921,7 +1922,7 @@ VD_FC_API unsigned int vd_fc_raw_button_down(int id, int button_id)
         VdFc__Device *dev = &Vd_Fc_G.devices[id];
         if (dev->driver == VD_FC__WIN32_DEVICE_DRIVER_DINPUT) {
             if (button_id < dev->num_buttons) {
-                return dev->data.dinput.state.rgbButtons[button_id];
+                return dev->data.dinput.state.rgbButtons[button_id] ? 1 : 0;
             } else {
                 return 0;
             }
@@ -1994,7 +1995,8 @@ static VdFcBOOL vd_fc__win32_dinput_enum_devices(VdFc__Win32_LPDIDEVICEINSTANCEW
     int device_already_acquired = 0;
     (void)usr;
 
-    if (vd_fc__win32_xinput_supported(&inst->guidProduct)) {
+    uint32_t output_report_size;
+    if (vd_fc__win32_xinput_supported(&inst->guidProduct, &output_report_size)) {
         return 1;
     }
 
@@ -2063,6 +2065,7 @@ static VdFcBOOL vd_fc__win32_dinput_enum_devices(VdFc__Win32_LPDIDEVICEINSTANCEW
                             guid.parts.version          = 0x0000;
                             guid.parts.driver_signature = 0x00;
                             guid.parts.driver_data      = 0x00;
+                            fc_device->common = vd_fc__device_get_common_data(vid, pid, output_report_size);
                         } else {
                             uint16_t bus = 0x05;
                             guid.parts.bus = VD_FC_SWAP16LE(bus);
@@ -2070,6 +2073,7 @@ static VdFcBOOL vd_fc__win32_dinput_enum_devices(VdFc__Win32_LPDIDEVICEINSTANCEW
                             for (int i = 0; i < 11; ++i) {
                                 guid.dat[4 + i] = fc_device->name[i];
                             }
+                            fc_device->common = vd_fc__device_get_common_data(0, 0, output_report_size);
                         }
                         fc_device->guid = guid;
 
@@ -2182,7 +2186,7 @@ static VdFcLRESULT vd_fc__win32_wndproc(VdFcHWND hwnd, VdFcUINT msg, VdFcWPARAM 
     return result;
 }
 
-static int vd_fc__win32_xinput_supported(VdFcGUID *guid)
+static int vd_fc__win32_xinput_supported(VdFcGUID *guid, uint32_t *out_opt_report_size)
 {
     VdFcRAWINPUTDEVICELIST *raw_input_device_list = Vd_Fc_G.raw_input_device_list;
     VdFcUINT max_raw_input_devices = sizeof(Vd_Fc_G.raw_input_device_list) / sizeof(Vd_Fc_G.raw_input_device_list[0]);
@@ -2223,6 +2227,35 @@ static int vd_fc__win32_xinput_supported(VdFcGUID *guid)
         VdFcLONG vid_pid = VD_FC__WIN32_MAKELONG(rdi.v.hid.dwVendorId, rdi.v.hid.dwProductId);
         if (vid_pid != (VdFcLONG)(guid->Data1)) {
             continue;
+        }
+
+        if (out_opt_report_size) {
+            static char device_instance_path[128];
+            VdFcUINT device_instance_path_len;
+            VD_FC_MEMSET(device_instance_path, 0, sizeof(device_instance_path));
+            device_instance_path_len = sizeof(device_instance_path);
+            if (VdFcGetRawInputDeviceInfoA(raw_input_device_list[i].hDevice,
+                                           VD_FC_RIDI_DEVICENAME,
+                                           device_instance_path, &device_instance_path_len) != ((VdFcUINT)-1))
+            {
+                HANDLE device_file = CreateFileA(device_instance_path,
+                                                 GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                                 NULL, OPEN_EXISTING, 0, NULL);
+                VdFcPHIDP_PREPARSED_DATA ppd = 0;
+                *out_opt_report_size = 0;
+                if (VdFcHidD_GetPreparsedData(device_file, &ppd)) {
+
+                    VdFcHIDP_CAPS caps;
+                    if (VdFcHidP_GetCaps(ppd, &caps) != ((VdFcUINT)-1)) {
+                        *out_opt_report_size = caps.InputReportByteLength;
+                    }
+                }
+
+                CloseHandle(device_file);
+            } else {
+                VD_FC_LOG("Error. GetRawInputDeviceInfoA for RIDI_DEVICENAME");
+            }
+
         }
 
         if (vd_fc__win32_xinput_supported_handle(raw_input_device_list[i].hDevice)) {
@@ -2581,7 +2614,7 @@ static int vd_fc__win32_rawinput_handle_gidc_arrival(VdFcHANDLE devhandle)
     device->ff_gain                      = 1.f;
     VD_FC_MEMSET(&device->ff_rumble, 0, sizeof(device->ff_rumble));
 
-    device->rumble_method = vd_fc__win32_rumble_method_from_device(device->driver, is_xbox, -1);
+    device->output_method = vd_fc__win32_output_method_from_device(device->driver, is_xbox, -1);
 
     vd_fc_device_classify_auto(device);
 
@@ -2831,7 +2864,7 @@ static void vd_fc__win32_rawinput_xinput_correlate(VdFc__Device *device)
             VD_FC_LOG("Gamepad correlated to dwUserIndex: %d", i);
             device->data.rinput.correlation_idx = i;
             device->ff_rumble_resubmit = 1;
-            device->rumble_method = vd_fc__win32_rumble_method_from_device(device->driver, device->data.rinput.is_xbox, i);
+            device->output_method = vd_fc__win32_output_method_from_device(device->driver, device->data.rinput.is_xbox, i);
             break;
         }
     }
@@ -2848,7 +2881,7 @@ static void vd_fc__win32_rawinput_xinput_clear_correlation(void)
         if (dev->driver == VD_FC__WIN32_DEVICE_DRIVER_RINPUT) {
             dev->data.rinput.correlation_idx = -1;
             dev->ff_rumble_resubmit = 1;
-            dev->rumble_method = vd_fc__win32_rumble_method_from_device(dev->driver, dev->data.rinput.is_xbox, -1);
+            dev->output_method = vd_fc__win32_output_method_from_device(dev->driver, dev->data.rinput.is_xbox, -1);
         }
     }
 
@@ -2905,24 +2938,24 @@ static int vd_fc__win32_device_is_xbox(uint16_t vid, uint16_t pid)
     }
 }
 
-static VdFc__Win32RumbleMethod vd_fc__win32_rumble_method_from_device(VdFc__Win32DeviceDriver driver, int is_xbox, int correlation_idx)
+static VdFc__Win32OutputMethod vd_fc__win32_output_method_from_device(VdFc__Win32DeviceDriver driver, int is_xbox, int correlation_idx)
 {
 
-    VdFc__Win32RumbleMethod method = VD_FC__WIN32_RUMBLE_METHOD_NONE;
+    VdFc__Win32OutputMethod method = VD_FC__WIN32_OUTPUT_METHOD_NONE;
     if (driver == VD_FC__WIN32_DEVICE_DRIVER_DINPUT) {
-        method = VD_FC__WIN32_RUMBLE_METHOD_NONE;
+        method = VD_FC__WIN32_OUTPUT_METHOD_NONE;
     } else if (driver == VD_FC__WIN32_DEVICE_DRIVER_RINPUT) {
 
         if (correlation_idx != -1) {
-            method = VD_FC__WIN32_RUMBLE_METHOD_XINPUT_SET_STATE;
+            method = VD_FC__WIN32_OUTPUT_METHOD_XINPUT_SET_STATE;
         } else if (is_xbox) {
             // @note(mdodis)
             // XInput correlation allows us to get proper triggers for xbox controllers, but with this method we can't
             // have rumble before that controller is correlated. Since we now know how to send rumble packets
             // without XInput, we can do that and if/when it's correlated later, we can use the XInput stuff.
-            method = VD_FC__WIN32_RUMBLE_METHOD_XBOX_DEVICE_IO_CONTROL;
+            method = VD_FC__WIN32_OUTPUT_METHOD_XBOX_DEVICE_IO_CONTROL;
         } else {
-            method = VD_FC__WIN32_RUMBLE_METHOD_NONE;
+            method = VD_FC__WIN32_OUTPUT_METHOD_NONE;
         }
     }
 
@@ -2995,7 +3028,7 @@ VD_FC_API const char *vd_fc_driver(int id)
 VD_FC_API int vd_fc_ff_rumble_supported(int id)
 {
     if (id < Vd_Fc_G.num_devices) {
-        return Vd_Fc_G.devices[id].rumble_method != VD_FC__WIN32_RUMBLE_METHOD_NONE;
+        return Vd_Fc_G.devices[id].output_method != VD_FC__WIN32_OUTPUT_METHOD_NONE;
     } else {
         return 0;
     }
@@ -3237,7 +3270,7 @@ static int vd_fc__approxeq_rumble(VdFcRumbleState *a, VdFcRumbleState *b)
            vd_fc__approxeq(a->right_trigger, b->right_trigger);
 }
 
-static VdFc__CommonDeviceData vd_fc__device_get_common_data(uint16_t vendor_id, uint16_t product_id)
+static VdFc__CommonDeviceData vd_fc__device_get_common_data(uint16_t vendor_id, uint16_t product_id, uint32_t output_report_size)
 {
     VdFc__CommonDeviceData result;
     result.flags = 0;
@@ -3289,6 +3322,13 @@ static VdFc__CommonDeviceData vd_fc__device_get_common_data(uint16_t vendor_id, 
             case 0x05c4: result.flags |= VD_FC__COMMON_DEVICE_DS4; break;
             case 0x09cc: result.flags |= VD_FC__COMMON_DEVICE_DS4; break;
             default: break;
+        }
+    }
+
+    uint32_t device_type = result.flags & VD_FC__COMMON_DEVICE_FLAGS_PRODUCT_BITMASK;
+    if (device_type == VD_FC__COMMON_DEVICE_DS4) {
+        if (output_report_size == 547) {
+            result.flags |= VD_FC__COMMON_DEVICE_WIRELESS;
         }
     }
 
