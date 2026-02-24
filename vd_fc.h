@@ -150,6 +150,7 @@ VD_FC_API int               vd_fc_axis_count(int id);
 VD_FC_API uint64_t          vd_fc_uid(int id);
 VD_FC_API const char*       vd_fc_driver(int id);
 VD_FC_API int               vd_fc_id_from_uid(uint64_t uid);
+VD_FC_API const char*       vd_fc_name(int id);
 
 /* ----DEVICE FORCE FEEDBACK----------------------------------------------------------------------------------------- */
 typedef struct {
@@ -315,6 +316,7 @@ typedef uint32_t VdFc__CommonDeviceFlags;
 
 struct VdFc__CommonDeviceData {
     VdFc__CommonDeviceFlags flags;
+    const char              *identified_name;
 };
 
 static int                      vd_fc_device_classify_auto(VdFc__Device *device);
@@ -801,6 +803,15 @@ typedef struct VdFc_DEV_BROADCAST_DEVICEINTERFACE_A {
   char  dbcc_name[1];
 } VdFcDEV_BROADCAST_DEVICEINTERFACE_A, *VdFcPDEV_BROADCAST_DEVICEINTERFACE_A;
 
+struct VdFc_DEV_BROADCAST_HDR {     /* */
+    VdFcDWORD       dbch_size;
+    VdFcDWORD       dbch_devicetype;
+    VdFcDWORD       dbch_reserved;
+};
+
+typedef struct  VdFc_DEV_BROADCAST_HDR      VdFcDEV_BROADCAST_HDR;
+typedef         VdFcDEV_BROADCAST_HDR       *VdFcPDEV_BROADCAST_HDR;
+
 #pragma pack(pop)
 
 #define VD_FC__WIN32_FUNCTIONS \
@@ -904,14 +915,15 @@ VD_FC_DEFINE_GUID(VdFc__Win32_IID_IDirectInput8W,0xBF798031,0x483A,0x4DA2,0xAA,0
 typedef struct VdFc__Win32_IDirectInputDevice8W VdFc__Win32_IDirectInputDevice8W;
 VD_FC_DEFINE_GUID(VdFc__Win32_IID_IDirectInputDevice8W,0x54D41081,0xDC15,0x4833,0xA4,0x1B,0x74,0x8F,0x73,0xA3,0x81,0x79);
 
-VD_FC_DEFINE_GUID(Vd_Fc__Win32_Guid_XAxis,   0xa36d02e0,0xc9f3,0x11cf,0xbf,0xc7,0x44,0x45,0x53,0x54,0x00,0x00);
-VD_FC_DEFINE_GUID(Vd_Fc__Win32_Guid_YAxis,   0xa36d02e1,0xc9f3,0x11cf,0xbf,0xc7,0x44,0x45,0x53,0x54,0x00,0x00);
-VD_FC_DEFINE_GUID(Vd_Fc__Win32_Guid_ZAxis,   0xa36d02e2,0xc9f3,0x11cf,0xbf,0xc7,0x44,0x45,0x53,0x54,0x00,0x00);
-VD_FC_DEFINE_GUID(Vd_Fc__Win32_Guid_RxAxis,  0xa36d02f4,0xc9f3,0x11cf,0xbf,0xc7,0x44,0x45,0x53,0x54,0x00,0x00);
-VD_FC_DEFINE_GUID(Vd_Fc__Win32_Guid_RyAxis,  0xa36d02f5,0xc9f3,0x11cf,0xbf,0xc7,0x44,0x45,0x53,0x54,0x00,0x00);
-VD_FC_DEFINE_GUID(Vd_Fc__Win32_Guid_RzAxis,  0xa36d02e3,0xc9f3,0x11cf,0xbf,0xc7,0x44,0x45,0x53,0x54,0x00,0x00);
-VD_FC_DEFINE_GUID(Vd_Fc__Win32_Guid_Slider,  0xa36d02e4,0xc9f3,0x11cf,0xbf,0xc7,0x44,0x45,0x53,0x54,0x00,0x00);
-VD_FC_DEFINE_GUID(Vd_Fc__Win32_Guid_PoV,     0xa36d02f2,0xc9f3,0x11cf,0xbf,0xc7,0x44,0x45,0x53,0x54,0x00,0x00);
+VD_FC_DEFINE_GUID(Vd_Fc__Win32_Guid_XAxis,    0xa36d02e0,0xc9f3,0x11cf,0xbf,0xc7,0x44,0x45,0x53,0x54,0x00,0x00);
+VD_FC_DEFINE_GUID(Vd_Fc__Win32_Guid_YAxis,    0xa36d02e1,0xc9f3,0x11cf,0xbf,0xc7,0x44,0x45,0x53,0x54,0x00,0x00);
+VD_FC_DEFINE_GUID(Vd_Fc__Win32_Guid_ZAxis,    0xa36d02e2,0xc9f3,0x11cf,0xbf,0xc7,0x44,0x45,0x53,0x54,0x00,0x00);
+VD_FC_DEFINE_GUID(Vd_Fc__Win32_Guid_RxAxis,   0xa36d02f4,0xc9f3,0x11cf,0xbf,0xc7,0x44,0x45,0x53,0x54,0x00,0x00);
+VD_FC_DEFINE_GUID(Vd_Fc__Win32_Guid_RyAxis,   0xa36d02f5,0xc9f3,0x11cf,0xbf,0xc7,0x44,0x45,0x53,0x54,0x00,0x00);
+VD_FC_DEFINE_GUID(Vd_Fc__Win32_Guid_RzAxis,   0xa36d02e3,0xc9f3,0x11cf,0xbf,0xc7,0x44,0x45,0x53,0x54,0x00,0x00);
+VD_FC_DEFINE_GUID(Vd_Fc__Win32_Guid_Slider,   0xa36d02e4,0xc9f3,0x11cf,0xbf,0xc7,0x44,0x45,0x53,0x54,0x00,0x00);
+VD_FC_DEFINE_GUID(Vd_Fc__Win32_Guid_PoV,      0xa36d02f2,0xc9f3,0x11cf,0xbf,0xc7,0x44,0x45,0x53,0x54,0x00,0x00);
+VD_FC_DEFINE_GUID(Vd_Fc__WIn32_Guid_HIDClass, 0x745A17A0,0x74D3,0x11D0,0xB6,0xFE,0x00,0xA0,0xC9,0x0F,0x57,0xDA);
 
 typedef struct VdFc__Win32_DIDEVICEINSTANCEW {
     VdFcDWORD   dwSize;
@@ -1714,6 +1726,7 @@ VD_FC_API void vd_fc_init(void)
         VD_FC_MEMSET(&filter, 0, sizeof(filter));
         filter.dbcc_devicetype = 0x00000005 /*DBT_DEVTYP_DEVICEINTERFACE*/;
         filter.dbcc_size = sizeof(filter);
+        filter.dbcc_classguid = Vd_Fc__WIn32_Guid_HIDClass;
 
         void *hdev_notify = VdFcRegisterDeviceNotificationA(Vd_Fc_G.hwnd, (void*)&filter,
                                                             0x00000000 /*DEVICE_NOTIFY_WINDOW_HANDLE*/ |
@@ -2082,12 +2095,18 @@ static VdFcBOOL vd_fc__win32_dinput_enum_devices(VdFc__Win32_LPDIDEVICEINSTANCEW
 
                         vd_fc_device_classify_auto(fc_device);
 
+                        uint8_t *inst_guid = (uint8_t*)&inst->guidInstance;
                         VD_FC_LOG("Device initialized: '%s'", fc_device->name);
                         VD_FC_LOG("            Driver: %s", "Direct Input");
                         VD_FC_LOG("           Buttons: %d", caps.dwButtons);
                         VD_FC_LOG("              Hats: %d", caps.dwPOVs);
                         VD_FC_LOG("              Axes: %d", caps.dwAxes);
                         VD_FC_LOG("             class: %s", vd_fc_class_str(fc_device->klass));
+                        VD_FC_LOG("     Instance GUID: %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+                                                       inst_guid[0],  inst_guid[1],  inst_guid[2],  inst_guid[3],
+                                                       inst_guid[4],  inst_guid[5],  inst_guid[6],  inst_guid[7],
+                                                       inst_guid[8],  inst_guid[9],  inst_guid[10], inst_guid[11],
+                                                       inst_guid[12], inst_guid[13], inst_guid[14], inst_guid[15]);
                         VD_FC_LOG("              GUID: %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
                                                        guid.dat[0],  guid.dat[1],  guid.dat[2],  guid.dat[3],
                                                        guid.dat[4],  guid.dat[5],  guid.dat[6],  guid.dat[7],
@@ -2130,6 +2149,16 @@ static VdFcLRESULT vd_fc__win32_wndproc(VdFcHWND hwnd, VdFcUINT msg, VdFcWPARAM 
             if (Vd_Fc_G.hdev_notify) {
                 if (wparam == 0x8000/*DBT_DEVICEARRIVAL*/) {
                     Vd_Fc_G.dinput_enumerate_devices = 1;
+
+                    VdFcDEV_BROADCAST_HDR *dbh = (VdFcDEV_BROADCAST_HDR*)lparam;
+                    if (dbh->dbch_devicetype == 5) {
+                        VdFcDEV_BROADCAST_DEVICEINTERFACE_A *dbcc =(VdFcDEV_BROADCAST_DEVICEINTERFACE_A*)dbh;
+                        VdFcGUID dev_guid = {0};
+                        if (Vd_Fc_G.dinput->lpVtbl->FindDevice(Vd_Fc_G.dinput, &dbcc->dbcc_classguid, (wchar_t*)&dbcc->dbcc_name[0], &dev_guid) == 0) {
+                            VD_FC_LOG("DBT Device is dinput device.\n");
+                        }
+                    }
+
                 }
             } else {
                 Vd_Fc_G.dinput_enumerate_devices = 1;
@@ -2380,6 +2409,8 @@ static int vd_fc__win32_rawinput_handle_gidc_arrival(VdFcHANDLE devhandle)
     uint16_t product_id = (uint16_t)device_info.v.hid.dwProductId;
     uint16_t version    = (uint16_t)device_info.v.hid.dwVersionNumber;
     int is_xbox         = vd_fc__win32_device_is_xbox(vendor_id, product_id);
+
+    device->common      = vd_fc__device_get_common_data(vendor_id, product_id, 0);
 
     VdFcHANDLE write_handle = NULL;
 
@@ -3274,53 +3305,75 @@ static VdFc__CommonDeviceData vd_fc__device_get_common_data(uint16_t vendor_id, 
 {
     VdFc__CommonDeviceData result;
     result.flags = 0;
+    result.identified_name = 0;
 
     if (vendor_id == 0x045e /* Microsoft */) {
         switch (product_id) {
             // USB_PRODUCT_XBOX360_XUSB_CONTROLLER (XUSB driver software PID)
-            case 0x02a1: result.flags |= VD_FC__COMMON_DEVICE_XBOX; break;
+            case 0x02a1: result.identified_name = "XBOX 360 Controller";
+                         result.flags |= VD_FC__COMMON_DEVICE_XBOX; break;
             // USB_PRODUCT_XBOX360_WIRED_CONTROLLER
-            case 0x028e: result.flags |= VD_FC__COMMON_DEVICE_XBOX; break;
+            case 0x028e: result.identified_name = "XBOX 360 Controller (Wired)";
+                         result.flags |= VD_FC__COMMON_DEVICE_XBOX; break;
             // USB_PRODUCT_XBOX360_WIRELESS_RECEIVER
-            case 0x0719: result.flags |= VD_FC__COMMON_DEVICE_XBOX | VD_FC__COMMON_DEVICE_WIRELESS; break;
+            case 0x0719: result.identified_name = "XBOX 360 Controller (Wireless)";
+                         result.flags |= VD_FC__COMMON_DEVICE_XBOX | VD_FC__COMMON_DEVICE_WIRELESS; break;
             // USB_PRODUCT_XBOX360_WIRELESS_RECEIVER_THIRDPARTY1
-            case 0x02a9: result.flags |= VD_FC__COMMON_DEVICE_XBOX | VD_FC__COMMON_DEVICE_WIRELESS; break;
+            case 0x02a9: result.identified_name = "XBOX 360 Controller (Wireless)";
+                         result.flags |= VD_FC__COMMON_DEVICE_XBOX | VD_FC__COMMON_DEVICE_WIRELESS; break;
             // USB_PRODUCT_XBOX360_WIRELESS_RECEIVER_THIRDPARTY2
-            case 0x0291: result.flags |= VD_FC__COMMON_DEVICE_XBOX | VD_FC__COMMON_DEVICE_WIRELESS; break;
+            case 0x0291: result.identified_name = "XBOX 360 Controller (Wireless)";
+                         result.flags |= VD_FC__COMMON_DEVICE_XBOX | VD_FC__COMMON_DEVICE_WIRELESS; break;
             // USB_PRODUCT_XBOX_ONE_ADAPTIVE
-            case 0x0b0a: result.flags |= VD_FC__COMMON_DEVICE_XBOX; break;
+            case 0x0b0a: result.identified_name = "XBOX One Controller";
+                         result.flags |= VD_FC__COMMON_DEVICE_XBOX; break;
             // USB_PRODUCT_XBOX_ONE_ADAPTIVE_BLUETOOTH
-            case 0x0b0c: result.flags |= VD_FC__COMMON_DEVICE_XBOX | VD_FC__COMMON_DEVICE_WIRELESS; break;
+            case 0x0b0c: result.identified_name = "XBOX One Controller (BT)";
+                         result.flags |= VD_FC__COMMON_DEVICE_XBOX | VD_FC__COMMON_DEVICE_WIRELESS; break;
             // USB_PRODUCT_XBOX_ONE_ADAPTIVE_BLE
-            case 0x0b21: result.flags |= VD_FC__COMMON_DEVICE_XBOX | VD_FC__COMMON_DEVICE_WIRELESS; break;
+            case 0x0b21: result.identified_name = "XBOX One Controller (BLE)";
+                         result.flags |= VD_FC__COMMON_DEVICE_XBOX | VD_FC__COMMON_DEVICE_WIRELESS; break;
             // USB_PRODUCT_XBOX_ONE_ELITE_SERIES_1
-            case 0x02e3: result.flags |= VD_FC__COMMON_DEVICE_XBOX; break;
+            case 0x02e3: result.identified_name = "XBOX One Elite Series 1 Controller";
+                         result.flags |= VD_FC__COMMON_DEVICE_XBOX; break;
             // USB_PRODUCT_XBOX_ONE_ELITE_SERIES_2
-            case 0x0b00: result.flags |= VD_FC__COMMON_DEVICE_XBOX; break;
+            case 0x0b00: result.identified_name = "XBOX One Elite Series 2 Controller";
+                         result.flags |= VD_FC__COMMON_DEVICE_XBOX; break;
             // USB_PRODUCT_XBOX_ONE_ELITE_SERIES_2_BLUETOOTH
-            case 0x0b05: result.flags |= VD_FC__COMMON_DEVICE_XBOX | VD_FC__COMMON_DEVICE_WIRELESS; break;
+            case 0x0b05: result.identified_name = "XBOX One Elite Series 2 Controller (BT)";
+                         result.flags |= VD_FC__COMMON_DEVICE_XBOX | VD_FC__COMMON_DEVICE_WIRELESS; break;
             // USB_PRODUCT_XBOX_ONE_ELITE_SERIES_2_BLE
-            case 0x0b22: result.flags |= VD_FC__COMMON_DEVICE_XBOX | VD_FC__COMMON_DEVICE_WIRELESS; break;
+            case 0x0b22: result.identified_name = "XBOX One Elite Series 2 Controller (BLE)";
+                         result.flags |= VD_FC__COMMON_DEVICE_XBOX | VD_FC__COMMON_DEVICE_WIRELESS; break;
             // USB_PRODUCT_XBOX_ONE_S
-            case 0x02ea: result.flags |= VD_FC__COMMON_DEVICE_XBOX; break;
+            case 0x02ea: result.identified_name = "XBOX One S Controller";
+                         result.flags |= VD_FC__COMMON_DEVICE_XBOX; break;
             // USB_PRODUCT_XBOX_ONE_S_REV1_BLUETOOTH
-            case 0x02e0: result.flags |= VD_FC__COMMON_DEVICE_XBOX | VD_FC__COMMON_DEVICE_WIRELESS; break;
+            case 0x02e0: result.identified_name = "XBOX One S Controller Rv.1 (BT)";
+                         result.flags |= VD_FC__COMMON_DEVICE_XBOX | VD_FC__COMMON_DEVICE_WIRELESS; break;
             // USB_PRODUCT_XBOX_ONE_S_REV2_BLUETOOTH
-            case 0x02fd: result.flags |= VD_FC__COMMON_DEVICE_XBOX | VD_FC__COMMON_DEVICE_WIRELESS; break;
+            case 0x02fd: result.identified_name = "XBOX One S Controller Rv.2 (BT)";
+                         result.flags |= VD_FC__COMMON_DEVICE_XBOX | VD_FC__COMMON_DEVICE_WIRELESS; break;
             // USB_PRODUCT_XBOX_ONE_S_REV2_BLE
-            case 0x0b20: result.flags |= VD_FC__COMMON_DEVICE_XBOX | VD_FC__COMMON_DEVICE_WIRELESS; break;
+            case 0x0b20: result.identified_name = "XBOX One S Controller Rv.2 (BLE)";
+                         result.flags |= VD_FC__COMMON_DEVICE_XBOX | VD_FC__COMMON_DEVICE_WIRELESS; break;
             // USB_PRODUCT_XBOX_SERIES_X
-            case 0x0b12: result.flags |= VD_FC__COMMON_DEVICE_XBOX; break;
+            case 0x0b12: result.identified_name = "XBOX Series X Controller";
+                         result.flags |= VD_FC__COMMON_DEVICE_XBOX; break;
             // USB_PRODUCT_XBOX_SERIES_X_BLE
-            case 0x0b13: result.flags |= VD_FC__COMMON_DEVICE_XBOX | VD_FC__COMMON_DEVICE_WIRELESS; break;
+            case 0x0b13: result.identified_name = "XBOX Series X Controller (BLE)";
+                         result.flags |= VD_FC__COMMON_DEVICE_XBOX | VD_FC__COMMON_DEVICE_WIRELESS; break;
             // USB_PRODUCT_XBOX_ONE_XBOXGIP_CONTROLLER (XBOXGIP driver software PID)
-            case 0x02ff: result.flags |= VD_FC__COMMON_DEVICE_XBOX; break;
+            case 0x02ff: result.identified_name = "XBOX One Controller (GIP)";
+                         result.flags |= VD_FC__COMMON_DEVICE_XBOX; break;
             default: break;
         }
     } else if (vendor_id == 0x054c /* Sony */) {
         switch (product_id) {
-            case 0x05c4: result.flags |= VD_FC__COMMON_DEVICE_DS4; break;
-            case 0x09cc: result.flags |= VD_FC__COMMON_DEVICE_DS4; break;
+            case 0x05c4: result.identified_name = "Sony DualShock 4 Rv.1";
+                         result.flags |= VD_FC__COMMON_DEVICE_DS4; break;
+            case 0x09cc: result.identified_name = "Sony DualShock 4 Rv.2";
+                         result.flags |= VD_FC__COMMON_DEVICE_DS4; break;
             default: break;
         }
     }
@@ -3379,6 +3432,19 @@ VD_FC_API int vd_fc_id_from_uid(uint64_t uid)
         }
     }
     return -1;
+}
+
+VD_FC_API const char *vd_fc_name(int id)
+{
+    if (id < Vd_Fc_G.num_devices) {
+        if (Vd_Fc_G.devices[id].common.identified_name != 0) {
+            return Vd_Fc_G.devices[id].common.identified_name;
+        } else {
+            return Vd_Fc_G.devices[id].name;
+        }
+    } else {
+        return "N/A";
+    }
 }
 
 VD_FC_API int vd_fc_ff_rumble_any(int id)
