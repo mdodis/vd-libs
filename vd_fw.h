@@ -7550,6 +7550,13 @@ typedef enum VdFwDPI_AWARENESS {
 #define VD_FW_HWND_TOPMOST    ((VdFwHWND)-1)
 #define VD_FW_HWND_NOTOPMOST  ((VdFwHWND)-2)
 
+typedef enum {
+    VdFwMDT_EFFECTIVE_DPI = 0,
+    VdFwMDT_ANGULAR_DPI = 1,
+    VdFwMDT_RAW_DPI = 2,
+    VdFwMDT_DEFAULT
+} VdFwMONITOR_DPI_TYPE;
+
 typedef struct VdFwtagPOINT
 {
     VdFwLONG  x;
@@ -8331,6 +8338,7 @@ X(VdFwLONG,     ChangeDisplaySettingsW, (VdFwDEVMODEW *lpDevMode, VdFwDWORD dwFl
 X(VdFwBOOL,     GetMonitorInfoA, (VdFwHMONITOR hMonitor, VdFwLPMONITORINFO lpmi)) \
 X(VdFwBOOL,     GetMonitorInfoW, (VdFwHMONITOR hMonitor, VdFwLPMONITORINFO lpmi)) \
 X(VdFwUINT,     GetDpiForWindow, (VdFwHWND hwnd)) \
+X(VdFwHRESULT,  GetDpiForMonitor, (VdFwHMONITOR hmonitor, VdFwMONITOR_DPI_TYPE dpiType, VdFwUINT *dpiX, VdFwUINT *dpiY)) \
 X(VdFwBOOL,     SetProcessDpiAwarenessContext, (VdFwDPI_AWARENESS_CONTEXT value)) \
 X(VdFwBOOL,     GetWindowInfo, (VdFwHWND hwnd, VdFwPWINDOWINFO pwi)) \
 X(VdFwBOOL,     RegisterRawInputDevices, (VdFwPCRAWINPUTDEVICE pRawInputDevices, VdFwUINT uiNumDevices, VdFwUINT cbSize)) \
@@ -8343,7 +8351,7 @@ X(VdFwHKL,      GetKeyboardLayout, (VdFwDWORD idThread)) \
 X(VdFwHWND,     SetFocus, (VdFwHWND hWnd)) \
 X(VdFwBOOL,     SetForegroundWindow, (VdFwHWND hWnd)) \
 X(VdFwSHORT,    GetKeyState, (int nVirtKey)) \
-X(VdFwBOOL,     AdjustWindowRect, (VdFwLPRECT lpRect, VdFwDWORD dwStyle, VdFwBOOL bMenu) )\
+X(VdFwBOOL,     AdjustWindowRect, (VdFwLPRECT lpRect, VdFwDWORD dwStyle, VdFwBOOL bMenu)) \
 VE() \
 V("Shell32.dll") \
 X(VdFwUINT_PTR, SHAppBarMessage, (VdFwDWORD dwMessage, VdFwPAPPBARDATA pData)) \
@@ -9242,21 +9250,25 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     VD_FW_G.curr_frame.h = VD_FW_G.next_height;
     VD_FW_G.curr_frame.flags = 0;
 
+    // @todo(mdodis): Use different versions of SetProcessDpiAware if not supported
+    // SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+    VdFwSetProcessDpiAwarenessContext(VD_FW_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
     if (!info || !info->window_options.borderless) {
         VdFwRECT r;
         r.left = 0;
         r.right = VD_FW_G.next_width;
         r.top = 0;
         r.bottom = VD_FW_G.next_height;
+
+        // @note(mdodis): Documentation says that this function in not DPI aware for a process
+        // which is per-monitor aware. I've not seen this to be the case yet
         VD_FW__CHECK_TRUE(VdFwAdjustWindowRect(&r, WS_OVERLAPPEDWINDOW | WS_SIZEBOX, 0));
 
         VD_FW_G.next_width = r.right - r.left;
         VD_FW_G.next_height = r.bottom - r.top;
     }
 
-    // @todo(mdodis): Use different versions of SetProcessDpiAware if not supported
-    // SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
-    VdFwSetProcessDpiAwarenessContext(VD_FW_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     VdFwtimeBeginPeriod(1);
     QueryPerformanceFrequency(&VD_FW_G.frequency);
 
@@ -10341,6 +10353,8 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     // - WS_OVERLAPPED | WS_SIZEBOX | WS_MAXIMIZEBOX: Works perfectly.
     // 
 
+    int nw = VD_FW_G.next_width;
+    int nh = VD_FW_G.next_height;
     VD_FW_G.hwnd = VdFwCreateWindowEx(
         0,
         TEXT("FWCLASS"),
