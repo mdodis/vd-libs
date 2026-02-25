@@ -87,7 +87,8 @@ static int device_field_button(int i, float comp_pos_rel[2])
     int is_current = The_State.curr_device_id == i;
 
     vd_ui_style_padding_push(VD_UI_LEFT, 16.f);
-    vd_ui_style_padding_push(VD_UI_TOP, 16.f);
+    vd_ui_style_padding_push(VD_UI_TOP, 8.f);
+    vd_ui_style_padding_push(VD_UI_BOTTOM, 8.f);
     vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_ABSOLUTE, 300.f, 1.f);
     vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_TEXT_CONTENT, 1.f, 0.f);
     VdUiF4 color_on  = vd_ui_f4(0.32f, 0.32f, 0.32f, 1.f);
@@ -110,6 +111,7 @@ static int device_field_button(int i, float comp_pos_rel[2])
 
     vd_ui_style_size_pop(VD_UI_AXISV);
     vd_ui_style_size_pop(VD_UI_AXISH);
+    vd_ui_style_padding_pop(VD_UI_BOTTOM);
     vd_ui_style_padding_pop(VD_UI_TOP);
     vd_ui_style_padding_pop(VD_UI_LEFT);
 
@@ -130,6 +132,65 @@ static void vspacefixed(float f)
     vd_ui_style_size_pop(VD_UI_AXISH);
 }
 
+static int expander(int *on, const char *label)
+{
+    vd_ui_style_coloring_push(VD_UI_FLAG_BACKGROUND,
+                              vd_ui_coloring(vd_ui_gradient1(vd_ui_f4(0.33f, 0.33f, 0.33f, 1.f)),
+                                             vd_ui_gradient1(vd_ui_f4(0.52f, 0.52f, 0.52f, 1.f)),
+                                             vd_ui_gradient1(vd_ui_f4(0.33f, 0.33f, 0.33f, 1.f))));
+    vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 1.f);
+    vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 1.f);
+    VdUiDiv *div = vd_ui_div_newf(VD_UI_FLAG_BACKGROUND
+                                  | VD_UI_FLAG_FLEX_HORIZONTAL
+                                  | VD_UI_FLAG_CLICKABLE, label);
+    vd_ui_style_size_pop(VD_UI_AXISV);
+    vd_ui_style_size_pop(VD_UI_AXISH);
+    vd_ui_style_coloring_pop(VD_UI_FLAG_BACKGROUND);
+
+    int click = 0;
+
+    vd_ui_parent_push(div);
+    vd_ui_labelf("%s##toggle-label", label);
+    vd_ui_spacer(VD_UI_AXISH);
+    const VdUiSymbol sym_off = vd_ui_symbol((VdUiFontId){1}, 59393);
+    const VdUiSymbol sym_on  = vd_ui_symbol((VdUiFontId){1}, 59396);
+    VdUiSymbol sym = (*on) ? sym_on : sym_off;
+    if (vd_ui_icon_buttonf(sym, "##toggle").clicked) {
+        click = 1;
+    }
+    vd_ui_parent_pop();
+
+    VdUiReply reply = vd_ui_call(div);
+    if (reply.clicked) {
+        click = 1;
+    }
+
+    if (click) {
+        *on = !(*on);
+    }
+    return *on;
+}
+
+static void do_device_info(void)
+{
+    int curr_device_id = The_State.curr_device_id;
+    vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f);
+    vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 1.f);
+    vd_ui_parent_newf(0, "##contents");
+    vd_ui_style_size_pop(VD_UI_AXISV);
+    vd_ui_style_size_pop(VD_UI_AXISH);
+
+    vd_ui_labelf("%s##device-name", vd_fc_name(curr_device_id));
+
+    static int exp_device_raw = 0;
+    if (expander(&exp_device_raw, "Raw Data Properties")) {
+
+        vd_ui_labelf("Buttons: %d", vd_fc_button_count(curr_device_id));
+    }
+
+    vd_ui_parent_pop();
+}
+
 static void do_sidebar(void)
 {
     vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 0.f);
@@ -141,6 +202,8 @@ static void do_sidebar(void)
     vd_ui_style_coloring_pop(VD_UI_FLAG_BACKGROUND);
     vd_ui_style_size_pop(VD_UI_AXISV);
     vd_ui_style_size_pop(VD_UI_AXISH);
+
+    vd_ui_labelf("Devices");
 
     float mark_point_h = 0.f;
     for (int i = 0; i < vd_fc_count(); ++i) {
@@ -214,6 +277,9 @@ static void do_content_area(void)
             if (sidebar_display()) {
                 do_sidebar();
             }
+
+            do_device_info();
+
             vd_ui_parent_pop();
         }
     }

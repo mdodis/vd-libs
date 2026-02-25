@@ -2259,7 +2259,7 @@ static int vd_fc__win32_xinput_supported(VdFcGUID *guid, uint32_t *out_opt_repor
         }
 
         if (out_opt_report_size) {
-            static char device_instance_path[128];
+            static char device_instance_path[256];
             VdFcUINT device_instance_path_len;
             VD_FC_MEMSET(device_instance_path, 0, sizeof(device_instance_path));
             device_instance_path_len = sizeof(device_instance_path);
@@ -2282,7 +2282,7 @@ static int vd_fc__win32_xinput_supported(VdFcGUID *guid, uint32_t *out_opt_repor
 
                 CloseHandle(device_file);
             } else {
-                VD_FC_LOG("Error. GetRawInputDeviceInfoA for RIDI_DEVICENAME");
+                VD_FC_LOG("Error. GetRawInputDeviceInfoA for RIDI_DEVICENAME failed with %d", GetLastError());
             }
 
         }
@@ -3370,9 +3370,9 @@ static VdFc__CommonDeviceData vd_fc__device_get_common_data(uint16_t vendor_id, 
         }
     } else if (vendor_id == 0x054c /* Sony */) {
         switch (product_id) {
-            case 0x05c4: result.identified_name = "Sony DualShock 4 Rv.1";
+            case 0x05c4: result.identified_name = "Sony DualShock 4 Gen1";
                          result.flags |= VD_FC__COMMON_DEVICE_DS4; break;
-            case 0x09cc: result.identified_name = "Sony DualShock 4 Rv.2";
+            case 0x09cc: result.identified_name = "Sony DualShock 4 Gen2";
                          result.flags |= VD_FC__COMMON_DEVICE_DS4; break;
             default: break;
         }
