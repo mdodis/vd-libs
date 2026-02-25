@@ -53,13 +53,6 @@
  * - Win32:
  *     - Filter monitor orientation and other settings in display modes
  *     - Sort the display modes if not sorted already
- * - Win32:
- *     - Extern declare the Kernel32.dll functions and just pointer to _RTL_CRITICAL_SECTION CRITICAL_SECTION instead of
- *       including windows.h
- * - Vulkan
- *     - Win32: Required extensions function
- *     - Win32: Query queue surface presentation support
- *     - Win32: Implement vkCreateWin32SurfaceKHR
  * - MacOS: Event Queue
  * - MacOS: vd_fw_get_key_released: Gets if the key was released this frame
  * - raw hat states
@@ -308,6 +301,8 @@ typedef struct {
     struct {
         /* Set to 1 to disable window frame. */
         int             borderless;
+        /* Set to 1 to block while sizing. */
+        int             block_while_sizing;
     } window_options;
 } VdFwInitInfo;
 
@@ -333,6 +328,18 @@ VD_FW_API void               vd_fw_lock(void);
  * @brief Swap buffers and release lock to the window buffer after drawing
  */
 VD_FW_API void               vd_fw_unlock(void);
+
+/**
+ * @brief Get whether the system will block while sizing the window
+ * @return  Boolean value
+ */
+VD_FW_API int                vd_fw_get_block_while_sizing(void);
+
+/**
+ * @brief Set whether the system will block while sizing the window
+ * @param  on Whether to block while sizing
+ */
+VD_FW_API void               vd_fw_set_block_while_sizing(int on);
 
 /**
  * @brief Close the window and end the rendering loop
@@ -548,6 +555,18 @@ VD_FW_API int                vd_fw_get_size(int *w, int *h);
  * @param  h The height of the window, in pixels
  */
 VD_FW_API void               vd_fw_set_size(int w, int h);
+
+/**
+ * @brief Get whether to allow the user to change the window size or maximize it.
+ * @return  Whether the user is allowed to change the window size or maximize it.
+ */
+VD_FW_API int                vd_fw_get_resizable(void);
+
+/**
+ * @brief Set whether to allow the user to change the window size or maximize it.
+ * @return  Whether the user is allowed to change the window size or maximize it.
+ */
+VD_FW_API void               vd_fw_set_resizable(int on);
 
 /**
  * @brief Set minimum window size, in pixels.
@@ -807,6 +826,33 @@ VD_FW_API int                vd_fw_get_last_key_pressed(void);
  * @return   The key's name
  */
 VD_FW_INL const char*        vd_fw_get_key_name(VdFwKey k);
+
+
+/* ----VULKAN INTEGRATION-------------------------------------------------------------------------------------------- */
+typedef void (*VdFwVkVoidFunction)(void);
+typedef VdFwVkVoidFunction (*VdFwVkGetInstanceProcAddrProc)(void* instance, const char *name);
+
+/**
+ * @brief Set the vkGetInstanceProcAddr pointer. Call this before any function below
+ * @param  proc The function
+ */
+VD_FW_API void               vd_fw_vk_set_get_instance_proc_addr(VdFwVkGetInstanceProcAddrProc proc);
+
+/**
+ * @brief Get the required instance extensions for WSI 
+ * @param  count The count of the extensions
+ * @return       The extension names to pass into vkCreateInstance
+ */
+VD_FW_API const char**       vd_fw_vk_wsi_instance_extensions(int *count);
+
+/**
+ * @brief Create WSI surface
+ * @param  p_instance             Pointer to VkInstance
+ * @param  p_allocation_callbacks Pointer to VkAllocationCallbacks
+ * @param  p_surface              Pointer to VkSurfaceKHR
+ * @return                        VkResult
+ */
+VD_FW_API int                vd_fw_vk_wsi_surface_create(void *p_instance, void *p_allocation_callbacks, void *p_surface);
 
 /* ----GAMEPADS------------------------------------------------------------------------------------------------------ */
 enum {
@@ -8265,6 +8311,7 @@ X(VdFwBOOL,     GetCursorPos, (VdFwLPPOINT lpPoint)) \
 X(VdFwBOOL,     ScreenToClient, (VdFwHWND hWnd, VdFwLPPOINT lpPoint)) \
 X(VdFwBOOL,     EqualRect, (const VdFwRECT* lprc1, const VdFwRECT* lprc2)) \
 X(VdFwBOOL,     PtInRect, (const VdFwRECT* lprc, VdFwPOINT pt)) \
+X(VdFwLONG,     GetWindowLongA, (VdFwHWND, int nIndex)) \
 X(VdFwLONG,     SetWindowLongA, (VdFwHWND hWnd, int nIndex, VdFwLONG dwNewLong)) \
 X(VdFwLONG,     SetWindowLongW, (VdFwHWND hWnd, int nIndex, VdFwLONG dwNewLong)) \
 X(VdFwLONG_PTR, GetWindowLongPtrA, (VdFwHWND hWnd, int nIndex)) \
@@ -8296,6 +8343,7 @@ X(VdFwHKL,      GetKeyboardLayout, (VdFwDWORD idThread)) \
 X(VdFwHWND,     SetFocus, (VdFwHWND hWnd)) \
 X(VdFwBOOL,     SetForegroundWindow, (VdFwHWND hWnd)) \
 X(VdFwSHORT,    GetKeyState, (int nVirtKey)) \
+X(VdFwBOOL,     AdjustWindowRect, (VdFwLPRECT lpRect, VdFwDWORD dwStyle, VdFwBOOL bMenu) )\
 VE() \
 V("Shell32.dll") \
 X(VdFwUINT_PTR, SHAppBarMessage, (VdFwDWORD dwMessage, VdFwPAPPBARDATA pData)) \
@@ -8548,6 +8596,8 @@ enum {
     VD_FW_WIN32_GAMEPADDBCH     = VD_FW_WM_USER + 8,
     VD_FW_WIN32_GAMEPADRAWRQ    = VD_FW_WM_USER + 9,
     VD_FW_WIN32_KILL            = VD_FW_WM_USER + 10,
+    VD_FW_WIN32_RESIZABLE       = VD_FW_WM_USER + 11,
+    VD_FW_WIN32_BLOCKMODE       = VD_FW_WM_USER + 12,
 
     VD_FW_WIN32_WINDOW_STATE_MINIMIZED = 1 << 0,
     VD_FW_WIN32_WINDOW_STATE_MAXIMIZED = 1 << 1,
@@ -8623,6 +8673,8 @@ typedef struct {
     int                     display_modes_cap;
 } VdFw__Win32Monitor;
 
+typedef int (*VdFw__vkCreateWin32SurfaceKHRProc)(void *instance, void *pCreateInfo, void *pAllocator, void *pSurface);
+
 typedef struct {
 /* ----WINDOW THREAD ONLY-------------------------------------------------------------------------------------------- */
     VdFwGraphicsApi             graphics_api;           // Currently selected graphics api
@@ -8633,6 +8685,7 @@ typedef struct {
                                                         // message loop)
 
     VdFwBOOL                    draw_decorations;       // Draw window frame, or be frame-less
+    VdFwBOOL                    winthread_block_while_sizing; // Block while sizing
     VdFwRECT                    rgn;                    // Cached Window Region
     VdFwBOOL                    theme_enabled;          // Whether theming is enabled
     VdFwBOOL                    composition_enabled;    // Whether Compositor is enabled
@@ -8656,6 +8709,7 @@ typedef struct {
     VdFw__Win32Monitor          *monitor_buffer;
     int                         monitor_buffer_len;
     int                         monitor_buffer_cap;
+    int                         winthread_resizable;
 
     VdFwU32                     monitor_count;
 
@@ -8672,6 +8726,8 @@ typedef struct {
     VdFwProcwglSwapIntervalExt  proc_swapInterval;      // Used for vd_fw_set_vsync
     unsigned long long          last_ns;                // Cached delta time
     // Mouse
+    int                         resizable;
+    int                         block_while_sizing;
     int                         mouse[2];
     int                         prev_mouse_state;
     int                         mouse_state;
@@ -8706,6 +8762,9 @@ typedef struct {
 
     int                         num_evts;
     VdFwEvent                   evtbuf[VD_FW_EVENT_COUNT_MAX];
+
+    VdFw__vkCreateWin32SurfaceKHRProc vk_create_win32_surface_khr_proc;
+    VdFwVkGetInstanceProcAddrProc vk_get_instance_proc_addr;
 
 /* ----RENDER THREAD - WINDOW THREAD DATA---------------------------------------------------------------------------- */
     VdFwEvent                   msgbuf[VD_FW_WIN32_MESSAGE_BUFFER_SIZE];
@@ -9124,8 +9183,11 @@ static SIZE_T vd_fw__tcslen(LPCTSTR s)
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
     VD_FW_G.graphics_api = VD_FW_GRAPHICS_API_INVALID;
+    VD_FW_G.resizable = 1;
+
     VD_FW_G.next_width = 640;
     VD_FW_G.next_height = 480;
+
     VD_FW_G.next_pos_x  = CW_USEDEFAULT;
     VD_FW_G.next_pos_y  = CW_USEDEFAULT;
 
@@ -9176,6 +9238,22 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         }
     }
 
+    VD_FW_G.curr_frame.w = VD_FW_G.next_width;
+    VD_FW_G.curr_frame.h = VD_FW_G.next_height;
+    VD_FW_G.curr_frame.flags = 0;
+
+    if (!info || !info->window_options.borderless) {
+        VdFwRECT r;
+        r.left = 0;
+        r.right = VD_FW_G.next_width;
+        r.top = 0;
+        r.bottom = VD_FW_G.next_height;
+        VD_FW__CHECK_TRUE(VdFwAdjustWindowRect(&r, WS_OVERLAPPEDWINDOW | WS_SIZEBOX, 0));
+
+        VD_FW_G.next_width = r.right - r.left;
+        VD_FW_G.next_height = r.bottom - r.top;
+    }
+
     // @todo(mdodis): Use different versions of SetProcessDpiAware if not supported
     // SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
     VdFwSetProcessDpiAwarenessContext(VD_FW_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
@@ -9192,6 +9270,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     VD_FW_G.draw_decorations = 1;
     if (info != NULL) {
         VD_FW_G.draw_decorations = !info->window_options.borderless;
+        VD_FW_G.winthread_block_while_sizing = info->window_options.block_while_sizing;
     }
 
     {
@@ -9444,6 +9523,28 @@ VD_FW_API void vd_fw_unlock(void)
     if (VD_FW_G.curr_frame.flags & VD_FW_WIN32_FLAGS_WAKE_COND_VAR) {
         WakeConditionVariable(&VD_FW_G.cond_var);
     }
+}
+
+VD_FW_API int vd_fw_get_block_while_sizing(void)
+{
+    return VD_FW_G.block_while_sizing;    
+}
+
+VD_FW_API void vd_fw_set_block_while_sizing(int on)
+{
+    if (VD_FW_G.block_while_sizing == on) {
+        return;
+    }
+
+    VD_FW_G.block_while_sizing = on;
+
+    LPARAM lparam = on;
+
+    VD_FW__CHECK_TRUE(VdFwPostMessage(
+        VD_FW_G.hwnd,
+        VD_FW_WIN32_BLOCKMODE,
+        0, /* WPARAM */
+        lparam));
 }
 
 VD_FW_API int vd_fw_close_requested(void)
@@ -9765,6 +9866,28 @@ VD_FW_API void vd_fw_set_size(int w, int h)
     VD_FW__CHECK_TRUE(VdFwPostMessage(
         VD_FW_G.hwnd,
         VD_FW_WIN32_SIZE,
+        0, /* WPARAM */
+        lparam));
+}
+
+VD_FW_API int vd_fw_get_resizable(void)
+{
+    return VD_FW_G.resizable;
+}
+
+VD_FW_API void vd_fw_set_resizable(int on)
+{
+    if (VD_FW_G.resizable == on)
+    {
+        return;
+    }
+
+    LPARAM lparam = on;
+
+    VD_FW_G.resizable = on;
+    VD_FW__CHECK_TRUE(VdFwPostMessage(
+        VD_FW_G.hwnd,
+        VD_FW_WIN32_RESIZABLE,
         0, /* WPARAM */
         lparam));
 }
@@ -10276,11 +10399,11 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     rids[0].dwFlags     = 0x00; // None (NO RIDEV_INPUTSINK)
     rids[0].hwndTarget  = VD_FW_G.hwnd;
 
-    rids[1].usUsagePage = 0x01; // Generic desktop controls
-    rids[1].usUsage     = 0x05; // Gamepad
-    rids[1].dwFlags     = RIDEV_DEVNOTIFY | RIDEV_INPUTSINK;
-    rids[1].hwndTarget  = VD_FW_G.hwnd;
-    VD_FW__CHECK_TRUE(VdFwRegisterRawInputDevices(rids, 2, sizeof(rids[0])));
+    // rids[1].usUsagePage = 0x01; // Generic desktop controls
+    // rids[1].usUsage     = 0x05; // Gamepad
+    // rids[1].dwFlags     = RIDEV_DEVNOTIFY | RIDEV_INPUTSINK;
+    // rids[1].hwndTarget  = VD_FW_G.hwnd;
+    VD_FW__CHECK_TRUE(VdFwRegisterRawInputDevices(rids, 1, sizeof(rids[0])));
 
     VD_FW_G.last_window_style = window_style;
     VD_FW_G.t_paint_ready = 1;
@@ -10456,36 +10579,38 @@ static int vd_fw__hit_test(int x, int y)
     }
 
     if (!VD_FW_G.is_fullscreen) {
-        if (mouse.y < frame_size) {
-            if (mouse.x < diagonal_width) {
-                return HTTOPLEFT;
+        if (VD_FW_G.winthread_resizable) {
+            if (mouse.y < frame_size) {
+                if (mouse.x < diagonal_width) {
+                    return HTTOPLEFT;
+                }
+
+                if (mouse.x >= width - diagonal_width) {
+                    return HTTOPRIGHT;
+                }
+
+                return HTTOP;
             }
 
-            if (mouse.x >= width - diagonal_width) {
-                return HTTOPRIGHT;
+            if (mouse.y >= height - frame_size) {
+                if (mouse.x < diagonal_width) {
+                    return HTBOTTOMLEFT;
+                }
+
+                if (mouse.x >= width - diagonal_width) {
+                    return HTBOTTOMRIGHT;
+                }
+
+                return HTBOTTOM;
             }
 
-            return HTTOP;
-        }
-
-        if (mouse.y >= height - frame_size) {
-            if (mouse.x < diagonal_width) {
-                return HTBOTTOMLEFT;
+            if (mouse.x < frame_size) {
+                return HTLEFT;
             }
 
-            if (mouse.x >= width - diagonal_width) {
-                return HTBOTTOMRIGHT;
+            if (mouse.x >= width - frame_size) {
+                return HTRIGHT;
             }
-
-            return HTBOTTOM;
-        }
-
-        if (mouse.x < frame_size) {
-            return HTLEFT;
-        }
-
-        if (mouse.x >= width - frame_size) {
-            return HTRIGHT;
         }
 
         if (!VD_FW_G.nccaption_set) {
@@ -10848,22 +10973,24 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
             VD_FW_WIN32_PROFILE_BEGIN(wm_paint);
 
-            VdFwPAINTSTRUCT ps;
-            VdFwBeginPaint(hwnd, &ps);
-            EnterCriticalSection(&VD_FW_G.critical_section);
+            if (!VD_FW_G.winthread_block_while_sizing) {
+                VdFwPAINTSTRUCT ps;
+                VdFwBeginPaint(hwnd, &ps);
+                EnterCriticalSection(&VD_FW_G.critical_section);
 
-            if (VD_FW_G.w != VD_FW_G.next_frame.w || VD_FW_G.h != VD_FW_G.next_frame.h) {
-                VD_FW_G.next_frame.w = VD_FW_G.w;
-                VD_FW_G.next_frame.h = VD_FW_G.h;
-                VD_FW_G.next_frame.flags |= VD_FW_WIN32_FLAGS_SIZE_CHANGED;
+                if (VD_FW_G.w != VD_FW_G.next_frame.w || VD_FW_G.h != VD_FW_G.next_frame.h) {
+                    VD_FW_G.next_frame.w = VD_FW_G.w;
+                    VD_FW_G.next_frame.h = VD_FW_G.h;
+                    VD_FW_G.next_frame.flags |= VD_FW_WIN32_FLAGS_SIZE_CHANGED;
+                }
+
+                VD_FW_G.next_frame.flags |= VD_FW_WIN32_FLAGS_WAKE_COND_VAR;
+
+                WakeConditionVariable(&VD_FW_G.cond_var);
+                SleepConditionVariableCS(&VD_FW_G.cond_var, &VD_FW_G.critical_section, INFINITE);
+                LeaveCriticalSection(&VD_FW_G.critical_section);
+                VdFwEndPaint(hwnd, &ps);
             }
-
-            VD_FW_G.next_frame.flags |= VD_FW_WIN32_FLAGS_WAKE_COND_VAR;
-
-            WakeConditionVariable(&VD_FW_G.cond_var);
-            SleepConditionVariableCS(&VD_FW_G.cond_var, &VD_FW_G.critical_section, INFINITE);
-            LeaveCriticalSection(&VD_FW_G.critical_section);
-            VdFwEndPaint(hwnd, &ps);
 
             VD_FW_WIN32_PROFILE_END(wm_paint);
         } break;
@@ -10940,13 +11067,27 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         // Obviously the second message is technically part of the internal Windows API that's used to handle some part
         // of the SIZEMOVE op... but I'm not really sure if there's a better way to do it and keep the mouse interface
         // relatively simple.
+
+        case WM_ENTERSIZEMOVE: {
+            if (VD_FW_G.winthread_block_while_sizing) {
+                EnterCriticalSection(&VD_FW_G.critical_section);
+            }
+
+        } break;
+
         case WM_EXITSIZEMOVE: {
+            if (VD_FW_G.winthread_block_while_sizing) {
+                LeaveCriticalSection(&VD_FW_G.critical_section);
+            }
+
             if (!VD_FW_G.draw_decorations) {
                 VdFwEvent evt;
                 evt.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP;
                 evt.data.mouse_button_up.button = vd_fw__win32_translate_button(VK_LBUTTON);
                 vd_fw__msgbuf_w(&evt);
             }
+
+            result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
         } break;
 
         case WM_SYSCOMMAND: {
@@ -11479,6 +11620,11 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                                          vendor_id, product_id, version,
                                          manufacturer_string, product_string,
                                          'r', 0);
+
+                for (int j = 0; j < sizeof(guid.dat); ++j) {
+                    printf("%02x", guid.dat[j]);
+                }
+                printf("\n");
 
 
                 // Free strings if needed
@@ -12064,6 +12210,29 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             }
         } break;
 
+        case VD_FW_WIN32_RESIZABLE: {
+            int on = (int)lparam;
+            VD_FW_G.winthread_resizable = on;
+            LONG style = VdFwGetWindowLongA(hwnd, GWL_STYLE);
+            if (on) {
+                if (VD_FW_G.draw_decorations) {
+                    style |= WS_MAXIMIZEBOX;
+                }
+
+                style |= WS_SIZEBOX;
+            } else {
+                style &= ~WS_MAXIMIZEBOX;
+                style &= ~WS_SIZEBOX;
+            }
+
+            VdFwSetWindowLong(hwnd, GWL_STYLE, style);
+        } break;
+
+        case VD_FW_WIN32_BLOCKMODE: {
+            int on = (int)lparam;
+            VD_FW_G.winthread_block_while_sizing = on;
+        } break;
+
         case VD_FW_WIN32_GAMEPADRMBREQ: {
             VdFwWORD lo = LOWORD(lparam);
             VdFwWORD hi = HIWORD(lparam);
@@ -12514,6 +12683,52 @@ static void vd_fw__win32_update_monitors(void)
         VdFw__Win32Monitor temp = VD_FW_G.monitor_buffer[0];
         VD_FW_G.monitor_buffer[0] = VD_FW_G.monitor_buffer[primary_monitor_index];
         VD_FW_G.monitor_buffer[primary_monitor_index] = temp;
+    }
+}
+
+const char *Vd_Fw_Vk_Instance_Extensions[] = {
+    "VK_KHR_win32_surface",
+};
+
+VD_FW_API void vd_fw_vk_set_get_instance_proc_addr(VdFwVkGetInstanceProcAddrProc proc)
+{
+    VD_FW_G.vk_get_instance_proc_addr = proc;
+}
+
+VD_FW_API const char **vd_fw_vk_wsi_instance_extensions(int *count)
+{
+    if (count) {
+        *count = sizeof(Vd_Fw_Vk_Instance_Extensions) / sizeof(Vd_Fw_Vk_Instance_Extensions[0]);
+    }
+    return Vd_Fw_Vk_Instance_Extensions;
+}
+
+typedef struct VdFwVkWin32SurfaceCreateInfoKHR {
+    int                                 sType;
+    const void*                         pNext;
+    VdFwU32                             flags;
+    VdFwHINSTANCE                       hinstance;
+    VdFwHWND                            hwnd;
+} VdFwVkWin32SurfaceCreateInfoKHR;
+
+VD_FW_API int vd_fw_vk_wsi_surface_create(void *p_instance, void *p_allocation_callbacks, void *p_surface)
+{
+    VdFwVkWin32SurfaceCreateInfoKHR surface_create_info;
+    surface_create_info.sType     = 1000009000 /*VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR*/;
+    surface_create_info.pNext     = 0;
+    surface_create_info.flags     = 0;
+    surface_create_info.hinstance = (VdFwHINSTANCE)GetModuleHandleA(NULL);
+    surface_create_info.hwnd      = VD_FW_G.hwnd;
+
+    if (VD_FW_G.vk_create_win32_surface_khr_proc == 0) {
+        VD_FW_G.vk_create_win32_surface_khr_proc = (VdFw__vkCreateWin32SurfaceKHRProc)
+            VD_FW_G.vk_get_instance_proc_addr(p_instance, "vkCreateWin32SurfaceKHR");
+    }
+
+    if (VD_FW_G.vk_create_win32_surface_khr_proc) {
+        return VD_FW_G.vk_create_win32_surface_khr_proc(p_instance, (void*)&surface_create_info, p_allocation_callbacks, p_surface);
+    } else {
+        return -13;
     }
 }
 

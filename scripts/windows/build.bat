@@ -58,8 +58,15 @@ if %BUILD_MODE%=="release" (
     set CL_FLAGS=%CL_FLAGS% %CL_DEBUG_FLAGS%
 )
 
+set VK_INCLUDE_PATH=%VULKAN_SDK%\Include
+set EXTRA_LINK_ARGS=""
+
+if not %VULKAN_SDK%=="" (
+    set EXTRA_LINK_ARGS="/link %VULKAN_SDK%\Lib\vulkan-1.lib"
+)
+
 if not %SAMPLE_TO_COMPILE%=="" (
-    cl %CL_FLAGS% %SRC_DIR%\%SAMPLE_TO_COMPILE%%CSEXT% /Fe:%SAMPLE_TO_COMPILE%.exe 
+    cl %CL_FLAGS% /I %VK_INCLUDE_PATH% %SRC_DIR%\%SAMPLE_TO_COMPILE%%CSEXT% /Fe:%SAMPLE_TO_COMPILE%.exe %EXTRA_LINK_ARGS%
 )
 
 if %COMPILE_PROGRAMS%==1 (
