@@ -84,9 +84,11 @@ int main(int argc, char const *argv[])
         .api = VD_FW_GRAPHICS_API_CUSTOM,
         .window_options = {
             .borderless = 0,
-            .block_while_sizing = 0,
+            .block_while_sizing = 1,
         }
     });
+
+    vd_fw_set_title("VK Window (B = Toggle blocking during resize)");
 
     VkExtent2D window_size;
     {
@@ -96,7 +98,6 @@ int main(int argc, char const *argv[])
         window_size.height = (uint32_t)h;
     }
 
-    VkClearColorValue clear_color_value = {0.2f, 0.1f, 0.7f, 1.f};
     uint32_t api_version = VK_MAKE_VERSION(1, 3, 0);
     int frames_in_flight = 2;
 
@@ -813,9 +814,14 @@ int main(int argc, char const *argv[])
             vd_fw_quit();
         }
 
+        if (vd_fw_get_key_pressed('B')) {
+            vd_fw_set_block_while_sizing(!vd_fw_get_block_while_sizing());
+        }
+
         vd_fw_lock();
         int new_w, new_h;
         if (vd_fw_get_size(&new_w, &new_h)) {
+            printf("Resize\n");
             window_size.width = (uint32_t)new_w;
             window_size.height = (uint32_t)new_h;
             // Size changed. Recreate swapchain & image views
@@ -853,6 +859,10 @@ int main(int argc, char const *argv[])
                                     0,                                              VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                                     VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 
+            static float t = 0.f;
+            t += vd_fw_delta_s();
+
+            VkClearColorValue clear_color_value = {(sinf(t) + 1.f) * 0.5f, 0.1f, 0.7f, 1.f};
             VkRenderingAttachmentInfo color_attachment_info;
             color_attachment_info.sType              = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
             color_attachment_info.pNext              = 0;

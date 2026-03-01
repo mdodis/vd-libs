@@ -592,7 +592,7 @@ VD_FW_API int                vd_fw_get_minimized(int *minimized);
 /**
  * @brief Minimize the window
  */
-VD_FW_API void               vd_fw_minimize(void);
+VD_FW_API void               vd_fw_set_minimized(void);
 
 /**
  * @brief Get if the window is maximized
@@ -604,7 +604,7 @@ VD_FW_API int                vd_fw_get_maximized(int *maximized);
 /**
  * @brief Maximize the window
  */
-VD_FW_API void               vd_fw_maximize(void);
+VD_FW_API void               vd_fw_set_maximized(void);
 
 /**
  * @brief Restores the window state, if it's minimized or maximized
@@ -9192,6 +9192,8 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
     VD_FW_G.graphics_api = VD_FW_GRAPHICS_API_INVALID;
     VD_FW_G.resizable = 1;
+    VD_FW_G.block_while_sizing = 0;
+    VD_FW_G.winthread_block_while_sizing = 0;
 
     VD_FW_G.next_width = 640;
     VD_FW_G.next_height = 480;
@@ -9283,6 +9285,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     if (info != NULL) {
         VD_FW_G.draw_decorations = !info->window_options.borderless;
         VD_FW_G.winthread_block_while_sizing = info->window_options.block_while_sizing;
+        VD_FW_G.block_while_sizing = info->window_options.block_while_sizing;
     }
 
     {
@@ -9936,7 +9939,7 @@ VD_FW_API int vd_fw_get_minimized(int *minimized)
     return VD_FW_G.window_state_changed & VD_FW_WIN32_WINDOW_STATE_MINIMIZED;
 }
 
-VD_FW_API void vd_fw_minimize(void)
+VD_FW_API void vd_fw_set_minimized(void)
 {
     VdFwShowWindow(VD_FW_G.hwnd, SW_MINIMIZE);
 }
@@ -9947,7 +9950,7 @@ VD_FW_API int vd_fw_get_maximized(int *maximized)
     return VD_FW_G.window_state_changed & VD_FW_WIN32_WINDOW_STATE_MAXIMIZED;
 }
 
-VD_FW_API void vd_fw_maximize(void)
+VD_FW_API void vd_fw_set_maximized(void)
 {
     VdFwShowWindow(VD_FW_G.hwnd, SW_MAXIMIZE);
     VD_FW_G.window_state |= VD_FW_WIN32_WINDOW_STATE_MAXIMIZED;
@@ -10353,8 +10356,6 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     // - WS_OVERLAPPED | WS_SIZEBOX | WS_MAXIMIZEBOX: Works perfectly.
     // 
 
-    int nw = VD_FW_G.next_width;
-    int nh = VD_FW_G.next_height;
     VD_FW_G.hwnd = VdFwCreateWindowEx(
         0,
         TEXT("FWCLASS"),
@@ -10987,10 +10988,11 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
             VD_FW_WIN32_PROFILE_BEGIN(wm_paint);
 
-            if (!VD_FW_G.winthread_block_while_sizing) {
                 VdFwPAINTSTRUCT ps;
                 VdFwBeginPaint(hwnd, &ps);
-                EnterCriticalSection(&VD_FW_G.critical_section);
+                if (!VD_FW_G.winthread_block_while_sizing) {
+                    EnterCriticalSection(&VD_FW_G.critical_section);
+                }
 
                 if (VD_FW_G.w != VD_FW_G.next_frame.w || VD_FW_G.h != VD_FW_G.next_frame.h) {
                     VD_FW_G.next_frame.w = VD_FW_G.w;
@@ -11000,11 +11002,13 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
                 VD_FW_G.next_frame.flags |= VD_FW_WIN32_FLAGS_WAKE_COND_VAR;
 
-                WakeConditionVariable(&VD_FW_G.cond_var);
-                SleepConditionVariableCS(&VD_FW_G.cond_var, &VD_FW_G.critical_section, INFINITE);
-                LeaveCriticalSection(&VD_FW_G.critical_section);
+                if (!VD_FW_G.winthread_block_while_sizing) {
+                    WakeConditionVariable(&VD_FW_G.cond_var);
+                    SleepConditionVariableCS(&VD_FW_G.cond_var, &VD_FW_G.critical_section, INFINITE);
+                    LeaveCriticalSection(&VD_FW_G.critical_section);
+                }
+
                 VdFwEndPaint(hwnd, &ps);
-            }
 
             VD_FW_WIN32_PROFILE_END(wm_paint);
         } break;
@@ -14173,7 +14177,7 @@ VD_FW_API int vd_fw_get_minimized(int *minimized)
     return VD_FW_G.window_state_changed;
 }
 
-VD_FW_API void vd_fw_minimize(void)
+VD_FW_API void vd_fw_set_minimized(void)
 {
     NSWindow *window = VD_FW_G.window;
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -14191,7 +14195,7 @@ VD_FW_API int vd_fw_get_maximized(int *maximized)
     return VD_FW_G.window_state_changed;
 }
 
-VD_FW_API void vd_fw_maximize(void)
+VD_FW_API void vd_fw_set_maximized(void)
 {
     NSWindow *window = VD_FW_G.window;
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -16308,7 +16312,7 @@ VD_FW_API int vd_fw_get_minimized(int *minimized)
     return VD_FW_G.window_state_changed & VD_FW_WINDOW_STATE_MINIMIZED;
 }
 
-VD_FW_API void vd_fw_minimize(void)
+VD_FW_API void vd_fw_set_minimized(void)
 {
     VdFwXIconifyWindow(VD_FW_G.display, VD_FW_G.window, VdFwXDefaultScreen(VD_FW_G.display));
 }
@@ -16321,7 +16325,7 @@ VD_FW_API int vd_fw_get_maximized(int *maximized)
     return VD_FW_G.window_state_changed & VD_FW_WINDOW_STATE_MAXIMIZED;
 }
 
-VD_FW_API void vd_fw_maximize(void)
+VD_FW_API void vd_fw_set_maximized(void)
 {
     XEvent e = {0};
     e.xclient.type = ClientMessage;

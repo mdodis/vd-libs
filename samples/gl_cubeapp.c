@@ -353,7 +353,7 @@ int main(int argc, char const *argv[])
                 if (is_maximized) {
                     vd_fw_normalize();
                 } else {
-                    vd_fw_maximize();
+                    vd_fw_set_maximized();
                 }
             }
 
@@ -377,7 +377,7 @@ int main(int argc, char const *argv[])
             }
 
             if (mouse_inside_minimize_button && vd_fw_get_mouse_clicked(VD_FW_MOUSE_BUTTON_LEFT)) {
-                vd_fw_minimize();
+                vd_fw_set_minimized();
             }
 
             glUniform4f(glGetUniformLocation(program, "rect_color"), button_color[0], button_color[1], button_color[2], button_color[3]);

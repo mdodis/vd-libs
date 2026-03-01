@@ -717,6 +717,17 @@ freely, subject to the following restrictions:
                 }
             }
 
+            @rev-item(version="0.1.0" date="xx/xx/xxxx" available="yes") {
+                text {
+                    In Development version
+                    <ul>
+                        <li>Win32: Support Vulkan</li>
+                        <li>Linux: Initial Support</li>
+                        <li>Gamepad input is being moved to a separate library</li>
+                    </ul>
+                }
+            }
+
             @rev-item(version="0.0.2" date="03/11/2025" available="yes") {
                 text {
                     In Development version
@@ -857,47 +868,6 @@ int main(int argc, char const *argv[])
         para {
             Note that resizing or moving the window will never pause the render loop, with OpenGL or any other API.
         }
-    }
-
-    @section("Choose OpenGL Version") {
-        para {
-            To specify the OpenGL version, create a <code>VdFwInitInfo</code> struct, populate the
-            <code>VdFwInitInfo::gl::version</code> member, and pass it to <code>vd_fw_init</code>.
-        } 
-
-        verb```
-VdFwInitInfo init_info = {};
-init_info.gl.version = VD_FW_GL_VERSION_4_5; // Set OpenGL Version
-vd_fw_init(&init_info);
-        ```
-
-        para {
-            For reference, here's all of the possible versions:
-        }
-
-        verb```
-typedef enum {
-    VD_FW_GL_VERSION_BASIC = 0,
-    VD_FW_GL_VERSION_1_0   = 1,
-    VD_FW_GL_VERSION_1_2   = 12,
-    VD_FW_GL_VERSION_1_3   = 13,
-    VD_FW_GL_VERSION_1_4   = 14,
-    VD_FW_GL_VERSION_1_5   = 15,
-    VD_FW_GL_VERSION_2_0   = 20,
-    VD_FW_GL_VERSION_2_1   = 21,
-    VD_FW_GL_VERSION_3_0   = 30,
-    VD_FW_GL_VERSION_3_1   = 31,
-    VD_FW_GL_VERSION_3_2   = 32,
-    VD_FW_GL_VERSION_3_3   = 33,
-    VD_FW_GL_VERSION_4_0   = 40,
-    VD_FW_GL_VERSION_4_1   = 41,
-    VD_FW_GL_VERSION_4_2   = 42,
-    VD_FW_GL_VERSION_4_3   = 43,
-    VD_FW_GL_VERSION_4_4   = 44,
-    VD_FW_GL_VERSION_4_5   = 45,
-    VD_FW_GL_VERSION_4_6   = 46,
-} VdFwGlVersion;
-        ```
     }
 
     @section("Create a Borderless Window") {
@@ -1655,12 +1625,12 @@ if (mouse_inside_maximize_button && vd_fw_get_mouse_clicked(VD_FW_MOUSE_BUTTON_L
     if (is_maximized) {
         vd_fw_normalize();
     } else {
-        vd_fw_maximize();
+        vd_fw_set_maximized();
     }
 }
 
 if (mouse_inside_minimize_button && vd_fw_get_mouse_clicked(VD_FW_MOUSE_BUTTON_LEFT)) {
-    vd_fw_minimize();
+    vd_fw_set_minimized();
 }
         ```
 
@@ -1669,62 +1639,6 @@ if (mouse_inside_minimize_button && vd_fw_get_mouse_clicked(VD_FW_MOUSE_BUTTON_L
 
         para {
             Finally, we have a window that can be maximized and minized with customizable buttons.
-        }
-    }
-
-    @section("Use the Discrete GPU") {
-        para {
-            The OpenGL specification makes no distinction between the presence of multiple GPUs inside
-            the target system; one will be automatically selected based on vendor preference settings
-            host OS, and other factors that the developer will not be able to affect.
-        }
-
-        para {
-            However, for most systems there is a way to tell the OS at least what <i>kind</i> of GPU
-            the application prefers. This library can be instructed to do that through using:
-        }
-
-        verb ```
-#define VD_FW_PREFER_DISCRETE_GPU    // Prefer D-GPU
-// Or
-#define VD_FW_PREFER_INTEGRATED_GPU  // Prefer I-GPU (The one inside your CPU)
-        ```
-
-        para {
-            Of course, this doesn't mean that your target application will only use the GPU type you
-            specified, but it will signal to whatever system decides this that the application prefers
-            that type of GPU.
-        }
-
-        para {
-            There are many more technicalities, the most important of which to know is: The OpenGL
-            backend will change/swap GPUs if run on an Optimus, or other kind of laptop that features
-            GPU switching. It will also change (depending on the operating system, version, etc.), if
-            the window enters a full-screen state. 
-        }
-
-        para {
-            Most of these 2 GPU devices are high end gaming laptops, which use the integrated GPU for
-            low priority tasks, such as the web browser, and keep the discrete GPU turned off until a
-            demanding task, like a game needs it. 
-        }
-
-        para {
-            My suggestion is:
-            <ul>
-                <li>
-                    For GUI applications:<br> 
-                    <b>Don't set any GPU preference</b>. These apps are supposed to use few system
-                    resources anyway. This should guarantee that resizing, going fullscreen, etc.. will
-                    match the display context to the currently used one by other applications.
-                </li>
-                <li>
-                    For games:<br>
-                    <b>Always use the discrete GPU</b>, since those are the ones that implement the most
-                    OpenGL extensions, as well as the fastest ones. But be aware that initial startup
-                    time (especially on gaming laptops with 2 GPUs), will be affected.        
-                </li>
-            </ul>
         }
     }
 
@@ -1869,7 +1783,165 @@ rgdir -= left_stick[1];
         ```
     }
 
-    @section("Switching Graphics APIs") {
+
+
+    @section("OpenGL") {
+        para {
+            The OpenGL loader included with this library works by getting a set of possible configurations (version,
+            surface format, extensions), in order of preference, and then giving you the best supported one. If you only
+            ever need 1 configuration, then just do this:
+        } 
+
+        verb```
+VdFwGlConfig config = {};
+config.version = VD_FW_GL_VERSION_4_5;
+
+VdFwGlConfig configs[] = {
+    config,
+    0 // Null terminator
+};
+
+VdFwInitInfo init_info = {};
+init_info.gl.configs = configs;
+vd_fw_init(&init_info);
+        ```
+
+        para {
+            For reference, here's all of the possible OpenGL versions:
+        }
+
+        verb```
+typedef enum {
+    VD_FW_GL_VERSION_BASIC = 0,
+    VD_FW_GL_VERSION_1_0   = 1,
+    VD_FW_GL_VERSION_1_2   = 12,
+    VD_FW_GL_VERSION_1_3   = 13,
+    VD_FW_GL_VERSION_1_4   = 14,
+    VD_FW_GL_VERSION_1_5   = 15,
+    VD_FW_GL_VERSION_2_0   = 20,
+    VD_FW_GL_VERSION_2_1   = 21,
+    VD_FW_GL_VERSION_3_0   = 30,
+    VD_FW_GL_VERSION_3_1   = 31,
+    VD_FW_GL_VERSION_3_2   = 32,
+    VD_FW_GL_VERSION_3_3   = 33,
+    VD_FW_GL_VERSION_4_0   = 40,
+    VD_FW_GL_VERSION_4_1   = 41,
+    VD_FW_GL_VERSION_4_2   = 42,
+    VD_FW_GL_VERSION_4_3   = 43,
+    VD_FW_GL_VERSION_4_4   = 44,
+    VD_FW_GL_VERSION_4_5   = 45,
+    VD_FW_GL_VERSION_4_6   = 46,
+} VdFwGlVersion;
+        ```
+
+        @section("Use the Discrete GPU") {
+            para {
+                The OpenGL specification makes no distinction between the presence of multiple GPUs inside
+                the target system; one will be automatically selected based on vendor preference settings
+                host OS, and other factors that the developer will not be able to affect.
+            }
+
+            para {
+                However, for most systems there is a way to tell the OS at least what <i>kind</i> of GPU
+                the application prefers. This library can be instructed to do that through using:
+            }
+
+            verb ```
+    #define VD_FW_PREFER_DISCRETE_GPU    // Prefer D-GPU
+    // Or
+    #define VD_FW_PREFER_INTEGRATED_GPU  // Prefer I-GPU (The one inside your CPU)
+            ```
+
+            para {
+                Of course, this doesn't mean that your target application will only use the GPU type you
+                specified, but it will signal to whatever system decides this that the application prefers
+                that type of GPU.
+            }
+
+            para {
+                There are many more technicalities, the most important of which to know is: The OpenGL
+                backend will change/swap GPUs if run on an Optimus, or other kind of laptop that features
+                GPU switching. It will also change (depending on the operating system, version, etc.), if
+                the window enters a full-screen state. 
+            }
+
+            para {
+                Most of these 2 GPU devices are high end gaming laptops, which use the integrated GPU for
+                low priority tasks, such as the web browser, and keep the discrete GPU turned off until a
+                demanding task, like a game needs it. 
+            }
+
+            para {
+                My suggestion is:
+                <ul>
+                    <li>
+                        For GUI applications:<br> 
+                        <b>Don't set any GPU preference</b>. These apps are supposed to use few system
+                        resources anyway. This should guarantee that resizing, going fullscreen, etc.. will
+                        match the display context to the currently used one by other applications.
+                    </li>
+                    <li>
+                        For games:<br>
+                        <b>Always use the discrete GPU</b>, since those are the ones that implement the most
+                        OpenGL extensions, as well as the fastest ones. But be aware that initial startup
+                        time (especially on gaming laptops with 2 GPUs), will be affected.        
+                    </li>
+                </ul>
+            }
+        }
+    }
+
+    @section("Vulkan") {
+        para {
+            This library now also supports Vulkan. If you've used it before you should know that at the very least
+            you need to;
+            <ul>
+                <li>Get the required instance extensions to create a VkSurfaceKHR</li>
+                <li>Create a VkSurfaceKHR</li>
+            </ul>
+        }
+
+        para {
+            To get the required extensions for WSI, do the following:
+        }
+
+        verb```
+int count;
+const char **extensions = vd_fw_vk_wsi_instance_extensions(&count);
+        ```
+
+        para {
+            And continue on just like you would normally. At some point, if you're rendering on a window, you'd like to
+            create a window surface. In Vulkan, each WSI for each window platform has its own function to do that, as
+            well as several other functions.
+        }
+
+        para {
+            But to actually be able to use at one of the WSI functions, Vulkan needs to be loaded. Typically, some
+            windowing libraries will try to load Vulkan themselves. This library doesn't do this. Instead you call:
+        }
+
+        verb```
+vd_fw_vk_set_get_instance_proc_addr(vkGetInstanceProcAddr); // Your version of vkGetInstanceProcAddr
+        ```
+
+        para {
+            Afterwards, to create a window surface, call:
+        }
+
+        verb```
+result = vd_fw_vk_wsi_surface_create((void*)instance, (void*)alloc, (void*)&surface);
+        ```
+
+        para {
+            You can then use the surface normally (i.e. query queue families for presentation support, formats, etc...).
+        }
+
+        @img(class="rounded img-fluid rmprint"
+             src="./assets/fw/tutorials-vulkan.gif")
+    }
+
+    @section("Switch Graphics APIs") {
         para {
             Apart from OpenGL, this library allows you to use other Graphics APIs. This is done by specifying the
             graphics API <code>VdFwInitInfo::api</code>.
@@ -2013,6 +2085,31 @@ if (will_switch_to_next_backend) {
         para {
             The rest of the code is typical graphics programming stuff (setting up buffers, textures rendering context).
         }
+    }
+
+    @section("Block while Resizing") {
+        para {
+            While live resize is nice to have, there may be cases where you don't want it, most likely for performance
+            reasons. You can enable/disable blocking while the user is resizing the window like so:
+        }
+
+        verb```
+vd_fw_init(& (VdFwInitInfo) {
+    .api = VD_FW_GRAPHICS_API_CUSTOM,
+    .window_options = {
+        .borderless = 0,
+        .block_while_sizing = 1,
+    }
+});
+        ```
+
+        para {
+            Or, during runtime:
+        }
+
+        verb```
+vd_fw_set_block_while_sizing(1 /* or 0 */);
+        ```
     }
 }
 

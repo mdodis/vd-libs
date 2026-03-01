@@ -1,0 +1,33 @@
+@title("vd_fc.h")
+
+@section("Brief") {
+    @img(src="./assets/fc/vd-fc-logo@1x.png"
+         srcset="./assets/fc/vd-fc-logo@1x.png 1x, ./assets/fc/vd-fc-logo@2x.png 2x"
+         width="128"
+         height="106.5"
+         class="span-image")
+
+
+    para {
+        A <b>header-only</b> library that handles controller input & mapping.
+    }
+
+    @div(class="d-flex justify-content-end") {
+        @button(type="button" class="btn ms-2 btn-outline-success" onclick="window.print();") {
+            text {
+                PDF
+            }
+        }
+        @a(type="button" class="btn ms-2 btn-outline-success" href="https://raw.githubusercontent.com/mdodis/vd-libs/main/vd_fc.h") {
+            text {
+                Download
+            }
+        }
+    }
+}
+
+@section("Reference") {
+    @apigen("vd_fc.h")
+}
+
+@copyright()

@@ -159,7 +159,9 @@ section, .apiitem {
 }
 
 .libcard {
+    min-width: 260px;
     transition: background-color 0.2s ease-in-out;
+    flex: 1 1 320px;
     /*width: 564px;*/
     /*height: 120px;*/
 }
