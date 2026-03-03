@@ -510,7 +510,16 @@ VD_CG_INL VdFLine       vd_fray_to_line     (VdFRay *ray, float t)              
 /* ----COORDINATE SYSTEMS-------------------------------------------------------------------------------------------- */
 VD_CG_INL VdF4x4        vd_fidentity4x4        (void);
 VD_CG_INL VdF4x4        vd_fdx_to_vk4x4        (void);
+/**
+ * @brief Build perspective projection matrix for right handed coordinate system, with normalized depth [-1,+1]
+ * @param  fovyrad Vertical FoV in radians
+ * @param  aspect  Aspect Ratio
+ * @param  pnr     Near Plane
+ * @param  pfr     Far Plane
+ * @return         The matrix
+ */
 VD_CG_INL VdF4x4        vd_fperspective4x4     (VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr, VdCgf32 pfr);
+VD_CG_INL VdF4x4        vd_fperspective4x4_zo  (VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr, VdCgf32 pfr);
 VD_CG_INL VdF4x4        vd_foblique4x4         (VdCgf32 left, VdCgf32 right, VdCgf32 bottom, VdCgf32 top, VdCgf32 pnr, VdCgf32 pfr);
 VD_CG_INL VdF4x4        vd_fperspective4x4_vk  (VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr, VdCgf32 pfr);
 VD_CG_INL VdF4x4        vd_flookat4x4          (VdF3 from, VdF3 to, VdF3 up);
@@ -815,6 +824,21 @@ VD_CG_INL VdF4x4 vd_fperspective4x4(VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr
     return result;
 }
 
+VD_CG_INL VdF4x4 vd_fperspective4x4_zo(VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr, VdCgf32 pfr)
+{
+    VdF4x4 result;
+    VdCgf32 f;
+
+    f = 1.f / VD_CG_FTAN(fovyrad * 0.5f);
+
+    result = vd_fm4x4(f / aspect,                       0.f,                  0.f,                        0.f,
+                      0.f,                              f,                    0.f,                        0.f,
+                      0.f,                              0.f,                  pfr / (pfr - pnr),          1.f,
+                      0.f,                              0.f,                  -pnr * pfr / (pfr - pnr),   0.f);
+
+    return result;
+}
+
 VD_CG_INL VdF4x4 vd_foblique4x4(VdCgf32 left, VdCgf32 right, VdCgf32 bottom, VdCgf32 top, VdCgf32 pnr, VdCgf32 pfr)
 {
     VdF4x4 result;
@@ -831,17 +855,6 @@ VD_CG_INL VdF4x4 vd_foblique4x4(VdCgf32 left, VdCgf32 right, VdCgf32 bottom, VdC
                       0.f,                      0.f,                        2.f / depth,            0.f,
                       - (right + left) / width, - (top + bottom) / height,  - (pfr + pnr) / depth,  1.f);
     return result;
-}
-
-VD_CG_INL VdF4x4 vd_fperspective4x4_vk(VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr, VdCgf32 pfr)
-{
-    VdCgf32 half_tan_fovy = VD_CG_FTAN(fovyrad * 0.5f);
-
-    return vd_fm4x4(
-        1.f / ((half_tan_fovy) * aspect), 0.f,                  0.f,                0.f,
-        0.f,                              1.f / half_tan_fovy,  0.f,                0.f,
-        0.f,                              0.f,                  pfr / (pfr - pnr), -(pnr * pfr) / (pfr - pnr),
-        0.f,                              0.f,                  1.f,                0.f);
 }
 
 VD_CG_INL VdF4x4 vd_flookat4x4(VdF3 from, VdF3 to, VdF3 up)
@@ -1311,6 +1324,7 @@ VD_CG_INL int vd_fline_vs_cylinder(VdFLine *line, VdFCylinder *cylinder, VdCgf32
 #define fidentity4x4             vd_fidentity4x4 
 #define fdx_to_vk4x4             vd_fdx_to_vk4x4 
 #define fperspective4x4          vd_fperspective4x4 
+#define fperspective4x4_zo       vd_fperspective4x4_zo
 #define foblique4x4              vd_foblique4x4
 #define fperspective4x4_vk       vd_fperspective4x4_vk 
 #define flookat4x4               vd_flookat4x4 

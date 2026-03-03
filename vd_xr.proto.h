@@ -329,6 +329,8 @@ typedef struct {
     int                overriden;
 } VdXr__LoaderPropertyStorage;
 
+typedef struct VdXr__RuntimeLibrary VdXr__RuntimeLibrary;
+
 static void                 vd_xr__string_buffer_empty(VdXr__StringBuffer *buf);
 static char*                vd_xr__string_buffer_push(VdXr__StringBuffer *buf, const char *str);
 static char*                vd_xr__string_buffer_push_range(VdXr__StringBuffer *buf, VdXr__StringRange range);
@@ -346,6 +348,8 @@ static XrResult             vd_xr__get_instance_extension_properties_from_runtim
 static void                 vd_xr__add_files_in_path(VdXr__ManifestFileList *list, int is_directory_list, const char *search_path);
 static void                 vd_xr__check_all_files_in_path(VdXr__StringRange search_path, int is_directory_list, VdXr__ManifestFileList *list);
 static int                  vd_xr__load_manifest_file(VdXr__ManifestFile *file, char *json, size_t len);
+static VdXr__RuntimeLibrary vd_xr__open_runtime(VdXr__ManifestFile *file);
+static int                  vd_xr__path_is_absolute(char *path, size_t len);
 
 static const char*          vd_xr__get_loader_property(VdXr__LoaderProperty property);
 static void                 vd_xr__copy_include_paths(VdXr__StringBuffer *buf, int is_directory_list, const char *cur_path, const char *rel_path);
@@ -377,7 +381,6 @@ $$xr_generated_loader.cpp$$
 $$xr_generated_dispatch_table.c$$
 
 #ifdef _WIN32
-
 #pragma pack(push, 1)
 /* ----WIN32 BASE---------------------------------------------------------------------------------------------------- */
 #ifndef _MINWINDEF_
@@ -488,6 +491,7 @@ VD_XR_DECLARE_HANDLE(VdXrHKEY);
 typedef VdXrHINSTANCE VdXrHMODULE;
 
 extern VdXrHMODULE LoadLibraryA(VdXrLPCSTR path);
+extern VdXrHMODULE LoadLibraryExW(VdXrLPCWSTR lpLibFileName, VdXrHANDLE hFile, VdXrDWORD dwFlags);
 extern VdXrBOOL    CloseHandle(VdXrHANDLE hObject);
 extern VdXrHANDLE  GetCurrentProcess();
 extern void*       HeapAlloc(VdXrHANDLE hHeap, VdXrDWORD dwFlags, VdXrSIZE_T dwBytes);
@@ -699,6 +703,17 @@ typedef VdXrACCESS_MASK VdXrREGSAM;
 #define VD_XR__WIN32_FILE_ATTRIBUTE_NORMAL               0x00000080  
 #define VD_XR__WIN32_FILE_ATTRIBUTE_TEMPORARY            0x00000100  
 
+#define VD_XR__WIN32_LOAD_WITH_ALTERED_SEARCH_PATH       0x00000008
+#define VD_XR__WIN32_LOAD_IGNORE_CODE_AUTHZ_LEVEL        0x00000010
+#define VD_XR__WIN32_LOAD_LIBRARY_AS_IMAGE_RESOURCE      0x00000020
+#define VD_XR__WIN32_LOAD_LIBRARY_AS_DATAFILE_EXCLUSIVE  0x00000040
+#define VD_XR__WIN32_LOAD_LIBRARY_REQUIRE_SIGNED_TARGET  0x00000080
+#define VD_XR__WIN32_LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR    0x00000100
+#define VD_XR__WIN32_LOAD_LIBRARY_SEARCH_APPLICATION_DIR 0x00000200
+#define VD_XR__WIN32_LOAD_LIBRARY_SEARCH_USER_DIRS       0x00000400
+#define VD_XR__WIN32_LOAD_LIBRARY_SEARCH_SYSTEM32        0x00000800
+#define VD_XR__WIN32_LOAD_LIBRARY_SEARCH_DEFAULT_DIRS    0x00001000
+
 #define VD_XR__WIN32_INVALID_FILE_ATTRIBUTES ((VdXrDWORD)-1)
 
 typedef enum VdXr_TOKEN_INFORMATION_CLASS {
@@ -803,6 +818,10 @@ static VdXr__ProcGetTokenInformation VdXr__GetTokenInformation;
 static VdXr__ProcGetSidSubAuthorityCount VdXr__GetSidSubAuthorityCount;
 static VdXr__ProcGetSidSubAuthority VdXr__GetSidSubAuthority;
 
+struct VdXr__RuntimeLibrary {
+    VdXrHMODULE mod;
+};
+
 static void                 vd_xr__win32_init(void);
 static int                  vd_xr__read_data_files_in_hive(VdXrHKEY hive, const wchar_t *location, VdXr__ManifestFileList *list);
 static int                  vd_xr__is_high_integrity_level(void);
@@ -896,6 +915,31 @@ static int vd_xr__is_high_integrity_level(void)
     }
 
     return cached_result > 0 ? 1 : 0;
+}
+
+static VdXr__RuntimeLibrary vd_xr__open_runtime(VdXr__ManifestFile *file)
+{
+    VD_XR_ASSERT(file->file_type == VD_XR__MANIFEST_FILE_TYPE_RUNTIME);
+
+    static wchar_t path[256];
+    int dwritten = vd_xr__utf8_to_wide(file->data.runtime.library_path, file->data.runtime.library_path_len, path, 256);
+    path[dwritten] = 0;
+
+    VdXrHMODULE handle = LoadLibraryExW(path, NULL, VD_XR__WIN32_LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | VD_XR__WIN32_LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR);
+
+    VdXr__RuntimeLibrary library;
+    library.mod = handle;
+    return library;
+}
+
+static int vd_xr__path_is_absolute(char *path, size_t len)
+{
+    int pathStartsWithDir = (len >= 1) && ((path[0] == '/') || (path[0] == '\\'));
+
+    int pathStartsWithDrive =
+        (len >= 3) && (path[1] == ':' && (path[2] == '/' || path[2] == '\\'));
+
+    return pathStartsWithDir || pathStartsWithDrive;
 }
 
 static void vd_xr__win32_init(void)
@@ -1128,6 +1172,9 @@ static XrResult vd_xr__load_runtime(void)
         return XR_SUCCESS;
     }
 
+    VdXr__ManifestFile file = {0};
+    int file_loaded = 0;
+
     // @note(mdodis): RuntimeManifestFile::FindManifestFiles
     {
 
@@ -1135,7 +1182,6 @@ static XrResult vd_xr__load_runtime(void)
         vd_xr__manifest_file_list_empty(list);
         vd_xr__get_loader_property(VD_XR__LOADER_PROPERTY_XR_RUNTIME_JSON_ENV_VAR);
 
-        VdXr__ManifestFile file = {0};
 #if XR_OS_WINDOWS
         const char *runtime_registry_location = "";
         const char *default_runtime_value_name = "ActiveRuntime";
@@ -1181,8 +1227,6 @@ static XrResult vd_xr__load_runtime(void)
                     GetFullPathNameW(value_w, nreq, full_pathw, NULL);
                     full_pathw[nreq] = 0;
 
-                    vd_xr__wide_to_utf8
-
                     VdXrHANDLE file_handle = CreateFileW(full_pathw, VD_XR__WIN32_GENERIC_READ,
                                                          VD_XR__WIN32_FILE_SHARE_READ, 0, 4 /* OPEN_ALWAYS */,
                                                          VD_XR__WIN32_FILE_ATTRIBUTE_NORMAL, 0);
@@ -1193,7 +1237,11 @@ static XrResult vd_xr__load_runtime(void)
                         char *json = (char*)vd_xr__arena_alloc(&Vd_Xr_G.arena, file_size.QuadPart);
                         VdXrDWORD num_bytes_read;
                         if (ReadFile(file_handle, json, file_size.QuadPart, &num_bytes_read, 0) && (num_bytes_read >= file_size.QuadPart)) {
-                            vd_xr__load_manifest_file(&file, json, file_size.QuadPart);
+                            if (vd_xr__load_manifest_file(&file, json, file_size.QuadPart)) {
+                                if (!vd_xr__path_is_absolute(file.data.runtime.library_path, file.data.runtime.library_path_len)) {
+                                    
+                                }
+                            }
                         }
                     }
                 }
@@ -1206,6 +1254,10 @@ static XrResult vd_xr__load_runtime(void)
         vd_xr__arena_restore(save);
 #endif
 
+    }
+
+    if (file_loaded) {
+        vd_xr__open_runtime(&file);
     }
 
 

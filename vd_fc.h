@@ -141,15 +141,75 @@ VD_FC_API VdFcIndexUID*     vd_fc_dropped(int *count);
 VD_FC_API VdFcIndexUID*     vd_fc_arrived(int *count);
 
 /* ----DEVICE PROPERTIES--------------------------------------------------------------------------------------------- */
+
+/**
+ * @brief Get the computed GUID for the device
+ * @param  id The device index
+ * @return    The Guid of the device
+ */
 VD_FC_API VdFcGuid          vd_fc_guid(int id);
+
+/**
+ * @brief Get the detected type of the device
+ * @param  id The device index
+ * @return    The type of the device. This is not guaranteed to be correct, and will default to VD_FC_TYPE_CONTROLLER
+ */
 VD_FC_API VdFcType          vd_fc_type(int id);
+
+/**
+ * @brief Get the class of the device
+ * @param  id The device index
+ * @return    The class of the device
+ */
 VD_FC_API VdFcClass         vd_fc_class(int id);
+
+/**
+ * @brief Get the total count of buttons that the device reports
+ * @param  id The device index
+ * @return    The count of the buttons
+ */
 VD_FC_API int               vd_fc_button_count(int id);
+
+/**
+ * @brief Get the total count of PoV hats that the device reports
+ * @param  id The device index
+ * @return    The count of the hats
+ */
 VD_FC_API int               vd_fc_hat_count(int id);
+
+/**
+ * @brief Get the total count of axes that the device reports
+ * @param  id The device index
+ * @return    The count of the axes
+ */
 VD_FC_API int               vd_fc_axis_count(int id);
+
+/**
+ * @brief Get the device's unique id. This is unique only per instance of the device (i.e. if disconnected & reconnected, it won't be the same)
+ * @param  id The device index
+ * @return    The unique instance id
+ */
 VD_FC_API uint64_t          vd_fc_uid(int id);
+
+/**
+ * @brief Get a short description of the library's driver that is used for this device
+ * @param  id The device index
+ * @return    The short name of the driver
+ */
 VD_FC_API const char*       vd_fc_driver(int id);
+
+/**
+ * @brief Lookup a device by UID
+ * @param  uid The UID to find
+ * @return     The device index, or -1
+ */
 VD_FC_API int               vd_fc_id_from_uid(uint64_t uid);
+
+/**
+ * @brief Get the device's name
+ * @param  id The device index
+ * @return    The device name. Popular devices by manufacturers should have very descriptive names, but some third-party devices may have generic names like "Game Controller"
+ */
 VD_FC_API const char*       vd_fc_name(int id);
 
 /* ----DEVICE FORCE FEEDBACK----------------------------------------------------------------------------------------- */
@@ -171,7 +231,7 @@ VD_FC_API int               vd_fc_ff_rumble_any(int id);
 /* ----SYMBOLIC INPUTS----------------------------------------------------------------------------------------------- */
 typedef struct {
     float         axes[34];
-    unsigned char buttons[160]; // 128 Buttons + 4 hats of 8 directions
+    unsigned char buttons[144]; // 128 Buttons + 4 hats of 8 directions
 } VdFcState;
 
 VD_FC_API int               vd_fc_button_down(int id, int sym_button_id);
@@ -333,6 +393,7 @@ static float                    vd_fc__clampf(float v, float m, float x);
 static int                      vd_fc__approxeq(float a, float b);
 static int                      vd_fc__approxeq_rumble(VdFcRumbleState *a, VdFcRumbleState *b);
 static VdFc__CommonDeviceData   vd_fc__device_get_common_data(uint16_t vendor_id, uint16_t product_id, uint32_t output_report_size);
+static uint32_t                 vd_fc__make_reflected_crc32(uint8_t *data, uint32_t count);
 
 #ifdef _WIN32
 #ifndef _MINWINDEF_
@@ -434,6 +495,14 @@ typedef struct VdFc_OVERLAPPED {
 
 typedef VdFcHINSTANCE VdFcHMODULE;
 
+typedef union VdFc_LARGE_INTEGER {
+  struct {
+    VdFcDWORD LowPart;
+    VdFcDWORD HighPart;
+  } u;
+  VdFcLONGLONG QuadPart;
+} VdFcLARGE_INTEGER;
+
 extern VdFcHMODULE LoadLibraryA(VdFcLPCSTR path);
 extern void*       HeapAlloc(VdFcHANDLE hHeap, VdFcDWORD dwFlags, VdFcSIZE_T dwBytes);
 extern VdFcHANDLE  GetProcessHeap();
@@ -446,62 +515,65 @@ extern VdFcHMODULE GetModuleHandleA(VdFcLPCSTR lpModuleName);
 extern int         WideCharToMultiByte(VdFcUINT CodePage, VdFcDWORD dwFlags, VdFcLPCWSTR lpWideCharStr, int cchWideChar, VdFcLPSTR lpMultiByteStr, int cbMultiByte, VdFcLPSTR lpDefaultChar, VdFcBOOL *lpUsedDefaultChar);
 extern VdFcBOOL    DeviceIoControl(VdFcHANDLE hDevice, VdFcDWORD dwIoControlCode, void* lpInBuffer, VdFcDWORD nInBufferSize, void* lpOutBuffer, VdFcDWORD nOutBufferSize, VdFcLPDWORD lpBytesReturned, VdFcLPOVERLAPPED lpOverlapped);
 extern VdFcBOOL    CancelIo(VdFcHANDLE hFile);
+extern int         QueryPerformanceCounter(VdFcLARGE_INTEGER *perf_count);
+extern int         QueryPerformanceFrequency(VdFcLARGE_INTEGER *perf_freq);
 #else
-typedef HWND        VdFcHWND;
-typedef DWORD       VdFcDWORD;
-typedef WORD        VdFcWORD;
-typedef LPWSTR      VdFcLPWSTR;
-typedef LPCWSTR     VdFcLPCWSTR;
-typedef LPCSTR      VdFcLPCSTR;
-typedef DWORD       VdFcDWORD;
-typedef UINT        VdFcUINT;
-typedef UINT64      VdFcUINT64;
-typedef UINT32      VdFcUINT32;
-typedef INT32       VdFcINT32;
-typedef UINT16      VdFcUINT16;
-typedef UINT8       VdFcUINT8;
-typedef INT16       VdFcINT16;
-typedef HMODULE     VdFcHMODULE;
-typedef HRESULT     VdFcHRESULT;
-typedef ULONG       VdFcULONG;
-typedef HDC         VdFcHDC;
-typedef HMONITOR    VdFcHMONITOR;
-typedef HANDLE      VdFcHANDLE;
-typedef HGDIOBJ     VdFcHGDIOBJ;
-typedef HBITMAP     VdFcHBITMAP;
-typedef LPARAM      VdFcLPARAM;
-typedef BOOL        VdFcPBOOL;
-typedef LONG        VdFcLONG;
-typedef BYTE        VdFcBYTE;
-typedef WCHAR       VdFcWCHAR;
-typedef BOOL        VdFcBOOL;
-typedef LPVOID      VdFcLPVOID;
-typedef FLOAT       VdFcFLOAT;
-typedef LPLONG      VdFcLPLONG;
-typedef VdFcDWORD   VdFcCOLORREF;
-typedef VdFcDWORD*  VdFcLPCOLORREF;
-typedef LPDWORD     VdFcLPDWORD;
-typedef HINSTANCE   VdFcHINSTANCE;
-typedef UINT_PTR    VdFcUINT_PTR, * VdFcPUINT_PTR;
-typedef FILETIME    VdFcFILETIME;
-typedef LONG_PTR    VdFcLONG_PTR;
-typedef LRESULT     VdFcLRESULT;
-typedef HICON       VdFcHICON;
-typedef HCURSOR     VdFcHCURSOR;
-typedef HBITMAP     VdFcHBITMAP;
-typedef HBRUSH      VdFcHBRUSH;
-typedef ATOM        VdFcATOM;
-typedef HMENU       VdFcHMENU;
-typedef USHORT      VdFcUSHORT;
-typedef BOOLEAN     VdFcBOOLEAN;
-typedef PUINT       VdFcPUINT;
-typedef UCHAR       VdFcUCHAR;
-typedef PUSHORT     VdFcPUSHORT;
-typedef PULONG      VdFcPULONG;
-typedef PCHAR       VdFcPCHAR;
-typedef SHORT       VdFcSHORT;
-typedef DWORD_PTR   VdFcDWORD_PTR;
-typedef OVERLAPPED  VdFcOVERLAPPED;
+typedef HWND            VdFcHWND;
+typedef DWORD           VdFcDWORD;
+typedef WORD            VdFcWORD;
+typedef LPWSTR          VdFcLPWSTR;
+typedef LPCWSTR         VdFcLPCWSTR;
+typedef LPCSTR          VdFcLPCSTR;
+typedef DWORD           VdFcDWORD;
+typedef UINT            VdFcUINT;
+typedef UINT64          VdFcUINT64;
+typedef UINT32          VdFcUINT32;
+typedef INT32           VdFcINT32;
+typedef UINT16          VdFcUINT16;
+typedef UINT8           VdFcUINT8;
+typedef INT16           VdFcINT16;
+typedef HMODULE         VdFcHMODULE;
+typedef HRESULT         VdFcHRESULT;
+typedef ULONG           VdFcULONG;
+typedef HDC             VdFcHDC;
+typedef HMONITOR        VdFcHMONITOR;
+typedef HANDLE          VdFcHANDLE;
+typedef HGDIOBJ         VdFcHGDIOBJ;
+typedef HBITMAP         VdFcHBITMAP;
+typedef LPARAM          VdFcLPARAM;
+typedef BOOL            VdFcPBOOL;
+typedef LONG            VdFcLONG;
+typedef BYTE            VdFcBYTE;
+typedef WCHAR           VdFcWCHAR;
+typedef BOOL            VdFcBOOL;
+typedef LPVOID          VdFcLPVOID;
+typedef FLOAT           VdFcFLOAT;
+typedef LPLONG          VdFcLPLONG;
+typedef VdFcDWORD       VdFcCOLORREF;
+typedef VdFcDWORD*      VdFcLPCOLORREF;
+typedef LPDWORD         VdFcLPDWORD;
+typedef HINSTANCE       VdFcHINSTANCE;
+typedef UINT_PTR        VdFcUINT_PTR, * VdFcPUINT_PTR;
+typedef FILETIME        VdFcFILETIME;
+typedef LONG_PTR        VdFcLONG_PTR;
+typedef LRESULT         VdFcLRESULT;
+typedef HICON           VdFcHICON;
+typedef HCURSOR         VdFcHCURSOR;
+typedef HBITMAP         VdFcHBITMAP;
+typedef HBRUSH          VdFcHBRUSH;
+typedef ATOM            VdFcATOM;
+typedef HMENU           VdFcHMENU;
+typedef USHORT          VdFcUSHORT;
+typedef BOOLEAN         VdFcBOOLEAN;
+typedef PUINT           VdFcPUINT;
+typedef UCHAR           VdFcUCHAR;
+typedef PUSHORT         VdFcPUSHORT;
+typedef PULONG          VdFcPULONG;
+typedef PCHAR           VdFcPCHAR;
+typedef SHORT           VdFcSHORT;
+typedef DWORD_PTR       VdFcDWORD_PTR;
+typedef OVERLAPPED      VdFcOVERLAPPED;
+typedef LARGE_INTEGER   VdFcLARGE_INTEGER;
 #endif // !_MINWINDEF_
 
 typedef struct VdFc_GUID {
@@ -1529,7 +1601,8 @@ typedef struct {
 
 typedef struct {
     VdFc__Win32_DIJOYSTATE2 state;
-    VdFcGUID instance_guid;
+    VdFcGUID                instance_guid;
+    uint8_t                 output_report[128];
 } VdFc__Win32DeviceDirectInputData;
 
 typedef struct {
@@ -1604,6 +1677,7 @@ struct VdFc__Device {
 
 typedef struct {
     int                                 has_polled_once;
+    VdFcLARGE_INTEGER                   perf_freq;
 
     // Dummy Window
     VdFcHWND                            hwnd;
@@ -1639,7 +1713,7 @@ static VdFc__Device*            vd_fc__win32_alloc_device(int *id);
 static VdFcLRESULT              vd_fc__win32_wndproc(VdFcHWND hwnd, VdFcUINT msg, VdFcWPARAM wparam, VdFcLPARAM lparam);
 static void                     vd_fc__win32_remove_dropped_devices(void);
 static VdFcBOOL                 vd_fc__win32_dinput_enum_devices(VdFc__Win32_LPDIDEVICEINSTANCEW inst, void *usr);
-static int                      vd_fc__win32_xinput_supported(VdFcGUID *guid, uint32_t *out_opt_report_size);
+static int                      vd_fc__win32_xinput_supported(VdFcGUID *guid, uint32_t *out_opt_report_size, char *instance_path);
 static int                      vd_fc__win32_xinput_supported_handle(VdFcHANDLE devhandle);
 static int                      vd_fc__win32_xinput_supported_instance_path(const char *name, VdFcUINT len);
 static int                      vd_fc__win32_rawinput_handle_gidc_arrival(VdFcHANDLE devhandle);
@@ -1650,11 +1724,14 @@ static void                     vd_fc__win32_rawinput_xinput_poll(void);
 static void                     vd_fc__win32_rawinput_xinput_correlate(VdFc__Device *device);
 static void                     vd_fc__win32_rawinput_xinput_clear_correlation(void);
 static int                      vd_fc__win32_device_is_xbox(uint16_t vid, uint16_t pid);
-static VdFc__Win32OutputMethod  vd_fc__win32_output_method_from_device(VdFc__Win32DeviceDriver driver, int is_xbox, int correlation_idx);
+static VdFc__Win32OutputMethod  vd_fc__win32_output_method_from_device(VdFc__Win32DeviceDriver driver,
+                                                                       VdFc__CommonDeviceData *common,
+                                                                       int correlation_idx);
 
 VD_FC_API void vd_fc_init(void)
 {
-    Vd_Fc_G.uid_next = 1;
+
+    QueryPerformanceFrequency(&Vd_Fc_G.perf_freq);
 
 #define V(dllpath) { HMODULE m = LoadLibraryA(dllpath);
 #define _X2(s, e) s##e
@@ -1759,6 +1836,11 @@ VD_FC_API void vd_fc_quit(void)
 
 VD_FC_API void vd_fc_poll(void)
 {
+    VdFcLARGE_INTEGER now_count;
+    QueryPerformanceCounter(&now_count);
+
+    // @todo(mdodis): Resubmit rumble on dualshock devices, since they stop themselves from rumbling after ~1s
+
     Vd_Fc_G.num_devices_dropped = 0;
     Vd_Fc_G.num_devices_arrived = 0;
     Vd_Fc_G.xinput_polled_this_frame = 0;
@@ -1871,6 +1953,60 @@ VD_FC_API void vd_fc_poll(void)
                     VdFcXInputSetState(dev->data.rinput.correlation_idx, &vibration);
                 } break;
 
+                case VD_FC__WIN32_OUTPUT_METHOD_DUALSHOCK_WRITE_FILE: {
+                    uint8_t *output_report = dev->data.dinput.output_report;
+
+                    uint32_t output_report_size = 32;
+                    uint32_t header_size = 0;
+                    uint32_t offset = 0;
+                    if (dev->common.flags & VD_FC__COMMON_DEVICE_WIRELESS) {
+                        output_report_size = 78;
+                        header_size = 1;
+                        offset = 2;
+                    }
+
+                    VD_FC_MEMSET(output_report, 0, output_report_size);
+
+                    if (dev->common.flags & VD_FC__COMMON_DEVICE_WIRELESS) {
+                        output_report[0] = 0xA2; // Header - Bluetooth HID report type: data/output
+                        output_report[1] = 0x11;
+                        output_report[2] = 0XC0;
+                        output_report[4] = 0x07;
+                    } else {
+                        output_report[0] = 0x05;
+                        output_report[1] = 0xFF;
+                    }
+
+                    uint8_t left_motor_freq  = (uint8_t)(vd_fc__clampf(left_motor  * 255.f, 0, 255));
+                    uint8_t right_motor_freq = (uint8_t)(vd_fc__clampf(right_motor * 255.f, 0, 255));
+
+                    output_report[4 + offset + header_size] = left_motor_freq;
+                    output_report[5 + offset + header_size] = right_motor_freq;
+                    // output_report[6 + offset + headerSize] = ledRed;
+                    // output_report[7 + offset + headerSize] = ledGreen;
+                    // output_report[8 + offset + headerSize] = ledBlue;
+
+                    if (dev->common.flags & VD_FC__COMMON_DEVICE_WIRELESS) {
+                        uint32_t crc = vd_fc__make_reflected_crc32(output_report, 75);
+                        VD_FC_MEMCPY(output_report + 75, &crc, sizeof(crc));
+                    }
+
+                    if (dev->write_handle != 0) {
+
+                        VdFcDWORD bytes_transferred;
+                        VdFcBOOL finished = GetOverlappedResult(dev->write_handle, &dev->overlapped,
+                                                                &bytes_transferred, 0);
+
+                        if (!finished) {
+                            CancelIo(dev->write_handle);
+                        }
+
+                        WriteFile(dev->write_handle, (void*)(output_report + header_size), output_report_size, 0,
+                                  &dev->overlapped);
+                    }
+
+                } break;
+
                 default: {} break;
             }
         }
@@ -1959,7 +2095,36 @@ VD_FC_API unsigned int vd_fc_raw_hat_value(int id, int hat_id)
         VdFc__Device *dev = &Vd_Fc_G.devices[id];
         if (dev->driver == VD_FC__WIN32_DEVICE_DRIVER_DINPUT) {
             if (hat_id < dev->num_hats) {
-                return dev->data.dinput.state.rgdwPOV[hat_id];
+
+                const int hat_centered   = 0;
+                const int hat_up         = 1;
+                const int hat_right      = 2;
+                const int hat_down       = 4;
+                const int hat_left       = 8;
+                const int hat_right_up   = (hat_right | hat_up);
+                const int hat_right_down = (hat_right | hat_down);
+                const int hat_left_up    = (hat_left  | hat_up);
+                const int hat_left_down  = (hat_left  | hat_down);
+
+                const int hat_states[9] = {
+                    hat_up,
+                    hat_right_up,
+                    hat_right,
+                    hat_right_down,
+                    hat_down,
+                    hat_left_down,
+                    hat_left,
+                    hat_left_up,
+                    hat_centered
+                };
+
+                int state_index = VD_FC__WIN32_LOWORD(dev->data.dinput.state.rgdwPOV[hat_id]) / (45 * 100);
+
+                if ((state_index < 0) || (state_index > 8)) {
+                    state_index = 8;
+                }
+
+                return hat_states[state_index];
             } else {
                 return 0;
             }
@@ -2009,7 +2174,8 @@ static VdFcBOOL vd_fc__win32_dinput_enum_devices(VdFc__Win32_LPDIDEVICEINSTANCEW
     (void)usr;
 
     uint32_t output_report_size;
-    if (vd_fc__win32_xinput_supported(&inst->guidProduct, &output_report_size)) {
+    static char instance_path[256];
+    if (vd_fc__win32_xinput_supported(&inst->guidProduct, &output_report_size, instance_path)) {
         return 1;
     }
 
@@ -2025,6 +2191,7 @@ static VdFcBOOL vd_fc__win32_dinput_enum_devices(VdFc__Win32_LPDIDEVICEINSTANCEW
         }
     }
 
+    int success = 0;
     if (!device_already_acquired) {
         VdFc__Win32_IDirectInputDevice8W *device = NULL;
         if (Vd_Fc_G.dinput->lpVtbl->CreateDevice(Vd_Fc_G.dinput, &inst->guidInstance, &device, NULL) == 0) {
@@ -2093,7 +2260,18 @@ static VdFcBOOL vd_fc__win32_dinput_enum_devices(VdFc__Win32_LPDIDEVICEINSTANCEW
                         fc_device->driver = VD_FC__WIN32_DEVICE_DRIVER_DINPUT;
                         fc_device->just_arrived = 1;
 
+                        fc_device->output_method = vd_fc__win32_output_method_from_device(fc_device->driver,
+                                                                                          &fc_device->common,
+                                                                                          -1);
+                        fc_device->ff_gain = 1.f;
+
+                        fc_device->write_handle = CreateFileA(instance_path,
+                                                              GENERIC_READ | GENERIC_WRITE,
+                                                              FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                                              NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
+
                         vd_fc_device_classify_auto(fc_device);
+                        success = 1;
 
                         uint8_t *inst_guid = (uint8_t*)&inst->guidInstance;
                         VD_FC_LOG("Device initialized: '%s'", fc_device->name);
@@ -2215,7 +2393,7 @@ static VdFcLRESULT vd_fc__win32_wndproc(VdFcHWND hwnd, VdFcUINT msg, VdFcWPARAM 
     return result;
 }
 
-static int vd_fc__win32_xinput_supported(VdFcGUID *guid, uint32_t *out_opt_report_size)
+static int vd_fc__win32_xinput_supported(VdFcGUID *guid, uint32_t *out_opt_report_size, char *instance_path)
 {
     VdFcRAWINPUTDEVICELIST *raw_input_device_list = Vd_Fc_G.raw_input_device_list;
     VdFcUINT max_raw_input_devices = sizeof(Vd_Fc_G.raw_input_device_list) / sizeof(Vd_Fc_G.raw_input_device_list[0]);
@@ -2279,6 +2457,8 @@ static int vd_fc__win32_xinput_supported(VdFcGUID *guid, uint32_t *out_opt_repor
                         *out_opt_report_size = caps.InputReportByteLength;
                     }
                 }
+
+                vd_fc__strlcpy(instance_path, device_instance_path, 256);
 
                 CloseHandle(device_file);
             } else {
@@ -2645,7 +2825,7 @@ static int vd_fc__win32_rawinput_handle_gidc_arrival(VdFcHANDLE devhandle)
     device->ff_gain                      = 1.f;
     VD_FC_MEMSET(&device->ff_rumble, 0, sizeof(device->ff_rumble));
 
-    device->output_method = vd_fc__win32_output_method_from_device(device->driver, is_xbox, -1);
+    device->output_method = vd_fc__win32_output_method_from_device(device->driver, &device->common, -1);
 
     vd_fc_device_classify_auto(device);
 
@@ -2895,7 +3075,7 @@ static void vd_fc__win32_rawinput_xinput_correlate(VdFc__Device *device)
             VD_FC_LOG("Gamepad correlated to dwUserIndex: %d", i);
             device->data.rinput.correlation_idx = i;
             device->ff_rumble_resubmit = 1;
-            device->output_method = vd_fc__win32_output_method_from_device(device->driver, device->data.rinput.is_xbox, i);
+            device->output_method = vd_fc__win32_output_method_from_device(device->driver, &device->common, i);
             break;
         }
     }
@@ -2912,7 +3092,7 @@ static void vd_fc__win32_rawinput_xinput_clear_correlation(void)
         if (dev->driver == VD_FC__WIN32_DEVICE_DRIVER_RINPUT) {
             dev->data.rinput.correlation_idx = -1;
             dev->ff_rumble_resubmit = 1;
-            dev->output_method = vd_fc__win32_output_method_from_device(dev->driver, dev->data.rinput.is_xbox, -1);
+            dev->output_method = vd_fc__win32_output_method_from_device(dev->driver, &dev->common, -1);
         }
     }
 
@@ -2969,25 +3149,39 @@ static int vd_fc__win32_device_is_xbox(uint16_t vid, uint16_t pid)
     }
 }
 
-static VdFc__Win32OutputMethod vd_fc__win32_output_method_from_device(VdFc__Win32DeviceDriver driver, int is_xbox, int correlation_idx)
+static VdFc__Win32OutputMethod  vd_fc__win32_output_method_from_device(VdFc__Win32DeviceDriver driver,
+                                                                       VdFc__CommonDeviceData *common,
+                                                                       int correlation_idx)
 {
 
     VdFc__Win32OutputMethod method = VD_FC__WIN32_OUTPUT_METHOD_NONE;
-    if (driver == VD_FC__WIN32_DEVICE_DRIVER_DINPUT) {
-        method = VD_FC__WIN32_OUTPUT_METHOD_NONE;
-    } else if (driver == VD_FC__WIN32_DEVICE_DRIVER_RINPUT) {
+    switch (driver) {
+        case VD_FC__WIN32_DEVICE_DRIVER_RINPUT: {
+            if (correlation_idx != -1) {
+                method = VD_FC__WIN32_OUTPUT_METHOD_XINPUT_SET_STATE;
+            } else if (common->flags & VD_FC__COMMON_DEVICE_XBOX) {
+                // @note(mdodis)
+                // XInput correlation allows us to get proper triggers for xbox controllers, but with this method we can't
+                // have rumble before that controller is correlated. Since we now know how to send rumble packets
+                // without XInput, we can do that and if/when it's correlated later, we can use the XInput stuff.
+                method = VD_FC__WIN32_OUTPUT_METHOD_XBOX_DEVICE_IO_CONTROL;
+            } else {
+                method = VD_FC__WIN32_OUTPUT_METHOD_NONE;
+            }
+        } break;
 
-        if (correlation_idx != -1) {
-            method = VD_FC__WIN32_OUTPUT_METHOD_XINPUT_SET_STATE;
-        } else if (is_xbox) {
-            // @note(mdodis)
-            // XInput correlation allows us to get proper triggers for xbox controllers, but with this method we can't
-            // have rumble before that controller is correlated. Since we now know how to send rumble packets
-            // without XInput, we can do that and if/when it's correlated later, we can use the XInput stuff.
-            method = VD_FC__WIN32_OUTPUT_METHOD_XBOX_DEVICE_IO_CONTROL;
-        } else {
+        case VD_FC__WIN32_DEVICE_DRIVER_DINPUT: {
             method = VD_FC__WIN32_OUTPUT_METHOD_NONE;
-        }
+
+            if (common->flags & VD_FC__COMMON_DEVICE_DS4) {
+                method = VD_FC__WIN32_OUTPUT_METHOD_DUALSHOCK_WRITE_FILE;     
+            }
+        } break;
+
+        default: break;
+    }
+    if (driver == VD_FC__WIN32_DEVICE_DRIVER_DINPUT) {
+    } else if (driver == VD_FC__WIN32_DEVICE_DRIVER_RINPUT) {
     }
 
     return method;
@@ -3013,7 +3207,15 @@ static void vd_fc__win32_remove_dropped_devices(void)
 
             if (dev->present) {
                 if (write_index != read_index) {
+
+                    // @note(mdodis): If we're relocating devices, then * to OVERLAPPED must be reset to the new device.
+                    // So cancel IO and resubmit and end of frame. 
+                    if (Vd_Fc_G.devices[read_index].write_handle) {
+                        CancelIo(Vd_Fc_G.devices[read_index].write_handle);
+                    }
+
                     Vd_Fc_G.devices[write_index] = Vd_Fc_G.devices[read_index];
+                    Vd_Fc_G.devices[write_index].ff_rumble_resubmit = 1;
                 }
                 write_index++;
             } else {
@@ -3386,6 +3588,40 @@ static VdFc__CommonDeviceData vd_fc__device_get_common_data(uint16_t vendor_id, 
     }
 
     return result;
+}
+
+static uint32_t vd_fc__make_reflected_crc32(uint8_t *data, uint32_t count)
+{
+
+    static const uint32_t crc_table[] = {
+        0x00000000,0x77073096,0xEE0E612C,0x990951BA,0x076DC419,0x706AF48F,0xE963A535,0x9E6495A3,0x0EDB8832,0x79DCB8A4,0xE0D5E91E,0x97D2D988,0x09B64C2B,
+        0x7EB17CBD,0xE7B82D07,0x90BF1D91,0x1DB71064,0x6AB020F2,0xF3B97148,0x84BE41DE,0x1ADAD47D,0x6DDDE4EB,0xF4D4B551,0x83D385C7,0x136C9856,0x646BA8C0,
+        0xFD62F97A,0x8A65C9EC,0x14015C4F,0x63066CD9,0xFA0F3D63,0x8D080DF5,0x3B6E20C8,0x4C69105E,0xD56041E4,0xA2677172,0x3C03E4D1,0x4B04D447,0xD20D85FD,
+        0xA50AB56B,0x35B5A8FA,0x42B2986C,0xDBBBC9D6,0xACBCF940,0x32D86CE3,0x45DF5C75,0xDCD60DCF,0xABD13D59,0x26D930AC,0x51DE003A,0xC8D75180,0xBFD06116,
+        0x21B4F4B5,0x56B3C423,0xCFBA9599,0xB8BDA50F,0x2802B89E,0x5F058808,0xC60CD9B2,0xB10BE924,0x2F6F7C87,0x58684C11,0xC1611DAB,0xB6662D3D,0x76DC4190,
+        0x01DB7106,0x98D220BC,0xEFD5102A,0x71B18589,0x06B6B51F,0x9FBFE4A5,0xE8B8D433,0x7807C9A2,0x0F00F934,0x9609A88E,0xE10E9818,0x7F6A0DBB,0x086D3D2D,
+        0x91646C97,0xE6635C01,0x6B6B51F4,0x1C6C6162,0x856530D8,0xF262004E,0x6C0695ED,0x1B01A57B,0x8208F4C1,0xF50FC457,0x65B0D9C6,0x12B7E950,0x8BBEB8EA,
+        0xFCB9887C,0x62DD1DDF,0x15DA2D49,0x8CD37CF3,0xFBD44C65,0x4DB26158,0x3AB551CE,0xA3BC0074,0xD4BB30E2,0x4ADFA541,0x3DD895D7,0xA4D1C46D,0xD3D6F4FB,
+        0x4369E96A,0x346ED9FC,0xAD678846,0xDA60B8D0,0x44042D73,0x33031DE5,0xAA0A4C5F,0xDD0D7CC9,0x5005713C,0x270241AA,0xBE0B1010,0xC90C2086,0x5768B525,
+        0x206F85B3,0xB966D409,0xCE61E49F,0x5EDEF90E,0x29D9C998,0xB0D09822,0xC7D7A8B4,0x59B33D17,0x2EB40D81,0xB7BD5C3B,0xC0BA6CAD,0xEDB88320,0x9ABFB3B6,
+        0x03B6E20C,0x74B1D29A,0xEAD54739,0x9DD277AF,0x04DB2615,0x73DC1683,0xE3630B12,0x94643B84,0x0D6D6A3E,0x7A6A5AA8,0xE40ECF0B,0x9309FF9D,0x0A00AE27,
+        0x7D079EB1,0xF00F9344,0x8708A3D2,0x1E01F268,0x6906C2FE,0xF762575D,0x806567CB,0x196C3671,0x6E6B06E7,0xFED41B76,0x89D32BE0,0x10DA7A5A,0x67DD4ACC,
+        0xF9B9DF6F,0x8EBEEFF9,0x17B7BE43,0x60B08ED5,0xD6D6A3E8,0xA1D1937E,0x38D8C2C4,0x4FDFF252,0xD1BB67F1,0xA6BC5767,0x3FB506DD,0x48B2364B,0xD80D2BDA,
+        0xAF0A1B4C,0x36034AF6,0x41047A60,0xDF60EFC3,0xA867DF55,0x316E8EEF,0x4669BE79,0xCB61B38C,0xBC66831A,0x256FD2A0,0x5268E236,0xCC0C7795,0xBB0B4703,
+        0x220216B9,0x5505262F,0xC5BA3BBE,0xB2BD0B28,0x2BB45A92,0x5CB36A04,0xC2D7FFA7,0xB5D0CF31,0x2CD99E8B,0x5BDEAE1D,0x9B64C2B0,0xEC63F226,0x756AA39C,
+        0x026D930A,0x9C0906A9,0xEB0E363F,0x72076785,0x05005713,0x95BF4A82,0xE2B87A14,0x7BB12BAE,0x0CB61B38,0x92D28E9B,0xE5D5BE0D,0x7CDCEFB7,0x0BDBDF21,
+        0x86D3D2D4,0xF1D4E242,0x68DDB3F8,0x1FDA836E,0x81BE16CD,0xF6B9265B,0x6FB077E1,0x18B74777,0x88085AE6,0xFF0F6A70,0x66063BCA,0x11010B5C,0x8F659EFF,
+        0xF862AE69,0x616BFFD3,0x166CCF45,0xA00AE278,0xD70DD2EE,0x4E048354,0x3903B3C2,0xA7672661,0xD06016F7,0x4969474D,0x3E6E77DB,0xAED16A4A,0xD9D65ADC,
+        0x40DF0B66,0x37D83BF0,0xA9BCAE53,0xDEBB9EC5,0x47B2CF7F,0x30B5FFE9,0xBDBDF21C,0xCABAC28A,0x53B39330,0x24B4A3A6,0xBAD03605,0xCDD70693,0x54DE5729,
+        0x23D967BF,0xB3667A2E,0xC4614AB8,0x5D681B02,0x2A6F2B94,0xB40BBE37,0xC30C8EA1,0x5A05DF1B,0x2D02EF8D
+    };
+
+    uint32_t crc = (uint32_t)~0;
+    while (count--) {
+        crc = (crc>>8) ^ crc_table[(uint8_t)crc^*data];
+        ++data;
+    }
+    return ~crc;
 }
 
 VD_FC_API int vd_fc_button_count(int id)

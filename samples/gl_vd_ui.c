@@ -5,7 +5,7 @@
 
 #define VD_USE_CRT 1
 #define VD_FW_NO_CRT 0
-#define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS
+#define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_CONSOLE
 #include "vd_fw.h"
 #include "vd.h"
 
@@ -19,18 +19,20 @@ int main(int argc, char const *argv[])
 {
     (void)argc;
     (void)argv;
+    int inspector = 0;
 
     vd_ui_init();
     vd_ui_debug_set_draw_cursor_on(0);
-    vd_ui_debug_set_inspector_on(0);
     vd_ui_debug_set_metrics_on(0);
-    vd_ui_debug_set_layout_recompute_vis_on(0);
+    vd_ui_debug_set_layout_recompute_vis_on(1);
 
     vd_fw_init(& (VdFwInitInfo) {
         .window_options = {
-            .borderless = 1,
+            .borderless = 0,
         },
     });
+
+    vd_fw_set_size(1600, 900);
 
     vd_ui_set_scale(vd_fw_get_scale());
 
@@ -77,6 +79,11 @@ int main(int argc, char const *argv[])
 
         int num_events = 0;
         VdFwEvent *events = vd_fw_poll(&num_events);
+
+        if (vd_fw_get_key_pressed(VD_FW_KEY_F11)) {
+            inspector = !inspector;
+            vd_ui_debug_set_inspector_on(inspector); 
+        }
 
         if (vd_fw_close_requested()) {
             vd_fw_quit();
@@ -125,9 +132,7 @@ int main(int argc, char const *argv[])
                     int shift   = (evt->data.key_down.modifiers & VD_FW_MOD_SHIFT)   ? 1 : 0;
                     int control = (evt->data.key_down.modifiers & VD_FW_MOD_CONTROL) ? 1 : 0;
                     int alt     = (evt->data.key_down.modifiers & VD_FW_MOD_ALT)     ? 1 : 0;
-                    if (shift && evt->data.key_down.key != VD_FW_KEY_LSHIFT) {
-                        printf("SHIFT\n");
-                    }
+
                     vd_ui_event_mod(VD_UI_MOD_SHIFT, shift);
                     vd_ui_event_mod(VD_UI_MOD_CONTROL, control);
                     vd_ui_event_mod(VD_UI_MOD_ALT, alt);
@@ -153,14 +158,14 @@ int main(int argc, char const *argv[])
 
         vd_ui_render_begin();
         {
-            int nc_rect[4];
-            int rects[16][4];
-            int written = 0;
-            int total = 0;
-            int changed = vd_ui_ws_nc_area_get(nc_rect, 16, &total, &written, rects);
-            if (changed) {
-                vd_fw_set_ncrects(nc_rect, written, rects);
-            }
+            // int nc_rect[4];
+            // int rects[16][4];
+            // int written = 0;
+            // int total = 0;
+            // int changed = vd_ui_ws_nc_area_get(nc_rect, 16, &total, &written, rects);
+            // if (changed) {
+            //     vd_fw_set_ncrects(nc_rect, written, rects);
+            // }
 
             // float nc_rectf[4] = {
             //     (float)nc_rect[0], (float)nc_rect[1],
@@ -259,7 +264,7 @@ int main(int argc, char const *argv[])
         VdUiRenderPass *passes = vd_ui_frame_get_render_passes(&num_passes);
 
         glViewport(0, 0, w, h);
-        glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         // Loop through render passes

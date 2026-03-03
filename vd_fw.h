@@ -9192,6 +9192,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
     VD_FW_G.graphics_api = VD_FW_GRAPHICS_API_INVALID;
     VD_FW_G.resizable = 1;
+    VD_FW_G.winthread_resizable = 1;
     VD_FW_G.block_while_sizing = 0;
     VD_FW_G.winthread_block_while_sizing = 0;
 

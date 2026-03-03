@@ -45,8 +45,8 @@ static int do_menu()
 {
     int result = 1;
 
-    vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f);
-    vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 1.f);
+    vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 1.f);
+    vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 0.f);
 
     vd_ui_style_padding_push(VD_UI_LEFT, 16.f);
 
@@ -132,6 +132,16 @@ static void vspacefixed(float f)
     vd_ui_style_size_pop(VD_UI_AXISH);
 }
 
+static void hspacefixed(float f)
+{
+    vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_ABSOLUTE, f, 1.f);
+    vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_ABSOLUTE, 0.f, 1.f);
+    VdUiStr null_str = {0, 0};
+    vd_ui_div_new(0, null_str);
+    vd_ui_style_size_pop(VD_UI_AXISV);
+    vd_ui_style_size_pop(VD_UI_AXISH);
+}
+
 static int expander(int *on, const char *label)
 {
     vd_ui_style_coloring_push(VD_UI_FLAG_BACKGROUND,
@@ -139,10 +149,13 @@ static int expander(int *on, const char *label)
                                              vd_ui_gradient1(vd_ui_f4(0.52f, 0.52f, 0.52f, 1.f)),
                                              vd_ui_gradient1(vd_ui_f4(0.33f, 0.33f, 0.33f, 1.f))));
     vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 1.f);
-    vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 1.f);
+    vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 0.f);
+    vd_ui_style_padding_push(VD_UI_LEFT, 4);
     VdUiDiv *div = vd_ui_div_newf(VD_UI_FLAG_BACKGROUND
                                   | VD_UI_FLAG_FLEX_HORIZONTAL
+                                  | VD_UI_FLAG_ALIGN_CENTER
                                   | VD_UI_FLAG_CLICKABLE, label);
+    vd_ui_style_padding_pop(VD_UI_LEFT);
     vd_ui_style_size_pop(VD_UI_AXISV);
     vd_ui_style_size_pop(VD_UI_AXISH);
     vd_ui_style_coloring_pop(VD_UI_FLAG_BACKGROUND);
@@ -150,7 +163,10 @@ static int expander(int *on, const char *label)
     int click = 0;
 
     vd_ui_parent_push(div);
-    vd_ui_labelf("%s##toggle-label", label);
+
+    VdUiDiv *lbl_div = vd_ui_labelf("%s##toggle-label", label);
+    lbl_div->style.text.halign = VD_UI_TEXT_HALIGN_CENTER;
+
     vd_ui_spacer(VD_UI_AXISH);
     const VdUiSymbol sym_off = vd_ui_symbol((VdUiFontId){1}, 59393);
     const VdUiSymbol sym_on  = vd_ui_symbol((VdUiFontId){1}, 59396);
@@ -173,6 +189,10 @@ static int expander(int *on, const char *label)
 
 static void do_device_info(void)
 {
+    static float scroll_x = 0.f;
+    static float scroll_y = 0.f;
+    // vd_ui_scroll_begin(VD_UI_LIT("##contents-scroll"), &scroll_x, &scroll_y);
+
     int curr_device_id = The_State.curr_device_id;
     vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f);
     vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 1.f);
@@ -180,15 +200,94 @@ static void do_device_info(void)
     vd_ui_style_size_pop(VD_UI_AXISV);
     vd_ui_style_size_pop(VD_UI_AXISH);
 
-    vd_ui_labelf("%s##device-name", vd_fc_name(curr_device_id));
+
+    // vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 10.f);
+    VdUiDiv *name_div = vd_ui_labelf("%s##device-name", vd_fc_name(curr_device_id));
+    name_div->style.text.halign = VD_UI_TEXT_HALIGN_CENTER;
+    // vd_ui_style_size_pop(VD_UI_AXISH);
 
     static int exp_device_raw = 0;
-    if (expander(&exp_device_raw, "Raw Data Properties")) {
+    static int exp_device_rmb = 0;
 
+    if (expander(&exp_device_raw, "Raw Data Properties")) {
+        int button_column_count = 8;
         vd_ui_labelf("Buttons: %d", vd_fc_button_count(curr_device_id));
+        for (int i = 0; i < vd_fc_button_count(curr_device_id); i += button_column_count) {
+
+            if (i != 0) {
+                vspacefixed(4.f);
+            }
+
+            vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 0.f);
+            vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 0.f);
+            vd_ui_parent_newf(VD_UI_FLAG_FLEX_HORIZONTAL, "##button-row-%d", i);
+            vd_ui_style_size_pop(VD_UI_AXISV);
+            vd_ui_style_size_pop(VD_UI_AXISH);
+
+            for (int j = 0; (j < button_column_count) && ((i + j) < vd_fc_button_count(curr_device_id)); ++j) {
+
+                int button_id = i + j;
+
+                VdUiDiv *div = vd_ui_div_newf(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_TEXT,
+                                              "%d##button-%d", button_id, button_id);
+
+                div->style.size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
+                div->style.size[0].value = 32.f;
+                div->style.size[0].niceness = 0.f;
+                div->style.size[1].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
+                div->style.size[1].value = 32.f;
+                div->style.size[1].niceness = 0.f;
+
+                div->style.text.halign = VD_UI_TEXT_HALIGN_CENTER;
+                div->style.text.valign = VD_UI_TEXT_VALIGN_MIDDLE;
+
+                div->style.background.corner_radius = 16.f;
+                div->style.background.edge_softness = 0.002f;
+
+                if (vd_fc_raw_button_down(curr_device_id, button_id)) {
+                    div->style.background.coloring = vd_ui_coloring_all4(vd_ui_f4(1.f, 0.f, 0.f, 1.f));
+                } else {
+                    div->style.background.coloring = vd_ui_coloring_all4(vd_ui_f4(0.1f, 0.1f, 0.1f, 1.f));
+                }
+
+                hspacefixed(4.f);
+            }
+
+            vd_ui_parent_pop();
+        }
+
+        vd_ui_labelf("Hats: %d", vd_fc_hat_count(curr_device_id));
+        for (int i = 0; i < vd_fc_hat_count(curr_device_id); ++i) {
+            vd_ui_labelf("Hat %d: %d", i, vd_fc_raw_hat_value(curr_device_id, i));
+        }
+
+        vd_ui_labelf("Axes: %d", vd_fc_axis_count(curr_device_id));
     }
 
+
+    if (expander(&exp_device_rmb, "Force Feedback")) {
+        vd_ui_labelf("Rumble Supported: %d", vd_fc_ff_rumble_supported(curr_device_id));
+
+        vspacefixed(16.f);
+
+        if (vd_fc_ff_rumble_supported(curr_device_id)) {
+            vd_ui_labelf("Rumble");
+            static float left_motor  = 0.5f;
+            static float right_motor = 0.5f;
+            vd_ui_sliderf_float(&left_motor, 0.f, 1.f, VD_UI_AXISH, "Left Motor Freq.");
+            vd_ui_sliderf_float(&right_motor, 0.f, 1.f, VD_UI_AXISH, "Right Motor Freq.");
+
+            if (vd_ui_buttonf("Toggle Rumble").clicked) {
+                vd_fc_ff_rumble_set_motors(curr_device_id, left_motor, right_motor);
+            }
+        }
+
+    }
+
+    // vspacefixed(1000.f);
+
     vd_ui_parent_pop();
+    // vd_ui_scroll_end();
 }
 
 static void do_sidebar(void)
@@ -197,8 +296,10 @@ static void do_sidebar(void)
     vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f);
     vd_ui_style_coloring_push(VD_UI_FLAG_BACKGROUND, sidebar_bg());
     vd_ui_style_padding_push(VD_UI_LEFT, 8.f);
+    vd_ui_style_padding_push(VD_UI_RIGHT, 8.f);
     vd_ui_parent_newf(VD_UI_FLAG_BACKGROUND, "##sidebar-bg");
     vd_ui_style_padding_pop(VD_UI_LEFT);
+    vd_ui_style_padding_pop(VD_UI_RIGHT);
     vd_ui_style_coloring_pop(VD_UI_FLAG_BACKGROUND);
     vd_ui_style_size_pop(VD_UI_AXISV);
     vd_ui_style_size_pop(VD_UI_AXISH);
@@ -266,10 +367,10 @@ static void do_content_area(void)
             d->style.text.halign = VD_UI_TEXT_HALIGN_CENTER;
             d->style.text.valign = VD_UI_TEXT_VALIGN_MIDDLE;
         } else {
-            vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 0.f);
-            vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 0.f);
+            vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 1.f);
+            vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f);
 
-            vd_ui_parent_newf(VD_UI_FLAG_FLEX_HORIZONTAL, "##content-area");
+            vd_ui_parent_newf(VD_UI_FLAG_FLEX_HORIZONTAL, "##at-least-one-in");
 
             vd_ui_style_size_pop(VD_UI_AXISV);
             vd_ui_style_size_pop(VD_UI_AXISH);
@@ -320,19 +421,24 @@ int main(int argc, char const *argv[])
     (void)argc;
     (void)argv;
 
+    The_State.sidebar_overlaid = 1;
+
     vd_fc_init();
 
     vd_ui_init();
     vd_ui_debug_set_draw_cursor_on(0);
-    vd_ui_debug_set_inspector_on(0);
+    vd_ui_debug_set_inspector_on(1);
     vd_ui_debug_set_metrics_on(0);
     vd_ui_debug_set_layout_recompute_vis_on(0);
 
     vd_fw_init(& (VdFwInitInfo) {
         .window_options = {
             .borderless = 1,
+            .block_while_sizing = 0,
         },
     });
+
+    vd_fw_set_resizable(1);
 
     vd_ui_set_scale(vd_fw_get_scale());
 
@@ -386,7 +492,7 @@ int main(int argc, char const *argv[])
         vd_fw_link_program(program);
     }
 
-    vd_fw_set_vsync_on(1);
+    vd_fw_set_vsync_on(0);
     while (vd_fw_running()) {
 
         int num_events = 0;
