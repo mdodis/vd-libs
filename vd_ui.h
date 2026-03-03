@@ -355,9 +355,9 @@ enum {
 typedef int VdUiTextVAlign;
 
 typedef struct {
-    VdUiGradient normal;
-    VdUiGradient hot;
-    VdUiGradient active;
+    VdUiGradient    normal;
+    VdUiGradient    hot;
+    VdUiGradient    active;
 } VdUiColoring;
 
 VD_UI_INL float vd_ui_lerp(float a, float b, float t)
@@ -389,14 +389,16 @@ VD_UI_INL VdUiGradient vd_ui_coloring_interpolate(VdUiColoring coloring, float h
 }
 
 typedef struct VdUiStyleBox {
-    float        corner_radius;
-    float        edge_softness;
-    float        border_thickness;
-    VdUiColoring coloring;
+    float           corner_radius;
+    float           edge_softness;
+    float           border_thickness;
+    VdUiColoring    coloring;
+    VdUiTextureId   texture;
 } VdUiStyleBox;
 
 typedef struct VdUiStyleText {
     VdUiColoring    coloring;
+    VdUiTextureId   texture;
 
     /** The font size to use for the text & symbol, in pixels. */
     float           font_size;
@@ -883,6 +885,9 @@ VD_UI_API void             vd_ui_render_end(void);
 /* ----FONTS--------------------------------------------------------------------------------------------------------- */
 VD_UI_API VdUiFontId       vd_ui_font_add_ttf(void *buffer, size_t size);
 VD_UI_API void*            vd_ui_font_default(size_t *size);
+
+/* ----TEXTURES------------------------------------------------------------------------------------------------------ */
+VD_UI_API void             vd_ui_texture_add(VdUiTextureId id);
 
 /* ----INPUT--------------------------------------------------------------------------------------------------------- */
 VD_UI_API void             vd_ui_event_size(float width, float height);
@@ -2600,25 +2605,31 @@ VD_UI_API int vd_ui_slider(void *value, void *min_value, void *max_value,
                            VdUiDataType type, VdUiAxis orientation,
                            VdUiStr label)
 {
+    const float grip_size = 16.f;
+
     (void)orientation;
     (void)type;
 
+    vd_ui_style_padding_push(VD_UI_LEFT, grip_size * 0.5f);
+    vd_ui_style_padding_push(VD_UI_RIGHT, grip_size * 0.5f);
     VdUiDiv *slider_group = vd_ui_div_new(VD_UI_FLAG_FLEX_HORIZONTAL | VD_UI_FLAG_ALIGN_CENTER, label);
-    slider_group->style.size[0].mode = VD_UI_SIZE_MODE_ABSOLUTE;
-    slider_group->style.size[0].value = 120.f;
+    vd_ui_style_padding_pop(VD_UI_LEFT);
+    vd_ui_style_padding_pop(VD_UI_RIGHT);
+    // slider_group->style.size[0].mode = VD_UI_SIZE_MODE_ABSOLUTE;
+    // slider_group->style.size[0].value = 120.f;
     slider_group->style.size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
-    slider_group->style.size[1].value = 16.f;
+    slider_group->style.size[1].value = grip_size;
 
     vd_ui_parent_push(slider_group);
     {
         VdUiDiv *track = vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("##track"));
         track->style.size[0].mode     = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
         track->style.size[0].value    = 1.f;
-        track->style.size[0].niceness = 0.f;
+        track->style.size[0].niceness = 1.f;
         track->style.size[1].mode     = VD_UI_SIZE_MODE_ABSOLUTE;
-        track->style.size[1].value    = 4.f;
+        track->style.size[1].value    = grip_size * 0.25f;
         track->style.size[1].niceness = 0.f;
-        track->style.background.corner_radius    = 2.f;
+        track->style.background.corner_radius    = grip_size * 0.125f;
         track->style.background.edge_softness    = 0.25f;
         track->style.background.coloring.normal      = vd_ui_gradient1(vd_ui_f4(0.4f, 0.4f, 0.4f, 1.f));
 
@@ -2629,23 +2640,44 @@ VD_UI_API int vd_ui_slider(void *value, void *min_value, void *max_value,
                                        VD_UI_LIT("##grip"));
 
         grip->style.size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
-        grip->style.size[0].value = 16.f;
+        grip->style.size[0].value = grip_size;
         grip->style.size[1].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
-        grip->style.size[1].value = 16.f;
+        grip->style.size[1].value = grip_size;
         grip->style.background.edge_softness = 0.7f;
-        grip->style.background.coloring.normal   = vd_ui_gradient1(vd_ui_f4(0.294f, 0.71f, 0.925f, 1.f));
-        grip->style.background.coloring.hot      = vd_ui_gradient1(vd_ui_f4(0.294f, 0.71f, 0.925f, 1.f));
-        grip->style.background.coloring.active   = vd_ui_gradient1(vd_ui_f4(0.294f, 0.71f, 0.925f, 1.f));
+        grip->style.background.corner_radius = grip_size * 0.5f;
+        grip->style.background.coloring.normal   = vd_ui_gradient1(vd_ui_f4(0.27f, 0.27f, 0.27f, 1.f));
+        grip->style.background.coloring.hot      = vd_ui_gradient1(vd_ui_f4(0.27f, 0.27f, 0.27f, 1.f));
+        grip->style.background.coloring.active   = vd_ui_gradient1(vd_ui_f4(0.27f, 0.27f, 0.27f, 1.f));
         grip->zoffset             = 1;
         VdUiReply grip_reply  = vd_ui_call(grip);
 
-        float t = vd_ui__clampf01(grip->hot_t + grip->active_t);
-        grip->style.background.corner_radius = 8.f;
+        float t = vd_ui__clampf01(grip->hot_t * (1.f - grip->active_t));
+        const float inner_grip_size = vd_ui_fremap(t, 0.f, 1.f, grip_size * 0.5f, grip_size * 0.75f);
+
+        vd_ui_parent_push(grip);
+        VdUiDiv *grip_inner = vd_ui_div_new(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_FLOAT, VD_UI_LIT("##grip-inner"));
+        grip_inner->style.size[0].mode = VD_UI_SIZE_MODE_ABSOLUTE;
+        grip_inner->style.size[0].value = grip_size;
+        grip_inner->style.size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
+        grip_inner->style.size[1].value = grip_size;
+        grip_inner->style.background.edge_softness = 0.7f;
+        grip_inner->style.background.corner_radius = inner_grip_size * 0.5f;
+        grip_inner->style.background.coloring.normal   = vd_ui_gradient1(vd_ui_f4(0.29f, 0.71f, 0.93f, 1.f));
+        grip_inner->style.background.coloring.hot      = vd_ui_gradient1(vd_ui_f4(0.29f, 0.71f, 0.93f, 1.f));
+        grip_inner->style.background.coloring.active   = vd_ui_gradient1(vd_ui_f4(0.29f, 0.71f, 0.93f, 1.f));
+        grip_inner->style.size[0].value = inner_grip_size;
+        grip_inner->style.size[1].value = inner_grip_size;
+        grip_inner->comp_pos_rel[0] = grip->style.size[0].value * 0.5f - inner_grip_size * 0.5f;
+        grip_inner->comp_pos_rel[1] = grip->style.size[1].value * 0.5f - inner_grip_size * 0.5f;
+        // grip_inner->scale[0] = vd_ui_fremap(t, 0.f, 1.f, 0.66f, 0.8f);
+        // grip_inner->scale[1] = vd_ui_fremap(t, 0.f, 1.f, 0.66f, 0.8f);
+        vd_ui_parent_pop();
+
         // grip->scale[0] = vd_ui__clampf(grip->hot_t - (grip->active_t) * 0.2f, 0.8f, 1.f);
         // grip->scale[1] = vd_ui__clampf(grip->hot_t - (grip->active_t) * 0.2f, 0.8f, 1.f);
 
-        grip->scale[0] = vd_ui_fremap(t, 0.f, 1.f, 0.8f, 1.f);
-        grip->scale[1] = vd_ui_fremap(t, 0.f, 1.f, 0.8f, 1.f);
+        // grip->scale[0] = vd_ui_fremap(t, 0.f, 1.f, 0.8f, 1.f);
+        // grip->scale[1] = vd_ui_fremap(t, 0.f, 1.f, 0.8f, 1.f);
 
         float track_size = track->rect[2] - track->rect[0];
 
@@ -2660,7 +2692,7 @@ VD_UI_API int vd_ui_slider(void *value, void *min_value, void *max_value,
         float value_mapped_to_position_on_track = vd_ui_fremap(
             *((float*)value), *((float*)min_value), *((float*)max_value),
             0.f, track_size);
-        grip->comp_pos_rel[0] = value_mapped_to_position_on_track - grip->style.size[0].value * 0.5f;
+        grip->comp_pos_rel[0] = value_mapped_to_position_on_track; //- grip->style.size[0].value * 0.5f;
         grip->comp_pos_rel[1] = 0.f;
 
     }
@@ -3726,6 +3758,24 @@ static void vd_ui__demo_code(VdUiStr label, char *code)
     vd_ui_style_size_pop(VD_UI_AXISH);
 }
 
+static void vd_ui__demo_section_begin(const char *label)
+{
+    vd_ui_style_coloring_push(VD_UI_FLAG_BACKGROUND, vd_ui_coloring_all4(vd_ui_f4(0.1f, 0.1f, 0.1f, 1.f)));
+    vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_ABSOLUTE, 700, 0.f);
+    vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 0.f);
+    vd_ui_parent_newf(VD_UI_FLAG_BACKGROUND, "##%s", label);
+    vd_ui_style_size_pop(VD_UI_AXISV);
+    vd_ui_style_size_pop(VD_UI_AXISH);
+    vd_ui_style_coloring_pop(VD_UI_FLAG_BACKGROUND);
+
+    vd_ui_labelf("Basics - Horizontal Layout");
+}
+
+static void vd_ui__demo_section_end(void)
+{
+    vd_ui_parent_pop();
+}
+
 VD_UI_API int vd_ui_demo(void)
 {
     int result = 0;
@@ -3760,19 +3810,28 @@ VD_UI_API int vd_ui_demo(void)
             {
                 #if 1
                 static int layout_1_align_center = 0;
-                vd_ui_labelf("Basics - Horizontal Layout");
+                vd_ui__demo_section_begin("Basics - Horizontal Layout");
                 vd_ui__demo_code(VD_UI_LIT("code-1"), "vd_ui_div_newf(VD_UI_FLAG_FLEX_HORIZONTAL, \"layout-1\");");
-                vd_ui_checkboxf(&layout_1_align_center, "Center##align-center-1");
-                vd_ui__demo_fixed_rect_parent("layout-1", VD_UI_FLAG_FLEX_HORIZONTAL | (layout_1_align_center ? VD_UI_FLAG_ALIGN_CENTER : 0), 400, 200, vd_ui_f4(0.05f, 0.05f, 0.05f, 1.f));
+                vd_ui__demo_dyn_rect_parent2("columns", VD_UI_FLAG_FLEX_HORIZONTAL,
+                                      VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 1.f,
+                                      VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 1.f,
+                                      vd_ui_f4(0,0,0,0));
                 {
-                    vd_ui__demo_fixed_rect("1", 40, 40, vd_ui_f4(0.5f, 0.3f, 0.2f, 1.f));
-                    vd_ui__demo_fixed_rect("2", 80, 40, vd_ui_f4(0.4f, 0.7f, 0.2f, 1.f));
-                    vd_ui__demo_fixed_rect("3", 40, 90, vd_ui_f4(0.2f, 0.3f, 0.5f, 1.f));
+
+                    vd_ui__demo_fixed_rect_parent("layout-1", VD_UI_FLAG_FLEX_HORIZONTAL | (layout_1_align_center ? VD_UI_FLAG_ALIGN_CENTER : 0), 400, 200, vd_ui_f4(0.05f, 0.05f, 0.05f, 1.f));
+                    {
+                        vd_ui__demo_fixed_rect("1", 40, 40, vd_ui_f4(0.5f, 0.3f, 0.2f, 1.f));
+                        vd_ui__demo_fixed_rect("2", 80, 40, vd_ui_f4(0.4f, 0.7f, 0.2f, 1.f));
+                        vd_ui__demo_fixed_rect("3", 40, 90, vd_ui_f4(0.2f, 0.3f, 0.5f, 1.f));
+                    }
+                    vd_ui_parent_pop();
                 }
+                vd_ui_checkboxf(&layout_1_align_center, "Center##align-center-1");
                 vd_ui_parent_pop();
+                vd_ui__demo_section_end();
 
                 static int layout_2_align_center = 0;
-                vd_ui_labelf("Basics - Vertical Layout");
+                vd_ui__demo_section_begin("Basics - Vertical Layout");
                 vd_ui__demo_code(VD_UI_LIT("code-2"), "vd_ui_div_newf(0/*Vertical Flex*/, \"layout-2\");");
                 vd_ui_checkboxf(&layout_2_align_center, "Center##align-center-2");
                 vd_ui__demo_fixed_rect_parent("layout-2", (layout_2_align_center ? VD_UI_FLAG_ALIGN_CENTER : 0), 400, 200, vd_ui_f4(0.05f, 0.05f, 0.05f, 1.f));
@@ -3782,9 +3841,10 @@ VD_UI_API int vd_ui_demo(void)
                     vd_ui__demo_fixed_rect("3", 40, 90, vd_ui_f4(0.2f, 0.3f, 0.5f, 1.f));
                 }
                 vd_ui_parent_pop();
+                vd_ui__demo_section_end();
 
                 static float layout_3_child_3_width = 40.f;
-                vd_ui_labelf("Basics - Contain Children");
+                vd_ui__demo_section_begin("Basics - Contain Children");
                 vd_ui__demo_code(VD_UI_LIT("code-3"),
                         "vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 0.f);\n"
                         "vd_ui_div_newf(VD_UI_FLAG_FLEX_HORIZONTAL, \"layout-3\");\n"
@@ -3802,6 +3862,7 @@ VD_UI_API int vd_ui_demo(void)
                     vd_ui_parent_pop();
                 }
                 vd_ui_parent_pop();
+
                 vd_ui__demo_fixed_rect_parent("layout-3-vertical", 0, 200, 400, vd_ui_f4(0.05f, 0.05f, 0.05f, 1.f));
                 {
                     vd_ui__demo_fixed_rect("1", 40, 40, vd_ui_f4(0.5f, 0.3f, 0.2f, 1.f));
@@ -3813,9 +3874,10 @@ VD_UI_API int vd_ui_demo(void)
                     vd_ui_parent_pop();
                 }
                 vd_ui_parent_pop();
+                vd_ui__demo_section_end();
 
                 static float layout_4_child_3_width = 40.f;
-                vd_ui_labelf("Basics - Percentage of Parent");
+                vd_ui__demo_section_begin("Basics - Percentage of Parent");
                 vd_ui__demo_code(VD_UI_LIT("code-4"),
                         "vd_ui_spacer(VD_UI_AXISH);"
                         );
@@ -3832,10 +3894,11 @@ VD_UI_API int vd_ui_demo(void)
                     vd_ui_parent_pop();
                 }
                 vd_ui_parent_pop();
+                vd_ui__demo_section_end();
                 #endif
 
 
-                vd_ui_labelf("Nesting - 1");
+                vd_ui__demo_section_begin("Nesting - 1");
                 vd_ui__demo_fixed_rect_parent("layout-5", 0, 400, 200, vd_ui_f4(0.05f, 0.05f, 0.05f, 1.f));
                 {
                     VdUiDiv *pa = 0;
@@ -3885,8 +3948,9 @@ VD_UI_API int vd_ui_demo(void)
                     vd_ui_parent_pop();
                 }
                 vd_ui_parent_pop();
+                vd_ui__demo_section_end();
 
-                vd_ui_labelf("Nesting - 2");
+                vd_ui__demo_section_begin("Nesting - 2");
                 float layout_6_length[2];
                 vd_ui__demo_fixed_rect_parent("layout-6", 0, 400, 200, vd_ui_f4(0.05f, 0.05f, 0.05f, 1.f));
                 {
@@ -3941,6 +4005,7 @@ VD_UI_API int vd_ui_demo(void)
                 }
                 vd_ui_parent_pop();
                 vd_ui_labelf("Green Rect Size: %f %f", layout_6_length[0], layout_6_length[1]);
+                vd_ui__demo_section_end();
 
             }
 
@@ -4135,10 +4200,6 @@ static void vd_ui__calc_oversizes(VdUiContext *ctx, VdUiDiv *curr)
 
         if (curr->first == 0) {
             continue;
-        }
-
-        if (vd_ui_str_eq(curr->id_str, VD_UI_LIT("demo-dyn-rect-custom-dynamic-c"))) {
-            printf("hjere\n");
         }
 
         // If working on horizontal axis and flex mode is vertical (i.e. VD_UI_FLAG_FLEX_HORIZONTAL is not set)
