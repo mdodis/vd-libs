@@ -163,7 +163,9 @@ VD_FT_API VdFtCollection    vd_ft_collection_from_memory(void *memory, uint32_t 
  * @param  collection The collection
  * @return            The count of its families
  */
-VD_FT_API int               vd_ft_collection_family_count(VdFtCollection collection);
+VD_FT_API unsigned int      vd_ft_collection_family_count(VdFtCollection collection);
+
+VD_FT_API VdFtFamily        vd_ft_collection_family_from_index(VdFtCollection collection, int index);
 
 /**
  * @brief Free the collection
@@ -177,13 +179,6 @@ VD_FT_API void              vd_ft_collection_free(VdFtCollection collection);
  * @return  The count
  */
 VD_FT_API unsigned int      vd_ft_family_count(void);
-
-/**
- * @brief Creates a font family object from the system font collection
- * @param  index The family index [0, vd_ft_family_count())
- * @return       The family instance
- */
-VD_FT_API VdFtFamily*       vd_ft_family_from_index(unsigned int index);
 
 /**
  * @brief Get the font family name
@@ -1732,6 +1727,11 @@ static VdFt__ProcDWriteCreateFactory VdFt__DWriteCreateFactory;
 
 #define VD_FT__WIN32_CHECK_HRESULT(expr) do { VdFtHRESULT _hr_ = (expr); if (_hr_ != 0) { VD_FT_ABORT(#expr " failed"); } } while(0)
 
+typedef struct {
+    void *ptr;
+    uint32_t size;
+} VdFt__Win32Buffer;
+
 typedef struct VdFt__Win32MemCollection VdFt__Win32MemCollection;
 struct VdFt__Win32MemCollection {
     VdFtIDWriteFontCollection       *collection;
@@ -2078,17 +2078,48 @@ VD_FT_API VdFtCollection vd_ft_collection_from_memory(void *memory, uint32_t siz
 {
     vd_ft__win32_init();
 
+    VdFt__Win32Buffer buf;
+    buf.ptr = memory;
+    buf.size = size;
+
     // Create font collection from our loader
     VdFtIDWriteFontCollection *fc;
     VD_FT__WIN32_CHECK_HRESULT(Vd_Ft_G.factory->lpVtbl->CreateCustomFontCollection(Vd_Ft_G.factory,
                                                                                    &Vd_Ft_G.static_font_collection_loader,
-                                                                                   memory, size,
+                                                                                   &buf, sizeof(buf),
                                                                                    &fc));
 
     VdFtCollection result;
     result.source = 1;
-    result.hnd = 0;
+    result.hnd = (void*)fc;
     return result;
+}
+
+VD_FT_API unsigned int vd_ft_collection_family_count(VdFtCollection collection)
+{
+    unsigned int count = 0;
+    VdFtIDWriteFontCollection *fc = (VdFtIDWriteFontCollection*)collection.hnd;
+
+    if (collection.source == 0) {
+        fc = Vd_Ft_G.system_font_collection;
+    }
+    
+    count = fc->lpVtbl->GetFontFamilyCount(fc);
+
+    return count;
+}
+
+VD_FT_API VdFtFamily vd_ft_collection_family_from_index(VdFtCollection collection, int index)
+{
+    VdFtIDWriteFontFamily *font_family;
+
+    VdFtIDWriteFontCollection *fc = (VdFtIDWriteFontCollection*)collection.hnd;
+    if (collection.source == 0) {
+        fc = Vd_Ft_G.system_font_collection;
+    }
+
+    fc->lpVtbl->GetFontFamily(fc, index, &font_family);
+    return (VdFtFamily)font_family;
 }
 
 int EnumFontFamExProc(const VdFtLOGFONTW *lpelfe, const VdFtTEXTMETRICW *lpntme, VdFtDWORD FontType, VdFtLPARAM lParam)
@@ -2115,14 +2146,6 @@ VD_FT_API unsigned int vd_ft_family_count(void)
     } else {
         return 0;
     }
-}
-
-VD_FT_API VdFtFamily *vd_ft_family_from_index(unsigned int index)
-{
-    vd_ft__win32_init();
-    VdFtIDWriteFontFamily *font_family;
-    Vd_Ft_G.system_font_collection->lpVtbl->GetFontFamily(Vd_Ft_G.system_font_collection, index, &font_family);
-    return (VdFtFamily)font_family;
 }
 
 VD_FT_API char *vd_ft_family_name(VdFtFamily *family)
@@ -2654,13 +2677,8 @@ static VdFtHRESULT vd_ft__win32_static_create_stream_from_key(VdFtIDWriteFontFil
                                                               VdFtUINT32 fontFileReferenceKeySize,
                                                               VdFtIDWriteFontFileStream **fontFileStream)
 {
-    (void)This;
-    (void)fontFileReferenceKeySize;
-
-    VdFt__Win32Font *font = *(VdFt__Win32Font**)fontFileReferenceKey;
-    font->data.mem.stream.lpVtbl = &Vd_Ft_G.static_font_stream_vtbl;
-    *fontFileStream = &font->data.mem.stream;
-
+    VdFt__Win32MemCollection *collection = *(VdFt__Win32MemCollection**)fontFileReferenceKey;
+    *fontFileStream = &collection->stream;
     return 0;
 }
 
@@ -2668,13 +2686,11 @@ static VdFtHRESULT vd_ft__win32_read_file_fragment(VdFtIDWriteFontFileStream *Th
                                                    VdFtUINT64 fileOffset, VdFtUINT64 fragmentSize,
                                                    void** fragmentContext)
 {
+    VdFt__Win32MemCollection *collection = VD_FT__CONTAINER_OF(This, VdFt__Win32MemCollection, stream);
     (void)fragmentSize;
 
-    VdFt__Win32Font *font = (VdFt__Win32Font*)VD_FT__CONTAINER_OF(This, VdFt__Win32Font, data.mem.stream);
-
-    *fragmentStart = ((uint8_t*)font->data.mem.memory) + fileOffset;
+    *fragmentStart = ((uint8_t*)collection->memory) + fileOffset;
     *fragmentContext = 0;
-
     return 0;
 }
 
@@ -2686,8 +2702,8 @@ static void vd_ft__win32_release_file_fragment(VdFtIDWriteFontFileStream *This, 
 
 static VdFtHRESULT vd_ft__win32_get_file_size(VdFtIDWriteFontFileStream *This, VdFtUINT64* fileSize)
 {
-    VdFt__Win32Font *font = (VdFt__Win32Font*)VD_FT__CONTAINER_OF(This, VdFt__Win32Font, data.mem.stream);
-    *fileSize = font->data.mem.size;
+    VdFt__Win32MemCollection *collection = VD_FT__CONTAINER_OF(This, VdFt__Win32MemCollection, stream);
+    *fileSize = collection->size;
     return 0;
 }
 
@@ -2930,13 +2946,15 @@ static VdFtHRESULT vd_ft__win32_fcl_create_enumerator_from_key(VdFtIDWriteFontCo
                                                                VdFtUINT32 collectionKeySize,
                                                                VdFtIDWriteFontFileEnumerator** fontFileEnumerator)
 {
-    void *memory = (void*)collectionKey;
-    uint32_t memory_size = collectionKeySize;
+    VdFt__Win32Buffer buf = *(VdFt__Win32Buffer*)collectionKey;
+    void *memory = buf.ptr;
+    uint32_t memory_size = buf.size;
 
     VdFt__Win32MemCollection *wc = (VdFt__Win32MemCollection*)vd_ft__realloc_mem(0, sizeof(VdFt__Win32MemCollection));
     wc->memory = memory;
     wc->size = memory_size;
     wc->enumerator.lpVtbl = &Vd_Ft_G.static_font_enumerator_vtbl;
+    wc->stream.lpVtbl = &Vd_Ft_G.static_font_stream_vtbl;
     wc->file_opened = 0;
     *fontFileEnumerator = &wc->enumerator;
     return 0;
@@ -2947,23 +2965,28 @@ static VdFtHRESULT vd_ft__win32_ffe_move_next(VdFtIDWriteFontFileEnumerator *Thi
 {
     VdFt__Win32MemCollection *collection = VD_FT__CONTAINER_OF(This, VdFt__Win32MemCollection, enumerator);
 
-
     if (!collection->file_opened) {
         collection->file_opened = 1;
 
+        VdFtIDWriteFontFile *font_ref = 0;
         VD_FT__WIN32_CHECK_HRESULT(Vd_Ft_G.factory->lpVtbl->CreateCustomFontFileReference(Vd_Ft_G.factory,
                                                                                           &collection, sizeof(collection),
                                                                                           &Vd_Ft_G.static_font_loader,
                                                                                           &font_ref));
+        collection->font_ref = font_ref;
+        *hasCurrentFile = 1;
+    } else {
+        *hasCurrentFile = 0;
     }
 
-    *hasCurrentFile = !collection->file_opened;
     return 0;    
 }
 
 static VdFtHRESULT vd_ft__win32_ffe_get_current_font_file(VdFtIDWriteFontFileEnumerator *This,
                                                           VdFtIDWriteFontFile** fontFile)
 {
+    VdFt__Win32MemCollection *collection = VD_FT__CONTAINER_OF(This, VdFt__Win32MemCollection, enumerator);
+    *fontFile = collection->font_ref;
     return 0;
 }
 

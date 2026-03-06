@@ -179,14 +179,19 @@ int main(int argc, char const *argv[])
 
     VdFtCollection ui_font_collection = vd_ft_collection_from_memory(font_memory, font_size);
 
-    VdFtFamily *family = vd_ft_family_from_index(0);
-    printf("Using %s", vd_ft_family_name(family));
-
-
-    VdFtFontId font_id = vd_ft_create_font_from_memory(font_memory, (int)font_size);
+    for (unsigned int i = 0; i < vd_ft_collection_family_count(ui_font_collection); ++i) {
+        VdFtFamily family = vd_ft_collection_family_from_index(ui_font_collection, i);
+        printf("%u Family Name: %s\n", i, vd_ft_family_name(family));
+    }
 
     vd_ft_box_begin("Hello! My name is Michael. I'm from Greece.", 0);
     vd_ft_box_end();
+
+    // VdFtFamily *family = vd_ft_family_from_index(0);
+    // printf("Using %s", vd_ft_family_name(family));
+
+
+    VdFtFontId font_id = vd_ft_create_font_from_memory(font_memory, (int)font_size);
 
     #define TX L"Hello! My name is Michael Dodis."
     #define TXLEN ((sizeof(TX) / 2) - 1)
