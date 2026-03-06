@@ -10,6 +10,7 @@
 #include "vd.h"
 
 #include "vd_ui.h"
+#include "vd_ui_demo.c"
 
 #include <stdio.h>
 

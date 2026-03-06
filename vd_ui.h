@@ -91,25 +91,6 @@
 #endif // !VD_UI_INL
 
 typedef char VdUiBool;
-
-/**
- * Override to change the max rectangles that will be used to compute non-client area
- * @see vd_ui_ws_nc_area_mark, vd_ui_ws_nc_area_get
- */
-#ifndef VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX
-#   define VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX 16
-#endif // !VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX
-
-/**
- * To use a custom id for a texture, define a struct like so:
- * typedef struct {
- *     <Your custom texture id stuff>
- * } VdUiTextureId;
- */
-#ifndef VD_UI_TEXTURE_ID_STRUCT_DEFINED
-#   define VD_UI_TEXTURE_ID_STRUCT_DEFINED 0
-#endif // VD_UI_TEXTURE_ID_STRUCT_DEFINED
-
 #ifndef VD_UI_MEMSET
 #   ifdef VD_H
 #       define VD_UI_MEMSET(p,v,s) VD_MEMSET(p,v,s)
@@ -154,48 +135,22 @@ typedef char VdUiBool;
 #   endif
 #endif
 
-#define VD_UI_OFFSET_OF(type, element) ((size_t) & (((type*)0)->element))
-
 /* ----INITIALIZATION------------------------------------------------------------------------------------------------ */
 /**
- * Initialize the ui.
+ * @brief Initialize the library. This is equivalent to doing vd_ui_context_set(vd_ui_context_create(info))>
  */
 VD_UI_API void             vd_ui_init(void);
 
 /**
- * Begin a new frame. Call this before any ui layout or rendering calls
- * @param delta_seconds The delta time, in seconds.
+ * @brief Begin a new frame. Call this before any ui layout or rendering calls
+ * @param  delta_seconds The delta time, in seconds.
  */
 VD_UI_API void             vd_ui_frame_begin(float delta_seconds);
 /**
- * End the frame. Call this after any ui layout or drawing calls.
+ * @brief End the frame. Call this after any ui layout or drawing calls.
  */
 VD_UI_API void             vd_ui_frame_end(void);
 
-/* ----HELPERS------------------------------------------------------------------------------------------------------- */
-VD_UI_API int              vd_ui_vsnprintf(char *s, size_t n, const char *format, va_list args);
-static inline int          vd_ui_snprintf(char *s, size_t n, const char *format, ...);
-static inline int          vd_ui_strlen(const char *s);
-static inline void*        vd_ui_memcpy(void *dst, void *src, size_t count);
-VD_UI_INL void*            vd_ui_memmove(void *dest, void *src, size_t num);
-VD_UI_API void*            vd_ui_mem_push(size_t size);
-
-VD_UI_INL void *vd_ui_memmove(void *dest, void *src, size_t num) {
-    uint8_t* d = (uint8_t*)dest;
-    uint8_t* s = (uint8_t*)src;
-
-    if (d < s) {
-        for (size_t i = 0; i < num; ++i) {
-            d[i] = s[i];
-        }
-    } else if (s < d) {
-        for (size_t i = num; i > 0; --i) {
-            d[i - 1] = s[i - 1];
-        }
-    }
-
-    return d;
-}
 
 /* ----DATA TYPES---------------------------------------------------------------------------------------------------- */
 typedef struct {
@@ -219,6 +174,16 @@ typedef union {
 typedef struct {
     uintptr_t id;
 } VdUiFontId;
+
+/**
+ * To use a custom id for a texture, define a struct like so:
+ * typedef struct {
+ *     <Your custom texture id stuff>
+ * } VdUiTextureId;
+ */
+#ifndef VD_UI_TEXTURE_ID_STRUCT_DEFINED
+#   define VD_UI_TEXTURE_ID_STRUCT_DEFINED 0
+#endif // VD_UI_TEXTURE_ID_STRUCT_DEFINED
 
 #if !VD_UI_TEXTURE_ID_STRUCT_DEFINED
 typedef struct {
@@ -260,6 +225,7 @@ enum {
     VD_UI_FLAG_CLICKABLE        = 1 <<  4,
     VD_UI_FLAG_CLIP_CONTENT     = 1 <<  5,
     VD_UI_FLAG_FLEX_HORIZONTAL  = 1 <<  6, // 0 here means Vertical
+    VD_UI_FLAG_FLEX_VERTICAL    = 0 <<  6, // 1 here means Horizontal
     VD_UI_FLAG_ALIGN_CENTER     = 1 <<  7,
     VD_UI_FLAG_FLOAT            = 1 <<  8,
     VD_UI_FLAG_CAPTURES_MOUSE   = 1 <<  9,
@@ -318,8 +284,11 @@ typedef int VdUiSizeMode;
 VD_UI_INL const char*      vd_ui_size_mode_to_str(VdUiSizeMode size_mode);
 
 typedef struct {
+    /* The size mode. The `value` field is based on this field */
     VdUiSizeMode mode;
+    /* The value. For VD_UI_SIZE_MODE_ABSOLUTE, it's in pixels, for VD_UI_SIZE_MODE_PERCENT_OF_PARENT it's in [0,1] */
     float        value;
+    /* How eager this div is to resize its contents in order to fit into the parent div's rect */
     float        niceness;
 } VdUiSize;
 
@@ -332,11 +301,19 @@ enum {
 typedef int VdUiAxis;
 
 enum {
+    /* Don't draw the contents */
     VD_UI_VISBILITY_DONT_DISPLAY = 1 << 0,
+
+    /* Don't take the contents into account for layout */
     VD_UI_VISBILITY_DONT_MEASURE = 1 << 2,
 
+    /* Calculate & draw */
     VD_UI_VISIBILITY_SHOW = 0,
+
+    /* Calculate layout, but don't draw */
     VD_UI_VISIBILITY_HIDE = VD_UI_VISBILITY_DONT_DISPLAY,
+
+    /* Dont Calculate the layout and don't draw */
     VD_UI_VISIBILITY_OMIT = VD_UI_VISBILITY_DONT_DISPLAY | VD_UI_VISBILITY_DONT_MEASURE,
 };
 typedef int VdUiVisibility;
@@ -355,8 +332,11 @@ enum {
 typedef int VdUiTextVAlign;
 
 typedef struct {
+    /* Div is not hovered or active */
     VdUiGradient    normal;
+    /* Div is hovered but not active (i.e. no further interaction) */
     VdUiGradient    hot;
+    /* Div is active, but not necessarily hovered */
     VdUiGradient    active;
 } VdUiColoring;
 
@@ -548,21 +528,25 @@ typedef struct {
     float    click_timeout;
 } VdUiReply;
 
-#define VD_UI_CHAR_BUF_COUNT    1024
+/**
+ * Override to change the maximum amount of characters for vd_ui_<x>f calls
+ */
+#ifndef VD_UI_CHAR_BUF_COUNT
+#   define VD_UI_CHAR_BUF_COUNT    1024
+#endif // !VD_UI_CHAR_BUF_COUNT
+
 #define VD_UI_LIT(s)            ((VdUiStr) {s, sizeof(s) - 1})
 
-#define VD_UI_DOTTOSTR(fmt)                                                       \
-    va_list args;                                                                 \
-    va_start(args, fmt);                                                          \
-    int __sz__ = vd_ui_vsnprintf(Vd_Ui_CharBuf, VD_UI_CHAR_BUF_COUNT, fmt, args); \
-    va_end(args);                                                                 \
-    VdUiStr str = {Vd_Ui_CharBuf, __sz__};
-
-
+#define VD_UI_DOTTOSTR(fmt) va_list args; va_start(args, fmt); int __sz__ = vd_ui_vsnprintf(Vd_Ui_CharBuf, VD_UI_CHAR_BUF_COUNT, fmt, args); va_end(args); VdUiStr str = {Vd_Ui_CharBuf, __sz__};
 extern char Vd_Ui_CharBuf[VD_UI_CHAR_BUF_COUNT];
 
-/* ----DEMOS--------------------------------------------------------------------------------------------------------- */
-VD_UI_API int              vd_ui_demo(void);
+/* ----HELPERS------------------------------------------------------------------------------------------------------- */
+VD_UI_API int              vd_ui_vsnprintf(char *s, size_t n, const char *format, va_list args);
+static inline int          vd_ui_snprintf(char *s, size_t n, const char *format, ...);
+static inline int          vd_ui_strlen(const char *s);
+static inline void*        vd_ui_memcpy(void *dst, void *src, size_t count);
+VD_UI_INL void*            vd_ui_memmove(void *dest, void *src, size_t num);
+VD_UI_API void*            vd_ui_mem_push(size_t size);
 
 /* ----BASIC WIDGETS------------------------------------------------------------------------------------------------- */
 /**
@@ -669,18 +653,19 @@ VD_UI_API void             vd_ui_scroll_end(void);
 
 /* ----CORE UI------------------------------------------------------------------------------------------------------- */
 /**
- * Allocates a new div
+ * @brief Allocates a new div
  * @param  flags The flags to use for the div
  * @param  str   The id/label of the div
  * @return       The allocated div
- *
- * Every 'widget' in the library is composed from one or more divs. A div encompasses all of the possible interactions
- * display modes, etc... that can be used
+ * @remarks {
+ *     Every 'widget' in the library is composed from one or more divs. A div encompasses all of the possible
+ *     interactions display modes, etc... that can be used
+ * }
  */
 VD_UI_API VdUiDiv*         vd_ui_div_new(VdUiFlags flags, VdUiStr str);
 
 /**
- * Allocates a new div (printf version)
+ * @brief Allocates a new div (printf version)
  * @param  flags The flags to use for the div
  * @param  str   The id/label of the div
  * @return       The allocated div
@@ -690,27 +675,76 @@ VD_UI_API VdUiDiv*         vd_ui_div_new(VdUiFlags flags, VdUiStr str);
 VD_UI_API VdUiDiv*         vd_ui_div_newf(VdUiFlags flags, const char *fmt, ...);
 
 /**
- * Calls the div, computing the interaction based on user input
+ * @brief Calls the div, computing the interaction based on user input
  * @param  div The div to call
  * @return     The interaction result, based on the div's flags (passed by vd_ui_div_new*)
  */
 VD_UI_API VdUiReply        vd_ui_call(VdUiDiv *div);
 
-VD_UI_API void             vd_ui_parent_push(VdUiDiv *div);
+/**
+ * @brief Push a div to be the parent of newly created divs
+ * @param  div The div
+ */
+VD_UI_API int              vd_ui_parent_push(VdUiDiv *div);
+
+/**
+ * @brief Pop the current parent div
+ */
 VD_UI_API void             vd_ui_parent_pop(void);
+
+/**
+ * @brief Get the current depth of the tree
+ * @return  Count of pushes + 1 (root div)
+ */
 VD_UI_API int              vd_ui_parent_count(void);
+
+/**
+ * @brief Get a specific div by traversing upwards
+ * @param  i The offset
+ * @return   The div.
+ */
 VD_UI_API VdUiDiv*         vd_ui_parent_get(int i);
+
+/**
+ * @brief Like vd_ui_div_new, but also calls vd_ui_parent_push
+ * @param  flags The flags
+ * @param  str   The label/id
+ * @return       The div
+ */
 VD_UI_INL VdUiDiv*         vd_ui_parent_new(VdUiFlags flags, VdUiStr str);
+
+/**
+ * @brief Like vd_ui_div_newf, but also calls vd_ui_parent_push
+ * @param  flags The flags
+ * @param  fmt   The label/id
+ * @return       The div
+ */
 VD_UI_INL VdUiDiv*         vd_ui_parent_newf(VdUiFlags flags, const char *fmt, ...)                                     { VD_UI_DOTTOSTR(fmt); return vd_ui_parent_new(flags, str); }
 
 /**
- * Sets the scale of the UI
+ * @brief Sets the scale of the UI
  * @param  s The scale, 1.0f by default
  */
 VD_UI_API void             vd_ui_set_scale(float s);
+
+/**
+ * @brief Get the current scale of the UI
+ * @return  The scale, 1.0f by default
+ */
 VD_UI_API float            vd_ui_get_scale(void);
 
+/**
+ * @brief Get if the current div is active
+ * @param  div The div to check
+ * @return     Whether it's active
+ */
 VD_UI_API int              vd_ui_div_is_active(VdUiDiv *div);
+
+/**
+ * @brief Get if the current div has input focus
+ * @param  div The div to check
+ * @return     Whether it has input focus
+ */
 VD_UI_API int              vd_ui_div_is_focused(VdUiDiv *div);
 
 VD_UI_INL VdUiDiv *vd_ui_parent_new(VdUiFlags flags, VdUiStr str)
@@ -721,21 +755,70 @@ VD_UI_INL VdUiDiv *vd_ui_parent_new(VdUiFlags flags, VdUiStr str)
 }
 
 /* ----STYLE STACKS-------------------------------------------------------------------------------------------------- */
+/**
+ * Scopes
+ *
+ * With the style stacks, you typically have to do:
+ * vd_ui_style_x_push()
+ * vd_ui_div_new()
+ * vd_ui_style_x_pop()
+ *
+ * This is kind of annoying.
+ *
+ * So you can do:
+ * VD_UI_WITH_STYLE_X()
+ * {
+ *     vd_ui_div_new()
+ * }
+ *
+ * Make sure you add the braces! This uses the defer scope trick:
+ * #define VD_UI_WITH_STYLE_X() for (int __i__ = (vd_ui_style_x_push(), 0); !i; i += 1, (vd_ui_style_x_pop()))
+ *
+ * Since the next statement on an non-braced for-loop is used you can do the following:
+ * VD_UI_WITH_STYLE_X()
+ * VD_UI_WITH_STYLE_Y()
+ * {
+ *     vd_ui_div_new()
+ * }
+ */
+#define VD_UI_SCOPE_I_ID2(id, line) id##line
+#define VD_UI_SCOPE_I_ID(line) VD_UI_SCOPE_I_ID2(__i__, line)
+#define VD_UI_WITH_SCOPE_IMPL(line, begin, end) for (int VD_UI_SCOPE_I_ID(line) = ((begin), 0); !VD_UI_SCOPE_I_ID(line); VD_UI_SCOPE_I_ID(line) += 1, (end))
+#define VD_UI_WITH_SCOPE(begin, end) VD_UI_WITH_SCOPE_IMPL(__COUNTER__, begin, end)
+
+/**
+ * @brief Push mode, value & niceness for axis 
+ * @param  axis     The axis to use
+ * @param  mode     The mode to push
+ * @param  value    The value to push
+ * @param  niceness The niceness to push
+ */
 VD_UI_API void             vd_ui_style_size_push(VdUiAxis axis, VdUiSizeMode mode, float value, float niceness);
 VD_UI_API VdUiSize*        vd_ui_style_size_get(VdUiAxis axis);
 VD_UI_API unsigned int     vd_ui_style_size_count(VdUiAxis axis);
 VD_UI_API void             vd_ui_style_size_pop(VdUiAxis axis);
+#define VD_UI_WITH_STYLE_SIZE(axis, mode, value, niceness) VD_UI_WITH_SCOPE(vd_ui_style_size_push(axis, mode, value, niceness), vd_ui_style_size_pop(axis))
+#define VD_UI_WITH_STYLE_SIZE_ABSOLUTE(axis, value, niceness) VD_UI_WITH_STYLE_SIZE(axis, VD_UI_SIZE_MODE_ABSOLUTE, value, niceness)
+#define VD_UI_WITH_STYLE_SIZE_ABSOLUTE_W(value, niceness) VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_ABSOLUTE, value, niceness)
+#define VD_UI_WITH_STYLE_SIZE_ABSOLUTE_H(value, niceness) VD_UI_WITH_STYLE_SIZE(VD_UI_AXISV, VD_UI_SIZE_MODE_ABSOLUTE, value, niceness)
+#define VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(width, height, width_niceness, height_niceness) VD_UI_WITH_STYLE_SIZE_ABSOLUTE_W(width, width_niceness) VD_UI_WITH_STYLE_SIZE_ABSOLUTE_H(height, height_niceness)
+#define VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(axis, niceness) VD_UI_WITH_STYLE_SIZE(axis, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, niceness)
+#define VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(axis, value, niceness) VD_UI_WITH_STYLE_SIZE(axis, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, value, niceness)
 
 VD_UI_API void             vd_ui_style_padding_push(int pos, float value);
 VD_UI_API void             vd_ui_style_padding_push4(float left, float top, float right, float bottom);
-VD_UI_API void             vd_ui_style_padding_all(float value);
+VD_UI_API void             vd_ui_style_padding_push_all(float value);
 VD_UI_API float            vd_ui_style_padding_get(int pos);
 VD_UI_API void             vd_ui_style_padding_pop(int pos);
 VD_UI_API void             vd_ui_style_padding_pop_all(void);
+#define VD_UI_WITH_STYLE_PADDING(pos, value) VD_UI_WITH_SCOPE(vd_ui_style_padding_push(pos, value), vd_ui_style_padding_pop(pos))
+#define VD_UI_WITH_STYLE_PADDING4(left, top, right, bottom) VD_UI_WITH_SCOPE(vd_ui_style_padding_push4(left, top, right, bottom), vd_ui_style_padding_pop_all())
+#define VD_UI_WITH_STYLE_PADDING_ALL(all_value) VD_UI_WITH_SCOPE(vd_ui_style_padding_push_all(all_value), vd_ui_style_padding_pop_all())
 
 VD_UI_API void             vd_ui_style_child_gap_push(float gap);
 VD_UI_API float            vd_ui_style_child_gap_get(void);
 VD_UI_API void             vd_ui_style_child_gap_pop(void);
+#define VD_UI_WITH_STYLE_CHILD_GAP(value) VD_UI_WITH_SCOPE(vd_ui_style_child_gap_push(value), vd_ui_style_child_gap_pop())
 
 VD_UI_INL void             vd_ui_style_size_push_all(VdUiSizeMode mode, float value, float niceness);
 VD_UI_INL void             vd_ui_style_size_pop_all(void);
@@ -746,6 +829,12 @@ VD_UI_API void             vd_ui_style_coloring_pop(VdUiFlags mask);
 VD_UI_API VdUiColoring     vd_ui_coloring(VdUiGradient normal, VdUiGradient hot, VdUiGradient active);
 VD_UI_API VdUiColoring     vd_ui_coloring_all4(VdUiF4 v);
 VD_UI_API VdUiColoring     vd_ui_coloring_all(float v);
+#define VD_UI_WITH_STYLE_COLORING(mask, coloring) VD_UI_WITH_SCOPE(vd_ui_style_coloring_push(mask, coloring), vd_ui_style_coloring_pop(mask))
+#define VD_UI_WITH_STYLE_COLOR(mask, f4) VD_UI_WITH_SCOPE(vd_ui_style_coloring_push(mask, vd_ui_coloring_all4(f4)), vd_ui_style_coloring_pop(mask))
+#define VD_UI_WITH_STYLE_BACKGROUND_COLORING(coloring) VD_UI_WITH_STYLE_COLORING(VD_UI_FLAG_BACKGROUND, coloring)
+#define VD_UI_WITH_STYLE_BACKGROUND_COLOR(f4) VD_UI_WITH_STYLE_COLOR(VD_UI_FLAG_BACKGROUND, f4)
+#define VD_UI_WITH_STYLE_TEXT_COLORING(coloring) VD_UI_WITH_STYLE_COLORING(VD_UI_FLAG_TEXT, coloring)
+#define VD_UI_WITH_STYLE_TEXT_COLOR(f4) VD_UI_WITH_STYLE_COLOR(VD_UI_FLAG_TEXT, f4)
 
 VD_UI_API void             vd_ui_style_border_size_push(VdUiFlags mask, float border_size);
 VD_UI_API float            vd_ui_style_border_size_get(VdUiFlags mask);
@@ -754,6 +843,7 @@ VD_UI_API void             vd_ui_style_border_size_pop(VdUiFlags mask);
 VD_UI_API void             vd_ui_style_font_size_push(float font_size);
 VD_UI_API float            vd_ui_style_font_size_get(void);
 VD_UI_API void             vd_ui_style_font_size_pop(void);
+#define VD_UI_WITH_STYLE_FONT_SIZE(size) VD_UI_WITH_SCOPE(vd_ui_style_font_size_push(size), vd_ui_style_font_size_pop())
 
 VD_UI_INL void vd_ui_style_size_push_all(VdUiSizeMode mode, float value, float niceness)
 {
@@ -775,24 +865,37 @@ typedef unsigned int VdUiVertexFlags;
 
 #pragma pack(push, 1)
 typedef struct {
+    /* Top left of rectangle */
     float            p0[2];            //  2 x  4 =   8 bytes
+    /* Bottom right of rectangle */
     float            p1[2];            //  2 x  4 =   8 bytes
+    /* Top left Tex Coord */
     float            p0u[2];           //  2 x  4 =   8 bytes
+    /* Bottom right Tex Coord */
     float            p1u[2];           //  2 x  4 =   8 bytes
+    /* 4 Corners of gradient */
     float            color[16];        //  4 x 16 =  64 bytes
+    /* 0 = tint, 1 = letters */
     float            alpha_mix;        //  1 x  4 =   4 bytes
+    /* Corner radius in screen space */
     float            corner_radius;    //  1 x  4 =   4 bytes
+    /* SDF softness of said radius */
     float            edge_softness;    //  1 x  4 =   4 bytes
+    /* How thick to draw the border */
     float            border_thickness; //  1 x  4 =   4 bytes
+    /* Unused for now */
     unsigned char    padd[16];         // 16 x  1 =  16 bytes
 } VdUiVertex;                          //         = 128 bytes
 #pragma pack(pop)
 
 typedef struct {
-    VdUiFontId    cached_id;
+    /* Texture to bind */
     VdUiTextureId *selected_texture;
+    /* Index of first vertex in vertex buffer */
     unsigned int  first_instance;
+    /* How many vertices to draw */
     unsigned int  instance_count;
+    /* Screen space scissor rect */
     float         clip[4];
 } VdUiRenderPass;
 
@@ -896,7 +999,28 @@ VD_UI_API VdUiFontId       vd_ui_font_add_ttf(void *buffer, size_t size);
 VD_UI_API void*            vd_ui_font_default(size_t *size);
 
 /* ----TEXTURES------------------------------------------------------------------------------------------------------ */
-VD_UI_API void             vd_ui_texture_add(VdUiTextureId id);
+/**
+ * @brief Register a texture id to be populated at the end of a frame.
+ * @param  id     Pointer to an initially zeroed id. This pointer must be valid until the scope where
+ *                vd_ui_frame_get_updates is called
+ * @param  buffer Pointer to texture memory. This pointer must be valid until the scope where vd_ui_frame_get_updates is 
+ *                called
+ * @param  width  Width of the texture
+ * @param  height Height of the texture
+ * @param  format Format of the texture
+ * @remarks {
+ *     This function is more or less a shorthand to help code that uses this library only, and not any specific graphics
+ *     API implementing it. In layman's terms, in OpenGL you would `glGenTextures(1, &tex)`, populate texture and so on,
+ *     then `tex_id = VdUiTextureId { tex };` which you could then pass to the normal functions available here.
+ *
+ *     This works great, but it makes it pretty hard to separate functionality that would otherwise be renderer
+ *     independent, and could be sourced externally. For simplicity though, the restrictions here are currently pretty
+ *     rough; you have to keep a stable pointer to both the texture id, and the buffer. More than likely this means that
+ *     you will be storing these variables statically and calling this function once at startup. That's a compromise
+ *     I'm willing to make.
+ * }
+ */
+VD_UI_API void             vd_ui_texture_add(VdUiTextureId *id, void *buffer, int width, int height, VdUiTextureFormat format);
 
 /* ----INPUT--------------------------------------------------------------------------------------------------------- */
 VD_UI_API void             vd_ui_event_size(float width, float height);
@@ -1096,6 +1220,22 @@ static inline void *vd_ui_memcpy(void *dst, void *src, size_t count)
     return dst;
 }
 
+VD_UI_INL void *vd_ui_memmove(void *dest, void *src, size_t num) {
+    uint8_t* d = (uint8_t*)dest;
+    uint8_t* s = (uint8_t*)src;
+
+    if (d < s) {
+        for (size_t i = 0; i < num; ++i) {
+            d[i] = s[i];
+        }
+    } else if (s < d) {
+        for (size_t i = num; i > 0; --i) {
+            d[i - 1] = s[i - 1];
+        }
+    }
+
+    return d;
+}
 
 static inline int vd_ui_div_has_flag(VdUiDiv *div, VdUiFlags flag)
 {
@@ -1545,6 +1685,14 @@ static VdUiColoring  Vd_Ui__Coloring_Tx_Default;
 #define VD_UI_FBUF_MAX                          1024
 #define VD_UI_CLIP_STACK_MAX                    64
 #define VD_UI_NULL_DIVS_MAX                     64
+
+/**
+ * Override to change the max rectangles that will be used to compute non-client area
+ * @see vd_ui_ws_nc_area_mark, vd_ui_ws_nc_area_get
+ */
+#ifndef VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX
+#   define VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX 16
+#endif // !VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX
 
 #ifndef VD_UI_STYLE_SIZE_STACK_COUNT
 #   define VD_UI_STYLE_SIZE_STACK_COUNT         32
@@ -3404,11 +3552,12 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
 }
 
 // Parent Stack Impl
-VD_UI_API void vd_ui_parent_push(VdUiDiv *div)
+VD_UI_API int vd_ui_parent_push(VdUiDiv *div)
 {
     VdUiContext *ctx = vd_ui_context_get();
     VD_UI_ASSERT(ctx->parents_next != VD_UI_PARENT_STACK_MAX && "Too many pushes to parents!");
     ctx->parents[ctx->parents_next++] = div;
+    return 0;
 }
 
 VD_UI_API void vd_ui_parent_pop(void)
@@ -3530,7 +3679,7 @@ VD_UI_API void vd_ui_style_padding_push4(float left, float top, float right, flo
 
 }
 
-VD_UI_API void vd_ui_style_padding_all(float value)
+VD_UI_API void vd_ui_style_padding_push_all(float value)
 {
     vd_ui_style_padding_push(VD_UI_LEFT, value);
     vd_ui_style_padding_push(VD_UI_TOP, value);
@@ -3719,351 +3868,6 @@ VD_UI_API void vd_ui_style_font_size_pop(void)
     ctx->font_size_stack_count--;
 }
 
-static void vd_ui__demo_fixed_rect(const char *name, float width, float height, VdUiF4 color)
-{
-    vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_ABSOLUTE, width, 0.f);
-    vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_ABSOLUTE, height, 0.f);
-    vd_ui_style_coloring_push(VD_UI_FLAG_BACKGROUND, vd_ui_coloring_all4(color));
-    vd_ui_div_newf(VD_UI_FLAG_BACKGROUND, "##demo-rect-fixed-%s", name);
-    vd_ui_style_coloring_pop(VD_UI_FLAG_BACKGROUND);
-    vd_ui_style_size_pop(VD_UI_AXISV);
-    vd_ui_style_size_pop(VD_UI_AXISH);
-}
-
-static VdUiDiv *vd_ui__demo_dyn_rect_parent2(const char *name, int flags,
-                                         VdUiSizeMode hsize, float hv, float hn,
-                                         VdUiSizeMode vsize, float vv, float vn,
-                                         VdUiF4 color)
-{
-    vd_ui_style_size_push(VD_UI_AXISH, hsize, hv, hn);
-    vd_ui_style_size_push(VD_UI_AXISV, vsize, vv, vn);
-    vd_ui_style_coloring_push(VD_UI_FLAG_BACKGROUND, vd_ui_coloring_all4(color));
-    VdUiDiv *div = vd_ui_parent_newf(flags | VD_UI_FLAG_BACKGROUND, "##demo-dyn-rect-custom-%s", name);
-    vd_ui_style_coloring_pop(VD_UI_FLAG_BACKGROUND);
-    vd_ui_style_size_pop(VD_UI_AXISV);
-    vd_ui_style_size_pop(VD_UI_AXISH);
-    return div;
-}
-
-static VdUiDiv *vd_ui__demo_dyn_rect2(const char *name, int flags,
-                                  VdUiSizeMode hsize, float hv, float hn,
-                                  VdUiSizeMode vsize, float vv, float vn,
-                                  VdUiF4 color)
-{
-    vd_ui_style_size_push(VD_UI_AXISH, hsize, hv, hn);
-    vd_ui_style_size_push(VD_UI_AXISV, vsize, vv, vn);
-    vd_ui_style_coloring_push(VD_UI_FLAG_BACKGROUND, vd_ui_coloring_all4(color));
-    VdUiDiv *div = vd_ui_div_newf(flags | VD_UI_FLAG_BACKGROUND, "##demo-dyn-rect-custom-%s", name);
-    vd_ui_style_coloring_pop(VD_UI_FLAG_BACKGROUND);
-    vd_ui_style_size_pop(VD_UI_AXISV);
-    vd_ui_style_size_pop(VD_UI_AXISH);
-    return div;
-}
-
-static void vd_ui__demo_dyn_rect_parenth(const char *name, float height, VdUiF4 color, float niceness)
-{
-    vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, niceness);
-    vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_ABSOLUTE, height, 0.f);
-    vd_ui_style_coloring_push(VD_UI_FLAG_BACKGROUND, vd_ui_coloring_all4(color));
-    vd_ui_parent_newf(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_FLEX_HORIZONTAL, "##demo-rect-dyn-%s", name);
-    vd_ui_style_coloring_pop(VD_UI_FLAG_BACKGROUND);
-    vd_ui_style_size_pop(VD_UI_AXISV);
-    vd_ui_style_size_pop(VD_UI_AXISH);
-}
-
-static void vd_ui__demo_dyn_rect_parentv(const char *name, float width, VdUiF4 color, float niceness)
-{
-    vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_ABSOLUTE, width, niceness);
-    vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, niceness);
-    vd_ui_style_coloring_push(VD_UI_FLAG_BACKGROUND, vd_ui_coloring_all4(color));
-    vd_ui_parent_newf(VD_UI_FLAG_BACKGROUND, "##demo-rect-dyn-%s", name);
-    vd_ui_style_coloring_pop(VD_UI_FLAG_BACKGROUND);
-    vd_ui_style_size_pop(VD_UI_AXISV);
-    vd_ui_style_size_pop(VD_UI_AXISH);
-}
-
-static void vd_ui__demo_fixed_rect_parent(const char *name, int flags, float width, float height, VdUiF4 color)
-{
-    vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_ABSOLUTE, width, 0.f);
-    vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_ABSOLUTE, height, 0.f);
-    vd_ui_style_coloring_push(VD_UI_FLAG_BACKGROUND, vd_ui_coloring_all4(color));
-    vd_ui_parent_newf(flags | VD_UI_FLAG_BACKGROUND, "##demo-rect-%s", name);
-    vd_ui_style_coloring_pop(VD_UI_FLAG_BACKGROUND);
-    vd_ui_style_size_pop(VD_UI_AXISV);
-    vd_ui_style_size_pop(VD_UI_AXISH);
-}
-
-static void vd_ui__demo_code(VdUiStr label, char *code)
-{
-    size_t len = vd_ui_strlen(code);
-    vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_ABSOLUTE, 600, 0.f);
-    vd_ui_textbox(label, code, &len, len);
-    vd_ui_style_size_pop(VD_UI_AXISH);
-}
-
-static void vd_ui__demo_section_begin(const char *label)
-{
-    // vd_ui_style_coloring_push(VD_UI_FLAG_BACKGROUND, vd_ui_coloring_all4(vd_ui_f4(0.1f, 0.1f, 0.1f, 1.f)));
-    vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_ABSOLUTE, 700, 0.f);
-    vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 0.f);
-    vd_ui_parent_newf(0, "##%s", label);
-    vd_ui_style_size_pop(VD_UI_AXISV);
-    vd_ui_style_size_pop(VD_UI_AXISH);
-    // vd_ui_style_coloring_pop(VD_UI_FLAG_BACKGROUND);
-
-    vd_ui_labelf("Basics - Horizontal Layout");
-}
-
-static void vd_ui__demo_section_end(void)
-{
-    vd_ui_parent_pop();
-}
-
-VD_UI_API int vd_ui_demo(void)
-{
-    int result = 0;
-    VdUiDiv *app = vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("##app"));
-    app->style.size[0].mode = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
-    app->style.size[0].value = 1.f;
-    app->style.size[1].mode = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
-    app->style.size[1].value = 1.f;
-    app->style.background.coloring = vd_ui_coloring_all4(vd_ui_f4(0.13f, 0.15f, 0.16f, 1.f));
-
-    static int num_items = 25;
-
-    vd_ui_parent_push(app);
-    {
-        static float scrollx = 0.f;
-        static float scrolly = 0.f;
-
-        vd_ui_scroll_begin(VD_UI_LIT("##main-scroll-view"), &scrollx, &scrolly);
-        {
-
-            vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f);
-            vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 0.f);
-            vd_ui_style_child_gap_push(32.f);
-            vd_ui_parent_new(VD_UI_FLAG_ALIGN_CENTER, VD_UI_LIT("##layout-examples"));
-            vd_ui_style_child_gap_pop();
-            vd_ui_style_size_pop(VD_UI_AXISV);
-            vd_ui_style_size_pop(VD_UI_AXISH);
-
-            vd_ui_style_coloring_push(VD_UI_FLAG_TEXT, vd_ui_coloring_all4(vd_ui_f4(0.93f, 0.35f, 0.34f, 1.f)));
-            vd_ui_style_font_size_push(64.f);
-            vd_ui_labelf("VD UI");
-            vd_ui_style_font_size_pop();
-            vd_ui_style_coloring_pop(VD_UI_FLAG_TEXT);
-
-            {
-                #if 1
-                static int layout_1_align_center = 0;
-                vd_ui__demo_section_begin("Basics - Horizontal Layout");
-                vd_ui__demo_code(VD_UI_LIT("code-1"), "vd_ui_div_newf(VD_UI_FLAG_FLEX_HORIZONTAL, \"layout-1\");");
-                vd_ui__demo_dyn_rect_parent2("columns", VD_UI_FLAG_FLEX_HORIZONTAL,
-                                      VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 1.f,
-                                      VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 1.f,
-                                      vd_ui_f4(0,0,0,0));
-                {
-
-                    vd_ui__demo_fixed_rect_parent("layout-1", VD_UI_FLAG_FLEX_HORIZONTAL | (layout_1_align_center ? VD_UI_FLAG_ALIGN_CENTER : 0), 400, 200, vd_ui_f4(0.05f, 0.05f, 0.05f, 1.f));
-                    {
-                        vd_ui__demo_fixed_rect("1", 40, 40, vd_ui_f4(0.5f, 0.3f, 0.2f, 1.f));
-                        vd_ui__demo_fixed_rect("2", 80, 40, vd_ui_f4(0.4f, 0.7f, 0.2f, 1.f));
-                        vd_ui__demo_fixed_rect("3", 40, 90, vd_ui_f4(0.2f, 0.3f, 0.5f, 1.f));
-                    }
-                    vd_ui_parent_pop();
-                }
-                vd_ui_checkboxf(&layout_1_align_center, "Center##align-center-1");
-                vd_ui_parent_pop();
-                vd_ui__demo_section_end();
-
-                static int layout_2_align_center = 0;
-                vd_ui__demo_section_begin("Basics - Vertical Layout");
-                vd_ui__demo_code(VD_UI_LIT("code-2"), "vd_ui_div_newf(0/*Vertical Flex*/, \"layout-2\");");
-                vd_ui_checkboxf(&layout_2_align_center, "Center##align-center-2");
-                vd_ui__demo_fixed_rect_parent("layout-2", (layout_2_align_center ? VD_UI_FLAG_ALIGN_CENTER : 0), 400, 200, vd_ui_f4(0.05f, 0.05f, 0.05f, 1.f));
-                {
-                    vd_ui__demo_fixed_rect("1", 40, 40, vd_ui_f4(0.5f, 0.3f, 0.2f, 1.f));
-                    vd_ui__demo_fixed_rect("2", 80, 40, vd_ui_f4(0.4f, 0.7f, 0.2f, 1.f));
-                    vd_ui__demo_fixed_rect("3", 40, 90, vd_ui_f4(0.2f, 0.3f, 0.5f, 1.f));
-                }
-                vd_ui_parent_pop();
-                vd_ui__demo_section_end();
-
-                static float layout_3_child_3_width = 40.f;
-                vd_ui__demo_section_begin("Basics - Contain Children");
-                vd_ui__demo_code(VD_UI_LIT("code-3"),
-                        "vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 0.f);\n"
-                        "vd_ui_div_newf(VD_UI_FLAG_FLEX_HORIZONTAL, \"layout-3\");\n"
-                        "vd_ui_style_size_pop(VD_UI_AXISH);"
-                        );
-                vd_ui_sliderf_float(&layout_3_child_3_width, 40.f, 400.f, VD_UI_AXISH, "Child 3 Size");
-                vd_ui__demo_fixed_rect_parent("layout-3", VD_UI_FLAG_FLEX_HORIZONTAL, 400, 200, vd_ui_f4(0.05f, 0.05f, 0.05f, 1.f));
-                {
-                    vd_ui__demo_fixed_rect("1", 40, 40, vd_ui_f4(0.5f, 0.3f, 0.2f, 1.f));
-                    vd_ui__demo_dyn_rect_parenth("2", 100.f, vd_ui_f4(0.01f, 0.15f, 0.15f, 1.f), 0.f);
-                    {
-                        vd_ui__demo_fixed_rect("2", 40, 40, vd_ui_f4(0.4f, 0.7f, 0.2f, 1.f));
-                        vd_ui__demo_fixed_rect("3", layout_3_child_3_width, 40, vd_ui_f4(0.2f, 0.3f, 0.5f, 1.f));
-                    }
-                    vd_ui_parent_pop();
-                }
-                vd_ui_parent_pop();
-
-                vd_ui__demo_fixed_rect_parent("layout-3-vertical", 0, 200, 400, vd_ui_f4(0.05f, 0.05f, 0.05f, 1.f));
-                {
-                    vd_ui__demo_fixed_rect("1", 40, 40, vd_ui_f4(0.5f, 0.3f, 0.2f, 1.f));
-                    vd_ui__demo_dyn_rect_parentv("2", 100.f, vd_ui_f4(0.01f, 0.15f, 0.15f, 1.f), 0.f);
-                    {
-                        vd_ui__demo_fixed_rect("2", 40, 40, vd_ui_f4(0.4f, 0.7f, 0.2f, 1.f));
-                        vd_ui__demo_fixed_rect("3", 40, layout_3_child_3_width, vd_ui_f4(0.2f, 0.3f, 0.5f, 1.f));
-                    }
-                    vd_ui_parent_pop();
-                }
-                vd_ui_parent_pop();
-                vd_ui__demo_section_end();
-
-                static float layout_4_child_3_width = 40.f;
-                vd_ui__demo_section_begin("Basics - Percentage of Parent");
-                vd_ui__demo_code(VD_UI_LIT("code-4"),
-                        "vd_ui_spacer(VD_UI_AXISH);"
-                        );
-                vd_ui_sliderf_float(&layout_4_child_3_width, 40.f, 520.f, VD_UI_AXISH, "Child 4 Size");
-                vd_ui__demo_fixed_rect_parent("layout-4", VD_UI_FLAG_FLEX_HORIZONTAL, 400, 200, vd_ui_f4(0.05f, 0.05f, 0.05f, 1.f));
-                {
-                    vd_ui__demo_fixed_rect("x", 40, 40, vd_ui_f4(0.5f, 0.3f, 0.2f, 1.f));
-                    vd_ui__demo_dyn_rect_parenth("y", 100.f, vd_ui_f4(0.01f, 0.15f, 0.15f, 1.f), 1.f);
-                    {
-                        vd_ui__demo_fixed_rect("1", 40, 40, vd_ui_f4(0.4f, 0.7f, 0.2f, 1.f));
-                        vd_ui_spacer(VD_UI_AXISH);
-                        vd_ui__demo_fixed_rect("2", layout_4_child_3_width, 40, vd_ui_f4(0.2f, 0.3f, 0.5f, 1.f));
-                    }
-                    vd_ui_parent_pop();
-                }
-                vd_ui_parent_pop();
-                vd_ui__demo_section_end();
-                #endif
-
-
-                vd_ui__demo_section_begin("Nesting - 1");
-                vd_ui__demo_fixed_rect_parent("layout-5", 0, 400, 200, vd_ui_f4(0.05f, 0.05f, 0.05f, 1.f));
-                {
-                    VdUiDiv *pa = 0;
-                    VdUiDiv *pb = 0;
-                    VdUiDiv *pc = 0;
-
-                    pa = vd_ui__demo_dyn_rect_parent2("dynamic-a", VD_UI_FLAG_FLEX_HORIZONTAL,
-                                                      VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
-                                                      VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
-                                                      vd_ui_f4(0.01f, 0.15f, 0.15f, 1.f));
-                    {
-
-                        pb = vd_ui__demo_dyn_rect_parent2("dynamic-b", 0,
-                                                          VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 0.f,
-                                                          VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
-                                                          vd_ui_f4(0.01f, 0.15f, 0.15f, 1.f));
-                        {
-                            vd_ui__demo_dyn_rect2("x", 0,
-                                                       VD_UI_SIZE_MODE_ABSOLUTE, 100.f, 0.f,
-                                                       VD_UI_SIZE_MODE_ABSOLUTE, 64.f, 0.f,
-                                                       vd_ui_f4(0.5f, 0.3f, 0.2f, 1.f));
-
-                            vd_ui__demo_dyn_rect2("y", 0, 
-                                                       VD_UI_SIZE_MODE_ABSOLUTE, 80.f, 0.f,
-                                                       VD_UI_SIZE_MODE_ABSOLUTE, 64.f, 0.f,
-                                                       vd_ui_f4(0.4f, 0.7f, 0.2f, 1.f));
-                        }
-                        vd_ui_parent_pop();
-
-                        pc = vd_ui__demo_dyn_rect_parent2("dynamic-c", 0,
-                                                          VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
-                                                          VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
-                                                          vd_ui_f4(0.15f, 0.01f, 0.15f, 1.f));
-                        {
-                            vd_ui__demo_dyn_rect2("x", 0,
-                                                       VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
-                                                       VD_UI_SIZE_MODE_ABSOLUTE, 64.f, 0.f,
-                                                       vd_ui_f4(0.7f, 0.3f, 0.2f, 1.f));
-
-                            vd_ui__demo_dyn_rect2("y", 0, 
-                                                       VD_UI_SIZE_MODE_ABSOLUTE, 80.f, 0.f,
-                                                       VD_UI_SIZE_MODE_ABSOLUTE, 64.f, 0.f,
-                                                       vd_ui_f4(0.3f, 0.2f, 0.5f, 1.f));
-                        }
-                        vd_ui_parent_pop();
-                    }
-                    vd_ui_parent_pop();
-                }
-                vd_ui_parent_pop();
-                vd_ui__demo_section_end();
-
-                vd_ui__demo_section_begin("Nesting - 2");
-                float layout_6_length[2];
-                vd_ui__demo_fixed_rect_parent("layout-6", 0, 400, 200, vd_ui_f4(0.05f, 0.05f, 0.05f, 1.f));
-                {
-                    VdUiDiv *pa = 0;
-                    VdUiDiv *pb = 0;
-                    VdUiDiv *pc = 0;
-
-                    pa = vd_ui__demo_dyn_rect_parent2("dynamic-a", 0,
-                                                      VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
-                                                      VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
-                                                      vd_ui_f4(0.01f, 0.15f, 0.15f, 1.f));
-                    {
-
-                        pb = vd_ui__demo_dyn_rect_parent2("dynamic-b", VD_UI_FLAG_FLEX_HORIZONTAL,
-                                                          VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
-                                                          VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 0.f,
-                                                          vd_ui_f4(0.01f, 0.15f, 0.15f, 1.f));
-                        {
-                            vd_ui__demo_dyn_rect2("x", 0,
-                                                       VD_UI_SIZE_MODE_ABSOLUTE, 64.f, 1.f,
-                                                       VD_UI_SIZE_MODE_ABSOLUTE, 100.f, 0.f,
-                                                       vd_ui_f4(0.5f, 0.3f, 0.2f, 1.f));
-
-                            pa = vd_ui__demo_dyn_rect2("y", 0, 
-                                                       VD_UI_SIZE_MODE_ABSOLUTE, 64.f, 1.f,
-                                                       VD_UI_SIZE_MODE_ABSOLUTE, 80.f, 0.f,
-                                                       vd_ui_f4(0.4f, 0.7f, 0.2f, 1.f));
-                        }
-                        vd_ui_parent_pop();
-
-                        pc = vd_ui__demo_dyn_rect_parent2("dynamic-c", VD_UI_FLAG_FLEX_HORIZONTAL,
-                                                          VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
-                                                          VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
-                                                          vd_ui_f4(0.15f, 0.01f, 0.15f, 1.f));
-                        {
-                            vd_ui__demo_dyn_rect2("x", 0,
-                                                       VD_UI_SIZE_MODE_ABSOLUTE, 80.f, 1.f,
-                                                       VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
-                                                       vd_ui_f4(0.7f, 0.3f, 0.2f, 1.f));
-
-                            vd_ui__demo_dyn_rect2("y", 0, 
-                                                       VD_UI_SIZE_MODE_ABSOLUTE, 64.f, 1.f,
-                                                       VD_UI_SIZE_MODE_ABSOLUTE, 80.f, 0.f,
-                                                       vd_ui_f4(0.3f, 0.2f, 0.5f, 1.f));
-                        }
-                        vd_ui_parent_pop();
-                    }
-                    vd_ui_parent_pop();
-
-                    layout_6_length[0] = pa->comp_size[0];
-                    layout_6_length[1] = pa->comp_size[1];
-                }
-                vd_ui_parent_pop();
-                vd_ui_labelf("Green Rect Size: %f %f", layout_6_length[0], layout_6_length[1]);
-                vd_ui__demo_section_end();
-
-            }
-
-            vd_ui_parent_pop();
-        }
-        vd_ui_scroll_end();
-    }
-    vd_ui_parent_pop();
-
-    return result;
-}
-
 static void vd_ui__get_axes_for_div(VdUiDiv *div, int *daxis, int *faxis, int *daxisf, int *faxisf)
 {
 
@@ -4214,7 +4018,7 @@ static void vd_ui__calc_dyn_size_down(VdUiContext *ctx, VdUiDiv *curr)
     full_size[VD_UI_AXISV] += curr->style.padding[VD_UI_TOP] + curr->style.padding[VD_UI_BOTTOM];
 
     VdUiAxis flex_axis = ((curr->flags & VD_UI_FLAG_FLEX_HORIZONTAL) ? 0 : 1);
-    full_size[flex_axis] += curr->child_count * curr->style.child_gap;
+    full_size[flex_axis] += (curr->child_count - 1) * curr->style.child_gap;
 
 
     for (int i = 0; i < VD_UI_AXES; ++i) {
@@ -4745,6 +4549,12 @@ static void vd_ui__push_vertexgrad(VdUiContext *ctx, VdUiTextureId *texture, flo
                                                                              float edge_softness,
                                                                              float border_thickness)
 {
+
+    if (VD_UI_TEXTURE_ID_IS_NULL(*texture))
+    {
+        return;
+    }
+
     float current_clip[4];
     vd_ui__get_clip(ctx, current_clip);
 
@@ -6976,6 +6786,7 @@ VD_UI_API int vd_ui_gl_get_num_attributes(void)
     return 12;
 }
 
+#define VD_UI_OFFSET_OF(type, element) ((size_t) & (((type*)0)->element))
 VD_UI_API void vd_ui_gl_get_attribute_properties(int attribute, int *size, unsigned int *type, unsigned char *normalized, int *stride, void **pointer, unsigned int *divisor)
 {
     switch (attribute) {
