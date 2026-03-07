@@ -179,12 +179,13 @@ int main(int argc, char const *argv[])
 
     VdFtCollection ui_font_collection = vd_ft_collection_from_memory(font_memory, font_size);
 
-    for (unsigned int i = 0; i < vd_ft_collection_family_count(ui_font_collection); ++i) {
-        VdFtFamily family = vd_ft_collection_family_from_index(ui_font_collection, i);
-        printf("%u Family Name: %s\n", i, vd_ft_family_name(family));
-    }
+    VdFtFamily family = vd_ft_collection_family_from_index(ui_font_collection, 0);
+    printf("Family Name: %s\n", vd_ft_family_name(family));
 
-    vd_ft_box_begin("Hello! My name is Michael. I'm from Greece.", 0);
+    vd_ft_box_begin();
+    vd_ft_box_family_set(family);
+    vd_ft_box_size_set(32.f);
+    vd_ft_box_push("Hi, I'm Michael.", 0);
     vd_ft_box_end();
 
     // VdFtFamily *family = vd_ft_family_from_index(0);
