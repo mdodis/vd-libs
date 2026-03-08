@@ -53,6 +53,7 @@
  * - Win32:
  *     - Filter monitor orientation and other settings in display modes
  *     - Sort the display modes if not sorted already
+ * - Win32: F10, F11, F12 don't work
  * - MacOS: Event Queue
  * - MacOS: vd_fw_get_key_released: Gets if the key was released this frame
  * - raw hat states
