@@ -35,6 +35,24 @@ typedef struct {
     VdFtGlyphMetrics m;
 } FontTex;
 
+typedef struct {
+    VdFtFaceKey key;
+    uint16_t    index;
+    float       size;
+} GlyphKey;
+
+typedef struct {
+    GlyphKey         key;
+    int              x, y;
+    int              w, h;
+    VdFtGlyphMetrics m;
+} Glyph;
+
+typedef struct {
+    GlyphKey k;
+    Glyph    v;
+} GlyphMap;
+
 GLuint Rect_Vbo;
 GLuint Rect_Vao;
 GLuint Rect_Program;
@@ -59,25 +77,173 @@ static void rects_push(Rect *r)
 
 static void rects_render(void)
 {
-    glBindVertexArray(Rect_Vao);
-    glBindBuffer(GL_ARRAY_BUFFER, Rect_Vbo);
+    GL_CHECK(glBindVertexArray(Rect_Vao));
+    GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, Rect_Vbo));
 
     // Update vertex buffer
-    glBindBuffer(GL_ARRAY_BUFFER, Rect_Vbo);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, The_Rect_Count * sizeof(Rect), The_Rects);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, Rect_Vbo));
+    GL_CHECK(glBufferSubData(GL_ARRAY_BUFFER, 0, The_Rect_Count * sizeof(Rect), The_Rects));
+    GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, 0));
 
-    glDrawArraysInstanced(
+    GL_CHECK(glDrawArraysInstanced(
         GL_TRIANGLE_STRIP,
         0,
         4,
-        The_Rect_Count);
+        The_Rect_Count));
 }
+
+static unsigned char *atlas = 0;
+static VD_KVMAP GlyphMap *glyph_map = 0;
+static stbrp_context rp_context;
+static int cache_needs_resubmit = 0;
+static GLuint cache_atlas;
+static int atlas_width = 2048;
+static int atlas_height = 2048;
+Glyph get_or_create_glyph(VdFtFace face, float size, uint16_t index)
+{
+    GlyphKey key;
+    key.key = vd_ft_face_key(face); 
+    key.size = size;
+    key.index = index;
+
+    Glyph result;
+    if (VD_KVMAP_GET(glyph_map, &key, &result)) {
+        return result;
+    }
+
+    VdFtExtent extent = vd_ft_face_glyph_bounds(face, size, index);
+
+    stbrp_rect rect = {0};
+    rect.w = (int)ceilf(extent.x);
+    rect.h = (int)ceilf(extent.y);
+
+    stbrp_pack_rects(&rp_context, &rect, 1);
+    result.key = key;
+    result.x = rect.x;
+    result.y = rect.y;
+    result.w = rect.w;
+    result.h = rect.h;
+    result.m = vd_ft_face_glyph_metrics(face, size, index);
+
+    assert(rect.was_packed != 0);
+
+    VdFtBitmapRegion region = vd_ft_face_raster(face, size, index);
+    for (unsigned int y = 0; y < region.h; ++y) {
+        for (unsigned int x = 0; x < region.w; ++x) {
+            uint8_t in_pixel = *(((uint8_t*)region.memory) + region.pitch * (region.y + y) + (region.x + x) * region.stride);
+
+            uint8_t *out_pixel = (atlas + atlas_width * (result.y + y) + (result.x + x) * sizeof(uint8_t));
+
+            *out_pixel = in_pixel;
+        }
+    }
+
+
+    cache_needs_resubmit = 1;
+
+    VD_KVMAP_SET(glyph_map, &key, &result);
+    return result;
+}
+
+typedef struct {
+    float left;
+    float top;
+    float right;
+    float bottom;
+} Uv;
+
+Uv get_glyph_subregion(Glyph glyph)
+{
+    Uv result;
+    float ipw = 1.f / atlas_width;
+    float iph = 1.f / atlas_height;
+
+    float x0 = (float)glyph.x;
+    float x1 = (float)glyph.x + glyph.w;
+    float y0 = (float)glyph.y;
+    float y1 = (float)glyph.y + glyph.h;
+
+    result.left = x0 * ipw;
+    result.top = y0 * iph;
+    result.right = x1 * ipw;
+    result.bottom = y1 * iph;
+    return result;
+}
+
+void update_glyph_cache(void)
+{
+    if (!cache_needs_resubmit)
+    {
+        return;
+    }
+
+    GLint  level = 0;
+    GLint  internal_format = GL_RED;
+    GLint  border = 0;
+    GLenum format = GL_RED;
+    GLenum type = GL_UNSIGNED_BYTE;
+
+    GL_CHECK(glBindTexture(GL_TEXTURE_2D, cache_atlas));
+    GL_CHECK(glPixelStorei(GL_UNPACK_ALIGNMENT, 1));
+    GL_CHECK(glTexImage2D(GL_TEXTURE_2D, level, internal_format, atlas_width, atlas_height, border, format, type, atlas));
+    GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT));
+    GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT));
+    GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST));
+    GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST));
+    GL_CHECK(glBindTexture(GL_TEXTURE_2D, 0));
+
+    cache_needs_resubmit = 0;
+}
+
+static int utf32_to_utf8(uint32_t codepoint, unsigned char *out)
+{
+    if (codepoint <= 0x7F) {
+        out[0] = (unsigned char)codepoint;
+        return 1;
+    }
+    else if (codepoint <= 0x7FF) {
+        out[0] = 0xC0 | (unsigned char)(codepoint >> 6);
+        out[1] = 0x80 | (unsigned char)(codepoint & 0x3F);
+        return 2;
+    }
+    else if (codepoint <= 0xFFFF) {
+        out[0] = 0xE0 | (unsigned char)(codepoint >> 12);
+        out[1] = 0x80 | (unsigned char)((codepoint >> 6) & 0x3F);
+        out[2] = 0x80 | (unsigned char)(codepoint & 0x3F);
+        return 3;
+    }
+    else if (codepoint <= 0x10FFFF) {
+        out[0] = 0xF0 | (unsigned char)(codepoint >> 18);
+        out[1] = 0x80 | (unsigned char)((codepoint >> 12) & 0x3F);
+        out[2] = 0x80 | (unsigned char)((codepoint >> 6) & 0x3F);
+        out[3] = 0x80 | (unsigned char)(codepoint & 0x3F);
+        return 4;
+    }
+
+    return 0;
+}
+
+static char String_Buf[1024];
+static int String_Buf_Len;
 
 int main(int argc, char const *argv[])
 {
     (void)argc;
     (void)argv;
+
+    memcpy(String_Buf, "Hello, World", 12);
+    String_Buf_Len = 12;
+
+
+    vd_init(0);
+
+    VdArena arena = vd_arena_from_malloc(VD_KILOBYTES(128));
+    VD_KVMAP_INIT_DEFAULT(glyph_map, &arena);
+
+    atlas = malloc(atlas_width * atlas_height);
+    int num_nodes = atlas_width - 2;
+    stbrp_node *nodes = malloc(sizeof(*nodes) * num_nodes);
+    stbrp_init_target(&rp_context, atlas_width, atlas_height, nodes, num_nodes);
 
     vd_ui_init();
     vd_ui_debug_set_draw_cursor_on(0);
@@ -99,6 +265,19 @@ int main(int argc, char const *argv[])
         },
     });
 
+    int show_glyph_cache = 0;
+    vd_fw_set_title("GL Font (F2: Atlas, F3: Style)");
+
+    glGenTextures(1, &cache_atlas);
+    GL_CHECK(glBindTexture(GL_TEXTURE_2D, cache_atlas));
+    GL_CHECK(glPixelStorei(GL_UNPACK_ALIGNMENT, 1));
+    GL_CHECK(glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, atlas_width, atlas_height, 0, GL_RED, GL_UNSIGNED_BYTE, NULL));
+    GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT));
+    GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT));
+    GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST));
+    GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST));
+    GL_CHECK(glBindTexture(GL_TEXTURE_2D, 0));
+
     vd_ui_set_scale(vd_fw_get_scale());
 
     // Rect
@@ -110,7 +289,7 @@ int main(int argc, char const *argv[])
         GLuint vbo;
         glGenBuffers(1, &vbo);
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
-        glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)1024, 0, GL_DYNAMIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)1024 * sizeof(Rect), 0, GL_DYNAMIC_DRAW);
 
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Rect), (void*)offsetof(Rect, p0p));
@@ -192,162 +371,6 @@ int main(int argc, char const *argv[])
 
     FontTex font_textures[64];
 
-    vd_ft_box_begin();
-    vd_ft_box_family_set(family);
-    vd_ft_box_font_size_set(32.f);
-    vd_ft_box_font_style_set(VD_FT_STYLE_NORMAL);
-    vd_ft_box_push("Hi, I'm Michael.", 0);
-    vd_ft_box_end();
-    vd_ft_box_wrap(VD_FT_WRAP_NONE);
-    VdFtExtent extent = vd_ft_box_measure();
-
-    VdFtRunResult run_result = vd_ft_box_run();
-    VdFtRun *runs = run_result.runs;
-    int run_count = run_result.run_count;
-
-    for (int i = 0; i < run_count; ++i) {
-        VdFtRun *run = &runs[i];
-
-        for (uint32_t g = 0; g < run->glyph_count; ++g) {
-            uint16_t glyph_index = run_result.indices[run->glyph_start + g];
-
-            VdFtExtent bounds = vd_ft_face_glyph_bounds(run->face, run->pixel_scale, glyph_index);
-
-            VdFtBitmapRegion region = vd_ft_face_raster(run->face, run->pixel_scale, glyph_index);
-            uint8_t *new_mem = malloc(sizeof(uint8_t) * region.w * region.h);
-
-            for (unsigned int y = 0; y < region.h; ++y) {
-                for (unsigned int x = 0; x < region.w; ++x) {
-                    uint8_t *line = ((uint8_t*)region.memory) + region.pitch * (region.y + y) + (region.x + x) * region.stride;
-                    // uint32_t pixel = *(uint32_t*)line;
-                    // uint8_t r = (pixel >>  0) & 0xFF;
-                    // uint8_t g = (pixel >>  8) & 0xFF;
-                    // uint8_t b = (pixel >> 16) & 0xFF;
-                    // uint8_t a = (pixel >> 24) & 0xFF;
-                    uint8_t a = line[0];
-
-                    uint8_t cv_pixel = a;
-                    new_mem[y * region.w + x] = cv_pixel;
-                }
-            }
-
-            GLuint texture;
-            glGenTextures(1, &texture);
-            glBindTexture(GL_TEXTURE_2D, texture);
-
-            GLint  level = 0;
-            GLint  internal_format = GL_RED;
-            GLint  border = 0;
-            GLenum format = GL_RED;
-            GLenum type = GL_UNSIGNED_BYTE;
-            GL_CHECK(glPixelStorei(GL_UNPACK_ALIGNMENT, 1));
-            GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT));
-            GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT));
-            GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST));
-            GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST));
-            GL_CHECK(glTexImage2D(GL_TEXTURE_2D, level, internal_format, region.w, region.h, border, format, type, new_mem));
-            GL_CHECK(glBindTexture(GL_TEXTURE_2D, 0));
-
-            font_textures[i + g].id = texture;
-            font_textures[i + g].w = region.w;
-            font_textures[i + g].h = region.h;
-            font_textures[i + g].m = vd_ft_face_glyph_metrics(run->face, run->pixel_scale, glyph_index);
-            free(new_mem);
-        }
-    }
-
-    printf("Extent is %f %f", extent.x, extent.y);
-    // for (size_t i = 0; i < run->glyph_count; ++i) {
-    //     uint16_t glyph_index = analysis.glyph_indices[run->glyph_start + i];
-
-    //     int aw, ah;
-    //     vd_ft_font_get_glyph_bounds(font_id, face_size, glyph_index, &aw, &ah);
-
-    //     VdFtBitmapRegion region = vd_ft_font_raster(font_id, face_size, &glyph_index, 1);
-
-    //     // uint8_t *mem = ((uint8_t*)region.memory) + region.pitch * (region.y) + (region.x) * region.stride;
-    //     uint8_t *new_mem = malloc(sizeof(uint8_t) * region.w * region.h);
-
-    //     for (unsigned int y = 0; y < region.h; ++y) {
-    //         for (unsigned int x = 0; x < region.w; ++x) {
-    //             uint8_t *line = ((uint8_t*)region.memory) + region.pitch * (region.y + y) + (region.x + x) * region.stride;
-    //             uint8_t pixel = *line;
-
-    //             uint8_t cv_pixel = pixel;
-    //             new_mem[y * region.w + x] = cv_pixel;
-    //         }
-    //     }
-
-    //     GLuint texture;
-    //     glGenTextures(1, &texture);
-    //     glBindTexture(GL_TEXTURE_2D, texture);
-
-    //     GLint  level = 0;
-    //     GLint  internal_format = GL_RED;
-    //     GLint  border = 0;
-    //     GLenum format = GL_RED;
-    //     GLenum type = GL_UNSIGNED_BYTE;
-    //     GL_CHECK(glPixelStorei(GL_UNPACK_ALIGNMENT, 1));
-    //     GL_CHECK(glTexImage2D(GL_TEXTURE_2D, level, internal_format, region.w, region.h, border, format, type, new_mem));
-    //     GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT));
-    //     GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT));
-    //     GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST));
-    //     GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST));
-    //     GL_CHECK(glBindTexture(GL_TEXTURE_2D, 0));
-
-    //     font_textures[i].id = texture;
-    //     font_textures[i].w = region.w;
-    //     font_textures[i].h = region.h;
-    //     font_textures[i].m = vd_ft_font_get_glyph_metrics(font_id, face_size, glyph_index);
-    // }
-
-
-    // float total_width = 0.f;
-    // float max_height = 0.f;
-    // for (size_t i = 0; i < run->glyph_count; ++i) {
-    //     size_t glyph_index_index = run->glyph_start + i;
-    //     uint16_t glyph_index = analysis.glyph_indices[glyph_index_index];
-
-    //     int aw, ah;
-    //     vd_ft_font_get_glyph_bounds(font_id, 32.f, glyph_index, &aw, &ah);
-    //     if (max_height < ((float)ah)) {
-    //         max_height = (float)ah;
-    //     }
-
-    //     total_width += analysis.glyph_advances[glyph_index_index];
-    //     // total_width += aw;
-    // }
-
-    // int bitmap_width  = ((int)total_width) + 1;
-    // int bitmap_height = ((int)max_height) * 4 + 1;
-    // uint32_t *memory = malloc(bitmap_width * bitmap_height * 4);
-
-    // int running_width = 0;
-    // for (size_t i = 0; i < run->glyph_count; ++i) {
-
-    //     size_t glyph_index_index = run->glyph_start + i;
-    //     uint16_t glyph_index = analysis.glyph_indices[glyph_index_index];
-
-    //     VdFtGlyphMetrics glyph_metrics = vd_ft_font_get_glyph_metrics(font_id, 32.f, glyph_index);
-    //     VdFtBitmapRegion region = vd_ft_font_raster(font_id, 32.f, &glyph_index, 1);
-    //     for (unsigned int y = 0; y < region.h; ++y) {
-    //         for (unsigned int x = 0; x < region.w; ++x) {
-    //             uint8_t *line = ((uint8_t*)region.memory) + region.pitch * (region.y + y) + (region.x + x) * region.stride;
-    //             uint8_t pixel = *line;
-
-    //             uint32_t cv_pixel = 0x00FFFFFF | (pixel << 24);
-    //             int yoff = (y + (int)glyph_metrics.baseline_origin_y - region.h + 10);
-    //             // int yoff = (y + region.h - 10);
-    //             memory[yoff * bitmap_width + x + running_width] = cv_pixel;
-    //         }
-    //     }
-
-
-    //     running_width += (int)analysis.glyph_advances[glyph_index_index];
-    //     // running_width += region.w;
-    // }
-    // stbi_write_png("./test.png", bitmap_width, bitmap_height, 4, memory, 4 * bitmap_width);
-
     GLuint program = 0;
     unsigned long long program_time = 0;
 
@@ -381,6 +404,8 @@ int main(int argc, char const *argv[])
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    VdFtStyle style = VD_FT_STYLE_NORMAL;
+
     vd_fw_set_vsync_on(1);
     while (vd_fw_running()) {
 
@@ -395,6 +420,28 @@ int main(int argc, char const *argv[])
         float delta_seconds = vd_fw_delta_s();
 
         vd_fw_compile_or_hotload_program(&program, &program_time, "./glsl/ui_basic.vert", "./glsl/ui_basic.frag");
+
+        if (vd_fw_get_key_pressed(VD_FW_KEY_F2)) {
+            show_glyph_cache = !show_glyph_cache;
+        }
+
+        if (vd_fw_get_key_pressed(VD_FW_KEY_F3)) {
+            if (style == VD_FT_STYLE_NORMAL) {
+                style = VD_FT_STYLE_ITALIC;
+            } else {
+                style = VD_FT_STYLE_NORMAL;
+            }
+        }
+
+        for (unsigned short i = 0; i < vd_fw_get_num_codepoints(); ++i) {
+            uint32_t codepoint = vd_fw_get_codepoint(i);
+
+            String_Buf_Len += utf32_to_utf8(codepoint, (unsigned char*)String_Buf + String_Buf_Len);
+        }
+
+        if (vd_fw_get_key_pressed(VD_FW_KEY_ESCAPE)) {
+            String_Buf_Len = 0;
+        }
 
         vd_fw_lock();
 
@@ -516,76 +563,86 @@ int main(int argc, char const *argv[])
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        // // Loop through render passes
-        // for (unsigned int i = 0; i < num_passes; ++i) {
-        //     VdUiRenderPass *pass = &passes[i];
-        //     GLuint texture_id = (GLuint)pass->selected_texture->id;
-        //     GLint clip_width   = (GLint)pass->clip[2] - (GLint)pass->clip[0];
-        //     GLint clip_height  = (GLint)pass->clip[3] - (GLint)pass->clip[1];
-        //     GLint clip_x       = (GLint)pass->clip[0];
-        //     GLint clip_lower_y = (GLint)h - (GLint)pass->clip[3];
+        vd_ft_box_begin();
+        vd_ft_box_family_set(family);
+        vd_ft_box_font_size_set(32.f);
+        vd_ft_box_font_style_set(style);
+        vd_ft_box_push(String_Buf, String_Buf_Len);
+        vd_ft_box_end();
+        vd_ft_box_wrap(VD_FT_WRAP_NONE);
 
-        //     glScissor(clip_x, clip_lower_y, clip_width, clip_height);
+        VdFtRunResult run_result = vd_ft_box_run();
+        VdFtRun *runs = run_result.runs;
+        int run_count = run_result.run_count;
 
-        //     glUseProgram(program);
-        //     glActiveTexture(GL_TEXTURE0);
-        //     glBindTexture(GL_TEXTURE_2D, texture_id);
-        //     glUniform2f(glGetUniformLocation(program, vd_ui_gl_get_uniform_name_resolution()), (float)w, (float)h);
-        //     glUniform1i(glGetUniformLocation(program, vd_ui_gl_get_uniform_name_texture()), 0);
-        //     glUniform2f(glGetUniformLocation(program, vd_ui_gl_get_uniform_name_mouse()), mx, my);
+        VdFtFontMetrics face_metrics = vd_ft_face_metrics(runs[0].face, runs[0].pixel_scale);
 
-        //     glBindVertexArray(vao);
-        //     glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        GL_CHECK(glUseProgram(Rect_Program));
+        GL_CHECK(glUniform2f(glGetUniformLocation(Rect_Program, "u_resolution"), (float)w, (float)h));
+        GL_CHECK(glUniform1i(glGetUniformLocation(Rect_Program, "u_tex"), 0));
+        rects_begin(cache_atlas);
+        float baseline_x = mx;
+        float baseline_y = my - face_metrics.ascent;
+        for (int i = 0; i < run_count; ++i) {
+            VdFtRun *run = &runs[i];
 
-        //     // Update vertex buffer
-        //     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-        //     glBufferSubData(GL_ARRAY_BUFFER, 0, pass->instance_count * sizeof(VdUiVertex), (unsigned char*)buffer + pass->first_instance * sizeof(VdUiVertex));
-        //     glBindBuffer(GL_ARRAY_BUFFER, 0);
+            for (uint32_t g = 0; g < run->glyph_count; ++g) {
+                uint16_t glyph_index = run_result.indices[run->glyph_start + g];
+                Glyph glyph = get_or_create_glyph(run->face, run->pixel_scale, glyph_index);
 
-        //     glDrawArraysInstanced(
-        //         GL_TRIANGLE_STRIP,
-        //         0,
-        //         4,
-        //         pass->instance_count);
-        // }
+                float fw = (float)glyph.w; 
+                float fh = (float)glyph.h;
 
-        // Layout the text
-        
+                VdFtGlyphOffset offset = run_result.offsets[run->offsets_start + g];
 
-        glUseProgram(Rect_Program);
-        glUniform2f(glGetUniformLocation(Rect_Program, "u_resolution"), (float)w, (float)h);
-        glUniform1i(glGetUniformLocation(Rect_Program, "u_tex"), 0);
-        {
-            VdFtFontMetrics face_metrics = vd_ft_face_metrics(runs[0].face, runs[0].pixel_scale);
-            float c_x = mx;
-            float c_y = my - face_metrics.ascent;
+                float x = baseline_x + glyph.m.bearing_x + offset.advance;
+                float y = baseline_y + glyph.m.bearing_y - offset.ascend;
 
-            for (unsigned int i = 0; i < runs[0].glyph_count; ++i) {
-                rects_begin(font_textures[i].id);
-                VdFtGlyphMetrics *m = &font_textures[i].m;
-
-                float fw = (float)font_textures[i].w; 
-                float fh = (float)font_textures[i].h; 
-
-                VdFtGlyphOffset offset = run_result.offsets[runs[0].offsets_start + i];
-                float x = c_x + offset.advance;
-                float y = c_y + m->bearing_y + offset.ascend;
+                Uv uv = get_glyph_subregion(glyph);
 
                 Rect r = {
                     {x, y},
                     {x + fw, y + fh},
-                    {0, 0},
-                    {1, 1},
+                    {uv.left, uv.top},
+                    {uv.right, uv.bottom},
                     {1,1,1,1},
                 };
-
                 rects_push(&r);
-                rects_render();
 
-                c_x += run_result.advances[runs[0].advances_start + i];
+                baseline_x += run_result.advances[run->advances_start + g];
             }
         }
-        
+
+        update_glyph_cache();
+        rects_render();
+
+        if (show_glyph_cache) {
+            rects_begin(Mask1_Texture);
+            float scale = 0.5f;
+            float atlas_width_scaled = (float)atlas_width * scale;
+            float atlas_height_scaled = (float)atlas_height * scale;
+            Rect r1 = {
+                {0, 0},
+                {atlas_width_scaled, atlas_height_scaled},
+                {0, 0},
+                {1, 1},
+                {0.2f,0.2f,0.2f,0.7f},
+            };
+            rects_push(&r1);
+            rects_render();
+
+            rects_begin(cache_atlas);
+            Rect r = {
+                {0, 0},
+                {atlas_width_scaled, atlas_height_scaled},
+                {0, 0},
+                {1, 1},
+                {1,1,1,1},
+            };
+            rects_push(&r);
+            rects_render();
+        }
+
         vd_fw_unlock();
     }
     return 0;

@@ -89,6 +89,7 @@ typedef struct {
 typedef struct {
     float baseline_origin_y;
     float advance_w;
+    float bearing_x;
     float bearing_y;
 } VdFtGlyphMetrics;
 
@@ -278,15 +279,15 @@ VD_FT_API void              vd_ft_family_free(VdFtFamily family);
  * @param  pixel_scale The scale of the face
  * @return             (ascent, descent, linegap, ...)
  */
-VD_FT_API VdFtFontMetrics   vd_ft_face_metrics(VdFtFace face, float pixel_scale);
+VD_FT_API VdFtFontMetrics   vd_ft_face_metrics(VdFtFace face, float em);
 
 /**
  * @brief Render a glyph from a face
- * @param  pixel_scale The pixel scale
+ * @param  pixel_scale The scale in em
  * @param  glyph_index The glyph to render
  * @return             A bitmap region where the glyph will exist.
  */
-VD_FT_API VdFtBitmapRegion  vd_ft_face_raster(VdFtFace face, float pixel_scale, uint16_t glyph_index);
+VD_FT_API VdFtBitmapRegion  vd_ft_face_raster(VdFtFace face, float em, uint16_t glyph_index);
 
 /**
  * @brief Get the bounding box of a given glyph of a face at pixel scale
@@ -295,16 +296,16 @@ VD_FT_API VdFtBitmapRegion  vd_ft_face_raster(VdFtFace face, float pixel_scale, 
  * @param  glyph_index The glyph index
  * @return             (width, height) pair
  */
-VD_FT_API VdFtExtent        vd_ft_face_glyph_bounds(VdFtFace face, float pixel_scale, uint16_t glyph_index);
+VD_FT_API VdFtExtent        vd_ft_face_glyph_bounds(VdFtFace face, float em, uint16_t glyph_index);
 
 /**
- * @brief Get metrics given a glyph of a face at pixel scale
+ * @brief Get metrics given a glyph of a face in em
  * @param  face        The font face
  * @param  pixel_scale The scale
  * @param  glyph_index The glyph index
  * @return             Metrics of this glyph
  */
-VD_FT_API VdFtGlyphMetrics  vd_ft_face_glyph_metrics(VdFtFace face, float pixel_scale, uint16_t glyph_index);
+VD_FT_API VdFtGlyphMetrics  vd_ft_face_glyph_metrics(VdFtFace face, float em, uint16_t glyph_index);
 
 /**
  * @brief Gets a unique key to this face
@@ -359,7 +360,7 @@ VD_FT_API void              vd_ft_box_family_set(VdFtFamily family);
  * @brief Set the font size (in dips) for the next vd_ft_box_push calls
  * @param  pixels Pixel height
  */
-VD_FT_API void              vd_ft_box_font_size_set(float pixels);
+VD_FT_API void              vd_ft_box_font_size_set(float em);
 
 /**
  * @brief Set the font style for the next vd_ft_box_push calls
@@ -2474,7 +2475,7 @@ VD_FT_API void vd_ft_family_free(VdFtFamily family)
     font_family->lpVtbl->Release((VdFtIUnknown*)font_family);
 }
 
-VD_FT_API VdFtFontMetrics vd_ft_face_metrics(VdFtFace face, float pixel_scale)
+VD_FT_API VdFtFontMetrics vd_ft_face_metrics(VdFtFace face, float em)
 {
     VdFtIDWriteFontFace *font_face = (VdFtIDWriteFontFace*)face;
 
@@ -2482,17 +2483,18 @@ VD_FT_API VdFtFontMetrics vd_ft_face_metrics(VdFtFace face, float pixel_scale)
     font_face->lpVtbl->GetMetrics(font_face, &metrics);
 
     VdFtFontMetrics result = {0};
-    result.ascent   = (96.f / 72.f) * ((float)metrics.ascent / (float)metrics.designUnitsPerEm) * pixel_scale;
-    result.descent  = (96.f / 72.f) * ((float)metrics.descent / (float)metrics.designUnitsPerEm) * pixel_scale;
-    result.line_gap = (96.f / 72.f) * ((float)metrics.lineGap / (float)metrics.designUnitsPerEm) * pixel_scale;
+    float scale = em / metrics.designUnitsPerEm;
+    result.ascent   = metrics.ascent * scale;
+    result.descent  = metrics.descent * scale;
+    result.line_gap = metrics.lineGap * scale;
     return result;
 }
 
-VD_FT_API VdFtBitmapRegion vd_ft_face_raster(VdFtFace face, float pixel_scale, uint16_t glyph_index)
+VD_FT_API VdFtBitmapRegion vd_ft_face_raster(VdFtFace face, float em, uint16_t glyph_index)
 {
     VdFtDWRITE_GLYPH_RUN run = {0};
     run.fontFace = (VdFtIDWriteFontFace*)face;
-    run.fontEmSize = (96.f/72.f) * pixel_scale;
+    run.fontEmSize = em;
     run.glyphCount = 1;
     run.glyphIndices = &glyph_index;
     VdFtCOLORREF fg_color = 0x00FFFFFF;
@@ -2509,7 +2511,8 @@ VD_FT_API VdFtBitmapRegion vd_ft_face_raster(VdFtFace face, float pixel_scale, u
 
     VdFtDWRITE_FONT_METRICS metrics;
     run.fontFace->lpVtbl->GetMetrics(run.fontFace, &metrics);
-    float ascent = (96.f/72.f) * ((float)metrics.ascent / (float)metrics.designUnitsPerEm) * pixel_scale;
+    float scale = em / (float)metrics.designUnitsPerEm;
+    float ascent = (float)metrics.ascent * scale;
 
     VdFtRECT bbox;
     VD_FT__WIN32_CHECK_HRESULT(render_target->lpVtbl->DrawGlyphRun(render_target,
@@ -2534,13 +2537,13 @@ VD_FT_API VdFtBitmapRegion vd_ft_face_raster(VdFtFace face, float pixel_scale, u
     return result;
 }
 
-VD_FT_API VdFtExtent vd_ft_face_glyph_bounds(VdFtFace face, float pixel_scale, uint16_t glyph_index)
+VD_FT_API VdFtExtent vd_ft_face_glyph_bounds(VdFtFace face, float em, uint16_t glyph_index)
 {
     VdFtIDWriteFontFace *font_face = (VdFtIDWriteFontFace*)face;
 
     VdFtDWRITE_GLYPH_RUN run = {0};
     run.fontFace = font_face;
-    run.fontEmSize = (96.f/72.f) * pixel_scale;
+    run.fontEmSize = em;
     run.glyphCount = 1;
     run.glyphIndices = &glyph_index;
     VdFtIDWriteGlyphRunAnalysis *analysis;
@@ -2563,7 +2566,7 @@ VD_FT_API VdFtExtent vd_ft_face_glyph_bounds(VdFtFace face, float pixel_scale, u
     return result;
 }
 
-VD_FT_API VdFtGlyphMetrics vd_ft_face_glyph_metrics(VdFtFace face, float pixel_scale, uint16_t glyph_index)
+VD_FT_API VdFtGlyphMetrics vd_ft_face_glyph_metrics(VdFtFace face, float em, uint16_t glyph_index)
 {
     VdFtIDWriteFontFace *font_face = (VdFtIDWriteFontFace*)face;
 
@@ -2572,13 +2575,21 @@ VD_FT_API VdFtGlyphMetrics vd_ft_face_glyph_metrics(VdFtFace face, float pixel_s
 
     VdFtDWRITE_GLYPH_METRICS metrics;
     font_face->lpVtbl->GetDesignGlyphMetrics(font_face, &glyph_index, 1, &metrics, 0);
-    float dpi_mod = (96.f / 72.f);
+    // float dpi_mod = (96.f / 72.f);
+
+    // VdFtGlyphMetrics result = {0};
+    // result.baseline_origin_y = dpi_mod * (metrics.verticalOriginY / (float)font_metrics.designUnitsPerEm) * pixel_scale;
+    // result.advance_w         = dpi_mod * (metrics.advanceWidth / (float)font_metrics.designUnitsPerEm) * pixel_scale;
+    // // result.bearing_y         = dpi_mod * (((font_metrics.ascent / font_metrics.designUnitsPerEm) - metrics.topSideBearing) / (float)font_metrics.designUnitsPerEm) * pixel_scale;
+    // result.bearing_y         = dpi_mod * ((metrics.topSideBearing ) / (float)font_metrics.designUnitsPerEm) * pixel_scale;
 
     VdFtGlyphMetrics result = {0};
-    result.baseline_origin_y = dpi_mod * (metrics.verticalOriginY / (float)font_metrics.designUnitsPerEm) * pixel_scale;
-    result.advance_w         = dpi_mod * (metrics.advanceWidth / (float)font_metrics.designUnitsPerEm) * pixel_scale;
-    // result.bearing_y         = dpi_mod * (((font_metrics.ascent / font_metrics.designUnitsPerEm) - metrics.topSideBearing) / (float)font_metrics.designUnitsPerEm) * pixel_scale;
-    result.bearing_y         = dpi_mod * ((metrics.topSideBearing ) / (float)font_metrics.designUnitsPerEm) * pixel_scale;
+    float scale = em / font_metrics.designUnitsPerEm;
+
+    result.baseline_origin_y = scale * metrics.verticalOriginY;
+    result.advance_w = scale * metrics.advanceWidth;
+    result.bearing_x = scale * metrics.leftSideBearing;
+    result.bearing_y = scale * metrics.topSideBearing;
     return result;
 }
 
@@ -2586,7 +2597,11 @@ VD_FT_API VdFtFaceKey vd_ft_face_key(VdFtFace face)
 {
     VdFtIDWriteFontFace *font_face = (VdFtIDWriteFontFace*)face;
 
-    VdFtUINT32 num_files;
+    VdFtUINT32 num_files = 0;
+    VD_FT__WIN32_CHECK_HRESULT(font_face->lpVtbl->GetFiles(font_face, &num_files, NULL));
+
+    assert(num_files <= 16);
+
     VdFtIDWriteFontFile *files[16];
     VD_FT__WIN32_CHECK_HRESULT(font_face->lpVtbl->GetFiles(font_face, &num_files, files));
 
@@ -2602,7 +2617,7 @@ VD_FT_API VdFtFaceKey vd_ft_face_key(VdFtFace face)
     VD_FT__WIN32_CHECK_HRESULT(file->lpVtbl->GetReferenceKey(file, &file_ref_key, &file_ref_key_size));
 
     VdFtFaceKey result;
-    result.int1 = (void*)file;
+    result.int1 = (void*)index;
     result.int2 = (void*)file_ref_key;
     result.int3 = (void*)loader;
     return result;
@@ -2628,9 +2643,9 @@ VD_FT_API void vd_ft_box_family_set(VdFtFamily family)
     Vd_Ft_G.curr_cluster.family = family;
 }
 
-VD_FT_API void vd_ft_box_font_size_set(float pixels)
+VD_FT_API void vd_ft_box_font_size_set(float em)
 {
-    Vd_Ft_G.curr_cluster.size = pixels;
+    Vd_Ft_G.curr_cluster.size = em;
 }
 
 VD_FT_API void vd_ft_box_font_style_set(VdFtStyle style)
@@ -2640,8 +2655,12 @@ VD_FT_API void vd_ft_box_font_style_set(VdFtStyle style)
 
 VD_FT_API void vd_ft_box_push(const char *text, int len)
 {
-    if (len <= 0) {
+    if (len < 0) {
         len = vd_ft__strlen(text);    
+    }
+
+    if (len == 0) {
+        return;
     }
 
     VD_FT_ASSERT(Vd_Ft_G.curr_text_layout == 0);
@@ -2769,9 +2788,12 @@ VD_FT_API VdFtRunResult vd_ft_box_run(void)
     Vd_Ft_G.glyph_advances_buffer_len = 0;
     Vd_Ft_G.user_glyph_offsets_buffer_len = 0;
 
-    VD_FT__WIN32_CHECK_HRESULT(Vd_Ft_G.curr_text_layout->lpVtbl->Draw(Vd_Ft_G.curr_text_layout, 0,
-                                                                      &Vd_Ft_G.static_text_renderer,
-                                                                      0.f, 0.f));
+    if (Vd_Ft_G.curr_text_len != 0) {
+        VD_FT__WIN32_CHECK_HRESULT(Vd_Ft_G.curr_text_layout->lpVtbl->Draw(Vd_Ft_G.curr_text_layout, 0,
+                                                                          &Vd_Ft_G.static_text_renderer,
+                                                                          0.f, 0.f));
+    }
+
     VdFtRunResult result;
     result.runs = Vd_Ft_G.run_buffer;
     result.run_count = Vd_Ft_G.run_buffer_len;
@@ -2839,6 +2861,7 @@ VD_FT_API VdFtGlyphMetrics vd_ft_font_get_glyph_metrics(VdFtFontId id, float dd_
     VdFtGlyphMetrics result = {0};
     result.baseline_origin_y = dpi_mod * (metrics.verticalOriginY / (float)font->design_units_per_em) * dd_pixel_scale;
     result.advance_w         = dpi_mod * (metrics.advanceWidth / (float)font->design_units_per_em) * dd_pixel_scale;
+    result.bearing_x         = dpi_mod * (metrics.leftSideBearing / (float)font->design_units_per_em) * dd_pixel_scale;
     float top_side_bearing = dpi_mod * (metrics.topSideBearing / (float)font->design_units_per_em) * dd_pixel_scale;
     float bot_side_bearing = dpi_mod * (metrics.bottomSideBearing / (float)font->design_units_per_em) * dd_pixel_scale;
     result.bearing_y         = top_side_bearing - bot_side_bearing;
@@ -3595,7 +3618,8 @@ static VdFtHRESULT vd_ft__win32_get_pixels_per_dip(VdFtIDWriteTextRenderer *This
 {
     (void)This;
     (void)clientDrawingContext;
-    *pixelsPerDip = 96.f / 72.f;
+    // *pixelsPerDip = 96.f / 72.f;
+    *pixelsPerDip = 1.f;
     return 0;
 }
 
@@ -3622,8 +3646,8 @@ static VdFtHRESULT vd_ft__win32_draw_glyph_run(VdFtIDWriteTextRenderer *This,
 
     uint32_t glyph_start = Vd_Ft_G.glyph_indices_buffer_len;
     uint32_t glyph_count = glyphRun->glyphCount;
-    uint32_t offsets_start;
-    uint32_t advances_start;
+    uint32_t offsets_start = 0;
+    uint32_t advances_start = 0;
 
     Vd_Ft_G.glyph_indices_buffer = (uint16_t*)vd_ft__resize_buffer_u32((void*)Vd_Ft_G.glyph_indices_buffer,
                                                                        sizeof(*Vd_Ft_G.glyph_indices_buffer),
@@ -3638,9 +3662,16 @@ static VdFtHRESULT vd_ft__win32_draw_glyph_run(VdFtIDWriteTextRenderer *This,
                                                                                    sizeof(*Vd_Ft_G.user_glyph_offsets_buffer),
                                                                                    Vd_Ft_G.user_glyph_offsets_buffer_len + glyph_count,
                                                                                    &Vd_Ft_G.user_glyph_offsets_buffer_cap);
-    VD_FT_MEMCPY(Vd_Ft_G.user_glyph_offsets_buffer + Vd_Ft_G.user_glyph_offsets_buffer_len,
-                 glyphRun->glyphOffsets,
-                 sizeof(VdFtGlyphOffset) * glyph_count);
+    if (glyphRun->glyphOffsets) {
+
+        VD_FT_MEMCPY(Vd_Ft_G.user_glyph_offsets_buffer + Vd_Ft_G.user_glyph_offsets_buffer_len,
+                     glyphRun->glyphOffsets,
+                     sizeof(VdFtGlyphOffset) * glyph_count);
+    } else {
+        for (uint32_t i = 0; i < glyph_count; ++i) {
+            Vd_Ft_G.user_glyph_offsets_buffer[Vd_Ft_G.user_glyph_offsets_buffer_len + i] = (VdFtGlyphOffset){0.f, 0.f};
+        }
+    }
     offsets_start = Vd_Ft_G.user_glyph_offsets_buffer_len;
     Vd_Ft_G.user_glyph_offsets_buffer_len += glyph_count;
 
@@ -3648,14 +3679,20 @@ static VdFtHRESULT vd_ft__win32_draw_glyph_run(VdFtIDWriteTextRenderer *This,
                                                                      sizeof(*Vd_Ft_G.glyph_advances_buffer),
                                                                      Vd_Ft_G.glyph_advances_buffer_len + glyph_count,
                                                                      &Vd_Ft_G.glyph_advances_buffer_cap);
-    VD_FT_MEMCPY(Vd_Ft_G.glyph_advances_buffer + Vd_Ft_G.glyph_advances_buffer_len,
-                 glyphRun->glyphAdvances,
-                 sizeof(*Vd_Ft_G.glyph_advances_buffer) * glyph_count);
+    if (glyphRun->glyphAdvances) {
+        VD_FT_MEMCPY(Vd_Ft_G.glyph_advances_buffer + Vd_Ft_G.glyph_advances_buffer_len,
+                     glyphRun->glyphAdvances,
+                     sizeof(*Vd_Ft_G.glyph_advances_buffer) * glyph_count);
+    } else {
+        for (uint32_t i = 0; i < glyph_count; ++i) {
+            Vd_Ft_G.glyph_advances_buffer[Vd_Ft_G.glyph_advances_buffer_len + i] = 0.f;
+        }
+    }
     advances_start = Vd_Ft_G.glyph_advances_buffer_len;
     Vd_Ft_G.glyph_advances_buffer_len += glyph_count;
 
     run->face = (VdFtFace)glyphRun->fontFace;
-    run->pixel_scale = (72.f/96.f) * glyphRun->fontEmSize;
+    run->pixel_scale = glyphRun->fontEmSize;
     // run->pixel_scale = glyphRun->fontEmSize;
     run->glyph_start = glyph_start;
     run->glyph_count = glyph_count;
