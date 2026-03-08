@@ -123,6 +123,12 @@ typedef enum {
     VD_FT_WRAP_WORD = 1,
 } VdFtWrap;
 
+typedef enum {
+    VD_FT_STYLE_NORMAL  = 0,
+    VD_FT_STYLE_ITALIC  = 1,
+    VD_FT_STYLE_OBLIQUE = 2,
+} VdFtStyle;
+
 typedef struct {
     int     source;
     void    *hnd;
@@ -221,7 +227,7 @@ VD_FT_API void              vd_ft_collection_free(VdFtCollection collection);
 // FAMILIES
 // A font family can contain 1 or more fonts. You can create font faces based on an index by doing:
 // ```
-// vd_ft_family_face_count(family)
+// vd_ft_family_face_from_index(family, index)
 // ```
 // 
 // You can then continue by either using that font family with the vd_ft_box* calls, or by extracting faces from it
@@ -260,6 +266,20 @@ VD_FT_API VdFtFace          vd_ft_family_face_from_index(VdFtFamily family, int 
  */
 VD_FT_API void              vd_ft_family_free(VdFtFamily family);
 
+// FACES
+// A face represents loaded font data, either from a whole font file (if it has a family with one face), or from part
+// of said font file.
+// 
+// This is the most basic building block. You can use it by yourself (by creating it from a family), or by using
+// vd_ft_box_run(), which will return you an array of runs with a specific face assigned.
+/**
+ * @brief Get the metrics of a font face, positioned around the baseline
+ * @param  face        The font face
+ * @param  pixel_scale The scale of the face
+ * @return             (ascent, descent, linegap, ...)
+ */
+VD_FT_API VdFtFontMetrics   vd_ft_face_metrics(VdFtFace face, float pixel_scale);
+
 /**
  * @brief Render a glyph from a face
  * @param  pixel_scale The pixel scale
@@ -268,9 +288,23 @@ VD_FT_API void              vd_ft_family_free(VdFtFamily family);
  */
 VD_FT_API VdFtBitmapRegion  vd_ft_face_raster(VdFtFace face, float pixel_scale, uint16_t glyph_index);
 
-VD_FT_API VdFtExtent        vd_ft_face_bounds(VdFtFace face, float pixel_scale, uint16_t glyph_index);
+/**
+ * @brief Get the bounding box of a given glyph of a face at pixel scale
+ * @param  face        The font face
+ * @param  pixel_scale The scale
+ * @param  glyph_index The glyph index
+ * @return             (width, height) pair
+ */
+VD_FT_API VdFtExtent        vd_ft_face_glyph_bounds(VdFtFace face, float pixel_scale, uint16_t glyph_index);
 
-VD_FT_API VdFtGlyphMetrics  vd_ft_face_metrics(VdFtFace face, float pixel_scale, uint16_t glyph_index);
+/**
+ * @brief Get metrics given a glyph of a face at pixel scale
+ * @param  face        The font face
+ * @param  pixel_scale The scale
+ * @param  glyph_index The glyph index
+ * @return             Metrics of this glyph
+ */
+VD_FT_API VdFtGlyphMetrics  vd_ft_face_glyph_metrics(VdFtFace face, float pixel_scale, uint16_t glyph_index);
 
 /**
  * @brief Gets a unique key to this face
@@ -326,6 +360,8 @@ VD_FT_API void              vd_ft_box_family_set(VdFtFamily family);
  * @param  pixels Pixel height
  */
 VD_FT_API void              vd_ft_box_font_size_set(float pixels);
+
+VD_FT_API void              vd_ft_box_font_style_set(VdFtStyle style);
 
 /**
  * @brief Push a string slice into the layout buffer
@@ -651,6 +687,7 @@ typedef struct {
     uint32_t    start;
     uint32_t    count;
     VdFtFamily  family;
+    VdFtStyle   style;
     float       size;
 } VdFt__Cluster;
 
@@ -2433,6 +2470,20 @@ VD_FT_API void vd_ft_family_free(VdFtFamily family)
     font_family->lpVtbl->Release((VdFtIUnknown*)font_family);
 }
 
+VD_FT_API VdFtFontMetrics vd_ft_face_metrics(VdFtFace face, float pixel_scale)
+{
+    VdFtIDWriteFontFace *font_face = (VdFtIDWriteFontFace*)face;
+
+    VdFtDWRITE_FONT_METRICS metrics;
+    font_face->lpVtbl->GetMetrics(font_face, &metrics);
+
+    VdFtFontMetrics result = {0};
+    result.ascent   = (96.f / 72.f) * ((float)metrics.ascent / (float)metrics.designUnitsPerEm) * pixel_scale;
+    result.descent  = (96.f / 72.f) * ((float)metrics.descent / (float)metrics.designUnitsPerEm) * pixel_scale;
+    result.line_gap = (96.f / 72.f) * ((float)metrics.lineGap / (float)metrics.designUnitsPerEm) * pixel_scale;
+    return result;
+}
+
 VD_FT_API VdFtBitmapRegion vd_ft_face_raster(VdFtFace face, float pixel_scale, uint16_t glyph_index)
 {
     VdFtDWRITE_GLYPH_RUN run = {0};
@@ -2475,7 +2526,7 @@ VD_FT_API VdFtBitmapRegion vd_ft_face_raster(VdFtFace face, float pixel_scale, u
     return result;
 }
 
-VD_FT_API VdFtExtent vd_ft_face_bounds(VdFtFace face, float pixel_scale, uint16_t glyph_index)
+VD_FT_API VdFtExtent vd_ft_face_glyph_bounds(VdFtFace face, float pixel_scale, uint16_t glyph_index)
 {
     VdFtIDWriteFontFace *font_face = (VdFtIDWriteFontFace*)face;
 
@@ -2501,6 +2552,25 @@ VD_FT_API VdFtExtent vd_ft_face_bounds(VdFtFace face, float pixel_scale, uint16_
 
     analysis->lpVtbl->Release((VdFtIUnknown*)analysis);
 
+    return result;
+}
+
+VD_FT_API VdFtGlyphMetrics vd_ft_face_glyph_metrics(VdFtFace face, float pixel_scale, uint16_t glyph_index)
+{
+    VdFtIDWriteFontFace *font_face = (VdFtIDWriteFontFace*)face;
+
+    VdFtDWRITE_FONT_METRICS font_metrics;
+    font_face->lpVtbl->GetMetrics(font_face, &font_metrics);
+
+    VdFtDWRITE_GLYPH_METRICS metrics;
+    font_face->lpVtbl->GetDesignGlyphMetrics(font_face, &glyph_index, 1, &metrics, 0);
+    float dpi_mod = (96.f / 72.f);
+
+    VdFtGlyphMetrics result = {0};
+    result.baseline_origin_y = dpi_mod * (metrics.verticalOriginY / (float)font_metrics.designUnitsPerEm) * pixel_scale;
+    result.advance_w         = dpi_mod * (metrics.advanceWidth / (float)font_metrics.designUnitsPerEm) * pixel_scale;
+    // result.bearing_y         = dpi_mod * (((font_metrics.ascent / font_metrics.designUnitsPerEm) - metrics.topSideBearing) / (float)font_metrics.designUnitsPerEm) * pixel_scale;
+    result.bearing_y         = dpi_mod * ((metrics.topSideBearing ) / (float)font_metrics.designUnitsPerEm) * pixel_scale;
     return result;
 }
 
@@ -2541,6 +2611,7 @@ VD_FT_API void vd_ft_box_begin(void)
     Vd_Ft_G.curr_cluster.start = 0;
     Vd_Ft_G.curr_cluster.count = 0;
     Vd_Ft_G.curr_cluster.family = 0;
+    Vd_Ft_G.curr_cluster.style = 0;
     Vd_Ft_G.curr_cluster.size = 0.f;
 }
 
@@ -2552,6 +2623,11 @@ VD_FT_API void vd_ft_box_family_set(VdFtFamily family)
 VD_FT_API void vd_ft_box_font_size_set(float pixels)
 {
     Vd_Ft_G.curr_cluster.size = pixels;
+}
+
+VD_FT_API void vd_ft_box_font_style_set(VdFtStyle style)
+{
+    Vd_Ft_G.curr_cluster.style = style;
 }
 
 VD_FT_API void vd_ft_box_push(const char *text, int len)
@@ -2608,11 +2684,19 @@ VD_FT_API void vd_ft_box_end(void)
     VD_FT__WIN32_CHECK_HRESULT(font_family->lpVtbl->GetFontCollection(font_family, &collection));
     collection->lpVtbl->AddRef((VdFtIUnknown*)collection);
 
+    VdFtDWRITE_FONT_STYLE style = 0;
+    switch (first_cluster->style) {
+        case VD_FT_STYLE_NORMAL:  style = VD_FT_DWRITE_FONT_STYLE_NORMAL;
+        case VD_FT_STYLE_ITALIC:  style = VD_FT_DWRITE_FONT_STYLE_ITALIC;
+        case VD_FT_STYLE_OBLIQUE: style = VD_FT_DWRITE_FONT_STYLE_OBLIQUE;
+        default: break;
+    }
+
     VdFtIDWriteTextFormat *text_format;
     VdFtHRESULT hr = Vd_Ft_G.factory->lpVtbl->CreateTextFormat(Vd_Ft_G.factory,
                                                                temp, collection,
                                                                VD_FT_DWRITE_FONT_WEIGHT_NORMAL,
-                                                               VD_FT_DWRITE_FONT_STYLE_NORMAL,
+                                                               style,
                                                                VD_FT_DWRITE_FONT_STRETCH_NORMAL,
                                                                first_cluster->size,
                                                                L"en-us",
@@ -3547,7 +3631,7 @@ static VdFtHRESULT vd_ft__win32_draw_glyph_run(VdFtIDWriteTextRenderer *This,
                                                                                    &Vd_Ft_G.user_glyph_offsets_buffer_cap);
     VD_FT_MEMCPY(Vd_Ft_G.user_glyph_offsets_buffer + Vd_Ft_G.user_glyph_offsets_buffer_len,
                  glyphRun->glyphOffsets,
-                 sizeof(uint16_t) * glyph_count);
+                 sizeof(VdFtGlyphOffset) * glyph_count);
     offsets_start = Vd_Ft_G.user_glyph_offsets_buffer_len;
     Vd_Ft_G.user_glyph_offsets_buffer_len += glyph_count;
 
@@ -3557,12 +3641,13 @@ static VdFtHRESULT vd_ft__win32_draw_glyph_run(VdFtIDWriteTextRenderer *This,
                                                                      &Vd_Ft_G.glyph_advances_buffer_cap);
     VD_FT_MEMCPY(Vd_Ft_G.glyph_advances_buffer + Vd_Ft_G.glyph_advances_buffer_len,
                  glyphRun->glyphAdvances,
-                 sizeof(uint16_t) * glyph_count);
+                 sizeof(*Vd_Ft_G.glyph_advances_buffer) * glyph_count);
     advances_start = Vd_Ft_G.glyph_advances_buffer_len;
     Vd_Ft_G.glyph_advances_buffer_len += glyph_count;
 
     run->face = (VdFtFace)glyphRun->fontFace;
     run->pixel_scale = (72.f/96.f) * glyphRun->fontEmSize;
+    // run->pixel_scale = glyphRun->fontEmSize;
     run->glyph_start = glyph_start;
     run->glyph_count = glyph_count;
     run->offsets_start = offsets_start;

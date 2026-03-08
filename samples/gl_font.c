@@ -15,6 +15,7 @@
 
 #include <stdio.h>
 #include "vd_ft.h"
+#include "stb_rect_pack.h"
 
 #define GL_CHECK(expr) do { (expr); int _e_ = glGetError(); if (_e_ != 0) { printf("Check at " __FILE__ ":%d failed with 0x%x\n", __LINE__, _e_); assert(0); }} while(0)
 
@@ -178,77 +179,122 @@ int main(int argc, char const *argv[])
     font_memory = vd_ui_font_default(&font_size);
 
     VdFtCollection ui_font_collection = vd_ft_collection_from_memory(font_memory, font_size);
+    VdFtCollection sys_collection = vd_ft_collection_from_system();
 
-    VdFtFamily family = vd_ft_collection_family_from_index(ui_font_collection, 0);
+    VdFtFamily family;
+    if (1) {
+        family = vd_ft_collection_family_from_index(sys_collection, 0);
+    } else {
+        family = vd_ft_collection_family_from_index(ui_font_collection, 0);
+    }
+
     printf("Family Name: %s\n", vd_ft_family_name(family));
+
+    FontTex font_textures[64];
 
     vd_ft_box_begin();
     vd_ft_box_family_set(family);
-    vd_ft_box_size_set(32.f);
+    vd_ft_box_font_size_set(32.f);
+    vd_ft_box_font_style_set(VD_FT_STYLE_OBLIQUE);
     vd_ft_box_push("Hi, I'm Michael.", 0);
     vd_ft_box_end();
+    vd_ft_box_wrap(VD_FT_WRAP_NONE);
+    VdFtExtent extent = vd_ft_box_measure();
 
-    // VdFtFamily *family = vd_ft_family_from_index(0);
-    // printf("Using %s", vd_ft_family_name(family));
+    VdFtRunResult run_result = vd_ft_box_run();
+    VdFtRun *runs = run_result.runs;
+    int run_count = run_result.run_count;
 
+    for (int i = 0; i < run_count; ++i) {
+        VdFtRun *run = &runs[i];
 
-    VdFtFontId font_id = vd_ft_create_font_from_memory(font_memory, (int)font_size);
+        for (uint32_t g = 0; g < run->glyph_count; ++g) {
+            uint16_t glyph_index = run_result.indices[run->glyph_start + g];
 
-    #define TX L"Hello! My name is Michael Dodis."
-    #define TXLEN ((sizeof(TX) / 2) - 1)
-    const wchar_t *s = TX;
-    size_t s_len = TXLEN;
-    VdFtAnalysis analysis = vd_ft_font_analyze_utf16(font_id, 32.f, s, s_len);
-    VdFtRun *run = &analysis.runs[0];
+            VdFtExtent bounds = vd_ft_face_glyph_bounds(run->face, run->pixel_scale, glyph_index);
 
-    FontTex font_textures[TXLEN];
+            VdFtBitmapRegion region = vd_ft_face_raster(run->face, run->pixel_scale, glyph_index);
+            uint8_t *new_mem = malloc(sizeof(uint8_t) * region.w * region.h);
 
-    const float face_size = 32.f;
-    VdFtFontMetrics face_metrics = vd_ft_font_get_metrics(font_id, face_size);
+            for (unsigned int y = 0; y < region.h; ++y) {
+                for (unsigned int x = 0; x < region.w; ++x) {
+                    uint8_t *line = ((uint8_t*)region.memory) + region.pitch * (region.y + y) + (region.x + x) * region.stride;
+                    uint8_t pixel = *line;
 
-    for (size_t i = 0; i < run->glyph_count; ++i) {
-        uint16_t glyph_index = analysis.glyph_indices[run->glyph_start + i];
-
-        int aw, ah;
-        vd_ft_font_get_glyph_bounds(font_id, face_size, glyph_index, &aw, &ah);
-
-        VdFtBitmapRegion region = vd_ft_font_raster(font_id, face_size, &glyph_index, 1);
-
-        // uint8_t *mem = ((uint8_t*)region.memory) + region.pitch * (region.y) + (region.x) * region.stride;
-        uint8_t *new_mem = malloc(sizeof(uint8_t) * region.w * region.h);
-
-        for (unsigned int y = 0; y < region.h; ++y) {
-            for (unsigned int x = 0; x < region.w; ++x) {
-                uint8_t *line = ((uint8_t*)region.memory) + region.pitch * (region.y + y) + (region.x + x) * region.stride;
-                uint8_t pixel = *line;
-
-                uint8_t cv_pixel = pixel;
-                new_mem[y * region.w + x] = cv_pixel;
+                    uint8_t cv_pixel = pixel;
+                    new_mem[y * region.w + x] = cv_pixel;
+                }
             }
+
+            GLuint texture;
+            glGenTextures(1, &texture);
+            glBindTexture(GL_TEXTURE_2D, texture);
+
+            GLint  level = 0;
+            GLint  internal_format = GL_RED;
+            GLint  border = 0;
+            GLenum format = GL_RED;
+            GLenum type = GL_UNSIGNED_BYTE;
+            GL_CHECK(glPixelStorei(GL_UNPACK_ALIGNMENT, 1));
+            GL_CHECK(glTexImage2D(GL_TEXTURE_2D, level, internal_format, region.w, region.h, border, format, type, new_mem));
+            GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT));
+            GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT));
+            GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST));
+            GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST));
+            GL_CHECK(glBindTexture(GL_TEXTURE_2D, 0));
+
+            font_textures[i + g].id = texture;
+            font_textures[i + g].w = region.w;
+            font_textures[i + g].h = region.h;
+            font_textures[i + g].m = vd_ft_face_glyph_metrics(run->face, run->pixel_scale, glyph_index);
+            free(new_mem);
         }
-
-        GLuint texture;
-        glGenTextures(1, &texture);
-        glBindTexture(GL_TEXTURE_2D, texture);
-
-        GLint  level = 0;
-        GLint  internal_format = GL_RED;
-        GLint  border = 0;
-        GLenum format = GL_RED;
-        GLenum type = GL_UNSIGNED_BYTE;
-        GL_CHECK(glPixelStorei(GL_UNPACK_ALIGNMENT, 1));
-        GL_CHECK(glTexImage2D(GL_TEXTURE_2D, level, internal_format, region.w, region.h, border, format, type, new_mem));
-        GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT));
-        GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT));
-        GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST));
-        GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST));
-        GL_CHECK(glBindTexture(GL_TEXTURE_2D, 0));
-
-        font_textures[i].id = texture;
-        font_textures[i].w = region.w;
-        font_textures[i].h = region.h;
-        font_textures[i].m = vd_ft_font_get_glyph_metrics(font_id, face_size, glyph_index);
     }
+
+    printf("Extent is %f %f", extent.x, extent.y);
+    // for (size_t i = 0; i < run->glyph_count; ++i) {
+    //     uint16_t glyph_index = analysis.glyph_indices[run->glyph_start + i];
+
+    //     int aw, ah;
+    //     vd_ft_font_get_glyph_bounds(font_id, face_size, glyph_index, &aw, &ah);
+
+    //     VdFtBitmapRegion region = vd_ft_font_raster(font_id, face_size, &glyph_index, 1);
+
+    //     // uint8_t *mem = ((uint8_t*)region.memory) + region.pitch * (region.y) + (region.x) * region.stride;
+    //     uint8_t *new_mem = malloc(sizeof(uint8_t) * region.w * region.h);
+
+    //     for (unsigned int y = 0; y < region.h; ++y) {
+    //         for (unsigned int x = 0; x < region.w; ++x) {
+    //             uint8_t *line = ((uint8_t*)region.memory) + region.pitch * (region.y + y) + (region.x + x) * region.stride;
+    //             uint8_t pixel = *line;
+
+    //             uint8_t cv_pixel = pixel;
+    //             new_mem[y * region.w + x] = cv_pixel;
+    //         }
+    //     }
+
+    //     GLuint texture;
+    //     glGenTextures(1, &texture);
+    //     glBindTexture(GL_TEXTURE_2D, texture);
+
+    //     GLint  level = 0;
+    //     GLint  internal_format = GL_RED;
+    //     GLint  border = 0;
+    //     GLenum format = GL_RED;
+    //     GLenum type = GL_UNSIGNED_BYTE;
+    //     GL_CHECK(glPixelStorei(GL_UNPACK_ALIGNMENT, 1));
+    //     GL_CHECK(glTexImage2D(GL_TEXTURE_2D, level, internal_format, region.w, region.h, border, format, type, new_mem));
+    //     GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT));
+    //     GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT));
+    //     GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST));
+    //     GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST));
+    //     GL_CHECK(glBindTexture(GL_TEXTURE_2D, 0));
+
+    //     font_textures[i].id = texture;
+    //     font_textures[i].w = region.w;
+    //     font_textures[i].h = region.h;
+    //     font_textures[i].m = vd_ft_font_get_glyph_metrics(font_id, face_size, glyph_index);
+    // }
 
 
     // float total_width = 0.f;
@@ -504,18 +550,20 @@ int main(int argc, char const *argv[])
         glUniform2f(glGetUniformLocation(Rect_Program, "u_resolution"), (float)w, (float)h);
         glUniform1i(glGetUniformLocation(Rect_Program, "u_tex"), 0);
         {
+            VdFtFontMetrics face_metrics = vd_ft_face_metrics(runs[0].face, runs[0].pixel_scale);
             float c_x = mx;
-            float c_y = my - (face_metrics.ascent - face_metrics.descent) + face_metrics.line_gap;
+            float c_y = my - face_metrics.ascent;
 
-            for (unsigned int i = 0; i < run->glyph_count; ++i) {
+            for (unsigned int i = 0; i < runs[0].glyph_count; ++i) {
                 rects_begin(font_textures[i].id);
                 VdFtGlyphMetrics *m = &font_textures[i].m;
 
                 float fw = (float)font_textures[i].w; 
                 float fh = (float)font_textures[i].h; 
 
-                float x = c_x + analysis.glyph_offsets[i].advance;
-                float y = c_y + m->bearing_y - analysis.glyph_offsets[i].ascend;
+                VdFtGlyphOffset offset = run_result.offsets[runs[0].offsets_start + i];
+                float x = c_x + offset.advance;
+                float y = c_y + m->bearing_y + offset.ascend;
 
                 Rect r = {
                     {x, y},
@@ -528,7 +576,7 @@ int main(int argc, char const *argv[])
                 rects_push(&r);
                 rects_render();
 
-                c_x += analysis.glyph_advances[i];
+                c_x += run_result.advances[runs[0].advances_start + i];
             }
         }
         
@@ -551,6 +599,9 @@ int main(int argc, char const *argv[])
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+
+#define STB_RECT_PACK_IMPLEMENTATION
+#include "stb_rect_pack.h"
 
 #if defined(__clang__)
 #pragma clang diagnostic pop
