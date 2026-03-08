@@ -41,8 +41,6 @@
  * ╚════════════════════════════════════════════════════════════╝
  * 
  * TODO
- * - Have a way for a user to request OpenGL extensions/versions via a precedence array, and initialize the maximum possible version
- * - Add option to enable sys keys
  * - Gamepads
  *     - Face Heuristics
  *     - Class Heuristics
@@ -818,6 +816,10 @@ VD_FW_API int                vd_fw_get_key_released(int key);
  */
 VD_FW_API int                vd_fw_get_key_down(int key);
 
+/**
+ * @brief Get the last key pressed
+ * @return  The last key pressed
+ */
 VD_FW_API int                vd_fw_get_last_key_pressed(void);
 
 /**
@@ -10410,11 +10412,11 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     rids[0].dwFlags     = 0x00; // None (NO RIDEV_INPUTSINK)
     rids[0].hwndTarget  = VD_FW_G.hwnd;
 
-    rids[1].usUsagePage = 0x01; // Generic desktop controls
-    rids[1].usUsage     = 0x05; // Gamepad
-    rids[1].dwFlags     = RIDEV_DEVNOTIFY | RIDEV_INPUTSINK;
-    rids[1].hwndTarget  = VD_FW_G.hwnd;
-    VD_FW__CHECK_TRUE(VdFwRegisterRawInputDevices(rids, 2, sizeof(rids[0])));
+    // rids[1].usUsagePage = 0x01; // Generic desktop controls
+    // rids[1].usUsage     = 0x05; // Gamepad
+    // rids[1].dwFlags     = RIDEV_DEVNOTIFY | RIDEV_INPUTSINK;
+    // rids[1].hwndTarget  = VD_FW_G.hwnd;
+    VD_FW__CHECK_TRUE(VdFwRegisterRawInputDevices(rids, 1, sizeof(rids[0])));
 
     VD_FW_G.last_window_style = window_style;
     VD_FW_G.t_paint_ready = 1;

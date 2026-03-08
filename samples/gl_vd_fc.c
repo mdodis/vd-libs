@@ -262,6 +262,9 @@ static void do_device_info(void)
         }
 
         vd_ui_labelf("Axes: %d", vd_fc_axis_count(curr_device_id));
+        for (int i = 0; i < vd_fc_axis_count(curr_device_id); ++i) {
+            vd_ui_labelf("Axis[%d]: %lld", i, vd_fc_raw_axis_value(curr_device_id, i));
+        }
     }
 
 
@@ -427,7 +430,7 @@ int main(int argc, char const *argv[])
 
     vd_ui_init();
     vd_ui_debug_set_draw_cursor_on(0);
-    vd_ui_debug_set_inspector_on(1);
+    vd_ui_debug_set_inspector_on(0);
     vd_ui_debug_set_metrics_on(0);
     vd_ui_debug_set_layout_recompute_vis_on(0);
 
