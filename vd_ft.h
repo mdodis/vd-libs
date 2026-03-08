@@ -361,6 +361,10 @@ VD_FT_API void              vd_ft_box_family_set(VdFtFamily family);
  */
 VD_FT_API void              vd_ft_box_font_size_set(float pixels);
 
+/**
+ * @brief Set the font style for the next vd_ft_box_push calls
+ * @param  style The font style
+ */
 VD_FT_API void              vd_ft_box_font_style_set(VdFtStyle style);
 
 /**
@@ -2503,9 +2507,13 @@ VD_FT_API VdFtBitmapRegion vd_ft_face_raster(VdFtFace face, float pixel_scale, u
     VdFt__Rectangle(hdc, 0, 0, 2048, 2048);
     VdFt__SelectObject(hdc, curr);
 
+    VdFtDWRITE_FONT_METRICS metrics;
+    run.fontFace->lpVtbl->GetMetrics(run.fontFace, &metrics);
+    float ascent = (96.f/72.f) * ((float)metrics.ascent / (float)metrics.designUnitsPerEm) * pixel_scale;
+
     VdFtRECT bbox;
     VD_FT__WIN32_CHECK_HRESULT(render_target->lpVtbl->DrawGlyphRun(render_target,
-                                                                   0.f, 100.f,
+                                                                   16.f, ascent,
                                                                    VD_FT_DWRITE_MEASURING_MODE_NATURAL,
                                                                    &run,
                                                                    Vd_Ft_G.rendering_params,
@@ -2686,9 +2694,9 @@ VD_FT_API void vd_ft_box_end(void)
 
     VdFtDWRITE_FONT_STYLE style = 0;
     switch (first_cluster->style) {
-        case VD_FT_STYLE_NORMAL:  style = VD_FT_DWRITE_FONT_STYLE_NORMAL;
-        case VD_FT_STYLE_ITALIC:  style = VD_FT_DWRITE_FONT_STYLE_ITALIC;
-        case VD_FT_STYLE_OBLIQUE: style = VD_FT_DWRITE_FONT_STYLE_OBLIQUE;
+        case VD_FT_STYLE_NORMAL:  style = VD_FT_DWRITE_FONT_STYLE_NORMAL; break;
+        case VD_FT_STYLE_ITALIC:  style = VD_FT_DWRITE_FONT_STYLE_ITALIC; break;
+        case VD_FT_STYLE_OBLIQUE: style = VD_FT_DWRITE_FONT_STYLE_OBLIQUE; break;
         default: break;
     }
 
@@ -3134,6 +3142,7 @@ static void vd_ft__win32_init(void)
     VD_FT__WIN32_CHECK_HRESULT(Vd_Ft_G.factory->lpVtbl->CreateRenderingParams(Vd_Ft_G.factory,
                                                                               &rendering_params));
     Vd_Ft_G.rendering_params = rendering_params;
+    VdFtDWRITE_RENDERING_MODE mode = Vd_Ft_G.rendering_params->lpVtbl->GetRenderingMode(Vd_Ft_G.rendering_params);
 
     VdFtIDWriteGdiInterop *gdi_interop;
     VD_FT__WIN32_CHECK_HRESULT(Vd_Ft_G.factory->lpVtbl->GetGdiInterop(Vd_Ft_G.factory,

@@ -195,7 +195,7 @@ int main(int argc, char const *argv[])
     vd_ft_box_begin();
     vd_ft_box_family_set(family);
     vd_ft_box_font_size_set(32.f);
-    vd_ft_box_font_style_set(VD_FT_STYLE_OBLIQUE);
+    vd_ft_box_font_style_set(VD_FT_STYLE_NORMAL);
     vd_ft_box_push("Hi, I'm Michael.", 0);
     vd_ft_box_end();
     vd_ft_box_wrap(VD_FT_WRAP_NONE);
@@ -219,9 +219,14 @@ int main(int argc, char const *argv[])
             for (unsigned int y = 0; y < region.h; ++y) {
                 for (unsigned int x = 0; x < region.w; ++x) {
                     uint8_t *line = ((uint8_t*)region.memory) + region.pitch * (region.y + y) + (region.x + x) * region.stride;
-                    uint8_t pixel = *line;
+                    // uint32_t pixel = *(uint32_t*)line;
+                    // uint8_t r = (pixel >>  0) & 0xFF;
+                    // uint8_t g = (pixel >>  8) & 0xFF;
+                    // uint8_t b = (pixel >> 16) & 0xFF;
+                    // uint8_t a = (pixel >> 24) & 0xFF;
+                    uint8_t a = line[0];
 
-                    uint8_t cv_pixel = pixel;
+                    uint8_t cv_pixel = a;
                     new_mem[y * region.w + x] = cv_pixel;
                 }
             }
@@ -236,11 +241,11 @@ int main(int argc, char const *argv[])
             GLenum format = GL_RED;
             GLenum type = GL_UNSIGNED_BYTE;
             GL_CHECK(glPixelStorei(GL_UNPACK_ALIGNMENT, 1));
-            GL_CHECK(glTexImage2D(GL_TEXTURE_2D, level, internal_format, region.w, region.h, border, format, type, new_mem));
             GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT));
             GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT));
             GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST));
             GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST));
+            GL_CHECK(glTexImage2D(GL_TEXTURE_2D, level, internal_format, region.w, region.h, border, format, type, new_mem));
             GL_CHECK(glBindTexture(GL_TEXTURE_2D, 0));
 
             font_textures[i + g].id = texture;
@@ -468,6 +473,7 @@ int main(int argc, char const *argv[])
                     GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT));
                     GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST));
                     GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST));
+                    // glGenerateMipmap(GL_TEXTURE_2D);
                     GL_CHECK(glBindTexture(GL_TEXTURE_2D, 0));
 
                     id->id = (uintptr_t)texture;
