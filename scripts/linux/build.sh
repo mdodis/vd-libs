@@ -21,7 +21,7 @@ done
 pushd $SCRIPT_DIR/../.. > /dev/null
 
 PRJ_DIR="$(realpath .)"
-CFLAGS="-Wall -std=c11 -Wno-unused-but-set-variable -Wno-unused-function -I $PRJ_DIR"
+CFLAGS="-Wall -pthread -std=c99 -Wno-missing-braces -Wno-unused-but-set-variable -Wno-unused-function -I $PRJ_DIR"
 DFLAGS="-O0 -g"
 CFLAGS="$DFLAGS $CFLAGS"
 

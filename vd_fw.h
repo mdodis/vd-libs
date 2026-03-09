@@ -14978,6 +14978,10 @@ static void vd_fw__mac_hid_value_callback(void *context, IOReturn result, void *
 }
 
 #elif defined(__linux__)
+#ifndef VD_FW_X11_MESSAGE_BUFFER_SIZE
+#   define VD_FW_X11_MESSAGE_BUFFER_SIZE 256
+#endif // !VD_FW_X11_MESSAGE_BUFFER_SIZE
+
 #define GL_NO_PROTOTYPES
 #define GL_GLEXT_PROTOTYPES 0
 #define GLX_GLXEXT_PROTOTYPES 0
@@ -14995,6 +14999,7 @@ static void vd_fw__mac_hid_value_callback(void *context, IOReturn result, void *
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <pthread.h>
 
 enum {
     VD_FW_GLX_DRAWABLE_TYPE = 0x8010,
@@ -15074,6 +15079,7 @@ typedef struct {
 #define VD_FW_X11_FUNCTIONS \
     XBEGIN_MODULE(xlib) \
     XSYM(xlib, Display*, XOpenDisplay, (const char *name)) \
+    XSYM(xlib, Status, XInitThreads, (void)) \
     XSYM(xlib, Status, XMatchVisualInfo, (Display *display, int screen, int depth, int klass, XVisualInfo *vinfo_return)) \
     XSYM(xlib, Colormap, XCreateColormap, (Display *display, Window w, Visual *visual, int alloc)) \
     XSYM(xlib, Window, XCreateWindow, (Display *display, Window parent, int x, int y, unsigned int width, unsigned int height, unsigned int border_width, int depth, unsigned int class, Visual *visual, unsigned long valuemask, XSetWindowAttributes *attributes)) \
@@ -15160,6 +15166,16 @@ VD_FW_X11_FUNCTIONS
 #define VD_FW_XIMaskIsSet(ptr, event) (((unsigned char*)(ptr))[(event)>>3] &   (1 << ((event) & 7)))
 #define VD_FW_XIMaskLen(event)        (((event) >> 3) + 1)
 
+enum {
+    VD_FW_X11_FLAGS_WAKE_COND_VAR = 1 << 0,
+    VD_FW_X11_FLAGS_SIZE_CHANGED  = 1 << 1,
+};
+
+typedef struct {
+    int w, h;
+    int flags;
+} VdFw__X11Frame;
+
 typedef struct {
     void                            *handle_xlib;
     int                             has_xlib;
@@ -15203,6 +15219,8 @@ typedef struct {
     Atom                            wm_hidden;
     Atom                            wm_fullscreen;
     Atom                            wm_icon;
+    Atom                            wm_usr_close;
+    Atom                            wm_usr_block;
     XID                             sync_counter;
     VdFwU64                         sync_counter_value;
     int                             sync_redraw;
@@ -15219,6 +15237,8 @@ typedef struct {
     int                             close_request;
     int                             quit_request;
     VdFwGraphicsApi                 graphics_api;
+    int                             block_while_sizing;
+    int                             winthread_block_while_sizing;
 
     int                             ncrect_count;
     int                             ncrects[VD_FW_NCRECTS_MAX][4];
@@ -15259,6 +15279,20 @@ typedef struct {
     VdFwGamepadDBEntry              *gamepad_db_entries;
     struct timespec                 time_last;
     VdFwU64                         delta_ns;
+
+    VdFwU16                         num_codepoints;
+    VdFwU16                         first_codepoint_index;
+    VdFwU32                         codepoints[VD_FW_CODEPOINT_BUFFER_COUNT];
+
+    pthread_t                       win_thread;
+    pthread_mutex_t                 mtx_paint;
+    pthread_cond_t                  cnd_paint;
+
+    VdFwEvent                       msgbuf[VD_FW_X11_MESSAGE_BUFFER_SIZE];
+    int                             msgbuf_r;
+    int                             msgbuf_w;
+    VdFw__X11Frame                  next_frame;
+    VdFw__X11Frame                  curr_frame;
 } VdFw__LinuxInternalData;
 
 VdFw__LinuxInternalData VdFw__Globals = {0};
@@ -15271,6 +15305,9 @@ static VdFwKey         vd_fw__x11_translate_keycode(XEvent *evt);
 static int             vd_fw__x11_translate_mouse_button(unsigned int button);
 static int             vd_fw__x11_recreate_window(Colormap colormap, XVisualInfo *vi_info);
 static int             vd_fw__x11_test_orientation(int x, int y);
+static void*           vd_fw__x11_thread_proc(void *arg);
+static int             vd_fw__x11_msgbuf_r(VdFwEvent *message);
+static int             vd_fw__x11_msgbuf_w(VdFwEvent *message);
 
 void *vd_fw__gl_get_proc_address(const char *name)
 {
@@ -15341,6 +15378,8 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     if (info) {
         api = info->api;
     }
+
+    VdFwXInitThreads();
 
     VD_FW_G.display = VdFwXOpenDisplay(NULL);
     VD_FW_G.screen = VdFwXDefaultScreen(VD_FW_G.display);
@@ -15432,6 +15471,9 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         VD_FW_G.wm_sync_request_counter = VdFwXInternAtom(VD_FW_G.display, "_NET_WM_SYNC_REQUEST_COUNTER", 0);
     }
 
+    VD_FW_G.wm_usr_close = VdFwXInternAtom(VD_FW_G.display, "WM_USR_CLOSE", 0);
+    VD_FW_G.wm_usr_block = VdFwXInternAtom(VD_FW_G.display, "WM_USR_BLOCK", 0);
+
     int screen_bits = 24;
     XVisualInfo visual_info = {};
     if (!VdFwXMatchVisualInfo(VD_FW_G.display, VD_FW_G.screen, screen_bits, TrueColor, &visual_info)) {
@@ -15458,6 +15500,20 @@ VD_FW_API unsigned long long vd_fw_delta_ns(void)
 VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_options)
 {
     int result = 1;
+
+    if (VD_FW_G.graphics_api != VD_FW_GRAPHICS_API_INVALID) {
+
+        XEvent ev = {0};
+        ev.xclient.type = ClientMessage;
+        ev.xclient.window = VD_FW_G.window;
+        ev.xclient.message_type = VD_FW_G.wm_usr_close;
+        ev.xclient.format = 32;
+        VdFwXSendEvent(VD_FW_G.display, VD_FW_G.window, False, NoEventMask, &ev);
+
+        pthread_cond_signal(&VD_FW_G.cnd_paint);
+        pthread_join(VD_FW_G.win_thread, NULL);
+        pthread_cond_destroy(&VD_FW_G.cnd_paint);
+    }
 
     if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
         // Destroy OpenGL Context
@@ -15663,6 +15719,9 @@ LOOP_END:
         VdFwglXMakeCurrent(VD_FW_G.display, VD_FW_G.window, VD_FW_G.glx_context);
     }
 
+    pthread_cond_init(&VD_FW_G.cnd_paint, NULL);
+    pthread_create(&VD_FW_G.win_thread, NULL, vd_fw__x11_thread_proc, NULL);
+
     return result;
 }
 
@@ -15673,458 +15732,106 @@ VD_FW_API int vd_fw_running(void)
 
 VD_FW_API VdFwEvent *vd_fw_poll(int *count)
 {
-    VD_FW_G.size_changed = 0;
-    VD_FW_G.close_request = 0;
-    VD_FW_G.num_evts = 0;
-    VD_FW_G.prev_mouse_state = VD_FW_G.mouse_state;
-    VD_FW_G.mouse_delta[0] = VD_FW_G.mouse_delta[1] = 0.f;
-    VD_FW_G.window_state_changed = 0;
-    VD_FW_G.focus_changed = 0;
-    VD_FW_G.wheel[0] = VD_FW_G.wheel[1] = 0.f;
     VD_FW_G.wheel_moved = 0;
+    VD_FW_G.wheel[0] = 0.f;
+    VD_FW_G.wheel[1] = 0.f;
+    VD_FW_G.focus_changed = 0;
+    VD_FW_G.window_state_changed = 0;
+    VD_FW_G.prev_mouse_state = VD_FW_G.mouse_state;
+    VD_FW_G.close_request = 0;
+
+    VD_FW_G.num_codepoints = 0;
     VD_FW_G.last_key = VD_FW_KEY_UNKNOWN;
+    VdFwU16 num_codepoints = 0;
+    VD_FW_G.mouse_delta[0] = VD_FW_G.mouse_delta[1] = 0.f;
 
     for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
         VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
     }
 
-    XEvent evt = {};
-    while ((VdFwXPending(VD_FW_G.display)) && (VD_FW_G.num_evts < VD_FW_EVENT_COUNT_MAX)) {
-        VdFwXNextEvent(VD_FW_G.display, &evt);
+    VD_FW_G.num_evts = 0;
 
-        switch (evt.type) {
-            case DestroyNotify: {
-                VD_FW_G.window_open = 0;
+    VdFwEvent mm;
+    while (vd_fw__x11_msgbuf_r(&mm) && (VD_FW_G.num_evts < VD_FW_EVENT_COUNT_MAX)) {
+        VD_FW_G.evtbuf[VD_FW_G.num_evts++] = mm;
+
+        switch (mm.type) {
+            case VD_FW_EVENT_TYPE_CHARACTER: {
+                VD_FW_G.codepoints[(num_codepoints++) % VD_FW_CODEPOINT_BUFFER_COUNT] = mm.data.character.codepoint;
             } break;
 
-            case Expose: {
-                if (VD_FW_G.xlib_supports_xsync) {
-                    VD_FW_G.sync_redraw = 1;
-                }
+            case VD_FW_EVENT_TYPE_CLOSE_REQUEST: {
+                VD_FW_G.close_request = 1;
             } break;
 
-            case PropertyNotify: {
-
-                if (evt.xproperty.atom == VD_FW_G.wm_state) {
-
-                    Atom actual_type;
-                    int actual_format;
-                    unsigned long nitems, bytes_after;
-                    Atom *states = NULL; 
-                    if (VdFwXGetWindowProperty(VD_FW_G.display, VD_FW_G.window,
-                                               VD_FW_G.wm_state,
-                                               0, (~0L), False, XA_ATOM,
-                                               &actual_type, &actual_format, &nitems, &bytes_after,
-                                               (unsigned char**)&states) == Success)
-                    {
-                        int is_hidden = 0;
-                        int is_max_h  = 0;
-                        int is_max_v  = 0;
-
-                        for (unsigned long i = 0; i < nitems; i++) {
-                            if (states[i] == VD_FW_G.wm_hidden) {
-                                is_hidden = 1;
-                            }
-
-                            if (states[i] == VD_FW_G.wm_max_h) {
-                                is_max_h = 1;
-                            }
-
-                            if (states[i] == VD_FW_G.wm_max_v) {
-                                is_max_v = 1;
-                            }
-                        }
-
-                        int is_maximized = is_max_h && is_max_v;
-                        int was_minimized = VD_FW_G.window_state & VD_FW_WINDOW_STATE_MINIMIZED ? 1 : 0;
-                        int was_maximized = VD_FW_G.window_state & VD_FW_WINDOW_STATE_MAXIMIZED ? 1 : 0;
-
-                        if (was_minimized != is_hidden) {
-                            VD_FW_G.window_state_changed |= VD_FW_WINDOW_STATE_MINIMIZED;
-
-                            if (is_hidden) {
-                                VD_FW_G.window_state |= VD_FW_WINDOW_STATE_MINIMIZED;
-                            } else {
-                                VD_FW_G.window_state &= ~VD_FW_WINDOW_STATE_MINIMIZED;
-                            }
-
-                            VdFwEvent fw_event;
-                            fw_event.type = VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE;
-                            fw_event.data.window_state_change.flag = VD_FW_WINDOW_STATE_MINIMIZED;
-                            fw_event.data.window_state_change.value = is_hidden;
-                            VD_FW_G.evtbuf[VD_FW_G.num_evts++] = fw_event;
-                        }
-
-                        if (was_maximized != is_maximized) {
-                            if (is_maximized) {
-                                VD_FW_G.window_state |= VD_FW_WINDOW_STATE_MAXIMIZED;
-                            } else {
-                                VD_FW_G.window_state &= ~VD_FW_WINDOW_STATE_MAXIMIZED;
-                            }
-
-                            VdFwEvent fw_event;
-                            fw_event.type = VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE;
-                            fw_event.data.window_state_change.flag = VD_FW_WINDOW_STATE_MAXIMIZED;
-                            fw_event.data.window_state_change.value = is_maximized;
-                            VD_FW_G.evtbuf[VD_FW_G.num_evts++] = fw_event;
-                        }
-                    }
-                }
-
+            case VD_FW_EVENT_TYPE_MOUSE_MOVE: {
+                VD_FW_G.mouse[0] = mm.data.mouse_move.x;
+                VD_FW_G.mouse[1] = mm.data.mouse_move.y;
             } break;
 
-            case FocusIn: {
+            case VD_FW_EVENT_TYPE_MOUSE_DELTA: {
+                VD_FW_G.mouse_delta[0] = VD_FW_G.mouse_delta[0] * 0.8f + mm.data.mouse_delta.dx * 0.2f;
+                VD_FW_G.mouse_delta[1] = VD_FW_G.mouse_delta[1] * 0.8f + mm.data.mouse_delta.dy * 0.2f;
+            } break;
+
+            case VD_FW_EVENT_TYPE_MOUSE_SCROLL: {
+                VD_FW_G.wheel[0] += mm.data.mouse_scroll.dx;
+                VD_FW_G.wheel[1] += mm.data.mouse_scroll.dy;
+            } break;
+
+            case VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN: {
+                VD_FW_G.mouse_state |= mm.data.mouse_button_down.button;
+            } break;
+
+            case VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP: {
+                VD_FW_G.mouse_state &= ~mm.data.mouse_button_up.button;
+            } break;
+
+            case VD_FW_EVENT_TYPE_FOCUS_CHANGE: {
                 VD_FW_G.focus_changed = 1;
-                VD_FW_G.is_focused = 1;
-
-                VdFwEvent fw_event;
-                fw_event.type = VD_FW_EVENT_TYPE_FOCUS_CHANGE;
-                fw_event.data.focus_change.got_focus = 1;
-                VD_FW_G.evtbuf[VD_FW_G.num_evts++] = fw_event;
+                VD_FW_G.is_focused = mm.data.focus_change.got_focus;
             } break;
 
-            case FocusOut: {
-                VD_FW_G.focus_changed = 1;
-                VD_FW_G.is_focused = 0;
-
-                VdFwEvent fw_event;
-                fw_event.type = VD_FW_EVENT_TYPE_FOCUS_CHANGE;
-                fw_event.data.focus_change.got_focus = 0;
-                VD_FW_G.evtbuf[VD_FW_G.num_evts++] = fw_event;
+            case VD_FW_EVENT_TYPE_KEY_UP: {
+                VD_FW_G.curr_key_states[mm.data.key_up.key] = 0;
             } break;
 
-            case ClientMessage: {
-                XClientMessageEvent *e = &evt.xclient;
-
-                if(e->message_type == VD_FW_G.wm_protocols) {
-                    if (e->data.l[0] == VD_FW_G.wm_delete_window) {
-                        VD_FW_G.close_request = 1;
-
-                        VdFwEvent fw_event;
-                        fw_event.type = VD_FW_EVENT_TYPE_CLOSE_REQUEST;
-                        VD_FW_G.evtbuf[VD_FW_G.num_evts++] = fw_event;
-
-                    } else if (e->data.l[0] == VD_FW_G.wm_sync_request) {
-                        VD_FW_G.sync_counter_value = 0;
-                        VD_FW_G.sync_counter_value |= e->data.l[2];
-                        VD_FW_G.sync_counter_value |= e->data.l[3] << 32;
-                        VD_FW_G.sync_redraw = 1;
-                    }
-                }
-
+            case VD_FW_EVENT_TYPE_KEY_DOWN: {
+                VD_FW_G.curr_key_states[mm.data.key_down.key] = 1;
             } break;
 
-            case KeyPress: {
-                XKeyPressedEvent *key_event = &evt.xkey;
-
-                VdFwEvent fw_event = {0};
-                fw_event.type = VD_FW_EVENT_TYPE_KEY_DOWN;
-                fw_event.data.key_down.key = vd_fw__x11_translate_keycode(&evt);
-                fw_event.data.key_down.modifiers = 0;
-
-                if (key_event->state & ControlMask) {
-                    fw_event.data.key_down.modifiers |= VD_FW_MOD_CONTROL;
+            case VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE: {
+                int prev_state = VD_FW_G.window_state;
+                int change_flag = mm.data.window_state_change.flag;
+                if (mm.data.window_state_change.value) {
+                    VD_FW_G.window_state |= change_flag;
+                } else {
+                    VD_FW_G.window_state &= ~change_flag;
                 }
 
-                if (key_event->state & ShiftMask) {
-                    fw_event.data.key_down.modifiers |= VD_FW_MOD_SHIFT;
+                if (prev_state != VD_FW_G.window_state) {
+                    VD_FW_G.window_state_changed |= change_flag;
                 }
 
-                if (key_event->state & Mod1Mask) {
-                    fw_event.data.key_down.modifiers |= VD_FW_MOD_ALT;
-                }
-                
-                VD_FW_G.curr_key_states[fw_event.data.key_down.key] = 1;
-
-                VD_FW_G.last_key = fw_event.data.key_down.key;
-                VD_FW_G.evtbuf[VD_FW_G.num_evts++] = fw_event;
-
-                // Character Input
-                if (VD_FW_G.input_method && VD_FW_G.input_style) {
-                    char buf[5] = {0};
-                    Status status = 0;
-                    VdFwXutf8LookupString(VD_FW_G.input_context, key_event, buf, 4, 0, &status);
-
-                    if (status == XLookupChars) {
-                        int len = 0;
-                        char *b = buf;
-                        while (*b) {
-                            len++;
-                            b++;
-                        }
-
-                        VdFwU32 codepoint = 0;
-                        int l = vd_fw__utf8_to_utf32((unsigned char*)buf, len, &codepoint);
-
-                        if (l != -1) {
-                            fw_event.type = VD_FW_EVENT_TYPE_CHARACTER;
-                            fw_event.data.character.codepoint = codepoint;
-                            VD_FW_G.evtbuf[VD_FW_G.num_evts++] = fw_event;
-                        }
-                    }
-                }
-            } break;
-
-            case KeyRelease: {
-                VdFwEvent fw_event = {0};
-                fw_event.type = VD_FW_EVENT_TYPE_KEY_UP;
-                fw_event.data.key_up.key = vd_fw__x11_translate_keycode(&evt);
-                
-                VD_FW_G.curr_key_states[fw_event.data.key_down.key] = 0;
-                VD_FW_G.evtbuf[VD_FW_G.num_evts++] = fw_event;
-            } break;
-
-            case MotionNotify: {
-                VD_FW_G.mouse[0] = evt.xmotion.x;
-                VD_FW_G.mouse[1] = evt.xmotion.y;
-
-                float delta[2] = {0.f, 0.f};
-                if (!VD_FW_G.has_xi) {
-                    delta[0] = (VD_FW_G.mouse[0] - VD_FW_G.prev_mouse[0]);
-                    delta[1] = (VD_FW_G.mouse[1] - VD_FW_G.prev_mouse[1]);
-
-                    VD_FW_G.mouse_delta[0] += delta[0];
-                    VD_FW_G.mouse_delta[1] += delta[1];
-                }
-
-                VD_FW_G.prev_mouse[0] = VD_FW_G.mouse[0];
-                VD_FW_G.prev_mouse[1] = VD_FW_G.mouse[1];
-
-                {
-                    VdFwEvent fw_event;
-                    fw_event.type = VD_FW_EVENT_TYPE_MOUSE_MOVE;
-                    fw_event.data.mouse_move.x = VD_FW_G.mouse[0];
-                    fw_event.data.mouse_move.y = VD_FW_G.mouse[1];
-                    VD_FW_G.evtbuf[VD_FW_G.num_evts++] = fw_event;
-                }
-
-                if (!VD_FW_G.has_xi) {
-                    VdFwEvent fw_event;
-                    fw_event.type = VD_FW_EVENT_TYPE_MOUSE_DELTA;
-                    fw_event.data.mouse_delta.dx = delta[0];
-                    fw_event.data.mouse_delta.dy = delta[1];
-                    VD_FW_G.evtbuf[VD_FW_G.num_evts++] = fw_event;
-                }
-
-                if (VD_FW_G.borderless) {
-                    int x = evt.xmotion.x;
-                    int y = evt.xmotion.y;
-
-                    int orientation = vd_fw__x11_test_orientation(x, y);
-                    XID c = VD_FW_G.cursor_arrow;
-                    switch (orientation) {
-                        case 0: c = VD_FW_G.cursor_tl; break;
-                        case 1: c = VD_FW_G.cursor_top; break;
-                        case 2: c = VD_FW_G.cursor_tr; break;
-                        case 3: c = VD_FW_G.cursor_right; break;
-                        case 4: c = VD_FW_G.cursor_br; break;
-                        case 5: c = VD_FW_G.cursor_bottom; break;
-                        case 6: c = VD_FW_G.cursor_bl; break;
-                        case 7: c = VD_FW_G.cursor_left; break;
-                        case 8: c = VD_FW_G.cursor_arrow; break;
-                        default: break;
-                    }
-
-                    if (c != VD_FW_G.curr_cursor) {
-                        if (c != VD_FW_G.cursor_arrow) {
-                            VdFwXDefineCursor(VD_FW_G.display, VD_FW_G.window, c);
-                        } else {
-                            VdFwXUndefineCursor(VD_FW_G.display, VD_FW_G.window);
-                        }
-                    }
-
-                }
-            } break;
-
-            case GenericEvent: {
-                VdFwXGetEventData(VD_FW_G.display, &evt.xcookie);
-                if (VD_FW_G.has_xi && (evt.xcookie.evtype == VD_FW_XI_RawMotion)) {
-                    VdFw__XIRawEvent *raw = (VdFw__XIRawEvent*)evt.xcookie.data;
-                    if (raw->valuators.mask_len == 0) {
-                        VdFwXFreeEventData(VD_FW_G.display, &evt.xcookie);
-                        break;
-                    }
-
-                    float dx = 0.f;
-                    float dy = 0.f;
-
-                    if (VD_FW_XIMaskIsSet(raw->valuators.mask, 0) != 0) {
-                        dx += raw->raw_values[0];
-                    }
-
-                    if (VD_FW_XIMaskIsSet(raw->valuators.mask, 1) != 0) {
-                        dy += raw->raw_values[1];
-                    }
-
-                    VD_FW_G.mouse_delta[0] += dx;
-                    VD_FW_G.mouse_delta[1] += dy;
-
-                    VdFwEvent fw_event;
-                    fw_event.type = VD_FW_EVENT_TYPE_MOUSE_DELTA;
-                    fw_event.data.mouse_delta.dx = dx;
-                    fw_event.data.mouse_delta.dy = dy;
-                    VD_FW_G.evtbuf[VD_FW_G.num_evts++] = fw_event;
-                }
-
-                VdFwXFreeEventData(VD_FW_G.display, &evt.xcookie);
-
-            } break;
-
-            case ButtonPress: {
-
-                int handled = 1;
-                int btn = 0;
-                {
-                    const float wheel_delta = 1.f;
-
-                    VdFwEvent fw_event;
-                    fw_event.type = VD_FW_EVENT_TYPE_MOUSE_SCROLL;
-                    fw_event.data.mouse_scroll.dx = 0.f;
-                    fw_event.data.mouse_scroll.dy = 0.f;
-
-                    switch (evt.xbutton.button) {
-                        case 4: fw_event.data.mouse_scroll.dy += wheel_delta; break;
-                        case 5: fw_event.data.mouse_scroll.dy -= wheel_delta; break;
-                        case 6: fw_event.data.mouse_scroll.dx += wheel_delta; break;
-                        case 7: fw_event.data.mouse_scroll.dx -= wheel_delta; break;
-                        default: handled = 0; break;
-                    }
-
-                    if (handled) {
-                        VD_FW_G.wheel[0] += fw_event.data.mouse_scroll.dx;
-                        VD_FW_G.wheel[1] += fw_event.data.mouse_scroll.dy;
-
-                        VD_FW_G.evtbuf[VD_FW_G.num_evts++] = fw_event;
-                        VD_FW_G.wheel_moved = 1;
-                    }
-                }
-
-                if (!handled) {
-                    btn = vd_fw__x11_translate_mouse_button(evt.xbutton.button);
-                }
-
-                if (btn) {
-                    VdFwEvent fw_event = {0};
-                    fw_event.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN;
-                    fw_event.data.mouse_button_down.button = btn;
-                    VD_FW_G.evtbuf[VD_FW_G.num_evts++] = fw_event;
-
-                    VD_FW_G.mouse_state |= btn;
-
-                    if (VD_FW_G.borderless) {
-                        if (btn == VD_FW_MOUSE_BUTTON_LEFT) {
-
-                            int mouse_x = evt.xbutton.x;
-                            int mouse_y = evt.xbutton.y;
-
-                            int orientation = vd_fw__x11_test_orientation(mouse_x, mouse_y);
-                            if (orientation != 8) {
-                                int move_resize_place = orientation;
-
-                                // !!! FIXME: we need to regrab this if necessary when the drag is done.
-                                VdFwXUngrabPointer(VD_FW_G.display, 0L);
-                                VdFwXFlush(VD_FW_G.display);
-
-                                XEvent ev = {0};
-                                ev.xclient.type = ClientMessage;
-                                ev.xclient.window = VD_FW_G.window;
-                                ev.xclient.message_type = 
-                                        VdFwXInternAtom(VD_FW_G.display, "_NET_WM_MOVERESIZE", False);
-                                ev.xclient.format = 32;
-                                ev.xclient.data.l[0] = evt.xbutton.x_root;
-                                ev.xclient.data.l[1] = evt.xbutton.y_root;
-                                ev.xclient.data.l[2] = move_resize_place;
-                                ev.xclient.data.l[3] = Button1;
-                                ev.xclient.data.l[4] = 0;
-                                VdFwXSendEvent(VD_FW_G.display, VdFwXDefaultRootWindow(VD_FW_G.display), False, SubstructureRedirectMask | SubstructureNotifyMask, &ev);
-
-                                VdFwXSync(VD_FW_G.display, 0);
-                                break;
-                            }
-
-                            int inside_caption = 
-                                ((mouse_x >= VD_FW_G.nccaption[0]) && (mouse_x <= VD_FW_G.nccaption[2])) &&
-                                ((mouse_y >= VD_FW_G.nccaption[1]) && (mouse_y <= VD_FW_G.nccaption[3]));
-                            if (inside_caption) {
-                                int hit_ignore_rects = 0;
-                                for (int ri = 0; ri < VD_FW_G.ncrect_count; ++ri) {
-                                    int rect[4] = {
-                                        VD_FW_G.ncrects[ri][0],
-                                        VD_FW_G.ncrects[ri][1],
-                                        VD_FW_G.ncrects[ri][2],
-                                        VD_FW_G.ncrects[ri][3],
-                                    };
-
-                                    int inside =
-                                        ((mouse_x >= rect[0]) && (mouse_x <= rect[2])) &&
-                                        ((mouse_y >= rect[1]) && (mouse_y <= rect[3]));
-
-                                    if (inside) {
-                                        hit_ignore_rects = 1;
-                                        break;
-                                    }
-                                }
-
-                                if (!hit_ignore_rects) {
-                                    VD_FW_G.caption_dragging = 1;
-                                    XEvent ev = {0};
-                                    ev.xclient.type = ClientMessage;
-                                    ev.xclient.window = VD_FW_G.window;
-                                    ev.xclient.message_type =
-                                        VdFwXInternAtom(VD_FW_G.display, "_NET_WM_MOVERESIZE", False);
-                                    ev.xclient.format = 32;
-                                    ev.xclient.data.l[0] = evt.xmotion.x_root;
-                                    ev.xclient.data.l[1] = evt.xmotion.y_root;
-                                    ev.xclient.data.l[2] = 8; // _NET_WM_MOVERESIZE_MOVE
-                                    ev.xclient.data.l[3] = Button1;
-                                    ev.xclient.data.l[4] = 0;
-
-                                    VdFwXUngrabPointer(VD_FW_G.display, 0L);
-                                    VdFwXFlush(VD_FW_G.display);
-
-                                    VdFwXSendEvent(VD_FW_G.display,
-                                       VdFwXDefaultRootWindow(VD_FW_G.display),
-                                       False,
-                                       SubstructureRedirectMask | SubstructureNotifyMask,
-                                       &ev);
-
-                                    VdFwXSync(VD_FW_G.display, 0);
-                                }
-                            }
-                        } 
-                    }
-                }
-            } break;
-
-            case ButtonRelease: {
-                int btn = vd_fw__x11_translate_mouse_button(evt.xbutton.button);
-                if (btn) {
-                    VdFwEvent fw_event = {0};
-                    fw_event.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP;
-                    fw_event.data.mouse_button_down.button = btn;
-                    VD_FW_G.evtbuf[VD_FW_G.num_evts++] = fw_event;
-
-                    VD_FW_G.mouse_state &= ~btn;
-
-                    if (VD_FW_G.borderless) {
-                        if (btn == VD_FW_MOUSE_BUTTON_LEFT) {
-                            VD_FW_G.caption_dragging = 0;
-                        } 
-                    }
-                }
-            } break;
-
-            case ConfigureNotify: {
-                XConfigureEvent* e = (XConfigureEvent*)&evt;
-                VD_FW_G.width = e->width;
-                VD_FW_G.height = e->height;
-                VD_FW_G.size_changed = 1;
             } break;
 
             default: break;
         }
-
     }
+
+    VD_FW_G.num_codepoints = (num_codepoints < VD_FW_CODEPOINT_BUFFER_COUNT) 
+                             ? num_codepoints
+                             : VD_FW_CODEPOINT_BUFFER_COUNT;
+    if (num_codepoints > 0) {
+        VD_FW_G.first_codepoint_index = (num_codepoints - 1) % VD_FW_CODEPOINT_BUFFER_COUNT;
+    } else {
+        VD_FW_G.first_codepoint_index = 0;
+    }
+
+    if (count) {
+        *count = VD_FW_G.num_evts;
+    }
+
 
     if (VD_FW_G.mouse_is_locked) {
         VdFwXWarpPointer(VD_FW_G.display, None, VD_FW_G.window,
@@ -16138,10 +15845,6 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
     delta_timespec = vd_fw__linux_timespec_diff(now, VD_FW_G.time_last);
     VD_FW_G.time_last = now;
     VD_FW_G.delta_ns = delta_timespec.tv_nsec;
-
-    if (count) {
-        *count = VD_FW_G.num_evts;
-    }
 
     return VD_FW_G.evtbuf;
 }
@@ -16173,30 +15876,73 @@ VD_FW_API int vd_fw_close_requested(void)
 
 VD_FW_API void vd_fw_quit(void)
 {
-    VD_FW_G.quit_request = 1;
+    XEvent ev = {0};
+    ev.xclient.type = ClientMessage;
+    ev.xclient.display = VD_FW_G.display;
+    ev.xclient.window = VD_FW_G.window;
+    ev.xclient.message_type = VD_FW_G.wm_usr_close;
+    ev.xclient.format = 32;
+    VdFwXSendEvent(VD_FW_G.display, VD_FW_G.window, False, NoEventMask, &ev);
+    VD_FW_G.window_open = 0;
 }
 
 VD_FW_API void vd_fw_lock(void)
 {
+    pthread_mutex_lock(&VD_FW_G.mtx_paint);
+    VD_FW_G.curr_frame = VD_FW_G.next_frame;
+    VD_FW_G.next_frame.flags = 0;
+    pthread_mutex_unlock(&VD_FW_G.mtx_paint);
 }
 
 VD_FW_API void vd_fw_unlock(void)
 {
-    if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
-        VdFwglXSwapBuffers(VD_FW_G.display, VD_FW_G.window);
+    if (VD_FW_G.window_open) {
+        if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
+            VdFwglXSwapBuffers(VD_FW_G.display, VD_FW_G.window);
+        }
+
+        if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
+            if (glFenceSync && glClientWaitSync && glDeleteSync) {
+                GLsync fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+                if (fence) {
+                    glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, 1000000000ULL);
+                    glDeleteSync(fence);
+                }
+            }
+        }
     }
 
-    if (VD_FW_G.sync_redraw) {
-        XSyncValue value;
-        VdFwXSyncIntToValue(&value, VD_FW_G.sync_counter_value);
-        VdFwXSyncSetCounter(VD_FW_G.display, VD_FW_G.sync_counter, value);
-        VD_FW_G.sync_redraw = 0;
+    if (VD_FW_G.curr_frame.flags & VD_FW_X11_FLAGS_WAKE_COND_VAR) {
+        pthread_cond_signal(&VD_FW_G.cnd_paint);
     }
 
-    if (VD_FW_G.quit_request) {
-        VdFwXDestroyWindow(VD_FW_G.display, VD_FW_G.window);
-        VD_FW_G.window_open = 0;
+    // if (VD_FW_G.quit_request) {
+    //     VdFwXDestroyWindow(VD_FW_G.display, VD_FW_G.window);
+    //     VD_FW_G.window_open = 0;
+    // }
+}
+
+VD_FW_API int vd_fw_get_block_while_sizing(void)
+{
+    return VD_FW_G.block_while_sizing;
+}
+
+VD_FW_API void vd_fw_set_block_while_sizing(int on)
+{
+    if (VD_FW_G.block_while_sizing == on) {
+        return;
     }
+
+    VD_FW_G.block_while_sizing = on;
+
+    XEvent ev = {0};
+    ev.xclient.type = ClientMessage;
+    ev.xclient.display = VD_FW_G.display;
+    ev.xclient.window = VD_FW_G.window;
+    ev.xclient.message_type = VD_FW_G.wm_usr_block;
+    ev.xclient.format = 32;
+    ev.xclient.data.b[0] = on ? 1 : 0;
+    VdFwXSendEvent(VD_FW_G.display, VD_FW_G.window, False, NoEventMask, &ev);
 }
 
 VD_FW_API int vd_fw_set_vsync_on(int on)
@@ -16262,15 +16008,9 @@ VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
 
 VD_FW_API int vd_fw_get_size(int *w, int *h)
 {
-    if (w) {
-        *w = VD_FW_G.width;
-    }
-
-    if (h) {
-        *h = VD_FW_G.height;
-    }
-
-    return VD_FW_G.size_changed;
+    if (w) *w = VD_FW_G.curr_frame.w;
+    if (h) *h = VD_FW_G.curr_frame.h;
+    return VD_FW_G.curr_frame.flags & VD_FW_X11_FLAGS_SIZE_CHANGED;
 }
 
 VD_FW_API void vd_fw_set_size(int w, int h)
@@ -16887,6 +16627,536 @@ static int vd_fw__x11_test_orientation(int x, int y)
     return result;
 }
 
+static int vd_fw__x11_msgbuf_r(VdFwEvent *message)
+{
+    int r = VD_FW_G.msgbuf_r;
+    int w;
+    __atomic_load(&VD_FW_G.msgbuf_w, &w, __ATOMIC_SEQ_CST);
+
+    if (r == w) {
+        return 0;
+    }
+
+    *message = VD_FW_G.msgbuf[r];
+
+    int nr = (r + 1) % VD_FW_X11_MESSAGE_BUFFER_SIZE;
+    __atomic_exchange_n(&VD_FW_G.msgbuf_r, nr, __ATOMIC_SEQ_CST);
+
+    return 1;
+}
+
+static int vd_fw__x11_msgbuf_w(VdFwEvent *message)
+{
+    int w = VD_FW_G.msgbuf_w;
+    int r;
+    __atomic_load(&VD_FW_G.msgbuf_r, &r, __ATOMIC_SEQ_CST);
+
+    if ((w + 1) % VD_FW_X11_MESSAGE_BUFFER_SIZE == r) {
+        return 0;
+    }
+
+    VD_FW_G.msgbuf[w] = *message;
+    int nw = (w + 1) % VD_FW_X11_MESSAGE_BUFFER_SIZE;
+    __atomic_exchange_n(&VD_FW_G.msgbuf_w, nw, __ATOMIC_SEQ_CST);
+
+    return 1;
+}
+
+static void *vd_fw__x11_thread_proc(void *arg)
+{
+    (void)arg;
+    int w = 0;
+    int h = 0;
+
+    XWindowAttributes attr;
+    VdFwXGetWindowAttributes(VD_FW_G.display, VD_FW_G.window, &attr);
+    w = attr.width;
+    h = attr.height;
+
+
+    struct timespec resize_start;
+    int resizing = 0;
+
+    XEvent evt = {};
+    // while ((VdFwXPending(VD_FW_G.display)) && (VD_FW_G.num_evts < VD_FW_EVENT_COUNT_MAX)) {
+    int t_running = 1;
+    while (t_running) {
+        // if (!VdFwXPending(VD_FW_G.display)) {
+        //     continue;
+        // }
+
+        VdFwXNextEvent(VD_FW_G.display, &evt);
+
+        switch (evt.type) {
+            case DestroyNotify: {
+                // VD_FW_G.window_open = 0;
+            } break;
+
+            case Expose: {
+                // if (VD_FW_G.xlib_supports_xsync) {
+                //     VD_FW_G.sync_redraw = 1;
+                // }
+            } break;
+
+            case PropertyNotify: {
+
+                if (evt.xproperty.atom == VD_FW_G.wm_state) {
+
+                    Atom actual_type;
+                    int actual_format;
+                    unsigned long nitems, bytes_after;
+                    Atom *states = NULL; 
+                    if (VdFwXGetWindowProperty(VD_FW_G.display, VD_FW_G.window,
+                                               VD_FW_G.wm_state,
+                                               0, (~0L), False, XA_ATOM,
+                                               &actual_type, &actual_format, &nitems, &bytes_after,
+                                               (unsigned char**)&states) == Success)
+                    {
+                        int is_hidden = 0;
+                        int is_max_h  = 0;
+                        int is_max_v  = 0;
+
+                        for (unsigned long i = 0; i < nitems; i++) {
+                            if (states[i] == VD_FW_G.wm_hidden) {
+                                is_hidden = 1;
+                            }
+
+                            if (states[i] == VD_FW_G.wm_max_h) {
+                                is_max_h = 1;
+                            }
+
+                            if (states[i] == VD_FW_G.wm_max_v) {
+                                is_max_v = 1;
+                            }
+                        }
+
+                        int is_maximized = is_max_h && is_max_v;
+                        int was_minimized = VD_FW_G.window_state & VD_FW_WINDOW_STATE_MINIMIZED ? 1 : 0;
+                        int was_maximized = VD_FW_G.window_state & VD_FW_WINDOW_STATE_MAXIMIZED ? 1 : 0;
+
+                        if (was_minimized != is_hidden) {
+                            VD_FW_G.window_state_changed |= VD_FW_WINDOW_STATE_MINIMIZED;
+
+                            if (is_hidden) {
+                                VD_FW_G.window_state |= VD_FW_WINDOW_STATE_MINIMIZED;
+                            } else {
+                                VD_FW_G.window_state &= ~VD_FW_WINDOW_STATE_MINIMIZED;
+                            }
+
+                            VdFwEvent fw_event;
+                            fw_event.type = VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE;
+                            fw_event.data.window_state_change.flag = VD_FW_WINDOW_STATE_MINIMIZED;
+                            fw_event.data.window_state_change.value = is_hidden;
+                            vd_fw__x11_msgbuf_w(&fw_event);
+                        }
+
+                        if (was_maximized != is_maximized) {
+                            if (is_maximized) {
+                                VD_FW_G.window_state |= VD_FW_WINDOW_STATE_MAXIMIZED;
+                            } else {
+                                VD_FW_G.window_state &= ~VD_FW_WINDOW_STATE_MAXIMIZED;
+                            }
+
+                            VdFwEvent fw_event;
+                            fw_event.type = VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE;
+                            fw_event.data.window_state_change.flag = VD_FW_WINDOW_STATE_MAXIMIZED;
+                            fw_event.data.window_state_change.value = is_maximized;
+                            vd_fw__x11_msgbuf_w(&fw_event);
+                        }
+                    }
+                }
+
+            } break;
+
+            case FocusIn: {
+                VdFwEvent fw_event;
+                fw_event.type = VD_FW_EVENT_TYPE_FOCUS_CHANGE;
+                fw_event.data.focus_change.got_focus = 1;
+                vd_fw__x11_msgbuf_w(&fw_event);
+            } break;
+
+            case FocusOut: {
+                VdFwEvent fw_event;
+                fw_event.type = VD_FW_EVENT_TYPE_FOCUS_CHANGE;
+                fw_event.data.focus_change.got_focus = 0;
+                vd_fw__x11_msgbuf_w(&fw_event);
+            } break;
+
+            case ClientMessage: {
+                XClientMessageEvent *e = &evt.xclient;
+
+                if(e->message_type == VD_FW_G.wm_protocols) {
+                    if (e->data.l[0] == VD_FW_G.wm_delete_window) {
+
+                        VdFwEvent fw_event;
+                        fw_event.type = VD_FW_EVENT_TYPE_CLOSE_REQUEST;
+                        vd_fw__x11_msgbuf_w(&fw_event);
+                    } else if (e->data.l[0] == VD_FW_G.wm_sync_request) {
+                        VD_FW_G.sync_counter_value = 0;
+                        VD_FW_G.sync_counter_value |= e->data.l[2];
+                        VD_FW_G.sync_counter_value |= e->data.l[3] << 32;
+                        VD_FW_G.sync_redraw = 1;
+                    }
+                } else if (e->message_type == VD_FW_G.wm_usr_close) {
+                    t_running = 0;
+                } else if (e->message_type == VD_FW_G.wm_usr_block) {
+                    VD_FW_G.winthread_block_while_sizing = e->data.b[0];
+                }
+
+            } break;
+
+            case KeyPress: {
+                XKeyPressedEvent *key_event = &evt.xkey;
+
+                VdFwEvent fw_event = {0};
+                fw_event.type = VD_FW_EVENT_TYPE_KEY_DOWN;
+                fw_event.data.key_down.key = vd_fw__x11_translate_keycode(&evt);
+                fw_event.data.key_down.modifiers = 0;
+
+                if (key_event->state & ControlMask) {
+                    fw_event.data.key_down.modifiers |= VD_FW_MOD_CONTROL;
+                }
+
+                if (key_event->state & ShiftMask) {
+                    fw_event.data.key_down.modifiers |= VD_FW_MOD_SHIFT;
+                }
+
+                if (key_event->state & Mod1Mask) {
+                    fw_event.data.key_down.modifiers |= VD_FW_MOD_ALT;
+                }
+
+                vd_fw__x11_msgbuf_w(&fw_event);
+
+                // Character Input
+                if (VD_FW_G.input_method && VD_FW_G.input_style) {
+                    char buf[5] = {0};
+                    Status status = 0;
+                    VdFwXutf8LookupString(VD_FW_G.input_context, key_event, buf, 4, 0, &status);
+
+                    if (status == XLookupChars) {
+                        int len = 0;
+                        char *b = buf;
+                        while (*b) {
+                            len++;
+                            b++;
+                        }
+
+                        VdFwU32 codepoint = 0;
+                        int l = vd_fw__utf8_to_utf32((unsigned char*)buf, len, &codepoint);
+
+                        if (l != -1) {
+                            fw_event.type = VD_FW_EVENT_TYPE_CHARACTER;
+                            fw_event.data.character.codepoint = codepoint;
+                            vd_fw__x11_msgbuf_w(&fw_event);
+                        }
+                    }
+                }
+            } break;
+
+            case KeyRelease: {
+                VdFwEvent fw_event = {0};
+                fw_event.type = VD_FW_EVENT_TYPE_KEY_UP;
+                fw_event.data.key_up.key = vd_fw__x11_translate_keycode(&evt);
+                
+                vd_fw__x11_msgbuf_w(&fw_event);
+            } break;
+
+            case MotionNotify: {
+                float delta[2] = {0.f, 0.f};
+                if (!VD_FW_G.has_xi) {
+                    delta[0] = (evt.xmotion.x - VD_FW_G.prev_mouse[0]);
+                    delta[1] = (evt.xmotion.y - VD_FW_G.prev_mouse[1]);
+                }
+
+                VD_FW_G.prev_mouse[0] = evt.xmotion.x;
+                VD_FW_G.prev_mouse[1] = evt.xmotion.y;
+
+                {
+                    VdFwEvent fw_event;
+                    fw_event.type = VD_FW_EVENT_TYPE_MOUSE_MOVE;
+                    fw_event.data.mouse_move.x = evt.xmotion.x;
+                    fw_event.data.mouse_move.y = evt.xmotion.y;
+                    vd_fw__x11_msgbuf_w(&fw_event);
+                }
+
+                if (!VD_FW_G.has_xi) {
+                    VdFwEvent fw_event;
+                    fw_event.type = VD_FW_EVENT_TYPE_MOUSE_DELTA;
+                    fw_event.data.mouse_delta.dx = delta[0];
+                    fw_event.data.mouse_delta.dy = delta[1];
+                    vd_fw__x11_msgbuf_w(&fw_event);
+                }
+
+                if (VD_FW_G.borderless) {
+                    int x = evt.xmotion.x;
+                    int y = evt.xmotion.y;
+
+                    int orientation = vd_fw__x11_test_orientation(x, y);
+                    XID c = VD_FW_G.cursor_arrow;
+                    switch (orientation) {
+                        case 0: c = VD_FW_G.cursor_tl; break;
+                        case 1: c = VD_FW_G.cursor_top; break;
+                        case 2: c = VD_FW_G.cursor_tr; break;
+                        case 3: c = VD_FW_G.cursor_right; break;
+                        case 4: c = VD_FW_G.cursor_br; break;
+                        case 5: c = VD_FW_G.cursor_bottom; break;
+                        case 6: c = VD_FW_G.cursor_bl; break;
+                        case 7: c = VD_FW_G.cursor_left; break;
+                        case 8: c = VD_FW_G.cursor_arrow; break;
+                        default: break;
+                    }
+
+                    if (c != VD_FW_G.curr_cursor) {
+                        if (c != VD_FW_G.cursor_arrow) {
+                            VdFwXDefineCursor(VD_FW_G.display, VD_FW_G.window, c);
+                        } else {
+                            VdFwXUndefineCursor(VD_FW_G.display, VD_FW_G.window);
+                        }
+                    }
+                }
+            } break;
+
+            case GenericEvent: {
+                VdFwXGetEventData(VD_FW_G.display, &evt.xcookie);
+                if (VD_FW_G.has_xi && (evt.xcookie.evtype == VD_FW_XI_RawMotion)) {
+                    VdFw__XIRawEvent *raw = (VdFw__XIRawEvent*)evt.xcookie.data;
+                    if (raw->valuators.mask_len == 0) {
+                        VdFwXFreeEventData(VD_FW_G.display, &evt.xcookie);
+                        break;
+                    }
+
+                    float dx = 0.f;
+                    float dy = 0.f;
+
+                    if (VD_FW_XIMaskIsSet(raw->valuators.mask, 0) != 0) {
+                        dx += raw->raw_values[0];
+                    }
+
+                    if (VD_FW_XIMaskIsSet(raw->valuators.mask, 1) != 0) {
+                        dy += raw->raw_values[1];
+                    }
+
+                    VdFwEvent fw_event;
+                    fw_event.type = VD_FW_EVENT_TYPE_MOUSE_DELTA;
+                    fw_event.data.mouse_delta.dx = dx;
+                    fw_event.data.mouse_delta.dy = dy;
+                    vd_fw__x11_msgbuf_w(&fw_event);
+                }
+
+                VdFwXFreeEventData(VD_FW_G.display, &evt.xcookie);
+
+            } break;
+
+            case ButtonPress: {
+
+                int handled = 1;
+                int btn = 0;
+                {
+                    const float wheel_delta = 1.f;
+
+                    VdFwEvent fw_event;
+                    fw_event.type = VD_FW_EVENT_TYPE_MOUSE_SCROLL;
+                    fw_event.data.mouse_scroll.dx = 0.f;
+                    fw_event.data.mouse_scroll.dy = 0.f;
+
+                    switch (evt.xbutton.button) {
+                        case 4: fw_event.data.mouse_scroll.dy += wheel_delta; break;
+                        case 5: fw_event.data.mouse_scroll.dy -= wheel_delta; break;
+                        case 6: fw_event.data.mouse_scroll.dx += wheel_delta; break;
+                        case 7: fw_event.data.mouse_scroll.dx -= wheel_delta; break;
+                        default: handled = 0; break;
+                    }
+
+                    if (handled) {
+                        vd_fw__x11_msgbuf_w(&fw_event);
+                    }
+                }
+
+                if (!handled) {
+                    btn = vd_fw__x11_translate_mouse_button(evt.xbutton.button);
+                }
+
+                if (btn) {
+                    VdFwEvent fw_event = {0};
+                    fw_event.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN;
+                    fw_event.data.mouse_button_down.button = btn;
+                    vd_fw__x11_msgbuf_w(&fw_event);
+
+                    VD_FW_G.mouse_state |= btn;
+
+                    if (VD_FW_G.borderless) {
+                        if (btn == VD_FW_MOUSE_BUTTON_LEFT) {
+
+                            int mouse_x = evt.xbutton.x;
+                            int mouse_y = evt.xbutton.y;
+
+                            int orientation = vd_fw__x11_test_orientation(mouse_x, mouse_y);
+                            if (orientation != 8) {
+                                int move_resize_place = orientation;
+
+                                // !!! FIXME: we need to regrab this if necessary when the drag is done.
+                                VdFwXUngrabPointer(VD_FW_G.display, 0L);
+                                VdFwXFlush(VD_FW_G.display);
+
+                                XEvent ev = {0};
+                                ev.xclient.type = ClientMessage;
+                                ev.xclient.window = VD_FW_G.window;
+                                ev.xclient.message_type = 
+                                        VdFwXInternAtom(VD_FW_G.display, "_NET_WM_MOVERESIZE", False);
+                                ev.xclient.format = 32;
+                                ev.xclient.data.l[0] = evt.xbutton.x_root;
+                                ev.xclient.data.l[1] = evt.xbutton.y_root;
+                                ev.xclient.data.l[2] = move_resize_place;
+                                ev.xclient.data.l[3] = Button1;
+                                ev.xclient.data.l[4] = 0;
+                                VdFwXSendEvent(VD_FW_G.display, VdFwXDefaultRootWindow(VD_FW_G.display), False, SubstructureRedirectMask | SubstructureNotifyMask, &ev);
+
+                                VdFwXSync(VD_FW_G.display, 0);
+                                break;
+                            }
+
+                            int inside_caption = 
+                                ((mouse_x >= VD_FW_G.nccaption[0]) && (mouse_x <= VD_FW_G.nccaption[2])) &&
+                                ((mouse_y >= VD_FW_G.nccaption[1]) && (mouse_y <= VD_FW_G.nccaption[3]));
+                            if (inside_caption) {
+                                int hit_ignore_rects = 0;
+                                for (int ri = 0; ri < VD_FW_G.ncrect_count; ++ri) {
+                                    int rect[4] = {
+                                        VD_FW_G.ncrects[ri][0],
+                                        VD_FW_G.ncrects[ri][1],
+                                        VD_FW_G.ncrects[ri][2],
+                                        VD_FW_G.ncrects[ri][3],
+                                    };
+
+                                    int inside =
+                                        ((mouse_x >= rect[0]) && (mouse_x <= rect[2])) &&
+                                        ((mouse_y >= rect[1]) && (mouse_y <= rect[3]));
+
+                                    if (inside) {
+                                        hit_ignore_rects = 1;
+                                        break;
+                                    }
+                                }
+
+                                if (!hit_ignore_rects) {
+                                    VD_FW_G.caption_dragging = 1;
+                                    XEvent ev = {0};
+                                    ev.xclient.type = ClientMessage;
+                                    ev.xclient.window = VD_FW_G.window;
+                                    ev.xclient.message_type =
+                                        VdFwXInternAtom(VD_FW_G.display, "_NET_WM_MOVERESIZE", False);
+                                    ev.xclient.format = 32;
+                                    ev.xclient.data.l[0] = evt.xmotion.x_root;
+                                    ev.xclient.data.l[1] = evt.xmotion.y_root;
+                                    ev.xclient.data.l[2] = 8; // _NET_WM_MOVERESIZE_MOVE
+                                    ev.xclient.data.l[3] = Button1;
+                                    ev.xclient.data.l[4] = 0;
+
+                                    VdFwXUngrabPointer(VD_FW_G.display, 0L);
+                                    VdFwXFlush(VD_FW_G.display);
+
+                                    VdFwXSendEvent(VD_FW_G.display,
+                                       VdFwXDefaultRootWindow(VD_FW_G.display),
+                                       False,
+                                       SubstructureRedirectMask | SubstructureNotifyMask,
+                                       &ev);
+
+                                    VdFwXSync(VD_FW_G.display, 0);
+                                }
+                            }
+                        } 
+                    }
+                }
+            } break;
+
+            case ButtonRelease: {
+                int btn = vd_fw__x11_translate_mouse_button(evt.xbutton.button);
+                if (btn) {
+                    VdFwEvent fw_event = {0};
+                    fw_event.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP;
+                    fw_event.data.mouse_button_down.button = btn;
+                    vd_fw__x11_msgbuf_w(&fw_event);
+
+                    VD_FW_G.mouse_state &= ~btn;
+
+                    if (VD_FW_G.borderless) {
+                        if (btn == VD_FW_MOUSE_BUTTON_LEFT) {
+                            VD_FW_G.caption_dragging = 0;
+                        } 
+                    }
+                }
+            } break;
+
+            case ConfigureNotify: {
+                XConfigureEvent* e = (XConfigureEvent*)&evt;
+                // VD_FW_G.width = e->width;
+                // VD_FW_G.height = e->height;
+                // VD_FW_G.size_changed = 1;
+                w = e->width;
+                h = e->height;
+
+                if (VD_FW_G.winthread_block_while_sizing) {
+                    if (!resizing) {
+                        resizing = 1;
+                        clock_gettime(CLOCK_MONOTONIC, &resize_start);
+                        pthread_mutex_lock(&VD_FW_G.mtx_paint);
+                    } else {
+                        clock_gettime(CLOCK_MONOTONIC, &resize_start);
+                    }
+                }
+
+            } break;
+
+            default: break;
+        }
+
+        if (VD_FW_G.winthread_block_while_sizing) {
+
+            struct timespec now;
+            clock_gettime(CLOCK_MONOTONIC, &now);
+
+            struct timespec diff = vd_fw__linux_timespec_diff(now, resize_start);
+            unsigned long long ms_diff = diff.tv_nsec / 1000;
+
+            if (resizing && (ms_diff > 500)) {
+                resizing = 0;
+                pthread_mutex_unlock(&VD_FW_G.mtx_paint);
+            }
+        }
+
+
+        if (!VD_FW_G.winthread_block_while_sizing) {
+            pthread_mutex_lock(&VD_FW_G.mtx_paint);
+        }
+
+        if (w != VD_FW_G.next_frame.w || h != VD_FW_G.next_frame.h) {
+            VD_FW_G.next_frame.w = w;
+            VD_FW_G.next_frame.h = h;
+            VD_FW_G.next_frame.flags |= VD_FW_X11_FLAGS_SIZE_CHANGED;
+        }
+
+        if (!VD_FW_G.winthread_block_while_sizing && VD_FW_G.sync_redraw) {
+            VD_FW_G.next_frame.flags |= VD_FW_X11_FLAGS_WAKE_COND_VAR;
+            pthread_cond_signal(&VD_FW_G.cnd_paint);
+            pthread_cond_wait(&VD_FW_G.cnd_paint, &VD_FW_G.mtx_paint);
+        }
+
+
+        if (!VD_FW_G.winthread_block_while_sizing) {
+            pthread_mutex_unlock(&VD_FW_G.mtx_paint);
+        }
+
+        if (VD_FW_G.sync_redraw) {
+
+            XSyncValue value;
+            VdFwXSyncIntToValue(&value, VD_FW_G.sync_counter_value);
+            VdFwXSyncSetCounter(VD_FW_G.display, VD_FW_G.sync_counter, value);
+            VD_FW_G.sync_redraw = 0;
+        }
+    }
+
+    return NULL;
+}
 
 #endif // _WIN32, __APPLE__, __linux__
 
