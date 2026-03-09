@@ -120,25 +120,29 @@ VD_TEST("GL/Multiple Configs") {
         0
     };
 
-    VdFwGlConfig bogus_config1 = {0};
+    VdFwGlConfig bogus_config1;
+    VD_MEMSET(&bogus_config1, 0, sizeof(bogus_config1));
     bogus_config1.version = VD_FW_GL_VERSION_3_3;
     bogus_config1.req_extensions = bogus_extensions;
 
-    VdFwGlConfig bogus_config2 = {0};
+    VdFwGlConfig bogus_config2;
+    VD_MEMSET(&bogus_config2, 0, sizeof(bogus_config2));
     bogus_config2.version = VD_FW_GL_VERSION_1_5;
     bogus_config2.req_extensions = bogus_extensions;
 
-    VdFwGlConfig actual_config = {0};
+    VdFwGlConfig actual_config;
+    VD_MEMSET(&actual_config, 0, sizeof(actual_config));
     actual_config.version = VD_FW_GL_VERSION_3_3;
 
     VdFwGlConfig configs[] = {
         bogus_config1,
         bogus_config2,
         actual_config,
-        {0}
+        {VD_FW_GL_VERSION_BASIC}
     };
 
-    VdFwInitInfo info = {0};
+    VdFwInitInfo info;
+    VD_MEMSET(&info, 0, sizeof(info));
     info.gl.configs = configs;
     vd_fw_init(&info);
 

@@ -137,7 +137,7 @@ typedef char VdUiBool;
 
 #ifndef VD_UI_VSNPRINTF
 #   include <stdio.h>
-#   define VD_UI_VSNPRINTF(...) vsnprintf(##__VA_ARGS__)
+#   define VD_UI_VSNPRINTF(...) vsnprintf(__VA_ARGS__)
 #endif // !VD_UI_VSNPRINTF
 
 /* ----INITIALIZATION------------------------------------------------------------------------------------------------ */

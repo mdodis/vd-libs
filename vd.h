@@ -3270,7 +3270,7 @@ query_file:
 
 VD_API int vd_directory_close(VdDirectory *directory)
 {
-    DIR *dir = directory->handle;
+    DIR *dir = (DIR*)directory->handle;
     closedir(dir);
     return 1;
 }

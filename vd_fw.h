@@ -428,10 +428,11 @@ enum {
     VD_FW_MOUSE_BUTTON_M2     = VD_FW_MOUSE_STATE_M2_BUTTON_DOWN,
 };
 
-typedef enum {
+enum VD_FW_WINDOW_STATE_ {
     VD_FW_WINDOW_STATE_MINIMIZED = 1 << 0,
     VD_FW_WINDOW_STATE_MAXIMIZED = 1 << 1,
-} VdFwWindowState;
+};
+typedef int VdFwWindowState;
 
 typedef enum {
     VD_FW_EVENT_TYPE_NONE = 0,
@@ -15082,7 +15083,7 @@ typedef struct {
     XSYM(xlib, Status, XInitThreads, (void)) \
     XSYM(xlib, Status, XMatchVisualInfo, (Display *display, int screen, int depth, int klass, XVisualInfo *vinfo_return)) \
     XSYM(xlib, Colormap, XCreateColormap, (Display *display, Window w, Visual *visual, int alloc)) \
-    XSYM(xlib, Window, XCreateWindow, (Display *display, Window parent, int x, int y, unsigned int width, unsigned int height, unsigned int border_width, int depth, unsigned int class, Visual *visual, unsigned long valuemask, XSetWindowAttributes *attributes)) \
+    XSYM(xlib, Window, XCreateWindow, (Display *display, Window parent, int x, int y, unsigned int width, unsigned int height, unsigned int border_width, int depth, unsigned int klass, Visual *visual, unsigned long valuemask, XSetWindowAttributes *attributes)) \
     XSYM(xlib, int, XMapWindow, (Display *display, Window w)) \
     XSYM(xlib, int, XFree, (void *data)) \
     XSYM(xlib, int, XStoreName, (Display *display, Window w, char *window_name)) \
@@ -15106,7 +15107,7 @@ typedef struct {
     XSYM(xlib, int, XWarpPointer, (Display *display, Window src_w, Window dest_w, int src_x, int src_y, unsigned int src_width, unsigned int src_height, int dest_x,  int dest_y)) \
     XSYM(xlib, int, XGrabPointer, (Display *display, Window grab_window, Bool owner_events, unsigned intevent_mask, int pointer_mode, int keyboard_mode, Window confine_to, Cursor cursor, Time time)) \
     XSYM(xlib, int, XUngrabPointer, (Display *display, Time time)) \
-    XSYM(xlib, int, XGetWindowProperty, (Display *display, Window w, Atom property, long long_offset, long long_length, Bool delete, Atom req_type, Atom *actual_type_return, int *actual_format_return, unsigned long *nitems_return, unsigned long *bytes_after_return, unsigned char **prop_return)) \
+    XSYM(xlib, int, XGetWindowProperty, (Display *display, Window w, Atom property, long long_offset, long long_length, Bool del, Atom req_type, Atom *actual_type_return, int *actual_format_return, unsigned long *nitems_return, unsigned long *bytes_after_return, unsigned char **prop_return)) \
     XSYM(xlib, Status, XIconifyWindow, (Display *display, Window w, int screen_number)) \
     XSYM(xlib, Status, XSendEvent, (Display *display, Window w, Bool propagate, long event_mask, XEvent *event_send)) \
     XSYM(xlib, Status, XGetWindowAttributes, (Display *display, Window w, XWindowAttributes *attrs))\
@@ -15343,7 +15344,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
             "libXi.so.6",
             "libXi.so",
         };
-        for (int i = 0; i < sizeof(xi_libs) / sizeof(xi_libs[0]); ++i) {
+        for (unsigned i = 0; i < sizeof(xi_libs) / sizeof(xi_libs[0]); ++i) {
             void *dl = dlopen(xi_libs[i], RTLD_NOW | RTLD_GLOBAL);
             if (dl) {
                 VD_FW_G.handle_xi   = dl;
@@ -15357,7 +15358,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
             "libGL.so",
         };
 
-        for (int i = 0; i < sizeof(glx_libs) / sizeof(glx_libs[0]); ++i) {
+        for (unsigned i = 0; i < sizeof(glx_libs) / sizeof(glx_libs[0]); ++i) {
             void *dl = dlopen(glx_libs[i], RTLD_NOW | RTLD_GLOBAL);
             if (dl) {
                 VD_FW_G.handle_glx = dl;
@@ -15400,7 +15401,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     // Sync Extension
     {
         int major_opcode, first_event, first_error;
-        if (VdFwXQueryExtension(VD_FW_G.display, "SYNC", &major_opcode, &first_event, &first_error)) {
+        if (VdFwXQueryExtension(VD_FW_G.display, (char*)"SYNC", &major_opcode, &first_event, &first_error)) {
             int version = 0;
             {
                 int major, minor;
@@ -15418,7 +15419,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     {
 
         int major_opcode, first_event, first_error;
-        if (!VdFwXQueryExtension(VD_FW_G.display, "XInputExtension", &major_opcode, &first_event, &first_error)) {
+        if (!VdFwXQueryExtension(VD_FW_G.display, (char*)"XInputExtension", &major_opcode, &first_event, &first_error)) {
             VD_FW_G.has_xi = 0;
         }
 
@@ -15456,23 +15457,23 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         }
     }
 
-    VD_FW_G.wm_motif = VdFwXInternAtom(VD_FW_G.display, "_MOTIF_WM_HINTS", 0);
-    VD_FW_G.wm_protocols = VdFwXInternAtom(VD_FW_G.display, "WM_PROTOCOLS", 0);
-    VD_FW_G.wm_delete_window = VdFwXInternAtom(VD_FW_G.display, "WM_DELETE_WINDOW", 0);
-    VD_FW_G.wm_state = VdFwXInternAtom(VD_FW_G.display, "_NET_WM_STATE", 0);
-    VD_FW_G.wm_max_h = VdFwXInternAtom(VD_FW_G.display, "_NET_WM_STATE_MAXIMIZED_HORZ", 0);
-    VD_FW_G.wm_max_v = VdFwXInternAtom(VD_FW_G.display, "_NET_WM_STATE_MAXIMIZED_VERT", 0);
-    VD_FW_G.wm_hidden = VdFwXInternAtom(VD_FW_G.display, "_NET_WM_STATE_HIDDEN", 0);
-    VD_FW_G.wm_fullscreen = VdFwXInternAtom(VD_FW_G.display, "_NET_WM_STATE_FULLSCREEN", 0);
-    VD_FW_G.wm_icon = VdFwXInternAtom(VD_FW_G.display, "_NET_WM_ICON", False);
+    VD_FW_G.wm_motif = VdFwXInternAtom(VD_FW_G.display, (char*)"_MOTIF_WM_HINTS", 0);
+    VD_FW_G.wm_protocols = VdFwXInternAtom(VD_FW_G.display, (char*)"WM_PROTOCOLS", 0);
+    VD_FW_G.wm_delete_window = VdFwXInternAtom(VD_FW_G.display, (char*)"WM_DELETE_WINDOW", 0);
+    VD_FW_G.wm_state = VdFwXInternAtom(VD_FW_G.display, (char*)"_NET_WM_STATE", 0);
+    VD_FW_G.wm_max_h = VdFwXInternAtom(VD_FW_G.display, (char*)"_NET_WM_STATE_MAXIMIZED_HORZ", 0);
+    VD_FW_G.wm_max_v = VdFwXInternAtom(VD_FW_G.display, (char*)"_NET_WM_STATE_MAXIMIZED_VERT", 0);
+    VD_FW_G.wm_hidden = VdFwXInternAtom(VD_FW_G.display, (char*)"_NET_WM_STATE_HIDDEN", 0);
+    VD_FW_G.wm_fullscreen = VdFwXInternAtom(VD_FW_G.display, (char*)"_NET_WM_STATE_FULLSCREEN", 0);
+    VD_FW_G.wm_icon = VdFwXInternAtom(VD_FW_G.display, (char*)"_NET_WM_ICON", False);
 
     if (VD_FW_G.xlib_supports_xsync) {
-        VD_FW_G.wm_sync_request = VdFwXInternAtom(VD_FW_G.display, "_NET_WM_SYNC_REQUEST", 0);
-        VD_FW_G.wm_sync_request_counter = VdFwXInternAtom(VD_FW_G.display, "_NET_WM_SYNC_REQUEST_COUNTER", 0);
+        VD_FW_G.wm_sync_request = VdFwXInternAtom(VD_FW_G.display, (char*)"_NET_WM_SYNC_REQUEST", 0);
+        VD_FW_G.wm_sync_request_counter = VdFwXInternAtom(VD_FW_G.display, (char*)"_NET_WM_SYNC_REQUEST_COUNTER", 0);
     }
 
-    VD_FW_G.wm_usr_close = VdFwXInternAtom(VD_FW_G.display, "WM_USR_CLOSE", 0);
-    VD_FW_G.wm_usr_block = VdFwXInternAtom(VD_FW_G.display, "WM_USR_BLOCK", 0);
+    VD_FW_G.wm_usr_close = VdFwXInternAtom(VD_FW_G.display, (char*)"WM_USR_CLOSE", 0);
+    VD_FW_G.wm_usr_block = VdFwXInternAtom(VD_FW_G.display, (char*)"WM_USR_BLOCK", 0);
 
     int screen_bits = 24;
     XVisualInfo visual_info = {};
@@ -15527,7 +15528,9 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
     switch (api) {
         case VD_FW_GRAPHICS_API_OPENGL: {
 
-            VdFwGlConfig      default_configs[2] = {0};
+            VdFwGlConfig      default_configs[2];
+            VD_FW_MEMSET(default_configs, 0, sizeof(default_configs));
+
             default_configs[0].version = VD_FW_GL_VERSION_3_3;
 
             VdFwOpenGLOptions default_options = {0};
@@ -15642,23 +15645,25 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
 
                 int nelements;
                 __GlxFbConfig *fbs = VdFwglXChooseFBConfig(VD_FW_G.display, VD_FW_G.screen, pixel_attribs, &nelements);
+                __GlxFbConfig fb_cfg;
+                XVisualInfo *vi_info;
+                int context_attribs[9];
+                int ctx_flags = 0;
+                int prf_flags = 0;
 
                 if (!fbs || nelements < 1) {
                     VdFwXFree(fbs);
                     goto LOOP_END;
                 }
 
-                __GlxFbConfig fb_cfg = fbs[0];
+                fb_cfg = fbs[0];
                 VdFwXFree(fbs);
 
-                XVisualInfo *vi_info = VdFwglXGetVisualFromFBConfig(VD_FW_G.display, fb_cfg);
+                vi_info = VdFwglXGetVisualFromFBConfig(VD_FW_G.display, fb_cfg);
                 window_visual_info = *vi_info;
                 window_colormap = VdFwXCreateColormap(VD_FW_G.display, VD_FW_G.root_window, vi_info->visual, AllocNone);
 
                 VdFwXSync(VD_FW_G.display, False);
-
-                int ctx_flags = 0;
-                int prf_flags = 0;
 
                 if (debug) {
                     ctx_flags |= VD_FW_GLX_CONTEXT_DEBUG_BIT_ARB;
@@ -15670,13 +15675,19 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
                     prf_flags |= VD_FW_GLX_CONTEXT_CORE_PROFILE_BIT_ARB;
                 }
 
-                int context_attribs[] = {
-                    VD_FW_GLX_CONTEXT_MAJOR_VERSION_ARB, major,
-                    VD_FW_GLX_CONTEXT_MINOR_VERSION_ARB, minor,
-                    VD_FW_GLX_CONTEXT_PROFILE_MASK_ARB,  prf_flags,
-                    VD_FW_GLX_CONTEXT_FLAGS_ARB,         ctx_flags,
-                    0
-                };
+                context_attribs[0] = VD_FW_GLX_CONTEXT_MAJOR_VERSION_ARB;
+                context_attribs[1] = major;
+
+                context_attribs[2] = VD_FW_GLX_CONTEXT_MINOR_VERSION_ARB;
+                context_attribs[3] = minor;
+
+                context_attribs[4] = VD_FW_GLX_CONTEXT_PROFILE_MASK_ARB;
+                context_attribs[5] = prf_flags;
+
+                context_attribs[6] = VD_FW_GLX_CONTEXT_FLAGS_ARB;
+                context_attribs[7] = ctx_flags;
+
+                context_attribs[8] = 0;
 
                 VD_FW_G.glx_context = glXCreateContextAttribsARB(VD_FW_G.display, fb_cfg, 0, 1, context_attribs);
                 if (!VD_FW_G.glx_context) {
@@ -15801,8 +15812,8 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
             } break;
 
             case VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE: {
-                int prev_state = VD_FW_G.window_state;
-                int change_flag = mm.data.window_state_change.flag;
+                VdFwWindowState prev_state = VD_FW_G.window_state;
+                VdFwWindowState change_flag = (VdFwWindowState)mm.data.window_state_change.flag;
                 if (mm.data.window_state_change.value) {
                     VD_FW_G.window_state |= change_flag;
                 } else {
@@ -15886,6 +15897,11 @@ VD_FW_API void vd_fw_quit(void)
     VD_FW_G.window_open = 0;
 }
 
+VD_FW_API void vd_fw_exit(void)
+{
+    vd_fw_quit();
+}
+
 VD_FW_API void vd_fw_lock(void)
 {
     pthread_mutex_lock(&VD_FW_G.mtx_paint);
@@ -15915,11 +15931,6 @@ VD_FW_API void vd_fw_unlock(void)
     if (VD_FW_G.curr_frame.flags & VD_FW_X11_FLAGS_WAKE_COND_VAR) {
         pthread_cond_signal(&VD_FW_G.cnd_paint);
     }
-
-    // if (VD_FW_G.quit_request) {
-    //     VdFwXDestroyWindow(VD_FW_G.display, VD_FW_G.window);
-    //     VD_FW_G.window_open = 0;
-    // }
 }
 
 VD_FW_API int vd_fw_get_block_while_sizing(void)
@@ -15952,7 +15963,7 @@ VD_FW_API int vd_fw_set_vsync_on(int on)
 
         unsigned int value;
         VdFwglXQueryDrawable(VD_FW_G.display, VD_FW_G.window, VD_FW_GLX_SWAP_INTERVAL_EXT, &value);
-        return on == value;
+        return on == (int)value;
     }
 
     return 0;
@@ -15986,7 +15997,7 @@ VD_FW_API int vd_fw_get_gamepad_axis(int index, int axis, float *out)
 VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
 {
     int count = 2 + width * height;
-    unsigned long *data = vd_fw__realloc_mem(0, count * sizeof(unsigned long));
+    unsigned long *data = (unsigned long*)vd_fw__realloc_mem((void*)0, count * sizeof(unsigned long));
 
     data[0] = width;
     data[1] = height;
@@ -16273,7 +16284,7 @@ VD_FW_API int vd_fw__any_time_higher(int num_files, const char **files, unsigned
 
         close(fd);
 
-        unsigned long long file_secs = st.st_mtimensec;
+        unsigned long long file_secs = st.st_mtime;
 
         if (file_secs > *check_against) {
             *check_against = file_secs;
@@ -16534,14 +16545,14 @@ static int vd_fw__x11_recreate_window(Colormap colormap, XVisualInfo *vi_info)
                                        vi_info->depth, InputOutput,
                                        vi_info->visual, attribute_mask, &window_attributes);
 
-    XClassHint class_hint = {"fw_window", "popup"};
+    XClassHint class_hint = {(char*)"fw_window", (char*)"popup"};
     VdFwXSetClassHint(VD_FW_G.display, VD_FW_G.window, &class_hint);
 
     if (!VD_FW_G.window) {
         return 0;
     }
 
-    VdFwXStoreName(VD_FW_G.display, VD_FW_G.window, "FW Window");
+    VdFwXStoreName(VD_FW_G.display, VD_FW_G.window, (char*)"FW Window");
 
     if (VD_FW_G.borderless) {
         VdFw__X11MotifWmHints hints = {0};
@@ -16786,12 +16797,12 @@ static void *vd_fw__x11_thread_proc(void *arg)
                 XClientMessageEvent *e = &evt.xclient;
 
                 if(e->message_type == VD_FW_G.wm_protocols) {
-                    if (e->data.l[0] == VD_FW_G.wm_delete_window) {
+                    if (e->data.l[0] == (long)VD_FW_G.wm_delete_window) {
 
                         VdFwEvent fw_event;
                         fw_event.type = VD_FW_EVENT_TYPE_CLOSE_REQUEST;
                         vd_fw__x11_msgbuf_w(&fw_event);
-                    } else if (e->data.l[0] == VD_FW_G.wm_sync_request) {
+                    } else if (e->data.l[0] == (long)VD_FW_G.wm_sync_request) {
                         VD_FW_G.sync_counter_value = 0;
                         VD_FW_G.sync_counter_value |= e->data.l[2];
                         VD_FW_G.sync_counter_value |= e->data.l[3] << 32;
@@ -16808,7 +16819,8 @@ static void *vd_fw__x11_thread_proc(void *arg)
             case KeyPress: {
                 XKeyPressedEvent *key_event = &evt.xkey;
 
-                VdFwEvent fw_event = {0};
+                VdFwEvent fw_event;
+                VD_FW_MEMSET(&fw_event, 0, sizeof(fw_event));
                 fw_event.type = VD_FW_EVENT_TYPE_KEY_DOWN;
                 fw_event.data.key_down.key = vd_fw__x11_translate_keycode(&evt);
                 fw_event.data.key_down.modifiers = 0;
@@ -16854,7 +16866,8 @@ static void *vd_fw__x11_thread_proc(void *arg)
             } break;
 
             case KeyRelease: {
-                VdFwEvent fw_event = {0};
+                VdFwEvent fw_event;
+                VD_FW_MEMSET(&fw_event, 0, sizeof(fw_event));
                 fw_event.type = VD_FW_EVENT_TYPE_KEY_UP;
                 fw_event.data.key_up.key = vd_fw__x11_translate_keycode(&evt);
                 
@@ -16873,6 +16886,7 @@ static void *vd_fw__x11_thread_proc(void *arg)
 
                 {
                     VdFwEvent fw_event;
+                    VD_FW_MEMSET(&fw_event, 0, sizeof(fw_event));
                     fw_event.type = VD_FW_EVENT_TYPE_MOUSE_MOVE;
                     fw_event.data.mouse_move.x = evt.xmotion.x;
                     fw_event.data.mouse_move.y = evt.xmotion.y;
@@ -16881,6 +16895,7 @@ static void *vd_fw__x11_thread_proc(void *arg)
 
                 if (!VD_FW_G.has_xi) {
                     VdFwEvent fw_event;
+                    VD_FW_MEMSET(&fw_event, 0, sizeof(fw_event));
                     fw_event.type = VD_FW_EVENT_TYPE_MOUSE_DELTA;
                     fw_event.data.mouse_delta.dx = delta[0];
                     fw_event.data.mouse_delta.dy = delta[1];
@@ -16937,6 +16952,7 @@ static void *vd_fw__x11_thread_proc(void *arg)
                     }
 
                     VdFwEvent fw_event;
+                    VD_FW_MEMSET(&fw_event, 0, sizeof(fw_event));
                     fw_event.type = VD_FW_EVENT_TYPE_MOUSE_DELTA;
                     fw_event.data.mouse_delta.dx = dx;
                     fw_event.data.mouse_delta.dy = dy;
@@ -16955,6 +16971,7 @@ static void *vd_fw__x11_thread_proc(void *arg)
                     const float wheel_delta = 1.f;
 
                     VdFwEvent fw_event;
+                    VD_FW_MEMSET(&fw_event, 0, sizeof(fw_event));
                     fw_event.type = VD_FW_EVENT_TYPE_MOUSE_SCROLL;
                     fw_event.data.mouse_scroll.dx = 0.f;
                     fw_event.data.mouse_scroll.dy = 0.f;
@@ -16977,7 +16994,8 @@ static void *vd_fw__x11_thread_proc(void *arg)
                 }
 
                 if (btn) {
-                    VdFwEvent fw_event = {0};
+                    VdFwEvent fw_event;
+                    VD_FW_MEMSET(&fw_event, 0, sizeof(fw_event));
                     fw_event.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN;
                     fw_event.data.mouse_button_down.button = btn;
                     vd_fw__x11_msgbuf_w(&fw_event);
@@ -17002,7 +17020,7 @@ static void *vd_fw__x11_thread_proc(void *arg)
                                 ev.xclient.type = ClientMessage;
                                 ev.xclient.window = VD_FW_G.window;
                                 ev.xclient.message_type = 
-                                        VdFwXInternAtom(VD_FW_G.display, "_NET_WM_MOVERESIZE", False);
+                                        VdFwXInternAtom(VD_FW_G.display, (char*)"_NET_WM_MOVERESIZE", False);
                                 ev.xclient.format = 32;
                                 ev.xclient.data.l[0] = evt.xbutton.x_root;
                                 ev.xclient.data.l[1] = evt.xbutton.y_root;
@@ -17044,7 +17062,7 @@ static void *vd_fw__x11_thread_proc(void *arg)
                                     ev.xclient.type = ClientMessage;
                                     ev.xclient.window = VD_FW_G.window;
                                     ev.xclient.message_type =
-                                        VdFwXInternAtom(VD_FW_G.display, "_NET_WM_MOVERESIZE", False);
+                                        VdFwXInternAtom(VD_FW_G.display, (char*)"_NET_WM_MOVERESIZE", False);
                                     ev.xclient.format = 32;
                                     ev.xclient.data.l[0] = evt.xmotion.x_root;
                                     ev.xclient.data.l[1] = evt.xmotion.y_root;
@@ -17072,7 +17090,8 @@ static void *vd_fw__x11_thread_proc(void *arg)
             case ButtonRelease: {
                 int btn = vd_fw__x11_translate_mouse_button(evt.xbutton.button);
                 if (btn) {
-                    VdFwEvent fw_event = {0};
+                    VdFwEvent fw_event;
+                    VD_FW_MEMSET(&fw_event, 0, sizeof(fw_event));
                     fw_event.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP;
                     fw_event.data.mouse_button_down.button = btn;
                     vd_fw__x11_msgbuf_w(&fw_event);
@@ -17141,7 +17160,6 @@ static void *vd_fw__x11_thread_proc(void *arg)
             pthread_cond_wait(&VD_FW_G.cnd_paint, &VD_FW_G.mtx_paint);
         }
 
-
         if (!VD_FW_G.winthread_block_while_sizing) {
             pthread_mutex_unlock(&VD_FW_G.mtx_paint);
         }
@@ -17155,6 +17173,7 @@ static void *vd_fw__x11_thread_proc(void *arg)
         }
     }
 
+    VdFwXDestroyWindow(VD_FW_G.display, VD_FW_G.window);
     return NULL;
 }
 
@@ -17851,12 +17870,12 @@ static VdFw__GamepadSymbolToTarget *vd_fw__get_map_from_symbol(const char *s, in
 
     for (int map_index = 0; map_index < map_count; ++map_index) {
         VdFw__GamepadSymbolToTarget *check = &Vd_Fw__Gamepad_Symbols_To_Targets[map_index];
-        if (check->len != s_len) {
+        if (check->len != (size_t)s_len) {
             continue;
         }
 
         int found = 1;
-        for (int i = 0; i < check->len; ++i) {
+        for (int i = 0; i < (int)check->len; ++i) {
             if (check->sym[i] != s[i]) {
                 found = 0;
                 break;
