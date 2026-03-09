@@ -1857,7 +1857,7 @@ typedef struct __VD_TestEntry {
 #define VD_TEST_IMPL(string, counter) \
     VD_TEST_LINKAGE VD_PROC_TEST(VD_TEST_PROC_ID(counter)); \
     VD_TEST_REG_LINK void VD_TEST_REG_ID(counter)(void); \
-    __declspec(allocate(".CRT$XCU")) VD_TEST_LINK_PTR void (*VD_TEST_REG_PTR_ID(counter))(void) = VD_TEST_REG_ID(counter); \
+    VD_TEST_LINK_PTR __declspec(allocate(".CRT$XCU")) void (*VD_TEST_REG_PTR_ID(counter))(void) = VD_TEST_REG_ID(counter); \
     __pragma(comment(linker, "/include:"  VD_STRINGIFY(VD_TEST_REG_PTR_ID(counter)))) \
     VD_TEST_REG_LINK void VD_TEST_REG_ID(counter)(void) {\
         vd__test_register(string, VD_TEST_PROC_ID(counter)); \
