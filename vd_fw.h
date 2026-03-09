@@ -53,6 +53,8 @@
  * - Win32:
  *     - Filter monitor orientation and other settings in display modes
  *     - Sort the display modes if not sorted already
+ * - Win32:
+ *     - dpi change
  * - MacOS: Event Queue
  * - MacOS: vd_fw_get_key_released: Gets if the key was released this frame
  * - raw hat states
@@ -447,6 +449,7 @@ typedef enum {
     VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP,
     VD_FW_EVENT_TYPE_MOUSE_SCROLL,
     VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE,
+    VD_FW_EVENT_TYPE_SCALE_CHANGE,
 } VdFwEventType;
 
 typedef struct {
@@ -500,6 +503,10 @@ typedef struct {
     int connected;
 } VdFwEventGamepadStatusData;
 
+typedef struct {
+    float new_scale;
+} VdFwEventScaleChangeData;
+
 typedef union {
     VdFwEventCloseRequestData      close_request;
     VdFwEventFocusChangeData       focus_change;
@@ -512,6 +519,7 @@ typedef union {
     VdFwEventMouseButtonUpData     mouse_button_up;
     VdFwEventMouseScrollData       mouse_scroll;
     VdFwEventWindowStateChangeData window_state_change;
+    VdFwEventScaleChangeData       scale_change;
 } VdFwEventData;
 
 typedef struct {
@@ -654,7 +662,7 @@ VD_FW_API void               vd_fw_set_receive_ncmouse(int on);
  * @brief Gets the backing scale factor
  * @return  The backing scale factor (1.0f: 1:1 scale, 2.0f, 2:1 scale, etc...)
  */
-VD_FW_API float              vd_fw_get_scale(void);
+VD_FW_API int                vd_fw_get_scale(float *scale);
 
 /**
  * @brief Set the title of the window
@@ -10261,9 +10269,10 @@ VD_FW_API int vd_fw_get_mouse_wheel(float *dx, float *dy)
     return VD_FW_G.wheel_moved;
 }
 
-VD_FW_API float vd_fw_get_scale(void)
+VD_FW_API int vd_fw_get_scale(float *scale)
 {
-    return (float)VdFwGetDpiForWindow(VD_FW_G.hwnd) / 90.f;
+    *scale = (float)VdFwGetDpiForWindow(VD_FW_G.hwnd) / 90.f;
+    return 0;
 }
 
 VD_FW_API void vd_fw_set_title(const char *title)
@@ -14332,9 +14341,10 @@ VD_FW_API void vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4])
     }
 }
 
-VD_FW_API float vd_fw_get_scale(void)
+VD_FW_API int vd_fw_get_scale(float *scale)
 {
-    return VD_FW_G.scale;
+    *scale = VD_FW_G.scale;
+    return 1;
 }
 
 VD_FW_API void vd_fw_set_title(const char *title)
@@ -14987,10 +14997,12 @@ static void vd_fw__mac_hid_value_callback(void *context, IOReturn result, void *
 #define GL_GLEXT_PROTOTYPES 0
 #define GLX_GLXEXT_PROTOTYPES 0
 #include <X11/Xlib.h>
+#include <X11/Xresource.h>
 #include <X11/Xutil.h>
 #include <X11/Xatom.h>
 #include <X11/extensions/syncconst.h>
 #include <X11/extensions/XI.h>
+#include <X11/extensions/Xrandr.h>
 #include <time.h>
 #include <dlfcn.h>
 #include <stdio.h>
@@ -15085,6 +15097,7 @@ typedef struct {
     XSYM(xlib, Colormap, XCreateColormap, (Display *display, Window w, Visual *visual, int alloc)) \
     XSYM(xlib, Window, XCreateWindow, (Display *display, Window parent, int x, int y, unsigned int width, unsigned int height, unsigned int border_width, int depth, unsigned int klass, Visual *visual, unsigned long valuemask, XSetWindowAttributes *attributes)) \
     XSYM(xlib, int, XMapWindow, (Display *display, Window w)) \
+    XSYM(xlib, int, XUnmapWindow, (Display *display, Window w)) \
     XSYM(xlib, int, XFree, (void *data)) \
     XSYM(xlib, int, XStoreName, (Display *display, Window w, char *window_name)) \
     XSYM(xlib, int, XSync, (Display *display, Bool discard)) \
@@ -15121,6 +15134,12 @@ typedef struct {
     XSYM(xlib, XIC, XCreateIC, (XIM im, ...)) \
     XSYM(xlib, void, XDestroyIC, (XIC ic)) \
     XSYM(xlib, int, Xutf8LookupString, (XIC ic, XKeyPressedEvent *event, char *buffer_return, int bytes_buffer, KeySym *keysym_return, Status *status_return)) \
+    XSYM(xlib, int, XSelectInput, (Display*, Window, long)) \
+    XSYM(xlib, char*, XResourceManagerString, (Display*)) \
+    XSYM(xlib, void, XrmInitialize, (void)) \
+    XSYM(xlib, XrmDatabase, XrmGetStringDatabase, (const char*)) \
+    XSYM(xlib, Bool, XrmGetResource, (XrmDatabase, const char*, const char*, char**, XrmValue*)) \
+    XSYM(xlib, void, XrmDestroyDatabase, (XrmDatabase)) \
     XEND_MODULE() \
     XBEGIN_MODULE(xext) \
     XSYM(xext, Status, XSyncQueryExtension, (Display *display, int *event_base_return, int *error_base_return)) \
@@ -15140,6 +15159,10 @@ typedef struct {
     XBEGIN_MODULE(xcursor) \
     XSYM(xcursor, XID, XcursorLibraryLoadCursor, (Display *dpy, const char *file)) \
     XSYM(xcursor, XID, XcursorShapeLoadCursor, (Display *dpy, unsigned int shape)) \
+    XEND_MODULE() \
+    XBEGIN_MODULE(xrandr) \
+    XSYM(xrandr, Bool, XRRQueryExtension, (Display *dpy, int *event_base_return, int *error_base_return)) \
+    XSYM(xrandr, void, XRRSelectInput, (Display *dpy, Window window, int mask)) \
     XEND_MODULE() \
     XBEGIN_MODULE(glx) \
     XSYM(glx, __GlxFbConfig*, glXChooseFBConfig, (Display *display, int screen, const int *attrib_list, int *nelements)) \
@@ -15180,15 +15203,23 @@ typedef struct {
 typedef struct {
     void                            *handle_xlib;
     int                             has_xlib;
+
     void                            *handle_xext;
     int                             has_xext;
+
     void                            *handle_xi;
     int                             has_xi;
     int                             xi_opcode;
+
     void                            *handle_xfixes;
     int                             has_xfixes;
+
     void                            *handle_xcursor;
     int                             has_xcursor;
+
+    void                            *handle_xrandr;
+    int                             has_xrandr;
+    int                             event_base_xrandr;
 
     int                             xlib_supports_xsync;
 
@@ -15222,6 +15253,9 @@ typedef struct {
     Atom                            wm_icon;
     Atom                            wm_usr_close;
     Atom                            wm_usr_block;
+    Atom                            wm_xft_dpi;
+    Atom                            wm_dpi_change;
+    Atom                            wm_dpi_change_xsettings;
     XID                             sync_counter;
     VdFwU64                         sync_counter_value;
     int                             sync_redraw;
@@ -15273,6 +15307,7 @@ typedef struct {
     float                           mouse_delta[2];
     int                             mouse_is_locked;
     float                           scale;
+    int                             scale_changed;
 
     int                             has_initialized;
     int                             cap_gamepad_db_entries;
@@ -15305,10 +15340,11 @@ static int             vd_fw__x11_extension_supported(const char *extList, const
 static VdFwKey         vd_fw__x11_translate_keycode(XEvent *evt);
 static int             vd_fw__x11_translate_mouse_button(unsigned int button);
 static int             vd_fw__x11_recreate_window(Colormap colormap, XVisualInfo *vi_info);
-static int             vd_fw__x11_test_orientation(int x, int y);
+static int             vd_fw__x11_test_orientation(int x, int y, int w, int h);
 static void*           vd_fw__x11_thread_proc(void *arg);
 static int             vd_fw__x11_msgbuf_r(VdFwEvent *message);
 static int             vd_fw__x11_msgbuf_w(VdFwEvent *message);
+static float           vd_fw__x11_xft_dpi(void);
 
 void *vd_fw__gl_get_proc_address(const char *name)
 {
@@ -15318,7 +15354,6 @@ void *vd_fw__gl_get_proc_address(const char *name)
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
-    VD_FW_G.scale = 1.f;
     VD_FW_G.graphics_api = VD_FW_GRAPHICS_API_INVALID;
     VD_FW_G.borderless = 0;
     VD_FW_G.window_max[0] = VD_FW_G.window_max[1] = 99999;
@@ -15339,6 +15374,9 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 
         VD_FW_G.handle_xcursor   = dlopen("libXcursor.so", RTLD_NOW | RTLD_GLOBAL);
         VD_FW_G.has_xcursor      = VD_FW_G.handle_xcursor != NULL;
+
+        VD_FW_G.handle_xrandr   = dlopen("libXrandr.so", RTLD_NOW | RTLD_GLOBAL);
+        VD_FW_G.has_xrandr      = VD_FW_G.handle_xrandr != NULL;
 
         const char *xi_libs[] = {
             "libXi.so.6",
@@ -15433,6 +15471,15 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         VD_FW_G.xi_opcode = major_opcode;
     }
 
+    // Xrandr Extension
+    {
+        int event_base_return, error_base_return;
+        if (!VdFwXRRQueryExtension(VD_FW_G.display, &event_base_return, &error_base_return)) {
+            VD_FW_G.has_xrandr = 0;
+        }
+        VD_FW_G.event_base_xrandr = event_base_return;
+    }
+
     // Character Input
     {
         XIM input_method = VdFwXOpenIM(VD_FW_G.display, 0, 0, 0);
@@ -15474,6 +15521,10 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 
     VD_FW_G.wm_usr_close = VdFwXInternAtom(VD_FW_G.display, (char*)"WM_USR_CLOSE", 0);
     VD_FW_G.wm_usr_block = VdFwXInternAtom(VD_FW_G.display, (char*)"WM_USR_BLOCK", 0);
+    VD_FW_G.wm_xft_dpi   = VdFwXInternAtom(VD_FW_G.display, (char*)"Xft.dpi", 0);
+    VD_FW_G.wm_dpi_change = VdFwXInternAtom(VD_FW_G.display, (char*)"RESOURCE_MANAGER", 0);
+    VD_FW_G.wm_dpi_change_xsettings = VdFwXInternAtom(VD_FW_G.display, (char*)"_XSETTINGS_S0", 0);
+    VD_FW_G.scale = vd_fw__x11_xft_dpi();
 
     int screen_bits = 24;
     XVisualInfo visual_info = {};
@@ -15743,6 +15794,7 @@ VD_FW_API int vd_fw_running(void)
 
 VD_FW_API VdFwEvent *vd_fw_poll(int *count)
 {
+    VD_FW_G.scale_changed = 0;
     VD_FW_G.wheel_moved = 0;
     VD_FW_G.wheel[0] = 0.f;
     VD_FW_G.wheel[1] = 0.f;
@@ -15824,6 +15876,11 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
                     VD_FW_G.window_state_changed |= change_flag;
                 }
 
+            } break;
+
+            case VD_FW_EVENT_TYPE_SCALE_CHANGE: {
+                VD_FW_G.scale_changed = 1;
+                VD_FW_G.scale = mm.data.scale_change.new_scale;
             } break;
 
             default: break;
@@ -16303,9 +16360,10 @@ VD_FW_API VdFwPlatform vd_fw_get_platform(void)
     return VD_FW_PLATFORM_LINUX;
 }
 
-VD_FW_API float vd_fw_get_scale(void)
+VD_FW_API int vd_fw_get_scale(float *scale)
 {
-    return VD_FW_G.scale;
+    if (scale) *scale = VD_FW_G.scale;
+    return VD_FW_G.scale_changed;
 }
 
 VD_FW_API void vd_fw_set_title(const char *title)
@@ -16535,6 +16593,7 @@ static int vd_fw__x11_recreate_window(Colormap colormap, XVisualInfo *vi_info)
                                    ButtonPressMask | ButtonReleaseMask | PointerMotionMask |
                                    PropertyChangeMask;
 
+
     unsigned long attribute_mask = CWBitGravity | CWBackPixel | CWColormap | CWEventMask;
 
     int width = 640;
@@ -16547,6 +16606,13 @@ static int vd_fw__x11_recreate_window(Colormap colormap, XVisualInfo *vi_info)
 
     XClassHint class_hint = {(char*)"fw_window", (char*)"popup"};
     VdFwXSetClassHint(VD_FW_G.display, VD_FW_G.window, &class_hint);
+
+    VdFwXSelectInput(VD_FW_G.display, VD_FW_G.root_window, PropertyChangeMask);
+
+    // if (VD_FW_G.has_xrandr) {
+    //     VdFwXRRSelectInput(VD_FW_G.display, VD_FW_G.root_window,
+    //                        RRScreenChangeNotifyMask | RROutputChangeNotifyMask | RRCrtcChangeNotifyMask);
+    // }
 
     if (!VD_FW_G.window) {
         return 0;
@@ -16607,12 +16673,9 @@ static int vd_fw__x11_recreate_window(Colormap colormap, XVisualInfo *vi_info)
     return 1;
 }
 
-static int vd_fw__x11_test_orientation(int x, int y)
+static int vd_fw__x11_test_orientation(int x, int y, int w, int h)
 {
     const int BORDER = 6;
-    int w = VD_FW_G.width;
-    int h = VD_FW_G.height;
-
     int left   = x < BORDER;
     int right  = x > w - BORDER;
     int top    = y < BORDER;
@@ -16671,6 +16734,69 @@ static int vd_fw__x11_msgbuf_w(VdFwEvent *message)
     __atomic_exchange_n(&VD_FW_G.msgbuf_w, nw, __ATOMIC_SEQ_CST);
 
     return 1;
+}
+
+static float vd_fw__x11_xft_dpi(void)
+{
+#if 1
+    char *resource_str = VdFwXResourceManagerString(VD_FW_G.display);
+    XrmDatabase db;
+    XrmValue value;
+    char *type = NULL;
+    float dpi = 96.f;
+
+    VdFwXrmInitialize();
+
+
+    if (resource_str) {
+        db = VdFwXrmGetStringDatabase(resource_str);
+        if (VdFwXrmGetResource(db, "Xft.dpi", "String", &type, &value) == True) {
+            if (value.addr) {
+                dpi = atof(value.addr);
+                printf("Found xft %f\n", dpi);
+            }
+        }
+        VdFwXrmDestroyDatabase(db);
+    }
+
+    return dpi / 96.f;
+#else
+
+    Atom actual_type;
+    int actual_format;
+    unsigned long nitems, bytes_after;
+    unsigned char *prop = NULL;
+
+    Atom atom = VD_FW_G.wm_xft_dpi;
+    if (atom == None) {
+        return 1.f;
+    }
+
+    if (VdFwXGetWindowProperty(
+            VD_FW_G.display,
+            VD_FW_G.root_window,
+            atom,
+            0, 1024,
+            False,
+            AnyPropertyType,
+            &actual_type,
+            &actual_format,
+            &nitems,
+            &bytes_after,
+            &prop) != Success)
+    {
+        return 1.f;
+    }
+
+    if (!prop) {
+        return 1.f;
+    }
+
+    float dpi = atof((char*)prop);
+
+    VdFwXFree(prop);
+    return dpi;
+#endif
 }
 
 static void *vd_fw__x11_thread_proc(void *arg)
@@ -16775,6 +16901,11 @@ static void *vd_fw__x11_thread_proc(void *arg)
                             vd_fw__x11_msgbuf_w(&fw_event);
                         }
                     }
+                } else if ((evt.xproperty.atom == VD_FW_G.wm_dpi_change) || (evt.xproperty.atom == VD_FW_G.wm_dpi_change_xsettings)) {
+                    VdFwEvent fw_event;
+                    fw_event.type = VD_FW_EVENT_TYPE_SCALE_CHANGE;
+                    fw_event.data.scale_change.new_scale = vd_fw__x11_xft_dpi();
+                    vd_fw__x11_msgbuf_w(&fw_event);
                 }
 
             } break;
@@ -16906,7 +17037,7 @@ static void *vd_fw__x11_thread_proc(void *arg)
                     int x = evt.xmotion.x;
                     int y = evt.xmotion.y;
 
-                    int orientation = vd_fw__x11_test_orientation(x, y);
+                    int orientation = vd_fw__x11_test_orientation(x, y, w, h);
                     XID c = VD_FW_G.cursor_arrow;
                     switch (orientation) {
                         case 0: c = VD_FW_G.cursor_tl; break;
@@ -17000,15 +17131,13 @@ static void *vd_fw__x11_thread_proc(void *arg)
                     fw_event.data.mouse_button_down.button = btn;
                     vd_fw__x11_msgbuf_w(&fw_event);
 
-                    VD_FW_G.mouse_state |= btn;
-
                     if (VD_FW_G.borderless) {
                         if (btn == VD_FW_MOUSE_BUTTON_LEFT) {
 
                             int mouse_x = evt.xbutton.x;
                             int mouse_y = evt.xbutton.y;
 
-                            int orientation = vd_fw__x11_test_orientation(mouse_x, mouse_y);
+                            int orientation = vd_fw__x11_test_orientation(mouse_x, mouse_y, w, h);
                             if (orientation != 8) {
                                 int move_resize_place = orientation;
 
@@ -17036,6 +17165,11 @@ static void *vd_fw__x11_thread_proc(void *arg)
                             int inside_caption = 
                                 ((mouse_x >= VD_FW_G.nccaption[0]) && (mouse_x <= VD_FW_G.nccaption[2])) &&
                                 ((mouse_y >= VD_FW_G.nccaption[1]) && (mouse_y <= VD_FW_G.nccaption[3]));
+
+                            if (!VD_FW_G.nccaption_set) {
+                                inside_caption = 1;
+                            }
+
                             if (inside_caption) {
                                 int hit_ignore_rects = 0;
                                 for (int ri = 0; ri < VD_FW_G.ncrect_count; ++ri) {
@@ -17111,22 +17245,32 @@ static void *vd_fw__x11_thread_proc(void *arg)
                 // VD_FW_G.width = e->width;
                 // VD_FW_G.height = e->height;
                 // VD_FW_G.size_changed = 1;
-                w = e->width;
-                h = e->height;
+                if ((w != e->width) || (h != e->height)) {
+                    w = e->width;
+                    h = e->height;
 
-                if (VD_FW_G.winthread_block_while_sizing) {
-                    if (!resizing) {
-                        resizing = 1;
-                        clock_gettime(CLOCK_MONOTONIC, &resize_start);
-                        pthread_mutex_lock(&VD_FW_G.mtx_paint);
-                    } else {
-                        clock_gettime(CLOCK_MONOTONIC, &resize_start);
+                    if (VD_FW_G.winthread_block_while_sizing) {
+                        if (!resizing) {
+                            resizing = 1;
+                            clock_gettime(CLOCK_MONOTONIC, &resize_start);
+                            pthread_mutex_lock(&VD_FW_G.mtx_paint);
+                        } else {
+                            clock_gettime(CLOCK_MONOTONIC, &resize_start);
+                        }
                     }
                 }
-
             } break;
 
             default: break;
+        }
+
+        // Xrandr Events
+        {
+            if (evt.type == (VD_FW_G.event_base_xrandr + RRScreenChangeNotify)) {
+                printf("RRScreenChangeNotify\n");
+            } else if (evt.type == (VD_FW_G.event_base_xrandr + RRNotify)) {
+                printf("RRNotify\n");
+            }
         }
 
         if (VD_FW_G.winthread_block_while_sizing) {
