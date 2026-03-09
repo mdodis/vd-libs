@@ -1066,8 +1066,8 @@ VD_INLINE Vdcstr vd_cstr_from_str(VdArena *arena, VdStr s)
 }
 
 #if VD_CPP
-#define VD_LIT(string)        {(string), (sizeof(string) - 1)}
-#define VD_LIT_INLINE(string) {(string), (sizeof(string) - 1)}
+#define VD_LIT(string)        {((char*)string), (sizeof(string) - 1)}
+#define VD_LIT_INLINE(string) {((char*)string), (sizeof(string) - 1)}
 #else
 #define VD_LIT(string)        (VdStr) { .s = (string), .len = (sizeof(string) - 1), }
 #define VD_LIT_INLINE(string) {(string), (sizeof(string) - 1)}
@@ -1845,19 +1845,21 @@ typedef struct __VD_TestEntry {
 #pragma section(".CRT$XCU", read)
 
 #if VD_CPP
-#   define VD_TEST_LINKAGE extern "C"
+#   define VD_TEST_LINKAGE static
 #   define VD_TEST_LINK_PTR extern "C"
+#   define VD_TEST_REG_LINK extern "C"
 #else
 #   define VD_TEST_LINK_PTR
 #   define VD_TEST_LINKAGE static
+#   define VD_TEST_REG_LINK static
 #endif // VD_CPP
 
 #define VD_TEST_IMPL(string, counter) \
     VD_TEST_LINKAGE VD_PROC_TEST(VD_TEST_PROC_ID(counter)); \
-    static void VD_TEST_REG_ID(counter)(void); \
+    VD_TEST_REG_LINK void VD_TEST_REG_ID(counter)(void); \
     __declspec(allocate(".CRT$XCU")) VD_TEST_LINK_PTR void (*VD_TEST_REG_PTR_ID(counter))(void) = VD_TEST_REG_ID(counter); \
-    __pragma(comment(linker, "/include:" VD_STRINGIFY(VD_TEST_REG_PTR_ID(counter)))) \
-    static void VD_TEST_REG_ID(counter)(void) {\
+    __pragma(comment(linker, "/include:"  VD_STRINGIFY(VD_TEST_REG_PTR_ID(counter)))) \
+    VD_TEST_REG_LINK void VD_TEST_REG_ID(counter)(void) {\
         vd__test_register(string, VD_TEST_PROC_ID(counter)); \
     } \
     VD_TEST_LINKAGE VD_PROC_TEST(VD_TEST_PROC_ID(counter))
@@ -1915,7 +1917,11 @@ extern void vd_test_set_context(VdTestContext *context);
 extern void vd_test_get_tests(VdTestEntry **out_entries, Vdu32 *out_num_entries);
 extern void vd_test_main(void);
 
-#define VD_TEST_ERR(msg)          do { VdTestResult __r; __r.ok = 0; __r.err = msg; return __r; } while(0)
+#ifndef VD_TEST_ERR_CODE
+#   define VD_TEST_ERR_CODE
+#endif // !VD_TEST_ERR_CODE
+
+#define VD_TEST_ERR(msg)          do { VdTestResult __r; __r.ok = 0; __r.err = msg; VD_TEST_ERR_CODE return __r; } while(0)
 #define VD_TEST_OK()              do { VdTestResult __r; __r.ok = 1; __r.err = 0;   return __r; } while(0)
 #define VD_TEST_ASSERT(desc, x)   do { if (!(x))       { VD_TEST_ERR(desc "\nExpected: " #x " would be true");  } } while (0)
 #define VD_TEST_TRUE(desc, x)     do { if (!(x))       { VD_TEST_ERR(desc "\nExpected: " #x " == true");        } } while (0)

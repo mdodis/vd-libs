@@ -7966,7 +7966,7 @@ typedef struct VdFw_devicemodeW {
       short dmCopies;
       short dmDefaultSource;
       short dmPrintQuality;
-    } DUMMYSTRUCTNAME;
+    } printer;
     VdFwPOINTL dmPosition;
     struct {
       VdFwPOINTL dmPosition;
@@ -9597,6 +9597,10 @@ VD_FW_API void vd_fw_exit(void)
     }
 
     WaitForSingleObject(VD_FW_G.win_thread, INFINITE);
+
+    CloseHandle(VD_FW_G.sem_window_ready);
+    CloseHandle(VD_FW_G.sem_closed);
+    DeleteCriticalSection(&VD_FW_G.critical_section);
 }
 
 VD_FW_API VdFwPlatform vd_fw_get_platform(void)
@@ -12577,6 +12581,10 @@ static VdFwBOOL vd_fw__win32_enum_monitor(VdFwHMONITOR monitor, VdFwHDC hdc, VdF
 
     static VdFwBYTE edid_data[1024];
     VdFwDWORD edid_data_size = sizeof(edid_data);
+    VdFwEdid1_4 *edid = 0;
+    int display_name_len = 0;
+    const char *display_name = 0;
+    VdFw__Win32Monitor *mmonitor = 0;
 
     if (VdFwRegQueryValueExW(hk, L"EDID", NULL, NULL, edid_data, &edid_data_size) != 0) {
         goto WIN32_DISPLAY_MONITOR_EDID_FAIL;
@@ -12587,7 +12595,7 @@ static VdFwBOOL vd_fw__win32_enum_monitor(VdFwHMONITOR monitor, VdFwHDC hdc, VdF
     }
 
 
-    VdFwEdid1_4 *edid = (VdFwEdid1_4*)edid_data;
+    edid = (VdFwEdid1_4*)edid_data;
     if ((edid->header[0] != 0x00) || (edid->header[1] != 0xFF) ||
         (edid->header[2] != 0xFF) || (edid->header[3] != 0xFF) ||
         (edid->header[4] != 0xFF) || (edid->header[5] != 0xFF) ||
@@ -12596,8 +12604,8 @@ static VdFwBOOL vd_fw__win32_enum_monitor(VdFwHMONITOR monitor, VdFwHDC hdc, VdF
         goto WIN32_DISPLAY_MONITOR_EDID_FAIL;
     }
 
-    int display_name_len = sizeof("Generic PnP Monitor") - 1;
-    const char *display_name = "Generic PnP Monitor";
+    display_name_len = sizeof("Generic PnP Monitor") - 1;
+    display_name = "Generic PnP Monitor";
 
     for (int i = 0; i < 4; ++i) {
         VdFwEdid1_4DataBlock *data_block = &edid->data_blocks[i];
@@ -12624,7 +12632,7 @@ static VdFwBOOL vd_fw__win32_enum_monitor(VdFwHMONITOR monitor, VdFwHDC hdc, VdF
         break;
     }
 
-    VdFw__Win32Monitor *mmonitor = &VD_FW_G.monitor_buffer[VD_FW_G.monitor_buffer_len++];
+    mmonitor = &VD_FW_G.monitor_buffer[VD_FW_G.monitor_buffer_len++];
     VD_FW_MEMCPY(mmonitor->friendly_name, display_name, display_name_len);
     mmonitor->friendly_name[display_name_len] = 0;
     mmonitor->hmonitor = monitor;
@@ -17194,7 +17202,7 @@ VD_FW_API VdFwGuid vd_fw__make_gamepad_guid(VdFwU16 bus, VdFwU16 vendor, VdFwU16
 
     if (vendor_name && *vendor_name && product_name && *product_name) {
         crc = vd_fw__crc16(crc, vendor_name,  vd_fw__strlen(vendor_name));
-        crc = vd_fw__crc16(crc, " ", 1);
+        crc = vd_fw__crc16(crc, (void*)" ", 1);
         crc = vd_fw__crc16(crc, product_name, vd_fw__strlen(product_name));
     } else if (product_name) {
         crc = vd_fw__crc16(crc, product_name, vd_fw__strlen(product_name));
