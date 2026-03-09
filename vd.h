@@ -1844,15 +1844,23 @@ typedef struct __VD_TestEntry {
 #if VD_HOST_COMPILER_MSVC
 #pragma section(".CRT$XCU", read)
 
+#if VD_CPP
+#   define VD_TEST_LINKAGE extern "C"
+#   define VD_TEST_LINK_PTR extern "C"
+#else
+#   define VD_TEST_LINK_PTR
+#   define VD_TEST_LINKAGE static
+#endif // VD_CPP
+
 #define VD_TEST_IMPL(string, counter) \
-    static VD_PROC_TEST(VD_TEST_PROC_ID(counter)); \
+    VD_TEST_LINKAGE VD_PROC_TEST(VD_TEST_PROC_ID(counter)); \
     static void VD_TEST_REG_ID(counter)(void); \
-    __declspec(allocate(".CRT$XCU")) void (*VD_TEST_REG_PTR_ID(counter))(void) = VD_TEST_REG_ID(counter); \
+    __declspec(allocate(".CRT$XCU")) VD_TEST_LINK_PTR void (*VD_TEST_REG_PTR_ID(counter))(void) = VD_TEST_REG_ID(counter); \
     __pragma(comment(linker, "/include:" VD_STRINGIFY(VD_TEST_REG_PTR_ID(counter)))) \
     static void VD_TEST_REG_ID(counter)(void) {\
         vd__test_register(string, VD_TEST_PROC_ID(counter)); \
     } \
-    static VD_PROC_TEST(VD_TEST_PROC_ID(counter))
+    VD_TEST_LINKAGE VD_PROC_TEST(VD_TEST_PROC_ID(counter))
 
 #elif VD_HOST_COMPILER_CLANG
 #define VD_TEST_IMPL(string, counter) \
@@ -1907,8 +1915,8 @@ extern void vd_test_set_context(VdTestContext *context);
 extern void vd_test_get_tests(VdTestEntry **out_entries, Vdu32 *out_num_entries);
 extern void vd_test_main(void);
 
-#define VD_TEST_ERR(msg)          return ((VdTestResult) { .ok = 0, .err = msg })
-#define VD_TEST_OK()              return ((VdTestResult) { .ok = 1, .err = 0 })
+#define VD_TEST_ERR(msg)          do { VdTestResult __r; __r.ok = 0; __r.err = msg; return __r; } while(0)
+#define VD_TEST_OK()              do { VdTestResult __r; __r.ok = 1; __r.err = 0;   return __r; } while(0)
 #define VD_TEST_ASSERT(desc, x)   do { if (!(x))       { VD_TEST_ERR(desc "\nExpected: " #x " would be true");  } } while (0)
 #define VD_TEST_TRUE(desc, x)     do { if (!(x))       { VD_TEST_ERR(desc "\nExpected: " #x " == true");        } } while (0)
 #define VD_TEST_FALSE(desc, x)    do { if ( (x))       { VD_TEST_ERR(desc "\nExpected: " #x " == false");       } } while (0)

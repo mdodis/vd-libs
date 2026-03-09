@@ -44,6 +44,8 @@
  * - Gamepads
  *     - Face Heuristics
  *     - Class Heuristics
+ * - Remove all weird CRT stuff, custom memcpy impls, allocations with HeapAlloc for example, move everything into
+ *   re-definable macros like VD_FW_REALLOC  
  * - Win32: Use DeviceIoControl for XBOX controllers until they're correlated to XINPUT
  * - vd_fw_get_last_mouse_button_pressed
  * - Win32: Allow gamepad input even when window isn't focused?
@@ -343,6 +345,11 @@ VD_FW_API void               vd_fw_set_block_while_sizing(int on);
  * @brief Close the window and end the rendering loop
  */
 VD_FW_API void               vd_fw_quit(void);
+
+/**
+ * @brief Deinitialize library
+ */
+VD_FW_API void               vd_fw_exit(void);
 
 /* ----EVENTS-------------------------------------------------------------------------------------------------------- */
 enum {
@@ -9567,11 +9574,29 @@ VD_FW_API int vd_fw_close_requested(void)
 
 VD_FW_API void vd_fw_quit(void)
 {
-    VD_FW__CHECK_TRUE(VdFwPostMessage(
+    VdFwPostMessage(
         VD_FW_G.hwnd,
         VD_FW_WIN32_KILL,
         0, /* WPARAM */
-        0  /* LPARAM */));
+        0  /* LPARAM */);
+}
+
+VD_FW_API void vd_fw_exit(void)
+{
+    vd_fw_quit();
+
+    EnterCriticalSection(&VD_FW_G.critical_section);
+    VD_FW_G.curr_frame = VD_FW_G.next_frame;
+    VD_FW_G.next_frame.flags = 0;
+    VD_FW_G.t_running = 0;
+    VD_FW_G.t_paint_ready = 0;
+    LeaveCriticalSection(&VD_FW_G.critical_section);
+
+    if (VD_FW_G.curr_frame.flags & VD_FW_WIN32_FLAGS_WAKE_COND_VAR) {
+        WakeConditionVariable(&VD_FW_G.cond_var);
+    }
+
+    WaitForSingleObject(VD_FW_G.win_thread, INFINITE);
 }
 
 VD_FW_API VdFwPlatform vd_fw_get_platform(void)
@@ -9653,7 +9678,9 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
         case VD_FW_GRAPHICS_API_OPENGL: {
 
             VD_FW_WIN32_PROFILE_BEGIN(create_temp_context);
-            VdFwGlConfig      default_configs[2] = {0};
+            VdFwGlConfig      default_configs[2];
+            VD_FW_MEMSET(default_configs, 0, sizeof(default_configs));
+
             default_configs[0].version = VD_FW_GL_VERSION_3_3;
 
             VdFwOpenGLOptions default_options = {0};
@@ -10401,7 +10428,7 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     VdFwShowWindow(VD_FW_G.hwnd, SW_SHOW);
     VD_FW__CHECK_NONZERO(VdFwUpdateWindow(VD_FW_G.hwnd));
     VD_FW__CHECK_NONZERO(VdFwSetFocus(VD_FW_G.hwnd));
-    VD_FW__CHECK_NONZERO(VdFwSetForegroundWindow(VD_FW_G.hwnd));
+    VdFwSetForegroundWindow(VD_FW_G.hwnd);
 
     VD_FW__CHECK_TRUE(ReleaseSemaphore(VD_FW_G.sem_window_ready, 1, NULL));
 

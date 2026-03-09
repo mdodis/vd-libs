@@ -263,7 +263,7 @@ static void do_device_info(void)
 
         vd_ui_labelf("Axes: %d", vd_fc_axis_count(curr_device_id));
         for (int i = 0; i < vd_fc_axis_count(curr_device_id); ++i) {
-            vd_ui_labelf("Axis[%d]: %lld", i, vd_fc_raw_axis_value(curr_device_id, i));
+            vd_ui_labelf("Axis[%d]: %lld##Axis%d", i, vd_fc_raw_axis_value(curr_device_id, i), i);
         }
     }
 

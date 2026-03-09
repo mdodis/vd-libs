@@ -8,8 +8,9 @@ if not exist build-test mkdir build-test
 pushd build-test
 set INC_DIR=%PRJ_DIR%
 set SRC_DIR=%PRJ_DIR%
+set CFLAGS=/Zi /Od /W4 /GS- /nologo /I %PRJ_DIR% /I %PRJ_DIR%\ext
 
-cl /Zi /Od  /W4 /GS- /std:c11 /nologo %SRC_DIR%\test.c /link
+cl %CFLAGS% %SRC_DIR%\tests\vd_fw_test.c
 
 popd
 popd
