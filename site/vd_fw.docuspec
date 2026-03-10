@@ -196,28 +196,10 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>#define VD_FW_NO_CRT</code>}}
-                @td() {
-                    text {
-                        Options:
-                        <ul>
-                            <li>Set to '1' to disable including C standard library</li>
-                            <li>Set to '0' to enable including C standard library</li>
-                        </ul>
-                    }
-                }
-            }
-
-            @tr() {
                 @td() { text{<code>#define VD_FW_SIN</code>}}
                 @td() {
                     text {
-                        Can be predefined to your implementation of sinf.
-                        Options:
-                        <ul>
-                            <li>If <code>VD_FW_NO_CRT == 1</code> it's resolved to libc <code>sinf</code></li>
-                            <li>If <code>VD_FW_NO_CRT == 0</code> it's resolved to vd_fw_sin (custom implementation).</li>
-                        </ul>
+                        Can be predefined to your implementation of sinf. Otherwise uses math.h
                     }
                 }
             }
@@ -226,12 +208,7 @@ int main() {
                 @td() { text{<code>#define VD_FW_COS</code>}}
                 @td() {
                     text {
-                        Can be predefined to your implementation of cosf.
-                        Options:
-                        <ul>
-                            <li>If <code>VD_FW_NO_CRT == 1</code> it's resolved to libc <code>cosf</code></li>
-                            <li>If <code>VD_FW_NO_CRT == 0</code> it's resolved to vd_fw_cos (custom implementation).</li>
-                        </ul>
+                        Can be defined to your implementation of cosf. Otherwise uses math.h
                     }
                 }
             }
@@ -240,12 +217,7 @@ int main() {
                 @td() { text{<code>#define VD_FW_TAN</code>}}
                 @td() {
                     text {
-                        Can be predefined to your implementation of tanf.
-                        Options:
-                        <ul>
-                            <li>If <code>VD_FW_NO_CRT == 1</code> it's resolved to libc <code>tanf</code></li>
-                            <li>If <code>VD_FW_NO_CRT == 0</code> it's resolved to vd_fw_tan (custom implementation).</li>
-                        </ul>
+                        Can be defined to your implementation of tanf. Otherwise uses math.h
                     }
                 }
             }
@@ -254,12 +226,7 @@ int main() {
                 @td() { text{<code>#define VD_FW_SQRT</code>}}
                 @td() {
                     text {
-                        Can be predefined to your implementation of sqrtf.
-                        Options:
-                        <ul>
-                            <li>If <code>VD_FW_NO_CRT == 1</code> it's resolved to libc <code>sqrtf</code></li>
-                            <li>If <code>VD_FW_NO_CRT == 0</code> it's resolved to vd_fw_sqrt (custom implementation).</li>
-                        </ul>
+                        Can be defined to your implementation of sqrtf. Otherwise uses math.h
                     }
                 }
             }
@@ -268,12 +235,7 @@ int main() {
                 @td() { text{<code>#define VD_FW_MEMCPY</code>}}
                 @td() {
                     text {
-                        Can be predefined to your implementation of memcpy.
-                        Options:
-                        <ul>
-                            <li>If <code>VD_FW_NO_CRT == 1</code> it's resolved to libc <code>memcpy</code></li>
-                            <li>If <code>VD_FW_NO_CRT == 0</code> it's resolved to vd_fw_memcpy (custom implementation).</li>
-                        </ul>
+                        Can be defined to your implementation of memcpy. Otherwise uses stdlib.h
                     }
                 }
             }
@@ -282,12 +244,27 @@ int main() {
                 @td() { text{<code>#define VD_FW_MEMSET</code>}}
                 @td() {
                     text {
-                        Can be predefined to your implementation of memset.
-                        Options:
-                        <ul>
-                            <li>If <code>VD_FW_NO_CRT == 1</code> it's resolved to libc <code>memset</code></li>
-                            <li>If <code>VD_FW_NO_CRT == 0</code> it's resolved to vd_fw_memset (custom implementation).</li>
-                        </ul>
+                        Can be defined to your implementation of memset. Otherwise uses stdlib.h
+                    }
+                }
+            }
+
+            @tr() {
+                @td() { text{<code>#define VD_FW_REALLOC</code>}}
+                @td() {
+                    text {
+                        Can be defined to your implementation of realloc. Otherwise uses stdlib.h
+                        Reports previous ptr, new size as well as previous size
+                    }
+                }
+            }
+
+            @tr() {
+                @td() { text{<code>#define VD_FW_FREE</code>}}
+                @td() {
+                    text {
+                        Can be defined to your implementation of free. Otherwise uses stdlib.h
+                        Reports previous ptr as well as previous size
                     }
                 }
             }
@@ -397,23 +374,6 @@ int main() {
             }
 
             @tr() {
-                @td() {
-                    text {
-                        <code>#define VD_FW_WIN32_SUBSYSTEM</code><br>
-                        <code>// Can be one of the following:</code><br>
-                        <code>// VD_FW_WIN32_SUBSYSTEM_CONSOLE</code><br>
-                        <code>// VD_FW_WIN32_SUBSYSTEM_WINDOWS</code>
-                    }
-                }
-                @td() {
-                    text {
-                        Change the <a href="https://learn.microsoft.com/en-us/cpp/build/reference/subsystem-specify-subsystem?view=msvc-170">Subsystem</a>
-                        (Windows only).
-                    }
-                }
-            }
-
-            @tr() {
                 @td() { text{<code>#define VD_FW_WIN32_NO_LINKER_COMMENTS</code>}}
                 @td() {
                     text {
@@ -428,7 +388,7 @@ int main() {
         para {
             With MSVC you don't really need to link anything since linker directives in the
             translation unit that includes vd_fw.h are defined, so that the appropriate libraries
-            and subsystem are used. Additionally, several core libraries are <b>dynamically</b> loaded in vd_fw_init.
+            are used. Additionally, several core libraries are <b>dynamically</b> loaded in vd_fw_init.
             The only library required during compilation is <code>kernel32.lib</code>. For reference, here are the
             libraries this library tries to load during vd_fw_init:
 
@@ -490,34 +450,6 @@ VdFwCreateBitmap          =          (VdFwProcCreateBitmap*)GetProcAddress(m, "C
         para {
             Note that all platform specific functions/typedefs/structs are prefixed with 'VdFw' or 'VD_FW_' so as not to
             induce collisions in cases where you need to include Windows functionality yourself.
-        }
-
-        para {
-
-            To set the subsystem of the application: 
-            <ul>
-                <li> Windows: <code>#define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS</code> </li>
-                <li> Console: <code>#define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_CONSOLE</code> </li>
-            </ul>
-        }
-
-        para {
-            If you're on the Windows subsystem, but would still like a console for debugging purposes, this
-            can be done by setting <code>VdFwInitInfo::gl_options::debug_on = 1</code> when calling
-            <code>vd_fw_init</code>.
-
-            <br>
-            This will allocate a console and set-up the relevant gl debug callback for you.
-        }
-
-        para {
-            It's highly recommended to <code>#define VD_FW_NO_CRT 1</code> so that the CRT is removed
-            when linking. This can reduce the final executable size by a factor of 10 (for small applications).
-        }
-
-        para {
-            If you'd like to define options by yourself,
-            <code>#define VD_FW_WIN32_NO_LINKER_COMMENTS</code> before including the implementation.
         }
     }
 
@@ -818,9 +750,6 @@ freely, subject to the following restrictions:
         }
 
         verb```
-#define VD_FW_NO_CRT 1                                       // Disable CRT, this is highly recommended,
-                                                             // if you know what you're doing.
-#define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS  // Disable console (Windows)
 #include "vd_fw.h"
 
 int main(int argc, char const *argv[])

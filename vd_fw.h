@@ -107,74 +107,52 @@
 #   define VD_FW_INL static inline
 #endif // VD_FW_INL
 
-#ifndef VD_FW_NO_CRT
-#   define VD_FW_NO_CRT 0
-#endif
 #define VD_FW_FPI  3.14159265359f
 #define VD_FW_FPI2 (2 * VD_FW_FPI)
 #define VD_FW_FPIH (0.5f * VD_FW_FPI)
 
 #ifndef VD_FW_SIN
-#   if VD_FW_NO_CRT
-#       define VD_FW_SIN(x) vd_fw_sin(x)
-#   else
-#       include <math.h>
-#       define VD_FW_SIN(x) sinf(x)
-#   endif
+#   include <math.h>
+#   define VD_FW_SIN(x) sinf(x)
 #endif // !VD_FW_SIN
 
 #ifndef VD_FW_COS
-#   if VD_FW_NO_CRT
-#       define VD_FW_COS(x) vd_fw_cos(x)
-#   else
-#       include <math.h>
-#       define VD_FW_COS(x) cosf(x)
-#   endif
+#   include <math.h>
+#   define VD_FW_COS(x) cosf(x)
 #endif // !VD_FW_COS
 
 #ifndef VD_FW_TAN
-#   if VD_FW_NO_CRT
-#       define VD_FW_TAN(x) vd_fw_tan(x)
-#   else
-#       include <math.h>
-#       define VD_FW_TAN(x) tanf(x)
-#   endif
+#   include <math.h>
+#   define VD_FW_TAN(x) tanf(x)
 #endif // !VD_FW_TAN
 
 #ifndef VD_FW_SQRT
-#   if VD_FW_NO_CRT
-#       define VD_FW_SQRT(x) vd_fw_sqrt(x)
-#   else
-#       include <math.h>
-#       define VD_FW_SQRT(x) sqrtf(x)
-#   endif
+#   include <math.h>
+#   define VD_FW_SQRT(x) sqrtf(x)
 #endif // !VD_FW_SQRT
 
 #ifndef VD_FW_MEMCPY
-#   if VD_FW_NO_CRT
-#       define VD_FW_MEMCPY(dst, src, count) vd_fw_memcpy(dst, src, count)
-#   else
-#       include <string.h>
-#       define VD_FW_MEMCPY(dst, src, count) memcpy(dst, src, count)
-#   endif
+#   include <string.h>
+#   define VD_FW_MEMCPY(dst, src, count) memcpy(dst, src, count)
 #endif // !VD_FW_MEMCPY
 
 #ifndef VD_FW_MEMSET
-#   if VD_FW_NO_CRT
-#       define VD_FW_MEMSET(dst, val, num) vd_fw_memset(dst, val, num)
-#   else
-#       include <string.h>
-#       define VD_FW_MEMSET(dst, val, num) memset(dst, val, num)
-#   endif
+#   include <string.h>
+#   define VD_FW_MEMSET(dst, val, num) memset(dst, val, num)
 #endif // !VD_FW_MEMSET
 
+#ifndef VD_FW_REALLOC
+#   include <stdlib.h>
+#   define VD_FW_REALLOC(pprev, psize, nsize) realloc(pprev, nsize)
+#endif // !VD_FW_REALLOC
+
+#ifndef VD_FW_FREE
+#   include <stdlib.h>
+#   define VD_FW_FREE(pprev, psize) free(pprev)
+#endif // !VD_FW_FREE
+
 #ifndef VD_FW_LOG
-#   if VD_FW_NO_CRT
-#       define VD_FW_LOG(fmt, ...)
-#   else
-#       include <stdio.h>
-#       define VD_FW_LOG(fmt, ...) printf("vd_fw: " fmt "\n", ## __VA_ARGS__)
-#   endif // VD_FW_NO_CRT
+#   define VD_FW_LOG(fmt, ...)
 #endif // !VD_FW_LOG
 
 #define VD_FW_ENDIANNESS_LE 1
@@ -664,7 +642,8 @@ VD_FW_API void               vd_fw_set_receive_ncmouse(int on);
 
 /**
  * @brief Gets the backing scale factor
- * @return  The backing scale factor (1.0f: 1:1 scale, 2.0f, 2:1 scale, etc...)
+ * @param  scale Pointer to the scale factor (1.0f: 1:1 scale, 2.0f, 2:1 scale, etc...)
+ * @return  Whether the scale has changed this frame
  */
 VD_FW_API int                vd_fw_get_scale(float *scale);
 
@@ -700,14 +679,6 @@ VD_FW_INL float              vd_fw_delta_s(void);
  * @return 1 if the change was applied successfully
  */
 VD_FW_API int                vd_fw_set_vsync_on(int on);
-
-/**
- * @brief Get the fully-qualified path to the executable without the last path separator
- * @param  len Length of the UTF-8 string, in bytes
- * @return     A callee-allocated string. There's no need to free it
- */
-VD_FW_API const char*        vd_fw_get_executable_dir(int *len);
-
 /* ----MONITORS------------------------------------------------------------------------------------------------------ */
 typedef struct {
     int     width;
@@ -1356,83 +1327,6 @@ VD_FW_INL int vd_fw_get_mouse_down(int button)
     return (vd_fw_get_mouse_state(NULL, NULL) & button) ? 1 : 0;
 }
 
-VD_FW_INL float vd_fw__fabs(float x)
-{
-    if (x < 0.f) return x;
-    return x;
-}
-
-VD_FW_INL int vd_fw__cmp_float(float x, float y)
-{
-    float precision = 1.1920929e-07f;
-
-    if ((x - precision) < y) {
-        return -1;
-    } else if ((x + precision) > y) {
-        return 1;
-    } else {
-        return 0;
-    }
-}
-
-VD_FW_INL float vd_fw_cos(float x)
-{
-    if (x < 0.f) {
-        x = -x;
-    }
-
-    if (vd_fw__cmp_float(x, VD_FW_FPI2) >= 0) {
-        do {
-            x -= VD_FW_FPI2;
-        } while(vd_fw__cmp_float(x, VD_FW_FPI2) >= 0);
-    }
-
-    if ((vd_fw__cmp_float(x, VD_FW_FPI) >= 0) && (vd_fw__cmp_float(x, VD_FW_FPI2) == -1)) {
-        x -= VD_FW_FPI;
-
-        return -1.f * (1.0f - (x*x/2.0f)*( 1.0f - (x*x/12.0f) * ( 1.0f - (x*x/30.0f) * (1.0f - (x*x/56.0f )*(1.0f - (x*x/90.0f)*(1.0f - (x*x/132.0f)*(1.0f - (x*x/182.0f))))))));
-    } else {
-        return 1.0f - (x*x/2.0f)*( 1.0f - (x*x/12.0f) * ( 1.0f - (x*x/30.0f) * (1.0f - (x*x/56.0f )*(1.0f - (x*x/90.0f)*(1.0f - (x*x/132.0f)*(1.0f - (x*x/182.0f)))))));
-    }
-}
-
-VD_FW_INL float vd_fw_sin(float x)
-{
-    return vd_fw_cos(x - VD_FW_FPIH);
-}
-
-VD_FW_INL float vd_fw_tan(float x)
-{
-
-    float x2 = x * x;
-    return x * (1.0f
-               + x2 * ( 1.0f/3.0f
-               + x2 * ( 2.0f/15.0f
-               + x2 * ( 17.0f/315.0f
-               + x2 * ( 62.0f/2835.0f
-               + x2 * ( 1382.0f/155925.0f
-               + x2 * ( 21844.0f/6081075.0f
-               )))))) );
-}
-
-VD_FW_INL float vd_fw_sqrt(float x)
-{
-    float g;
-
-    if (x <= 0.0f) {
-        return 0.0f;
-    }
-
-    // Initial guess using bit manipulation
-    unsigned int i = *(unsigned int*)(&x);
-    i = (i >> 1) + 0x1fc00000;
-
-    g = *(float*)(&i);
-    g = 0.5f * (g + x / g);
-
-    return g; 
-}
-
 VD_FW_INL void vd_fw_u_ortho(float left, float right, float bottom, float top, float near, float far, float out[16])
 {
     out[0]  = 2.0f / (right - left);               out[1]  = 0.0f;                              out[2]  = 0.0f;                          out[3]  = 0.0f;
@@ -1486,18 +1380,6 @@ VD_FW_INL void vd_fw_u_lookat(float eye[3], float target[3], float updir[3], flo
     out[1] = up[0];        out[5] = up[1];       out[9]  = up[2];       out[13] = - (up[0]      * eye[0] + up[1]      * eye[1] + up[2]      * eye[2]);
     out[2] = -forward[0];  out[6] = -forward[1]; out[10] = -forward[2]; out[14] =    forward[0] * eye[0] + forward[1] * eye[1] + forward[2] * eye[2];
     out[3] = 0.0f;         out[7] = 0.0f;        out[11] = 0.0f;        out[15] = 1.0f;
-}
-
-VD_FW_INL void *vd_fw_memcpy(void *dst, void *src, size_t count)
-{
-    for (size_t i = 0; i < count; ++i) ((unsigned char*)dst)[i] = ((unsigned char*)src)[i];
-    return dst;
-}
-
-VD_FW_INL void *vd_fw_memset(void *dst, unsigned char val, size_t num)
-{
-    for (size_t i = 0; i < num; ++i) ((unsigned char *)dst)[i] = val;
-    return dst;
 }
 
 /* ----INTERNAL API-------------------------------------------------------------------------------------------------- */
@@ -1652,9 +1534,7 @@ typedef struct {
 #pragma pack(pop)
 
 VD_FW_API int      vd_fw__any_time_higher(int num_files, const char **files, unsigned long long *check_against);
-VD_FW_API char*    vd_fw__debug_dump_file_text(const char *path);
-VD_FW_API void*    vd_fw__realloc_mem(void *prev_ptr, size_t size);
-VD_FW_API void     vd_fw__free_mem(void *memory);
+VD_FW_API char*    vd_fw__debug_dump_file_text(const char *path, size_t *size);
 VD_FW_API void*    vd_fw__resize_buffer(void *buffer, size_t element_size, int required_capacity, int *cap);
 VD_FW_API void     vd_fw__def_gamepad(VdFwGamepadMap *map);
 VD_FW_API int      vd_fw__map_gamepad(VdFwGuid guid, VdFwGamepadMap *map);
@@ -7366,7 +7246,6 @@ VD_FW_OPENGL_CORE_FUNCTIONS
 #endif
 
 #ifdef VD_FW_IMPL
-
 typedef unsigned char VdFw__GamepadButtonState;
 typedef VdFwU64 VdFw__GamepadButtonBits;
 
@@ -7393,19 +7272,7 @@ static int vd_fw__lookup_gl_extension(const char *q, VdFwGlConfig *config);
 
 #if VD_FW_WIN32_LINKER_COMMENTS
 #pragma comment(lib, "kernel32.lib")
-#if VD_FW_WIN32_SUBSYSTEM == VD_FW_WIN32_SUBSYSTEM_CONSOLE
-#pragma comment(linker, "/subsystem:console")
-#else
-#pragma comment(linker, "/subsystem:windows")
-#endif // VD_FW_WIN32_SUBSYSTEM == VD_FW_WIN32_SUBSYSTEM_CONSOLE
-#if VD_FW_NO_CRT
-#pragma comment(linker, "/NODEFAULTLIB:libcmt.lib")
-#pragma comment(linker, "/NODEFAULTLIB:libcmtd.lib")
-#pragma comment(linker, "/NODEFAULTLIB:msvcrt.lib")
-#pragma comment(linker, "/NODEFAULTLIB:msvcrtd.lib")
-#pragma comment(linker, "/NODEFAULTLIB:oldnames.lib")
 #pragma execution_character_set("utf-8")
-#endif // VD_FW_NO_CRT
 #endif // VD_FW_WIN32_LINKER_COMMENTS
 
 #pragma pack(push, 1)
@@ -8795,6 +8662,8 @@ typedef struct {
 
     VdFw__vkCreateWin32SurfaceKHRProc vk_create_win32_surface_khr_proc;
     VdFwVkGetInstanceProcAddrProc vk_get_instance_proc_addr;
+    float                       scale;
+    int                         scale_changed;
 
 /* ----RENDER THREAD - WINDOW THREAD DATA---------------------------------------------------------------------------- */
     VdFwEvent                   msgbuf[VD_FW_WIN32_MESSAGE_BUFFER_SIZE];
@@ -9123,7 +8992,6 @@ static void         vd_fw__gl_debug_message_callback(GLenum source, GLenum type,
                                                      const void *userParam);
 static int          vd_fw__msgbuf_r(VdFwEvent *message);
 static int          vd_fw__msgbuf_w(VdFwEvent *message);
-static char*        vd_fw__utf16_to_utf8(const wchar_t *ws);
 static void         vd_fw__update_kb_codepage(void);
 static VdFwBOOL     vd_fw__win32_enum_monitor(VdFwHMONITOR monitor, VdFwHDC hdc, VdFwLPRECT rect, VdFwLPARAM lpparam);
 static VdFwBOOL     vd_fw__win32_enum_monitor_resize_count(VdFwHMONITOR monitor, VdFwHDC hdc, VdFwLPRECT rect, VdFwLPARAM lpparam);
@@ -9310,28 +9178,6 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         VD_FW_G.block_while_sizing = info->window_options.block_while_sizing;
     }
 
-    {
-
-        TCHAR *buf = (TCHAR*)vd_fw__realloc_mem(NULL, sizeof(TCHAR) * MAX_PATH);
-        DWORD nsize = GetModuleFileName(NULL, buf, MAX_PATH);
-#ifdef UNICODE
-        buf[nsize] = 0;
-        VD_FW_G.exedir = vd_fw__utf16_to_utf8(buf);
-        VD_FW_G.exedir_cap = vd_fw__strlen(VD_FW_G.exedir);
-#else
-        VD_FW_G.exedir = buf;
-        VD_FW_G.exedir_cap = nsize;
-#endif 
-
-        const char *c = VD_FW_G.exedir;
-        for (DWORD i = (VD_FW_G.exedir_cap - 1); i > 0; --i) {
-            if (c[i] == '\\') {
-                VD_FW_G.exedir_len = i;
-                break;
-            }
-        }
-    }
-
     InitializeCriticalSection(&VD_FW_G.critical_section);
     InitializeCriticalSection(&VD_FW_G.db_section);
     InitializeCriticalSectionAndSpinCount(&VD_FW_G.input_critical_section, 3000);
@@ -9391,6 +9237,7 @@ VD_FW_API int vd_fw_running(void)
 
 VD_FW_API VdFwEvent *vd_fw_poll(int *count)
 {
+    VD_FW_G.scale_changed = 0;
     VD_FW_G.wheel_moved = 0;
     VD_FW_G.wheel[0] = 0.f;
     VD_FW_G.wheel[1] = 0.f;
@@ -9472,6 +9319,11 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
                     VD_FW_G.window_state_changed |= change_flag;
                 }
 
+            } break;
+
+            case VD_FW_EVENT_TYPE_SCALE_CHANGE: {
+                VD_FW_G.scale = mm.data.scale_change.new_scale;
+                VD_FW_G.scale_changed = 1;
             } break;
 
             default: break;
@@ -10065,12 +9917,6 @@ VD_FW_API int vd_fw_set_vsync_on(int on)
     return 0;
 }
 
-VD_FW_API const char *vd_fw_get_executable_dir(int *len)
-{
-    *len = VD_FW_G.exedir_len; 
-    return VD_FW_G.exedir; 
-}
-
 VD_FW_API int vd_fw_get_monitor_count(void)
 {
     return VD_FW_G.monitor_count;
@@ -10275,8 +10121,8 @@ VD_FW_API int vd_fw_get_mouse_wheel(float *dx, float *dy)
 
 VD_FW_API int vd_fw_get_scale(float *scale)
 {
-    *scale = (float)VdFwGetDpiForWindow(VD_FW_G.hwnd) / 90.f;
-    return 0;
+    if (scale) *scale = VD_FW_G.scale;
+    return VD_FW_G.scale_changed;
 }
 
 VD_FW_API void vd_fw_set_title(const char *title)
@@ -10448,6 +10294,14 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     VD_FW__CHECK_NONZERO(VdFwSetFocus(VD_FW_G.hwnd));
     VdFwSetForegroundWindow(VD_FW_G.hwnd);
 
+    {
+        VdFwEvent evt;
+        evt.type = VD_FW_EVENT_TYPE_SCALE_CHANGE;
+        evt.data.scale_change.new_scale = VdFwGetDpiForWindow(VD_FW_G.hwnd) / 90.f;
+        VD_FW_G.scale = evt.data.scale_change.new_scale;
+        vd_fw__msgbuf_w(&evt);
+    }
+
     VD_FW__CHECK_TRUE(ReleaseSemaphore(VD_FW_G.sem_window_ready, 1, NULL));
 
     // Register raw input mouse
@@ -10523,7 +10377,7 @@ VD_FW_API int vd_fw__any_time_higher(int num_files, const char **files, unsigned
     return result;
 }
 
-VD_FW_API char *vd_fw__debug_dump_file_text(const char *path)
+VD_FW_API char *vd_fw__debug_dump_file_text(const char *path, size_t *size)
 {
     HANDLE hfile = CreateFileA(path,
                                GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
@@ -10540,30 +10394,17 @@ VD_FW_API char *vd_fw__debug_dump_file_text(const char *path)
         return 0;
     }
 
-    char *memory = (char*)HeapAlloc(GetProcessHeap(), 0, sz.QuadPart + 1);
+    char *memory = (char*)VD_FW_REALLOC(0, 0, sz.QuadPart + 1);
 
     DWORD bytes_read;
     if (!ReadFile(hfile, memory, (DWORD)sz.QuadPart, &bytes_read, 0)) {
-        HeapFree(GetProcessHeap(), 0, memory);
+        VD_FW_FREE(memory, sz.QuadPart + 1);
         return 0;
     }
 
     memory[sz.QuadPart] = 0;
+    *size = sz.QuadPart + 1;
     return memory;
-}
-
-VD_FW_API void *vd_fw__realloc_mem(void *prev_ptr, size_t size)
-{
-    if (prev_ptr == 0) {
-        return HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, size);
-    } else {
-        return HeapReAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, prev_ptr, size);
-    }
-}
-
-VD_FW_API void vd_fw__free_mem(void *memory)
-{
-    HeapFree(GetProcessHeap(), 0, memory);
 }
 
 VD_FW_API void vd_fw__lock_gamepaddb(void)
@@ -11164,8 +11005,15 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         } break;
 
         case WM_DPICHANGED: {
+            VdFwUINT dpi = VD_FW_HIWORD(wparam);
+
             VdFwRECT *rect = (VdFwRECT*)lparam;
             VdFwSetWindowPos(hwnd, 0, rect->left, rect->top, rect->right - rect->left, rect->bottom - rect->top, SWP_NOZORDER | SWP_NOACTIVATE);
+
+            VdFwEvent evt;
+            evt.type = VD_FW_EVENT_TYPE_SCALE_CHANGE;
+            evt.data.scale_change.new_scale = (float)dpi / 90.f;
+            vd_fw__msgbuf_w(&evt);
         } break;
 
         case WM_ERASEBKGND: {
@@ -11542,415 +11390,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].axes[i] = axes[i];
                 }
                 LeaveCriticalSection(&VD_FW_G.input_critical_section);
-            }
-
-        } break;
-
-        case WM_INPUT_DEVICE_CHANGE: {
-            VdFwHANDLE device_handle = (VdFwHANDLE)lparam;
-
-            if (wparam == GIDC_ARRIVAL) {
-                VdFwRID_DEVICE_INFO device_info;
-                device_info.cbSize = sizeof(device_info);
-                UINT cb_size = sizeof(device_info);
-                UINT device_info_result = VdFwGetRawInputDeviceInfoA(
-                    device_handle,
-                    VD_FW_RIDI_DEVICEINFO,
-                    &device_info,
-                    &cb_size);
-
-                if ((device_info_result) == ((UINT)-1)) {
-                    // Get device info failed
-                    break;
-                }
-
-                if (device_info.dwType != RIM_TYPEHID) {
-                    // Device is not an HID device
-                    break;
-                }
-
-                // @note(mdodis): Check if this device is an XInput compatible device
-                // We do this by inspecting RIDI_DEVICENAME, and checking for TEXT("IG_")
-                // See: https://learn.microsoft.com/en-us/windows/win32/xinput/xinput-and-directinput
-                int is_xinput_device = 0;
-                char device_instance_path[256];
-                if (VD_FW_G.xinput) {
-                    VdFwUINT size = sizeof(device_instance_path);
-                    device_info_result = VdFwGetRawInputDeviceInfoA(
-                        device_handle,
-                        VD_FW_RIDI_DEVICENAME,
-                        device_instance_path,
-                        &size);
-
-                    // If we can't even get the device name, then there's obviously something more wrong
-                    // than just not knowing if the device is an XInput device... I think.
-                    if (device_info_result == ((UINT)-1)) {
-                        break;
-                    }
-
-                    for (VdFwUINT i = 0; i < size; ++i) {
-                        if ((i + 2) > size) {
-                            continue;
-                        }
-
-                        if (device_instance_path[i + 0] == ('I') &&
-                            device_instance_path[i + 1] == ('G') &&
-                            device_instance_path[i + 2] == ('_'))
-                        {
-                            is_xinput_device = 1;
-                            break;
-                        }
-                    }
-                }
-
-                if (is_xinput_device) {
-                    VD_FW_LOG("Discovered XInput Device");
-                } else {
-                    VD_FW_LOG("Discovered RAWINPUT Device");
-                }
-
-                VdFw__Win32GamepadInfo *new_gamepad = NULL;
-                int new_gamepad_index = 0;
-                for (int i = 0; i < VD_FW_GAMEPAD_COUNT_MAX; ++i) {
-                    if (!VD_FW_G.gamepad_infos[i].connected) {
-                        new_gamepad = &VD_FW_G.gamepad_infos[i];
-                        new_gamepad_index = i;
-                        break;
-                    }
-                }
-
-                if (new_gamepad == NULL) {
-                    break;
-                }
-
-                // @todo(mdodis): Cache allocated ppd data and realloc only if required size is bigger
-                UINT ppd_req_size = 0;
-                if (VdFwGetRawInputDeviceInfoA(
-                    device_handle,
-                    RIDI_PREPARSEDDATA,
-                    NULL,
-                    &ppd_req_size) == ((UINT)-1))
-                {
-                    break;
-                }
-
-                new_gamepad->ppd = (VdFwPHIDP_PREPARSED_DATA)HeapAlloc(GetProcessHeap(), 0, ppd_req_size);
-                if (VdFwGetRawInputDeviceInfoA(
-                    device_handle,
-                    RIDI_PREPARSEDDATA,
-                    new_gamepad->ppd,
-                    &ppd_req_size) == ((UINT)-1))
-                {
-                    break;
-                }
-
-                // Construct GUID form gamepad info
-                VdFwGuid guid;
-                char *manufacturer_string = 0;
-                char *product_string = 0;
-                VdFwU16 vendor_id    = (VdFwU16)device_info.v.hid.dwVendorId;
-                VdFwU16 product_id   = (VdFwU16)device_info.v.hid.dwProductId;
-                VdFwU16 version      = (VdFwU16)device_info.v.hid.dwVersionNumber;
-
-                // Get Manufacturer String & Product String
-                {
-
-                    HANDLE device_file = CreateFileA(device_instance_path,
-                                                     GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                                                     NULL, OPEN_EXISTING, 0, NULL);
-                    wchar_t temp_wstring[128];
-                    temp_wstring[0] = 0;
-
-                    if (VdFwHidD_GetManufacturerString(device_file, temp_wstring, sizeof(temp_wstring))) {
-                        manufacturer_string = vd_fw__utf16_to_utf8(temp_wstring);
-                    }
-
-                    temp_wstring[0] = 0;
-                    if (VdFwHidD_GetProductString(device_file, temp_wstring, sizeof(temp_wstring))) {
-                        product_string = vd_fw__utf16_to_utf8(temp_wstring);
-                    }
-
-                    CloseHandle(device_file);
-
-                    new_gamepad->write_handle = CreateFileA(device_instance_path,
-                                                            GENERIC_READ | GENERIC_WRITE,
-                                                            FILE_SHARE_READ | FILE_SHARE_WRITE,
-                                                            NULL, OPEN_EXISTING, 0, NULL);
-                }
-                // Compute GUID
-                guid = vd_fw__make_gamepad_guid(0x03 /* USB Bus */,
-                                         vendor_id, product_id, version,
-                                         manufacturer_string, product_string,
-                                         'r', 0);
-
-                for (int j = 0; j < sizeof(guid.dat); ++j) {
-                    printf("%02x", guid.dat[j]);
-                }
-                printf("\n");
-
-
-                // Free strings if needed
-                {
-                    if (manufacturer_string) {
-                        vd_fw__free_mem(manufacturer_string);
-                    }
-
-                    if (product_string) {
-                        vd_fw__free_mem(product_string);
-                    }
-                }
-
-                new_gamepad->flags = 0;
-                if (is_xinput_device) {
-                    new_gamepad->flags |= VD_FW__WIN32_GAMEPAD_FLAG_XINPUT;
-                }
-
-                // Reset all gamepad specific data
-                new_gamepad->handle = device_handle;
-                new_gamepad->guid = guid;
-                new_gamepad->connected = TRUE;
-                new_gamepad->xinput_index = -1;
-                new_gamepad->z_split = -1;
-                VdFwULONG data_count = VdFwHidP_MaxDataListLength(VdFwHidP_Input, new_gamepad->ppd);
-
-
-                // Resize HIDP_DATA buffer if needed
-                new_gamepad->hidp_data = (VdFwHIDP_DATA*)vd_fw__resize_buffer(new_gamepad->hidp_data,
-                                                                              sizeof(VdFwHIDP_DATA),
-                                                                              data_count,
-                                                                              &new_gamepad->hidp_data_cap);
-                new_gamepad->hidp_data_len = data_count;
-
-
-                // Map gamepad
-                VdFwGamepadMap gamepad_map = {0};
-                int mapped_gamepad = vd_fw__map_gamepad(guid, &gamepad_map);
-                if (!mapped_gamepad) {
-                    vd_fw__def_gamepad(&gamepad_map);
-                }
-                new_gamepad->map = gamepad_map;
-
-
-                VdFwHIDP_CAPS caps;
-                if (VdFwHidP_GetCaps(new_gamepad->ppd, &caps) != VD_FW_HIDP_STATUS_SUCCESS) {
-                    break;
-                }
-
-                new_gamepad->output_report_size = caps.OutputReportByteLength;
-
-                // For each button, compute the data indices. These will map to:
-                // b0, b1, b2, and so on...
-                // 
-                // HID Button Caps:
-                // - Either are specified individually, (i.e 10 buttons on controller -> 10 button caps)
-                // - Or, they are specified in a range (10 buttons on controller -> 1 button cap with range 10..1)
-                // So, to handle this, we iterate on the button caps, and then iterate on the range, if that caps
-                // entry happens to be a range
-                static VdFwHIDP_BUTTON_CAPS button_caps[32];
-                VdFwUSHORT num_button_caps = caps.NumberInputButtonCaps;
-                if (VdFwHidP_GetButtonCaps(VdFwHidP_Input, button_caps, &num_button_caps, new_gamepad->ppd) == VD_FW_HIDP_STATUS_SUCCESS) {
-                    int count = 0;
-                    // Count the total button caps
-                    for (int i = 0; i < num_button_caps; ++i) {
-                        if (button_caps[i].IsRange) {
-                            count += 1 + button_caps[i].v.Range.DataIndexMax - button_caps[i].v.Range.DataIndexMin;
-                        } else {
-                            count++;
-                        }
-                    }
-
-                    new_gamepad->button_data_indices = (int*)vd_fw__resize_buffer(new_gamepad->button_data_indices,
-                                                                                  sizeof(new_gamepad->button_data_indices[0]),
-                                                                                  count,
-                                                                                  &new_gamepad->button_data_indices_cap);
-                    new_gamepad->button_data_indices_len = count;
-
-                    // Write the button data indices
-                    count = 0;
-                    for (int i = 0; i < num_button_caps; ++i) {
-                        if (button_caps[i].IsRange) {
-
-                            VdFwUSHORT usage_count = 1 + button_caps[i].v.Range.DataIndexMax - button_caps[i].v.Range.DataIndexMin;
-                            for (VdFwUSHORT j = 0; j < usage_count; ++j) {
-                                VdFwUSHORT button_data_index = button_caps[i].v.Range.DataIndexMin + j;
-                                new_gamepad->button_data_indices[count++] = button_data_index;
-                            }
-                        } else {
-                            VdFwUSHORT data_index = button_caps[i].v.NotRange.DataIndex;
-                            new_gamepad->button_data_indices[count++] = data_index;
-                        }
-                    }
-                }
-
-                // HID Value Caps:
-                // - Are only useful afaik when they're not ranges
-                static VdFwHIDP_VALUE_CAPS value_caps[32];
-                VdFwUSHORT num_value_caps = caps.NumberInputValueCaps;
-                int num_hats = 0;
-                if (VdFwHidP_GetValueCaps(VdFwHidP_Input, value_caps, &num_value_caps, new_gamepad->ppd) == VD_FW_HIDP_STATUS_SUCCESS) {
-
-                    // Sort value caps by v.NotRange.Usage
-                    for (int i = 0; i < num_value_caps - 1; ++i) {
-                        for (int j = i + 1; j < num_value_caps; ++j) {
-                            if (value_caps[i].v.NotRange.Usage > value_caps[j].v.NotRange.Usage) {
-                                VdFwHIDP_VALUE_CAPS temp = value_caps[i];
-                                value_caps[i] = value_caps[j];
-                                value_caps[j] = temp;
-                            }
-                        }
-                    }
-
-                    for (int i = 0; i < num_value_caps; ++i) {
-                        VD_FW_LOG("a%2d -> %2d, Usage: %04x Page: %04x LMin: %5d LMax:%5d", i, 
-                            value_caps[i].v.NotRange.DataIndex,
-                            value_caps[i].v.NotRange.Usage,
-                            value_caps[i].UsagePage,
-                            value_caps[i].LogicalMin,
-                            value_caps[i].LogicalMax);
-                    }
-
-                    int count = 0;
-                    for (int i = 0; i < num_value_caps; ++i) {
-                        if (value_caps[i].IsRange) {
-                            continue;
-                        }
-
-                        if (value_caps[i].v.NotRange.Usage == 0x0039 /* Hat */) {
-                            num_hats++;
-                            continue; 
-                        }
-
-                        if (is_xinput_device && value_caps[i].v.NotRange.Usage == 0x0032 /* Generic Z*/) {
-                            new_gamepad->flags |= VD_FW__WIN32_GAMEPAD_FLAG_SPLITZ;
-                            new_gamepad->z_split = value_caps[i].v.NotRange.DataIndex; 
-                            new_gamepad->z_split_min = value_caps[i].LogicalMin;
-                            new_gamepad->z_split_max = value_caps[i].LogicalMax;
-                            if (new_gamepad->z_split_max == -1) {
-                                new_gamepad->z_split_max = (1u << value_caps[i].BitSize) - 1;
-                            }
-                            continue;
-                        }
-
-                        count++;
-                    }
-
-                    new_gamepad->axis_data_indices = (VdFw__Win32Axis*)
-                        vd_fw__resize_buffer(new_gamepad->axis_data_indices,
-                                             sizeof(new_gamepad->axis_data_indices[0]),
-                                             count,
-                                             &new_gamepad->axis_data_indices_cap);
-                    new_gamepad->axis_data_indices_len = count;
-
-                    if (num_hats > 0) {
-                        new_gamepad->hat_data_indices = (VdFw__Win32Axis*)vd_fw__resize_buffer(new_gamepad->hat_data_indices,
-                                                                                               sizeof(new_gamepad->hat_data_indices[0]),
-                                                                                               num_hats,
-                                                                                               &new_gamepad->hat_data_indices_cap);
-                        new_gamepad->hat_data_indices_len = num_hats;
-                    }
-
-                    int count_hats = 0;
-                    count = 0;
-                    for (int i = 0; i < num_value_caps; ++i) {
-                        if (value_caps[i].IsRange) {
-                            continue;
-                        }
-
-                        if (value_caps[i].v.NotRange.Usage == 0x0039 /* Hat */) {
-                            int new_index = count_hats++;
-                            new_gamepad->hat_data_indices[new_index].data_index = value_caps[i].v.NotRange.DataIndex;
-                            new_gamepad->hat_data_indices[new_index].min_value  = value_caps[i].LogicalMin;
-                            new_gamepad->hat_data_indices[new_index].max_value  = value_caps[i].LogicalMax;
-                            continue; 
-                        }
-
-                        if (is_xinput_device && value_caps[i].v.NotRange.Usage == 0x0032 /* Generic Z*/) {
-                            continue;
-                        }
-
-                        VdFw__Win32Axis *axis = &new_gamepad->axis_data_indices[count++];
-                        axis->data_index = value_caps[i].v.NotRange.DataIndex;
-                        axis->min_value  = value_caps[i].LogicalMin;
-                        axis->max_value  = value_caps[i].LogicalMax;
-
-                        if (axis->max_value == -1) {
-                            axis->max_value = (1u << value_caps[i].BitSize) - 1;
-                        }
-                    }
-
-                }
-                VD_FW_LOG("Buttons: %d, Axes: %d, ZSplit: %d", new_gamepad->button_data_indices_len, new_gamepad->axis_data_indices_len, new_gamepad->z_split);
-                for (int i = 0; i < new_gamepad->axis_data_indices_len; ++i) {
-                    VD_FW_LOG("a%d -> %d", i, new_gamepad->axis_data_indices[i].data_index);
-                }
-
-                for (int entry_index = 0;
-                         (entry_index < VD_FW_GAMEPAD_MAX_MAPPINGS) && 
-                         !vd_fw_gamepad_map_entry_is_none(&new_gamepad->map.mappings[entry_index]);
-                     ++entry_index)
-                {
-                    VdFwGamepadMapEntry *entry = &new_gamepad->map.mappings[entry_index];
-                    VdFwGamepadMappingSourceKind actual_kind = entry->kind & VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_MASK; 
-                    if (actual_kind == VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS) {
-                        VD_FW_LOG("Axis[%d] (=%d): vd_fw_axis_%d [%d %d]",
-                            entry->index,
-                            new_gamepad->axis_data_indices[entry->index].data_index,
-                            entry->target,
-                            new_gamepad->axis_data_indices[entry->index].min_value,
-                            new_gamepad->axis_data_indices[entry->index].max_value);
-                    }
-                }
-
-
-                int index_to_write_to = new_gamepad_index;
-                EnterCriticalSection(&VD_FW_G.input_critical_section);
-                VD_FW_G.winthread_num_gamepads_present++;
-                VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].guid  = new_gamepad->guid;
-                VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].bits  = 0;
-                VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].face  = new_gamepad->map.face;
-                VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].klass = new_gamepad->map.klass;
-                VD_FW_G.winthread_gamepad_curr_states[index_to_write_to].has_rumble = 
-                    (new_gamepad->map.rumble_config.type != VD_FW_GAMEPAD_RUMBLE_TYPE_NOT_AVAILABLE) ||
-                    ((new_gamepad->flags >> VD_FW__WIN32_GAMEPAD_FLAG_XINPUT) & 1);
-
-                LeaveCriticalSection(&VD_FW_G.input_critical_section);
-
-            } else {
-
-                int disconnected_gamepad_index = -1;
-                VdFw__Win32GamepadInfo *disconnected_gamepad = NULL;
-                for (int i = 0; i < VD_FW_GAMEPAD_COUNT_MAX; ++i) {
-                    if (VD_FW_G.gamepad_infos[i].handle == device_handle) {
-                        disconnected_gamepad = &VD_FW_G.gamepad_infos[i];
-                        disconnected_gamepad_index = i;
-                        break;
-                    }
-                }
-
-                if (disconnected_gamepad == NULL) {
-                    break;
-                }
-
-                CloseHandle(disconnected_gamepad->write_handle);
-
-                // Move all gamepad infos after disconnected_gamepad_index to index -1
-                {
-                    for (int i = disconnected_gamepad_index; i < (VD_FW_G.winthread_num_gamepads_present - 1); ++i) {
-                        VD_FW_G.gamepad_infos[i] = VD_FW_G.gamepad_infos[i + 1];
-                    }
-                }
-
-                VD_FW_MEMSET(&VD_FW_G.gamepad_infos[VD_FW_G.winthread_num_gamepads_present - 1], 0, sizeof(VD_FW_G.gamepad_infos[0]));
-
-                VD_FW_LOG("Gamepad Disconnected");
-                VD_FW_G.winthread_num_gamepads_present--;
-
-                for (int i = 0; i < VD_FW_GAMEPAD_COUNT_MAX; ++i) {
-                    // Reset correlation from xinput
-                    // This is done because we can't know if XInput decided to map the dwUserIndex to other devices
-                    // which usually happens if, for example, player 2/3 disconnects and reconnects.
-                    VD_FW_G.gamepad_infos[i].xinput_index = -1;
-                }
             }
 
         } break;
@@ -12488,32 +11927,6 @@ static int vd_fw__msgbuf_w(VdFwEvent *message)
     return 1;
 }
 
-static char *vd_fw__utf16_to_utf8(const wchar_t *ws)
-{
-    int req = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
-                                  ws, -1,
-                                  0, 0,
-                                  NULL, NULL);
-    if (req <= 0) {
-        return 0;
-    }
-
-    char *data = (char*)vd_fw__realloc_mem(0, req + 1);
-
-    int wrt = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
-                                  ws, -1,
-                                  data, req,
-                                  NULL, NULL);
-
-    if (wrt == 0) {
-        vd_fw__free_mem(data);
-        return 0;
-    }
-
-    data[req] = 0;
-    return data;
-}
-
 static void vd_fw__update_kb_codepage(void)
 {
     VdFwHKL keyboard_layout = VdFwGetKeyboardLayout(0);
@@ -12821,106 +12234,6 @@ VD_FW_API int vd_fw_vk_wsi_surface_create(void *p_instance, void *p_allocation_c
         return -13;
     }
 }
-
-#if VD_FW_NO_CRT
-#pragma function(memset)
-void *__cdecl memset(void *dest, int value, size_t num)
-{
-    __stosb((unsigned char *)dest, (unsigned char)value, num);
-    return dest;
-}
-
-#pragma function(memcpy)
-void *__cdecl memcpy(void *dest, void *src, size_t num)
-{
-    __movsb((unsigned char *)dest, (unsigned const char*)src, num);
-    return dest;
-}
-int _fltused;
-#ifdef _M_IX86
-
-    // float to int64 cast
-    // on /arch:IA32
-    // on /arch:SSE
-    // on /arch:SSE2 with /d2noftol3 compiler switch
-    __declspec(naked) void _ftol2()
-    {
-        __asm
-        {
-            fistp qword ptr[esp - 8]
-            mov   edx, [esp - 4]
-            mov   eax, [esp - 8]
-            ret
-        }
-    }
-
-    // float to int64 cast on /arch:IA32
-    __declspec(naked) void _ftol2_sse()
-    {
-        __asm
-        {
-            fistp dword ptr[esp - 4]
-            mov   eax, [esp - 4]
-            ret
-        }
-    }
-
-    // float to uint32 cast on / arch:SSE2
-    __declspec(naked) void _ftoui3()
-    {
-
-    }
-
-    // float to int64 cast on / arch:SSE2
-    __declspec(naked) void _ftol3()
-    {
-        
-    }
-
-    // float to uint64 cast on / arch:SSE2
-    __declspec(naked) void _ftoul3()
-    {
-
-    }
-
-    // int64 to float cast on / arch:SSE2
-    __declspec(naked) void _ltod3()
-    {
-
-    }
-
-    // uint64 to float cast on / arch:SSE2
-    __declspec(naked) void _ultod3()
-    {
-
-    }
-
-#endif
-
-#if VD_FW_WIN32_SUBSYSTEM == VD_FW_WIN32_SUBSYSTEM_CONSOLE
-int mainCRTStartup(void)
-{
-    int result = main(0, 0);
-    ExitProcess(result);
-}
-#else
-LRESULT WinMainCRTStartup(void)
-{
-    int result = main(0, 0);
-    ExitProcess(result);
-}
-#endif // VD_FW_WIN32_SUBSYSTEM == VD_FW_WIN32_SUBSYSTEM_CONSOLE
-#else
-int wWinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPWSTR cmdline, int nshowcmd)
-{
-    (void)(hinstance);
-    (void)(prev_instance);
-    (void)(cmdline);
-    (void)(nshowcmd);
-    int result = main(0, 0);
-    ExitProcess(result);
-}
-#endif // VD_FW_NO_CRT
 
 #elif defined(__APPLE__)
 #import <AppKit/AppKit.h>
@@ -14364,7 +13677,7 @@ VD_FW_API void vd_fw_set_title(const char *title)
 
 VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
 {
-    VdFwU32 *app_image_data = (VdFwU32*)malloc(sizeof(unsigned int) * width * height);
+    VdFwU32 *app_image_data = (VdFwU32*)VD_FW_REALLOC(0, 0, sizeof(unsigned int) * width * height);
     VD_FW_MEMCPY(app_image_data, pixels, sizeof(unsigned int) * width * height);
 
     for (int y = 0; y < height; ++y) {
@@ -14464,16 +13777,11 @@ VD_FW_API char *vd_fw__debug_dump_file_text(const char *path)
     size_t size = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    char *result = (char*)malloc(size +1);
+    char *result = (char*)VD_FW_REALLOC(0, 0, size +1);
     fread(result, size, 1, f);
 
     result[size] = 0;
     return result;
-}
-
-VD_FW_API void vd_fw__free_mem(void *memory)
-{
-    free(memory);
 }
 
 VD_FW_API void vd_fw__lock_gamepaddb(void)
@@ -14489,11 +13797,6 @@ VD_FW_API void vd_fw__unlock_gamepaddb(void)
 VD_FW_API void vd_fw__notify_gamepaddb_changed(void)
 {
     return;
-}
-
-VD_FW_API void *vd_fw__realloc_mem(void *prev_ptr, size_t size)
-{
-    return realloc(prev_ptr, size);
 }
 
 
@@ -16101,7 +15404,7 @@ VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
                         (unsigned char*)data,
                         count);
 
-    vd_fw__free_mem(data);
+    VD_FW_FREE(data, count * sizeof(unsigned long));
 }
 
 VD_FW_API int vd_fw_get_size(int *w, int *h)
@@ -16412,16 +15715,11 @@ VD_FW_API char *vd_fw__debug_dump_file_text(const char *path)
     size_t size = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    char *result = (char*)malloc(size +1);
+    char *result = (char*)VD_FW_REALLOC(0, 0, size +1);
     fread(result, size, 1, f);
 
     result[size] = 0;
     return result;
-}
-
-VD_FW_API void vd_fw__free_mem(void *memory)
-{
-    free(memory);
 }
 
 VD_FW_API void vd_fw__lock_gamepaddb(void)
@@ -16437,11 +15735,6 @@ VD_FW_API void vd_fw__unlock_gamepaddb(void)
 VD_FW_API void vd_fw__notify_gamepaddb_changed(void)
 {
     return;
-}
-
-VD_FW_API void *vd_fw__realloc_mem(void *prev_ptr, size_t size)
-{
-    return realloc(prev_ptr, size);
 }
 
 static struct timespec vd_fw__linux_timespec_diff(struct timespec a, struct timespec b)
@@ -17531,8 +16824,9 @@ VD_FW_API int vd_fw_compile_or_hotload_program(unsigned int *program, unsigned l
 
     int result = 1;
 
-    char *srv = vd_fw__debug_dump_file_text(vertex_file_path);
-    char *srf = vd_fw__debug_dump_file_text(fragment_file_path);
+    size_t srv_sz, srf_sz;
+    char *srv = vd_fw__debug_dump_file_text(vertex_file_path, &srv_sz);
+    char *srf = vd_fw__debug_dump_file_text(fragment_file_path, &srf_sz);
 
     unsigned int vshd = vd_fw_compile_shader(GL_VERTEX_SHADER, srv);
     unsigned int fshd = vd_fw_compile_shader(GL_FRAGMENT_SHADER, srf);
@@ -17541,8 +16835,8 @@ VD_FW_API int vd_fw_compile_or_hotload_program(unsigned int *program, unsigned l
     if (vshd == 0 || fshd == 0) {
         result = 0;
     } else {
-        vd_fw__free_mem(srv);
-        vd_fw__free_mem(srf);
+        VD_FW_FREE(srv, srv_sz);
+        VD_FW_FREE(srf, srf_sz);
 
         new_program = glCreateProgram();
         glAttachShader(new_program, vshd);
@@ -17744,7 +17038,7 @@ VD_FW_API void *vd_fw__resize_buffer(void *buffer, size_t element_size, int requ
     }
 
     int resize_capacity = required_capacity;
-    buffer = vd_fw__realloc_mem(buffer, element_size * resize_capacity);
+    buffer = VD_FW_REALLOC(buffer, element_size * (*cap), element_size * resize_capacity);
     *cap = resize_capacity;
     return buffer;
 }
@@ -18151,9 +17445,9 @@ VD_FW_API int vd_fw_add_gamepad_db_entry(VdFwGamepadDBEntry *entry)
     }
 
     if (will_resize) {
-        VD_FW_G.gamepad_db_entries = (VdFwGamepadDBEntry*)vd_fw__realloc_mem(VD_FW_G.gamepad_db_entries, 
-                                                                             sizeof(VD_FW_G.gamepad_db_entries[0]) * cap);
-        VD_FW_G.cap_gamepad_db_entries = cap;
+        // VD_FW_G.gamepad_db_entries = (VdFwGamepadDBEntry*)vd_fw__realloc_mem(VD_FW_G.gamepad_db_entries, 
+        //                                                                      sizeof(VD_FW_G.gamepad_db_entries[0]) * cap);
+        // VD_FW_G.cap_gamepad_db_entries = cap;
     }
 
     if (VD_FW_G.has_initialized) vd_fw__lock_gamepaddb();

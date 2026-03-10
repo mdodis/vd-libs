@@ -443,7 +443,10 @@ int main(int argc, char const *argv[])
 
     vd_fw_set_resizable(1);
 
-    vd_ui_set_scale(vd_fw_get_scale());
+    // float scale;
+    // vd_fw_get_scale(&scale);
+
+    // vd_ui_set_scale(scale);
 
     GLuint vao;
     glGenVertexArrays(1, &vao);
@@ -503,6 +506,11 @@ int main(int argc, char const *argv[])
 
         if (vd_fw_close_requested()) {
             vd_fw_quit();
+        }
+
+        float dpi_scale;
+        if (vd_fw_get_scale(&dpi_scale)) {
+            vd_ui_set_scale(dpi_scale);
         }
 
         vd_fc_poll();
