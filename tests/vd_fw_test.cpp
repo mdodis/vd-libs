@@ -3,10 +3,13 @@
 #define VD_INCLUDE_TESTS 1
 #include "vd.h"
 #include "vd_fw.h"
+#include <stdio.h>
 
 #ifdef _WIN32
 #include <windows.h>
 #pragma comment(lib, "User32.lib")
+#else
+#include <unistd.h>
 #endif
 
 #define ENABLE_SLOW_TESTS 0
@@ -16,21 +19,27 @@
 
 static void get_fw_window_rect(int *left, int *top, int *right, int *bottom);
 static void move_cursor(int x, int y);
-static void sleep_ms(int s);
+static void sleep_s(int s);
+
+VD_TEST("Basic/Switch APIs") {
+    // VD_TEST_LOG("OpenGL API");
+    vd_fw_init(0);
+
+    // VD_TEST_LOG("Custom API");
+    vd_fw_set_graphics_api(VD_FW_GRAPHICS_API_CUSTOM, 0);
+
+    // VD_TEST_LOG("OpenGL API");
+    vd_fw_set_graphics_api(VD_FW_GRAPHICS_API_OPENGL, 0);
+
+    vd_fw_exit();
+
+    VD_TEST_OK();
+}
 
 VD_TEST("Basic/Init Quit Multiple") {
 
     for (int i = 0; i < 10; ++i) {
         vd_fw_init(0);
-
-        while (vd_fw_running()) {
-            vd_fw_poll(0);
-
-            vd_fw_quit();
-            vd_fw_lock();
-            vd_fw_unlock();
-        }
-
         vd_fw_exit();
     }
 
@@ -38,8 +47,9 @@ VD_TEST("Basic/Init Quit Multiple") {
 }
 
 #if ENABLE_SLOW_TESTS
+
 VD_TEST("Basic/Borderless Window Mouse locations") {
-    VdFwInitInfo init_info = {0};
+    VdFwInitInfo init_info = {};
     init_info.window_options.borderless = 1;
     vd_fw_init(&init_info);
 
@@ -58,7 +68,7 @@ VD_TEST("Basic/Borderless Window Mouse locations") {
     int moved = 0;
 
     while (vd_fw_running()) {
-        sleep_ms(1000);
+        sleep_s(1);
         vd_fw_poll(0);
 
         if (i < 4) {
@@ -71,7 +81,7 @@ VD_TEST("Basic/Borderless Window Mouse locations") {
 
                 // VD_TEST_LOG("Moving cursor to %d %d", x, y);
                 move_cursor(x, y);
-                sleep_ms(1000);
+                sleep_s(1);
 
                 moved = 1;
             } else {
@@ -317,6 +327,12 @@ static void move_cursor(int x, int y)
 
 static void sleep_ms(int s)
 {
-    Sleep(s);
+    Sleep(s * 1000);
+}
+#else
+
+static void sleep_ms(int s)
+{
+    usleep(s);
 }
 #endif

@@ -25,20 +25,24 @@
  * - The highest possible OpenGL version you should support if you want it to work (as of 2025...)
  *   on the big threes is OpenGL Core Profile 4.1 (MacOS limitation)
  * 
- * HID GUIDS
- * ╔════════════════════════════════════════════════════════════╗
- * ║ 0300 938d 5e04 0000 ff02 0000 0100 72 00                   ║
- * ║ │    │    │    │    │    │    │    │  │                    ║
- * ║ └────│────│────│────│────│────│────│──│── BUS              ║
- * ║      └────│────│────│────│────│────│──│── CRC              ║
- * ║           └────│────│────│────│────│──│── Vendor ID        ║
- * ║                └────│────│────│────│──│── (empty)          ║
- * ║                     └────│────│────│──│── Product ID       ║
- * ║                          └────│────│──│── (empty)          ║
- * ║                               └────│──│── Version          ║
- * ║                                    └──│── Driver Signature ║
- * ║                                       └── Driver Data      ║
- * ╚════════════════════════════════════════════════════════════╝
+ * FEATURE TRACKING
+ * ╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ Feature                                 ║ Win32   ║ X11     ║ Mac     ║                                           ║
+ * ║═════════════════════════════════════════║═════════║═════════║═════════║═══════════════════════════════════════════║
+ * ║ Normal Sizable Window                   ║ YES     ║ YES     ║ YES     ║                                           ║
+ * ║ Borderless Sizable Window               ║ YES     ║ YES     ║ YES     ║                                           ║
+ * ║ vd_fw_set_ncrects                       ║ YES     ║ YES     ║ YES     ║                                           ║
+ * ║                                         ║         ║         ║         ║                                           ║
+ * ║ OpenGL                                  ║         ║         ║         ║                                           ║
+ * ║═════════════════════════════════════════║═════════║═════════║═════════║═══════════════════════════════════════════║
+ * ║ Extensions                              ║ YES     ║ YES     ║ NO      ║                                           ║
+ * ║ Config API                              ║ YES     ║ YES     ║ NO      ║                                           ║
+ * ║                                         ║         ║         ║         ║                                           ║
+ * ║ Vulkan                                  ║         ║         ║         ║                                           ║
+ * ║═════════════════════════════════════════║═════════║═════════║═════════║═══════════════════════════════════════════║
+ * ║ Basic Support                           ║ YES     ║ YES     ║ NO      ║                                           ║
+ * ║                                         ║         ║         ║         ║                                           ║
+ * ╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
  * 
  * TODO
  * - Gamepads
@@ -15092,7 +15096,10 @@ typedef struct {
 #define VD_FW_X11_FUNCTIONS \
     XBEGIN_MODULE(xlib) \
     XSYM(xlib, Display*, XOpenDisplay, (const char *name)) \
+    XSYM(xlib, int, XCloseDisplay, (Display*)) \
     XSYM(xlib, Status, XInitThreads, (void)) \
+    XSYM(xlib, void, XLockDisplay, (Display*)) \
+    XSYM(xlib, void, XUnlockDisplay, (Display*)) \
     XSYM(xlib, Status, XMatchVisualInfo, (Display *display, int screen, int depth, int klass, XVisualInfo *vinfo_return)) \
     XSYM(xlib, Colormap, XCreateColormap, (Display *display, Window w, Visual *visual, int alloc)) \
     XSYM(xlib, Window, XCreateWindow, (Display *display, Window parent, int x, int y, unsigned int width, unsigned int height, unsigned int border_width, int depth, unsigned int klass, Visual *visual, unsigned long valuemask, XSetWindowAttributes *attributes)) \
@@ -15130,6 +15137,7 @@ typedef struct {
     XSYM(xlib, void, XSetWMNormalHints, (Display *display, Window w, XSizeHints *hints)) \
     XSYM(xlib, void, XSetWMSizeHints, (Display *display, Window w, XSizeHints *hints, Atom property)) \
     XSYM(xlib, XIM, XOpenIM, (Display *display, struct _XrmHashBucketRec *rdb, char *res_name, char *res_class)) \
+    XSYM(xlib, Status, XCloseIM, (XIM)) \
     XSYM(xlib, char*, XGetIMValues, (XIM im, ...)) \
     XSYM(xlib, XIC, XCreateIC, (XIM im, ...)) \
     XSYM(xlib, void, XDestroyIC, (XIC ic)) \
@@ -15323,6 +15331,7 @@ typedef struct {
     pthread_t                       win_thread;
     pthread_mutex_t                 mtx_paint;
     pthread_cond_t                  cnd_paint;
+    volatile int                    t_running;
 
     VdFwEvent                       msgbuf[VD_FW_X11_MESSAGE_BUFFER_SIZE];
     int                             msgbuf_r;
@@ -15339,12 +15348,13 @@ static struct timespec vd_fw__linux_timespec_diff(struct timespec a, struct time
 static int             vd_fw__x11_extension_supported(const char *extList, const char *extension);
 static VdFwKey         vd_fw__x11_translate_keycode(XEvent *evt);
 static int             vd_fw__x11_translate_mouse_button(unsigned int button);
-static int             vd_fw__x11_recreate_window(Colormap colormap, XVisualInfo *vi_info);
+static int             vd_fw__x11_recreate_window(Colormap colormap, int depth, Visual *visual);
 static int             vd_fw__x11_test_orientation(int x, int y, int w, int h);
 static void*           vd_fw__x11_thread_proc(void *arg);
 static int             vd_fw__x11_msgbuf_r(VdFwEvent *message);
 static int             vd_fw__x11_msgbuf_w(VdFwEvent *message);
 static float           vd_fw__x11_xft_dpi(void);
+static void            vd_fw__x11_thread_finish(void);
 
 void *vd_fw__gl_get_proc_address(const char *name)
 {
@@ -15541,6 +15551,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         return 0;
     }
 
+    VD_FW_G.has_initialized = 1;
     return 1;
 }
 
@@ -15553,28 +15564,14 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
 {
     int result = 1;
 
-    if (VD_FW_G.graphics_api != VD_FW_GRAPHICS_API_INVALID) {
-
-        XEvent ev = {0};
-        ev.xclient.type = ClientMessage;
-        ev.xclient.window = VD_FW_G.window;
-        ev.xclient.message_type = VD_FW_G.wm_usr_close;
-        ev.xclient.format = 32;
-        VdFwXSendEvent(VD_FW_G.display, VD_FW_G.window, False, NoEventMask, &ev);
-
-        pthread_cond_signal(&VD_FW_G.cnd_paint);
-        pthread_join(VD_FW_G.win_thread, NULL);
-        pthread_cond_destroy(&VD_FW_G.cnd_paint);
-    }
-
-    if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
-        // Destroy OpenGL Context
-        VdFwglXMakeCurrent(VD_FW_G.display, VD_FW_G.window, NULL);
-        VdFwglXDestroyContext(VD_FW_G.display, VD_FW_G.glx_context);
+    if (VD_FW_G.has_initialized) {
+        vd_fw__x11_thread_finish();
     }
 
     Colormap window_colormap;
     XVisualInfo window_visual_info;
+    int window_depth;
+    Visual *window_visual;
 
     switch (api) {
         case VD_FW_GRAPHICS_API_OPENGL: {
@@ -15712,6 +15709,8 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
 
                 vi_info = VdFwglXGetVisualFromFBConfig(VD_FW_G.display, fb_cfg);
                 window_visual_info = *vi_info;
+                window_depth = vi_info->depth;
+                window_visual = vi_info->visual;
                 window_colormap = VdFwXCreateColormap(VD_FW_G.display, VD_FW_G.root_window, vi_info->visual, AllocNone);
 
                 VdFwXSync(VD_FW_G.display, False);
@@ -15749,6 +15748,7 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
                     break;
                 } else {
                     VdFwglXDestroyContext(VD_FW_G.display, VD_FW_G.glx_context);
+                    result = 0;
                     goto LOOP_END;
                 }
 
@@ -15766,23 +15766,33 @@ LOOP_END:
 
         } break;
 
+        case VD_FW_GRAPHICS_API_CUSTOM: {
+
+            window_depth = 0;
+            window_visual = DefaultVisual(VD_FW_G.display, VD_FW_G.screen);
+            window_colormap = DefaultColormap(VD_FW_G.display, VD_FW_G.screen);
+        } break;
+
         default: break;
     }
 
     if (result) {
         VD_FW_G.graphics_api = api;
+
+        // @note(mdodis): We create the window after a graphics api is set
+        // This is done because we need a Visual and a compatible colormap from glx first
+        vd_fw__x11_recreate_window(window_colormap, window_depth, window_visual);
+
+        if (api == VD_FW_GRAPHICS_API_OPENGL) {
+            VdFwglXMakeCurrent(VD_FW_G.display, VD_FW_G.window, VD_FW_G.glx_context);
+        }
+
+        VdFwXSync(VD_FW_G.display, 0);
+
+        pthread_mutex_init(&VD_FW_G.mtx_paint, NULL);
+        pthread_cond_init(&VD_FW_G.cnd_paint, NULL);
+        pthread_create(&VD_FW_G.win_thread, NULL, vd_fw__x11_thread_proc, NULL);
     }
-
-    // @note(mdodis): We create the window after a graphics api is set
-    // This is done because we need a Visual and a compatible colormap from glx first
-    vd_fw__x11_recreate_window(window_colormap, &window_visual_info);
-
-    if (api == VD_FW_GRAPHICS_API_OPENGL) {
-        VdFwglXMakeCurrent(VD_FW_G.display, VD_FW_G.window, VD_FW_G.glx_context);
-    }
-
-    pthread_cond_init(&VD_FW_G.cnd_paint, NULL);
-    pthread_create(&VD_FW_G.win_thread, NULL, vd_fw__x11_thread_proc, NULL);
 
     return result;
 }
@@ -15944,6 +15954,7 @@ VD_FW_API int vd_fw_close_requested(void)
 
 VD_FW_API void vd_fw_quit(void)
 {
+    VdFwXLockDisplay(VD_FW_G.display);
     XEvent ev = {0};
     ev.xclient.type = ClientMessage;
     ev.xclient.display = VD_FW_G.display;
@@ -15951,12 +15962,31 @@ VD_FW_API void vd_fw_quit(void)
     ev.xclient.message_type = VD_FW_G.wm_usr_close;
     ev.xclient.format = 32;
     VdFwXSendEvent(VD_FW_G.display, VD_FW_G.window, False, NoEventMask, &ev);
+    VdFwXUnlockDisplay(VD_FW_G.display);
     VD_FW_G.window_open = 0;
 }
 
 VD_FW_API void vd_fw_exit(void)
 {
-    vd_fw_quit();
+    if (VD_FW_G.has_initialized) {
+        vd_fw__x11_thread_finish();
+
+        VD_FW_G.has_initialized = 0;
+    }
+
+    VdFwXCloseDisplay(VD_FW_G.display);
+
+    if (VD_FW_G.input_method) {
+        VdFwXCloseIM(VD_FW_G.input_method);
+    }
+
+    dlclose(VD_FW_G.handle_xlib);
+    dlclose(VD_FW_G.handle_xext);
+    dlclose(VD_FW_G.handle_xfixes);
+    dlclose(VD_FW_G.handle_xcursor);
+    dlclose(VD_FW_G.handle_xrandr);
+    dlclose(VD_FW_G.handle_xi);
+    dlclose(VD_FW_G.handle_glx);
 }
 
 VD_FW_API void vd_fw_lock(void)
@@ -16581,7 +16611,7 @@ static int vd_fw__x11_translate_mouse_button(unsigned int button)
     }    
 }
 
-static int vd_fw__x11_recreate_window(Colormap colormap, XVisualInfo *vi_info)
+static int vd_fw__x11_recreate_window(Colormap colormap, int depth, Visual* visual)
 {
     XSetWindowAttributes window_attributes = {0};
     // window_attributes.bit_gravity = ForgetGravity;
@@ -16601,8 +16631,8 @@ static int vd_fw__x11_recreate_window(Colormap colormap, XVisualInfo *vi_info)
     VD_FW_G.window = VdFwXCreateWindow(VD_FW_G.display, VD_FW_G.root_window,
                                        0, 0,
                                        width, height, 0,
-                                       vi_info->depth, InputOutput,
-                                       vi_info->visual, attribute_mask, &window_attributes);
+                                       depth, InputOutput,
+                                       visual, attribute_mask, &window_attributes);
 
     XClassHint class_hint = {(char*)"fw_window", (char*)"popup"};
     VdFwXSetClassHint(VD_FW_G.display, VD_FW_G.window, &class_hint);
@@ -16799,6 +16829,40 @@ static float vd_fw__x11_xft_dpi(void)
 #endif
 }
 
+static void vd_fw__x11_thread_finish(void)
+{
+    XEvent ev = {0};
+    ev.xclient.type = ClientMessage;
+    ev.xclient.display = VD_FW_G.display;
+    ev.xclient.window = VD_FW_G.window;
+    ev.xclient.message_type = VD_FW_G.wm_usr_close;
+    ev.xclient.format = 32;
+    VdFwXLockDisplay(VD_FW_G.display);
+    VdFwXSendEvent(VD_FW_G.display, VD_FW_G.window, False, NoEventMask, &ev);
+    VdFwXUnlockDisplay(VD_FW_G.display);
+
+    pthread_mutex_lock(&VD_FW_G.mtx_paint);
+    VD_FW_G.curr_frame = VD_FW_G.next_frame;
+    VD_FW_G.next_frame.flags = 0;
+    VD_FW_G.sync_redraw = 0;
+    VD_FW_G.t_running = 0;
+    pthread_cond_broadcast(&VD_FW_G.cnd_paint);
+    pthread_mutex_unlock(&VD_FW_G.mtx_paint);
+
+    pthread_join(VD_FW_G.win_thread, NULL);
+    pthread_cond_destroy(&VD_FW_G.cnd_paint);
+    pthread_mutex_destroy(&VD_FW_G.mtx_paint);
+
+    if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
+        // Destroy OpenGL Context
+        VdFwglXMakeCurrent(VD_FW_G.display, 0, NULL);
+        VdFwglXDestroyContext(VD_FW_G.display, VD_FW_G.glx_context);
+    }
+
+    VdFwXDestroyWindow(VD_FW_G.display, VD_FW_G.window);
+    VdFwXFlush(VD_FW_G.display);
+}
+
 static void *vd_fw__x11_thread_proc(void *arg)
 {
     (void)arg;
@@ -16816,8 +16880,8 @@ static void *vd_fw__x11_thread_proc(void *arg)
 
     XEvent evt = {};
     // while ((VdFwXPending(VD_FW_G.display)) && (VD_FW_G.num_evts < VD_FW_EVENT_COUNT_MAX)) {
-    int t_running = 1;
-    while (t_running) {
+    VD_FW_G.t_running = 1;
+    while (VD_FW_G.t_running) {
         // if (!VdFwXPending(VD_FW_G.display)) {
         //     continue;
         // }
@@ -16940,7 +17004,7 @@ static void *vd_fw__x11_thread_proc(void *arg)
                         VD_FW_G.sync_redraw = 1;
                     }
                 } else if (e->message_type == VD_FW_G.wm_usr_close) {
-                    t_running = 0;
+                    VD_FW_G.t_running = 0;
                 } else if (e->message_type == VD_FW_G.wm_usr_block) {
                     VD_FW_G.winthread_block_while_sizing = e->data.b[0];
                 }
@@ -17264,13 +17328,8 @@ static void *vd_fw__x11_thread_proc(void *arg)
             default: break;
         }
 
-        // Xrandr Events
-        {
-            if (evt.type == (VD_FW_G.event_base_xrandr + RRScreenChangeNotify)) {
-                printf("RRScreenChangeNotify\n");
-            } else if (evt.type == (VD_FW_G.event_base_xrandr + RRNotify)) {
-                printf("RRNotify\n");
-            }
+        if (VD_FW_G.t_running == 0) {
+            break;
         }
 
         if (VD_FW_G.winthread_block_while_sizing) {
@@ -17292,6 +17351,13 @@ static void *vd_fw__x11_thread_proc(void *arg)
             pthread_mutex_lock(&VD_FW_G.mtx_paint);
         }
 
+        if (!VD_FW_G.t_running) {
+            if (!VD_FW_G.winthread_block_while_sizing) {
+                pthread_mutex_unlock(&VD_FW_G.mtx_paint);
+            }
+            break;
+        }
+
         if (w != VD_FW_G.next_frame.w || h != VD_FW_G.next_frame.h) {
             VD_FW_G.next_frame.w = w;
             VD_FW_G.next_frame.h = h;
@@ -17301,7 +17367,11 @@ static void *vd_fw__x11_thread_proc(void *arg)
         if (!VD_FW_G.winthread_block_while_sizing && VD_FW_G.sync_redraw) {
             VD_FW_G.next_frame.flags |= VD_FW_X11_FLAGS_WAKE_COND_VAR;
             pthread_cond_signal(&VD_FW_G.cnd_paint);
-            pthread_cond_wait(&VD_FW_G.cnd_paint, &VD_FW_G.mtx_paint);
+            struct timespec bound_time;
+            bound_time.tv_sec = 0;
+            bound_time.tv_nsec = 1000 * 100;
+            pthread_cond_timedwait(&VD_FW_G.cnd_paint, &VD_FW_G.mtx_paint, &bound_time);
+            // pthread_cond_wait(&VD_FW_G.cnd_paint, &VD_FW_G.mtx_paint);
         }
 
         if (!VD_FW_G.winthread_block_while_sizing) {
@@ -17316,8 +17386,6 @@ static void *vd_fw__x11_thread_proc(void *arg)
             VD_FW_G.sync_redraw = 0;
         }
     }
-
-    VdFwXDestroyWindow(VD_FW_G.display, VD_FW_G.window);
     return NULL;
 }
 

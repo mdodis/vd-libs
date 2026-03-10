@@ -1908,10 +1908,10 @@ typedef struct {
 extern VdTestContext *Vd__Global_Test_Context;
 
 #define VD_TEST_LOG_IMPL(fmt, ...) \
-        snprintf(Vd__Global_Test_Context->buf, 1024, fmt "\n", __VA_ARGS__); \
+        snprintf(Vd__Global_Test_Context->buf, 1024, fmt "\n", ## __VA_ARGS__); \
         Vd__Global_Test_Context->log_impl(VD_LOG_VERBOSITY_LOG, Vd__Global_Test_Context->buf); \
 
-#define VD_TEST_LOG(fmt, ...) VD_TEST_LOG_IMPL(fmt, __VA_ARGS__)
+#define VD_TEST_LOG(fmt, ...) VD_TEST_LOG_IMPL(fmt, ## __VA_ARGS__)
 
 extern void vd_test_set_context(VdTestContext *context);
 extern void vd_test_get_tests(VdTestEntry **out_entries, Vdu32 *out_num_entries);
