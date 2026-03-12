@@ -519,6 +519,7 @@ VD_CG_INL VdF4x4        vd_fdx_to_vk4x4        (void);
  * @return         The matrix
  */
 VD_CG_INL VdF4x4        vd_fperspective4x4     (VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr, VdCgf32 pfr);
+VD_CG_INL VdF4x4        vd_fperspective4x4_rno (VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr, VdCgf32 pfr);
 VD_CG_INL VdF4x4        vd_fperspective4x4_zo  (VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr, VdCgf32 pfr);
 VD_CG_INL VdF4x4        vd_foblique4x4         (VdCgf32 left, VdCgf32 right, VdCgf32 bottom, VdCgf32 top, VdCgf32 pnr, VdCgf32 pfr);
 VD_CG_INL VdF4x4        vd_fperspective4x4_vk  (VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr, VdCgf32 pfr);
@@ -821,6 +822,21 @@ VD_CG_INL VdF4x4 vd_fperspective4x4(VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr
 
     result.e[2][2] = -result.e[2][2];
     result.e[2][3] = -result.e[2][3];
+    return result;
+}
+
+VD_CG_INL VdF4x4 vd_fperspective4x4_rno(VdCgf32 fovyrad, VdCgf32 aspect, VdCgf32 pnr, VdCgf32 pfr)
+{
+    VdF4x4 result;
+    VdCgf32 f;
+
+    f = 1.f / VD_CG_FTAN(fovyrad * 0.5f);
+
+    // https://www.khronos.org/registry/OpenGL-Refpages/gl2.1/xhtml/gluPerspective.xml
+    result = vd_fm4x4(f / aspect,                       0.f,                  0.f,                        0.f,
+                      0.f,                              f,                    0.f,                        0.f,
+                      0.f,                              0.f,                  (pnr + pfr) / (pnr - pfr), -1.f,
+                      0.f,                              0.f,                  2.f*pnr*pfr/(pnr - pfr),    0.f);
     return result;
 }
 
@@ -1324,6 +1340,7 @@ VD_CG_INL int vd_fline_vs_cylinder(VdFLine *line, VdFCylinder *cylinder, VdCgf32
 #define fidentity4x4             vd_fidentity4x4 
 #define fdx_to_vk4x4             vd_fdx_to_vk4x4 
 #define fperspective4x4          vd_fperspective4x4 
+#define fperspective4x4_rno      vd_fperspective4x4_rno
 #define fperspective4x4_zo       vd_fperspective4x4_zo
 #define foblique4x4              vd_foblique4x4
 #define fperspective4x4_vk       vd_fperspective4x4_vk 

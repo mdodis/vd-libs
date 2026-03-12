@@ -4348,8 +4348,8 @@ VD_UI_API void vd_ui_event_mouse_wheel(float dx, float dy)
 
     static float xvel = 0.f;
     static float yvel = 0.f;
-    ctx->wheel_current[0] = vd_ui__smooth_damp(ctx->wheel_current[0], ctx->wheel_target[0], &xvel, 0.11f, 300.f, ctx->delta_seconds);
-    ctx->wheel_current[1] = vd_ui__smooth_damp(ctx->wheel_current[1], ctx->wheel_target[1], &yvel, 0.11f, 300.f, ctx->delta_seconds);
+    ctx->wheel_current[0] = vd_ui__smooth_damp(ctx->wheel_current[0], ctx->wheel_target[0], &xvel, 0.05f, 300.f, ctx->delta_seconds);
+    ctx->wheel_current[1] = vd_ui__smooth_damp(ctx->wheel_current[1], ctx->wheel_target[1], &yvel, 0.05f, 300.f, ctx->delta_seconds);
 #endif
 }
 
@@ -4667,7 +4667,7 @@ static void vd_ui__push_rectgrad(VdUiContext *ctx, float rect[4], float color[16
     // @todo(mdodis): Precompute calculation for st for full alpha pixel row
     vd_ui__push_vertexgrad(ctx, &ctx->texture,
         (float[]){rect[0], rect[1]}, (float[]){rect[2], rect[3]},
-        (float[]){0.0f   , 0.0f   }, (float[]){4.f / (float)(ctx->atlas[0])   , 0.0f   },
+        (float[]){1.f / (float)(ctx->atlas[0]) , 1.f / (float)(ctx->atlas[1])}, (float[]){3.f / (float)(ctx->atlas[0]) , 3.f / (float)(ctx->atlas[1])},
         color,
         VD_UI_VERTEX_FLAG_TEXTURE_IS_ALPHA_BUFFER,
         corner_radius, edge_softness, border_thickness);
@@ -4677,7 +4677,7 @@ static void vd_ui__push_rect(VdUiContext *ctx, float rect[4], float color[4])
 {
     vd_ui__push_vertex(ctx, &ctx->texture,
         (float[]){rect[0], rect[1]}, (float[]){rect[2], rect[3]},
-        (float[]){0.0f   , 0.0f   }, (float[]){4.f / (float)(ctx->atlas[0])   , 0.0f   },
+        (float[]){1.f / (float)(ctx->atlas[0]) , 1.f / (float)(ctx->atlas[1])}, (float[]){3.f / (float)(ctx->atlas[0]) , 3.f / (float)(ctx->atlas[1])},
         color,
         VD_UI_VERTEX_FLAG_TEXTURE_IS_ALPHA_BUFFER);
 }
@@ -4794,7 +4794,7 @@ static void vd_ui__get_glyph_quad(VdUiContext *ctx, unsigned int codepoint, floa
         glyph = vd_ui__push_glyph(ctx, codepoint, size, font_id);
     }
 
-    int align_to_integer = 1;
+    int align_to_integer = 0;
     float ipw = 1.0f / (ctx->atlas[0]); float iph = 1.0f / (ctx->atlas[1]);
 
     if (align_to_integer) {
@@ -5309,12 +5309,18 @@ VD_UI_API VdUiContext *vd_ui_context_create(VdUiContextCreateInfo *info)
     // Write 4x4 white texture
     {
         unsigned char *buf = (unsigned char*)result->buffer;
-        buf[0 * 4 + 0] = 255; buf[0 * 4 + 1] = 255; buf[0 * 4 + 2] = 255; buf[0 * 4 + 3] = 255;
+        for (int y = 0; y < 4; ++ y) {
+            buf[y * result->atlas[1] + 0] = 255;
+            buf[y * result->atlas[1] + 1] = 255;
+            buf[y * result->atlas[1] + 2] = 255;
+            buf[y * result->atlas[1] + 3] = 255;
+        }
     }
 
     // Reserve first 4 pixels in the texture for rectangle rendering
     stbrp_context_struct *rpcontext = (stbrp_context_struct*)result->pack_context.pack_info;
     rpcontext->x = 4;
+    rpcontext->y = 4;
 
     // Divs & Ids
     result->divs_cap       = 1000;
