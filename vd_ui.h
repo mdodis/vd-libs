@@ -279,8 +279,8 @@ typedef struct {
 } VdUiKeyStroke;
 
 enum {
-    VD_UI_SIZE_MODE_ABSOLUTE = 0,
-    VD_UI_SIZE_MODE_TEXT_CONTENT = 1,
+    VD_UI_SIZE_MODE_TEXT_CONTENT = 0,
+    VD_UI_SIZE_MODE_ABSOLUTE = 1,
     VD_UI_SIZE_MODE_CONTAIN_CHILDREN = 2,
     VD_UI_SIZE_MODE_PERCENT_OF_PARENT = 3,
 };
@@ -725,6 +725,10 @@ VD_UI_INL VdUiDiv*         vd_ui_parent_new(VdUiFlags flags, VdUiStr str);
  */
 VD_UI_INL VdUiDiv*         vd_ui_parent_newf(VdUiFlags flags, const char *fmt, ...)                                     { VD_UI_DOTTOSTR(fmt); return vd_ui_parent_new(flags, str); }
 
+VD_UI_API void             vd_ui_tag_push(VdUiStr str);
+VD_UI_API VdUiStr          vd_ui_tag_get(void);
+VD_UI_API void             vd_ui_tag_pop(void);
+
 /**
  * @brief Sets the scale of the UI
  * @param  s The scale, 1.0f by default
@@ -736,6 +740,13 @@ VD_UI_API void             vd_ui_set_scale(float s);
  * @return  The scale, 1.0f by default
  */
 VD_UI_API float            vd_ui_get_scale(void);
+
+/**
+ * @brief Get if the current div is hot
+ * @param  div The div to check
+ * @return     Whether it's hot
+ */
+VD_UI_API int              vd_ui_div_is_hot(VdUiDiv *div);
 
 /**
  * @brief Get if the current div is active
@@ -2071,17 +2082,12 @@ VD_UI_API void vd_ui_frame_begin(float delta_seconds)
 
     ctx->last_frame_index = ctx->frame_index;
     ctx->frame_index++;
-
-    vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f);
-    vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_TEXT_CONTENT, 0.f, 0.f);
 }
 
 VD_UI_API void vd_ui_frame_end(void)
 {
     VdUiContext *ctx = vd_ui_context_get();
     vd_ui_parent_pop();
-    vd_ui_style_size_pop(VD_UI_AXISH);
-    vd_ui_style_size_pop(VD_UI_AXISV);
 
     // Zero immediate mode stuff
     ctx->vbuf_count = 0;
@@ -2626,22 +2632,22 @@ VD_UI_API VdUiReply vd_ui_button(VdUiStr str)
                                  VD_UI_FLAG_CLICKABLE,
                                  str);
 
-    div->style.size[0].mode  = VD_UI_SIZE_MODE_TEXT_CONTENT;
-    div->style.size[1].mode  = VD_UI_SIZE_MODE_TEXT_CONTENT;
-    div->style.padding[VD_UI_LEFT]   = 4.f;
-    div->style.padding[VD_UI_TOP]    = 4.f;
-    div->style.padding[VD_UI_RIGHT]  = 4.f;
-    div->style.padding[VD_UI_BOTTOM] = 4.f;
-    div->style.background.corner_radius    = 6.f;
-    div->style.background.edge_softness    = 0.25f;
-    div->style.background.coloring.normal = vd_ui_gradient(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f),
-                                            vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f));
+    // div->style.size[0].mode  = VD_UI_SIZE_MODE_TEXT_CONTENT;
+    // div->style.size[1].mode  = VD_UI_SIZE_MODE_TEXT_CONTENT;
+    // div->style.padding[VD_UI_LEFT]   = 4.f;
+    // div->style.padding[VD_UI_TOP]    = 4.f;
+    // div->style.padding[VD_UI_RIGHT]  = 4.f;
+    // div->style.padding[VD_UI_BOTTOM] = 4.f;
+    // div->style.background.corner_radius    = 6.f;
+    // div->style.background.edge_softness    = 0.25f;
+    // div->style.background.coloring.normal = vd_ui_gradient(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f),
+    //                                         vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f));
 
-    div->style.background.coloring.hot    = vd_ui_gradient(vd_ui_f4(0.52f, 0.52f, 0.52f, 1.f), vd_ui_f4(0.52f, 0.52f, 0.52f, 1.f),
-                                            vd_ui_f4(0.52f, 0.52f, 0.52f, 1.f), vd_ui_f4(0.52f, 0.52f, 0.52f, 1.f));
+    // div->style.background.coloring.hot    = vd_ui_gradient(vd_ui_f4(0.52f, 0.52f, 0.52f, 1.f), vd_ui_f4(0.52f, 0.52f, 0.52f, 1.f),
+    //                                         vd_ui_f4(0.52f, 0.52f, 0.52f, 1.f), vd_ui_f4(0.52f, 0.52f, 0.52f, 1.f));
 
-    div->style.background.coloring.active = vd_ui_gradient(vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f),
-                                            vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f));
+    // div->style.background.coloring.active = vd_ui_gradient(vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f),
+    //                                         vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f));
     return vd_ui_call(div);
 }
 
@@ -3498,13 +3504,7 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
         int released = (ctx->focus) && vd_ui_mouse_left_just_released();
         int clicked  = (ctx->focus) && vd_ui_mouse_left_clicked();
         int captured = (ctx->focus) && vd_ui_is_captured(div);
-
-        if (hovered) {
-            ctx->hot = div->h;
-            reply.hovering = 1;
-        }
-
-        if (reply.hovering || captured) {
+        if (vd_ui_div_is_hot(div) || captured) {
             if (clicked) {
                 ctx->active = div->h;
             }
@@ -3518,7 +3518,7 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
         }
 
         if (released && (ctx->active == div->h) ) {
-            if (hovered) {
+            if (vd_ui_div_is_hot(div) && hovered) {
                 reply.clicked = 1;
             }
             div->timeout_t = 1.f;
@@ -3528,12 +3528,24 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
             }
         }
 
+        if (hovered) {
+            if (!pressed) {
+                ctx->hot = div->h;
+                reply.hovering = 1;
+            }
+        } else {
+            if (ctx->hot == div->h) {
+                ctx->hot = 0;
+            }
+        }
+
         float hot_speed = 9.f;
         float active_speed = 10.f;
-        div->hot_t    = vd_ui__lerp(div->hot_t, hovered ? 1.0f : 0.0f, dt * hot_speed);
+        div->hot_t    = vd_ui__lerp(div->hot_t, vd_ui_div_is_hot(div) ? 1.0f : 0.0f, dt * hot_speed);
         div->hot_t    = vd_ui__clampf01(div->hot_t);
 
-        div->active_t = vd_ui__lerp(div->active_t, ((pressed && hovered) || captured) ? 1.0f : 0.0f, dt * active_speed);
+        // div->active_t = vd_ui__lerp(div->active_t, ((pressed && hovered) || captured) ? 1.0f : 0.0f, dt * active_speed);
+        div->active_t = vd_ui__lerp(div->active_t, vd_ui_div_is_active(div) ? 1.0f : 0.0f, dt * active_speed);
         div->active_t = vd_ui__clampf01(div->active_t);
 
         div->timeout_t = vd_ui__lerp(div->timeout_t, 0.f, dt * 11.f);
@@ -3616,6 +3628,8 @@ VD_UI_API void vd_ui_style_size_push(VdUiAxis axis, VdUiSizeMode mode, float val
     size->niceness = niceness;
 }
 
+static VdUiSize Vd_Ui__Default_Size = {0};
+
 VD_UI_API VdUiSize *vd_ui_style_size_get(VdUiAxis axis)
 {
     VdUiContext *ctx = vd_ui_context_get();
@@ -3630,7 +3644,7 @@ VD_UI_API VdUiSize *vd_ui_style_size_get(VdUiAxis axis)
     if ((*stack_count) > 0) {
         return &stack[(*stack_count) - 1];
     } else {
-        return 0;
+        return &Vd_Ui__Default_Size;
     }
 }
 
@@ -5355,6 +5369,12 @@ VD_UI_API VdUiContext* vd_ui_context_get(void)
 }
 
 /* ----HELPERS IMPL-------------------------------------------------------------------------------------------------- */
+VD_UI_API int vd_ui_div_is_hot(VdUiDiv *div)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    return ctx->hot == div->h;
+}
+
 VD_UI_API int vd_ui_div_is_active(VdUiDiv *div)
 {
     VdUiContext *ctx = vd_ui_context_get();
