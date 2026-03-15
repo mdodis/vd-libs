@@ -8987,9 +8987,6 @@ static VdFwBOOL     vd_fw__has_autohide_taskbar(VdFwUINT edge, VdFwRECT monitor)
 static void         vd_fw__window_pos_changed(VdFwWINDOWPOS *pos);
 static VdFwLRESULT  vd_fw__handle_invisible(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam, VdFwLPARAM lparam);
 static VdFwDWORD    vd_fw__win_thread_proc(LPVOID param);
-static void         vd_fw__gl_debug_message_callback(GLenum source, GLenum type, GLuint id,
-                                                     GLenum severity, GLsizei length, const GLchar *message,
-                                                     const void *userParam);
 static int          vd_fw__msgbuf_r(VdFwEvent *message);
 static int          vd_fw__msgbuf_w(VdFwEvent *message);
 static void         vd_fw__update_kb_codepage(void);
@@ -10424,30 +10421,6 @@ VD_FW_API void vd_fw__notify_gamepaddb_changed(void)
         VD_FW_WIN32_GAMEPADDBCH,
         0, /* WPARAM */
         0  /* LPARAM */));
-}
-
-static void vd_fw__gl_debug_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam)
-{
-    (void)userParam;
-    (void)severity;
-    (void)id;
-    (void)type;
-    (void)source;
-
-    DWORD written;
-    WriteConsoleA(
-        GetStdHandle(STD_OUTPUT_HANDLE),
-        message,
-        length,
-        &written,
-        0);
-
-    WriteConsoleA(
-        GetStdHandle(STD_OUTPUT_HANDLE),
-        "\n",
-        1,
-        &written,
-        0);
 }
 
 static int vd_fw__hit_test(int x, int y)

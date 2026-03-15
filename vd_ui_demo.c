@@ -102,10 +102,81 @@ static void vd_ui__demo_section_end(void)
     vd_ui_parent_pop();
 }
 
+static int demo_menubar_active = 0;
+static int demo_menubar_hovering = 0;
+
+static int vd_ui__demo_point_in_rect(float x, float y, float rect[4])
+{
+    return (x >= rect[0]) && (x <= rect[2]) &&
+           (y >= rect[1]) && (y <= rect[3]);
+}
+
+static int vd_ui__demo_menu_section_begin(const char *label)
+{
+    VdUiDiv *file_menu;
+    int result;
+
+    result = 0;
+    VdUiReply file = vd_ui_buttonf("%s", label);
+
+    int my_index;
+
+    my_index = file.div->parent->child_count;
+
+    if (file.clicked) {
+        demo_menubar_active = my_index;
+    }
+
+    if (demo_menubar_active && file.hovering) {
+        demo_menubar_active = my_index;
+    }
+    if (file.hovering) {
+        demo_menubar_hovering = 1;
+    }
+
+    if (demo_menubar_active == my_index) {
+
+        // if (vd_ui_mouse_left_clicked() && !file.focused) {
+        //     demo_menubar_active = 0;
+        // }
+
+        vd_ui_parent_push(file.div);
+        VD_UI_WITH_STYLE_SIZE_ABSOLUTE_W(100, 1)
+        VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 1.f)
+        VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f))
+        {
+            file_menu = vd_ui_parent_newf(0
+                                          | VD_UI_FLAG_FLOAT
+                                          | VD_UI_FLAG_BACKGROUND
+                                          , "##menu-section");
+            file_menu->comp_pos_rel[0] = 0;
+            file_menu->comp_pos_rel[1] = file_menu->parent->parent->comp_size[1];
+
+            if (vd_ui__demo_point_in_rect(file.mouse[0], file.mouse[1], file_menu->rect)) {
+                demo_menubar_hovering = 1;
+            }
+
+            vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f);
+        }
+
+
+        result = 1;
+    }
+    return result;
+}
+
+static void vd_ui__demo_menu_section_end(void)
+{
+    vd_ui_style_size_pop(VD_UI_AXISH);
+    vd_ui_parent_pop();
+    vd_ui_parent_pop();
+}
+
 int vd_ui_demo(void)
 {
     int result = 0;
     VdUiDiv *app;
+    static int show_menubar = 0;
 
     VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f)
     VD_UI_WITH_STYLE_SIZE(VD_UI_AXISV, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f)
@@ -113,10 +184,136 @@ int vd_ui_demo(void)
     {
         app = vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("##app"));
     }
-    static int num_items = 25;
 
     vd_ui_parent_push(app);
     {
+        // Menubar
+        if (show_menubar) {
+            static uint32_t main_menubar = 0;
+            #if 1
+
+            VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f)
+            VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 0.f)
+            VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.1f, 0.1f, 0.1f, 1.f))
+            {
+                vd_ui_menu_group_begin(&main_menubar, VD_UI_LIT("##main-menubar"), VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_FLEX_HORIZONTAL);
+            }
+            {
+                if (vd_ui_menu_item(&main_menubar, VD_UI_LIT("File"))) {
+
+                    VD_UI_WITH_STYLE_SIZE_ABSOLUTE_W(100, 1)
+                    VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 1.f)
+                    VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f))
+                    {
+                        vd_ui_menu_item_begin(&main_menubar);
+                    }
+
+                    VdUiColoring coloring = vd_ui_coloring(vd_ui_gradient1(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f)),
+                                                           vd_ui_gradient1(vd_ui_f4(0.3f, 0.2f, 0.2f, 1.f)),
+                                                           vd_ui_gradient1(vd_ui_f4(0.2f, 0.4f, 0.2f, 1.f)));
+
+                    VD_UI_WITH_STYLE_BACKGROUND_COLORING(coloring)
+                    VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f)
+                    {
+                        if (vd_ui_buttonf("New").clicked) {
+                            printf("New File\n");
+                            vd_ui_menu_group_close(&main_menubar);
+                        }
+
+                        if (vd_ui_buttonf("Open").clicked) {
+                            printf("New File\n");
+                            vd_ui_menu_group_close(&main_menubar);
+                        }
+
+                        if (vd_ui_buttonf("Quit").clicked) {
+                            printf("New File\n");
+                            vd_ui_menu_group_close(&main_menubar);
+                        }
+                    }
+
+
+                    vd_ui_menu_item_end();
+                }
+
+                if (vd_ui_menu_item(&main_menubar, VD_UI_LIT("Options"))) {
+
+                    VD_UI_WITH_STYLE_SIZE_ABSOLUTE_W(100, 1)
+                    VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 1.f)
+                    VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f))
+                    {
+                        vd_ui_menu_item_begin(&main_menubar);
+                    }
+
+                    if (vd_ui_buttonf("Choreo").clicked) {
+                        printf("Choreo\n");
+                        vd_ui_menu_group_close(&main_menubar);
+                    }
+
+                    if (vd_ui_buttonf("Moreo").clicked) {
+                        printf("Moreo\n");
+                        vd_ui_menu_group_close(&main_menubar);
+                    }
+
+                    vd_ui_menu_item_end();
+                }
+            }
+            vd_ui_menu_group_end(&main_menubar);
+
+            #else
+            VdUiDiv *menu;
+
+            int prev_active = demo_menubar_active;
+            demo_menubar_hovering = 0;
+
+            VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f)
+            VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 0.f)
+            VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.1f, 0.1f, 0.1f, 1.f))
+            {
+                menu = vd_ui_parent_new(0
+                                        | VD_UI_FLAG_BACKGROUND
+                                        // | VD_UI_FLAG_CLICKABLE
+                                        | VD_UI_FLAG_FLEX_HORIZONTAL
+                                        , VD_UI_LIT("##menu"));
+            }
+            {
+                if (vd_ui__demo_menu_section_begin("File")) {
+                    VdUiColoring coloring = vd_ui_coloring(vd_ui_gradient1(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f)),
+                                                           vd_ui_gradient1(vd_ui_f4(0.3f, 0.2f, 0.2f, 1.f)),
+                                                           vd_ui_gradient1(vd_ui_f4(0.2f, 0.4f, 0.2f, 1.f)));
+
+                    VD_UI_WITH_STYLE_BACKGROUND_COLORING(coloring)
+                    {
+                        if (vd_ui_buttonf("New").clicked) {
+                            demo_menubar_active = 0;
+                            printf("NEW\n");
+                        }
+                        vd_ui_buttonf("Open");
+                        vd_ui_buttonf("Quit");
+                    }
+
+                    vd_ui__demo_menu_section_end();
+                }
+
+                if (vd_ui__demo_menu_section_begin("Window")) {
+                    vd_ui_buttonf("Debug");
+                    vd_ui_buttonf("Choreo");
+                    vd_ui__demo_menu_section_end();
+                }
+
+                if (vd_ui__demo_menu_section_begin("Help")) {
+                    vd_ui_buttonf("Debug");
+                    vd_ui_buttonf("Choreo");
+                    vd_ui__demo_menu_section_end();
+                }
+
+            }
+            vd_ui_parent_pop();
+
+            if (prev_active && !demo_menubar_hovering && vd_ui_mouse_left_just_released()) {
+                demo_menubar_active = 0;
+            }
+            #endif
+        }
 
         static float scrollx = 0.f;
         static float scrolly = 0.f;
@@ -142,8 +339,8 @@ int vd_ui_demo(void)
                 vd_ui_labelf("VD UI");
             }
 
+            #if 1
             {
-                #if 1
                 vd_ui__demo_section_begin("Basics - Horizontal Layout");
                 vd_ui__demo_code(VD_UI_LIT("code"), "VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(400, 200, 0, 0)\nVD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.05f, 0.05f, 0.05f, 1.f))\n{\n    vd_ui_parent_newf(0\n                      | VD_UI_FLAG_FLEX_HORIZONTAL\n                      | (layout_1_align_center ? VD_UI_FLAG_ALIGN_CENTER : 0) \n                      | VD_UI_FLAG_BACKGROUND\n                      , \"##rect-container-0\");\n}\n{\n\n    VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(40, 40, 0, 0)\n    VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.5f, 0.3f, 0.2f, 1.f))\n    {\n        vd_ui_div_newf(VD_UI_FLAG_BACKGROUND, \"##rect-0\");\n    }\n\n    VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(80, 40, 0, 0)\n    VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.4f, 0.7f, 0.2f, 1.f))\n    {\n        vd_ui_div_newf(VD_UI_FLAG_BACKGROUND, \"##rect-1\");\n    }\n\n    VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(40, 90, 0, 0)\n    VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.2f, 0.3f, 0.5f, 1.f))\n    {\n        vd_ui_div_newf(VD_UI_FLAG_BACKGROUND, \"##rect-2\");\n    }\n}\nvd_ui_parent_pop();\n");
 
@@ -285,8 +482,6 @@ int vd_ui_demo(void)
                 }
                 vd_ui_parent_pop();
                 vd_ui__demo_section_end();
-                #endif
-
 
                 vd_ui__demo_section_begin("Nesting - 1");
                 vd_ui__demo_fixed_rect_parent("layout-5", 0, 400, 200, vd_ui_f4(0.05f, 0.05f, 0.05f, 1.f));
@@ -409,6 +604,7 @@ int vd_ui_demo(void)
                 }
                 vd_ui__demo_section_end();
             }
+            #endif
 
             vd_ui_parent_pop();
         }
@@ -427,6 +623,7 @@ int vd_ui_demo(void)
             vd_ui_spacer(VD_UI_AXISV);
 
             VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 1.f)
+            VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISH, 1.f)
             {
                 vd_ui_parent_newf(0
                                   | VD_UI_FLAG_FLEX_VERTICAL
@@ -459,6 +656,9 @@ int vd_ui_demo(void)
                         if (vd_ui_buttonf("Toggle Inspector").clicked) {
                             vd_ui_debug_set_inspector_on(!vd_ui_debug_get_inspector_on());
                         }
+
+
+                        vd_ui_checkbox(&show_menubar, VD_UI_LIT("Show Menu Bar"));
                     }
                     vd_ui_parent_pop();
                 }

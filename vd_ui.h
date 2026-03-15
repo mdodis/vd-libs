@@ -420,6 +420,11 @@ typedef struct VdUiStyle {
     VdUiStyleText   text;
 } VdUiStyle;
 
+typedef enum {
+    VD_UI_FOCUS_MODE_ACTIVE = 0,
+    VD_UI_FOCUS_MODE_HOT    = 1,
+} VdUiFocusMode;
+
 /* ----TEXTOPS------------------------------------------------------------------------------------------------------- */
 typedef struct {
     long long          l;   // Line
@@ -483,6 +488,8 @@ struct VdUiDiv {
     /* The count of children */
     int             child_count;
 
+    VdUiFocusMode   focus_mode;
+
     VdUiFlags       flags;
     VdUiStyle       style;
 
@@ -530,6 +537,7 @@ typedef struct {
     VdUiBool released;
     VdUiBool clicked;
     VdUiBool hovering;
+    VdUiBool focused;
     float    click_timeout;
 } VdUiReply;
 
@@ -655,6 +663,13 @@ VD_UI_API VdUiReply        vd_ui_textbox(VdUiStr label, char *buf, size_t *len, 
 VD_UI_API void             vd_ui_scroll_begin(VdUiStr str, float *x, float *y);
 VD_UI_API void             vd_ui_scroll_end(void);
 
+VD_UI_API void             vd_ui_menu_group_begin(uint32_t *menu, VdUiStr name, VdUiFlags flags);
+VD_UI_API int              vd_ui_menu_item(uint32_t *menu, VdUiStr label);
+VD_UI_API void             vd_ui_menu_item_begin(uint32_t *menu);
+VD_UI_API void             vd_ui_menu_item_end(void);
+VD_UI_API void             vd_ui_menu_group_end(uint32_t *menu);
+VD_UI_API void             vd_ui_menu_group_close(uint32_t *menu);
+
 /* ----CORE UI------------------------------------------------------------------------------------------------------- */
 /**
  * @brief Allocates a new div
@@ -708,6 +723,12 @@ VD_UI_API int              vd_ui_parent_count(void);
  * @return   The div.
  */
 VD_UI_API VdUiDiv*         vd_ui_parent_get(int i);
+
+VD_UI_API void             vd_ui_focus_mode_push(VdUiFocusMode mode);
+
+VD_UI_API VdUiFocusMode    vd_ui_focus_mode_get(void);
+
+VD_UI_API void             vd_ui_focus_mode_pop(void);
 
 /**
  * @brief Like vd_ui_div_new, but also calls vd_ui_parent_push
@@ -1692,6 +1713,7 @@ static VdUiColoring  Vd_Ui__Coloring_Tx_Default;
 #define VD_UI_RENDER_PASSES_MAX                 (VD_UI_LAYERS_MAX * VD_UI_CHANNELS_MAX)
 
 #define VD_UI_PARENT_STACK_MAX                  256
+#define VD_UI_FOCUS_MODE_STACK_MAX              16
 #define VD_UI_VBUF_COUNT_MAX                    4096
 #define VD_UI_RP_COUNT_MAX                      128
 #define VD_UI_FONT_COUNT_MAX                    4
@@ -1910,6 +1932,9 @@ struct VdUiContext {
 
     unsigned int            parents_next;                                          // Parent stack.
     VdUiDiv                 *parents[VD_UI_PARENT_STACK_MAX];
+
+    unsigned int            focus_modes_count;
+    VdUiFocusMode           focus_modes[VD_UI_FOCUS_MODE_STACK_MAX];
 
     unsigned int            vbuf_count;                                            // Vertex buffer
     VdUiVertex              vbuf[VD_UI_VBUF_COUNT_MAX];
@@ -3295,6 +3320,89 @@ VD_UI_API void vd_ui_scroll_end()
     vd_ui_parent_pop();
 }
 
+#define VD_UI_MENU_HOVER_MASK 0x80000000
+#define VD_UI_MENU_INDEX_MASK (~(VD_UI_MENU_HOVER_MASK))
+
+VD_UI_API void vd_ui_menu_group_begin(uint32_t *menu, VdUiStr name, VdUiFlags flags)
+{
+    // Zero hover flag
+    *menu &= ~VD_UI_MENU_HOVER_MASK;
+
+    vd_ui_parent_new(flags, name);
+}
+
+VD_UI_API int vd_ui_menu_item(uint32_t *menu, VdUiStr label)
+{
+    VdUiDiv *button;
+
+    VdUiReply item_reply = vd_ui_button(label);
+    button = item_reply.div;
+
+    uint32_t my_index = button->parent->child_count;
+
+    // If user clicked this item, then it must become active
+    if (item_reply.clicked) {
+        (*menu) &= ~VD_UI_MENU_INDEX_MASK;
+        (*menu) |= my_index;
+    }
+
+    if (item_reply.hovering) {
+
+        if (*menu & VD_UI_MENU_INDEX_MASK) {
+            *menu &= ~VD_UI_MENU_INDEX_MASK;
+            *menu |= my_index;
+        }
+
+        *menu |= VD_UI_MENU_HOVER_MASK;
+    }
+
+    if ((*menu & VD_UI_MENU_INDEX_MASK) == my_index) {
+        vd_ui_parent_push(button);
+
+        return 1;
+    }
+
+    return 0;
+}
+
+VD_UI_API void vd_ui_menu_item_begin(uint32_t *menu)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    VdUiDiv *file_menu;
+
+    file_menu = vd_ui_parent_newf(0
+                                  | VD_UI_FLAG_FLOAT
+                                  | VD_UI_FLAG_BACKGROUND
+                                  , "##menu-section");
+    file_menu->comp_pos_rel[0] = 0;
+    file_menu->comp_pos_rel[1] = file_menu->parent->parent->comp_size[1];
+
+    if (vd_ui__point_in_rect(ctx->mouse, file_menu->rect)) {
+        *menu |= VD_UI_MENU_HOVER_MASK;
+    }
+}
+
+VD_UI_API void vd_ui_menu_item_end(void)
+{
+    vd_ui_parent_pop();
+    vd_ui_parent_pop();
+}
+
+VD_UI_API void vd_ui_menu_group_end(uint32_t *menu)
+{
+    vd_ui_parent_pop();
+
+    if (vd_ui_mouse_left_clicked() && !(*menu & VD_UI_MENU_HOVER_MASK)) {
+        vd_ui_menu_group_close(menu);
+    }
+}
+
+VD_UI_API void vd_ui_menu_group_close(uint32_t *menu)
+{
+    *menu = 0;
+}
+
+
 VD_UI_API VdUiDiv *vd_ui_div_newf(VdUiFlags flags, const char *fmt, ...)
 {
     static char buf[VD_UI_FBUF_MAX];
@@ -3467,6 +3575,7 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     }
 
     // Resolve styles
+    result->focus_mode                           = vd_ui_focus_mode_get();
     result->style.size[VD_UI_AXISH]              = *vd_ui_style_size_get(VD_UI_AXISH);
     result->style.size[VD_UI_AXISV]              = *vd_ui_style_size_get(VD_UI_AXISV);
     result->style.background.coloring.normal     = vd_ui_style_coloring_get(VD_UI_FLAG_BACKGROUND)->normal;
@@ -3553,14 +3662,32 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
         div->timeout_inv_t = (div->timeout_t > 0.1f) ? (1.f - div->timeout_t) : 0.f;
         if (div->timeout_t < 0.1f) div->timeout_t = 0.f;
 
-        if (reply.clicked) {
-            ctx->focused = div->h;
+        if (clicked && vd_ui_div_is_focused(div)) {
+            ctx->focused = 0;
+        }
+
+        switch (div->focus_mode) {
+
+            case VD_UI_FOCUS_MODE_HOT: {
+                if (vd_ui_div_is_hot(div)) {
+                    ctx->focused = div->h;
+                }
+            } break;
+
+            case VD_UI_FOCUS_MODE_ACTIVE: {
+                if (reply.clicked) {
+                    ctx->focused = div->h;
+                }
+            } break;
+
+            default: break;
         }
 
         if (reply.pressed && (ctx->active == div->h)) {
             reply.drag[0] = mouse_delta[0]; reply.drag[1] = mouse_delta[1];
         }
 
+        reply.focused = ctx->focused == div->h;
         reply.click_timeout = div->timeout_inv_t;
     }
 
@@ -3593,6 +3720,30 @@ VD_UI_API VdUiDiv *vd_ui_parent_get(int i)
 {
     VdUiContext *ctx = vd_ui_context_get();
     return ctx->parents[i + 1];
+}
+
+VD_UI_API void vd_ui_focus_mode_push(VdUiFocusMode mode)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    VD_UI_ASSERT(ctx->focus_modes_count < VD_UI_FOCUS_MODE_STACK_MAX);
+    ctx->focus_modes[ctx->focus_modes_count++] = mode;
+}
+
+VD_UI_API VdUiFocusMode vd_ui_focus_mode_get(void)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    if (ctx->focus_modes_count) {
+        return ctx->focus_modes[ctx->focus_modes_count - 1];
+    } else {
+        return VD_UI_FOCUS_MODE_ACTIVE;
+    }
+}
+
+VD_UI_API void vd_ui_focus_mode_pop(void)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    VD_UI_ASSERT(ctx->focus_modes_count);
+    ctx->focus_modes_count--;
 }
 
 VD_UI_API void vd_ui_set_scale(float s)
