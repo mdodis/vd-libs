@@ -35,8 +35,6 @@ int main(int argc, char const *argv[])
 
     vd_fw_set_size(1600, 900);
 
-    vd_ui_set_scale(vd_fw_get_scale());
-
     GLuint program = 0;
     unsigned long long program_time = 0;
 
@@ -83,7 +81,11 @@ int main(int argc, char const *argv[])
 
         if (vd_fw_get_key_pressed(VD_FW_KEY_F11)) {
             inspector = !inspector;
-            vd_ui_debug_set_inspector_on(inspector); 
+        }
+
+        float scale;
+        if (vd_fw_get_scale(&scale)) {
+            vd_ui_set_scale(scale);
         }
 
         if (vd_fw_close_requested()) {
@@ -303,6 +305,8 @@ int main(int argc, char const *argv[])
         
         vd_fw_unlock();
     }
+
+    vd_fw_exit();
     return 0;
 }
 

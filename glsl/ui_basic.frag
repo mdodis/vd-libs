@@ -5,7 +5,7 @@ in float f_amix;
 in vec2  f_dp;
 in vec2  f_dc;
 in vec2  f_dhs;
-in float f_corner_radius;
+in vec4 f_corner_radius;
 in float f_edge_softness;
 in float f_border_thickness;
 
@@ -24,26 +24,47 @@ float smoothFalloff(float distance, float radius, float softness) {
     return 1.0 - smoothstep(radius - softness, radius + softness, distance);
 }
 
+float sdf_rounded_rect4(
+    vec2 pos, vec2 center, vec2 half_size,
+    float r_tl, float r_tr, float r_bl, float r_br)
+{
+    vec2 p = pos - center;
+
+    float right = step(0.0, p.x);
+    float top   = step(0.0, p.y);
+
+    float r = mix(
+        mix(r_tl, r_bl, top),  // flipped
+        mix(r_tr, r_br, top),  // flipped
+        right
+    );
+
+    vec2 q = abs(p) - half_size + vec2(r);
+    return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - r;
+}
 void main()
 {
     vec2 softness_padding = vec2(max(0, f_edge_softness * 2 - 1.0));
-    float dist = sdf_rounded_rect(f_dp, f_dc, f_dhs - softness_padding, f_corner_radius);
+    float dist = sdf_rounded_rect4(f_dp, f_dc, f_dhs - softness_padding,
+                                   f_corner_radius.x, f_corner_radius.y,
+                                   f_corner_radius.z, f_corner_radius.w);
     float border_factor = 1.0;
     if (f_border_thickness != 0.0) {
         vec2 interior_hs = f_dhs - vec2(f_border_thickness);
 
         float interior_radius_reduce_f = min(interior_hs.x / f_dhs.x, interior_hs.y / f_dhs.y);
-        float interior_corner_radius = f_corner_radius * interior_radius_reduce_f * interior_radius_reduce_f;
+        vec4 interior_corner_radius = f_corner_radius * interior_radius_reduce_f * interior_radius_reduce_f;
 
-        float inside_d = sdf_rounded_rect(f_dp, f_dc, interior_hs - softness_padding, interior_corner_radius);
+        // float inside_d = sdf_rounded_rect(f_dp, f_dc, interior_hs - softness_padding, interior_corner_radius);
+        float inside_d = sdf_rounded_rect4(f_dp, f_dc, interior_hs - softness_padding,
+                                           interior_corner_radius.x, interior_corner_radius.y,
+                                           interior_corner_radius.z, interior_corner_radius.w);
 
         float inside_f = smoothstep(0, 2 * f_edge_softness, inside_d);
         border_factor = inside_f;
     }
     float sdf = 1.0 - smoothstep(0.0, 2.0 * f_edge_softness, dist);
 
-
-    // === Base color sampling and mask ===
     vec4 sample = texture(uTexture, f_uv);
     vec4 normal_color = sample * f_color;
     vec4 mask_color = vec4(f_color.rgb, f_color.a * sample.r);

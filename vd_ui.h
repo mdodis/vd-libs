@@ -211,6 +211,10 @@ typedef enum {
     VD_UI_DATA_TYPE_MAX,
 } VdUiDataType;
 
+#ifndef VD_UI_KEY_EXTRA
+#define VD_UI_KEY_EXTRA
+#endif // !VD_UI_KEY_EXTRA
+
 VD_UI_INL VdUiF4           vd_ui_f4(float x, float y, float z, float w);
 VD_UI_INL VdUiF4           vd_ui_fall4(float s);
 VD_UI_INL VdUiGradient     vd_ui_gradient(VdUiF4 top_left, VdUiF4 top_right, VdUiF4 bottom_left, VdUiF4 bottom_right);
@@ -245,6 +249,12 @@ enum {
     VD_UI_TOP  = 1,
     VD_UI_RIGHT = 2,
     VD_UI_BOTTOM = 3,
+
+    // Corners
+    VD_UI_TOP_LEFT = 0,
+    VD_UI_TOP_RIGHT = 1,
+    VD_UI_BOTTOM_LEFT = 2,
+    VD_UI_BOTTOM_RIGHT = 3,
 
     // Coloring
     VD_UI_ALL_SHAPES = VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_BORDER,
@@ -374,7 +384,7 @@ VD_UI_INL VdUiGradient vd_ui_coloring_interpolate(VdUiColoring coloring, float h
 }
 
 typedef struct VdUiStyleBox {
-    float           corner_radius;
+    VdUiF4          corner_radius;
     float           edge_softness;
     float           border_thickness;
     VdUiColoring    coloring;
@@ -746,10 +756,6 @@ VD_UI_INL VdUiDiv*         vd_ui_parent_new(VdUiFlags flags, VdUiStr str);
  */
 VD_UI_INL VdUiDiv*         vd_ui_parent_newf(VdUiFlags flags, const char *fmt, ...)                                     { VD_UI_DOTTOSTR(fmt); return vd_ui_parent_new(flags, str); }
 
-VD_UI_API void             vd_ui_tag_push(VdUiStr str);
-VD_UI_API VdUiStr          vd_ui_tag_get(void);
-VD_UI_API void             vd_ui_tag_pop(void);
-
 /**
  * @brief Sets the scale of the UI
  * @param  s The scale, 1.0f by default
@@ -783,6 +789,8 @@ VD_UI_API int              vd_ui_div_is_active(VdUiDiv *div);
  */
 VD_UI_API int              vd_ui_div_is_focused(VdUiDiv *div);
 
+VD_UI_API VdUiDiv*         vd_ui_get_root(void);
+
 VD_UI_INL VdUiDiv *vd_ui_parent_new(VdUiFlags flags, VdUiStr str)
 {
     VdUiDiv *result = vd_ui_div_new(flags, str);
@@ -791,32 +799,31 @@ VD_UI_INL VdUiDiv *vd_ui_parent_new(VdUiFlags flags, VdUiStr str)
 }
 
 /* ----STYLE STACKS-------------------------------------------------------------------------------------------------- */
-/**
- * Scopes
- *
- * With the style stacks, you typically have to do:
- * vd_ui_style_x_push()
- * vd_ui_div_new()
- * vd_ui_style_x_pop()
- *
- * This is kind of annoying.
- *
- * So you can do:
- * VD_UI_WITH_STYLE_X()
- * {
- *     vd_ui_div_new()
- * }
- *
- * Make sure you add the braces! This uses the defer scope trick:
- * #define VD_UI_WITH_STYLE_X() for (int __i__ = (vd_ui_style_x_push(), 0); !i; i += 1, (vd_ui_style_x_pop()))
- *
- * Since the next statement on an non-braced for-loop is used you can do the following:
- * VD_UI_WITH_STYLE_X()
- * VD_UI_WITH_STYLE_Y()
- * {
- *     vd_ui_div_new()
- * }
- */
+// Scopes
+// 
+// With the style stacks, you typically have to do:
+// vd_ui_style_x_push()
+// vd_ui_div_new()
+// vd_ui_style_x_pop()
+// 
+// This is kind of annoying.
+// 
+// So you can do:
+// VD_UI_WITH_STYLE_X()
+// {
+//     vd_ui_div_new()
+// }
+// 
+// Make sure you add the braces! This uses the defer scope trick:
+// #define VD_UI_WITH_STYLE_X() for (int __i__ = (vd_ui_style_x_push(), 0); !i; i += 1, (vd_ui_style_x_pop()))
+// 
+// Since the next statement on an non-braced for-loop is used you can do the following:
+// VD_UI_WITH_STYLE_X()
+// VD_UI_WITH_STYLE_Y()
+// {
+//     vd_ui_div_new()
+// }
+// 
 #define VD_UI_SCOPE_I_ID2(id, line) id##line
 #define VD_UI_SCOPE_I_ID(line) VD_UI_SCOPE_I_ID2(__i__, line)
 #define VD_UI_WITH_SCOPE_IMPL(line, begin, end) for (int VD_UI_SCOPE_I_ID(line) = ((begin), 0); !VD_UI_SCOPE_I_ID(line); VD_UI_SCOPE_I_ID(line) += 1, (end))
@@ -830,16 +837,41 @@ VD_UI_INL VdUiDiv *vd_ui_parent_new(VdUiFlags flags, VdUiStr str)
  * @param  niceness The niceness to push
  */
 VD_UI_API void             vd_ui_style_size_push(VdUiAxis axis, VdUiSizeMode mode, float value, float niceness);
+
+/**
+ * @brief Get the currently pushed style size, or default
+ * @param  axis The axis of the style size stack
+ * @return      Pointer to style size
+ */
 VD_UI_API VdUiSize*        vd_ui_style_size_get(VdUiAxis axis);
+
+/**
+ * @brief Get the current count of a style size stack
+ * @param  axis The axis of the style size stack
+ * @return      The count of sizes pushed onto the stack
+ */
 VD_UI_API unsigned int     vd_ui_style_size_count(VdUiAxis axis);
+
+/**
+ * @brief Pop a style size from the stack
+ * @param  axis The axis of the stack to pop from
+ */
 VD_UI_API void             vd_ui_style_size_pop(VdUiAxis axis);
-#define VD_UI_WITH_STYLE_SIZE(axis, mode, value, niceness) VD_UI_WITH_SCOPE(vd_ui_style_size_push(axis, mode, value, niceness), vd_ui_style_size_pop(axis))
-#define VD_UI_WITH_STYLE_SIZE_ABSOLUTE(axis, value, niceness) VD_UI_WITH_STYLE_SIZE(axis, VD_UI_SIZE_MODE_ABSOLUTE, value, niceness)
-#define VD_UI_WITH_STYLE_SIZE_ABSOLUTE_W(value, niceness) VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_ABSOLUTE, value, niceness)
-#define VD_UI_WITH_STYLE_SIZE_ABSOLUTE_H(value, niceness) VD_UI_WITH_STYLE_SIZE(VD_UI_AXISV, VD_UI_SIZE_MODE_ABSOLUTE, value, niceness)
-#define VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(width, height, width_niceness, height_niceness) VD_UI_WITH_STYLE_SIZE_ABSOLUTE_W(width, width_niceness) VD_UI_WITH_STYLE_SIZE_ABSOLUTE_H(height, height_niceness)
-#define VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(axis, niceness) VD_UI_WITH_STYLE_SIZE(axis, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, niceness)
-#define VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(axis, value, niceness) VD_UI_WITH_STYLE_SIZE(axis, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, value, niceness)
+
+#define VD_UI_WITH_STYLE_SIZE(axis, mode, value, niceness) \
+    VD_UI_WITH_SCOPE(vd_ui_style_size_push(axis, mode, value, niceness), vd_ui_style_size_pop(axis))
+#define VD_UI_WITH_STYLE_SIZE_ABSOLUTE(axis, value, niceness) \
+    VD_UI_WITH_STYLE_SIZE(axis, VD_UI_SIZE_MODE_ABSOLUTE, value, niceness)
+#define VD_UI_WITH_STYLE_SIZE_ABSOLUTE_W(value, niceness) \
+    VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_ABSOLUTE, value, niceness)
+#define VD_UI_WITH_STYLE_SIZE_ABSOLUTE_H(value, niceness) \
+    VD_UI_WITH_STYLE_SIZE(VD_UI_AXISV, VD_UI_SIZE_MODE_ABSOLUTE, value, niceness)
+#define VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(width, height, width_niceness, height_niceness) \
+    VD_UI_WITH_STYLE_SIZE_ABSOLUTE_W(width, width_niceness) VD_UI_WITH_STYLE_SIZE_ABSOLUTE_H(height, height_niceness)
+#define VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(axis, niceness) \
+    VD_UI_WITH_STYLE_SIZE(axis, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, niceness)
+#define VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(axis, value, niceness) \
+    VD_UI_WITH_STYLE_SIZE(axis, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, value, niceness)
 
 VD_UI_API void             vd_ui_style_padding_push(int pos, float value);
 VD_UI_API void             vd_ui_style_padding_push4(float left, float top, float right, float bottom);
@@ -847,17 +879,34 @@ VD_UI_API void             vd_ui_style_padding_push_all(float value);
 VD_UI_API float            vd_ui_style_padding_get(int pos);
 VD_UI_API void             vd_ui_style_padding_pop(int pos);
 VD_UI_API void             vd_ui_style_padding_pop_all(void);
-#define VD_UI_WITH_STYLE_PADDING(pos, value) VD_UI_WITH_SCOPE(vd_ui_style_padding_push(pos, value), vd_ui_style_padding_pop(pos))
-#define VD_UI_WITH_STYLE_PADDING4(left, top, right, bottom) VD_UI_WITH_SCOPE(vd_ui_style_padding_push4(left, top, right, bottom), vd_ui_style_padding_pop_all())
-#define VD_UI_WITH_STYLE_PADDING_ALL(all_value) VD_UI_WITH_SCOPE(vd_ui_style_padding_push_all(all_value), vd_ui_style_padding_pop_all())
+#define VD_UI_WITH_STYLE_PADDING(pos, value) \
+    VD_UI_WITH_SCOPE(vd_ui_style_padding_push(pos, value), vd_ui_style_padding_pop(pos))
+#define VD_UI_WITH_STYLE_PADDING4(left, top, right, bottom) \
+    VD_UI_WITH_SCOPE(vd_ui_style_padding_push4(left, top, right, bottom), vd_ui_style_padding_pop_all())
+#define VD_UI_WITH_STYLE_PADDING_ALL(all_value) \
+    VD_UI_WITH_SCOPE(vd_ui_style_padding_push_all(all_value), vd_ui_style_padding_pop_all())
 
 VD_UI_API void             vd_ui_style_child_gap_push(float gap);
 VD_UI_API float            vd_ui_style_child_gap_get(void);
 VD_UI_API void             vd_ui_style_child_gap_pop(void);
-#define VD_UI_WITH_STYLE_CHILD_GAP(value) VD_UI_WITH_SCOPE(vd_ui_style_child_gap_push(value), vd_ui_style_child_gap_pop())
+#define VD_UI_WITH_STYLE_CHILD_GAP(value) \
+    VD_UI_WITH_SCOPE(vd_ui_style_child_gap_push(value), vd_ui_style_child_gap_pop())
 
-VD_UI_INL void             vd_ui_style_size_push_all(VdUiSizeMode mode, float value, float niceness);
-VD_UI_INL void             vd_ui_style_size_pop_all(void);
+VD_UI_API void             vd_ui_style_rounding_push(VdUiFlags mask, VdUiF4 radius);
+VD_UI_API VdUiF4           vd_ui_style_rounding_get(VdUiFlags mask);
+VD_UI_API void             vd_ui_style_rounding_pop(VdUiFlags mask);
+#define VD_UI_WITH_STYLE_ROUNDING(mask, tl, tr, bl, br) \
+    VD_UI_WITH_SCOPE(vd_ui_style_rounding_push(mask, vd_ui_f4(tl, tr, bl, br)), vd_ui_style_rounding_pop())
+#define VD_UI_WITH_STYLE_ROUNDING_ALL(mask, rounding) \
+    VD_UI_WITH_STYLE_ROUNDING(mask, rounding, rounding, rounding, rounding)
+#define VD_UI_WITH_STYLE_BACKGROUND_ROUNDING(tl, tr, bl, br) \
+    VD_UI_WITH_STYLE_ROUNDING(VD_UI_FLAG_BACKGROUND, tl, tr, bl, br)
+#define VD_UI_WITH_STYLE_BORDER_ROUNDING(tl, tr, bl, br) \
+    VD_UI_WITH_STYLE_ROUNDING(VD_UI_FLAG_BORDER, tl, tr, bl, br)
+#define VD_UI_WITH_STYLE_BACKGROUND_ROUNDING_ALL(rounding) \
+    VD_UI_WITH_STYLE_ROUNDING_ALL(VD_UI_FLAG_BACKGROUND, rounding)
+#define VD_UI_WITH_STYLE_BORDER_ROUNDING_ALL(rounding) \
+    VD_UI_WITH_STYLE_ROUNDING_ALL(VD_UI_FLAG_BORDER, rounding)
 
 VD_UI_API void             vd_ui_style_coloring_push(VdUiFlags mask, VdUiColoring coloring);
 VD_UI_API VdUiColoring*    vd_ui_style_coloring_get(VdUiFlags mask);
@@ -865,12 +914,18 @@ VD_UI_API void             vd_ui_style_coloring_pop(VdUiFlags mask);
 VD_UI_API VdUiColoring     vd_ui_coloring(VdUiGradient normal, VdUiGradient hot, VdUiGradient active);
 VD_UI_API VdUiColoring     vd_ui_coloring_all4(VdUiF4 v);
 VD_UI_API VdUiColoring     vd_ui_coloring_all(float v);
-#define VD_UI_WITH_STYLE_COLORING(mask, coloring) VD_UI_WITH_SCOPE(vd_ui_style_coloring_push(mask, coloring), vd_ui_style_coloring_pop(mask))
-#define VD_UI_WITH_STYLE_COLOR(mask, f4) VD_UI_WITH_SCOPE(vd_ui_style_coloring_push(mask, vd_ui_coloring_all4(f4)), vd_ui_style_coloring_pop(mask))
-#define VD_UI_WITH_STYLE_BACKGROUND_COLORING(coloring) VD_UI_WITH_STYLE_COLORING(VD_UI_FLAG_BACKGROUND, coloring)
-#define VD_UI_WITH_STYLE_BACKGROUND_COLOR(f4) VD_UI_WITH_STYLE_COLOR(VD_UI_FLAG_BACKGROUND, f4)
-#define VD_UI_WITH_STYLE_TEXT_COLORING(coloring) VD_UI_WITH_STYLE_COLORING(VD_UI_FLAG_TEXT, coloring)
-#define VD_UI_WITH_STYLE_TEXT_COLOR(f4) VD_UI_WITH_STYLE_COLOR(VD_UI_FLAG_TEXT, f4)
+#define VD_UI_WITH_STYLE_COLORING(mask, coloring) \
+    VD_UI_WITH_SCOPE(vd_ui_style_coloring_push(mask, coloring), vd_ui_style_coloring_pop(mask))
+#define VD_UI_WITH_STYLE_COLOR(mask, f4) \
+    VD_UI_WITH_SCOPE(vd_ui_style_coloring_push(mask, vd_ui_coloring_all4(f4)), vd_ui_style_coloring_pop(mask))
+#define VD_UI_WITH_STYLE_BACKGROUND_COLORING(coloring) \
+    VD_UI_WITH_STYLE_COLORING(VD_UI_FLAG_BACKGROUND, coloring)
+#define VD_UI_WITH_STYLE_BACKGROUND_COLOR(f4) \
+    VD_UI_WITH_STYLE_COLOR(VD_UI_FLAG_BACKGROUND, f4)
+#define VD_UI_WITH_STYLE_TEXT_COLORING(coloring) \
+    VD_UI_WITH_STYLE_COLORING(VD_UI_FLAG_TEXT, coloring)
+#define VD_UI_WITH_STYLE_TEXT_COLOR(f4) \
+    VD_UI_WITH_STYLE_COLOR(VD_UI_FLAG_TEXT, f4)
 
 VD_UI_API void             vd_ui_style_border_size_push(VdUiFlags mask, float border_size);
 VD_UI_API float            vd_ui_style_border_size_get(VdUiFlags mask);
@@ -880,19 +935,6 @@ VD_UI_API void             vd_ui_style_font_size_push(float font_size);
 VD_UI_API float            vd_ui_style_font_size_get(void);
 VD_UI_API void             vd_ui_style_font_size_pop(void);
 #define VD_UI_WITH_STYLE_FONT_SIZE(size) VD_UI_WITH_SCOPE(vd_ui_style_font_size_push(size), vd_ui_style_font_size_pop())
-
-VD_UI_INL void vd_ui_style_size_push_all(VdUiSizeMode mode, float value, float niceness)
-{
-    vd_ui_style_size_push(VD_UI_AXISH, mode, value, niceness);
-    vd_ui_style_size_push(VD_UI_AXISV, mode, value, niceness);
-}
-
-VD_UI_INL void vd_ui_style_size_pop_all(void)
-{
-    vd_ui_style_size_pop(VD_UI_AXISH);
-    vd_ui_style_size_pop(VD_UI_AXISV);
-}
-
 /* ----RENDERING----------------------------------------------------------------------------------------------------- */
 enum {
     VD_UI_VERTEX_FLAG_TEXTURE_IS_ALPHA_BUFFER = 1 << 0,
@@ -911,16 +953,16 @@ typedef struct {
     float            p1u[2];           //  2 x  4 =   8 bytes
     /* 4 Corners of gradient */
     float            color[16];        //  4 x 16 =  64 bytes
+    /* Corner radius in screen space */
+    float            corner_radius[4]; //  4 x  4 =  16 bytes
     /* 0 = tint, 1 = letters */
     float            alpha_mix;        //  1 x  4 =   4 bytes
-    /* Corner radius in screen space */
-    float            corner_radius;    //  1 x  4 =   4 bytes
     /* SDF softness of said radius */
     float            edge_softness;    //  1 x  4 =   4 bytes
     /* How thick to draw the border */
     float            border_thickness; //  1 x  4 =   4 bytes
     /* Unused for now */
-    unsigned char    padd[16];         // 16 x  1 =  16 bytes
+    unsigned char    padd[4];          //  4 x  1 =   4 bytes
 } VdUiVertex;                          //         = 128 bytes
 #pragma pack(pop)
 
@@ -1018,9 +1060,13 @@ VD_UI_API void             vd_ui_set_draw_proc(VdUiDiv *div, VdUiDrawProc *proc,
  * @param color The gradient of the rectangle, mapped to each corner (left, top, right, bottom)
  */
 VD_UI_API void             vd_ui_push_rectgrad(float rect[4], float color[16],
-                                               float corner_radius,
+                                               float corner_radius[4],
                                                float edge_softness,
                                                float border_thickness);
+
+VD_UI_API void             vd_ui_push_texslice(float rect[4], float uv[4], float color[16],
+                                               VdUiTextureId *texture,
+                                               float corner_radius[4], float edge_softness, float border_thickness);
 
 VD_UI_API float            vd_ui_get_font_height(VdUiFontId font, float pixel_height);
 VD_UI_API void             vd_ui_push_glyph(VdUiFontId font, float rect[4], float uv[4], float color[4]);
@@ -1747,6 +1793,10 @@ static VdUiColoring  Vd_Ui__Coloring_Tx_Default;
 #   define VD_UI_STYLE_PADDING_STACK_COUNT      32
 #endif // !VD_UI_STYLE_PADDING_STACK_COUNT
 
+#ifndef VD_UI_STYLE_ROUNDING_STACK_COUNT
+#   define VD_UI_STYLE_ROUNDING_STACK_COUNT     32
+#endif // !VD_UI_STYLE_ROUNDING_STACK_COUNT
+
 #ifndef VD_UI_STYLE_CHILD_GAP_STACK_MAX
 #   define VD_UI_STYLE_CHILD_GAP_STACK_MAX      16
 #endif // !VD_UI_STYLE_CHILD_GAP_STACK_MAX
@@ -1816,10 +1866,6 @@ static int  vd_ui__is_clipped(VdUiContext *ctx, VdUiDiv *div);
 static unsigned int vd_ui__get_clip_index(VdUiContext *ctx);
 
 static void vd_ui__push_rect(VdUiContext *ctx, float rect[4], float color[4]);
-static void vd_ui__push_rectgrad(VdUiContext *ctx, float rect[4], float color[16],
-                                                                  float corner_radius,
-                                                                  float edge_softness,
-                                                                  float border_thickness);
 static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId *texture, float p0[2], float p1[2],
                                                                          float u0[2], float u1[2],
                                                                          float color[4],
@@ -1828,7 +1874,7 @@ static void vd_ui__push_vertexgrad(VdUiContext *ctx, VdUiTextureId *texture, flo
                                                                              float u0[2], float u1[2],
                                                                              float color[16],
                                                                              VdUiVertexFlags flags,
-                                                                             float corner_radius,
+                                                                             float corner_radius[4],
                                                                              float edge_softness,
                                                                              float border_thickness);
 static void vd_ui__get_transformed_rect(VdUiContext *ctx, VdUiDiv *div, float rect[4]);
@@ -2032,6 +2078,12 @@ struct VdUiContext {
     unsigned int            coloring_tx_stack_count;
     VdUiColoring            coloring_tx_stack[VD_UI_STYLE_COLORING_STACK_COUNT];   // Text Coloring
 
+    unsigned int            rounding_bg_stack_count;
+    VdUiF4                  rounding_bg_stack[VD_UI_STYLE_ROUNDING_STACK_COUNT];
+
+    unsigned int            rounding_bd_stack_count;
+    VdUiF4                  rounding_bd_stack[VD_UI_STYLE_ROUNDING_STACK_COUNT];
+
     unsigned int            font_size_stack_count;
     float                   font_size_stack[VD_UI_STYLE_FONT_SIZE_STACK_COUNT];    // Text Font Size
 
@@ -2095,6 +2147,7 @@ VD_UI_API void vd_ui_frame_begin(float delta_seconds)
     ctx->mouse_last[0]        = ctx->mouse[0];
     ctx->mouse_last[1]        = ctx->mouse[1];
     ctx->delta_seconds        = delta_seconds;
+    ctx->mouse_left_last      = ctx->mouse_left;
 
     ctx->strbuf_len           = 0;
     ctx->null_divs_len        = 0;
@@ -2143,6 +2196,8 @@ VD_UI_API void vd_ui_frame_end(void)
     ctx->coloring_bd_stack_count = 0;
     ctx->coloring_tx_stack_count = 0;
     ctx->font_size_stack_count = 0;
+    ctx->rounding_bg_stack_count = 0;
+    ctx->rounding_bd_stack_count = 0;
 
     // Layout UI
     vd_ui__layout(ctx);
@@ -2562,11 +2617,32 @@ VD_UI_API void vd_ui_set_draw_proc(VdUiDiv *div, VdUiDrawProc *proc, void *usr)
 }
 
 VD_UI_API void vd_ui_push_rectgrad(float rect[4], float color[16],
-                                   float corner_radius,
+                                   float corner_radius[4],
                                    float edge_softness,
                                    float border_thickness)
 {
-    vd_ui__push_rectgrad(vd_ui_context_get(), rect, color, corner_radius, edge_softness, border_thickness);
+    VdUiContext *ctx = vd_ui_context_get();
+    vd_ui__push_vertexgrad(ctx, &ctx->texture,
+                           (float[]){rect[0], rect[1]}, (float[]){rect[2], rect[3]},
+                           (float[]){1.f / (float)(ctx->atlas[0]) , 1.f / (float)(ctx->atlas[1])},
+                           (float[]){3.f / (float)(ctx->atlas[0]) , 3.f / (float)(ctx->atlas[1])},
+                           color,
+                           VD_UI_VERTEX_FLAG_TEXTURE_IS_ALPHA_BUFFER,
+                           corner_radius, edge_softness, border_thickness);
+}
+
+VD_UI_API void vd_ui_push_texslice(float rect[4], float uv[4], float color[16],
+                                   VdUiTextureId *texture,
+                                   float corner_radius[4], float edge_softness, float border_thickness)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    vd_ui__push_vertexgrad(ctx, texture, &rect[0], &rect[2],
+                                         &uv[0], &uv[2],
+                                         color,
+                                         0,
+                                         corner_radius,
+                                         edge_softness,
+                                         border_thickness);
 }
 
 VD_UI_API float vd_ui_get_font_height(VdUiFontId font, float pixel_height)
@@ -2830,7 +2906,7 @@ VD_UI_API int vd_ui_slider(void *value, void *min_value, void *max_value,
         track->style.size[1].mode     = VD_UI_SIZE_MODE_ABSOLUTE;
         track->style.size[1].value    = grip_size * 0.25f;
         track->style.size[1].niceness = 0.f;
-        track->style.background.corner_radius    = grip_size * 0.125f;
+        track->style.background.corner_radius    = vd_ui_fall4(grip_size * 0.125f);
         track->style.background.edge_softness    = 0.25f;
         track->style.background.coloring.normal      = vd_ui_gradient1(vd_ui_f4(0.4f, 0.4f, 0.4f, 1.f));
 
@@ -2845,7 +2921,7 @@ VD_UI_API int vd_ui_slider(void *value, void *min_value, void *max_value,
         grip->style.size[1].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
         grip->style.size[1].value = grip_size;
         grip->style.background.edge_softness = 0.7f;
-        grip->style.background.corner_radius = grip_size * 0.5f;
+        grip->style.background.corner_radius = vd_ui_fall4(grip_size * 0.5f);
         grip->style.background.coloring.normal   = vd_ui_gradient1(vd_ui_f4(0.27f, 0.27f, 0.27f, 1.f));
         grip->style.background.coloring.hot      = vd_ui_gradient1(vd_ui_f4(0.27f, 0.27f, 0.27f, 1.f));
         grip->style.background.coloring.active   = vd_ui_gradient1(vd_ui_f4(0.27f, 0.27f, 0.27f, 1.f));
@@ -2862,7 +2938,7 @@ VD_UI_API int vd_ui_slider(void *value, void *min_value, void *max_value,
         grip_inner->style.size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
         grip_inner->style.size[1].value = grip_size;
         grip_inner->style.background.edge_softness = 0.7f;
-        grip_inner->style.background.corner_radius = inner_grip_size * 0.5f;
+        grip_inner->style.background.corner_radius = vd_ui_fall4(inner_grip_size * 0.5f);
         grip_inner->style.background.coloring.normal   = vd_ui_gradient1(vd_ui_f4(0.29f, 0.71f, 0.93f, 1.f));
         grip_inner->style.background.coloring.hot      = vd_ui_gradient1(vd_ui_f4(0.29f, 0.71f, 0.93f, 1.f));
         grip_inner->style.background.coloring.active   = vd_ui_gradient1(vd_ui_f4(0.29f, 0.71f, 0.93f, 1.f));
@@ -3058,6 +3134,8 @@ VD_UI_DRAW_PROC(vd_ui_text_box_draw)
         caret_start[0] + 2.f, caret_start[1] + caret_h_len
     };
 
+    float zero_corner_radius[4] = {0, 0, 0, 0};
+
     if (caret_different_from_mark) {
         sel_draw_curr = &sel_draw_first;
 
@@ -3066,7 +3144,7 @@ VD_UI_DRAW_PROC(vd_ui_text_box_draw)
             VdUiGradient sel_grad = vd_ui_gradient1(vd_ui_f4(1.f, 1.f, 0.f, 0.2f));
             sel_draw_curr->rect.e[VD_UI_TOP] -= caret_h_len;
             sel_draw_curr->rect.e[VD_UI_BOTTOM] += caret_h_len;
-            vd_ui_push_rectgrad(sel_draw_curr->rect.e, sel_grad.e, 0.f, 0.2f, 0.f);
+            vd_ui_push_rectgrad(sel_draw_curr->rect.e, sel_grad.e, zero_corner_radius, 0.2f, 0.f);
 
 
             sel_draw_curr = sel_draw_curr->next;
@@ -3074,7 +3152,7 @@ VD_UI_DRAW_PROC(vd_ui_text_box_draw)
     }
 
     VdUiGradient caret_grad = vd_ui_gradient1(vd_ui_f4(1.f, 1.f, 0.f, 1.f));
-    vd_ui_push_rectgrad(caret_rect, caret_grad.e, 0.f, 0.2f, 0.f);
+    vd_ui_push_rectgrad(caret_rect, caret_grad.e, zero_corner_radius, 0.2f, 0.f);
 
     vd_ui__arena_restore(save);
 }
@@ -3914,6 +3992,56 @@ VD_UI_API void vd_ui_style_child_gap_pop(void)
     ctx->child_gap_stack_count--;
 }
 
+VD_UI_API void vd_ui_style_rounding_push(VdUiFlags mask, VdUiF4 radius)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    if (mask & VD_UI_FLAG_BACKGROUND) {
+        VD_UI_ASSERT(ctx->rounding_bg_stack_count < VD_UI_STYLE_ROUNDING_STACK_COUNT);
+        ctx->rounding_bg_stack[ctx->rounding_bg_stack_count++] = radius;
+    }
+
+    if (mask & VD_UI_FLAG_BORDER) {
+        VD_UI_ASSERT(ctx->rounding_bd_stack_count < VD_UI_STYLE_ROUNDING_STACK_COUNT);
+        ctx->rounding_bd_stack[ctx->rounding_bd_stack_count++] = radius;
+    }
+}
+
+VD_UI_API VdUiF4 vd_ui_style_rounding_get(VdUiFlags mask)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    if (mask & VD_UI_FLAG_BACKGROUND) {
+        if (ctx->rounding_bg_stack_count) {
+            return ctx->rounding_bg_stack[ctx->rounding_bg_stack_count - 1];
+        } else {
+            return vd_ui_fall4(0);
+        }
+    }
+
+    if (mask & VD_UI_FLAG_BACKGROUND) {
+        if (ctx->rounding_bd_stack_count) {
+            return ctx->rounding_bd_stack[ctx->rounding_bd_stack_count - 1];
+        } else {
+            return vd_ui_fall4(0);
+        }
+    }
+
+    return vd_ui_fall4(0.f);
+}
+
+VD_UI_API void vd_ui_style_rounding_pop(VdUiFlags mask)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    if (mask & VD_UI_FLAG_BACKGROUND) {
+        VD_UI_ASSERT(ctx->rounding_bg_stack_count > 0);
+        ctx->rounding_bg_stack_count--;
+    }
+
+    if (mask & VD_UI_FLAG_BORDER) {
+        VD_UI_ASSERT(ctx->rounding_bd_stack_count > 0);
+        ctx->rounding_bd_stack_count--;
+    }
+}
+
 VD_UI_API void vd_ui_style_coloring_push(VdUiFlags mask, VdUiColoring coloring)
 {
     VdUiContext *ctx = vd_ui_context_get();
@@ -4560,7 +4688,7 @@ VD_UI_API void vd_ui_event_mouse_button(int index, int down)
     VdUiContext *ctx = vd_ui_context_get();
     switch (index)
     {
-        case VD_UI_MOUSE_LEFT:   ctx->mouse_left_last = ctx->mouse_left; ctx->mouse_left = down; break;
+        case VD_UI_MOUSE_LEFT:   ctx->mouse_left = down; break;
         case VD_UI_MOUSE_RIGHT:  ctx->mouse_right  = down; break;
         case VD_UI_MOUSE_MIDDLE: ctx->mouse_middle = down; break;
         default: break;
@@ -4714,7 +4842,7 @@ static void vd_ui__push_vertexgrad(VdUiContext *ctx, VdUiTextureId *texture, flo
                                                                              float u0[2], float u1[2],
                                                                              float color[16],
                                                                              VdUiVertexFlags flags,
-                                                                             float corner_radius,
+                                                                             float corner_radius[4],
                                                                              float edge_softness,
                                                                              float border_thickness)
 {
@@ -4761,13 +4889,15 @@ static void vd_ui__push_vertexgrad(VdUiContext *ctx, VdUiTextureId *texture, flo
     v->color[2] = color[2]; v->color[6] = color[6]; v->color[10] = color[10]; v->color[14] = color[14];
     v->color[3] = color[3]; v->color[7] = color[7]; v->color[11] = color[11]; v->color[15] = color[15];
 
+    v->corner_radius[0] = corner_radius[0]; v->corner_radius[1] = corner_radius[1];
+    v->corner_radius[2] = corner_radius[2]; v->corner_radius[3] = corner_radius[3];
+
     if (flags & VD_UI_VERTEX_FLAG_TEXTURE_IS_ALPHA_BUFFER) {
         v->alpha_mix = 1.0;
     } else {
         v->alpha_mix = 0.0;
     }
 
-    v->corner_radius = corner_radius;
     v->edge_softness = edge_softness;
     v->border_thickness = border_thickness;
 
@@ -4821,21 +4951,8 @@ static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId *texture, float p
         color[0], color[1], color[2], color[3],
         color[0], color[1], color[2], color[3],
     };
-    vd_ui__push_vertexgrad(ctx, texture, p0, p1, u0, u1, colors, flags, 0.f, 0.f, 0.f);
-}
-
-static void vd_ui__push_rectgrad(VdUiContext *ctx, float rect[4], float color[16],
-                                                                  float corner_radius,
-                                                                  float edge_softness,
-                                                                  float border_thickness)
-{
-    // @todo(mdodis): Precompute calculation for st for full alpha pixel row
-    vd_ui__push_vertexgrad(ctx, &ctx->texture,
-        (float[]){rect[0], rect[1]}, (float[]){rect[2], rect[3]},
-        (float[]){1.f / (float)(ctx->atlas[0]) , 1.f / (float)(ctx->atlas[1])}, (float[]){3.f / (float)(ctx->atlas[0]) , 3.f / (float)(ctx->atlas[1])},
-        color,
-        VD_UI_VERTEX_FLAG_TEXTURE_IS_ALPHA_BUFFER,
-        corner_radius, edge_softness, border_thickness);
+    float corner_radius[4] = {0.f, 0.f, 0.f, 0.f};
+    vd_ui__push_vertexgrad(ctx, texture, p0, p1, u0, u1, colors, flags, corner_radius, 0.f, 0.f);
 }
 
 static void vd_ui__push_rect(VdUiContext *ctx, float rect[4], float color[4])
@@ -5109,7 +5226,7 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
 
         if (curr->flags & VD_UI_FLAG_BACKGROUND) {
             VdUiGradient grad = vd_ui_coloring_interpolate(curr->style.background.coloring, curr->hot_t, curr->active_t);
-            vd_ui__push_rectgrad(ctx, rect, grad.e, curr->style.background.corner_radius, curr->style.background.edge_softness, 0.f);
+            vd_ui_push_rectgrad(rect, grad.e, curr->style.background.corner_radius.e, curr->style.background.edge_softness, 0.f);
         }
 
         if (curr->flags & VD_UI_FLAG_TEXT) {
@@ -5185,7 +5302,8 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
 
         if (ctx->debug.layout_recompute_vis_on) {
             VdUiGradient grad = vd_ui_gradient1(vd_ui_f4(0.922f, 0.753f, 0.306f, curr->size_timeout_t));
-            vd_ui__push_rectgrad(ctx, rect, grad.e, 0.f, 0.f, 0.f);
+            float zero_corner_radius[4] = {0, 0, 0, 0};
+            vd_ui_push_rectgrad(rect, grad.e, zero_corner_radius, 0.f, 0.f);
         }
     }
 
@@ -5538,6 +5656,12 @@ VD_UI_API int vd_ui_div_is_focused(VdUiDiv *div)
     return ctx->focused == div->h;
 }
 
+VD_UI_API VdUiDiv *vd_ui_get_root(void)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    return &ctx->root;
+}
+
 /* ----DEBUG IMPL---------------------------------------------------------------------------------------------------- */
 VD_UI_API void vd_ui_debug_set_draw_cursor_on(VdUiBool on)
 {
@@ -5756,10 +5880,8 @@ static void vd_ui__inspector_do_hierarchy(VdUiContext *ctx, VdUiDiv *curr, float
             curr->rect[3] -= 1.f;
         }
 
-        vd_ui__push_rectgrad(ctx, rect, redgrad.e,
-                                              0.f,
-                                              0.f,
-                                              4.f);
+        float zero_corner_radius[4] = {0, 0, 0, 0};
+        vd_ui_push_rectgrad(rect, redgrad.e, zero_corner_radius, 0.f, 4.f);
     }
 
     vd_ui__push_rect(ctx, entry_rect, final_color);
@@ -5863,16 +5985,16 @@ int vd_ui__arena_free(VdUi__Arena *a, void *memory, size_t size)
 /* ----INTEGRATION - OPENGL IMPL------------------------------------------------------------------------------------- */
 #define VD_UI_GL_VERTEX_SHADER_SOURCE \
 "#version 330 core                                                                                                 \n" \
-"layout (location = 0) in vec2 a_p0;                                                                               \n" \
-"layout (location = 1) in vec2 a_p1;                                                                               \n" \
-"layout (location = 2) in vec2 a_p0u;                                                                              \n" \
-"layout (location = 3) in vec2 a_p1u;                                                                              \n" \
-"layout (location = 4) in vec4 a_color0;                                                                           \n" \
-"layout (location = 5) in vec4 a_color1;                                                                           \n" \
-"layout (location = 6) in vec4 a_color2;                                                                           \n" \
-"layout (location = 7) in vec4 a_color3;                                                                           \n" \
-"layout (location = 8) in float a_amix;                                                                            \n" \
-"layout (location = 9) in float a_corner_radius;                                                                   \n" \
+"layout (location =  0) in vec2  a_p0;                                                                             \n" \
+"layout (location =  1) in vec2  a_p1;                                                                             \n" \
+"layout (location =  2) in vec2  a_p0u;                                                                            \n" \
+"layout (location =  3) in vec2  a_p1u;                                                                            \n" \
+"layout (location =  4) in vec4  a_color0;                                                                         \n" \
+"layout (location =  5) in vec4  a_color1;                                                                         \n" \
+"layout (location =  6) in vec4  a_color2;                                                                         \n" \
+"layout (location =  7) in vec4  a_color3;                                                                         \n" \
+"layout (location =  8) in float a_amix;                                                                           \n" \
+"layout (location =  9) in vec4  a_corner_radius;                                                                  \n" \
 "layout (location = 10) in float a_edge_softness;                                                                  \n" \
 "layout (location = 11) in float a_border_thickness;                                                               \n" \
 "uniform vec2 uResolution;                                                                                         \n" \
@@ -5882,7 +6004,7 @@ int vd_ui__arena_free(VdUi__Arena *a, void *memory, size_t size)
 "out vec2  f_dp;                                                                                                   \n" \
 "out vec2  f_dc;                                                                                                   \n" \
 "out vec2  f_dhs;                                                                                                  \n" \
-"out float f_corner_radius;                                                                                        \n" \
+"out vec4 f_corner_radius;                                                                                         \n" \
 "out float f_edge_softness;                                                                                        \n" \
 "out float f_border_thickness;                                                                                     \n" \
 "                                                                                                                  \n" \
@@ -5925,7 +6047,7 @@ int vd_ui__arena_free(VdUi__Arena *a, void *memory, size_t size)
 "in vec2  f_dp;                                                                                                    \n" \
 "in vec2  f_dc;                                                                                                    \n" \
 "in vec2  f_dhs;                                                                                                   \n" \
-"in float f_corner_radius;                                                                                         \n" \
+"in vec4 f_corner_radius;                                                                                          \n" \
 "in float f_edge_softness;                                                                                         \n" \
 "in float f_border_thickness;                                                                                      \n" \
 "                                                                                                                  \n" \
@@ -5944,26 +6066,47 @@ int vd_ui__arena_free(VdUi__Arena *a, void *memory, size_t size)
 "    return 1.0 - smoothstep(radius - softness, radius + softness, distance);                                      \n" \
 "}                                                                                                                 \n" \
 "                                                                                                                  \n" \
+"float sdf_rounded_rect4(                                                                                          \n" \
+"    vec2 pos, vec2 center, vec2 half_size,                                                                        \n" \
+"    float r_tl, float r_tr, float r_bl, float r_br)                                                               \n" \
+"{                                                                                                                 \n" \
+"    vec2 p = pos - center;                                                                                        \n" \
+"                                                                                                                  \n" \
+"    float right = step(0.0, p.x);                                                                                 \n" \
+"    float top   = step(0.0, p.y);                                                                                 \n" \
+"                                                                                                                  \n" \
+"    float r = mix(                                                                                                \n" \
+"        mix(r_tl, r_bl, top),  // flipped                                                                         \n" \
+"        mix(r_tr, r_br, top),  // flipped                                                                         \n" \
+"        right                                                                                                     \n" \
+"    );                                                                                                            \n" \
+"                                                                                                                  \n" \
+"    vec2 q = abs(p) - half_size + vec2(r);                                                                        \n" \
+"    return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - r;                                                     \n" \
+"}                                                                                                                 \n" \
 "void main()                                                                                                       \n" \
 "{                                                                                                                 \n" \
 "    vec2 softness_padding = vec2(max(0, f_edge_softness * 2 - 1.0));                                              \n" \
-"    float dist = sdf_rounded_rect(f_dp, f_dc, f_dhs - softness_padding, f_corner_radius);                         \n" \
+"    float dist = sdf_rounded_rect4(f_dp, f_dc, f_dhs - softness_padding,                                          \n" \
+"                                   f_corner_radius.x, f_corner_radius.y,                                          \n" \
+"                                   f_corner_radius.z, f_corner_radius.w);                                         \n" \
 "    float border_factor = 1.0;                                                                                    \n" \
 "    if (f_border_thickness != 0.0) {                                                                              \n" \
 "        vec2 interior_hs = f_dhs - vec2(f_border_thickness);                                                      \n" \
 "                                                                                                                  \n" \
 "        float interior_radius_reduce_f = min(interior_hs.x / f_dhs.x, interior_hs.y / f_dhs.y);                   \n" \
-"        float interior_corner_radius = f_corner_radius * interior_radius_reduce_f * interior_radius_reduce_f;     \n" \
+"        vec4 interior_corner_radius = f_corner_radius * interior_radius_reduce_f * interior_radius_reduce_f;      \n" \
 "                                                                                                                  \n" \
-"        float inside_d = sdf_rounded_rect(f_dp, f_dc, interior_hs - softness_padding, interior_corner_radius);    \n" \
+"        // float inside_d = sdf_rounded_rect(f_dp, f_dc, interior_hs - softness_padding, interior_corner_radius); \n" \
+"        float inside_d = sdf_rounded_rect4(f_dp, f_dc, interior_hs - softness_padding,                            \n" \
+"                                           interior_corner_radius.x, interior_corner_radius.y,                    \n" \
+"                                           interior_corner_radius.z, interior_corner_radius.w);                   \n" \
 "                                                                                                                  \n" \
 "        float inside_f = smoothstep(0, 2 * f_edge_softness, inside_d);                                            \n" \
 "        border_factor = inside_f;                                                                                 \n" \
 "    }                                                                                                             \n" \
 "    float sdf = 1.0 - smoothstep(0.0, 2.0 * f_edge_softness, dist);                                               \n" \
 "                                                                                                                  \n" \
-"                                                                                                                  \n" \
-"    // === Base color sampling and mask ===                                                                       \n" \
 "    vec4 sample = texture(uTexture, f_uv);                                                                        \n" \
 "    vec4 normal_color = sample * f_color;                                                                         \n" \
 "    vec4 mask_color = vec4(f_color.rgb, f_color.a * sample.r);                                                    \n" \
@@ -6050,7 +6193,7 @@ VD_UI_API void vd_ui_gl_get_attribute_properties(int attribute, int *size, unsig
         //                  GL_FLOAT          GL_FALSE
         case 8:  *size = 1; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*) VD_UI_OFFSET_OF(VdUiVertex, alpha_mix);         *divisor = 1; break;
         //                  GL_FLOAT          GL_FALSE
-        case 9:  *size = 1; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*) VD_UI_OFFSET_OF(VdUiVertex, corner_radius);     *divisor = 1; break;
+        case 9:  *size = 4; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*) VD_UI_OFFSET_OF(VdUiVertex, corner_radius);     *divisor = 1; break;
         //                  GL_FLOAT          GL_FALSE
         case 10: *size = 1; *type = 0x1406;   *normalized = 0; *stride = sizeof(VdUiVertex); *pointer = (void*) VD_UI_OFFSET_OF(VdUiVertex, edge_softness);     *divisor = 1; break;
         //                  GL_FLOAT          GL_FALSE
@@ -8998,5 +9141,4 @@ static unsigned char Vd_Ui_Default_Icons_Font[7840] = {
 0x00,0x03,0x00,0x00,0x44,0x59,0x59,0x59,0x59,0x59,0xb1,0x00,0x0e,0x2a,0xb8,0x01,0xff,0x85,0xb0,0x04,0x8d,0xb1,0x02,0x00,0x44,0xb3,0x05,0x64,0x06,0x00,0x44,0x44
 
 };
-
 #endif // VD_UI_IMPL
