@@ -9613,7 +9613,7 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
                 int attribs[9];
                 attribs[0] = WGL_CONTEXT_MAJOR_VERSION_ARB; attribs[1] = major;
                 attribs[2] = WGL_CONTEXT_MINOR_VERSION_ARB; attribs[3] = minor;
-                attribs[4] = WGL_CONTEXT_PROFILE_MASK_ARB;  attribs[5] = (compat) ? WGL_CONTEXT_CORE_PROFILE_BIT_ARB : WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
+                attribs[4] = WGL_CONTEXT_PROFILE_MASK_ARB;  attribs[5] = (compat) ? WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB : WGL_CONTEXT_CORE_PROFILE_BIT_ARB;
                 attribs[6] = WGL_CONTEXT_FLAGS_ARB;         attribs[7] = (debug)  ? WGL_CONTEXT_DEBUG_BIT_ARB : 0;
                 attribs[8] = 0;
 

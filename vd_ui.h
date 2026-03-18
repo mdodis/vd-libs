@@ -896,7 +896,7 @@ VD_UI_API void             vd_ui_style_rounding_push(VdUiFlags mask, VdUiF4 radi
 VD_UI_API VdUiF4           vd_ui_style_rounding_get(VdUiFlags mask);
 VD_UI_API void             vd_ui_style_rounding_pop(VdUiFlags mask);
 #define VD_UI_WITH_STYLE_ROUNDING(mask, tl, tr, bl, br) \
-    VD_UI_WITH_SCOPE(vd_ui_style_rounding_push(mask, vd_ui_f4(tl, tr, bl, br)), vd_ui_style_rounding_pop())
+    VD_UI_WITH_SCOPE(vd_ui_style_rounding_push(mask, vd_ui_f4(tl, tr, bl, br)), vd_ui_style_rounding_pop(mask))
 #define VD_UI_WITH_STYLE_ROUNDING_ALL(mask, rounding) \
     VD_UI_WITH_STYLE_ROUNDING(mask, rounding, rounding, rounding, rounding)
 #define VD_UI_WITH_STYLE_BACKGROUND_ROUNDING(tl, tr, bl, br) \
@@ -1122,6 +1122,7 @@ VD_UI_API void             vd_ui_set_capture(size_t eid);
 VD_UI_API int              vd_ui_is_captured(VdUiDiv *div);
 VD_UI_API int              vd_ui_get_num_keystrokes(void);
 VD_UI_API VdUiKeyStroke    vd_ui_get_keystroke(int index);
+VD_UI_API int              vd_ui_any_hovered(void);
 
 /* ----CONTEXT CREATION---------------------------------------------------------------------------------------------- */
 typedef struct VdUiContext VdUiContext;
@@ -2033,6 +2034,7 @@ struct VdUiContext {
 
     int                     focus;                                                 // Determines if this UI tree has any focus
 
+    int                     mouse_over_any_visible_div;                            // Whether the mouse is over any visible div
     float                   mouse[VD_UI_AXES];                                     // The current mouse coordinates. Passed via vd_ui_event_mouse_location()
     float                   mouse_last[VD_UI_AXES];                                // The last known mouse coordinates.
 
@@ -2152,6 +2154,7 @@ VD_UI_API void vd_ui_frame_begin(float delta_seconds)
     ctx->strbuf_len           = 0;
     ctx->null_divs_len        = 0;
     ctx->num_keystrokes       = 0;
+    ctx->mouse_over_any_visible_div = 0;
 
     vd_ui__arena_clear(&ctx->frame_arena);
 
@@ -3652,16 +3655,18 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
         parent->child_count++;
     }
 
-    // Resolve styles
+    // Resolve Styles
     result->focus_mode                           = vd_ui_focus_mode_get();
     result->style.size[VD_UI_AXISH]              = *vd_ui_style_size_get(VD_UI_AXISH);
     result->style.size[VD_UI_AXISV]              = *vd_ui_style_size_get(VD_UI_AXISV);
     result->style.background.coloring.normal     = vd_ui_style_coloring_get(VD_UI_FLAG_BACKGROUND)->normal;
     result->style.background.coloring.hot        = vd_ui_style_coloring_get(VD_UI_FLAG_BACKGROUND)->hot;
     result->style.background.coloring.active     = vd_ui_style_coloring_get(VD_UI_FLAG_BACKGROUND)->active;
+    result->style.background.corner_radius       = vd_ui_style_rounding_get(VD_UI_FLAG_BACKGROUND);
     result->style.border.coloring.normal         = vd_ui_style_coloring_get(VD_UI_FLAG_BORDER)->normal;
     result->style.border.coloring.hot            = vd_ui_style_coloring_get(VD_UI_FLAG_BORDER)->hot;
     result->style.border.coloring.active         = vd_ui_style_coloring_get(VD_UI_FLAG_BORDER)->active;
+    result->style.border.corner_radius           = vd_ui_style_rounding_get(VD_UI_FLAG_BORDER);
     result->style.text.coloring.normal           = vd_ui_style_coloring_get(VD_UI_FLAG_TEXT)->normal;
     result->style.text.coloring.hot              = vd_ui_style_coloring_get(VD_UI_FLAG_TEXT)->hot;
     result->style.text.coloring.active           = vd_ui_style_coloring_get(VD_UI_FLAG_TEXT)->active;
@@ -3671,6 +3676,7 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     result->style.padding[VD_UI_RIGHT]           = vd_ui_style_padding_get(VD_UI_RIGHT);
     result->style.padding[VD_UI_BOTTOM]          = vd_ui_style_padding_get(VD_UI_BOTTOM);
     result->style.child_gap                      = vd_ui_style_child_gap_get();
+
     return result;
 }
 
@@ -4267,7 +4273,14 @@ static void vd_ui__calc_dyn_size_up(VdUiContext *ctx, VdUiDiv *curr)
             case VD_UI_SIZE_MODE_PERCENT_OF_PARENT: {
                 if (!curr->parent) break;
 
-                float new_comp_size = curr->style.size[i].value * curr->parent->comp_size[i];
+                float padd = 0.f;
+                if (i == VD_UI_AXISH) {
+                    padd = curr->parent->style.padding[VD_UI_LEFT] + curr->style.padding[VD_UI_RIGHT];
+                } else {
+                    padd = curr->parent->style.padding[VD_UI_TOP] + curr->style.padding[VD_UI_BOTTOM];
+                }
+
+                float new_comp_size = curr->style.size[i].value * (curr->parent->comp_size[i] - padd);
                 vd_ui__change_size(curr, i, new_comp_size);
             } break;
 
@@ -4543,6 +4556,14 @@ static void vd_ui__calc_positions(VdUiContext *ctx, VdUiDiv *curr)
         child->rect[VD_UI_LEFT]  += child->offset[0]; child->rect[VD_UI_TOP]    += child->offset[1];
         child->rect[VD_UI_RIGHT] += child->offset[0]; child->rect[VD_UI_BOTTOM] += child->offset[1];
 
+        int child_is_visible = 0
+                             || (child->flags & VD_UI_FLAG_BACKGROUND)
+                             || (child->flags & VD_UI_FLAG_BORDER)
+                             || (child->flags & VD_UI_FLAG_CLICKABLE);
+        if (child_is_visible && vd_ui__point_in_rect(ctx->mouse, child->rect)) {
+            ctx->mouse_over_any_visible_div = 1;
+        }
+
         child = child->next;
     }
 
@@ -4746,6 +4767,12 @@ VD_UI_API VdUiKeyStroke vd_ui_get_keystroke(int index)
     int keystroke_count = (ctx->num_keystrokes % VD_UI_KEYSTROKES_MAX);
     VD_UI_ASSERT(index < keystroke_count);
     return ctx->keystrokes[index];
+}
+
+VD_UI_API int vd_ui_any_hovered(void)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    return ctx->mouse_over_any_visible_div;
 }
 
 static void vd_ui__push_clip(VdUiContext *ctx, float clip[4])
