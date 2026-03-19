@@ -61,19 +61,29 @@ static int do_menu()
     vd_ui_style_size_pop(VD_UI_AXISV);
     vd_ui_style_size_pop(VD_UI_AXISH);
 
+    VdUiColoring icon_coloring = vd_ui_coloring(vd_ui_gradient1(vd_ui_f4(0.2f, 0.2f, 0.2f, 0.f)),
+                                                vd_ui_gradient1(vd_ui_f4(0.2f, 0.2f, 0.2f, 0.7f)),
+                                                vd_ui_gradient1(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f)));
+
     vd_ui_parent_push(menu);
     {
         if (sidebar_is_overlay()) {
-            if (vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, 62022), "##toggle-sidebar").clicked) {
-                sidebar_toggle();
+            VD_UI_WITH_STYLE_BACKGROUND_COLORING(icon_coloring)
+            {
+                if (vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, 62022), "##toggle-sidebar").clicked) {
+                    sidebar_toggle();
+                }
             }
         }
         vd_ui_labelf("Game Controllers##title");
 
         vd_ui_spacer(VD_UI_AXISH);
 
-        if (vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, 59397), "##close").clicked) {
-            result = 0;
+        VD_UI_WITH_STYLE_BACKGROUND_COLORING(icon_coloring)
+        {
+            if (vd_ui_icon_buttonf(vd_ui_symbol((VdUiFontId){1}, 59397), "##close").clicked) {
+                result = 0;
+            }
         }
     }
     vd_ui_parent_pop();
@@ -101,10 +111,14 @@ static int device_field_button(int i, float comp_pos_rel[2])
                               vd_ui_coloring(vd_ui_gradient1(normal_color),
                                              vd_ui_gradient1(vd_ui_f4(0.52f, 0.52f, 0.52f, 1.f)),
                                              vd_ui_gradient1(vd_ui_f4(0.33f, 0.33f, 0.33f, 1.f))));
-    VdUiDiv *btn = vd_ui_div_newf(VD_UI_FLAG_TEXT
-                                  | VD_UI_FLAG_BACKGROUND
-                                  | VD_UI_FLAG_CLICKABLE, "%s##dev-%d", vd_fc_name(i), i);
-    btn->style.background.corner_radius = 8.f;
+    VdUiDiv *btn;
+    VD_UI_WITH_STYLE_ROUNDING_ALL(VD_UI_FLAG_BACKGROUND, 8.f)
+    {
+        btn = vd_ui_div_newf(VD_UI_FLAG_TEXT
+                             | VD_UI_FLAG_BACKGROUND
+                             | VD_UI_FLAG_CLICKABLE
+                             , "%s##dev-%d", vd_fc_name(i), i);
+    }
     btn->style.background.edge_softness = 0.002f;
     btn->style.background.border_thickness = 0.f;
     vd_ui_style_coloring_pop(VD_UI_FLAG_BACKGROUND);
@@ -227,9 +241,12 @@ static void do_device_info(void)
             for (int j = 0; (j < button_column_count) && ((i + j) < vd_fc_button_count(curr_device_id)); ++j) {
 
                 int button_id = i + j;
-
-                VdUiDiv *div = vd_ui_div_newf(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_TEXT,
-                                              "%d##button-%d", button_id, button_id);
+                VdUiDiv *div;
+                VD_UI_WITH_STYLE_ROUNDING_ALL(VD_UI_FLAG_BACKGROUND, 16.f)
+                {
+                    div = vd_ui_div_newf(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_TEXT,
+                                        "%d##button-%d", button_id, button_id);
+                }
 
                 div->style.size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
                 div->style.size[0].value = 32.f;
@@ -241,7 +258,6 @@ static void do_device_info(void)
                 div->style.text.halign = VD_UI_TEXT_HALIGN_CENTER;
                 div->style.text.valign = VD_UI_TEXT_VALIGN_MIDDLE;
 
-                div->style.background.corner_radius = 16.f;
                 div->style.background.edge_softness = 0.002f;
 
                 if (vd_fc_raw_button_down(curr_device_id, button_id)) {
@@ -325,8 +341,15 @@ static void do_sidebar(void)
         }
     }
 
-    VdUiDiv *mark_point = vd_ui_div_new(VD_UI_FLAG_BACKGROUND
-                                        | VD_UI_FLAG_FLOAT, VD_UI_LIT("##active-device-indicator"));
+    VdUiDiv *mark_point;
+    VD_UI_WITH_STYLE_ROUNDING_ALL(VD_UI_FLAG_BACKGROUND, 4.f)
+    {
+
+        mark_point = vd_ui_div_new(VD_UI_FLAG_BACKGROUND
+                                   | VD_UI_FLAG_FLOAT
+                                   , VD_UI_LIT("##active-device-indicator"));
+    }
+
     mark_point->style.background.coloring = vd_ui_coloring_all4(vd_ui_f4(0.294f, 0.71f, 0.925f, 1.f));
     mark_point->style.size[0].mode = VD_UI_SIZE_MODE_ABSOLUTE;
     mark_point->style.size[0].value = 4.f;
@@ -335,9 +358,6 @@ static void do_sidebar(void)
     mark_point->comp_pos_rel[0] = 8.f;
     mark_point->comp_pos_rel[1] = vd_ui_lerp(mark_point->comp_pos_rel[1], mark_point_h + 6.f, vd_fw_delta_s() * 10.f);
     mark_point->zoffset = 1;
-    mark_point->style.background.corner_radius = 4.f;
-
-
     vd_ui_parent_pop();
 }
 

@@ -318,7 +318,11 @@ int vd_ui_demo(void)
         static float scrollx = 0.f;
         static float scrolly = 0.f;
 
-        vd_ui_scroll_begin(VD_UI_LIT("##main-scroll-view"), &scrollx, &scrolly);
+        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
+        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1, 1)
+        {
+            vd_ui_scroll_begin(VD_UI_LIT("##main-scroll-view"), &scrollx, &scrolly, 0);
+        }
         {
 
             VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f)
