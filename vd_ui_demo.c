@@ -150,7 +150,7 @@ static int vd_ui__demo_menu_section_begin(const char *label)
                                           | VD_UI_FLAG_BACKGROUND
                                           , "##menu-section");
             file_menu->comp_pos_rel[0] = 0;
-            file_menu->comp_pos_rel[1] = file_menu->parent->parent->comp_size[1];
+            file_menu->comp_pos_rel[1] = 16.f;
 
             if (vd_ui__demo_point_in_rect(file.mouse[0], file.mouse[1], file_menu->rect)) {
                 demo_menubar_hovering = 1;
@@ -321,7 +321,7 @@ int vd_ui_demo(void)
         VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
         VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1, 1)
         {
-            vd_ui_scroll_begin(VD_UI_LIT("##main-scroll-view"), &scrollx, &scrolly, 0);
+            vd_ui_scrollview_begin(VD_UI_LIT("##main-scroll-view"), &scrollx, &scrolly);
         }
         {
 
@@ -615,7 +615,7 @@ int vd_ui_demo(void)
 
             vd_ui_parent_pop();
         }
-        vd_ui_scroll_end();
+        vd_ui_scrollview_end();
 
         // Floating part
         VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1.f, 1.f)

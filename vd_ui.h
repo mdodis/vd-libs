@@ -570,6 +570,8 @@ static inline void*        vd_ui_memcpy(void *dst, void *src, size_t count);
 VD_UI_INL void*            vd_ui_memmove(void *dest, void *src, size_t num);
 VD_UI_API void*            vd_ui_mem_push(size_t size);
 
+VD_UI_INL VdUiAxis         vd_ui_diagonal_axis(VdUiAxis axis);
+VD_UI_INL VdUiFlags        vd_ui_flex_flag_from_axis(VdUiAxis axis);
 /* ----BASIC WIDGETS------------------------------------------------------------------------------------------------- */
 /**
  * Displays a button with text
@@ -618,6 +620,8 @@ VD_UI_INL VdUiReply        vd_ui_checkboxf(int *b, const char *label, ...)      
  * @param  axis The axis to space to
  */
 VD_UI_API void             vd_ui_spacer(VdUiAxis axis);
+
+VD_UI_API VdUiDiv*         vd_ui_spacerex(VdUiAxis axis, VdUiSizeMode size_mode, float value, float niceness);
 
 /**
  * Displays an icon with (optional) text
@@ -678,6 +682,27 @@ typedef struct {
 } VdUiScrollOptions;
 VD_UI_API void             vd_ui_scroll_begin(VdUiStr str, float *x, float *y, VdUiScrollOptions *options);
 VD_UI_API void             vd_ui_scroll_end(void);
+
+VD_UI_API VdUiDiv*         vd_ui_scrollview_begin(VdUiStr str, float *x, float *y);
+VD_UI_API void             vd_ui_scrollview_end(void);
+
+typedef struct {
+    float           diagonal_axis_size;
+    float           symbol_to_button_ratio;
+    float           button_speed;
+    VdUiColoring    button_coloring;
+    VdUiSymbol      increase;
+    VdUiSymbol      decrease;
+    VdUiColoring    track_coloring;
+    float           min_grip_size;
+    float           scroll_modifier;
+    float           grip_to_button_ratio;
+    float           grip_rounding;
+    VdUiColoring    grip_coloring;
+} VdUiScrollbarOptions;
+VD_UI_API VdUiDiv*         vd_ui_scrollbar(VdUiStr label, VdUiAxis scroll_axis,
+                                           float *v, float window, float contents,
+                                           int wheel_scrollable, VdUiScrollbarOptions *options);
 
 VD_UI_API void             vd_ui_menu_group_begin(uint32_t *menu, VdUiStr name, VdUiFlags flags);
 VD_UI_API int              vd_ui_menu_item(uint32_t *menu, VdUiStr label);
@@ -1144,8 +1169,11 @@ VD_UI_API void             vd_ui_event_char(unsigned int codepoint);
 VD_UI_API void             vd_ui_event_focus(int on);
 
 /* ----INPUT UTILITIES----------------------------------------------------------------------------------------------- */
+VD_UI_API void             vd_ui_mouse_pos(float pos[2]);
+VD_UI_API void             vd_ui_mouse_wheel(float wheel[2]);
 VD_UI_API int              vd_ui_mouse_left_clicked(void);
 VD_UI_API int              vd_ui_mouse_left_just_released(void);
+VD_UI_API float            vd_ui_dt(void);
 VD_UI_API void             vd_ui_transform_point(VdUiDiv *div, float point[2], float out_point[2]);
 VD_UI_API void             vd_ui_set_capture(size_t eid);
 VD_UI_API int              vd_ui_is_captured(VdUiDiv *div);
@@ -2248,6 +2276,11 @@ VD_UI_API void vd_ui_frame_begin(float delta_seconds)
 VD_UI_API void vd_ui_frame_end(void)
 {
     VdUiContext *ctx = vd_ui_context_get();
+
+    if (ctx->debug.inspector_on) {
+        vd_ui__do_inspector(ctx);
+    }
+
     vd_ui_parent_pop();
 
     // Zero immediate mode stuff
@@ -2266,12 +2299,22 @@ VD_UI_API void vd_ui_frame_end(void)
     ctx->root.comp_size[0] = ctx->window[0];
     ctx->root.comp_size[1] = ctx->window[1];
 
-    ctx->root.style.size[0].mode     = VD_UI_SIZE_MODE_ABSOLUTE;
-    ctx->root.style.size[0].value    = ctx->window[0];
-    ctx->root.style.size[0].niceness = 0.f;
-    ctx->root.style.size[1].mode     = VD_UI_SIZE_MODE_ABSOLUTE;
-    ctx->root.style.size[1].value    = ctx->window[1];
-    ctx->root.style.size[1].niceness = 0.f;
+    if (ctx->debug.inspector_on) {
+        ctx->root.flags = VD_UI_FLAG_FLEX_HORIZONTAL;
+        ctx->root.style.size[0].mode     = VD_UI_SIZE_MODE_ABSOLUTE;
+        ctx->root.style.size[0].value    = ctx->window[0];
+        ctx->root.style.size[0].niceness = 0.f;
+        ctx->root.style.size[1].mode     = VD_UI_SIZE_MODE_ABSOLUTE;
+        ctx->root.style.size[1].value    = ctx->window[1];
+        ctx->root.style.size[1].niceness = 0.f;
+    } else {
+        ctx->root.style.size[0].mode     = VD_UI_SIZE_MODE_ABSOLUTE;
+        ctx->root.style.size[0].value    = ctx->window[0];
+        ctx->root.style.size[0].niceness = 0.f;
+        ctx->root.style.size[1].mode     = VD_UI_SIZE_MODE_ABSOLUTE;
+        ctx->root.style.size[1].value    = ctx->window[1];
+        ctx->root.style.size[1].niceness = 0.f;
+    }
     ctx->clip_stack_count = 0;
     ctx->size_h_stack_count = 0;
     ctx->size_v_stack_count = 0;
@@ -2380,9 +2423,6 @@ VD_UI_API void vd_ui_frame_end(void)
             vd_ui_f4(1.f, 1.f, 1.f , 1.f).e);
     }
 
-    if (ctx->debug.inspector_on) {
-        vd_ui__do_inspector(ctx);
-    }
 
     if (ctx->debug.metrics_on) {
         vd_ui__put_linef(ctx, 0.f, 32.f, "VBUF: %d", ctx->vbuf_count);
@@ -2921,6 +2961,28 @@ VD_UI_API void vd_ui_spacer(VdUiAxis axis)
     spacer->style.size[faxis].niceness   = 0.f;
 }
 
+VD_UI_API VdUiDiv *vd_ui_spacerex(VdUiAxis axis, VdUiSizeMode size_mode, float value, float niceness)
+{
+    VdUiStr null_str = {0, 0};
+    VdUiDiv *spacer = vd_ui_div_new(0, null_str);
+    int daxis = 0;
+    int faxis = 0;
+
+    switch (axis) {
+        case VD_UI_AXISH: daxis = 0; faxis = 1; break;
+        case VD_UI_AXISV: daxis = 1; faxis = 0; break;
+    }
+
+    spacer->style.size[daxis].mode       = size_mode;
+    spacer->style.size[daxis].value      = value;
+    spacer->style.size[daxis].niceness   = niceness;
+    spacer->style.size[faxis].mode       = VD_UI_SIZE_MODE_ABSOLUTE;
+    spacer->style.size[faxis].value      = 0.f;
+    spacer->style.size[faxis].niceness   = 0.f;
+
+    return spacer;
+}
+
 VD_UI_API void vd_ui_icon(VdUiSymbol symbol, VdUiStr str)
 {
     VdUiDiv *div = vd_ui_div_new(VD_UI_FLAG_TEXT,
@@ -3300,21 +3362,6 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y, VdUiScrollOpt
         options = &default_options;
     }
 
-    //
-    //   Grip Size := Window / Content                                       *----------------* [-]    Window, Up Button
-    //                                                                       | *------------* | | |    Content, Track
-    //                                                                       | |            | | | |
-    //                                                                       | |            | | | |
-    //                                                                       | |            | | |X|    Grip
-    //                                                                       | |            | | |X|
-    //                                                                       | |            | | |X|
-    //                                                                       | |            | | | |
-    //                                                                       | |            | | | |
-    //                                                                       *----------------* [+]    Down Button
-    //                                                                         |            |
-    //                                                                         |------------|
-    //
-    // @todo(mdodis): Fix proportion of scrolling not correctly set
     VdUiDiv *scroll_view = vd_ui_div_new(VD_UI_FLAG_FLEX_HORIZONTAL | VD_UI_FLAG_CLIP_CONTENT, str);
     // scroll_view->style.size[0].mode  = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
     // scroll_view->style.size[0].value = 1.0f;
@@ -3394,12 +3441,16 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y, VdUiScrollOpt
         float scrollable_track_size       = track_size - grip_size;
         float scrollable_window_area_size = content_size - window_size;
 
+        if (scrollable_window_area_size < 0.f) {
+            scrollable_window_area_size = 0.f;
+        }
+
         if (up_button_reply.click_timeout > 0.f) {
             *y -= window_content_ratio * up_button_reply.click_timeout;
         }
 
         if (vd_ui__point_in_rect(ctx->mouse, scroll_view->rect)) {
-            *y -= ctx->wheel_current[1] * 20.f;
+            *y -= ctx->wheel_current[1] * 64.f;
         }
 
         VdUiReply track_reply = vd_ui_call(hspace);
@@ -3413,7 +3464,7 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y, VdUiScrollOpt
             if (mouse_click_pos[1] < *y) {
                 track_scroll_direction = -1.f;
             } else if (mouse_click_pos[1] > (*y + grip_size)) {
-                track_scroll_direction = 1.f;
+               track_scroll_direction = 1.f;
             }
         }
 
@@ -3451,27 +3502,45 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y, VdUiScrollOpt
 
             grip->comp_pos_rel[0] = hspace->comp_size[0] * 0.5f - grip->comp_size[0] * 0.5f;
 
-            if (scrollable_track_size > 0.f) {
+            if (scrollable_window_area_size > 0.f) {
                 VdUiReply grip_reply = vd_ui_call(grip);
+                static float drag_start = 0.f;
 
-                *y += grip_reply.drag[1];
+                if (grip_reply.pressed) {
+                    if (vd_ui_mouse_left_clicked()) {
 
-                if (*y < 0.f) {
-                    *y = 0.f;
+                        float click_pos[2];
+                        vd_ui_transform_point(grip, grip_reply.mouse, click_pos);
+                        drag_start = click_pos[1];
+                    }
+
+                    float now_pos[2];
+                    vd_ui_transform_point(hspace, grip_reply.mouse, now_pos);
+                    float mouse_relative_to_hspace = now_pos[1];
+                    float new_grip_pos = mouse_relative_to_hspace - drag_start;
+
+                    float grip_y_based_on_track = new_grip_pos / track_size;
+                    *y = grip_y_based_on_track * content_size;
                 }
-
-                if (*y > scrollable_track_size) {
-                    *y = scrollable_track_size;
-                }
-
-                grip->comp_pos_rel[1] = *y;
-
-                float scroll_ratio = *y / scrollable_track_size;
-                float content_offset = scroll_ratio * scrollable_window_area_size;
-                scroll_container->offset[1] = -content_offset;
-            } else {
-                grip->comp_pos_rel[1] = 0.f;
             }
+
+            if (*y < 0.f) {
+                *y = 0.f;
+            }
+
+            if (*y > scrollable_window_area_size) {
+                *y = scrollable_window_area_size;
+            }
+
+            float scroll_ratio = 0.f;
+            if (content_size > 0.f) {
+                scroll_ratio = (*y) / content_size;
+            }
+
+            float content_offset = scroll_ratio * track_size;
+            grip->comp_pos_rel[1] = content_offset;
+
+            scroll_container->offset[1] = -(*y);
         }
         vd_ui_parent_pop();
         VdUiReply down_button_reply;
@@ -3491,7 +3560,255 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y, VdUiScrollOpt
     vd_ui_parent_push(scroll_container);
 }
 
+VD_UI_API VdUiDiv *vd_ui_scrollbar(VdUiStr label, VdUiAxis scroll_axis,
+                                   float *v, float window, float contents,
+                                   int wheel_scrollable, VdUiScrollbarOptions *options)
+{
+    // @note(mdodis): These could have been stored in VdUiDiv, but as of now, I see no reason in doing so because this
+    //                whole system assumes one available mouse pointer, and one mouse wheel source (be it trackpad or
+    //                the mouse wheel).
+    static float drag_start = 0.f;
+
+    VdUiScrollbarOptions default_options;
+    default_options.diagonal_axis_size = 18.f;
+    default_options.symbol_to_button_ratio = 0.75f;
+    default_options.button_speed = 512.f;
+    default_options.button_coloring = vd_ui_coloring(vd_ui_gradient1(vd_ui_f4(0.1f, 0.1f, 0.1f, 0.2f)),
+                                                     vd_ui_gradient1(vd_ui_f4(0.1f, 0.1f, 0.1f, 1.0f)),
+                                                     vd_ui_gradient1(vd_ui_f4(0.3f, 0.3f, 0.3f, 1.0f)));
+    default_options.increase = scroll_axis == VD_UI_AXISH
+                             ? vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_RIGHT_OPEN)
+                             : vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_DOWN_OPEN);
+    default_options.decrease = scroll_axis == VD_UI_AXISH
+                             ? vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_LEFT_OPEN)
+                             : vd_ui_symbol((VdUiFontId){1}, VD_UI_DEFAULT_ICONS_UP_OPEN);
+    default_options.track_coloring = vd_ui_coloring(vd_ui_gradient1(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f)),
+                                                    vd_ui_gradient1(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f)),
+                                                    vd_ui_gradient1(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f)));
+    default_options.min_grip_size = 16.f;
+    default_options.scroll_modifier = 64.f;
+    default_options.grip_to_button_ratio = 0.64f;
+    default_options.grip_rounding = 1.f;
+    default_options.grip_coloring = vd_ui_coloring(vd_ui_gradient1(vd_ui_f4(0.3f, 0.3f, 0.3f, 0.8f)),
+                                                   vd_ui_gradient1(vd_ui_f4(0.3f, 0.3f, 0.3f, 1.0f)),
+                                                   vd_ui_gradient1(vd_ui_f4(0.4f, 0.4f, 0.4f, 1.0f)));
+
+    if (options == 0) {
+        options = &default_options;
+    }
+
+    VdUiAxis fixed_axis = vd_ui_diagonal_axis(scroll_axis);
+    VdUiFlags flex_flag = vd_ui_flex_flag_from_axis(scroll_axis);
+
+    float window_content_ratio = 0.f;
+    float scrollable_window_area_size = contents - window;
+
+    if (contents > 0.f) {
+        window_content_ratio = window / contents;
+    }
+
+    if (scrollable_window_area_size < 0.f) {
+        scrollable_window_area_size = 0.f;
+    }
+
+    // if (window_size > content_size) {
+    //     window_content_ratio = 1.f;
+    // }
+
+    *v = vd_ui__clampf(*v, 0.f, scrollable_window_area_size);
+    int can_decrease = !vd_ui__float_eq((*v), 0.f);
+    int can_increase = !vd_ui__float_eq((*v), scrollable_window_area_size);
+
+    VdUiDiv *scrollbar;
+
+    VD_UI_WITH_STYLE_SIZE_ABSOLUTE(fixed_axis, options->diagonal_axis_size, 0)
+    VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(scroll_axis, 1, 1)
+    {
+        scrollbar = vd_ui_parent_new(0
+                                     | VD_UI_FLAG_BACKGROUND
+                                     | flex_flag
+                                     , label);
+    }
+    {
+        VdUiDiv *track;
+        VdUiReply increase;
+        VdUiReply decrease;
+
+        // Handle decrease button
+        VD_UI_WITH_STYLE_FONT_SIZE(options->diagonal_axis_size * options->symbol_to_button_ratio)
+        VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(options->diagonal_axis_size, options->diagonal_axis_size, 0, 0)
+        VD_UI_WITH_STYLE_BACKGROUND_COLORING(options->button_coloring)
+        {
+            decrease = vd_ui_icon_button(options->decrease, VD_UI_LIT("##decrease"));
+        }
+
+        // Spawn track
+        VD_UI_WITH_STYLE_SIZE_ABSOLUTE(fixed_axis, options->diagonal_axis_size, 0.f)
+        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(scroll_axis, 1.f, 1.f)
+        VD_UI_WITH_STYLE_COLORING(VD_UI_FLAG_BACKGROUND, options->track_coloring)
+        {
+            track = vd_ui_parent_new(0
+                                     | VD_UI_FLAG_BACKGROUND
+                                     | VD_UI_FLAG_CLICKABLE
+                                     , VD_UI_LIT("##track"));
+        }
+        {
+            VdUiReply track_reply = vd_ui_call(track);
+
+            float track_size = track->comp_size[1];
+            float min_grip_size = options->min_grip_size;
+            float max_grip_size = track_size;
+            float grip_size = track_size * window_content_ratio;
+
+            if (decrease.pressed && can_decrease) {
+                *v -= options->button_speed * vd_ui_dt();
+            }
+
+            if (wheel_scrollable) {
+                float wheel[2];
+                vd_ui_mouse_wheel(wheel);
+
+                *v -= wheel[scroll_axis] * options->scroll_modifier;
+            }
+
+
+            // Spawn grip
+            VdUiDiv *grip;
+            grip_size = vd_ui__clampf(grip_size, min_grip_size, max_grip_size);
+
+            VD_UI_WITH_STYLE_ROUNDING_ALL(VD_UI_FLAG_BACKGROUND, options->diagonal_axis_size * 
+                                                                 options->grip_rounding *
+                                                                 options->grip_to_button_ratio * 0.5f)
+            VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(fixed_axis, options->grip_to_button_ratio, 0)
+            VD_UI_WITH_STYLE_SIZE_ABSOLUTE(scroll_axis, grip_size, 0)
+            VD_UI_WITH_STYLE_BACKGROUND_COLORING(options->grip_coloring)
+            {
+                grip = vd_ui_div_new(0
+                                     | VD_UI_FLAG_BACKGROUND
+                                     | VD_UI_FLAG_CLICKABLE
+                                     | VD_UI_FLAG_FLOAT
+                                     | VD_UI_FLAG_CAPTURES_MOUSE
+                                     , VD_UI_LIT("##grip"));
+            }
+
+            // Put grip in the middle of the track on the fixed axis
+            grip->comp_pos_rel[fixed_axis] = track->comp_size[fixed_axis] * 0.5f - grip->comp_size[fixed_axis] * 0.5f;
+
+            if (scrollable_window_area_size > 0.f) {
+                VdUiReply grip_reply = vd_ui_call(grip);
+
+                if (grip_reply.pressed) {
+
+                    // Save the position of the mouse relative to the grip when it was first pressed
+                    // clicked returns 1 on the frame the mouse was pressed and reply.pressed is 1 while grip is pressed.
+                    if (vd_ui_mouse_left_clicked()) {
+                        float click_pos[2];
+                        vd_ui_transform_point(grip, grip_reply.mouse, click_pos);
+                        drag_start = click_pos[scroll_axis];
+                    }
+
+                    float now_pos[2];
+                    vd_ui_transform_point(track, grip_reply.mouse, now_pos);
+
+                    float mouse_relative_to_track = now_pos[scroll_axis];
+                    float new_grip_pos = mouse_relative_to_track - drag_start;
+
+                    float grip_based_on_track = new_grip_pos / (track_size - grip_size);
+                    *v = grip_based_on_track * scrollable_window_area_size;
+                }
+            }
+
+            *v = vd_ui__clampf(*v, 0.f, scrollable_window_area_size);
+
+            // Map v to [0, 1]
+            float scroll_ratio = 0.f;
+            if (contents > 0.f) {
+                scroll_ratio = (*v) / scrollable_window_area_size;
+            }
+
+            // From that space, compute new grip position
+            grip->comp_pos_rel[scroll_axis] = scroll_ratio * (track_size - grip_size);
+
+            // Call logic for clicking on track
+            if (track_reply.pressed) {
+                float mouse_click_pos[2];
+                vd_ui_transform_point(grip, track_reply.mouse, mouse_click_pos);
+
+                float track_scroll_direction = 0.f;
+                float grip_middle = grip_size * 0.5f;
+                float grip_middle_min = grip_middle - options->button_speed * 0.01f;
+                float grip_middle_max = grip_middle + options->button_speed * 0.01f;
+
+                if ((mouse_click_pos[scroll_axis] < grip_middle_min) || (grip_middle_max < mouse_click_pos[scroll_axis]))
+                {
+                    if (mouse_click_pos[scroll_axis] < grip_middle) {
+                        if (can_decrease) {
+                            track_scroll_direction = -1.f;
+                        }
+                    } else if (mouse_click_pos[scroll_axis] > grip_middle) {
+                        if (can_increase) {
+                            track_scroll_direction = 1.f;
+                        }
+                    }
+
+                }
+
+                (*v) += track_scroll_direction * options->button_speed * vd_ui_dt();
+            }
+        }
+        vd_ui_parent_pop();
+
+        // Handle increase button
+        VD_UI_WITH_STYLE_FONT_SIZE(options->diagonal_axis_size * options->symbol_to_button_ratio)
+        VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(options->diagonal_axis_size, options->diagonal_axis_size, 0, 0)
+        VD_UI_WITH_STYLE_BACKGROUND_COLORING(options->button_coloring)
+        {
+            increase = vd_ui_icon_button(options->increase, VD_UI_LIT("##increase"));
+        }
+
+        if (increase.pressed && can_increase) {
+            *v += options->button_speed * vd_ui_dt();
+        }
+    }
+    vd_ui_parent_pop();
+
+    return scrollbar;
+}
+
 VD_UI_API void vd_ui_scroll_end()
+{
+    vd_ui_parent_pop();
+    vd_ui_parent_pop();
+}
+
+VD_UI_API VdUiDiv* vd_ui_scrollview_begin(VdUiStr str, float *x, float *y)
+{
+    VdUiDiv *scroll_view = vd_ui_div_new(VD_UI_FLAG_FLEX_HORIZONTAL | VD_UI_FLAG_CLIP_CONTENT, str);
+    vd_ui_parent_push(scroll_view);
+
+    VdUiDiv *content_area;
+    VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
+    VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 0)
+    {
+        content_area = vd_ui_div_new(0, VD_UI_LIT("##content-area"));
+    }
+
+    float window_size = scroll_view->comp_size[1];
+    float content_size = content_area->children_comp_size[1];
+
+    float mouse[2];
+    vd_ui_mouse_pos(mouse);
+
+    int wheel_scrollable = vd_ui__point_in_rect(mouse, scroll_view->rect);
+    vd_ui_scrollbar(VD_UI_LIT("##scrollbar-y"), VD_UI_AXISV, y, window_size, content_size, wheel_scrollable, 0);
+
+    content_area->offset[1] = -(*y);
+
+    vd_ui_parent_push(content_area);
+    return scroll_view;
+}
+
+VD_UI_API void vd_ui_scrollview_end(void)
 {
     vd_ui_parent_pop();
     vd_ui_parent_pop();
@@ -4554,9 +4871,9 @@ static void vd_ui__calc_oversizes(VdUiContext *ctx, VdUiDiv *curr)
     }
 
     for (int i = 0; i < VD_UI_AXES; ++i) {
-        if (curr->parent == 0) {
-            continue;
-        }
+        // if (curr->parent == 0) {
+        //     continue;
+        // }
 
         // if (curr->style.size[i].mode == VD_UI_SIZE_MODE_PERCENT_OF_PARENT) {
         //     curr->comp_size[i] = curr->parent->comp_size[i];
@@ -4930,6 +5247,19 @@ VD_UI_API void vd_ui_event_focus(int on)
 }
 
 /* ----INPUT UTILITIES IMPL------------------------------------------------------------------------------------------ */
+VD_UI_API void vd_ui_mouse_pos(float pos[2])
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    pos[0] = ctx->mouse[0];
+    pos[1] = ctx->mouse[1];
+}
+
+VD_UI_API void vd_ui_mouse_wheel(float wheel[2])
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    wheel[0] = ctx->wheel_current[0];
+    wheel[1] = ctx->wheel_current[1];
+}
 
 VD_UI_API int vd_ui_mouse_left_clicked(void)
 {
@@ -4941,6 +5271,12 @@ VD_UI_API int vd_ui_mouse_left_just_released(void)
 {
     VdUiContext *ctx = vd_ui_context_get();
     return ctx->mouse_left_last && !ctx->mouse_left;
+}
+
+VD_UI_API float vd_ui_dt(void)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    return ctx->delta_seconds;
 }
 
 VD_UI_API void vd_ui_transform_point(VdUiDiv *div, float point[2], float out_point[2])
@@ -5906,6 +6242,16 @@ VD_UI_API VdUiDiv *vd_ui_get_root(void)
     return &ctx->root;
 }
 
+VD_UI_INL VdUiAxis vd_ui_diagonal_axis(VdUiAxis axis)
+{
+    return (VdUiAxis)(1 - (int)axis);
+}
+
+VD_UI_INL VdUiFlags vd_ui_flex_flag_from_axis(VdUiAxis axis)
+{
+    return (1 - (int)axis) * VD_UI_FLAG_FLEX_HORIZONTAL;
+}
+
 /* ----DEBUG IMPL---------------------------------------------------------------------------------------------------- */
 VD_UI_API void vd_ui_debug_set_draw_cursor_on(VdUiBool on)
 {
@@ -6049,18 +6395,86 @@ static void vd_ui__inspector_do_hierarchy(VdUiContext *ctx, VdUiDiv *curr, float
 
 static void vd_ui__do_inspector(VdUiContext *ctx)
 {
-    Vd_Ui_Inspector.height = 350.f;
-    Vd_Ui_Inspector.rect[0] = 0.f;
-    Vd_Ui_Inspector.rect[1] = ctx->window[1] - Vd_Ui_Inspector.height;
-    Vd_Ui_Inspector.rect[2] = ctx->window[0];
-    Vd_Ui_Inspector.rect[3] = ctx->window[1];
-    Vd_Ui_Inspector.hierarchy.size_h = Vd_Ui_Inspector.rect[2] - ctx->window[0] * 0.5f;
+    (void)ctx;
 
-    Vd_Ui_Inspector.hierarchy.offset = 2.f;
+    VdUiDiv *inspector;
+    VD_UI_WITH_STYLE_SIZE_ABSOLUTE_W(300.f, 0.f)
+    VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1.f, 0.f)
+    {
+        inspector = vd_ui_parent_new(0
+                                     | VD_UI_FLAG_BACKGROUND
+                                     , VD_UI_LIT("##__inspector"));
+    }
+    {
+        vd_ui_labelf("Inspector");
 
-    vd_ui__push_rect(ctx, Vd_Ui_Inspector.rect, (float[]) {0.7f, 0.8f, 0.7f, 0.2f});
+        static float scroll_x = 0.f;
+        static float scroll_y = 0.f;
+        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1.f, 1.f)
+        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1.f, 1.f)
+        {
+            vd_ui_scrollview_begin(VD_UI_LIT("##tree"), &scroll_x, &scroll_y);
+        }
+        {
+            VdUiDiv *scroll_container = vd_ui_parent_get(vd_ui_parent_count() - 1);
+            float viewport = scroll_container->comp_size[1];
+            float item_height = 20.f;
+            int count_items = 100000;
 
-    vd_ui__inspector_do_hierarchy(ctx, &ctx->root, 0.f);
+            float total_height = (float)count_items * item_height;
+            float curr_scroll = scroll_y;
+
+            int first_item = (int)ceilf(curr_scroll / item_height) - 1;
+            if (first_item < 0) {
+                first_item = 0;
+            }
+
+            int items_per_viewport = (int)ceilf(viewport / item_height) + 1;
+            // int last_item  = (int)(ceilf(((scroll_y + viewport) / total_height) * (float)count_items));
+            int last_item = first_item + items_per_viewport;
+            if (last_item > count_items) {
+                last_item = count_items;
+            }
+
+            float space_before = (float)first_item * item_height;
+            float space_after = total_height - (last_item * item_height);
+            if (space_after < 0.f) space_after = 0.f;
+
+            if (space_before > 0.f) {
+                vd_ui_spacerex(VD_UI_AXISV, VD_UI_SIZE_MODE_ABSOLUTE, space_before, 0.f);
+            }
+
+            int c = 0;
+            for (int i = first_item; i < last_item; ++i) {
+                VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_TEXT_CONTENT, 1.f, 1.f)
+                VD_UI_WITH_STYLE_SIZE_ABSOLUTE_H(item_height, 0.f)
+                VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.2f, 0.1f, 0.1f, 1.f))
+                {
+                    vd_ui_div_newf(VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND, "Item %d##item-%d", i, c);
+                }
+                c++;
+            }
+
+            if (space_after > 0.f) {
+                vd_ui_spacerex(VD_UI_AXISV, VD_UI_SIZE_MODE_ABSOLUTE, space_after, 0.f);
+            }
+
+        }
+        vd_ui_scrollview_end();
+    }
+    vd_ui_parent_pop();
+    // Vd_Ui_Inspector.height = 350.f;
+    // Vd_Ui_Inspector.rect[0] = 0.f;
+    // Vd_Ui_Inspector.rect[1] = ctx->window[1] - Vd_Ui_Inspector.height;
+    // Vd_Ui_Inspector.rect[2] = ctx->window[0];
+    // Vd_Ui_Inspector.rect[3] = ctx->window[1];
+    // Vd_Ui_Inspector.hierarchy.size_h = Vd_Ui_Inspector.rect[2] - ctx->window[0] * 0.5f;
+
+    // Vd_Ui_Inspector.hierarchy.offset = 2.f;
+
+    // vd_ui__push_rect(ctx, Vd_Ui_Inspector.rect, (float[]) {0.7f, 0.8f, 0.7f, 0.2f});
+
+    // vd_ui__inspector_do_hierarchy(ctx, &ctx->root, 0.f);
 }
 
 static void vd_ui__inspector_do_hierarchy(VdUiContext *ctx, VdUiDiv *curr, float depth)
