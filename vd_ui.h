@@ -3463,13 +3463,13 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y, VdUiScrollOpt
                     *y = scrollable_track_size;
                 }
 
-                grip->comp_pos_rel[0] = hspace->comp_size[0] * 0.5f - grip->comp_size[0] * 0.5f;
-                grip->comp_pos_rel[1] = *y;
-
                 float scroll_ratio = *y / scrollable_track_size;
                 float content_offset = scroll_ratio * scrollable_window_area_size;
                 scroll_container->offset[1] = -content_offset;
             }
+
+            grip->comp_pos_rel[0] = hspace->comp_size[0] * 0.5f - grip->comp_size[0] * 0.5f;
+            grip->comp_pos_rel[1] = *y;
         }
         vd_ui_parent_pop();
         VdUiReply down_button_reply;
