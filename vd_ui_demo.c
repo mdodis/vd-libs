@@ -589,7 +589,10 @@ int vd_ui_demo(void)
                     layout_6_length[1] = pa->comp_size[1];
                 }
                 vd_ui_parent_pop();
-                vd_ui_labelf("Green Rect Size: %f %f", layout_6_length[0], layout_6_length[1]);
+                VD_UI_WITH_STYLE_TEXT_COLOR(vd_ui_f4(0.8f, 0.8f, 0.8f, 1.f))
+                {
+                    vd_ui_labelf("Green Rect Size: %f %f", layout_6_length[0], layout_6_length[1]);
+                }
                 vd_ui__demo_section_end();
 
                 VdUiGradient hue_grad = vd_ui_gradient(

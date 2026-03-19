@@ -1704,6 +1704,15 @@ VD_INLINE Vdcstr vd_dump_file_to_cstr(VdArena *arena, Vdcstr file_path, Vdusize 
 #define dump_file_to_cstr(arena, file_path, len)  vd_dump_file_to_cstr(arena, file_path, len)
 #endif // VD_MACRO_ABBREVIATIONS
 
+/* ----DYNAMIC LIBRARIES--------------------------------------------------------------------------------------------- */
+typedef struct {
+    void *handle;
+} VdLibrary;
+
+VD_API VdLibrary vd_library_from_path(const char *path);
+VD_API void*     vd_library_address(VdLibrary library, const char *name);
+VD_API void      vd_library_free(VdLibrary library);
+
 /* ----SCRATCH------------------------------------------------------------------------------------------------------- */
 #ifndef VD_SCRATCH_PAGE_COUNT
 #define VD_SCRATCH_PAGE_COUNT 8
@@ -3352,6 +3361,33 @@ VD_API void vd_directory_walk_recursively(const char *path, void (*visit)(VdFile
 
     vd_directory_close(&first_directory);
 }
+#endif // VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
+
+/* ----DYNAMIC LIBRARIES IMPL---------------------------------------------------------------------------------------- */
+#if VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
+#if VD_PLATFORM_WINDOWS
+VD_API VdLibrary vd_library_from_path(const char *path)
+{
+    HMODULE h = LoadLibraryA(path);
+    VdLibrary result;
+    result.handle = (void*)h;
+    return result;
+}
+
+VD_API void *vd_library_address(VdLibrary library, const char *name)
+{
+    HMODULE h = (HMODULE)library.handle;
+    return (void*)GetProcAddress(h, name);
+}
+
+VD_API void vd_library_free(VdLibrary library)
+{
+    HMODULE h = (HMODULE)library.handle;
+    FreeLibrary(h);
+}
+#else
+#error "No Shared Library implementation for this platform!"
+#endif // VD_PLATFORM_WINDOWS
 #endif // VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
 
 /* ----TESTING IMPL-------------------------------------------------------------------------------------------------- */
