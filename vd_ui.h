@@ -3449,6 +3449,7 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y, VdUiScrollOpt
             grip->style.background.coloring.active = vd_ui_gradient(vd_ui_f4(0.4f, 0.4f, 0.4f, 1.f), vd_ui_f4(0.4f, 0.4f, 0.4f, 1.f),
                                                      vd_ui_f4(0.4f, 0.4f, 0.4f, 1.f), vd_ui_f4(0.4f, 0.4f, 0.4f, 1.f));
 
+            grip->comp_pos_rel[0] = hspace->comp_size[0] * 0.5f - grip->comp_size[0] * 0.5f;
 
             if (scrollable_track_size > 0.f) {
                 VdUiReply grip_reply = vd_ui_call(grip);
@@ -3463,13 +3464,14 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y, VdUiScrollOpt
                     *y = scrollable_track_size;
                 }
 
+                grip->comp_pos_rel[1] = *y;
+
                 float scroll_ratio = *y / scrollable_track_size;
                 float content_offset = scroll_ratio * scrollable_window_area_size;
                 scroll_container->offset[1] = -content_offset;
+            } else {
+                grip->comp_pos_rel[1] = 0.f;
             }
-
-            grip->comp_pos_rel[0] = hspace->comp_size[0] * 0.5f - grip->comp_size[0] * 0.5f;
-            grip->comp_pos_rel[1] = *y;
         }
         vd_ui_parent_pop();
         VdUiReply down_button_reply;
