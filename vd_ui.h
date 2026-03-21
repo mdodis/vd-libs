@@ -3870,11 +3870,24 @@ VD_UI_API VdUiDiv* vd_ui_scrollview_begin(VdUiStr str, float *x, float *y)
             }
             vd_ui_parent_push(view_with_hscroll);
             {
-                VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISH, 0)
-                VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 0)
+                if (x) {
+                    vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1, 0);
+                } else {
+                    vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1, 0);
+                }
+
+                if (y) {
+                    vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1, 0);
+                } else {
+                    vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1, 0);
+                }
+
                 {
                     content_area = vd_ui_div_new(0, VD_UI_LIT("##content-area"));
                 }
+
+                vd_ui_style_size_pop(VD_UI_AXISV);
+                vd_ui_style_size_pop(VD_UI_AXISH);
             }
             vd_ui_parent_pop();
 

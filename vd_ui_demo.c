@@ -321,7 +321,7 @@ int vd_ui_demo(void)
         VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
         VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1, 1)
         {
-            vd_ui_scrollview_begin(VD_UI_LIT("##main-scroll-view"), &scrollx, &scrolly);
+            vd_ui_scrollview_begin(VD_UI_LIT("##main-scroll-view"), 0, &scrolly);
         }
         {
 
