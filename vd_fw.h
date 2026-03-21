@@ -450,6 +450,7 @@ typedef struct {
 
 typedef struct {
     VdFwKey key;
+    int     modifiers;
 } VdFwEventKeyUpData;
 
 typedef struct {
@@ -11438,6 +11439,10 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 evt.data.key_down.repeat = repeat;
             } else {
                 evt.type = VD_FW_EVENT_TYPE_KEY_UP;
+                evt.data.key_up.modifiers = 0;
+                if (shift) { evt.data.key_up.modifiers |= VD_FW_MOD_SHIFT; }
+                if (ctrl)  { evt.data.key_up.modifiers |= VD_FW_MOD_CONTROL; }
+                if (alt)   { evt.data.key_up.modifiers |= VD_FW_MOD_ALT; }
                 evt.data.key_up.key = vd_fw___vkcode_to_key(vkcode);
             }
 

@@ -44,6 +44,19 @@ typedef Vdi32   VdCgi32;
 typedef Vdu32   VdCgu32;
 #endif // !VD_H
 
+// Type Letter | Meaning  | Value
+// S           | (S)igned | in32  32 bit
+// B           | (B)ig    | int   64 bit
+// F           | (F)loat  | float 32 bit
+// D           | (D)ouble | float 64 bit
+// R           | (R)eal   | Depends on VD_CG_DEFAULT_PRECISION
+
+#include <stdint.h>
+typedef int32_t     S1;
+typedef int64_t     B1;
+typedef float       F1;
+typedef double      D1;
+
 #define VD_CG_PI32           3.14159265359f
 #define VD_CG_FPI            3.14159265359f
 #define VD_CG_FPI2           (2.f * 3.14159265359f)
@@ -320,6 +333,12 @@ VD_CG_INL VdR3          vd_rall3            (VdRea s)                           
 VD_CG_INL VdF3          vd_fzero3           (void)                                           { return vd_fall3(0.f);              }
 VD_CG_INL VdD3          vd_dzero3           (void)                                           { return vd_dall3(0.f);              }
 VD_CG_INL VdR3          vd_rzero3           (void)                                           { return vd_rall3(0.f);              }
+VD_CG_INL VdF3          vd_fm3ts            (VdF2  t, VdCgf32 s)                             { VdF3 r; r.xy = t; r.z  = s; return r; }
+VD_CG_INL VdD3          vd_dm3ts            (VdD2  t, VdCgf64 s)                             { VdD3 r; r.xy = t; r.z  = s; return r; }
+VD_CG_INL VdR3          vd_rm3ts            (VdR2  t, VdRea   s)                             { VdR3 r; r.xy = t; r.z  = s; return r; }
+VD_CG_INL VdF3          vd_fm3st            (VdCgf32 s, VdF2  t)                             { VdF3 r; r.x  = s; r.yz = t; return r; }
+VD_CG_INL VdD3          vd_dm3st            (VdCgf64 s, VdD2  t)                             { VdD3 r; r.x  = s; r.yz = t; return r; }
+VD_CG_INL VdR3          vd_rm3st            (VdRea   s, VdR2  t)                             { VdR3 r; r.x  = s; r.yz = t; return r; }
 
 VD_CG_INL VdF4          vd_fm4              (VdCgf32 x, VdCgf32 y, VdCgf32 z, VdCgf32 w)     { VdF4 r; r.x = x; r.y = y; r.z = z; r.w = w; return r; }
 VD_CG_INL VdD4          vd_dm4              (VdCgf64 x, VdCgf64 y, VdCgf64 z, VdCgf64 w)     { VdD4 r; r.x = x; r.y = y; r.z = z; r.w = w; return r; }
@@ -330,6 +349,24 @@ VD_CG_INL VdR4          vd_rall4            (VdRea s)                           
 VD_CG_INL VdF4          vd_fzero4           (void)                                           { return vd_fall4(0.f);              }
 VD_CG_INL VdD4          vd_dzero4           (void)                                           { return vd_dall4(0.f);              }
 VD_CG_INL VdR4          vd_rzero4           (void)                                           { return vd_rall4(0.f);              }
+VD_CG_INL VdF4          vd_fm4tt            (VdF2 t0, VdF2 t1)                               { return vd_fm4(t0.x, t0.y, t1.x, t1.y); }
+VD_CG_INL VdD4          vd_dm4tt            (VdD2 t0, VdD2 t1)                               { return vd_dm4(t0.x, t0.y, t1.x, t1.y); }
+VD_CG_INL VdR4          vd_rm4tt            (VdR2 t0, VdR2 t1)                               { return vd_rm4(t0.x, t0.y, t1.x, t1.y); }
+VD_CG_INL VdF4          vd_fm4tss           (VdF2 t, VdCgf32 s2, VdCgf32 s3)                 { return vd_fm4(t.x, t.y, s2, s3);   }
+VD_CG_INL VdD4          vd_dm4tss           (VdD2 t, VdCgf64 s2, VdCgf64 s3)                 { return vd_dm4(t.x, t.y, s2, s3);   }
+VD_CG_INL VdR4          vd_rm4tss           (VdR2 t, VdRea   s2, VdRea   s3)                 { return vd_rm4(t.x, t.y, s2, s3);   }
+VD_CG_INL VdF4          vd_fm4sst           (VdCgf32 s0, VdCgf32 s1, VdF2 t)                 { return vd_fm4(s0, s1, t.x, t.y);   }
+VD_CG_INL VdD4          vd_dm4sst           (VdCgf64 s0, VdCgf64 s1, VdD2 t)                 { return vd_dm4(s0, s1, t.x, t.y);   }
+VD_CG_INL VdR4          vd_rm4sst           (VdRea   s0, VdRea   s1, VdR2 t)                 { return vd_rm4(s0, s1, t.x, t.y);   }
+VD_CG_INL VdF4          vd_fm4sts           (VdCgf32 s0, VdF2 t, VdCgf32 s3)                 { return vd_fm4(s0, t.x, t.y, s3);   }
+VD_CG_INL VdD4          vd_dm4sts           (VdCgf64 s0, VdD2 t, VdCgf64 s3)                 { return vd_dm4(s0, t.x, t.y, s3);   }
+VD_CG_INL VdR4          vd_rm4sts           (VdRea   s0, VdR2 t, VdRea   s3)                 { return vd_rm4(s0, t.x, t.y, s3);   }
+VD_CG_INL VdF4          vd_fm4ps            (VdF3 p, VdCgf32 s3)                             { return vd_fm4(p.x, p.y, p.z, s3);  }
+VD_CG_INL VdD4          vd_dm4ps            (VdD3 p, VdCgf64 s3)                             { return vd_dm4(p.x, p.y, p.z, s3);  }
+VD_CG_INL VdR4          vd_rm4ps            (VdR3 p, VdRea   s3)                             { return vd_rm4(p.x, p.y, p.z, s3);  }
+VD_CG_INL VdF4          vd_fm4sp            (VdCgf32 s0, VdF3 p)                             { return vd_fm4(s0, p.x, p.y, p.z);  }
+VD_CG_INL VdD4          vd_dm4sp            (VdCgf64 s0, VdD3 p)                             { return vd_dm4(s0, p.x, p.y, p.z);  }
+VD_CG_INL VdR4          vd_rm4sp            (VdRea   s0, VdR3 p)                             { return vd_rm4(s0, p.x, p.y, p.z);  }
 
 VD_CG_INL VdF4x4        vd_fm4x4            (VdCgf32 a0, VdCgf32 a1, VdCgf32 a2, VdCgf32 a3,
                                                     VdCgf32 b0, VdCgf32 b1, VdCgf32 b2, VdCgf32 b3,
@@ -1118,7 +1155,7 @@ VD_CG_INL int vd_fline_vs_cylinder(VdFLine *line, VdFCylinder *cylinder, VdCgf32
         return 0;
     }
 
-    *t = (-b - fsqrt(discriminant)) / a;
+    *t = (-b - VD_CG_FSQRT(discriminant)) / a;
 
     if (((*t) < 0.f) || ((*t) > 1.f)) {
         return 0;
@@ -1180,7 +1217,6 @@ VD_CG_INL int vd_fline_vs_cylinder(VdFLine *line, VdFCylinder *cylinder, VdCgf32
 #define RLine                    VdRLine
 #define RRay                     VdRRay
 #define RCylinder                VdRCylinder
-
 #define S2                       VdS2
 
 /* ----INITIALIZATION------------------------------------------------------------------------------------------------ */
