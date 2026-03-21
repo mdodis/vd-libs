@@ -5444,10 +5444,21 @@ static void vd_ui__push_clip(VdUiContext *ctx, float clip[4])
     unsigned int new_idx = ctx->clip_stack_count;
     ctx->clip_stack_count++;
 
-    ctx->clip_stack[new_idx][0] = clip[0];
-    ctx->clip_stack[new_idx][1] = clip[1];
-    ctx->clip_stack[new_idx][2] = clip[2];
-    ctx->clip_stack[new_idx][3] = clip[3];
+    float actual_clip[4];
+    VD_UI_MEMCPY(actual_clip, clip, sizeof(actual_clip));
+
+    for (int i = 0; i < 2; ++i) {
+        int pt_x = i * 2 + 0;
+        int pt_y = i * 2 + 1;
+
+        actual_clip[pt_x] = vd_ui__clampf(actual_clip[pt_x], 0.f, ctx->window[0]);
+        actual_clip[pt_y] = vd_ui__clampf(actual_clip[pt_y], 0.f, ctx->window[1]);
+    }
+
+    ctx->clip_stack[new_idx][0] = actual_clip[0];
+    ctx->clip_stack[new_idx][1] = actual_clip[1];
+    ctx->clip_stack[new_idx][2] = actual_clip[2];
+    ctx->clip_stack[new_idx][3] = actual_clip[3];
 }
 
 static void vd_ui__pop_clip(VdUiContext *ctx)
