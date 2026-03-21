@@ -11844,7 +11844,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             float dx = (float)delta / (float)WHEEL_DELTA;
             VdFwEvent evt;
             evt.type = VD_FW_EVENT_TYPE_MOUSE_SCROLL;
-            evt.data.mouse_scroll.dx = dx;
+            evt.data.mouse_scroll.dx = -dx;
             evt.data.mouse_scroll.dy = 0.f;
             vd_fw__msgbuf_w(&evt);
         } break;

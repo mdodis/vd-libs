@@ -504,8 +504,6 @@ typedef VD_UI_DRAW_PROC(VdUiDrawProc);
 struct VdUiDiv {
     /* The first child of this div */
     VdUiDiv         *first;
-    /* The last child of this div (eqt. first->next->...) */
-    VdUiDiv         *last;
     /* The next sibling of this div */
     VdUiDiv         *next;
     /* The prev sibling of this div */
@@ -1192,6 +1190,7 @@ VD_UI_API void             vd_ui_event_char(unsigned int codepoint);
 VD_UI_API void             vd_ui_event_focus(int on);
 
 /* ----INPUT UTILITIES----------------------------------------------------------------------------------------------- */
+VD_UI_API void             vd_ui_clip_rect(float rect[4], float out[4]);
 VD_UI_API void             vd_ui_mouse_pos(float pos[2]);
 VD_UI_API void             vd_ui_mouse_wheel(float wheel[2]);
 VD_UI_API int              vd_ui_mouse_down(int idx);
@@ -2116,6 +2115,7 @@ VD_UI_INL VdUi__Arena       vd_ui__arena_from_malloc(size_t size)               
 struct VdUiContext {
     VdUiDiv                 root;                                                  // Root div. Every frame begins with this div
                                                                                    // as the parent.
+    VdUiDiv                 sent;
 
     unsigned int            parents_next;                                          // Parent stack.
     VdUiDiv                 *parents[VD_UI_PARENT_STACK_MAX];
@@ -2288,11 +2288,10 @@ struct VdUiContext {
 VD_UI_API void vd_ui_frame_begin(float delta_seconds)
 {
     VdUiContext *ctx = vd_ui_context_get();
-    ctx->root.first           = NULL;
-    ctx->root.next            = NULL;
-    ctx->root.last            = NULL;
-    ctx->root.prev            = NULL;
-    ctx->root.parent          = NULL;
+    ctx->root.first           = &ctx->sent;
+    ctx->root.next            = &ctx->sent;
+    ctx->root.prev            = &ctx->sent;
+    ctx->root.parent          = &ctx->sent;
     ctx->root.size_changed    = 0;
 
     ctx->nc_area.div          = NULL;
@@ -2318,6 +2317,8 @@ VD_UI_API void vd_ui_frame_begin(float delta_seconds)
 
     vd_ui_parent_push(&ctx->root);
 
+    vd_ui__push_clip(ctx, ctx->root.rect);
+
 
     ctx->last_frame_index = ctx->frame_index;
     ctx->frame_index++;
@@ -2331,6 +2332,7 @@ VD_UI_API void vd_ui_frame_end(void)
         vd_ui__do_inspector(ctx);
     }
 
+    vd_ui__pop_clip(ctx);
     vd_ui_parent_pop();
 
     // Zero immediate mode stuff
@@ -3846,13 +3848,13 @@ VD_UI_API VdUiDiv* vd_ui_scrollview_begin(VdUiStr str, float *x, float *y)
     VdUiDiv *main_view;
     VdUiDiv *scrollv = 0;
     VdUiDiv *scrollh = 0;
+    VdUiDiv *view_with_hscroll;
 
     main_view = vd_ui_div_new(VD_UI_FLAG_FLEX_VERTICAL | VD_UI_FLAG_CLIP_CONTENT, str);
     int wheel_scrollable = vd_ui__point_in_rect(mouse, main_view->rect);
     vd_ui_parent_push(main_view);
     {
         VdUiDiv *view_with_vscroll;
-        VdUiDiv *view_with_hscroll;
 
         VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
         VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1, 1)
@@ -3864,7 +3866,7 @@ VD_UI_API VdUiDiv* vd_ui_scrollview_begin(VdUiStr str, float *x, float *y)
             VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
             VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1, 1)
             {
-                view_with_hscroll = vd_ui_div_new(VD_UI_FLAG_FLEX_VERTICAL, VD_UI_LIT("##hori-partition"));
+                view_with_hscroll = vd_ui_div_new(VD_UI_FLAG_FLEX_VERTICAL | VD_UI_FLAG_CLIP_CONTENT, VD_UI_LIT("##hori-partition"));
             }
             vd_ui_parent_push(view_with_hscroll);
             {
@@ -3912,12 +3914,14 @@ VD_UI_API VdUiDiv* vd_ui_scrollview_begin(VdUiStr str, float *x, float *y)
     }
     vd_ui_parent_pop();
 
+    vd_ui_parent_push(view_with_hscroll); // We only do this to activate clipping
     vd_ui_parent_push(content_area);
     return main_view;
 }
 
 VD_UI_API void vd_ui_scrollview_end(void)
 {
+    vd_ui_parent_pop();
     vd_ui_parent_pop();
 }
 
@@ -4143,10 +4147,6 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
 
     result->last_frame_touched = ctx->frame_index;
     result->child_count      = 0;
-    result->first            = 0;
-    result->next             = 0;
-    result->last             = 0;
-    result->prev             = 0;
     result->flags            = flags;
     result->offset[0]        = 0.f;
     result->offset[1]        = 0.f;
@@ -4160,21 +4160,34 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
         result->size_changed = 0;
     }
 
+
     VdUiDiv *parent = ctx->parents[ctx->parents_next - 1];
     result->parent = parent;
+    result->first = &ctx->sent;
+    result->next = result->prev = result;
+
+    if (parent->first == &ctx->sent) {
+        parent->first = result;
+    }
+
+    parent->first->prev->next = result;
+    result->prev = parent->first->prev;
+    parent->first->prev       = result;
+    result->next = parent->first;
+
+    parent->child_count++;
 
     // If the parent widget never had any children, then its first and last child is this one
-    if (!parent->first) {
-        parent->first       = result;
-        parent->last        = result;
-        parent->child_count = 1;
-    } else {
-        VdUiDiv *last = parent->last;
-        last->next = result;
-        result->prev = last;
-        parent->last = result;
-        parent->child_count++;
-    }
+    // if (!parent->first) {
+    //     parent->first       = result;
+    //     parent->child_count = 1;
+    // } else {
+    //     result->prev = parent->first->prev;
+    //     parent->first->prev->next = result;
+    //     result->next = parent->first;
+    //     parent->first->prev = result;
+    //     parent->child_count++;
+    // }
 
     // Resolve Styles
     result->activation_mouse_button              = vd_ui_activation_button_get();
@@ -4217,8 +4230,13 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
 
     if (div->flags & VD_UI_FLAG_CLICKABLE) {
         float mouse_delta[2] = { ctx->mouse[0] - ctx->mouse_last[0], ctx->mouse[1] - ctx->mouse_last[1] };
+        if (vd_ui_str_eq(div->id_str, VD_UI_LIT("ckbx")) && vd_ui_mouse_just_pressed(VD_UI_MOUSE_LEFT)){
+            printf("yeet\n");
+        }
 
-        int hovered  = vd_ui__point_in_rect(ctx->mouse, div->rect);
+        float clipped_rect[4];
+        vd_ui_clip_rect(div->rect, clipped_rect);
+        int hovered  = vd_ui__point_in_rect(ctx->mouse, clipped_rect);
         int pressed  = (ctx->focus) && vd_ui_mouse_down(div->activation_mouse_button);
         int released = (ctx->focus) && vd_ui_mouse_just_released(div->activation_mouse_button);
         int clicked  = (ctx->focus) && vd_ui_mouse_just_pressed(div->activation_mouse_button);
@@ -4310,6 +4328,10 @@ VD_UI_API int vd_ui_parent_push(VdUiDiv *div)
     VdUiContext *ctx = vd_ui_context_get();
     VD_UI_ASSERT(ctx->parents_next != VD_UI_PARENT_STACK_MAX && "Too many pushes to parents!");
     ctx->parents[ctx->parents_next++] = div;
+
+    if (div->flags & VD_UI_FLAG_CLIP_CONTENT) {
+        vd_ui__push_clip(ctx, div->rect);
+    }
     return 0;
 }
 
@@ -4317,6 +4339,10 @@ VD_UI_API void vd_ui_parent_pop(void)
 {
     VdUiContext *ctx = vd_ui_context_get();
     VD_UI_ASSERT(ctx->parents_next != 0 && "Too many pops to parents!");
+    VdUiDiv *d = ctx->parents[ctx->parents_next-1];
+    if (d->flags & VD_UI_FLAG_CLIP_CONTENT) {
+        vd_ui__pop_clip(ctx);
+    }
     ctx->parents_next--;
 }
 
@@ -4851,15 +4877,13 @@ static void vd_ui__calc_fixed_size(VdUiContext *ctx, VdUiDiv *curr)
     if (curr == 0) {
         return;
     }
-    VdUiDiv *child = curr->first;
-    while (child != 0) {
-        vd_ui__calc_fixed_size(ctx, child);
 
-        if (child == child->next) {
-            // @impossible
-            VD_UI_ASSERT(0);
-        }
-        child = child->next;
+    if (curr->first != &ctx->sent) {
+        VdUiDiv *child = curr->first;
+        do {
+            vd_ui__calc_fixed_size(ctx, child);
+            child = child->next;
+        } while (child != curr->first);
     }
 
     if (curr == &ctx->root) {
@@ -4946,9 +4970,12 @@ static void vd_ui__calc_dyn_size_up(VdUiContext *ctx, VdUiDiv *curr)
     }
 
     VdUiDiv *child = curr->first;
-    while (child != 0) {
-        vd_ui__calc_dyn_size_up(ctx, child);
-        child = child->next;
+
+    if (curr->first != &ctx->sent) {
+        do {
+            vd_ui__calc_dyn_size_up(ctx, child);
+            child = child->next;
+        } while (child != curr->first);
     }
 }
 
@@ -4966,19 +4993,22 @@ static void vd_ui__calc_dyn_size_down(VdUiContext *ctx, VdUiDiv *curr)
 
     VdUiDiv *child = curr->first;
 
-    while (child != 0) {
-        vd_ui__calc_dyn_size_down(ctx, child);
 
-        if (child->is_null || child->size_changed) {
-            // size_will_change = 1;
-        }
+    if (curr->first != &ctx->sent) {
+        do {
+            vd_ui__calc_dyn_size_down(ctx, child);
 
-        if ((child->flags & VD_UI_FLAG_FLOAT) == 0) {
-            full_size[daxis] += child->comp_size[daxis];
-            full_size[faxis] =  (child->comp_size[faxis] > full_size[faxis]) ? child->comp_size[faxis] : full_size[faxis];
-        }
+            if (child->is_null || child->size_changed) {
+                // size_will_change = 1;
+            }
 
-        child = child->next;
+            if ((child->flags & VD_UI_FLAG_FLOAT) == 0) {
+                full_size[daxis] += child->comp_size[daxis];
+                full_size[faxis] =  (child->comp_size[faxis] > full_size[faxis]) ? child->comp_size[faxis] : full_size[faxis];
+            }
+
+            child = child->next;
+        } while (child != curr->first);
     }
 
     full_size[VD_UI_AXISH] += curr->style.padding[VD_UI_LEFT] + curr->style.padding[VD_UI_RIGHT];
@@ -5088,13 +5118,16 @@ static void vd_ui__calc_oversizes(VdUiContext *ctx, VdUiDiv *curr)
 
             float overall_niceness = 0.f;
             child = curr->first;
-            while (child != 0) {
 
-                if ((child->flags & VD_UI_FLAG_FLOAT) == 0) {
-                    overall_niceness += child->style.size[i].niceness;
-                }
+            if (curr->first != &ctx->sent) {
+                do {
+                    if ((child->flags & VD_UI_FLAG_FLOAT) == 0) {
+                        overall_niceness += child->style.size[i].niceness;
+                    }
 
-                child = child->next;
+                    child = child->next;
+
+                } while (child != curr->first);
             }
 
             // If no child is nice, then we can't do anything
@@ -5104,15 +5137,17 @@ static void vd_ui__calc_oversizes(VdUiContext *ctx, VdUiDiv *curr)
             }
 
             child = curr->first;
-            while (child != 0) {
-                if ((child->flags & VD_UI_FLAG_FLOAT) == 0) {
-                    float proportional_niceness = child->style.size[i].niceness / overall_niceness;
-                    if (proportional_niceness != 0.f) {
-                        vd_ui__change_size(child, i, child->comp_size[i] - oversize_amount * proportional_niceness);
+            if (curr->first != &ctx->sent) {
+                do {
+                    if ((child->flags & VD_UI_FLAG_FLOAT) == 0) {
+                        float proportional_niceness = child->style.size[i].niceness / overall_niceness;
+                        if (proportional_niceness != 0.f) {
+                            vd_ui__change_size(child, i, child->comp_size[i] - oversize_amount * proportional_niceness);
+                        }
                     }
-                }
 
-                child = child->next;
+                    child = child->next;
+                } while (child != curr->first);
             }
 
             child_sizes -= oversize_amount;
@@ -5125,23 +5160,30 @@ static void vd_ui__calc_oversizes(VdUiContext *ctx, VdUiDiv *curr)
 
             VdUiDiv *child;
             child = curr->first;
-            while (child != 0) {
-                if ((child->flags & VD_UI_FLAG_FLOAT) == 0) {
 
-                    if (child->comp_size[i] > curr->comp_size[i]) {
-                        vd_ui__change_size(child, i, curr->comp_size[i]);
+            if (curr->first != &ctx->sent) {
+                do {
+
+                    if ((child->flags & VD_UI_FLAG_FLOAT) == 0) {
+
+                        if (child->comp_size[i] > curr->comp_size[i]) {
+                            vd_ui__change_size(child, i, curr->comp_size[i]);
+                        }
+                        // child->comp_size[i] = child->comp_size[i] - oversize_amount;
                     }
-                    // child->comp_size[i] = child->comp_size[i] - oversize_amount;
-                }
-                child = child->next;
+                    child = child->next;
+
+                } while (child != curr->first);
             }
         }
     }
 
     VdUiDiv *child = curr->first;
-    while (child != 0) {
-        vd_ui__calc_oversizes(ctx, child);
-        child = child->next;
+    if (curr->first != &ctx->sent) {
+        do {
+            vd_ui__calc_oversizes(ctx, child);
+            child = child->next;
+        } while (child != curr->first);
     }
 }
 
@@ -5169,66 +5211,71 @@ static void vd_ui__calc_positions(VdUiContext *ctx, VdUiDiv *curr)
     }
 
     // @todo(mdodis): Cache this during vd_ui__calc_dyn_size_down instead of looping twice
-    while (child != 0) {
-
-        if ((child->flags & VD_UI_FLAG_FLOAT) == 0) {
-            if (child->comp_size[faxis] > cursor[faxis]) {
-                cursor[faxis] = child->comp_size[faxis];
+    if (curr->first != &ctx->sent) {
+        do {
+            if ((child->flags & VD_UI_FLAG_FLOAT) == 0) {
+                if (child->comp_size[faxis] > cursor[faxis]) {
+                    cursor[faxis] = child->comp_size[faxis];
+                }
             }
-        }
 
-        child = child->next;
+            child = child->next;
+        } while (child != curr->first);
     }
 
     float curr_faxis_center = curr->rect[faxis] + (curr->rect[faxisf] - curr->rect[faxis]) * 0.5f;
 
     child = curr->first;
-    while (child != 0) {
+    if (curr->first != &ctx->sent) {
+        do {
 
-        if ((child->flags & VD_UI_FLAG_FLOAT) == 0) {
-            child->comp_pos_rel[daxis] = curr->style.padding[daxis] + cursor[daxis];
-            child->comp_pos_rel[faxis] = curr->style.padding[faxis] + 0.f;
+            if ((child->flags & VD_UI_FLAG_FLOAT) == 0) {
+                child->comp_pos_rel[daxis] = curr->style.padding[daxis] + cursor[daxis];
+                child->comp_pos_rel[faxis] = curr->style.padding[faxis] + 0.f;
 
-            child->rect[daxis] = curr->rect[daxis] + child->comp_pos_rel[daxis];
-            child->rect[daxisf] = child->rect[daxis] + child->comp_size[daxis];
+                child->rect[daxis] = curr->rect[daxis] + child->comp_pos_rel[daxis];
+                child->rect[daxisf] = child->rect[daxis] + child->comp_size[daxis];
 
-            if (curr->flags & VD_UI_FLAG_ALIGN_CENTER) {
-                child->rect[faxis]  = curr_faxis_center - (child->comp_size[faxis] * 0.5f);
-                child->rect[faxisf] = child->rect[faxis] + child->comp_size[faxis];
+                if (curr->flags & VD_UI_FLAG_ALIGN_CENTER) {
+                    child->rect[faxis]  = curr_faxis_center - (child->comp_size[faxis] * 0.5f);
+                    child->rect[faxisf] = child->rect[faxis] + child->comp_size[faxis];
+                } else {
+
+                    child->rect[faxis] = curr->rect[faxis] + child->comp_pos_rel[faxis];
+                    child->rect[faxisf] = child->rect[faxis] + child->comp_size[faxis];
+                }
+
+                cursor[daxis] += child->comp_size[daxis] + curr->style.child_gap;
             } else {
-
-                child->rect[faxis] = curr->rect[faxis] + child->comp_pos_rel[faxis];
-                child->rect[faxisf] = child->rect[faxis] + child->comp_size[faxis];
+                child->rect[VD_UI_LEFT]   = curr->rect[0] + child->comp_pos_rel[0];
+                child->rect[VD_UI_TOP]    = curr->rect[1] + child->comp_pos_rel[1];
+                child->rect[VD_UI_RIGHT]  = child->rect[VD_UI_LEFT] + child->comp_size[0];
+                child->rect[VD_UI_BOTTOM] = child->rect[VD_UI_TOP]  + child->comp_size[1];
             }
 
-            cursor[daxis] += child->comp_size[daxis] + curr->style.child_gap;
-        } else {
-            child->rect[VD_UI_LEFT]   = curr->rect[0] + child->comp_pos_rel[0];
-            child->rect[VD_UI_TOP]    = curr->rect[1] + child->comp_pos_rel[1];
-            child->rect[VD_UI_RIGHT]  = child->rect[VD_UI_LEFT] + child->comp_size[0];
-            child->rect[VD_UI_BOTTOM] = child->rect[VD_UI_TOP]  + child->comp_size[1];
-        }
+            // @todo(mdodis): Move this to vd_ui__traverse_and_render_divs
+            child->rect[VD_UI_LEFT]  += child->offset[0]; child->rect[VD_UI_TOP]    += child->offset[1];
+            child->rect[VD_UI_RIGHT] += child->offset[0]; child->rect[VD_UI_BOTTOM] += child->offset[1];
 
-        // @todo(mdodis): Move this to vd_ui__traverse_and_render_divs
-        child->rect[VD_UI_LEFT]  += child->offset[0]; child->rect[VD_UI_TOP]    += child->offset[1];
-        child->rect[VD_UI_RIGHT] += child->offset[0]; child->rect[VD_UI_BOTTOM] += child->offset[1];
+            int child_is_visible = 0
+                                 || (child->flags & VD_UI_FLAG_BACKGROUND)
+                                 || (child->flags & VD_UI_FLAG_BORDER)
+                                 || (child->flags & VD_UI_FLAG_CLICKABLE);
+            if (child_is_visible && vd_ui__point_in_rect(ctx->mouse, child->rect)) {
+                ctx->mouse_over_any_visible_div = 1;
+            }
 
-        int child_is_visible = 0
-                             || (child->flags & VD_UI_FLAG_BACKGROUND)
-                             || (child->flags & VD_UI_FLAG_BORDER)
-                             || (child->flags & VD_UI_FLAG_CLICKABLE);
-        if (child_is_visible && vd_ui__point_in_rect(ctx->mouse, child->rect)) {
-            ctx->mouse_over_any_visible_div = 1;
-        }
+            child = child->next;
 
-        child = child->next;
+        } while (child != curr->first);
     }
 
-
     child = curr->first;
-    while (child != 0) {
-        vd_ui__calc_positions(ctx, child);
-        child = child->next;
+    if (curr->first != &ctx->sent) {
+        do {
+            vd_ui__calc_positions(ctx, child);
+            child = child->next;
+        } while (child != curr->first);
     }
 }
 
@@ -5386,6 +5433,40 @@ VD_UI_API void vd_ui_event_focus(int on)
 }
 
 /* ----INPUT UTILITIES IMPL------------------------------------------------------------------------------------------ */
+VD_UI_API void vd_ui_clip_rect(float rect[4], float out[4])
+{
+    VdUiContext *ctx = vd_ui_context_get();
+
+    float clip[4];
+    vd_ui__get_clip(ctx, clip);
+
+    for (int i = 0; i < 4; ++i) out[i] = rect[i];
+
+    if (out[0] < clip[0]) {
+        out[0] = clip[0];
+    }
+
+    if (out[1] < clip[1]) {
+        out[1] = clip[1];
+    }
+
+    if (out[2] > clip[2]) {
+        out[2] = clip[2];
+    }
+
+    if (out[3] > clip[3]) {
+        out[3] = clip[3];
+    }
+
+    if (out[0] > out[2]) {
+        out[0] = out[2] = 0.f;
+    }
+
+    if (out[1] > out[3]) {
+        out[1] = out[3] = 0.f;
+    }
+}
+
 VD_UI_API void vd_ui_mouse_pos(float pos[2])
 {
     VdUiContext *ctx = vd_ui_context_get();
@@ -6111,20 +6192,24 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
 
     // Pass over children that render normally
     VdUiDiv *child = curr->first;
-    while (child != 0) {
-        if (child->zoffset == 0) {
-            vd_ui__traverse_and_render_divs(ctx, child);
-        }
-        child = child->next;
+    if (curr->first != &ctx->sent) {
+        do {
+            if (child->zoffset == 0) {
+                vd_ui__traverse_and_render_divs(ctx, child);
+            }
+            child = child->next;
+        } while (child != curr->first);
     }
 
     // Pass over children that render on top
     child = curr->first;
-    while (child != 0) {
-        if (child->zoffset != 0) {
-            vd_ui__traverse_and_render_divs(ctx, child);
-        }
-        child = child->next;
+    if (curr->first != &ctx->sent) {
+        do {
+            if (child->zoffset != 0) {
+                vd_ui__traverse_and_render_divs(ctx, child);
+            }
+            child = child->next;
+        } while (child != curr->first);
     }
 
     if (curr->flags & VD_UI_FLAG_CLIP_CONTENT) {
@@ -6436,6 +6521,10 @@ VD_UI_API VdUiContext *vd_ui_context_create(VdUiContextCreateInfo *info)
 
     result->frame_arena = vd_ui__arena_from_malloc(1024 * 1024);
 
+    result->sent.id_str = VD_UI_LIT("__sent__");
+    result->sent.content_str = VD_UI_LIT("__sent__");
+    result->sent.next = result->sent.prev = &result->sent;
+
     result->focus = 1;
     return result;
 }
@@ -6629,6 +6718,52 @@ static struct {
 
 static void vd_ui__inspector_do_hierarchy(VdUiContext *ctx, VdUiDiv *curr, float depth);
 
+static void vd_ui__inspector_do_div(VdUiDiv *cur)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    int hovered = 0;
+
+    if (vd_ui_buttonf("%.*s##inspector_view-%.*s", cur->id_str.l, cur->id_str.s, cur->id_str.l, cur->id_str.s).hovering) {
+        hovered = 1;
+    }
+
+    VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISH, 0)
+    VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 0)
+    VD_UI_WITH_STYLE_PADDING4(8.f, 0, 0, 0)
+    {
+        vd_ui_parent_newf(0
+                          | VD_UI_FLAG_FLEX_VERTICAL
+                          ,"##inspector_children-%.*s", cur->id_str.l, cur->id_str.s);
+    }
+
+    VdUiDiv *child = cur->first;
+    if (cur->first != &ctx->sent) {
+        do {
+            vd_ui__inspector_do_div(child);
+            child = child->next;
+        } while (child != cur->first);
+    }
+
+    vd_ui_parent_pop();
+
+    if (hovered) {
+        vd_ui_parent_push(vd_ui_get_root());
+        float w = cur->rect[2] - cur->rect[0];
+        float h = cur->rect[3] - cur->rect[1];
+
+        VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(w, h, 0, 0)
+        VD_UI_WITH_STYLE_BORDER_SIZE(VD_UI_FLAG_BORDER, 2.f)
+        VD_UI_WITH_STYLE_COLOR(VD_UI_FLAG_BORDER, vd_ui_f4(1,0,0,1))
+        {
+            VdUiDiv *d = vd_ui_div_new(VD_UI_FLAG_FLOAT | VD_UI_FLAG_BORDER, VD_UI_LIT("##inspector_sel"));
+            d->comp_pos_rel[0] = cur->rect[0];
+            d->comp_pos_rel[1] = cur->rect[1];
+        }
+        vd_ui_parent_pop();
+
+    }
+}
+
 static void vd_ui__do_inspector(VdUiContext *ctx)
 {
     (void)ctx;
@@ -6651,6 +6786,7 @@ static void vd_ui__do_inspector(VdUiContext *ctx)
             scroll_view = vd_ui_scrollview_begin(VD_UI_LIT("##tree"), &scroll_x, &scroll_y);
         }
         {
+            #if 0
             float viewport = scroll_view->comp_size[1];
             float item_height = 20.f;
             int count_items = 100000;
@@ -6692,6 +6828,22 @@ static void vd_ui__do_inspector(VdUiContext *ctx)
             if (space_after > 0.f) {
                 vd_ui_spacerex(VD_UI_AXISV, VD_UI_SIZE_MODE_ABSOLUTE, space_after, 0.f);
             }
+            #else
+            VdUiDiv *child = ctx->root.first;
+            if (ctx->root.first != &ctx->sent) {
+                do {
+                    if (child != inspector) {
+
+                        if (!vd_ui_str_eq(child->id_str, VD_UI_LIT("inspector_sel"))) {
+                            vd_ui__inspector_do_div(child);
+                        }
+                    }
+
+                    child = child->next;
+                } while (child != ctx->root.first);
+            }
+
+            #endif
 
         }
         vd_ui_scrollview_end();
