@@ -47,6 +47,7 @@
  * | |                                     | Dynamic Resize Buffer                                              |   |
  * 
  * @todo(mdodis):
+ * - Add activation mask depending on mouse input buttons the user wants
  * - Sliders
  * - Introduce Tree concept
  *   > Right now, the whole UI system is done in one VdUiContext
@@ -243,6 +244,9 @@ enum {
     VD_UI_MOUSE_LEFT        = 0,
     VD_UI_MOUSE_RIGHT       = 1,
     VD_UI_MOUSE_MIDDLE      = 2,
+    VD_UI_MOUSE_M1          = 3,
+    VD_UI_MOUSE_M2          = 4,
+    VD_UI_MOUSE_MAX,
 
     // Positions
     VD_UI_LEFT = 0,
@@ -268,6 +272,11 @@ enum {
     VD_UI_KEY_END,
     VD_UI_KEY_DEL,
     VD_UI_KEY_A,
+    VD_UI_KEY_EXTRA
+    VD_UI_KEY_MAX,
+
+    VD_UI_KEY_STATE_PREV_MASK = 1 << 0,
+    VD_UI_KEY_STATE_NEXT_MASK = 1 << 1,
 
     VD_UI_MOD_SHIFT   = 0,
     VD_UI_MOD_CONTROL = 1,
@@ -501,6 +510,7 @@ struct VdUiDiv {
     VdUiFocusMode   focus_mode;
 
     VdUiFlags       flags;
+    int             activation_mouse_button;
     VdUiStyle       style;
 
     size_t          h;
@@ -989,6 +999,10 @@ VD_UI_API void             vd_ui_style_text_valign_pop(void);
 #define VD_UI_WITH_STYLE_TEXT_ALIGNMENT(halign, valign) \
     VD_UI_WITH_STYLE_TEXT_HALIGN(halign) VD_UI_WITH_STYLE_TEXT_VALIGN(valign)
 
+VD_UI_API void             vd_ui_activation_button_push(unsigned char button);
+VD_UI_API int              vd_ui_activation_button_get(void);
+VD_UI_API void             vd_ui_activation_button_pop(void);
+
 /* ----RENDERING----------------------------------------------------------------------------------------------------- */
 enum {
     VD_UI_VERTEX_FLAG_TEXTURE_IS_ALPHA_BUFFER = 1 << 0,
@@ -1164,6 +1178,7 @@ VD_UI_API void             vd_ui_event_mouse_location(float mx, float my);
 VD_UI_API void             vd_ui_event_mouse_button(int index, int down);
 VD_UI_API void             vd_ui_event_mouse_wheel(float dx, float dy);
 VD_UI_API void             vd_ui_event_key_press(VdUiKey key);
+VD_UI_API void             vd_ui_event_key_release(VdUiKey key);
 VD_UI_API void             vd_ui_event_mod(VdUiMod mod, int on);
 VD_UI_API void             vd_ui_event_char(unsigned int codepoint);
 VD_UI_API void             vd_ui_event_focus(int on);
@@ -1171,6 +1186,11 @@ VD_UI_API void             vd_ui_event_focus(int on);
 /* ----INPUT UTILITIES----------------------------------------------------------------------------------------------- */
 VD_UI_API void             vd_ui_mouse_pos(float pos[2]);
 VD_UI_API void             vd_ui_mouse_wheel(float wheel[2]);
+VD_UI_API int              vd_ui_mouse_down(int idx);
+VD_UI_API int              vd_ui_mouse_down_previously(int idx);
+VD_UI_API int              vd_ui_mouse_up(int idx);
+VD_UI_API int              vd_ui_mouse_just_pressed(int idx);
+VD_UI_API int              vd_ui_mouse_just_released(int idx);
 VD_UI_API int              vd_ui_mouse_left_clicked(void);
 VD_UI_API int              vd_ui_mouse_left_just_released(void);
 VD_UI_API float            vd_ui_dt(void);
@@ -1180,6 +1200,10 @@ VD_UI_API int              vd_ui_is_captured(VdUiDiv *div);
 VD_UI_API int              vd_ui_get_num_keystrokes(void);
 VD_UI_API VdUiKeyStroke    vd_ui_get_keystroke(int index);
 VD_UI_API int              vd_ui_any_hovered(void);
+VD_UI_API int              vd_ui_mod_down(VdUiMod mod);
+VD_UI_API int              vd_ui_key_down(VdUiKey key);
+VD_UI_API int              vd_ui_key_pressed(VdUiKey key);
+VD_UI_API int              vd_ui_key_released(VdUiKey key);
 
 /* ----CONTEXT CREATION---------------------------------------------------------------------------------------------- */
 typedef struct VdUiContext VdUiContext;
@@ -1898,6 +1922,10 @@ static VdUiColoring  Vd_Ui__Coloring_Tx_Default;
 #   define VD_UI_STYLE_CHILD_GAP_STACK_MAX      16
 #endif // !VD_UI_STYLE_CHILD_GAP_STACK_MAX
 
+#ifndef VD_UI_ACTIVATION_MOUSE_BUTTON_STACK_COUNT
+#   define VD_UI_ACTIVATION_MOUSE_BUTTON_STACK_COUNT 16
+#endif // !VD_UI_ACTIVATION_MOUSE_BUTTON_STACK_COUNT
+
 #ifndef VD_UI_KEYSTROKES_MAX
 #   define VD_UI_KEYSTROKES_MAX 16
 #endif // !VD_UI_KEYSTROKES_MAX
@@ -2137,15 +2165,14 @@ struct VdUiContext {
     float                   wheel_current[VD_UI_AXES];                             // The current wheel state. Smoothed on mouse sources
     float                   wheel_target[VD_UI_AXES];                              // The target wheel state
     float                   window[VD_UI_AXES];                                    // The window size, in pixels
-    int                     mouse_left;
-    int                     mouse_left_last;
-    int                     mouse_right;
-    int                     mouse_middle;
+    int                     prev_mouse_button_state[VD_UI_MOUSE_MAX];
+    int                     mouse_button_state[VD_UI_MOUSE_MAX];
 
     VdUiMod                 mods[VD_UI_MOD_MAX];
 
     int                     num_keystrokes;
     VdUiKeyStroke           keystrokes[VD_UI_KEYSTROKES_MAX];
+    unsigned char           key_states[VD_UI_KEY_MAX];
 
     size_t                  id_capturing_mouse;
     size_t                  hot;
@@ -2203,6 +2230,9 @@ struct VdUiContext {
     unsigned int            child_gap_stack_count;
     float                   child_gap_stack[VD_UI_STYLE_CHILD_GAP_STACK_MAX];
 
+    unsigned int            activation_mouse_button_stack_count;
+    unsigned char           activation_mouse_button_stack[VD_UI_ACTIVATION_MOUSE_BUTTON_STACK_COUNT];
+
     // Stored to differentiate between passes
     VdUiTextureId          *current_texture_id;
 
@@ -2257,12 +2287,16 @@ VD_UI_API void vd_ui_frame_begin(float delta_seconds)
     ctx->mouse_last[0]        = ctx->mouse[0];
     ctx->mouse_last[1]        = ctx->mouse[1];
     ctx->delta_seconds        = delta_seconds;
-    ctx->mouse_left_last      = ctx->mouse_left;
+    for (int i = 0; i < VD_UI_MOUSE_MAX; ++i) ctx->prev_mouse_button_state[i] = ctx->mouse_button_state[i];
 
     ctx->strbuf_len           = 0;
     ctx->null_divs_len        = 0;
     ctx->num_keystrokes       = 0;
     ctx->mouse_over_any_visible_div = 0;
+
+    for (int i = 0; i < VD_UI_KEY_MAX; ++i) {
+        ctx->key_states[i] = ctx->key_states[i] << 1;
+    }
 
     vd_ui__arena_clear(&ctx->frame_arena);
 
@@ -2581,10 +2615,12 @@ VD_UI_API void vd_ui_text_op_exec(VdUiTextOp op, VdUiSel *sel, char *buf, size_t
             return;
         }
 
-        size_t bytes_to_move = (*len) - new_c.b;
+        long long bytes_to_move = (long long)(*len) - new_c.b;
         long long move_start_pos = new_c.b;
         long long move_end_pos = move_start_pos + op.replace_str.l;
-        VD_UI_MEMMOVE(buf + move_end_pos, buf + move_start_pos, bytes_to_move);
+        if (bytes_to_move > 0) {
+            VD_UI_MEMMOVE(buf + move_end_pos, buf + move_start_pos, bytes_to_move);
+        }
 
         VD_UI_MEMCPY(buf + move_start_pos, op.replace_str.s, op.replace_str.l);
         (*len) += op.replace_str.l;
@@ -2665,7 +2701,8 @@ VD_UI_API void vd_ui_text_op_exec(VdUiTextOp op, VdUiSel *sel, char *buf, size_t
             new_c = vd_ui_text_point_move_by_borders(new_c, buf, *len, 1);
         } break;
 
-        default: VD_UI_ASSERT(0 && "Invalid distance unit flags!"); break;
+        // default: VD_UI_ASSERT(0 && "Invalid distance unit flags!"); break;
+        default: break;
     }
 
     if (new_c.b < 0) new_c.b = 0;
@@ -3233,8 +3270,8 @@ VD_UI_DRAW_PROC(vd_ui_text_box_draw)
                                 &s1, &t1);
 
         float glyph_rect[4] = {
-            x0, y0,
-            x1, y1,
+            x0, y0 - font_height * 0.25f,
+            x1, y1 - font_height * 0.25f,
         };
 
         float glyph_uv[4] = {
@@ -3438,7 +3475,7 @@ VD_UI_API void vd_ui_scroll_begin(VdUiStr str, float *x, float *y, VdUiScrollOpt
         if (grip_size < min_grip_size) grip_size = min_grip_size;
         if (grip_size > max_grip_size) grip_size = max_grip_size;
 
-        float scrollable_track_size       = track_size - grip_size;
+        // float scrollable_track_size       = track_size - grip_size;
         float scrollable_window_area_size = content_size - window_size;
 
         if (scrollable_window_area_size < 0.f) {
@@ -3783,6 +3820,8 @@ VD_UI_API void vd_ui_scroll_end()
 
 VD_UI_API VdUiDiv* vd_ui_scrollview_begin(VdUiStr str, float *x, float *y)
 {
+    (void)x;
+
     VdUiDiv *scroll_view = vd_ui_div_new(VD_UI_FLAG_FLEX_HORIZONTAL | VD_UI_FLAG_CLIP_CONTENT, str);
     vd_ui_parent_push(scroll_view);
 
@@ -4069,6 +4108,7 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     }
 
     // Resolve Styles
+    result->activation_mouse_button              = vd_ui_activation_button_get();
     result->focus_mode                           = vd_ui_focus_mode_get();
     result->style.size[VD_UI_AXISH]              = *vd_ui_style_size_get(VD_UI_AXISH);
     result->style.size[VD_UI_AXISV]              = *vd_ui_style_size_get(VD_UI_AXISV);
@@ -4110,9 +4150,9 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
         float mouse_delta[2] = { ctx->mouse[0] - ctx->mouse_last[0], ctx->mouse[1] - ctx->mouse_last[1] };
 
         int hovered  = vd_ui__point_in_rect(ctx->mouse, div->rect);
-        int pressed  = (ctx->focus) && ctx->mouse_left;
-        int released = (ctx->focus) && vd_ui_mouse_left_just_released();
-        int clicked  = (ctx->focus) && vd_ui_mouse_left_clicked();
+        int pressed  = (ctx->focus) && vd_ui_mouse_down(div->activation_mouse_button);
+        int released = (ctx->focus) && vd_ui_mouse_just_released(div->activation_mouse_button);
+        int clicked  = (ctx->focus) && vd_ui_mouse_just_pressed(div->activation_mouse_button);
         int captured = (ctx->focus) && vd_ui_is_captured(div);
         if (vd_ui_div_is_hot(div) || captured) {
             if (clicked) {
@@ -4612,7 +4652,7 @@ VD_UI_API void vd_ui_style_border_size_pop(VdUiFlags mask)
     VdUiContext *ctx = vd_ui_context_get();
 
     if (mask & VD_UI_FLAG_BACKGROUND) {
-        VD_UI_ASSERT(ctx->coloring_bg_stack_count > 0);
+        VD_UI_ASSERT(ctx->border_size_bg_stack_count > 0);
         ctx->border_size_bg_stack_count--;
     }
 
@@ -4693,6 +4733,30 @@ VD_UI_API void vd_ui_style_text_valign_pop(void)
     VdUiContext *ctx = vd_ui_context_get();
     VD_UI_ASSERT(ctx->text_valign_stack_count > 0);
     ctx->text_valign_stack_count--;
+}
+
+VD_UI_API void vd_ui_activation_button_push(unsigned char button)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    VD_UI_ASSERT(ctx->activation_mouse_button_stack_count < VD_UI_ACTIVATION_MOUSE_BUTTON_STACK_COUNT);
+    ctx->activation_mouse_button_stack[ctx->activation_mouse_button_stack_count++] = button;
+}
+
+VD_UI_API int vd_ui_activation_button_get(void)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    if (ctx->activation_mouse_button_stack_count) {
+        return ctx->activation_mouse_button_stack[ctx->activation_mouse_button_stack_count-1];
+    } else {
+        return VD_UI_MOUSE_LEFT;
+    }
+}
+
+VD_UI_API void vd_ui_activation_button_pop(void)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    VD_UI_ASSERT(ctx->activation_mouse_button_stack_count > 0);
+    ctx->activation_mouse_button_stack_count--;
 }
 
 static void vd_ui__get_axes_for_div(VdUiDiv *div, int *daxis, int *faxis, int *daxisf, int *faxisf)
@@ -5198,6 +5262,8 @@ VD_UI_API void vd_ui_event_key_press(VdUiKey key)
     }
 
     VdUiContext *ctx = vd_ui_context_get();
+    ctx->key_states[key] |= VD_UI_KEY_STATE_NEXT_MASK;
+
     VdUiKeyStroke keystroke;
     keystroke.key = key;
     keystroke.mods = 0;
@@ -5205,6 +5271,16 @@ VD_UI_API void vd_ui_event_key_press(VdUiKey key)
     keystroke.mods |= ctx->mods[VD_UI_MOD_CONTROL]  << VD_UI_MOD_CONTROL;
     ctx->keystrokes[ctx->num_keystrokes % VD_UI_KEYSTROKES_MAX] = keystroke;
     ctx->num_keystrokes++;
+}
+
+VD_UI_API void vd_ui_event_key_release(VdUiKey key)
+{
+    if (key == VD_UI_KEY_NONE) {
+        return;
+    }
+
+    VdUiContext *ctx = vd_ui_context_get();
+    ctx->key_states[key] &= ~VD_UI_KEY_STATE_NEXT_MASK;
 }
 
 VD_UI_API void vd_ui_event_mod(VdUiMod mod, int on)
@@ -5231,13 +5307,7 @@ VD_UI_API void vd_ui_event_char(unsigned int codepoint)
 VD_UI_API void vd_ui_event_mouse_button(int index, int down)
 {
     VdUiContext *ctx = vd_ui_context_get();
-    switch (index)
-    {
-        case VD_UI_MOUSE_LEFT:   ctx->mouse_left = down; break;
-        case VD_UI_MOUSE_RIGHT:  ctx->mouse_right  = down; break;
-        case VD_UI_MOUSE_MIDDLE: ctx->mouse_middle = down; break;
-        default: break;
-    }
+    ctx->mouse_button_state[index] = down;
 }
 
 VD_UI_API void vd_ui_event_focus(int on)
@@ -5261,16 +5331,42 @@ VD_UI_API void vd_ui_mouse_wheel(float wheel[2])
     wheel[1] = ctx->wheel_current[1];
 }
 
-VD_UI_API int vd_ui_mouse_left_clicked(void)
+VD_UI_API int vd_ui_mouse_down(int idx)
 {
     VdUiContext *ctx = vd_ui_context_get();
-    return !ctx->mouse_left_last && ctx->mouse_left;
+    return ctx->mouse_button_state[idx];
+}
+
+VD_UI_API int vd_ui_mouse_down_previously(int idx)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    return ctx->prev_mouse_button_state[idx];
+}
+
+VD_UI_API int vd_ui_mouse_up(int idx)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    return !ctx->mouse_button_state[idx];
+}
+
+VD_UI_API int vd_ui_mouse_just_pressed(int idx)
+{
+    return vd_ui_mouse_down(idx) && !vd_ui_mouse_down_previously(idx);
+}
+
+VD_UI_API int vd_ui_mouse_just_released(int idx)
+{
+    return !vd_ui_mouse_down(idx) && vd_ui_mouse_down_previously(idx);
+}
+
+VD_UI_API int vd_ui_mouse_left_clicked(void)
+{
+    return vd_ui_mouse_just_pressed(VD_UI_MOUSE_LEFT);
 }
 
 VD_UI_API int vd_ui_mouse_left_just_released(void)
 {
-    VdUiContext *ctx = vd_ui_context_get();
-    return ctx->mouse_left_last && !ctx->mouse_left;
+    return vd_ui_mouse_just_released(VD_UI_MOUSE_LEFT);
 }
 
 VD_UI_API float vd_ui_dt(void)
@@ -5316,6 +5412,30 @@ VD_UI_API int vd_ui_any_hovered(void)
 {
     VdUiContext *ctx = vd_ui_context_get();
     return ctx->mouse_over_any_visible_div;
+}
+
+VD_UI_API int vd_ui_mod_down(VdUiMod mod)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    return ctx->mods[mod];
+}
+
+VD_UI_API int vd_ui_key_down(VdUiKey key)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    return (ctx->key_states[key] & VD_UI_KEY_STATE_NEXT_MASK);
+}
+
+VD_UI_API int vd_ui_key_pressed(VdUiKey key)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    return !(ctx->key_states[key] & VD_UI_KEY_STATE_PREV_MASK) && (ctx->key_states[key] & VD_UI_KEY_STATE_NEXT_MASK);
+}
+
+VD_UI_API int vd_ui_key_released(VdUiKey key)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    return (ctx->key_states[key] & VD_UI_KEY_STATE_PREV_MASK) && !(ctx->key_states[key] & VD_UI_KEY_STATE_NEXT_MASK);
 }
 
 static void vd_ui__push_clip(VdUiContext *ctx, float clip[4])
@@ -5808,6 +5928,11 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
             vd_ui_push_rectgrad(rect, grad.e, curr->style.background.corner_radius.e, curr->style.background.edge_softness, 0.f);
         }
 
+        if (curr->flags & VD_UI_FLAG_BORDER) {
+            VdUiGradient grad = vd_ui_coloring_interpolate(curr->style.border.coloring, curr->hot_t, curr->active_t);
+            vd_ui_push_rectgrad(rect, grad.e, curr->style.border.corner_radius.e, curr->style.border.edge_softness, curr->style.border.border_thickness);
+        }
+
         if (curr->flags & VD_UI_FLAG_TEXT) {
             VdUiFont *font = &ctx->fonts[ctx->def.font.id];
 
@@ -6199,11 +6324,15 @@ VD_UI_API VdUiContext *vd_ui_context_create(VdUiContextCreateInfo *info)
     result->strbuf      = (char*)VD_UI_MALLOC(result->strbuf_cap);
     result->strbuf_len  = 0;
 
+    // Keys
+    VD_UI_MEMSET(result->key_states, 0, sizeof(result->key_states));
+
     result->frame_arena = vd_ui__arena_from_malloc(1024 * 1024);
 
     result->focus = 1;
     return result;
 }
+
 VD_UI_API void vd_ui_context_set(VdUiContext *context)
 {
     Vd_Ui_Global_Context = context;
