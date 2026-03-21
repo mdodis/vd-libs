@@ -271,7 +271,15 @@ enum {
     VD_UI_KEY_HOME,
     VD_UI_KEY_END,
     VD_UI_KEY_DEL,
-    VD_UI_KEY_A,
+    VD_UI_KEY_SPACE,
+    VD_UI_KEY_A, VD_UI_KEY_B, VD_UI_KEY_C, VD_UI_KEY_D,
+    VD_UI_KEY_E, VD_UI_KEY_F, VD_UI_KEY_G, VD_UI_KEY_H,
+    VD_UI_KEY_I, VD_UI_KEY_J, VD_UI_KEY_K, VD_UI_KEY_L,
+    VD_UI_KEY_M, VD_UI_KEY_N, VD_UI_KEY_O, VD_UI_KEY_P,
+    VD_UI_KEY_Q, VD_UI_KEY_R, VD_UI_KEY_S, VD_UI_KEY_T,
+    VD_UI_KEY_U, VD_UI_KEY_V, VD_UI_KEY_W, VD_UI_KEY_X,
+    VD_UI_KEY_Y,
+    VD_UI_KEY_Z,
     VD_UI_KEY_EXTRA
     VD_UI_KEY_MAX,
 
@@ -1933,6 +1941,14 @@ static VdUiColoring  Vd_Ui__Coloring_Tx_Default;
 #ifndef VD_UI_CHARS_MAX
 #   define VD_UI_CHARS_MAX 8
 #endif // !VD_UI_CHARS_MAX
+
+#ifndef VD_UI_DIVS_MAX
+#   define VD_UI_DIVS_MAX  2048
+#endif // !VD_UI_DIVS_MAX
+
+#ifndef VD_UI_DIVS_CELLAR_PORTION
+#   define VD_UI_DIVS_CELLAR_PORTION 0.025f
+#endif // !VD_UI_DIVS_CELLAR_PORTION
 
 #ifndef VD_UI_LOG_ENABLE
 #define VD_UI_LOG_ENABLE 0
@@ -3636,6 +3652,7 @@ VD_UI_API VdUiDiv *vd_ui_scrollbar(VdUiStr label, VdUiAxis scroll_axis,
 
     VdUiAxis fixed_axis = vd_ui_diagonal_axis(scroll_axis);
     VdUiFlags flex_flag = vd_ui_flex_flag_from_axis(scroll_axis);
+    VdUiFlags inv_flex_flag = vd_ui_flex_flag_from_axis(fixed_axis);
 
     float window_content_ratio = 0.f;
     float scrollable_window_area_size = contents - window;
@@ -3685,6 +3702,7 @@ VD_UI_API VdUiDiv *vd_ui_scrollbar(VdUiStr label, VdUiAxis scroll_axis,
         VD_UI_WITH_STYLE_COLORING(VD_UI_FLAG_BACKGROUND, options->track_coloring)
         {
             track = vd_ui_parent_new(0
+                                     | inv_flex_flag
                                      | VD_UI_FLAG_BACKGROUND
                                      | VD_UI_FLAG_CLICKABLE
                                      , VD_UI_LIT("##track"));
@@ -3692,7 +3710,7 @@ VD_UI_API VdUiDiv *vd_ui_scrollbar(VdUiStr label, VdUiAxis scroll_axis,
         {
             VdUiReply track_reply = vd_ui_call(track);
 
-            float track_size = track->comp_size[1];
+            float track_size = track->comp_size[scroll_axis];
             float min_grip_size = options->min_grip_size;
             float max_grip_size = track_size;
             float grip_size = track_size * window_content_ratio;
@@ -3821,35 +3839,85 @@ VD_UI_API void vd_ui_scroll_end()
 VD_UI_API VdUiDiv* vd_ui_scrollview_begin(VdUiStr str, float *x, float *y)
 {
     (void)x;
-
-    VdUiDiv *scroll_view = vd_ui_div_new(VD_UI_FLAG_FLEX_HORIZONTAL | VD_UI_FLAG_CLIP_CONTENT, str);
-    vd_ui_parent_push(scroll_view);
-
     VdUiDiv *content_area;
-    VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
-    VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 0)
-    {
-        content_area = vd_ui_div_new(0, VD_UI_LIT("##content-area"));
-    }
-
-    float window_size = scroll_view->comp_size[1];
-    float content_size = content_area->children_comp_size[1];
-
     float mouse[2];
     vd_ui_mouse_pos(mouse);
 
-    int wheel_scrollable = vd_ui__point_in_rect(mouse, scroll_view->rect);
-    vd_ui_scrollbar(VD_UI_LIT("##scrollbar-y"), VD_UI_AXISV, y, window_size, content_size, wheel_scrollable, 0);
+    VdUiDiv *main_view;
+    VdUiDiv *scrollv = 0;
+    VdUiDiv *scrollh = 0;
 
-    content_area->offset[1] = -(*y);
+    main_view = vd_ui_div_new(VD_UI_FLAG_FLEX_VERTICAL | VD_UI_FLAG_CLIP_CONTENT, str);
+    int wheel_scrollable = vd_ui__point_in_rect(mouse, main_view->rect);
+    vd_ui_parent_push(main_view);
+    {
+        VdUiDiv *view_with_vscroll;
+        VdUiDiv *view_with_hscroll;
+
+        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
+        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1, 1)
+        {
+            view_with_vscroll = vd_ui_div_new(VD_UI_FLAG_FLEX_HORIZONTAL, VD_UI_LIT("##vert-partition"));
+        }
+        vd_ui_parent_push(view_with_vscroll);
+        {
+            VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
+            VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1, 1)
+            {
+                view_with_hscroll = vd_ui_div_new(VD_UI_FLAG_FLEX_VERTICAL, VD_UI_LIT("##hori-partition"));
+            }
+            vd_ui_parent_push(view_with_hscroll);
+            {
+                VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISH, 0)
+                VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 0)
+                {
+                    content_area = vd_ui_div_new(0, VD_UI_LIT("##content-area"));
+                }
+            }
+            vd_ui_parent_pop();
+
+            if (y) {
+                float window_size = view_with_vscroll->comp_size[1];
+                float content_size = content_area->children_comp_size[1];
+
+                scrollv = vd_ui_scrollbar(VD_UI_LIT("##scrollbar-y"), VD_UI_AXISV, y, window_size, content_size, wheel_scrollable, 0);
+
+                content_area->offset[1] = -(*y);
+            }
+        }
+        vd_ui_parent_pop();
+
+        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
+        VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 0)
+        {
+            vd_ui_parent_new(VD_UI_FLAG_FLEX_HORIZONTAL, VD_UI_LIT("##scrollbar-x-container"));
+        }
+        {
+            if (x) {
+                float window_size = view_with_hscroll->comp_size[0];
+                float content_size = content_area->children_comp_size[0];
+                scrollh = vd_ui_scrollbar(VD_UI_LIT("##scrollbar-x"), VD_UI_AXISH, x, window_size, content_size, wheel_scrollable, 0);
+                content_area->offset[0] = -(*x);
+
+                if (y) {
+                    VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(scrollv->comp_size[0], scrollh->comp_size[1], 0, 0)
+                    {
+                        vd_ui_div_new(0, VD_UI_LIT("##corner"));
+                    }
+                }
+            }
+        }
+        vd_ui_parent_pop();
+
+    }
+    vd_ui_parent_pop();
 
     vd_ui_parent_push(content_area);
-    return scroll_view;
+    return main_view;
 }
 
 VD_UI_API void vd_ui_scrollview_end(void)
 {
-    vd_ui_parent_pop();
     vd_ui_parent_pop();
 }
 
@@ -3861,7 +3929,8 @@ VD_UI_API void vd_ui_menu_group_begin(uint32_t *menu, VdUiStr name, VdUiFlags fl
     // Zero hover flag
     *menu &= ~VD_UI_MENU_HOVER_MASK;
 
-    vd_ui_parent_new(flags, name);
+    VdUiDiv *d = vd_ui_parent_new(flags, name);
+    d->zoffset = 1;
 }
 
 VD_UI_API int vd_ui_menu_item(uint32_t *menu, VdUiStr label)
@@ -5448,11 +5517,19 @@ static void vd_ui__push_clip(VdUiContext *ctx, float clip[4])
     VD_UI_MEMCPY(actual_clip, clip, sizeof(actual_clip));
 
     for (int i = 0; i < 2; ++i) {
+        // Clamp Clips to window
         int pt_x = i * 2 + 0;
         int pt_y = i * 2 + 1;
-
         actual_clip[pt_x] = vd_ui__clampf(actual_clip[pt_x], 0.f, ctx->window[0]);
         actual_clip[pt_y] = vd_ui__clampf(actual_clip[pt_y], 0.f, ctx->window[1]);
+    }
+
+    if (actual_clip[VD_UI_LEFT] > actual_clip[VD_UI_RIGHT]) {
+        actual_clip[VD_UI_LEFT] = actual_clip[VD_UI_RIGHT];
+    }
+
+    if (actual_clip[VD_UI_TOP] > actual_clip[VD_UI_BOTTOM]) {
+        actual_clip[VD_UI_TOP] = actual_clip[VD_UI_BOTTOM];
     }
 
     ctx->clip_stack[new_idx][0] = actual_clip[0];
@@ -5919,17 +5996,9 @@ VD_UI_API void vd_ui_measure_text_size(VdUiFontId font_id, VdUiStr str, float si
     }
 }
 
-static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
+static void vd_ui__render_div(VdUiContext *ctx, VdUiDiv *curr, float rect[4])
 {
-    if (curr == 0) {
-        return;
-    }
-
-    float rect[4];
-    vd_ui__get_transformed_rect(ctx, curr, rect);
-
     if ((curr != &ctx->root) && !vd_ui__is_clipped(ctx, curr)) {
-
         if (curr->zoffset) {
             vd_ui__push_pass(ctx);
         }
@@ -6023,14 +6092,38 @@ static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
             vd_ui_push_rectgrad(rect, grad.e, zero_corner_radius, 0.f, 0.f);
         }
     }
+}
+
+static void vd_ui__traverse_and_render_divs(VdUiContext *ctx, VdUiDiv *curr)
+{
+    if (curr == 0) {
+        return;
+    }
+
+    float rect[4];
+    vd_ui__get_transformed_rect(ctx, curr, rect);
+
+    vd_ui__render_div(ctx, curr, rect);
 
     if (curr->flags & VD_UI_FLAG_CLIP_CONTENT) {
         vd_ui__push_clip(ctx, rect);
     }
 
+    // Pass over children that render normally
     VdUiDiv *child = curr->first;
     while (child != 0) {
-        vd_ui__traverse_and_render_divs(ctx, child);
+        if (child->zoffset == 0) {
+            vd_ui__traverse_and_render_divs(ctx, child);
+        }
+        child = child->next;
+    }
+
+    // Pass over children that render on top
+    child = curr->first;
+    while (child != 0) {
+        if (child->zoffset != 0) {
+            vd_ui__traverse_and_render_divs(ctx, child);
+        }
         child = child->next;
     }
 
@@ -6319,8 +6412,11 @@ VD_UI_API VdUiContext *vd_ui_context_create(VdUiContextCreateInfo *info)
     rpcontext->y = 4;
 
     // Divs & Ids
-    result->divs_cap       = 1000;
-    result->divs_cap_total = 1024;
+    int cellar = (int)(VD_UI_DIVS_MAX * VD_UI_DIVS_CELLAR_PORTION);
+    int remaining = VD_UI_DIVS_MAX - cellar;
+    result->divs_cap_total = VD_UI_DIVS_MAX;
+    result->divs_cap       = remaining;
+
     result->divs           = (VdUiDiv*)VD_UI_MALLOC(result->divs_cap_total * sizeof(VdUiDiv));
     VD_UI_MEMSET(result->divs, 0, result->divs_cap_total * sizeof(VdUiDiv));
 
@@ -6546,18 +6642,16 @@ static void vd_ui__do_inspector(VdUiContext *ctx)
                                      , VD_UI_LIT("##__inspector"));
     }
     {
-        vd_ui_labelf("Inspector");
-
         static float scroll_x = 0.f;
         static float scroll_y = 0.f;
+        VdUiDiv *scroll_view;
         VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1.f, 1.f)
         VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1.f, 1.f)
         {
-            vd_ui_scrollview_begin(VD_UI_LIT("##tree"), &scroll_x, &scroll_y);
+            scroll_view = vd_ui_scrollview_begin(VD_UI_LIT("##tree"), &scroll_x, &scroll_y);
         }
         {
-            VdUiDiv *scroll_container = vd_ui_parent_get(vd_ui_parent_count() - 1);
-            float viewport = scroll_container->comp_size[1];
+            float viewport = scroll_view->comp_size[1];
             float item_height = 20.f;
             int count_items = 100000;
 
@@ -7031,7 +7125,33 @@ VD_UI_API VdUiKey vd_ui_vd_fw_key_translate(VdFwKey key)
         case VD_FW_KEY_HOME:        result = VD_UI_KEY_HOME;        break;
         case VD_FW_KEY_END:         result = VD_UI_KEY_END;         break;
         case VD_FW_KEY_DEL:         result = VD_UI_KEY_DEL;         break;
+        case VD_FW_KEY_SPACE:       result = VD_UI_KEY_SPACE;       break;
         case VD_FW_KEY_A:           result = VD_UI_KEY_A;           break;
+        case VD_FW_KEY_B:           result = VD_UI_KEY_B;           break;
+        case VD_FW_KEY_C:           result = VD_UI_KEY_C;           break;
+        case VD_FW_KEY_D:           result = VD_UI_KEY_D;           break;
+        case VD_FW_KEY_E:           result = VD_UI_KEY_E;           break;
+        case VD_FW_KEY_F:           result = VD_UI_KEY_F;           break;
+        case VD_FW_KEY_G:           result = VD_UI_KEY_G;           break;
+        case VD_FW_KEY_H:           result = VD_UI_KEY_H;           break;
+        case VD_FW_KEY_I:           result = VD_UI_KEY_I;           break;
+        case VD_FW_KEY_J:           result = VD_UI_KEY_J;           break;
+        case VD_FW_KEY_K:           result = VD_UI_KEY_K;           break;
+        case VD_FW_KEY_L:           result = VD_UI_KEY_L;           break;
+        case VD_FW_KEY_M:           result = VD_UI_KEY_M;           break;
+        case VD_FW_KEY_N:           result = VD_UI_KEY_N;           break;
+        case VD_FW_KEY_O:           result = VD_UI_KEY_O;           break;
+        case VD_FW_KEY_P:           result = VD_UI_KEY_P;           break;
+        case VD_FW_KEY_Q:           result = VD_UI_KEY_Q;           break;
+        case VD_FW_KEY_R:           result = VD_UI_KEY_R;           break;
+        case VD_FW_KEY_S:           result = VD_UI_KEY_S;           break;
+        case VD_FW_KEY_T:           result = VD_UI_KEY_T;           break;
+        case VD_FW_KEY_U:           result = VD_UI_KEY_U;           break;
+        case VD_FW_KEY_V:           result = VD_UI_KEY_V;           break;
+        case VD_FW_KEY_W:           result = VD_UI_KEY_W;           break;
+        case VD_FW_KEY_X:           result = VD_UI_KEY_X;           break;
+        case VD_FW_KEY_Y:           result = VD_UI_KEY_Y;           break;
+        case VD_FW_KEY_Z:           result = VD_UI_KEY_Z;           break;
         default: break;
     }
 
