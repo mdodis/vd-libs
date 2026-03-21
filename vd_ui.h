@@ -4230,9 +4230,6 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
 
     if (div->flags & VD_UI_FLAG_CLICKABLE) {
         float mouse_delta[2] = { ctx->mouse[0] - ctx->mouse_last[0], ctx->mouse[1] - ctx->mouse_last[1] };
-        if (vd_ui_str_eq(div->id_str, VD_UI_LIT("ckbx")) && vd_ui_mouse_just_pressed(VD_UI_MOUSE_LEFT)){
-            printf("yeet\n");
-        }
 
         float clipped_rect[4];
         vd_ui_clip_rect(div->rect, clipped_rect);
@@ -6723,17 +6720,41 @@ static void vd_ui__inspector_do_div(VdUiDiv *cur)
     VdUiContext *ctx = vd_ui_context_get();
     int hovered = 0;
 
-    if (vd_ui_buttonf("%.*s##inspector_view-%.*s", cur->id_str.l, cur->id_str.s, cur->id_str.l, cur->id_str.s).hovering) {
-        hovered = 1;
+    VdUiColoring color = vd_ui_coloring(vd_ui_gradient1(vd_ui_f4(0.1f, 0.1f, 0.1f, 1.f)),
+                                        vd_ui_gradient1(vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f)),
+                                        vd_ui_gradient1(vd_ui_f4(0.4f, 0.4f, 0.4f, 1.f)));
+    // VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 0)
+    {
+
     }
 
+    VdUiDiv *p = 0;
     VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISH, 0)
     VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 0)
     VD_UI_WITH_STYLE_PADDING4(8.f, 0, 0, 0)
+    VD_UI_WITH_STYLE_BACKGROUND_COLORING(color)
     {
-        vd_ui_parent_newf(0
-                          | VD_UI_FLAG_FLEX_VERTICAL
-                          ,"##inspector_children-%.*s", cur->id_str.l, cur->id_str.s);
+        p = vd_ui_parent_newf(0
+                              | VD_UI_FLAG_BACKGROUND
+                              | VD_UI_FLAG_FLEX_VERTICAL
+                              ,"##inspector_children-%.*s", cur->id_str.l, cur->id_str.s);
+    }
+
+    VdUiDiv *lbl;
+    VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_TEXT_CONTENT, 1, 0)
+    VD_UI_WITH_STYLE_SIZE(VD_UI_AXISV, VD_UI_SIZE_MODE_TEXT_CONTENT, 1, 0)
+    {
+
+        lbl = vd_ui_div_newf(0
+                             | VD_UI_FLAG_CLICKABLE
+                             | VD_UI_FLAG_FLEX_HORIZONTAL
+                             | VD_UI_FLAG_TEXT
+                             , "%.*s##inspector_view-%.*s", cur->id_str.l, cur->id_str.s, cur->id_str.l, cur->id_str.s);
+    }
+
+    if (vd_ui_call(lbl).hovering) {
+
+        hovered = 1;
     }
 
     VdUiDiv *child = cur->first;
