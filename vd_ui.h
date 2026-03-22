@@ -272,6 +272,7 @@ enum {
     VD_UI_KEY_END,
     VD_UI_KEY_DEL,
     VD_UI_KEY_SPACE,
+    VD_UI_KEY_TAB,
     VD_UI_KEY_A, VD_UI_KEY_B, VD_UI_KEY_C, VD_UI_KEY_D,
     VD_UI_KEY_E, VD_UI_KEY_F, VD_UI_KEY_G, VD_UI_KEY_H,
     VD_UI_KEY_I, VD_UI_KEY_J, VD_UI_KEY_K, VD_UI_KEY_L,
@@ -839,6 +840,8 @@ VD_UI_API int              vd_ui_div_is_active(VdUiDiv *div);
 VD_UI_API int              vd_ui_div_is_focused(VdUiDiv *div);
 
 VD_UI_API VdUiDiv*         vd_ui_get_root(void);
+
+VD_UI_API VdUiDiv*         vd_ui_get_div(size_t h);
 
 VD_UI_INL VdUiDiv *vd_ui_parent_new(VdUiFlags flags, VdUiStr str)
 {
@@ -6588,6 +6591,46 @@ VD_UI_API VdUiDiv *vd_ui_get_root(void)
     return &ctx->root;
 }
 
+VD_UI_API VdUiDiv *vd_ui_get_div(size_t h)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    size_t index = h % ctx->divs_cap;
+
+    VdUiDiv *result = 0;
+    if (ctx->divs[index].h == h) {
+        result = &ctx->divs[index];
+    } else {
+        VdUiDiv *curr = &ctx->divs[index];
+        while ((curr->h != h) && (curr->hnext != 0)) {
+            curr = curr->hnext;
+        }
+
+        if (curr->h != h) {
+            index = ctx->divs_cap_total - 1;
+
+            while ((index > 0)) {
+                if (ctx->divs[index].h == 0) {
+                    break;
+                }
+
+                if (ctx->divs[index].h == h) {
+                    break;
+                }
+
+                index--;
+            }
+
+            if (index != 0) {
+                result = &ctx->divs[index];
+            }
+        } else {
+            result = curr;
+        }
+    }
+
+    return result;
+}
+
 VD_UI_INL VdUiAxis vd_ui_diagonal_axis(VdUiAxis axis)
 {
     return (VdUiAxis)(1 - (int)axis);
@@ -6855,9 +6898,28 @@ static int vd_ui__inspector_traverse_with_count_max(VdUiDiv *curr, int *take, in
         (*count)--;
         i++;
 
-        if (vd_ui_call(d).clicked) {
+        VdUiReply reply = vd_ui_call(d);
+        if (reply.clicked) {
             *h = curr->h;
         }
+
+        if (reply.hovering) {
+
+            vd_ui_parent_push(vd_ui_get_root());
+            float cw = curr->rect[2] - curr->rect[0];
+            float ch = curr->rect[3] - curr->rect[1];
+
+            VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(cw, ch, 0, 0)
+            VD_UI_WITH_STYLE_BORDER_SIZE(VD_UI_FLAG_BORDER, 2.f)
+            VD_UI_WITH_STYLE_COLOR(VD_UI_FLAG_BORDER, vd_ui_f4(1,0,0,1))
+            {
+                VdUiDiv *s = vd_ui_div_new(VD_UI_FLAG_FLOAT | VD_UI_FLAG_BORDER, VD_UI_LIT("##__inspector-sel"));
+                s->comp_pos_rel[0] = curr->rect[0];
+                s->comp_pos_rel[1] = curr->rect[1];
+            }
+            vd_ui_parent_pop();
+        }
+
     } else {
         (*take)--;
     }
@@ -6877,137 +6939,261 @@ static void vd_ui__do_inspector(VdUiContext *ctx)
 {
     (void)ctx;
 
+    VdUiColoring resizer_coloring = vd_ui_coloring(vd_ui_gradient1(vd_ui_f4(1,1,1, 0.3f)),
+                                                   vd_ui_gradient1(vd_ui_f4(1,0.7f,1, 0.6f)),
+                                                   vd_ui_gradient1(vd_ui_f4(1,1,1, 0.9f)));
+
     static size_t curr_div_h = 0;
+    static float  inspector_w = 400.f;
+    static float  details_h = 100.f;
+    static int    bananas = 0;
+    static float  bananas_scale = 1.f;
     VdUiDiv *inspector;
-    VD_UI_WITH_STYLE_SIZE_ABSOLUTE_W(400.f, 0.f)
+    VD_UI_WITH_STYLE_SIZE_ABSOLUTE_W(inspector_w, 0.f)
     VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1.f, 0.f)
     {
         inspector = vd_ui_parent_new(0
                                      | VD_UI_FLAG_BACKGROUND
+                                     | VD_UI_FLAG_FLEX_HORIZONTAL
                                      , VD_UI_LIT("##__inspector"));
     }
     {
-
-        int count_items = vd_ui_get_root()->last_descendant_count - inspector->last_descendant_count;
-        vd_ui_labelf("Total Divs: %d", count_items);
-        static float scroll_x = 0.f;
-        static float scroll_y = 0.f;
-        VdUiDiv *scroll_view;
-        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1.f, 1.f)
-        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1.f, 1.f)
+        VdUiDiv *resizer;
+        VD_UI_WITH_STYLE_SIZE_ABSOLUTE_W(2.f, 0)
+        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1, 1)
+        VD_UI_WITH_STYLE_BACKGROUND_COLORING(resizer_coloring)
         {
-            scroll_view = vd_ui_scrollview_begin(VD_UI_LIT("##tree"), 0, &scroll_y);
+            resizer = vd_ui_div_new(0
+                                    | VD_UI_FLAG_BACKGROUND
+                                    | VD_UI_FLAG_CLICKABLE
+                                    | VD_UI_FLAG_CAPTURES_MOUSE
+                                    , VD_UI_LIT("##__resizer"));
+            vd_ui_call(resizer);
+            if (vd_ui_div_is_active(resizer)) {
+
+                float mouse[2];
+                vd_ui_mouse_pos(mouse);
+
+                float mouserel[2];
+                vd_ui_transform_point(inspector, mouse, mouserel);
+
+                inspector_w = inspector->comp_size[0] - mouserel[0] + resizer->comp_size[0] * 0.5f;
+                // inspector_w -= resizer_reply.drag[0];
+            }
+        }
+
+        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
+        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1, 1)
+        {
+            vd_ui_parent_new(0
+                             | VD_UI_FLAG_FLEX_VERTICAL
+                             , VD_UI_LIT("##divlist"));
         }
         {
-            #if 0
-            float viewport = scroll_view->comp_size[1];
-            float item_height = 20.f;
-            int count_items = 100000;
-
-            float total_height = (float)count_items * item_height;
-            float curr_scroll = scroll_y;
-
-            int first_item = (int)ceilf(curr_scroll / item_height) - 1;
-            if (first_item < 0) {
-                first_item = 0;
+            VdUiDiv *details, *details_resizer;
+            VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 0.5f)
+            VD_UI_WITH_STYLE_SIZE_ABSOLUTE_H(details_h, 0)
+            {
+                details = vd_ui_parent_new(0
+                                           | VD_UI_FLAG_BACKGROUND
+                                           | VD_UI_FLAG_FLEX_VERTICAL
+                                           , VD_UI_LIT("##details"));
             }
+            {
 
-            int items_per_viewport = (int)ceilf(viewport / item_height) + 1;
-            // int last_item  = (int)(ceilf(((scroll_y + viewport) / total_height) * (float)count_items));
-            int last_item = first_item + items_per_viewport;
-            if (last_item > count_items) {
-                last_item = count_items;
-            }
-
-            float space_before = (float)first_item * item_height;
-            float space_after = total_height - (last_item * item_height);
-            if (space_after < 0.f) space_after = 0.f;
-
-            if (space_before > 0.f) {
-                vd_ui_spacerex(VD_UI_AXISV, VD_UI_SIZE_MODE_ABSOLUTE, space_before, 0.f);
-            }
-
-            int c = 0;
-            for (int i = first_item; i < last_item; ++i) {
-                VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_TEXT_CONTENT, 1.f, 1.f)
-                VD_UI_WITH_STYLE_SIZE_ABSOLUTE_H(item_height, 0.f)
-                VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.2f, 0.1f, 0.1f, 1.f))
-                {
-                    vd_ui_div_newf(VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND, "Item %d##item-%d", i, c);
+                VdUiDiv *curr_div = 0;
+                if (curr_div_h != 0) {
+                    curr_div = vd_ui_get_div(curr_div_h);
                 }
-                c++;
+
+                VD_UI_WITH_STYLE_PADDING4(4,4,4,4)
+                VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.1f, 0.1f, 0.1f, 1.f))
+                {
+                    if (vd_ui_buttonf("Bananas").clicked) {
+                        bananas = !bananas;
+                        printf("bananas on: %d\n", bananas);
+                    }
+                }
+
+                if (bananas) {
+                    bananas_scale = vd_ui__lerp(bananas_scale, 0.4f, vd_ui_dt() * 12.f);
+                    VdUiDiv *root = vd_ui_get_root();
+                    root->scale[0] = bananas_scale;
+                    root->scale[1] = bananas_scale;
+                }
+
+                if (curr_div_h != 0) {
+                    VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 0.4f, 0.1f)
+                    VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
+                    VD_UI_WITH_STYLE_PADDING4(4,4,4,4)
+                    {
+                        vd_ui_parent_new(0
+                                         | VD_UI_FLAG_ALIGN_CENTER
+                                         | VD_UI_FLAG_FLEX_VERTICAL
+                                         , VD_UI_LIT("##box"));
+                    }
+                    {
+                        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 0.4f, 1)
+                        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1.0f, 1)
+                        VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.2f, 0.3f, 0.8f, 1.f))
+                        {
+                            vd_ui_parent_new(0
+                                             | VD_UI_FLAG_BACKGROUND
+                                             | VD_UI_FLAG_ALIGN_CENTER
+                                             , VD_UI_LIT("##size-repr"));
+                        }
+                        {
+                            vd_ui_spacer(VD_UI_AXISV);
+                            vd_ui_labelf("%3.2f x %3.2f##comp-size"
+                                         , curr_div->comp_size[0]
+                                         , curr_div->comp_size[1]
+                                         );
+                            vd_ui_spacer(VD_UI_AXISV);
+                        }
+                        vd_ui_parent_pop();
+                    }
+                    vd_ui_parent_pop();
+                }
+
+                VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
+                VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1, 1)
+                {
+                    vd_ui_parent_new(0
+                                     | VD_UI_FLAG_FLEX_HORIZONTAL
+                                     , VD_UI_LIT("##details2"));
+                }
+                {
+                    if (curr_div_h == 0) {
+                        vd_ui_labelf("No Div Selected.");
+                    } else {
+                        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 0.2f, 0)
+                        {
+                            vd_ui_parent_new(0, VD_UI_LIT("##col-1"));
+                        }
+                        {
+                            vd_ui_labelf("Size X##size-x");
+                            vd_ui_labelf("Size Y##size-y");
+                            vd_ui_labelf("Flex##flex");
+                        }
+                        vd_ui_parent_pop();
+
+                        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
+                        {
+                            vd_ui_parent_new(0, VD_UI_LIT("##col-2"));
+                        }
+                        {
+                            const char *flex_str = (curr_div->flags & VD_UI_FLAG_FLEX_HORIZONTAL)
+                                ? "horizontal"
+                                : "vertical";
+
+                            vd_ui_labelf("%s##size-x", vd_ui_size_mode_to_str(curr_div->style.size[0].mode));
+                            vd_ui_labelf("%s##size-y", vd_ui_size_mode_to_str(curr_div->style.size[1].mode));
+                            vd_ui_labelf("%s##flex", flex_str);
+
+                        }
+                        vd_ui_parent_pop();
+
+                        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 0.2f, 0)
+                        {
+                            vd_ui_parent_new(0, VD_UI_LIT("##col-3"));
+                        }
+                        {
+                            vd_ui_labelf("%3.2f##size-x", (curr_div->style.size[0].value));
+                            vd_ui_labelf("%3.2f##size-y", (curr_div->style.size[1].value));
+                        }
+                        vd_ui_parent_pop();
+
+                        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 0.2f, 0)
+                        {
+                            vd_ui_parent_new(0, VD_UI_LIT("##col-4"));
+                        }
+                        {
+                            vd_ui_labelf("%3.2f##size-x", (curr_div->style.size[0].niceness));
+                            vd_ui_labelf("%3.2f##size-y", (curr_div->style.size[1].niceness));
+                        }
+                        vd_ui_parent_pop();
+                    }
+                }
+                vd_ui_parent_pop();
+
+                VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
+                VD_UI_WITH_STYLE_SIZE_ABSOLUTE(VD_UI_AXISV, 2, 0)
+                VD_UI_WITH_STYLE_COLORING(VD_UI_FLAG_BACKGROUND, resizer_coloring)
+                {
+
+                    details_resizer = vd_ui_div_new(0
+                                                    | VD_UI_FLAG_BACKGROUND
+                                                    | VD_UI_FLAG_CLICKABLE
+                                                    | VD_UI_FLAG_CAPTURES_MOUSE
+                                                    , VD_UI_LIT("##details-resizer"));
+
+                    vd_ui_call(details_resizer);
+                    if (vd_ui_div_is_active(details_resizer)) {
+
+                        float mouse[2];
+                        vd_ui_mouse_pos(mouse);
+
+                        float mouserel[2];
+                        vd_ui_transform_point(details, mouse, mouserel);
+
+                        details_h = mouserel[1];
+                        // inspector_w -= resizer_reply.drag[0];
+                    }
+                }
+
             }
+            vd_ui_parent_pop();
 
-            if (space_after > 0.f) {
-                vd_ui_spacerex(VD_UI_AXISV, VD_UI_SIZE_MODE_ABSOLUTE, space_after, 0.f);
+            int count_items = vd_ui_get_root()->last_descendant_count - inspector->last_descendant_count;
+            vd_ui_labelf("Total Divs: %d", count_items);
+            static float scroll_x = 0.f;
+            static float scroll_y = 0.f;
+            VdUiDiv *scroll_view;
+            VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1.f, 1.f)
+            VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1.f, 1.f)
+            {
+                scroll_view = vd_ui_scrollview_begin(VD_UI_LIT("##tree"), 0, &scroll_y);
             }
-            #else
+            {
+                float viewport = scroll_view->comp_size[1];
+                float item_height = 20.f;
 
-            float viewport = scroll_view->comp_size[1];
-            float item_height = 20.f;
+                float total_height = (float)count_items * item_height;
+                float curr_scroll = scroll_y;
 
-            float total_height = (float)count_items * item_height;
-            float curr_scroll = scroll_y;
+                int first_item = (int)ceilf(curr_scroll / item_height) - 1;
+                if (first_item < 0) {
+                    first_item = 0;
+                }
 
-            int first_item = (int)ceilf(curr_scroll / item_height) - 1;
-            if (first_item < 0) {
-                first_item = 0;
+                int items_per_viewport = (int)ceilf(viewport / item_height) + 1;
+                // int last_item  = (int)(ceilf(((scroll_y + viewport) / total_height) * (float)count_items));
+                int last_item = first_item + items_per_viewport;
+                if (last_item > count_items) {
+                    last_item = count_items;
+                }
+
+                float space_before = (float)first_item * item_height;
+                float space_after = total_height - (last_item * item_height);
+                if (space_after < 0.f) space_after = 0.f;
+
+                if (space_before > 0.f) {
+                    vd_ui_spacerex(VD_UI_AXISV, VD_UI_SIZE_MODE_ABSOLUTE, space_before, 0.f);
+                }
+
+                int visible_count = last_item - first_item;
+                vd_ui__inspector_traverse_with_count_max(&ctx->root, &first_item, &visible_count, 0, 0, &curr_div_h);
+
+                if (space_after > 0.f) {
+                    vd_ui_spacerex(VD_UI_AXISV, VD_UI_SIZE_MODE_ABSOLUTE, space_after, 0.f);
+                }
             }
-
-            int items_per_viewport = (int)ceilf(viewport / item_height) + 1;
-            // int last_item  = (int)(ceilf(((scroll_y + viewport) / total_height) * (float)count_items));
-            int last_item = first_item + items_per_viewport;
-            if (last_item > count_items) {
-                last_item = count_items;
-            }
-
-            float space_before = (float)first_item * item_height;
-            float space_after = total_height - (last_item * item_height);
-            if (space_after < 0.f) space_after = 0.f;
-
-            if (space_before > 0.f) {
-                vd_ui_spacerex(VD_UI_AXISV, VD_UI_SIZE_MODE_ABSOLUTE, space_before, 0.f);
-            }
-
-            int visible_count = last_item - first_item;
-            vd_ui__inspector_traverse_with_count_max(&ctx->root, &first_item, &visible_count, 0, 0, &curr_div_h);
-
-            if (space_after > 0.f) {
-                vd_ui_spacerex(VD_UI_AXISV, VD_UI_SIZE_MODE_ABSOLUTE, space_after, 0.f);
-            }
-
-            // VdUiDiv *child = ctx->root.first;
-            // if (ctx->root.first != &ctx->sent) {
-            //     do {
-            //         if (child != inspector) {
-
-            //             if (!vd_ui_str_eq(child->id_str, VD_UI_LIT("inspector_sel"))) {
-            //                 vd_ui__inspector_do_div(child);
-            //             }
-            //         }
-
-            //         child = child->next;
-            //     } while (child != ctx->root.first);
-            // }
-
-            #endif
-
+            vd_ui_scrollview_end();
         }
-        vd_ui_scrollview_end();
+        vd_ui_parent_pop();
     }
     vd_ui_parent_pop();
-    // Vd_Ui_Inspector.height = 350.f;
-    // Vd_Ui_Inspector.rect[0] = 0.f;
-    // Vd_Ui_Inspector.rect[1] = ctx->window[1] - Vd_Ui_Inspector.height;
-    // Vd_Ui_Inspector.rect[2] = ctx->window[0];
-    // Vd_Ui_Inspector.rect[3] = ctx->window[1];
-    // Vd_Ui_Inspector.hierarchy.size_h = Vd_Ui_Inspector.rect[2] - ctx->window[0] * 0.5f;
 
-    // Vd_Ui_Inspector.hierarchy.offset = 2.f;
-
-    // vd_ui__push_rect(ctx, Vd_Ui_Inspector.rect, (float[]) {0.7f, 0.8f, 0.7f, 0.2f});
-
-    // vd_ui__inspector_do_hierarchy(ctx, &ctx->root, 0.f);
 }
 
 static void vd_ui__inspector_do_hierarchy(VdUiContext *ctx, VdUiDiv *curr, float depth)
@@ -7425,6 +7611,7 @@ VD_UI_API VdUiKey vd_ui_vd_fw_key_translate(VdFwKey key)
         case VD_FW_KEY_END:         result = VD_UI_KEY_END;         break;
         case VD_FW_KEY_DEL:         result = VD_UI_KEY_DEL;         break;
         case VD_FW_KEY_SPACE:       result = VD_UI_KEY_SPACE;       break;
+        case VD_FW_KEY_TAB:         result = VD_UI_KEY_TAB;         break;
         case VD_FW_KEY_A:           result = VD_UI_KEY_A;           break;
         case VD_FW_KEY_B:           result = VD_UI_KEY_B;           break;
         case VD_FW_KEY_C:           result = VD_UI_KEY_C;           break;
