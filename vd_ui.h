@@ -512,6 +512,8 @@ struct VdUiDiv {
     VdUiDiv         *parent;
     /* The count of children */
     int             child_count;
+    int             descendant_count;
+    int             last_descendant_count;
 
     VdUiFocusMode   focus_mode;
 
@@ -2293,6 +2295,9 @@ VD_UI_API void vd_ui_frame_begin(float delta_seconds)
     ctx->root.prev            = &ctx->sent;
     ctx->root.parent          = &ctx->sent;
     ctx->root.size_changed    = 0;
+    ctx->root.child_count     = 0;
+    ctx->root.last_descendant_count = ctx->root.descendant_count;
+    ctx->root.descendant_count = 0;
 
     ctx->nc_area.div          = NULL;
     ctx->nc_area.changed      = 0;
@@ -4160,6 +4165,8 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
 
     result->last_frame_touched = ctx->frame_index;
     result->child_count      = 0;
+    result->last_descendant_count = result->descendant_count;
+    result->descendant_count = 0;
     result->flags            = flags;
     result->offset[0]        = 0.f;
     result->offset[1]        = 0.f;
@@ -4172,7 +4179,6 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     } else {
         result->size_changed = 0;
     }
-
 
     VdUiDiv *parent = ctx->parents[ctx->parents_next - 1];
     result->parent = parent;
@@ -5198,10 +5204,10 @@ static void vd_ui__calc_oversizes(VdUiContext *ctx, VdUiDiv *curr)
 }
 
 
-static void vd_ui__calc_positions(VdUiContext *ctx, VdUiDiv *curr)
+static int vd_ui__calc_positions(VdUiContext *ctx, VdUiDiv *curr)
 {
     if (curr == 0) {
-        return;
+        return 0;
     }
 
     VdUiDiv *child = curr->first;
@@ -5280,13 +5286,18 @@ static void vd_ui__calc_positions(VdUiContext *ctx, VdUiDiv *curr)
         } while (child != curr->first);
     }
 
+    int sum_children = 0;
     child = curr->first;
     if (curr->first != &ctx->sent) {
         do {
-            vd_ui__calc_positions(ctx, child);
+            sum_children += vd_ui__calc_positions(ctx, child);
             child = child->next;
         } while (child != curr->first);
     }
+
+    curr->descendant_count = sum_children;
+    return curr->descendant_count + 1;
+
 }
 
 static void vd_ui__layout(VdUiContext *ctx)
@@ -6798,12 +6809,77 @@ static void vd_ui__inspector_do_div(VdUiDiv *cur)
     }
 }
 
+static int vd_ui__inspector_traverse_with_count_max(VdUiDiv *curr, int *take, int *count, int i, int depth, size_t *h)
+{
+    if (curr == 0) {
+        return i;
+    }
+
+    if (vd_ui_str_eq(curr->id_str, VD_UI_LIT("__inspector"))) {
+        return i;
+    }
+
+    if (vd_ui_str_eq(curr->id_str, VD_UI_LIT("__inspector-sel"))) {
+        return i;
+    }
+
+    if ((*count) == 0) {
+        return i;
+    }
+
+    VdUiContext *ctx = vd_ui_context_get();
+
+    if ((*take) == 0) {
+        VdUiColoring ncoloring = vd_ui_coloring(vd_ui_gradient1(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f)),
+                                                vd_ui_gradient1(vd_ui_f4(0.2f, 0.2f, 0.4f, 1.f)),
+                                                vd_ui_gradient1(vd_ui_f4(0.2f, 0.2f, 0.3f, 1.f)));
+
+        VdUiColoring hcoloring = vd_ui_coloring(vd_ui_gradient1(vd_ui_f4(0.2f, 0.2f, 0.3f, 1.f)),
+                                                vd_ui_gradient1(vd_ui_f4(0.2f, 0.2f, 0.4f, 1.f)),
+                                                vd_ui_gradient1(vd_ui_f4(0.2f, 0.2f, 0.3f, 1.f)));
+
+        VdUiColoring coloring = curr->h == (*h) ? hcoloring : ncoloring;
+        VdUiDiv *d;
+
+        VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f)
+        VD_UI_WITH_STYLE_SIZE_ABSOLUTE_H(20.f, 0.f)
+        VD_UI_WITH_STYLE_PADDING4(depth * 4.f, 0, 0, 0)
+        VD_UI_WITH_STYLE_BACKGROUND_COLORING(coloring)
+        {
+            d = vd_ui_div_newf(0
+                               | VD_UI_FLAG_TEXT
+                               | VD_UI_FLAG_CLICKABLE
+                               | VD_UI_FLAG_BACKGROUND
+                               , "%.*s##item-%d", curr->id_str.l, curr->id_str.s, i);
+        }
+        (*count)--;
+        i++;
+
+        if (vd_ui_call(d).clicked) {
+            *h = curr->h;
+        }
+    } else {
+        (*take)--;
+    }
+
+    if (curr->first != &ctx->sent) {
+        VdUiDiv *child = curr->first;
+        do {
+            i = vd_ui__inspector_traverse_with_count_max(child, take, count, i, depth + 1, h);
+            child = child->next;
+        } while (child != curr->first);
+    }
+
+    return i;
+}
+
 static void vd_ui__do_inspector(VdUiContext *ctx)
 {
     (void)ctx;
 
+    static size_t curr_div_h = 0;
     VdUiDiv *inspector;
-    VD_UI_WITH_STYLE_SIZE_ABSOLUTE_W(300.f, 0.f)
+    VD_UI_WITH_STYLE_SIZE_ABSOLUTE_W(400.f, 0.f)
     VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1.f, 0.f)
     {
         inspector = vd_ui_parent_new(0
@@ -6811,13 +6887,16 @@ static void vd_ui__do_inspector(VdUiContext *ctx)
                                      , VD_UI_LIT("##__inspector"));
     }
     {
+
+        int count_items = vd_ui_get_root()->last_descendant_count - inspector->last_descendant_count;
+        vd_ui_labelf("Total Divs: %d", count_items);
         static float scroll_x = 0.f;
         static float scroll_y = 0.f;
         VdUiDiv *scroll_view;
         VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1.f, 1.f)
         VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1.f, 1.f)
         {
-            scroll_view = vd_ui_scrollview_begin(VD_UI_LIT("##tree"), &scroll_x, &scroll_y);
+            scroll_view = vd_ui_scrollview_begin(VD_UI_LIT("##tree"), 0, &scroll_y);
         }
         {
             #if 0
@@ -6863,19 +6942,53 @@ static void vd_ui__do_inspector(VdUiContext *ctx)
                 vd_ui_spacerex(VD_UI_AXISV, VD_UI_SIZE_MODE_ABSOLUTE, space_after, 0.f);
             }
             #else
-            VdUiDiv *child = ctx->root.first;
-            if (ctx->root.first != &ctx->sent) {
-                do {
-                    if (child != inspector) {
 
-                        if (!vd_ui_str_eq(child->id_str, VD_UI_LIT("inspector_sel"))) {
-                            vd_ui__inspector_do_div(child);
-                        }
-                    }
+            float viewport = scroll_view->comp_size[1];
+            float item_height = 20.f;
 
-                    child = child->next;
-                } while (child != ctx->root.first);
+            float total_height = (float)count_items * item_height;
+            float curr_scroll = scroll_y;
+
+            int first_item = (int)ceilf(curr_scroll / item_height) - 1;
+            if (first_item < 0) {
+                first_item = 0;
             }
+
+            int items_per_viewport = (int)ceilf(viewport / item_height) + 1;
+            // int last_item  = (int)(ceilf(((scroll_y + viewport) / total_height) * (float)count_items));
+            int last_item = first_item + items_per_viewport;
+            if (last_item > count_items) {
+                last_item = count_items;
+            }
+
+            float space_before = (float)first_item * item_height;
+            float space_after = total_height - (last_item * item_height);
+            if (space_after < 0.f) space_after = 0.f;
+
+            if (space_before > 0.f) {
+                vd_ui_spacerex(VD_UI_AXISV, VD_UI_SIZE_MODE_ABSOLUTE, space_before, 0.f);
+            }
+
+            int visible_count = last_item - first_item;
+            vd_ui__inspector_traverse_with_count_max(&ctx->root, &first_item, &visible_count, 0, 0, &curr_div_h);
+
+            if (space_after > 0.f) {
+                vd_ui_spacerex(VD_UI_AXISV, VD_UI_SIZE_MODE_ABSOLUTE, space_after, 0.f);
+            }
+
+            // VdUiDiv *child = ctx->root.first;
+            // if (ctx->root.first != &ctx->sent) {
+            //     do {
+            //         if (child != inspector) {
+
+            //             if (!vd_ui_str_eq(child->id_str, VD_UI_LIT("inspector_sel"))) {
+            //                 vd_ui__inspector_do_div(child);
+            //             }
+            //         }
+
+            //         child = child->next;
+            //     } while (child != ctx->root.first);
+            // }
 
             #endif
 
