@@ -2868,7 +2868,11 @@ Vd__StrmapBinPrefix* vd__strmap_get_bin(void *map, VdStr key, Vd__StrmapGetBinFl
             } else if (op & VD__STRMAP_GET_BIN_FLAGS_GET_EXISTING) {
                 // If the user wants to create a new bin, overwrite existing one, or just get it, and found is true, 
                 // this means that the user queried with an existing key. Return the existing bin in thie case.
-                return existing_bin;
+                if (existing_bin->used) {
+                    return existing_bin;
+                } else {
+                    return 0;
+                }
             } else if (op & VD__STRMAP_GET_BIN_FLAGS_CREATE) {
                 // If the user wants to create a new bin, and found is true, this means that the user
                 // queried with the same key. Return null in this case.

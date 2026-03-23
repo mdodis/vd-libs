@@ -172,6 +172,16 @@ typedef union {
 } VdUiF4;
 
 typedef union {
+    float e[4];
+    struct {
+        float scale_x;
+        float scale_y;
+        float translate_x;
+        float translate_y;
+    } m;
+} VdUiTransform;
+
+typedef union {
     float  colors[4][4];
     VdUiF4 vectors[4]; 
     float  e[16];
@@ -1592,7 +1602,7 @@ VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_bounds(VdUiTextPoint pt, char *
     long long last_line = new_pt.l;
 
     if (end) {
-        while (new_pt.b <= len) {
+        while (new_pt.b < len) {
             // @todo(mdodis): This can loop infitely
             VdUiTextPoint next_pt = vd_ui_text_point_move_by_char(new_pt, buf, len, 1);
             if (next_pt.l != last_line) {
