@@ -9294,6 +9294,12 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
             case VD_FW_EVENT_TYPE_FOCUS_CHANGE: {
                 VD_FW_G.focus_changed = 1;
                 VD_FW_G.focused = mm.data.focus_change.got_focus;
+
+                if (!VD_FW_G.focused) {
+                    for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
+                        VD_FW_G.curr_key_states[i] = 0;
+                    }
+                }
             } break;
 
             case VD_FW_EVENT_TYPE_KEY_UP: {
