@@ -9397,7 +9397,9 @@ VD_FW_API void vd_fw_unlock(void)
 
     // @note(mdodis): This needs to happen, otherwise the window animations and taskbar don't get redrawn if the window
     // is maximized to either section of the screen or the whole screen
-    VdFwDwmFlush();
+    if (!VD_FW_G.draw_decorations) {
+        VdFwDwmFlush();
+    }
 
     if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
         if (glFenceSync && glClientWaitSync && glDeleteSync) {
@@ -10534,14 +10536,15 @@ static void vd_fw__composition_changed(void)
     VD_FW_G.composition_enabled = enabled;
 
     if (enabled) {
-        VdFwMARGINS m = {-1};
+        VdFwMARGINS m = {0, 0, 1, 0};
         VD_FW__CHECK_HRESULT(VdFwDwmExtendFrameIntoClientArea(VD_FW_G.hwnd, &m));
 
         // @note(mdodis): If we set this to disabled, then every time we resize the Windows 7 frame gets drawn behind
         // Additionally alpha compositing is done on fragments that haven't received a full alpha.
         // Also see vd_fw__wndproc, WM_NCPAINT
         {
-            VdFwDWORD value = VD_FW_DWMNCRP_USEWINDOWSTYLE;
+            // VdFwDWORD value = VD_FW_DWMNCRP_USEWINDOWSTYLE;
+            VdFwDWORD value = VD_FW_DWMNCRP_ENABLED;
             VD_FW__CHECK_HRESULT(VdFwDwmSetWindowAttribute(VD_FW_G.hwnd, VD_FW_DWMWA_NCRENDERING_POLICY, &value, sizeof(value)));
         }
         // {
@@ -10873,6 +10876,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 }
 
                 VdFwEndPaint(hwnd, &ps);
+                VdFwDwmFlush();
 
             VD_FW_WIN32_PROFILE_END(wm_paint);
         } break;
@@ -11639,6 +11643,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             VD_FW_WIN32_PROFILE_BEGIN(fw_fullscreen);
             VdFwBOOL should_be_fullscreen = (VdFwBOOL)lparam;
 
+            EnterCriticalSection(&VD_FW_G.critical_section);
             if (should_be_fullscreen) {
 
                 VdFwGetWindowPlacement(VD_FW_G.hwnd, &VD_FW_G.last_window_placement);
@@ -11651,25 +11656,31 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 VdFwUINT flags;
 
                 if (VD_FW_G.draw_decorations) {
-                    style = WS_POPUP | WS_VISIBLE;
-                    flags = SWP_FRAMECHANGED;
+                    // style = WS_POPUP | WS_VISIBLE;
+                    // flags = SWP_FRAMECHANGED | SWP_NOOWNERZORDER;
+                    LONG current_style = VdFwGetWindowLongA(VD_FW_G.hwnd, GWL_STYLE);
+                    style = current_style & ~WS_OVERLAPPEDWINDOW;
+                    flags = SWP_SHOWWINDOW | SWP_FRAMECHANGED | SWP_NOOWNERZORDER | SWP_NOCOPYBITS;
                 } else {
-                    style = WS_POPUP | WS_VISIBLE;
-                    flags = SWP_FRAMECHANGED;
+                    // style = WS_POPUP | WS_VISIBLE;
+                    LONG current_style = VdFwGetWindowLongA(VD_FW_G.hwnd, GWL_STYLE);
+                    style = current_style & ~WS_OVERLAPPEDWINDOW;
+                    flags = SWP_FRAMECHANGED | SWP_NOOWNERZORDER;
                 }
 
+                // VdFwShowWindow(VD_FW_G.hwnd, SW_HIDE);
                 VdFwSetWindowLong(VD_FW_G.hwnd, GWL_STYLE, style);
                 VdFwSetWindowPos(VD_FW_G.hwnd, VD_FW_HWND_TOP,
                              monitor_info.rcMonitor.left , monitor_info.rcMonitor.top,
                              monitor_info.rcMonitor.right - monitor_info.rcMonitor.left,
                              monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top,
                              flags);
+                // VdFwShowWindow(VD_FW_G.hwnd, SW_SHOW);
+                // if (VD_FW_G.draw_decorations) {
 
-                if (VD_FW_G.draw_decorations) {
-
-                    VdFwMARGINS m = {-1,-1,-1,-1};
-                    VD_FW__CHECK_HRESULT(VdFwDwmExtendFrameIntoClientArea(VD_FW_G.hwnd, &m));
-                }
+                //     VdFwMARGINS m = {-1,-1,-1,-1};
+                //     VD_FW__CHECK_HRESULT(VdFwDwmExtendFrameIntoClientArea(VD_FW_G.hwnd, &m));
+                // }
             } else {
                 VdFwSetWindowLong(VD_FW_G.hwnd, GWL_STYLE, VD_FW_G.last_window_style);
                 VdFwSetWindowPlacement(VD_FW_G.hwnd, &VD_FW_G.last_window_placement);
@@ -11681,6 +11692,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                              SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
                              SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
             }
+            LeaveCriticalSection(&VD_FW_G.critical_section);
 
             VD_FW_WIN32_PROFILE_END(fw_fullscreen);
         } break;
