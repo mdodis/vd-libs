@@ -893,6 +893,7 @@ VD_UI_API int              vd_ui_div_is_focused(VdUiDiv *div);
 VD_UI_API VdUiDiv*         vd_ui_get_root(void);
 
 VD_UI_API VdUiDiv*         vd_ui_get_div(size_t h);
+VD_UI_API int              vd_ui_div_is_nil(VdUiDiv *d);
 
 VD_UI_INL VdUiDiv *vd_ui_parent_new(VdUiFlags flags, VdUiStr str)
 {
@@ -2481,7 +2482,48 @@ VD_UI_API void vd_ui_frame_end(void)
             new_focused = ctx->navlist[(focus_div->nav_index - 1) % ctx->navlist_count];
         }
 
-        vd_ui_focus(new_focused);
+        if (nav_next || nav_prev) {
+            vd_ui_focus(new_focused);
+
+            VdUiDiv *f = vd_ui_get_div(new_focused);
+            if (!vd_ui_div_is_nil(f)) {
+                VdUiDiv *curr = f;
+                do {
+                    curr = curr->parent;
+
+                    if (curr->flags & VD_UI_FLAG_VIEW_SCROLLABLE) {
+                        break;
+                    }
+
+                } while (curr != &ctx->root);
+
+                if (curr->flags & VD_UI_FLAG_VIEW_SCROLLABLE) {
+                    // printf("Hey, we tabbed on an element we can scroll to\n");
+
+                    // Get the hori-partition div
+                    VdUiDiv *window = curr->parent;
+
+                    if (!vd_ui_div_is_nil(window)) {
+                        float pos_of_element_to_scroll_to[2] = {
+                            f->rect[VD_UI_LEFT],
+                            f->rect[VD_UI_TOP],
+                        };
+                        if (!vd_ui__point_in_rect(pos_of_element_to_scroll_to, window->rect)) {
+                            float new_scroll[2] = {
+                                0,
+                                f->rect[VD_UI_BOTTOM] - window->rect[VD_UI_BOTTOM]
+                            };
+
+                            if (nav_prev > nav_next) {
+                                new_scroll[1] = f->rect[VD_UI_TOP] - window->rect[VD_UI_TOP];
+                            }
+
+                            curr->view_scroll[1] += new_scroll[1];
+                        }
+                    }
+                }
+            }
+        }
     }
 
     vd_ui__pop_clip(ctx);
@@ -2665,6 +2707,8 @@ VD_UI_API VdUiTextOp vd_ui_text_op_from_event(VdUiEvent evt, VdUiTextPoint c, Vd
 {
     VdUiTextOp op = {0};
 
+    int key_consumed = 0;
+
     if (evt.type == VD_UI_EVENT_TYPE_CHARACTER) {
         // @todo(mdodis): unicode
         char buf[4];
@@ -2683,8 +2727,11 @@ VD_UI_API VdUiTextOp vd_ui_text_op_from_event(VdUiEvent evt, VdUiTextPoint c, Vd
 
         op.flags = VD_UI_TEXT_OP_FLAGS_SCAN_LETTER | VD_UI_TEXT_OP_FLAGS_SYNC_MARK;
         op.dt = op.replace_str.l;
+
+        key_consumed = 1;
     } else if (evt.type == VD_UI_EVENT_TYPE_PRESS) {
         VdUiEventKey key = evt.key;
+        key_consumed = 1;
         switch (key) {
             case VD_UI_EVENT_KEY_ARROW_LEFT: {
                 if (evt.mods & (1 << VD_UI_MOD_CONTROL)) {
@@ -2773,16 +2820,20 @@ VD_UI_API VdUiTextOp vd_ui_text_op_from_event(VdUiEvent evt, VdUiTextPoint c, Vd
 
             } break;
 
-            default: {} break;
+            default: {
+                key_consumed = 0;
+            } break;
         }
 
-        if (evt.mods & (1 << VD_UI_MOD_SHIFT)) {
-            op.flags |= VD_UI_TEXT_OP_FLAGS_KEEP_MARK;
+        if (key_consumed) {
+            if (evt.mods & (1 << VD_UI_MOD_SHIFT)) {
+                op.flags |= VD_UI_TEXT_OP_FLAGS_KEEP_MARK;
 
-        }
+            }
 
-        if (c.b != m.b) {
-            op.flags |= VD_UI_TEXT_OP_FLAGS_ZERO_DELTA;
+            if (c.b != m.b) {
+                op.flags |= VD_UI_TEXT_OP_FLAGS_ZERO_DELTA;
+            }
         }
     }
 
@@ -4230,9 +4281,6 @@ VD_UI_API VdUiDiv* vd_ui_scrollview_begin(VdUiStr str, float *x, float *y)
     //     }
     // }
 
-    content_area->view_scroll[0] -= content_area_reply.scroll[0] * 64.f;
-    content_area->view_scroll[1] -= content_area_reply.scroll[1] * 64.f;
-
     // if (x) {
     //     *x -= main_view_reply.scroll[0] * 64.f;
     // }
@@ -4648,6 +4696,8 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
         {
             reply.scroll[0] += evt.v2[0];
             reply.scroll[1] += evt.v2[1];
+            div->view_scroll[0] -= evt.v2[0] * 64.f;
+            div->view_scroll[1] -= evt.v2[1] * 64.f;
             consume = 1;
         }
 
@@ -7247,7 +7297,17 @@ VD_UI_API VdUiDiv *vd_ui_get_div(size_t h)
         }
     }
 
+    if (result == 0) {
+        return &ctx->sent;
+    }
+
     return result;
+}
+
+VD_UI_API int vd_ui_div_is_nil(VdUiDiv *d)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    return &ctx->sent == d;
 }
 
 VD_UI_INL VdUiAxis vd_ui_diagonal_axis(VdUiAxis axis)
