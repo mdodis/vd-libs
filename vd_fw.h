@@ -12253,7 +12253,6 @@ VD_FW_API int vd_fw_vk_wsi_surface_create(void *p_instance, void *p_allocation_c
 #define VD_FW_G Vd_Fw_Globals
 
 @interface VdFwWindowDelegate : NSObject<NSApplicationDelegate, NSWindowDelegate>
-- (void)updateGLContext;
 @end
 @interface VdFwContentView : NSView
 @end
@@ -12727,12 +12726,36 @@ static NSPoint vd_fw__mac_mouse_cocoa_to_conventional(NSPoint loc)
 static VdFwWindowDelegate *Vd_Fw_Delegate;
 static int Update_Context = 0;
 
-@implementation VdFwWindowDelegate
-- (void)updateGLContext {
-    // [VD_FW_G.gl_context update];
+static void vd_fw__mac_check_frame_lock(void)
+{
+
+    pthread_mutex_lock(&VD_FW_G.m_paint);
+
+    if (VD_FW_G.context_update_requested) {
+        [VD_FW_G.gl_context update];
+        VD_FW_G.context_update_requested = 0;
+    }
+
+    if ((VD_FW_G.w != VD_FW_G.next_frame.w) || (VD_FW_G.h != VD_FW_G.next_frame.h)) {
+        VD_FW_G.next_frame.w = VD_FW_G.w;
+        VD_FW_G.next_frame.h = VD_FW_G.h;
+        VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_SIZE_CHANGED;
+    }
+
+    VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_WAKE_COND_VAR;
+
+    pthread_cond_signal(&VD_FW_G.n_paint);
+    pthread_cond_wait(&VD_FW_G.n_paint, &VD_FW_G.m_paint);
+    pthread_mutex_unlock(&VD_FW_G.m_paint);
+
 }
 
+@implementation VdFwWindowDelegate
 - (void)backingChanged:(NSNotification *)note {
+    // pthread_mutex_lock(&VD_FW_G.m_paint);
+    // [VD_FW_G.gl_context update];
+    // pthread_mutex_unlock(&VD_FW_G.m_paint);
+
     NSWindow *win = note.object;
     CGFloat scale = win.backingScaleFactor;
     VD_FW_G.scale = scale;
@@ -12740,9 +12763,9 @@ static int Update_Context = 0;
     NSRect rect = [[VD_FW_G.window contentView] frame];
     VD_FW_G.w = (int)rect.size.width * VD_FW_G.scale;
     VD_FW_G.h = (int)rect.size.height * VD_FW_G.scale;
-
+    vd_fw__mac_check_frame_lock();
     if (!VD_FW_G.context_update_requested) {
-        sem_post(VD_FW_G.s_main_thread_context_needs_update);
+    //     sem_post(VD_FW_G.s_main_thread_context_needs_update);
         VD_FW_G.context_update_requested = 1;
     }
 }
@@ -12899,20 +12922,7 @@ static int Update_Context = 0;
     NSRect rect = [[VD_FW_G.window contentView] frame];
     VD_FW_G.w = (int)rect.size.width * VD_FW_G.scale;
     VD_FW_G.h = (int)rect.size.height * VD_FW_G.scale;
-
-    pthread_mutex_lock(&VD_FW_G.m_paint);
-
-    if ((VD_FW_G.w != VD_FW_G.next_frame.w) || (VD_FW_G.h != VD_FW_G.next_frame.h)) {
-        VD_FW_G.next_frame.w = VD_FW_G.w;
-        VD_FW_G.next_frame.h = VD_FW_G.h;
-        VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_SIZE_CHANGED;
-    }
-
-    VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_WAKE_COND_VAR;
-
-    // pthread_cond_signal(&VD_FW_G.n_paint);
-    // pthread_cond_wait(&VD_FW_G.n_paint, &VD_FW_G.m_paint);
-    pthread_mutex_unlock(&VD_FW_G.m_paint);
+    vd_fw__mac_check_frame_lock();
 }
 
 - (void)keyUp:(NSEvent*)evt
@@ -13342,10 +13352,10 @@ VD_FW_API int vd_fw_get_gamepad_rumble_support(int index)
     return 0;
 }
 
-VD_FW_API int vd_fw_running(void)
+VD_FW_API VdFwEvent* vd_fw_poll(int *count)
 {
-    if (sem_trywait(VD_FW_G.s_main_thread_window_closed) == 0) {
-        return 0;
+    if (count) {
+        *count = 0;
     }
 
     VD_FW_G.wheel_moved = 0;
@@ -13462,20 +13472,31 @@ VD_FW_API int vd_fw_running(void)
         }
     }
 
-    pthread_mutex_lock(&VD_FW_G.m_paint);
-    VD_FW_G.curr_frame = VD_FW_G.next_frame;
-    VD_FW_G.next_frame.flags = 0;
-    pthread_mutex_unlock(&VD_FW_G.m_paint);
-
     uint64_t now = mach_absolute_time();
     uint64_t ns = (now - VD_FW_G.last_time) * VD_FW_G.time_base.numer / VD_FW_G.time_base.denom;
     VD_FW_G.delta_ns = ns;
     VD_FW_G.last_time = now;
 
+    return 0;
+}
+
+VD_FW_API int vd_fw_running(void)
+{
+    if (sem_trywait(VD_FW_G.s_main_thread_window_closed) == 0) {
+        return 0;
+    }
     return !VD_FW_G.should_close;
 }
 
-VD_FW_API int vd_fw_swap_buffers(void)
+VD_FW_API void vd_fw_lock(void)
+{
+    pthread_mutex_lock(&VD_FW_G.m_paint);
+    VD_FW_G.curr_frame = VD_FW_G.next_frame;
+    VD_FW_G.next_frame.flags = 0;
+    pthread_mutex_unlock(&VD_FW_G.m_paint);
+}
+
+VD_FW_API void vd_fw_unlock(void)
 {
     if (VD_FW_G.fullscreen_changed_this_frame) {
         for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
@@ -13488,23 +13509,9 @@ VD_FW_API int vd_fw_swap_buffers(void)
 
     [VD_FW_G.gl_context flushBuffer];
 
-    // if (VD_FW_G.curr_frame.flags & VD_FW__MAC_FLAGS_WAKE_COND_VAR) {
-    //     pthread_cond_signal(&VD_FW_G.n_paint);
-    // }
-
-    if (sem_trywait(VD_FW_G.s_main_thread_context_needs_update) == 0) {
-        @autoreleasepool {
-            // [Vd_Fw_Delegate performSelectorOnMainThread:@selector(updateGLContext)
-            //                                      withObject:nil
-            //                                   waitUntilDone:YES];
-            dispatch_sync(dispatch_get_main_queue(), ^(void){
-                [VD_FW_G.gl_context update];
-                VD_FW_G.context_update_requested = 0;
-            });
-        }
+    if (VD_FW_G.curr_frame.flags & VD_FW__MAC_FLAGS_WAKE_COND_VAR) {
+        pthread_cond_signal(&VD_FW_G.n_paint);
     }
-
-    return 1;
 }
 
 VD_FW_API int vd_fw_close_requested(void)
@@ -13762,7 +13769,7 @@ VD_FW_API int vd_fw__any_time_higher(int num_files, const char **files, unsigned
     return result;
 }
 
-VD_FW_API char *vd_fw__debug_dump_file_text(const char *path)
+VD_FW_API char *vd_fw__debug_dump_file_text(const char *path, size_t *sz)
 {
     FILE *f = fopen(path, "rb");
     if (!f) {
@@ -13772,6 +13779,7 @@ VD_FW_API char *vd_fw__debug_dump_file_text(const char *path)
     fseek(f, 0, SEEK_END);
     size_t size = ftell(f);
     fseek(f, 0, SEEK_SET);
+    *sz = size;
 
     char *result = (char*)VD_FW_REALLOC(0, 0, size +1);
     fread(result, size, 1, f);
@@ -13874,10 +13882,6 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
     [NSEvent setMouseCoalescingEnabled:NO];
 
     VdFwGlVersion version = VD_FW_GL_VERSION_3_3;
-    if (info && info->gl.version != 0) {
-        version = info->gl.version;
-    }
-
     // Window
     {
         NSScreen *main_screen = [NSScreen mainScreen];
@@ -13998,7 +14002,10 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
     }
     VD_FW_G.w = 640 * VD_FW_G.scale;
     VD_FW_G.h = 480 * VD_FW_G.scale;
-    vd_fw__load_opengl(version);
+
+    VdFwGlConfig conf = {0};
+    conf.version = version;
+    vd_fw__load_opengl(&conf);
 
     mach_timebase_info(&VD_FW_G.time_base);
     VD_FW_G.last_time = mach_absolute_time();
@@ -14007,40 +14014,32 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
         [VD_FW_G.window makeKeyAndOrderFront:nil];
     });
 
-    // IOKit
-    int filter[] = {kHIDPage_GenericDesktop};
-    IOHIDManagerRef hidman = IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDManagerOptionNone);
+    // VdFwGraphicsApi api = VD_FW_GRAPHICS_API_OPENGL;
+    // if (info) {
+    //     api = info->api;
+    // }
 
-    const void *keys[] = {
-        CFSTR(kIOHIDDeviceUsagePageKey),
-    };
+    // VdFwOpenGLOptions *poptions = NULL;
+    // if (info) {
+    //     poptions = &info->gl;
+    // }
 
-    const void *values[] = {
-        CFNumberCreate(kCFAllocatorDefault, kCFNumberIntType, filter)
-    };
+    // vd_fw_set_graphics_api(api, poptions);
+    // {
 
-    CFDictionaryRef match_dictionary = CFDictionaryCreate(kCFAllocatorDefault,
-                                                          keys,
-                                                          values,
-                                                          1,
-                                                          NULL,
-                                                          NULL);
+    //     VdFwGlConfig default_configs[2];
+    //     VD_FW_MEMSET(default_configs, 0, sizeof(default_configs));
+    //     default_configs[0].version = VD_FW_GL_VERSION_3_3;
 
-    // CFMutableDictionaryRef match_dictionary = CFDictionaryCreateMutable(kCFAllocatorDefault,
-    //                                                                     0,
-    //                                                                     &kCFTypeDictionaryKeyCallBacks,
-    //                                                                     &kCFTypeDictionaryValueCallBacks);
-    // CFDictionarySetValue(match_dictionary,
-    //                      CFSTR(kIOHIDDeviceUsagePageKey),
-    //                      CFNumberCreate(kCFAllocatorDefault, kCFNumberIntType, filter));
-    IOHIDManagerSetDeviceMatching(hidman, match_dictionary);
-    IOHIDManagerRegisterDeviceMatchingCallback(hidman, vd_fw__mac_hid_device_added_callback, 0);
-    IOHIDManagerRegisterDeviceRemovalCallback(hidman, vd_fw__mac_hid_device_removed_callback, 0);
+    //     VdFwOpenGLOptions default_options = {0};
+    //     default_options.configs = default_configs;
 
-    IOHIDManagerScheduleWithRunLoop(hidman, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
-    IOHIDManagerOpen(hidman, kIOHIDOptionsTypeNone);
-    CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, false);
+    //     VdFwOpenGLOptions *gl_options = info ? &info->gl : 0;
 
+    //     if (!info || (info->gl.configs == 0) || (info->gl.configs[0].version == VD_FW_GL_VERSION_BASIC)) {
+    //         gl_options = &default_options;
+    //     }
+    // }
 }
 
 static void vd_fw__mac_init_gl(VdFwInitInfo *info)
@@ -15700,7 +15699,7 @@ VD_FW_API void vd_fw_set_title(const char *title)
     VdFwXStoreName(VD_FW_G.display, VD_FW_G.window, (char*)title);
 }
 
-VD_FW_API char *vd_fw__debug_dump_file_text(const char *path)
+VD_FW_API char *vd_fw__debug_dump_file_text(const char *path, size_t *sz)
 {
     FILE *f = fopen(path, "rb");
     if (!f) {
@@ -15713,6 +15712,7 @@ VD_FW_API char *vd_fw__debug_dump_file_text(const char *path)
 
     char *result = (char*)VD_FW_REALLOC(0, 0, size +1);
     fread(result, size, 1, f);
+    *sz = size;
 
     result[size] = 0;
     return result;
