@@ -79,7 +79,7 @@ static void vd_ui__demo_fixed_rect_parent(const char *name, int flags, float wid
 static void vd_ui__demo_code(VdUiStr label, char *code)
 {
     size_t len = vd_ui_strlen(code);
-    vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_ABSOLUTE, 600, 0.f);
+    vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_ABSOLUTE, 600 * vd_ui_get_scale(), 0.f);
     vd_ui_textbox(label, code, &len, len);
     vd_ui_style_size_pop(VD_UI_AXISH);
 }
@@ -87,7 +87,7 @@ static void vd_ui__demo_code(VdUiStr label, char *code)
 static void vd_ui__demo_section_begin(const char *label)
 {
     // vd_ui_style_coloring_push(VD_UI_FLAG_BACKGROUND, vd_ui_coloring_all4(vd_ui_f4(0.1f, 0.1f, 0.1f, 1.f)));
-    vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_ABSOLUTE, 700, 0.f);
+    vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_ABSOLUTE, 700 * vd_ui_get_scale(), 0.f);
     vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 0.f);
     vd_ui_parent_newf(0, "##demo-section-%s", label);
     vd_ui_style_size_pop(VD_UI_AXISV);
@@ -182,7 +182,7 @@ int vd_ui_demo(void)
     VD_UI_WITH_STYLE_SIZE(VD_UI_AXISV, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f)
     VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.13f, 0.15f, 0.16f, 1.f))
     {
-        app = vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("##app"));
+        app = vd_ui_div_new(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_CLICKABLE, VD_UI_LIT("##app"));
     }
 
     vd_ui_parent_push(app);
@@ -599,15 +599,43 @@ int vd_ui_demo(void)
                 }
                 vd_ui__demo_section_end();
 
-                VdUiGradient hue_grad = vd_ui_gradient(
-                    vd_ui_f4(1, 0, 0, 1), vd_ui_f4(1, 1, 0, 1),
-                    vd_ui_f4(0, 1, 1, 1), vd_ui_f4(1, 0, 1, 1));
-                vd_ui__demo_section_begin("Color Picker");
-                VD_UI_WITH_STYLE_SIZE_ABSOLUTE(VD_UI_AXISH, 32.f, 1.f)
-                VD_UI_WITH_STYLE_SIZE_ABSOLUTE(VD_UI_AXISV, 128.f, 1.f)
-                VD_UI_WITH_STYLE_BACKGROUND_COLORING(vd_ui_coloring(hue_grad, hue_grad, hue_grad))
+                vd_ui__demo_section_begin("Popups - Basic");
+                VdUiReply button_w_popup = vd_ui_buttonf("Click for Popup");
+                if (button_w_popup.clicked) {
+                    vd_ui_popup_push(VD_UI_LIT("##popup-basic"));
+                }
+
+                VdUiDiv *popup;
+                VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.05f, 0.05f, 0.05f, 0.87f))
+                VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISH, 0)
+                VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 0)
                 {
-                    vd_ui_div_newf(VD_UI_FLAG_BACKGROUND, "rect");
+                    if ((popup = vd_ui_popup_begin(VD_UI_LIT("##popup-basic"), VD_UI_FLAG_BACKGROUND, button_w_popup.div)) != 0) {
+                        vd_ui_labelf("I am a popup!");
+
+                        VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.75f, 0.05f, 0.05f, 1.f))
+                        VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_TEXT_CONTENT, 1, 1)
+                        VD_UI_WITH_STYLE_SIZE(VD_UI_AXISV, VD_UI_SIZE_MODE_TEXT_CONTENT, 1, 1)
+                        {
+                            if (vd_ui_buttonf("Close").clicked) {
+                                vd_ui_popup_pop();
+                            }
+                        }
+
+                        vd_ui_popup_end();
+                    }
+
+                    vd_ui_labelf("Popups work like this");
+                }
+                vd_ui__demo_section_end();
+
+                vd_ui__demo_section_begin("Text Boxes");
+                static char buf[64] = "Text Box";
+                static size_t len = 8;
+                VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
+                VD_UI_WITH_STYLE_SIZE_ABSOLUTE(VD_UI_AXISV, 200, 0)
+                {
+                    vd_ui_textbox(VD_UI_LIT("##textbox"), buf, &len, 64);
                 }
                 vd_ui__demo_section_end();
             }
@@ -676,6 +704,8 @@ int vd_ui_demo(void)
         vd_ui_parent_pop();
     }
     vd_ui_parent_pop();
+
+    // vd_ui_call(app);
 
     return result;
 }

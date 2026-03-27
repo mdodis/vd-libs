@@ -222,10 +222,6 @@ typedef enum {
     VD_UI_DATA_TYPE_MAX,
 } VdUiDataType;
 
-#ifndef VD_UI_KEY_EXTRA
-#define VD_UI_KEY_EXTRA
-#endif // !VD_UI_KEY_EXTRA
-
 VD_UI_INL VdUiF4           vd_ui_f4(float x, float y, float z, float w);
 VD_UI_INL VdUiF4           vd_ui_fall4(float s);
 VD_UI_INL VdUiGradient     vd_ui_gradient(VdUiF4 top_left, VdUiF4 top_right, VdUiF4 bottom_left, VdUiF4 bottom_right);
@@ -249,6 +245,9 @@ enum {
     VD_UI_FLAG_ALIGN_CENTER     = 1 <<  7,
     VD_UI_FLAG_FLOAT            = 1 <<  8,
     VD_UI_FLAG_CAPTURES_MOUSE   = 1 <<  9,
+    VD_UI_FLAG_VIEW_SCROLLABLE  = 1 << 10,
+    VD_UI_FLAG_FOCUSABLE        = 1 << 11,
+    VD_UI_FLAG_NAVIGABLE        = 1 << 12,
 
     // Mouse Enumerations
     VD_UI_MOUSE_LEFT        = 0,
@@ -273,27 +272,6 @@ enum {
     // Coloring
     VD_UI_ALL_SHAPES = VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_BORDER,
 
-    VD_UI_KEY_NONE = 0,
-    VD_UI_KEY_ARROW_UP   = 40,
-    VD_UI_KEY_ARROW_LEFT = 41, VD_UI_KEY_ARROW_DOWN = 42, VD_UI_KEY_ARROW_RIGHT = 43,
-    VD_UI_KEY_ENTER,
-    VD_UI_KEY_BACKSPACE,
-    VD_UI_KEY_HOME,
-    VD_UI_KEY_END,
-    VD_UI_KEY_DEL,
-    VD_UI_KEY_SPACE,
-    VD_UI_KEY_TAB,
-    VD_UI_KEY_A, VD_UI_KEY_B, VD_UI_KEY_C, VD_UI_KEY_D,
-    VD_UI_KEY_E, VD_UI_KEY_F, VD_UI_KEY_G, VD_UI_KEY_H,
-    VD_UI_KEY_I, VD_UI_KEY_J, VD_UI_KEY_K, VD_UI_KEY_L,
-    VD_UI_KEY_M, VD_UI_KEY_N, VD_UI_KEY_O, VD_UI_KEY_P,
-    VD_UI_KEY_Q, VD_UI_KEY_R, VD_UI_KEY_S, VD_UI_KEY_T,
-    VD_UI_KEY_U, VD_UI_KEY_V, VD_UI_KEY_W, VD_UI_KEY_X,
-    VD_UI_KEY_Y,
-    VD_UI_KEY_Z,
-    VD_UI_KEY_EXTRA
-    VD_UI_KEY_MAX,
-
     VD_UI_KEY_STATE_PREV_MASK = 1 << 0,
     VD_UI_KEY_STATE_NEXT_MASK = 1 << 1,
 
@@ -306,15 +284,7 @@ enum {
     VD_UI_KEYSTROKE_FLAG_CHAR = 1 << 0,
 };
 typedef int VdUiFlags;
-typedef int VdUiKey;
 typedef int VdUiMod;
-
-typedef struct {
-    int          flags;
-    VdUiKey      key;
-    unsigned int codepoint;
-    int          mods;
-} VdUiKeyStroke;
 
 enum {
     VD_UI_SIZE_MODE_TEXT_CONTENT = 0,
@@ -463,6 +433,57 @@ typedef enum {
     VD_UI_FOCUS_MODE_HOT    = 1,
 } VdUiFocusMode;
 
+typedef enum {
+    VD_UI_NAV_MODE_CUSTOM  = 0,
+    VD_UI_NAV_MODE_DEFAULT = 1,
+} VdUiNavMode;
+
+/* ----EVENTS-------------------------------------------------------------------------------------------------------- */
+typedef enum {
+    VD_UI_EVENT_TYPE_NONE           = 0,
+    VD_UI_EVENT_TYPE_MOUSE_MOVE     = 1,
+    VD_UI_EVENT_TYPE_PRESS          = 2,
+    VD_UI_EVENT_TYPE_RELEASE        = 3,
+    VD_UI_EVENT_TYPE_SCROLL         = 4,
+    VD_UI_EVENT_TYPE_CHARACTER      = 5,
+} VdUiEventType;
+
+typedef enum {
+    VD_UI_EVENT_KEY_NONE         = 0,
+    VD_UI_EVENT_KEY_MOUSE_LEFT   = 1,
+    VD_UI_EVENT_KEY_MOUSE_RIGHT  = 2,
+    VD_UI_EVENT_KEY_MOUSE_MIDDLE = 3,
+    VD_UI_EVENT_KEY_ARROW_UP,
+    VD_UI_EVENT_KEY_ARROW_LEFT, VD_UI_EVENT_KEY_ARROW_DOWN, VD_UI_EVENT_KEY_ARROW_RIGHT,
+    VD_UI_EVENT_KEY_ENTER,
+    VD_UI_EVENT_KEY_BACKSPACE,
+    VD_UI_EVENT_KEY_HOME,
+    VD_UI_EVENT_KEY_END,
+    VD_UI_EVENT_KEY_DEL,
+    VD_UI_EVENT_KEY_SPACE,
+    VD_UI_EVENT_KEY_TAB,
+    VD_UI_EVENT_KEY_A, VD_UI_EVENT_KEY_B, VD_UI_EVENT_KEY_C, VD_UI_EVENT_KEY_D,
+    VD_UI_EVENT_KEY_E, VD_UI_EVENT_KEY_F, VD_UI_EVENT_KEY_G, VD_UI_EVENT_KEY_H,
+    VD_UI_EVENT_KEY_I, VD_UI_EVENT_KEY_J, VD_UI_EVENT_KEY_K, VD_UI_EVENT_KEY_L,
+    VD_UI_EVENT_KEY_M, VD_UI_EVENT_KEY_N, VD_UI_EVENT_KEY_O, VD_UI_EVENT_KEY_P,
+    VD_UI_EVENT_KEY_Q, VD_UI_EVENT_KEY_R, VD_UI_EVENT_KEY_S, VD_UI_EVENT_KEY_T,
+    VD_UI_EVENT_KEY_U, VD_UI_EVENT_KEY_V, VD_UI_EVENT_KEY_W, VD_UI_EVENT_KEY_X,
+    VD_UI_EVENT_KEY_Y,
+    VD_UI_EVENT_KEY_Z,
+    VD_UI_EVENT_KEY_MAX,
+} VdUiEventKey;
+
+typedef struct {
+    VdUiEventType   type;
+    VdUiEventKey    key;
+    uint32_t        codepoint;
+    float           mouse[2];
+    float           v2[2];
+    int             next;
+    int             prev;
+    VdUiMod         mods;
+} VdUiEvent;
+
 /* ----TEXTOPS------------------------------------------------------------------------------------------------------- */
 typedef struct {
     long long          l;   // Line
@@ -505,7 +526,7 @@ VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_bounds(VdUiTextPoint pt, char *
 VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_line(VdUiTextPoint pt, long long max_column, char *buf, long long len, int fwd);
 VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_word(VdUiTextPoint pt, char *buf, long long len, int fwd);
 VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_borders(VdUiTextPoint pt, char *buf, long long len, int end);
-VD_UI_API VdUiTextOp    vd_ui_text_op_from_keystroke(VdUiKeyStroke keystroke, VdUiTextPoint c, VdUiTextPoint m);
+VD_UI_API VdUiTextOp    vd_ui_text_op_from_event(VdUiEvent evt, VdUiTextPoint c, VdUiTextPoint m);
 VD_UI_API void          vd_ui_text_op_exec(VdUiTextOp op, VdUiSel *sel, char *buf, size_t *len, size_t capacity);
 typedef struct VdUiDiv VdUiDiv;
 
@@ -527,6 +548,7 @@ struct VdUiDiv {
     int             last_descendant_count;
 
     VdUiFocusMode   focus_mode;
+    int             nav_index;
 
     VdUiFlags       flags;
     int             activation_mouse_button;
@@ -551,6 +573,7 @@ struct VdUiDiv {
     float           comp_size[VD_UI_AXES];
     float           children_comp_size[VD_UI_AXES];
     float           comp_size_last[VD_UI_AXES];
+    float           view_scroll[VD_UI_AXES];
     float           rect[4];
     int             zoffset;
 
@@ -572,6 +595,7 @@ typedef struct {
     VdUiDiv  *div;
     float    mouse[2];
     float    drag[2];
+    float    scroll[2];
     VdUiBool pressed;
     VdUiBool released;
     VdUiBool clicked;
@@ -733,6 +757,12 @@ VD_UI_API VdUiDiv*         vd_ui_scrollbar(VdUiStr label, VdUiAxis scroll_axis,
                                            float *v, float window, float contents,
                                            int wheel_scrollable, VdUiScrollbarOptions *options);
 
+VD_UI_API VdUiDiv*         vd_ui_popup_begin(VdUiStr hstr, VdUiFlags flags, VdUiDiv *parent);
+VD_UI_API void             vd_ui_popup_end(void);
+VD_UI_API void             vd_ui_popup_push(VdUiStr hstr);
+VD_UI_API int              vd_ui_popup_count(void);
+VD_UI_API void             vd_ui_popup_pop(void);
+
 VD_UI_API void             vd_ui_menu_group_begin(uint32_t *menu, VdUiStr name, VdUiFlags flags);
 VD_UI_API int              vd_ui_menu_item(uint32_t *menu, VdUiStr label);
 VD_UI_API void             vd_ui_menu_item_begin(uint32_t *menu);
@@ -741,6 +771,8 @@ VD_UI_API void             vd_ui_menu_group_end(uint32_t *menu);
 VD_UI_API void             vd_ui_menu_group_close(uint32_t *menu);
 
 /* ----CORE UI------------------------------------------------------------------------------------------------------- */
+VD_UI_API size_t           vd_ui_hash(VdUiStr str, int *str_id_start_index);
+
 /**
  * @brief Allocates a new div
  * @param  flags The flags to use for the div
@@ -752,6 +784,7 @@ VD_UI_API void             vd_ui_menu_group_close(uint32_t *menu);
  * }
  */
 VD_UI_API VdUiDiv*         vd_ui_div_new(VdUiFlags flags, VdUiStr str);
+
 
 /**
  * @brief Allocates a new div (printf version)
@@ -794,11 +827,19 @@ VD_UI_API int              vd_ui_parent_count(void);
  */
 VD_UI_API VdUiDiv*         vd_ui_parent_get(int i);
 
+VD_UI_API VdUiDiv*         vd_ui_parent_cur(void);
+
 VD_UI_API void             vd_ui_focus_mode_push(VdUiFocusMode mode);
 
 VD_UI_API VdUiFocusMode    vd_ui_focus_mode_get(void);
 
 VD_UI_API void             vd_ui_focus_mode_pop(void);
+
+VD_UI_API void             vd_ui_focus(size_t h);
+
+VD_UI_API void             vd_ui_nav_anchor_push(size_t key);
+VD_UI_API size_t           vd_ui_nav_anchor_top(void);
+VD_UI_API size_t           vd_ui_nav_anchor_pop(void);
 
 /**
  * @brief Like vd_ui_div_new, but also calls vd_ui_parent_push
@@ -1194,12 +1235,18 @@ VD_UI_API void*            vd_ui_font_default(size_t *size);
 VD_UI_API void             vd_ui_texture_add(VdUiTextureId *id, void *buffer, int width, int height, VdUiTextureFormat format);
 
 /* ----INPUT--------------------------------------------------------------------------------------------------------- */
+
+VD_UI_API void             vd_ui_event_push(VdUiEvent *evt);
+VD_UI_API VdUiEvent        vd_ui_event_first(void);
+VD_UI_API int              vd_ui_event_next(VdUiEvent *evt);
+VD_UI_API void             vd_ui_event_take(VdUiEvent *evt);
+
 VD_UI_API void             vd_ui_event_size(float width, float height);
 VD_UI_API void             vd_ui_event_mouse_location(float mx, float my);
 VD_UI_API void             vd_ui_event_mouse_button(int index, int down);
 VD_UI_API void             vd_ui_event_mouse_wheel(float dx, float dy);
-VD_UI_API void             vd_ui_event_key_press(VdUiKey key);
-VD_UI_API void             vd_ui_event_key_release(VdUiKey key);
+VD_UI_API void             vd_ui_event_key_press(VdUiEventKey key);
+VD_UI_API void             vd_ui_event_key_release(VdUiEventKey key);
 VD_UI_API void             vd_ui_event_mod(VdUiMod mod, int on);
 VD_UI_API void             vd_ui_event_char(unsigned int codepoint);
 VD_UI_API void             vd_ui_event_focus(int on);
@@ -1219,13 +1266,11 @@ VD_UI_API float            vd_ui_dt(void);
 VD_UI_API void             vd_ui_transform_point(VdUiDiv *div, float point[2], float out_point[2]);
 VD_UI_API void             vd_ui_set_capture(size_t eid);
 VD_UI_API int              vd_ui_is_captured(VdUiDiv *div);
-VD_UI_API int              vd_ui_get_num_keystrokes(void);
-VD_UI_API VdUiKeyStroke    vd_ui_get_keystroke(int index);
 VD_UI_API int              vd_ui_any_hovered(void);
 VD_UI_API int              vd_ui_mod_down(VdUiMod mod);
-VD_UI_API int              vd_ui_key_down(VdUiKey key);
-VD_UI_API int              vd_ui_key_pressed(VdUiKey key);
-VD_UI_API int              vd_ui_key_released(VdUiKey key);
+VD_UI_API int              vd_ui_key_down(VdUiEventKey key);
+VD_UI_API int              vd_ui_key_pressed(VdUiEventKey key);
+VD_UI_API int              vd_ui_key_released(VdUiEventKey key);
 
 /* ----CONTEXT CREATION---------------------------------------------------------------------------------------------- */
 typedef struct VdUiContext VdUiContext;
@@ -1252,6 +1297,7 @@ VD_UI_API void             vd_ui_debug_set_draw_cursor_on(VdUiBool on);
 VD_UI_API void             vd_ui_debug_set_inspector_on(VdUiBool on);
 VD_UI_API VdUiBool         vd_ui_debug_get_inspector_on(void);
 VD_UI_API void             vd_ui_debug_set_metrics_on(VdUiBool on);
+VD_UI_API void             vd_ui_debug_set_focusvis_on(VdUiBool on);
 VD_UI_API void             vd_ui_debug_set_layout_recompute_vis_on(VdUiBool on);
 
 /* ----INTEGRATION - WINDOW SYSTEMS---------------------------------------------------------------------------------- */
@@ -1344,7 +1390,7 @@ VD_UI_API void             vd_ui_gl_get_attribute_properties(int attribute, int 
 /* ----INTEGRATION - vd_fw.h----------------------------------------------------------------------------------------- */
 #ifdef VD_FW_H
 VD_UI_API int              vd_ui_vd_fw_mouse_button_translate(int fw_mouse_button);
-VD_UI_API VdUiKey          vd_ui_vd_fw_key_translate(VdFwKey key);
+VD_UI_API VdUiEventKey     vd_ui_vd_fw_key_translate(VdFwKey key);
 #endif // !VD_FW_H
 
 /* ----INLINE IMPL--------------------------------------------------------------------------------------------------- */
@@ -1892,6 +1938,10 @@ static VdUiColoring  Vd_Ui__Coloring_Tx_Default;
 #   define VD_UI_FBUF_MAX                       1024
 #endif // !VD_UI_FBUF_MAX
 
+#ifndef VD_UI_EVENT_BUF_MAX
+#   define VD_UI_EVENT_BUF_MAX                  32
+#endif // !VD_UI_EVENT_BUF_MAX
+
 #ifndef VD_UI_CLIP_STACK_MAX
 #   define VD_UI_CLIP_STACK_MAX                 64
 #endif // !VD_UI_CLIP_STACK_MAX
@@ -1959,6 +2009,14 @@ static VdUiColoring  Vd_Ui__Coloring_Tx_Default;
 #ifndef VD_UI_DIVS_MAX
 #   define VD_UI_DIVS_MAX  2048
 #endif // !VD_UI_DIVS_MAX
+
+#ifndef VD_UI_POPUP_STACK_MAX
+#   define VD_UI_POPUP_STACK_MAX 16
+#endif // !VD_UI_POPUP_STACK_MAX
+
+#ifndef VD_UI_NAV_ANCHOR_STACK_MAX
+#   define VD_UI_NAV_ANCHOR_STACK_MAX 16
+#endif // !VD_UI_NAV_ANCHOR_STACK_MAX
 
 #ifndef VD_UI_DIVS_CELLAR_PORTION
 #   define VD_UI_DIVS_CELLAR_PORTION 0.025f
@@ -2127,6 +2185,12 @@ VD_UI_INL void*             vd_ui__arena_alloc(VdUi__Arena *a, size_t size)     
 VD_UI_INL void*             vd_ui__arena_resize(VdUi__Arena *a, void *old_memory, size_t old_size, size_t new_size) { return vd_ui__arena_resize_align(a, old_memory, old_size, new_size, 8); }
 VD_UI_INL VdUi__Arena       vd_ui__arena_from_malloc(size_t size)                                               { VdUi__Arena result; vd_ui__arena_init(&result, VD_UI_MALLOC(size), size); return result; }
 
+typedef struct {
+    size_t h;
+    float  pos[2];
+    size_t anchor;
+} VdUi__Popup;
+
 struct VdUiContext {
     VdUiDiv                 root;                                                  // Root div. Every frame begins with this div
                                                                                    // as the parent.
@@ -2158,6 +2222,16 @@ struct VdUiContext {
     unsigned int            null_divs_len;                                         // used for spacer divs
     unsigned int            null_divs_cap;
 
+    int                     navlist_count;
+    size_t                  navlist[VD_UI_DIVS_MAX];
+
+    int                     popup_stack_count;
+    VdUi__Popup             popup_stack[VD_UI_POPUP_STACK_MAX];
+
+    int                     nav_anchor_stack_count;
+    size_t                  nav_anchor_stack[VD_UI_NAV_ANCHOR_STACK_MAX];
+
+
     // Glyph Cache
     // Plan (for now):
     // - LUT for codepoint to glyph index
@@ -2169,6 +2243,9 @@ struct VdUiContext {
     // - to bitmap
     VdUiGlyph               *glyph_cache;
     int                     glyph_cache_count;
+
+    int                     evtbuf_num;
+    VdUiEvent               evtbuf[VD_UI_EVENT_BUF_MAX];
 
     int                     atlas[2];
     void                    *buffer;
@@ -2200,15 +2277,13 @@ struct VdUiContext {
     int                     mouse_button_state[VD_UI_MOUSE_MAX];
 
     VdUiMod                 mods[VD_UI_MOD_MAX];
-
-    int                     num_keystrokes;
-    VdUiKeyStroke           keystrokes[VD_UI_KEYSTROKES_MAX];
-    unsigned char           key_states[VD_UI_KEY_MAX];
+    unsigned char           key_states[VD_UI_EVENT_KEY_MAX];
 
     size_t                  id_capturing_mouse;
     size_t                  hot;
     size_t                  active;
     size_t                  focused;
+    int                     focused_changed;
 
     // Per frame storage (strings)
     char                    *strbuf;
@@ -2275,6 +2350,8 @@ struct VdUiContext {
 
     struct {
         VdUiBool           metrics_on;
+        VdUiBool           focusvis_on;
+        float              focusvis_rect[4];
         VdUiBool           custom_cursor_on;
         VdUiBool           inspector_on;
 
@@ -2303,6 +2380,9 @@ struct VdUiContext {
 VD_UI_API void vd_ui_frame_begin(float delta_seconds)
 {
     VdUiContext *ctx = vd_ui_context_get();
+    ctx->navlist_count        = 1;
+    ctx->navlist[0]           = 0;
+
     ctx->root.first           = &ctx->sent;
     ctx->root.next            = &ctx->sent;
     ctx->root.prev            = &ctx->sent;
@@ -2312,8 +2392,14 @@ VD_UI_API void vd_ui_frame_begin(float delta_seconds)
     ctx->root.last_descendant_count = ctx->root.descendant_count;
     ctx->root.descendant_count = 0;
 
+    ctx->sent.next            = &ctx->root;
+
     ctx->nc_area.div          = NULL;
     ctx->nc_area.changed      = 0;
+
+    ctx->evtbuf_num           = 1;
+    ctx->evtbuf[0].next       = 0;
+    ctx->evtbuf[0].prev       = 0;
 
     ctx->wheel_target[0]      = 0.f;
     ctx->wheel_target[1]      = 0.f;
@@ -2324,10 +2410,9 @@ VD_UI_API void vd_ui_frame_begin(float delta_seconds)
 
     ctx->strbuf_len           = 0;
     ctx->null_divs_len        = 0;
-    ctx->num_keystrokes       = 0;
     ctx->mouse_over_any_visible_div = 0;
 
-    for (int i = 0; i < VD_UI_KEY_MAX; ++i) {
+    for (int i = 0; i < VD_UI_EVENT_KEY_MAX; ++i) {
         ctx->key_states[i] = ctx->key_states[i] << 1;
     }
 
@@ -2346,8 +2431,57 @@ VD_UI_API void vd_ui_frame_end(void)
 {
     VdUiContext *ctx = vd_ui_context_get();
 
+
     if (ctx->debug.inspector_on) {
         vd_ui__do_inspector(ctx);
+    }
+
+    ctx->focused_changed      = 0;
+
+    VdUiEvent evt = vd_ui_event_first();
+    if (vd_ui_nav_anchor_top() == 0) {
+        int nav_next = 0;
+        int nav_prev = 0;
+        while (vd_ui_event_next(&evt)) {
+            if (1
+                && (evt.type == VD_UI_EVENT_TYPE_PRESS)
+                && (evt.key == VD_UI_EVENT_KEY_TAB)
+                )
+            {
+                if (evt.mods & (1 << VD_UI_MOD_SHIFT)) {
+                    nav_prev++;
+                } else {
+                    nav_next++;
+                }
+            }
+        }
+
+        size_t new_focused = ctx->focused;
+        for (int i = 0; i < nav_next; ++i) {
+            VdUiDiv *focus_div;
+
+            if (new_focused) {
+                focus_div = vd_ui_get_div(new_focused);
+            } else {
+                focus_div = vd_ui_get_root();
+            }
+
+            new_focused = ctx->navlist[(focus_div->nav_index + 1) % ctx->navlist_count];
+        }
+
+        for (int i = 0; i < nav_prev; ++i) {
+            VdUiDiv *focus_div;
+
+            if (new_focused) {
+                focus_div = vd_ui_get_div(new_focused);
+            } else {
+                focus_div = vd_ui_get_root();
+            }
+
+            new_focused = ctx->navlist[(focus_div->nav_index - 1) % ctx->navlist_count];
+        }
+
+        vd_ui_focus(new_focused);
     }
 
     vd_ui__pop_clip(ctx);
@@ -2497,6 +2631,29 @@ VD_UI_API void vd_ui_frame_end(void)
     if (ctx->debug.metrics_on) {
         vd_ui__put_linef(ctx, 0.f, 32.f, "VBUF: %d", ctx->vbuf_count);
     }
+
+    if (ctx->debug.focusvis_on) {
+        float rect_target[4] = {0,0,0,0};
+
+        if (ctx->focused != 0) {
+            VdUiDiv *d = vd_ui_get_div(ctx->focused);
+
+            rect_target[0] = d->rect[0];
+            rect_target[1] = d->rect[1];
+            rect_target[2] = d->rect[2];
+            rect_target[3] = d->rect[3];
+        }
+
+        VdUiGradient grad = vd_ui_gradient1(vd_ui_f4(1,1,1,0.7f));
+        VdUiF4 corner = vd_ui_f4(2,2,2,2);
+        ctx->debug.focusvis_rect[0] = vd_ui__lerp(ctx->debug.focusvis_rect[0], rect_target[0], 20.f * ctx->delta_seconds);
+        ctx->debug.focusvis_rect[1] = vd_ui__lerp(ctx->debug.focusvis_rect[1], rect_target[1], 20.f * ctx->delta_seconds);
+        ctx->debug.focusvis_rect[2] = vd_ui__lerp(ctx->debug.focusvis_rect[2], rect_target[2], 20.f * ctx->delta_seconds);
+        ctx->debug.focusvis_rect[3] = vd_ui__lerp(ctx->debug.focusvis_rect[3], rect_target[3], 20.f * ctx->delta_seconds);
+
+        vd_ui_push_rectgrad(ctx->debug.focusvis_rect, grad.e,
+                            corner.e, 0.01f, 2.f);
+    }
     vd_ui__pop_clip(ctx);
 
     // Process updates
@@ -2504,17 +2661,17 @@ VD_UI_API void vd_ui_frame_end(void)
 }
 
 /* ----TEXTOPS IMPL-------------------------------------------------------------------------------------------------- */
-VD_UI_API VdUiTextOp vd_ui_text_op_from_keystroke(VdUiKeyStroke keystroke, VdUiTextPoint c, VdUiTextPoint m)
+VD_UI_API VdUiTextOp vd_ui_text_op_from_event(VdUiEvent evt, VdUiTextPoint c, VdUiTextPoint m)
 {
     VdUiTextOp op = {0};
 
-    if (keystroke.flags & VD_UI_KEYSTROKE_FLAG_CHAR) {
+    if (evt.type == VD_UI_EVENT_TYPE_CHARACTER) {
         // @todo(mdodis): unicode
         char buf[4];
-        int l = (int)vd_ui__utf32_to_utf8(keystroke.codepoint, (unsigned char*)buf);
+        int l = (int)vd_ui__utf32_to_utf8(evt.codepoint, (unsigned char*)buf);
 
         char *s = (char*)vd_ui_mem_push(sizeof(char) * l);
-        *s = (char)keystroke.codepoint;
+        *s = (char)evt.codepoint;
         op.replace_str.s = s;
         op.replace_str.l = l;
 
@@ -2526,11 +2683,11 @@ VD_UI_API VdUiTextOp vd_ui_text_op_from_keystroke(VdUiKeyStroke keystroke, VdUiT
 
         op.flags = VD_UI_TEXT_OP_FLAGS_SCAN_LETTER | VD_UI_TEXT_OP_FLAGS_SYNC_MARK;
         op.dt = op.replace_str.l;
-    } else {
-        VdUiKey key = keystroke.key;
+    } else if (evt.type == VD_UI_EVENT_TYPE_PRESS) {
+        VdUiEventKey key = evt.key;
         switch (key) {
-            case VD_UI_KEY_ARROW_LEFT: {
-                if (keystroke.mods & (1 << VD_UI_MOD_CONTROL)) {
+            case VD_UI_EVENT_KEY_ARROW_LEFT: {
+                if (evt.mods & (1 << VD_UI_MOD_CONTROL)) {
                     op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_WORD;
                     op.dt = -1;
                 } else {
@@ -2539,8 +2696,8 @@ VD_UI_API VdUiTextOp vd_ui_text_op_from_keystroke(VdUiKeyStroke keystroke, VdUiT
                 }
             } break;
 
-            case VD_UI_KEY_ARROW_RIGHT: {
-                if (keystroke.mods & (1 << VD_UI_MOD_CONTROL)) {
+            case VD_UI_EVENT_KEY_ARROW_RIGHT: {
+                if (evt.mods & (1 << VD_UI_MOD_CONTROL)) {
                     op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_WORD;
                     op.dt = 1;
                 } else {
@@ -2549,31 +2706,31 @@ VD_UI_API VdUiTextOp vd_ui_text_op_from_keystroke(VdUiKeyStroke keystroke, VdUiT
                 }
             } break;
 
-            case VD_UI_KEY_ARROW_UP: {
+            case VD_UI_EVENT_KEY_ARROW_UP: {
                 op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LINE;
                 op.dt = -1;
             } break;
 
-            case VD_UI_KEY_ARROW_DOWN: {
+            case VD_UI_EVENT_KEY_ARROW_DOWN: {
                 op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LINE;
                 op.dt = 1;
             } break;
 
-            case VD_UI_KEY_HOME: {
+            case VD_UI_EVENT_KEY_HOME: {
                 op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_BOUNDS;
                 op.dt = -1;
             } break;
 
-            case VD_UI_KEY_END: {
+            case VD_UI_EVENT_KEY_END: {
                 op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_BOUNDS;
                 op.dt = 1;
             } break;
 
-            case VD_UI_KEY_BACKSPACE: {
+            case VD_UI_EVENT_KEY_BACKSPACE: {
                 op.flags |= VD_UI_TEXT_OP_FLAGS_DELETE
                             | VD_UI_TEXT_OP_FLAGS_SYNC_MARK;
 
-                if (keystroke.mods & (1 << VD_UI_MOD_CONTROL)) {
+                if (evt.mods & (1 << VD_UI_MOD_CONTROL)) {
                     op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_WORD;
                 } else {
                     op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER;
@@ -2582,18 +2739,18 @@ VD_UI_API VdUiTextOp vd_ui_text_op_from_keystroke(VdUiKeyStroke keystroke, VdUiT
                 op.dt = -1;
             } break;
 
-            case VD_UI_KEY_DEL: {
+            case VD_UI_EVENT_KEY_DEL: {
                 op.flags |= VD_UI_TEXT_OP_FLAGS_DELETE | VD_UI_TEXT_OP_FLAGS_SYNC_MARK;
                 op.dt = 1;
 
-                if (keystroke.mods & (1 << VD_UI_MOD_CONTROL)) {
+                if (evt.mods & (1 << VD_UI_MOD_CONTROL)) {
                     op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_WORD;
                 } else {
                     op.flags |= VD_UI_TEXT_OP_FLAGS_SCAN_LETTER;
                 }
             } break;
 
-            case VD_UI_KEY_ENTER: {
+            case VD_UI_EVENT_KEY_ENTER: {
                 char *s = (char*)vd_ui_mem_push(sizeof(char));
                 *s = (char)'\n';
                 op.replace_str.s = s;
@@ -2609,8 +2766,8 @@ VD_UI_API VdUiTextOp vd_ui_text_op_from_keystroke(VdUiKeyStroke keystroke, VdUiT
                 op.dt = op.replace_str.l;
             } break;
 
-            case VD_UI_KEY_A: {
-                if (keystroke.mods & (1 << VD_UI_MOD_CONTROL)) {
+            case VD_UI_EVENT_KEY_A: {
+                if (evt.mods & (1 << VD_UI_MOD_CONTROL)) {
                     op.flags = VD_UI_TEXT_OP_FLAGS_SCAN_BORDERS | VD_UI_TEXT_OP_FLAGS_ZERO_MARK | VD_UI_TEXT_OP_FLAGS_KEEP_MARK;
                 }
 
@@ -2619,7 +2776,7 @@ VD_UI_API VdUiTextOp vd_ui_text_op_from_keystroke(VdUiKeyStroke keystroke, VdUiT
             default: {} break;
         }
 
-        if (keystroke.mods & (1 << VD_UI_MOD_SHIFT)) {
+        if (evt.mods & (1 << VD_UI_MOD_SHIFT)) {
             op.flags |= VD_UI_TEXT_OP_FLAGS_KEEP_MARK;
 
         }
@@ -3099,7 +3256,7 @@ VD_UI_API int vd_ui_slider(void *value, void *min_value, void *max_value,
                            VdUiDataType type, VdUiAxis orientation,
                            VdUiStr label)
 {
-    const float grip_size = 16.f;
+    float grip_size = 16.f * vd_ui_get_scale();
 
     (void)orientation;
     (void)type;
@@ -3390,12 +3547,20 @@ VD_UI_API VdUiReply vd_ui_textbox(VdUiStr label, char *buf, size_t *len, size_t 
     VdUiSel *sel = &box->sel;
 
     if (vd_ui_div_is_focused(box)) {
-        for (int i = 0; i < vd_ui_get_num_keystrokes(); ++i) {
+        VdUiEvent evt = vd_ui_event_first();
+        while (vd_ui_event_next(&evt)) {
+            int consume = 0;
             VdUi__ArenaSave save = vd_ui__arena_save(&ctx->frame_arena);
-            VdUiKeyStroke keystroke = vd_ui_get_keystroke(i);
 
-            VdUiTextOp op = vd_ui_text_op_from_keystroke(keystroke, sel->c, sel->m);
-            vd_ui_text_op_exec(op, sel, buf, len, capacity);
+            VdUiTextOp op = vd_ui_text_op_from_event(evt, sel->c, sel->m);
+            if (op.flags != 0) {
+                vd_ui_text_op_exec(op, sel, buf, len, capacity);
+                consume = 1;
+            }
+
+            if (consume) {
+                vd_ui_event_take(&evt);
+            }
 
             vd_ui__arena_restore(save);
         }
@@ -3643,8 +3808,8 @@ VD_UI_API VdUiDiv *vd_ui_scrollbar(VdUiStr label, VdUiAxis scroll_axis,
     static float drag_start = 0.f;
 
     VdUiScrollbarOptions default_options;
-    default_options.diagonal_axis_size = 18.f;
-    default_options.symbol_to_button_ratio = 0.75f;
+    default_options.diagonal_axis_size = 14.f * vd_ui_get_scale();
+    default_options.symbol_to_button_ratio = 0.65f;
     default_options.button_speed = 512.f;
     default_options.button_coloring = vd_ui_coloring(vd_ui_gradient1(vd_ui_f4(0.1f, 0.1f, 0.1f, 0.2f)),
                                                      vd_ui_gradient1(vd_ui_f4(0.1f, 0.1f, 0.1f, 1.0f)),
@@ -3658,7 +3823,7 @@ VD_UI_API VdUiDiv *vd_ui_scrollbar(VdUiStr label, VdUiAxis scroll_axis,
     default_options.track_coloring = vd_ui_coloring(vd_ui_gradient1(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f)),
                                                     vd_ui_gradient1(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f)),
                                                     vd_ui_gradient1(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f)));
-    default_options.min_grip_size = 16.f;
+    default_options.min_grip_size = 12.f * vd_ui_get_scale();
     default_options.scroll_modifier = 64.f;
     default_options.grip_to_button_ratio = 0.64f;
     default_options.grip_rounding = 1.f;
@@ -3728,7 +3893,6 @@ VD_UI_API VdUiDiv *vd_ui_scrollbar(VdUiStr label, VdUiAxis scroll_axis,
                                      , VD_UI_LIT("##track"));
         }
         {
-            VdUiReply track_reply = vd_ui_call(track);
 
             float track_size = track->comp_size[scroll_axis];
             float min_grip_size = options->min_grip_size;
@@ -3739,12 +3903,12 @@ VD_UI_API VdUiDiv *vd_ui_scrollbar(VdUiStr label, VdUiAxis scroll_axis,
                 *v -= options->button_speed * vd_ui_dt();
             }
 
-            if (wheel_scrollable) {
-                float wheel[2];
-                vd_ui_mouse_wheel(wheel);
+            // if (wheel_scrollable) {
+            //     float wheel[2];
+            //     vd_ui_mouse_wheel(wheel);
 
-                *v -= wheel[scroll_axis] * options->scroll_modifier;
-            }
+            //     *v -= wheel[scroll_axis] * options->scroll_modifier;
+            // }
 
 
             // Spawn grip
@@ -3805,6 +3969,7 @@ VD_UI_API VdUiDiv *vd_ui_scrollbar(VdUiStr label, VdUiAxis scroll_axis,
             grip->comp_pos_rel[scroll_axis] = scroll_ratio * (track_size - grip_size);
 
             // Call logic for clicking on track
+            VdUiReply track_reply = vd_ui_call(track);
             if (track_reply.pressed) {
                 float mouse_click_pos[2];
                 vd_ui_transform_point(grip, track_reply.mouse, mouse_click_pos);
@@ -3850,6 +4015,109 @@ VD_UI_API VdUiDiv *vd_ui_scrollbar(VdUiStr label, VdUiAxis scroll_axis,
     return scrollbar;
 }
 
+VD_UI_API VdUiDiv *vd_ui_popup_begin(VdUiStr hstr, VdUiFlags flags, VdUiDiv *parent)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    int id_start;
+    vd_ui_parent_push(vd_ui_get_root());
+    size_t h = vd_ui_hash(hstr, &id_start);
+    vd_ui_parent_pop();
+
+    int open = 0;
+    int i = 0;
+    for (; i < vd_ui_popup_count(); ++i) {
+        if (ctx->popup_stack[i].h == h) {
+            open = 1;
+            break;
+        }
+    }
+
+    VdUiDiv *result = 0;
+
+    size_t h_anchor = 0;
+    if (parent) {
+        h_anchor = parent->h;
+    }
+
+    if (open) {
+        vd_ui_parent_push(vd_ui_get_root());
+        result = vd_ui_div_new(flags | VD_UI_FLAG_FLOAT /*| VD_UI_FLAG_CLICKABLE*/, hstr);
+        vd_ui_call(result);
+        vd_ui_parent_pop();
+
+        ctx->popup_stack[i].anchor = h_anchor;
+
+        if (h_anchor) {
+            VdUiDiv *anchor = vd_ui_get_div(h_anchor);
+
+            float pos[2];
+            float siz[2];
+            siz[0] = anchor->rect[VD_UI_RIGHT] - anchor->rect[VD_UI_LEFT];
+            siz[1] = anchor->rect[VD_UI_BOTTOM] - anchor->rect[VD_UI_TOP];
+
+            pos[0] = anchor->rect[0];
+            pos[1] = anchor->rect[1];
+
+            pos[1] -= result->comp_size[1];
+
+            ctx->popup_stack[i].pos[0] = pos[0];
+            ctx->popup_stack[i].pos[1] = pos[1];
+
+        }
+
+        result->comp_pos_rel[0] = ctx->popup_stack[i].pos[0];
+        result->comp_pos_rel[1] = ctx->popup_stack[i].pos[1];
+
+        vd_ui_parent_push(result);
+    }
+
+    return result;
+}
+
+VD_UI_API void vd_ui_popup_end(void)
+{
+    VdUiDiv *d = vd_ui_parent_get(vd_ui_parent_count());
+    vd_ui_call(d);
+    vd_ui_parent_pop();
+}
+
+VD_UI_API void vd_ui_popup_push(VdUiStr hstr)
+{
+    int id_start;
+    vd_ui_parent_push(vd_ui_get_root());
+    size_t h = vd_ui_hash(hstr, &id_start);
+    vd_ui_parent_pop();
+
+    VdUiContext *ctx = vd_ui_context_get();
+
+    VdUi__Popup *p = 0;
+    for (int i = 0; i < ctx->popup_stack_count; ++i) {
+        if (ctx->popup_stack[i].h == h) {
+            p = &ctx->popup_stack[i];
+            break;
+        }
+    }
+
+    if (!p) {
+        p = &ctx->popup_stack[ctx->popup_stack_count++];
+    }
+
+    p->h = h;
+    vd_ui_mouse_pos(p->pos);
+}
+
+VD_UI_API int vd_ui_popup_count(void)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    return ctx->popup_stack_count;
+}
+
+VD_UI_API void vd_ui_popup_pop(void)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    ctx->popup_stack_count--;
+}
+
 VD_UI_API void vd_ui_scroll_end()
 {
     vd_ui_parent_pop();
@@ -3868,7 +4136,12 @@ VD_UI_API VdUiDiv* vd_ui_scrollview_begin(VdUiStr str, float *x, float *y)
     VdUiDiv *scrollh = 0;
     VdUiDiv *view_with_hscroll;
 
-    main_view = vd_ui_div_new(VD_UI_FLAG_FLEX_VERTICAL | VD_UI_FLAG_CLIP_CONTENT, str);
+    main_view = vd_ui_div_new(0
+                              | VD_UI_FLAG_FLEX_VERTICAL 
+                              | VD_UI_FLAG_CLIP_CONTENT 
+                              | VD_UI_FLAG_NAVIGABLE
+                              /*| VD_UI_FLAG_CLICKABLE*/
+                              , str);
     int wheel_scrollable = vd_ui__point_in_rect(mouse, main_view->rect);
     vd_ui_parent_push(main_view);
     {
@@ -3901,7 +4174,7 @@ VD_UI_API VdUiDiv* vd_ui_scrollview_begin(VdUiStr str, float *x, float *y)
                 }
 
                 {
-                    content_area = vd_ui_div_new(0, VD_UI_LIT("##content-area"));
+                    content_area = vd_ui_div_new(VD_UI_FLAG_VIEW_SCROLLABLE, VD_UI_LIT("##content-area"));
                 }
 
                 vd_ui_style_size_pop(VD_UI_AXISV);
@@ -3913,9 +4186,9 @@ VD_UI_API VdUiDiv* vd_ui_scrollview_begin(VdUiStr str, float *x, float *y)
                 float window_size = view_with_vscroll->comp_size[1];
                 float content_size = content_area->children_comp_size[1];
 
-                scrollv = vd_ui_scrollbar(VD_UI_LIT("##scrollbar-y"), VD_UI_AXISV, y, window_size, content_size, wheel_scrollable, 0);
+                scrollv = vd_ui_scrollbar(VD_UI_LIT("##scrollbar-y"), VD_UI_AXISV, &content_area->view_scroll[1], window_size, content_size, wheel_scrollable, 0);
 
-                content_area->offset[1] = -(*y);
+                // content_area->offset[1] = -(*y);
             }
         }
         vd_ui_parent_pop();
@@ -3929,8 +4202,8 @@ VD_UI_API VdUiDiv* vd_ui_scrollview_begin(VdUiStr str, float *x, float *y)
             if (x) {
                 float window_size = view_with_hscroll->comp_size[0];
                 float content_size = content_area->children_comp_size[0];
-                scrollh = vd_ui_scrollbar(VD_UI_LIT("##scrollbar-x"), VD_UI_AXISH, x, window_size, content_size, wheel_scrollable, 0);
-                content_area->offset[0] = -(*x);
+                scrollh = vd_ui_scrollbar(VD_UI_LIT("##scrollbar-x"), VD_UI_AXISH, &content_area->view_scroll[0], window_size, content_size, wheel_scrollable, 0);
+                // content_area->offset[0] = -(*x);
 
                 if (y) {
                     VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(scrollv->comp_size[0], scrollh->comp_size[1], 0, 0)
@@ -3944,6 +4217,28 @@ VD_UI_API VdUiDiv* vd_ui_scrollview_begin(VdUiStr str, float *x, float *y)
 
     }
     vd_ui_parent_pop();
+
+    VdUiReply content_area_reply = vd_ui_call(content_area);
+
+    VdUiReply main_view_reply = vd_ui_call(main_view);
+    // VdUiContext *ctx = vd_ui_context_get();
+    // if (ctx->focused_changed) {
+    //     if (ctx->focused == main_view->h) {
+    //         vd_ui_nav_anchor_push(main_view->h);
+    //     } else if (vd_ui_nav_anchor_top() == main_view->h) {
+    //         vd_ui_nav_anchor_pop();
+    //     }
+    // }
+
+    content_area->view_scroll[0] -= content_area_reply.scroll[0] * 64.f;
+    content_area->view_scroll[1] -= content_area_reply.scroll[1] * 64.f;
+
+    // if (x) {
+    //     *x -= main_view_reply.scroll[0] * 64.f;
+    // }
+    // if (y) {
+    //     *y -= main_view_reply.scroll[1] * 64.f;
+    // }
 
     vd_ui_parent_push(view_with_hscroll); // We only do this to activate clipping
     vd_ui_parent_push(content_area);
@@ -4056,21 +4351,36 @@ VD_UI_API VdUiDiv *vd_ui_div_newf(VdUiFlags flags, const char *fmt, ...)
     return vd_ui_div_new(flags, str);
 }
 
-VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
+VD_UI_API size_t vd_ui_hash(VdUiStr str, int *str_id_start_index)
 {
-    VdUiContext *ctx = vd_ui_context_get();
-
-    // @note(mdodis): If the str contains ## then only use everything after ## for its id
     VdUiStr substr_to_hash = str;
-    int str_id_start_index = 0;
+    *str_id_start_index = 0;
     for (int i = 0; i < str.l; ++i) {
         if ((str.s[i] == '#') && ((i + 1) < str.l) && (str.s[i + 1] == '#')) {
-            str_id_start_index = i + 2;
+            *str_id_start_index = i + 2;
             substr_to_hash.s = str.s + i + 2;
             substr_to_hash.l = str.l - (i + 2);
             break;
         }
     }
+
+    size_t ht = vd_ui__hash(substr_to_hash.s, substr_to_hash.l);
+    size_t h = ht;
+
+    for (int i = 0; i < vd_ui_parent_count(); ++i) {
+        size_t ph = vd_ui_parent_get(i)->h;
+        h ^= ph + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+    }
+
+    return h;
+}
+
+VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+
+    int str_id_start_index = 0;
+    size_t h = vd_ui_hash(str, &str_id_start_index);
 
     VdUiDiv *result;
     if (str.l == 0) {
@@ -4081,14 +4391,6 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
         result->content_str = (VdUiStr) {0, 0};
         result->id_str = VD_UI_LIT("<null>");
     } else {
-        size_t ht = vd_ui__hash(substr_to_hash.s, substr_to_hash.l);
-        size_t h = ht;
-
-        for (int i = 0; i < vd_ui_parent_count(); ++i) {
-            size_t ph = vd_ui_parent_get(i)->h;
-            h ^= ph + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
-        }
-
         size_t index = h % ctx->divs_cap;
 
         if (ctx->divs[index].h == h) {
@@ -4181,11 +4483,19 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     result->last_descendant_count = result->descendant_count;
     result->descendant_count = 0;
     result->flags            = flags;
+    if (flags & VD_UI_FLAG_CLICKABLE) {
+        result->flags |= VD_UI_FLAG_NAVIGABLE;
+    }
     result->offset[0]        = 0.f;
     result->offset[1]        = 0.f;
     result->scale[0]         = 1.f;
     result->scale[1]         = 1.f;
     result->zoffset = 0;
+
+    if (!result->is_null && (result->flags & VD_UI_FLAG_NAVIGABLE)) {
+        result->nav_index = ctx->navlist_count++;
+        ctx->navlist[result->nav_index] = result->h;
+    }
 
     if (result->is_null) {
         result->size_changed = 1;
@@ -4256,9 +4566,191 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
     VdUiContext *ctx = vd_ui_context_get();
     float dt = ctx->delta_seconds;
 
+    VdUiReply reply = {0};
+    reply.div = div;
+
+    int popup_exists = ctx->popup_stack_count != 0;
+    int div_is_popup_root = ctx->popup_stack_count ? ctx->popup_stack[0].h == div->h : 0;
+    int div_is_popup_root_ancestor = div_is_popup_root;
+    VdUiDiv *parent = div;
+
+    if (ctx->popup_stack_count > 0) {
+        do {
+            if (ctx->popup_stack[0].h == parent->h) {
+                div_is_popup_root_ancestor = 1;
+                break;    
+            }
+
+            parent = parent->parent;
+        } while (parent != &ctx->sent);
+    }
+
+    float clipped_rect[4];
+    vd_ui_clip_rect(div->rect, clipped_rect);
+
+    VdUiEvent evt = vd_ui_event_first();
+    while (vd_ui_event_next(&evt)) {
+        int consume      = 0;
+        int in_bounds    = vd_ui__point_in_rect(evt.mouse, clipped_rect);
+        int is_mouse_btn = (evt.key >= VD_UI_EVENT_KEY_MOUSE_LEFT) && (evt.key <= VD_UI_EVENT_KEY_MOUSE_MIDDLE);
+
+
+        // Press mouse button down on div
+        if (1
+            && (div->flags & VD_UI_FLAG_CLICKABLE)
+            && (evt.type == VD_UI_EVENT_TYPE_PRESS)
+            && in_bounds
+            && is_mouse_btn
+            )
+        {
+            ctx->hot      = div->h;
+            ctx->active   = div->h;
+            reply.pressed = 1;
+            consume       = 1;
+        }
+
+        // Release mouse button down on div
+        if (1 
+            && (div->flags & VD_UI_FLAG_CLICKABLE)
+            && (evt.type == VD_UI_EVENT_TYPE_RELEASE)
+            && is_mouse_btn
+            && in_bounds
+            && (ctx->active == div->h)
+            )
+        {
+            ctx->active    = 0;
+            reply.released = 1;
+            reply.clicked  = 1;
+            consume        = 1;
+        }
+
+        // Release mouse button outside of div
+        if (1
+            && (div->flags & VD_UI_FLAG_CLICKABLE)
+            && (evt.type == VD_UI_EVENT_TYPE_RELEASE)
+            && is_mouse_btn
+            && (!in_bounds)
+            && (ctx->active == div->h)
+            )
+        {
+            ctx->active = 0;
+            reply.released = 1;
+            reply.clicked = 0;
+            consume = 1;
+        }
+
+        // View Scrolling
+        if (1
+            && (div->flags & VD_UI_FLAG_VIEW_SCROLLABLE)
+            && (in_bounds)
+            && (evt.type == VD_UI_EVENT_TYPE_SCROLL)
+            )
+        {
+            reply.scroll[0] += evt.v2[0];
+            reply.scroll[1] += evt.v2[1];
+            consume = 1;
+        }
+
+        if (consume) {
+            vd_ui_event_take(&evt);
+        }
+    }
+
+    int in_bounds = vd_ui__point_in_rect(ctx->mouse, clipped_rect);
+    reply.mouse[0] = ctx->mouse[0]; reply.mouse[1] = ctx->mouse[1];
+
+    if (in_bounds) {
+        // reply.hovering = 1;
+    }
+
+    if (1
+        && reply.pressed
+        // && (div->flags & VD_UI_FLAG_FOCUSABLE)
+        )
+    {
+        int was_focused = ctx->focused == div->h;
+        vd_ui_focus(div->h);
+        reply.focused = !was_focused && (ctx->focused == div->h);
+    }
+
+    if (1
+        && (div->flags & VD_UI_FLAG_CLICKABLE)
+        && vd_ui_mouse_down(VD_UI_MOUSE_LEFT)
+        // && in_bounds
+        && (ctx->active == div->h)
+        )
+    {
+        reply.pressed = 1;
+    }
+
+    // Close popup if click outside
+    if (1
+        && popup_exists
+        && div_is_popup_root
+        && vd_ui_mouse_just_pressed(VD_UI_MOUSE_LEFT))
+    {
+        if (!in_bounds) {
+            vd_ui_popup_pop();
+        }
+    }
+
+
+    // Hover over div, and no other div is hot
+    if (1
+        && (div->flags & VD_UI_FLAG_CLICKABLE)
+        && in_bounds
+        && ((ctx->hot == div->h) || (ctx->hot == 0)))
+    {
+        ctx->hot = div->h;
+        reply.hovering = 1;
+    }
+
+    if (1
+        && (div->flags & VD_UI_FLAG_CLICKABLE)
+        && !in_bounds
+        && ((ctx->hot == div->h) || (ctx->hot == 0)))
+    {
+        ctx->hot = 0;
+        reply.hovering = 0;
+    }
+
+    // Animate
+    float hot_speed = 9.f;
+    float active_speed = 10.f;
+    div->hot_t    = vd_ui__lerp(div->hot_t, vd_ui_div_is_hot(div) ? 1.0f : 0.0f, dt * hot_speed);
+    div->hot_t    = vd_ui__clampf01(div->hot_t);
+
+    // div->active_t = vd_ui__lerp(div->active_t, ((pressed && hovered) || captured) ? 1.0f : 0.0f, dt * active_speed);
+    div->active_t = vd_ui__lerp(div->active_t, vd_ui_div_is_active(div) ? 1.0f : 0.0f, dt * active_speed);
+    div->active_t = vd_ui__clampf01(div->active_t);
+
+    div->timeout_t = vd_ui__lerp(div->timeout_t, 0.f, dt * 11.f);
+    div->timeout_t = vd_ui__clampf01(div->timeout_t);
+    div->timeout_inv_t = (div->timeout_t > 0.1f) ? (1.f - div->timeout_t) : 0.f;
+    if (div->timeout_t < 0.1f) div->timeout_t = 0.f;
+
+    return reply;
+
+#if 0 
     VdUiReply reply = {};
     reply.div = div;
     reply.mouse[0]  = ctx->mouse[0];    reply.mouse[1] = ctx->mouse[1];
+
+    int popup_exists = ctx->popup_stack_count != 0;
+    int div_is_popup_root = ctx->popup_stack_count ? ctx->popup_stack[0].h == div->h : 0;
+    int div_is_popup_root_ancestor = div_is_popup_root;
+    VdUiDiv *parent = div;
+
+    if (ctx->popup_stack_count > 0) {
+        do {
+            if (ctx->popup_stack[0].h == parent->h) {
+                div_is_popup_root_ancestor = 1;
+                break;    
+            }
+
+            parent = parent->parent;
+        } while (parent != &ctx->sent);
+    }
 
     if (div->flags & VD_UI_FLAG_CLICKABLE) {
         float mouse_delta[2] = { ctx->mouse[0] - ctx->mouse_last[0], ctx->mouse[1] - ctx->mouse_last[1] };
@@ -4347,8 +4839,14 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
         reply.focused = ctx->focused == div->h;
         reply.click_timeout = div->timeout_inv_t;
     }
-
+    if (popup_exists) {
+        if (!div_is_popup_root_ancestor && vd_ui_mouse_just_pressed(VD_UI_MOUSE_LEFT)) {
+            vd_ui_popup_pop();
+        }
+    }
     return reply;
+#endif
+
 }
 
 // Parent Stack Impl
@@ -4387,6 +4885,11 @@ VD_UI_API VdUiDiv *vd_ui_parent_get(int i)
     return ctx->parents[i + 1];
 }
 
+VD_UI_API VdUiDiv *vd_ui_parent_cur(void)
+{
+    return vd_ui_parent_get(vd_ui_parent_count() - 1);
+}
+
 VD_UI_API void vd_ui_focus_mode_push(VdUiFocusMode mode)
 {
     VdUiContext *ctx = vd_ui_context_get();
@@ -4410,6 +4913,41 @@ VD_UI_API void vd_ui_focus_mode_pop(void)
     VD_UI_ASSERT(ctx->focus_modes_count);
     ctx->focus_modes_count--;
 }
+
+VD_UI_API void vd_ui_focus(size_t h)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+
+    if (ctx->focused != h) {
+        ctx->focused = h;
+        ctx->focused_changed = 1;
+    }
+}
+
+VD_UI_API void vd_ui_nav_anchor_push(size_t key)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    VD_UI_ASSERT(ctx->nav_anchor_stack_count < VD_UI_NAV_ANCHOR_STACK_MAX);
+    ctx->nav_anchor_stack[ctx->nav_anchor_stack_count++] = key;
+}
+
+VD_UI_API size_t vd_ui_nav_anchor_top(void)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    if (ctx->nav_anchor_stack_count) {
+        return ctx->nav_anchor_stack[ctx->nav_anchor_stack_count - 1];
+    } else {
+        return 0;
+    }
+}
+
+VD_UI_API size_t vd_ui_nav_anchor_pop(void)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    VD_UI_ASSERT(ctx->nav_anchor_stack_count);
+    return ctx->nav_anchor_stack[--ctx->nav_anchor_stack_count];
+}
+
 
 VD_UI_API void vd_ui_set_scale(float s)
 {
@@ -5286,6 +5824,9 @@ static int vd_ui__calc_positions(VdUiContext *ctx, VdUiDiv *curr)
             child->rect[VD_UI_LEFT]  += child->offset[0]; child->rect[VD_UI_TOP]    += child->offset[1];
             child->rect[VD_UI_RIGHT] += child->offset[0]; child->rect[VD_UI_BOTTOM] += child->offset[1];
 
+            child->rect[VD_UI_LEFT]  -= child->view_scroll[0]; child->rect[VD_UI_TOP]    -= child->view_scroll[1];
+            child->rect[VD_UI_RIGHT] -= child->view_scroll[0]; child->rect[VD_UI_BOTTOM] -= child->view_scroll[1];
+
             int child_is_visible = 0
                                  || (child->flags & VD_UI_FLAG_BACKGROUND)
                                  || (child->flags & VD_UI_FLAG_BORDER)
@@ -5374,6 +5915,43 @@ VD_UI_API void *vd_ui_font_default(size_t *size)
 }
 
 /* ----INPUT IMPL---------------------------------------------------------------------------------------------------- */
+VD_UI_API void vd_ui_event_push(VdUiEvent *evt)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    VD_UI_ASSERT(ctx->evtbuf_num < VD_UI_EVENT_BUF_MAX);
+
+    int idx = ctx->evtbuf_num++;
+    VdUiEvent *e = &ctx->evtbuf[idx];
+    *e = *evt;
+    e->next = 0;
+    e->prev = idx - 1;
+
+    ctx->evtbuf[idx - 1].next = idx;
+}
+
+VD_UI_API VdUiEvent vd_ui_event_first(void)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    return ctx->evtbuf[0];
+}
+
+VD_UI_API int vd_ui_event_next(VdUiEvent *evt)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    *evt = ctx->evtbuf[evt->next];
+
+    return evt->type != VD_UI_EVENT_TYPE_NONE;
+}
+
+VD_UI_API void vd_ui_event_take(VdUiEvent *evt)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    ctx->evtbuf[evt->prev].next = evt->next;
+    ctx->evtbuf[evt->next].prev = evt->prev;
+    // evt->next = my_idx;
+    // evt->prev = my_idx;
+}
+
 VD_UI_API void vd_ui_event_size(float width, float height)
 {
     VdUiContext *ctx = vd_ui_context_get();
@@ -5386,6 +5964,12 @@ VD_UI_API void vd_ui_event_mouse_location(float mx, float my)
     VdUiContext *ctx = vd_ui_context_get();
     ctx->mouse[0] = mx;
     ctx->mouse[1] = my;
+
+    VdUiEvent evt = {0};
+    evt.type = VD_UI_EVENT_TYPE_MOUSE_MOVE;
+    evt.mouse[0] = mx;
+    evt.mouse[1] = my;
+    vd_ui_event_push(&evt);
 }
 
 VD_UI_API void vd_ui_event_mouse_wheel(float dx, float dy)
@@ -5403,34 +5987,59 @@ VD_UI_API void vd_ui_event_mouse_wheel(float dx, float dy)
     ctx->wheel_current[0] = vd_ui__smooth_damp(ctx->wheel_current[0], ctx->wheel_target[0], &xvel, 0.05f, 300.f, ctx->delta_seconds);
     ctx->wheel_current[1] = vd_ui__smooth_damp(ctx->wheel_current[1], ctx->wheel_target[1], &yvel, 0.05f, 300.f, ctx->delta_seconds);
 #endif
+
+    VdUiEvent evt = {0};
+    evt.type = VD_UI_EVENT_TYPE_SCROLL;
+    evt.mouse[0] = ctx->mouse[0];
+    evt.mouse[1] = ctx->mouse[1];
+    evt.v2[0] = ctx->wheel_current[0];
+    evt.v2[1] = ctx->wheel_current[1];
+
+    vd_ui_event_push(&evt);
 }
 
-VD_UI_API void vd_ui_event_key_press(VdUiKey key)
+VD_UI_API void vd_ui_event_key_press(VdUiEventKey key)
 {
-    if (key == VD_UI_KEY_NONE) {
+    if (key == VD_UI_EVENT_KEY_NONE) {
         return;
     }
 
     VdUiContext *ctx = vd_ui_context_get();
     ctx->key_states[key] |= VD_UI_KEY_STATE_NEXT_MASK;
 
-    VdUiKeyStroke keystroke;
-    keystroke.key = key;
-    keystroke.mods = 0;
-    keystroke.mods |= ctx->mods[VD_UI_MOD_SHIFT]    << VD_UI_MOD_SHIFT;
-    keystroke.mods |= ctx->mods[VD_UI_MOD_CONTROL]  << VD_UI_MOD_CONTROL;
-    ctx->keystrokes[ctx->num_keystrokes % VD_UI_KEYSTROKES_MAX] = keystroke;
-    ctx->num_keystrokes++;
+    // VdUiKeyStroke keystroke;
+    // keystroke.key = key;
+    // keystroke.mods = 0;
+    // keystroke.mods |= ctx->mods[VD_UI_MOD_SHIFT]    << VD_UI_MOD_SHIFT;
+    // keystroke.mods |= ctx->mods[VD_UI_MOD_CONTROL]  << VD_UI_MOD_CONTROL;
+    // ctx->keystrokes[ctx->num_keystrokes % VD_UI_KEYSTROKES_MAX] = keystroke;
+    // ctx->num_keystrokes++;
+
+    VdUiEvent evt = {0};
+    evt.type = VD_UI_EVENT_TYPE_PRESS;
+    evt.key = key;
+    evt.mods = 0;
+    evt.mods |= ctx->mods[VD_UI_MOD_SHIFT]    << VD_UI_MOD_SHIFT;
+    evt.mods |= ctx->mods[VD_UI_MOD_CONTROL]  << VD_UI_MOD_CONTROL;
+    vd_ui_event_push(&evt);
 }
 
-VD_UI_API void vd_ui_event_key_release(VdUiKey key)
+VD_UI_API void vd_ui_event_key_release(VdUiEventKey key)
 {
-    if (key == VD_UI_KEY_NONE) {
+    if (key == VD_UI_EVENT_KEY_NONE) {
         return;
     }
 
     VdUiContext *ctx = vd_ui_context_get();
     ctx->key_states[key] &= ~VD_UI_KEY_STATE_NEXT_MASK;
+
+    VdUiEvent evt = {0};
+    evt.type = VD_UI_EVENT_TYPE_RELEASE;
+    evt.key = key;
+    evt.mods = 0;
+    evt.mods |= ctx->mods[VD_UI_MOD_SHIFT]    << VD_UI_MOD_SHIFT;
+    evt.mods |= ctx->mods[VD_UI_MOD_CONTROL]  << VD_UI_MOD_CONTROL;
+    vd_ui_event_push(&evt);
 }
 
 VD_UI_API void vd_ui_event_mod(VdUiMod mod, int on)
@@ -5446,18 +6055,32 @@ VD_UI_API void vd_ui_event_char(unsigned int codepoint)
         return;
     }
 
-    VdUiContext *ctx = vd_ui_context_get();
-    VdUiKeyStroke keystroke;
-    keystroke.flags |= VD_UI_KEYSTROKE_FLAG_CHAR;
-    keystroke.codepoint = codepoint;
-    ctx->keystrokes[ctx->num_keystrokes % VD_UI_KEYSTROKES_MAX] = keystroke;
-    ctx->num_keystrokes++;
+    VdUiEvent evt = {0};
+    evt.type = VD_UI_EVENT_TYPE_CHARACTER;
+    evt.codepoint = codepoint;
+    vd_ui_event_push(&evt);
 }
 
 VD_UI_API void vd_ui_event_mouse_button(int index, int down)
 {
     VdUiContext *ctx = vd_ui_context_get();
     ctx->mouse_button_state[index] = down;
+
+    VdUiEvent evt = {0};
+    evt.type = down 
+        ? VD_UI_EVENT_TYPE_PRESS
+        : VD_UI_EVENT_TYPE_RELEASE;
+    switch (index) {
+        case VD_UI_MOUSE_LEFT:      evt.key = VD_UI_EVENT_KEY_MOUSE_LEFT;   break;
+        case VD_UI_MOUSE_RIGHT:     evt.key = VD_UI_EVENT_KEY_MOUSE_RIGHT;  break;
+        case VD_UI_MOUSE_MIDDLE:    evt.key = VD_UI_EVENT_KEY_MOUSE_MIDDLE; break;
+        default:                    evt.key = VD_UI_EVENT_KEY_NONE;         break;
+    }
+
+    evt.mouse[0] = ctx->mouse[0];
+    evt.mouse[1] = ctx->mouse[1];
+
+    vd_ui_event_push(&evt);
 }
 
 VD_UI_API void vd_ui_event_focus(int on)
@@ -5513,6 +6136,7 @@ VD_UI_API void vd_ui_mouse_wheel(float wheel[2])
     VdUiContext *ctx = vd_ui_context_get();
     wheel[0] = ctx->wheel_current[0];
     wheel[1] = ctx->wheel_current[1];
+
 }
 
 VD_UI_API int vd_ui_mouse_down(int idx)
@@ -5577,21 +6201,6 @@ VD_UI_API int vd_ui_is_captured(VdUiDiv *div)
     return div->h == ctx->id_capturing_mouse;
 }
 
-VD_UI_API int vd_ui_get_num_keystrokes(void)
-{
-    VdUiContext *ctx = vd_ui_context_get();
-    int keystroke_count = (ctx->num_keystrokes % VD_UI_KEYSTROKES_MAX);
-    return keystroke_count;
-}
-
-VD_UI_API VdUiKeyStroke vd_ui_get_keystroke(int index)
-{
-    VdUiContext *ctx = vd_ui_context_get();
-    int keystroke_count = (ctx->num_keystrokes % VD_UI_KEYSTROKES_MAX);
-    VD_UI_ASSERT(index < keystroke_count);
-    return ctx->keystrokes[index];
-}
-
 VD_UI_API int vd_ui_any_hovered(void)
 {
     VdUiContext *ctx = vd_ui_context_get();
@@ -5604,19 +6213,19 @@ VD_UI_API int vd_ui_mod_down(VdUiMod mod)
     return ctx->mods[mod];
 }
 
-VD_UI_API int vd_ui_key_down(VdUiKey key)
+VD_UI_API int vd_ui_key_down(VdUiEventKey key)
 {
     VdUiContext *ctx = vd_ui_context_get();
     return (ctx->key_states[key] & VD_UI_KEY_STATE_NEXT_MASK);
 }
 
-VD_UI_API int vd_ui_key_pressed(VdUiKey key)
+VD_UI_API int vd_ui_key_pressed(VdUiEventKey key)
 {
     VdUiContext *ctx = vd_ui_context_get();
     return !(ctx->key_states[key] & VD_UI_KEY_STATE_PREV_MASK) && (ctx->key_states[key] & VD_UI_KEY_STATE_NEXT_MASK);
 }
 
-VD_UI_API int vd_ui_key_released(VdUiKey key)
+VD_UI_API int vd_ui_key_released(VdUiEventKey key)
 {
     VdUiContext *ctx = vd_ui_context_get();
     return (ctx->key_states[key] & VD_UI_KEY_STATE_PREV_MASK) && !(ctx->key_states[key] & VD_UI_KEY_STATE_NEXT_MASK);
@@ -6676,6 +7285,12 @@ VD_UI_API void vd_ui_debug_set_metrics_on(VdUiBool on)
     ctx->debug.metrics_on = on;
 }
 
+VD_UI_API void vd_ui_debug_set_focusvis_on(VdUiBool on)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    ctx->debug.focusvis_on = on;
+}
+
 VD_UI_API void vd_ui_debug_set_layout_recompute_vis_on(VdUiBool on)
 {
     VdUiContext *ctx = vd_ui_context_get();
@@ -6880,6 +7495,7 @@ static int vd_ui__inspector_traverse_with_count_max(VdUiDiv *curr, int *take, in
         return i;
     }
 
+    VdUiDiv *d = 0;
     VdUiContext *ctx = vd_ui_context_get();
 
     if ((*take) == 0) {
@@ -6892,11 +7508,10 @@ static int vd_ui__inspector_traverse_with_count_max(VdUiDiv *curr, int *take, in
                                                 vd_ui_gradient1(vd_ui_f4(0.2f, 0.2f, 0.3f, 1.f)));
 
         VdUiColoring coloring = curr->h == (*h) ? hcoloring : ncoloring;
-        VdUiDiv *d;
 
         VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f)
         VD_UI_WITH_STYLE_SIZE_ABSOLUTE_H(20.f, 0.f)
-        VD_UI_WITH_STYLE_PADDING4(depth * 4.f, 0, 0, 0)
+        VD_UI_WITH_STYLE_PADDING4(depth * 8.f, 0, 0, 0)
         VD_UI_WITH_STYLE_BACKGROUND_COLORING(coloring)
         {
             d = vd_ui_div_newf(0
@@ -6942,7 +7557,156 @@ static int vd_ui__inspector_traverse_with_count_max(VdUiDiv *curr, int *take, in
         } while (child != curr->first);
     }
 
+    // if (d && curr->last_descendant_count > 0) {
+    //     // vd_ui_parent_push(d);
+    //     VdUiDiv *vbar = vd_ui_div_newf(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_FLOAT, "##item-vbar%d", i);
+    //     vbar->style.size[0].mode = VD_UI_SIZE_MODE_ABSOLUTE;
+    //     vbar->style.size[0].value = 4.f;
+    //     vbar->style.size[0].niceness = 0.f;
+
+    //     vbar->style.size[1].mode = VD_UI_SIZE_MODE_ABSOLUTE;
+    //     vbar->style.size[1].value = curr->last_descendant_count * 20.f;
+    //     vbar->style.size[1].niceness = 0.f;
+
+    //     vbar->style.background.coloring = vd_ui_coloring_all4(vd_ui_f4(0.8f, 0.8f, 0.2f, 1.f));
+
+    //     vbar->comp_pos_rel[0] = d->comp_pos_rel[0] + depth * 8.f;
+    //     vbar->comp_pos_rel[1] = d->comp_pos_rel[1] + 20.f;
+    //     // vd_ui_parent_pop();
+    // }
+
+
     return i;
+}
+
+static void vd_ui__do_inspector_details(size_t curr_div_h)
+{
+    VdUiDiv *curr_div = 0;
+    if (curr_div_h != 0) {
+        curr_div = vd_ui_get_div(curr_div_h);
+    }
+
+    if (curr_div_h != 0) {
+
+        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 0.4f, 0.1f)
+        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
+        VD_UI_WITH_STYLE_PADDING4(4,4,4,4)
+        {
+            vd_ui_parent_new(0
+                             | VD_UI_FLAG_ALIGN_CENTER
+                             | VD_UI_FLAG_FLEX_VERTICAL
+                             , VD_UI_LIT("##box"));
+        }
+        {
+            VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 0.4f, 1)
+            VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1.0f, 1)
+            VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.2f, 0.3f, 0.8f, 1.f))
+            {
+                vd_ui_parent_new(0
+                                 | VD_UI_FLAG_BACKGROUND
+                                 | VD_UI_FLAG_ALIGN_CENTER
+                                 , VD_UI_LIT("##size-repr"));
+            }
+            {
+                vd_ui_spacer(VD_UI_AXISV);
+                vd_ui_labelf("%3.2f x %3.2f##comp-size"
+                             , curr_div->comp_size[0]
+                             , curr_div->comp_size[1]
+                             );
+                vd_ui_spacer(VD_UI_AXISV);
+            }
+            vd_ui_parent_pop();
+        }
+        vd_ui_parent_pop();
+    }
+
+    VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
+    VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1, 1)
+    {
+        vd_ui_parent_new(0
+                         | VD_UI_FLAG_FLEX_HORIZONTAL
+                         , VD_UI_LIT("##details2"));
+    }
+    {
+        if (curr_div_h == 0) {
+            vd_ui_labelf("No Div Selected.");
+        } else {
+            VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 0.2f, 0)
+            {
+                vd_ui_parent_new(0, VD_UI_LIT("##col-1"));
+            }
+            {
+                vd_ui_labelf("Size X##size-x");
+                vd_ui_labelf("Size Y##size-y");
+                vd_ui_labelf("Flex##flex");
+            }
+            vd_ui_parent_pop();
+
+            VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
+            {
+                vd_ui_parent_new(0, VD_UI_LIT("##col-2"));
+            }
+            {
+                const char *flex_str = (curr_div->flags & VD_UI_FLAG_FLEX_HORIZONTAL)
+                    ? "horizontal"
+                    : "vertical";
+
+                vd_ui_labelf("%s##size-x", vd_ui_size_mode_to_str(curr_div->style.size[0].mode));
+                vd_ui_labelf("%s##size-y", vd_ui_size_mode_to_str(curr_div->style.size[1].mode));
+                vd_ui_labelf("%s##flex", flex_str);
+
+            }
+            vd_ui_parent_pop();
+
+            VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 0.2f, 0)
+            {
+                vd_ui_parent_new(0, VD_UI_LIT("##col-3"));
+            }
+            {
+                vd_ui_labelf("%3.2f##size-x", (curr_div->style.size[0].value));
+                vd_ui_labelf("%3.2f##size-y", (curr_div->style.size[1].value));
+            }
+            vd_ui_parent_pop();
+
+            VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 0.2f, 0)
+            {
+                vd_ui_parent_new(0, VD_UI_LIT("##col-4"));
+            }
+            {
+                vd_ui_labelf("%3.2f##size-x", (curr_div->style.size[0].niceness));
+                vd_ui_labelf("%3.2f##size-y", (curr_div->style.size[1].niceness));
+            }
+            vd_ui_parent_pop();
+        }
+    }
+    vd_ui_parent_pop();
+}
+
+static void vd_ui__do_inspector_popups(void)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+
+    VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
+    VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1, 1)
+    {
+        vd_ui_parent_new(0
+                         | VD_UI_FLAG_FLEX_VERTICAL
+                         , VD_UI_LIT("##popups"));
+    }
+    {
+        if (ctx->popup_stack_count) {
+            for (int i = 0; i < ctx->popup_stack_count; ++i) {
+                VdUi__Popup *p = &ctx->popup_stack[i];
+
+                VdUiDiv *div = vd_ui_get_div(p->h);
+                vd_ui_labelf("%.*s##popup-%d", div->id_str.l, div->id_str.s, i);
+            }
+        } else {
+            vd_ui_labelf("No Popups");
+        }
+
+    }
+    vd_ui_parent_pop();
 }
 
 static void vd_ui__do_inspector(VdUiContext *ctx)
@@ -6955,9 +7719,10 @@ static void vd_ui__do_inspector(VdUiContext *ctx)
 
     static size_t curr_div_h = 0;
     static float  inspector_w = 400.f;
-    static float  details_h = 100.f;
+    static float  details_h = 200.f;
     static int    bananas = 0;
     static float  bananas_scale = 1.f;
+    static int    curr_tab_index = 0;
     VdUiDiv *inspector;
     VD_UI_WITH_STYLE_SIZE_ABSOLUTE_W(inspector_w, 0.f)
     VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1.f, 0.f)
@@ -7011,120 +7776,37 @@ static void vd_ui__do_inspector(VdUiContext *ctx)
             }
             {
 
-                VdUiDiv *curr_div = 0;
-                if (curr_div_h != 0) {
-                    curr_div = vd_ui_get_div(curr_div_h);
-                }
-
-                VD_UI_WITH_STYLE_PADDING4(4,4,4,4)
-                VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.1f, 0.1f, 0.1f, 1.f))
-                {
-                    if (vd_ui_buttonf("Bananas").clicked) {
-                        bananas = !bananas;
-                        printf("bananas on: %d\n", bananas);
-                    }
-                }
-
-                if (bananas) {
-                    bananas_scale = vd_ui__lerp(bananas_scale, 0.4f, vd_ui_dt() * 12.f);
-                    VdUiDiv *root = vd_ui_get_root();
-                    root->scale[0] = bananas_scale;
-                    root->scale[1] = bananas_scale;
-                }
-
-                if (curr_div_h != 0) {
-                    VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 0.4f, 0.1f)
-                    VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
-                    VD_UI_WITH_STYLE_PADDING4(4,4,4,4)
-                    {
-                        vd_ui_parent_new(0
-                                         | VD_UI_FLAG_ALIGN_CENTER
-                                         | VD_UI_FLAG_FLEX_VERTICAL
-                                         , VD_UI_LIT("##box"));
-                    }
-                    {
-                        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 0.4f, 1)
-                        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1.0f, 1)
-                        VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.2f, 0.3f, 0.8f, 1.f))
-                        {
-                            vd_ui_parent_new(0
-                                             | VD_UI_FLAG_BACKGROUND
-                                             | VD_UI_FLAG_ALIGN_CENTER
-                                             , VD_UI_LIT("##size-repr"));
-                        }
-                        {
-                            vd_ui_spacer(VD_UI_AXISV);
-                            vd_ui_labelf("%3.2f x %3.2f##comp-size"
-                                         , curr_div->comp_size[0]
-                                         , curr_div->comp_size[1]
-                                         );
-                            vd_ui_spacer(VD_UI_AXISV);
-                        }
-                        vd_ui_parent_pop();
-                    }
-                    vd_ui_parent_pop();
-                }
-
+                // VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.1f, 0.1f, 0.1f, 1.f))
                 VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
-                VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1, 1)
+                VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 0)
                 {
                     vd_ui_parent_new(0
                                      | VD_UI_FLAG_FLEX_HORIZONTAL
-                                     , VD_UI_LIT("##details2"));
+                                     , VD_UI_LIT("##button-row"));
                 }
                 {
-                    if (curr_div_h == 0) {
-                        vd_ui_labelf("No Div Selected.");
-                    } else {
-                        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 0.2f, 0)
-                        {
-                            vd_ui_parent_new(0, VD_UI_LIT("##col-1"));
-                        }
-                        {
-                            vd_ui_labelf("Size X##size-x");
-                            vd_ui_labelf("Size Y##size-y");
-                            vd_ui_labelf("Flex##flex");
-                        }
-                        vd_ui_parent_pop();
+                    VD_UI_WITH_STYLE_PADDING4(4,4,4,4)
+                    VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
+                    VD_UI_WITH_STYLE_TEXT_HALIGN(VD_UI_TEXT_HALIGN_CENTER)
+                    {
+                        VdUiF4 normal_color = vd_ui_f4(0.1f, 0.1f, 0.1f, 1.f);
+                        VdUiF4 on_color = vd_ui_f4(0.12f, 0.12f, 0.19f, 1.f);
 
-                        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
-                        {
-                            vd_ui_parent_new(0, VD_UI_LIT("##col-2"));
-                        }
-                        {
-                            const char *flex_str = (curr_div->flags & VD_UI_FLAG_FLEX_HORIZONTAL)
-                                ? "horizontal"
-                                : "vertical";
+                        VD_UI_WITH_STYLE_BACKGROUND_COLOR(curr_tab_index == 0 ? on_color : normal_color)
+                        if (vd_ui_buttonf("Details##details-tab").clicked) { curr_tab_index = 0; }
 
-                            vd_ui_labelf("%s##size-x", vd_ui_size_mode_to_str(curr_div->style.size[0].mode));
-                            vd_ui_labelf("%s##size-y", vd_ui_size_mode_to_str(curr_div->style.size[1].mode));
-                            vd_ui_labelf("%s##flex", flex_str);
-
-                        }
-                        vd_ui_parent_pop();
-
-                        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 0.2f, 0)
-                        {
-                            vd_ui_parent_new(0, VD_UI_LIT("##col-3"));
-                        }
-                        {
-                            vd_ui_labelf("%3.2f##size-x", (curr_div->style.size[0].value));
-                            vd_ui_labelf("%3.2f##size-y", (curr_div->style.size[1].value));
-                        }
-                        vd_ui_parent_pop();
-
-                        VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 0.2f, 0)
-                        {
-                            vd_ui_parent_new(0, VD_UI_LIT("##col-4"));
-                        }
-                        {
-                            vd_ui_labelf("%3.2f##size-x", (curr_div->style.size[0].niceness));
-                            vd_ui_labelf("%3.2f##size-y", (curr_div->style.size[1].niceness));
-                        }
-                        vd_ui_parent_pop();
+                        VD_UI_WITH_STYLE_BACKGROUND_COLOR(curr_tab_index == 1 ? on_color : normal_color)
+                        if (vd_ui_buttonf("Popups##popups-tab").clicked) { curr_tab_index = 1; }
                     }
                 }
                 vd_ui_parent_pop();
+
+                if (curr_tab_index == 0) {
+                    vd_ui__do_inspector_details(curr_div_h);
+                } else if (curr_tab_index == 1) {
+                    vd_ui__do_inspector_popups();
+                }
+
 
                 VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
                 VD_UI_WITH_STYLE_SIZE_ABSOLUTE(VD_UI_AXISV, 2, 0)
@@ -7169,7 +7851,8 @@ static void vd_ui__do_inspector(VdUiContext *ctx)
                 float item_height = 20.f;
 
                 float total_height = (float)count_items * item_height;
-                float curr_scroll = scroll_y;
+                VdUiDiv *content_area = vd_ui_parent_cur();
+                float curr_scroll = content_area->view_scroll[1];
 
                 int first_item = (int)ceilf(curr_scroll / item_height) - 1;
                 if (first_item < 0) {
@@ -7607,47 +8290,47 @@ VD_UI_API int vd_ui_vd_fw_mouse_button_translate(int fw_mouse_button)
     return result;
 }
 
-VD_UI_API VdUiKey vd_ui_vd_fw_key_translate(VdFwKey key)
+VD_UI_API VdUiEventKey vd_ui_vd_fw_key_translate(VdFwKey key)
 {
-    VdUiKey result = VD_UI_KEY_NONE;
+    VdUiEventKey result = VD_UI_EVENT_KEY_NONE;
     switch (key) {
-        case VD_FW_KEY_ARROW_LEFT:  result = VD_UI_KEY_ARROW_LEFT;  break;
-        case VD_FW_KEY_ARROW_RIGHT: result = VD_UI_KEY_ARROW_RIGHT; break;
-        case VD_FW_KEY_ARROW_UP:    result = VD_UI_KEY_ARROW_UP;    break;
-        case VD_FW_KEY_ARROW_DOWN:  result = VD_UI_KEY_ARROW_DOWN;  break;
-        case VD_FW_KEY_BACKSPACE:   result = VD_UI_KEY_BACKSPACE;   break;
-        case VD_FW_KEY_ENTER:       result = VD_UI_KEY_ENTER;       break;
-        case VD_FW_KEY_HOME:        result = VD_UI_KEY_HOME;        break;
-        case VD_FW_KEY_END:         result = VD_UI_KEY_END;         break;
-        case VD_FW_KEY_DEL:         result = VD_UI_KEY_DEL;         break;
-        case VD_FW_KEY_SPACE:       result = VD_UI_KEY_SPACE;       break;
-        case VD_FW_KEY_TAB:         result = VD_UI_KEY_TAB;         break;
-        case VD_FW_KEY_A:           result = VD_UI_KEY_A;           break;
-        case VD_FW_KEY_B:           result = VD_UI_KEY_B;           break;
-        case VD_FW_KEY_C:           result = VD_UI_KEY_C;           break;
-        case VD_FW_KEY_D:           result = VD_UI_KEY_D;           break;
-        case VD_FW_KEY_E:           result = VD_UI_KEY_E;           break;
-        case VD_FW_KEY_F:           result = VD_UI_KEY_F;           break;
-        case VD_FW_KEY_G:           result = VD_UI_KEY_G;           break;
-        case VD_FW_KEY_H:           result = VD_UI_KEY_H;           break;
-        case VD_FW_KEY_I:           result = VD_UI_KEY_I;           break;
-        case VD_FW_KEY_J:           result = VD_UI_KEY_J;           break;
-        case VD_FW_KEY_K:           result = VD_UI_KEY_K;           break;
-        case VD_FW_KEY_L:           result = VD_UI_KEY_L;           break;
-        case VD_FW_KEY_M:           result = VD_UI_KEY_M;           break;
-        case VD_FW_KEY_N:           result = VD_UI_KEY_N;           break;
-        case VD_FW_KEY_O:           result = VD_UI_KEY_O;           break;
-        case VD_FW_KEY_P:           result = VD_UI_KEY_P;           break;
-        case VD_FW_KEY_Q:           result = VD_UI_KEY_Q;           break;
-        case VD_FW_KEY_R:           result = VD_UI_KEY_R;           break;
-        case VD_FW_KEY_S:           result = VD_UI_KEY_S;           break;
-        case VD_FW_KEY_T:           result = VD_UI_KEY_T;           break;
-        case VD_FW_KEY_U:           result = VD_UI_KEY_U;           break;
-        case VD_FW_KEY_V:           result = VD_UI_KEY_V;           break;
-        case VD_FW_KEY_W:           result = VD_UI_KEY_W;           break;
-        case VD_FW_KEY_X:           result = VD_UI_KEY_X;           break;
-        case VD_FW_KEY_Y:           result = VD_UI_KEY_Y;           break;
-        case VD_FW_KEY_Z:           result = VD_UI_KEY_Z;           break;
+        case VD_FW_KEY_ARROW_LEFT:  result = VD_UI_EVENT_KEY_ARROW_LEFT;  break;
+        case VD_FW_KEY_ARROW_RIGHT: result = VD_UI_EVENT_KEY_ARROW_RIGHT; break;
+        case VD_FW_KEY_ARROW_UP:    result = VD_UI_EVENT_KEY_ARROW_UP;    break;
+        case VD_FW_KEY_ARROW_DOWN:  result = VD_UI_EVENT_KEY_ARROW_DOWN;  break;
+        case VD_FW_KEY_BACKSPACE:   result = VD_UI_EVENT_KEY_BACKSPACE;   break;
+        case VD_FW_KEY_ENTER:       result = VD_UI_EVENT_KEY_ENTER;       break;
+        case VD_FW_KEY_HOME:        result = VD_UI_EVENT_KEY_HOME;        break;
+        case VD_FW_KEY_END:         result = VD_UI_EVENT_KEY_END;         break;
+        case VD_FW_KEY_DEL:         result = VD_UI_EVENT_KEY_DEL;         break;
+        case VD_FW_KEY_SPACE:       result = VD_UI_EVENT_KEY_SPACE;       break;
+        case VD_FW_KEY_TAB:         result = VD_UI_EVENT_KEY_TAB;         break;
+        case VD_FW_KEY_A:           result = VD_UI_EVENT_KEY_A;           break;
+        case VD_FW_KEY_B:           result = VD_UI_EVENT_KEY_B;           break;
+        case VD_FW_KEY_C:           result = VD_UI_EVENT_KEY_C;           break;
+        case VD_FW_KEY_D:           result = VD_UI_EVENT_KEY_D;           break;
+        case VD_FW_KEY_E:           result = VD_UI_EVENT_KEY_E;           break;
+        case VD_FW_KEY_F:           result = VD_UI_EVENT_KEY_F;           break;
+        case VD_FW_KEY_G:           result = VD_UI_EVENT_KEY_G;           break;
+        case VD_FW_KEY_H:           result = VD_UI_EVENT_KEY_H;           break;
+        case VD_FW_KEY_I:           result = VD_UI_EVENT_KEY_I;           break;
+        case VD_FW_KEY_J:           result = VD_UI_EVENT_KEY_J;           break;
+        case VD_FW_KEY_K:           result = VD_UI_EVENT_KEY_K;           break;
+        case VD_FW_KEY_L:           result = VD_UI_EVENT_KEY_L;           break;
+        case VD_FW_KEY_M:           result = VD_UI_EVENT_KEY_M;           break;
+        case VD_FW_KEY_N:           result = VD_UI_EVENT_KEY_N;           break;
+        case VD_FW_KEY_O:           result = VD_UI_EVENT_KEY_O;           break;
+        case VD_FW_KEY_P:           result = VD_UI_EVENT_KEY_P;           break;
+        case VD_FW_KEY_Q:           result = VD_UI_EVENT_KEY_Q;           break;
+        case VD_FW_KEY_R:           result = VD_UI_EVENT_KEY_R;           break;
+        case VD_FW_KEY_S:           result = VD_UI_EVENT_KEY_S;           break;
+        case VD_FW_KEY_T:           result = VD_UI_EVENT_KEY_T;           break;
+        case VD_FW_KEY_U:           result = VD_UI_EVENT_KEY_U;           break;
+        case VD_FW_KEY_V:           result = VD_UI_EVENT_KEY_V;           break;
+        case VD_FW_KEY_W:           result = VD_UI_EVENT_KEY_W;           break;
+        case VD_FW_KEY_X:           result = VD_UI_EVENT_KEY_X;           break;
+        case VD_FW_KEY_Y:           result = VD_UI_EVENT_KEY_Y;           break;
+        case VD_FW_KEY_Z:           result = VD_UI_EVENT_KEY_Z;           break;
         default: break;
     }
 

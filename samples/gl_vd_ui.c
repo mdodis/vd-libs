@@ -9,6 +9,7 @@
 #include "vd_fw.h"
 #include "vd.h"
 
+#include "vd_cg.h"
 #include "vd_ui.h"
 #include "vd_ui_demo.c"
 
@@ -25,6 +26,7 @@ int main(int argc, char const *argv[])
     vd_ui_init();
     vd_ui_debug_set_draw_cursor_on(0);
     vd_ui_debug_set_metrics_on(0);
+    vd_ui_debug_set_focusvis_on(1);
     vd_ui_debug_set_layout_recompute_vis_on(0);
 
     vd_fw_init(& (VdFwInitInfo) {
@@ -64,7 +66,6 @@ int main(int argc, char const *argv[])
     glBindVertexArray(0);
 
     glEnable(GL_MULTISAMPLE);
-    glEnable(GL_SCISSOR_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -129,6 +130,17 @@ int main(int argc, char const *argv[])
 
                 case VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN: {
                     vd_ui_event_mouse_button(vd_ui_vd_fw_mouse_button_translate(evt->data.mouse_button_down.button), 1);
+                } break;
+
+                case VD_FW_EVENT_TYPE_KEY_UP: {
+                    int shift   = (evt->data.key_up.modifiers & VD_FW_MOD_SHIFT)   ? 1 : 0;
+                    int control = (evt->data.key_up.modifiers & VD_FW_MOD_CONTROL) ? 1 : 0;
+                    int alt     = (evt->data.key_up.modifiers & VD_FW_MOD_ALT)     ? 1 : 0;
+                    vd_ui_event_mod(VD_UI_MOD_SHIFT, shift);
+                    vd_ui_event_mod(VD_UI_MOD_CONTROL, control);
+                    vd_ui_event_mod(VD_UI_MOD_ALT, alt);
+
+                    vd_ui_event_key_release(vd_ui_vd_fw_key_translate(evt->data.key_up.key));
                 } break;
 
                 case VD_FW_EVENT_TYPE_KEY_DOWN: {
@@ -267,9 +279,10 @@ int main(int argc, char const *argv[])
         VdUiRenderPass *passes = vd_ui_frame_get_render_passes(&num_passes);
 
         glViewport(0, 0, w, h);
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClearColor(0.1f, 0.1f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
+        glEnable(GL_SCISSOR_TEST);
         // Loop through render passes
         for (unsigned int i = 0; i < num_passes; ++i) {
             VdUiRenderPass *pass = &passes[i];
