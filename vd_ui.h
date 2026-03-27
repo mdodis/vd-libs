@@ -2388,12 +2388,15 @@ VD_UI_API void vd_ui_frame_begin(float delta_seconds)
     ctx->root.next            = &ctx->sent;
     ctx->root.prev            = &ctx->sent;
     ctx->root.parent          = &ctx->sent;
+    ctx->sent.parent          = &ctx->sent;
     ctx->root.size_changed    = 0;
     ctx->root.child_count     = 0;
     ctx->root.last_descendant_count = ctx->root.descendant_count;
     ctx->root.descendant_count = 0;
 
-    ctx->sent.next            = &ctx->root;
+    ctx->sent.next            = &ctx->sent;
+    ctx->sent.prev            = &ctx->sent;
+    ctx->sent.first           = &ctx->sent;
 
     ctx->nc_area.div          = NULL;
     ctx->nc_area.changed      = 0;
@@ -2484,6 +2487,9 @@ VD_UI_API void vd_ui_frame_end(void)
 
         if (nav_next || nav_prev) {
             vd_ui_focus(new_focused);
+            if (!new_focused) {
+                printf("adasa\n");
+            }
 
             VdUiDiv *f = vd_ui_get_div(new_focused);
             if (!vd_ui_div_is_nil(f)) {
@@ -4475,18 +4481,16 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
                     index--;
                 }
 
-                if (index == 0) {
-
-                    if (index_of_farthest_time < ctx->divs_cap_total) {
-                        index = index_of_farthest_time;
-                    } else {
-                        // @todo(mdodis)
-                        VD_UI_ASSERT(0);
-                    }
+                if (index_of_farthest_time < ctx->divs_cap_total) {
+                    index = index_of_farthest_time;
                 }
 
-                result = &ctx->divs[index];
-                curr->hnext = result;
+                if (index == 0) {
+                    result = &ctx->sent;
+                } else {
+                    result = &ctx->divs[index];
+                    curr->hnext = result;
+                }
 
                 result->hnext = 0;
 
@@ -7265,6 +7269,10 @@ VD_UI_API VdUiDiv *vd_ui_get_div(size_t h)
     VdUiContext *ctx = vd_ui_context_get();
     size_t index = h % ctx->divs_cap;
 
+    if (h == 0) {
+        return &ctx->sent;
+    }
+
     VdUiDiv *result = 0;
     if (ctx->divs[index].h == h) {
         result = &ctx->divs[index];
@@ -7298,6 +7306,10 @@ VD_UI_API VdUiDiv *vd_ui_get_div(size_t h)
     }
 
     if (result == 0) {
+        return &ctx->sent;
+    }
+
+    if ((ctx->frame_index - result->last_frame_touched) > 1) {
         return &ctx->sent;
     }
 
