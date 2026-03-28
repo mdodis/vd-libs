@@ -7261,11 +7261,6 @@ typedef struct VdFw__GamepadState {
     int                      has_rumble;
 } VdFw__GamepadState;
 
-#if defined(__APPLE__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-#endif
-
 static int vd_fw__load_opengl(VdFwGlConfig *config);
 static int vd_fw__lookup_gl_extension(const char *q, VdFwGlConfig *config);
 
@@ -12419,10 +12414,6 @@ typedef struct {
 
 static int vd_fw__msgbuf_r(VdFw__MacMessage *message);
 static int vd_fw__msgbuf_w(VdFw__MacMessage *message);
-static void vd_fw__mac_hid_device_added_callback(void *context, IOReturn result, void *sender, IOHIDDeviceRef device);
-static void vd_fw__mac_hid_device_removed_callback(void *context, IOReturn result, void *sender, IOHIDDeviceRef device);
-static void vd_fw__mac_hid_value_callback(void *context, IOReturn result, void *sender, IOHIDValueRef value);
-
 
 static VdFw__MacOsInternalData Vd_Fw_Globals;
 
@@ -12731,18 +12722,15 @@ static void vd_fw__mac_check_frame_lock(void)
 
     pthread_mutex_lock(&VD_FW_G.m_paint);
 
-    if (VD_FW_G.context_update_requested) {
-        [VD_FW_G.gl_context update];
-        VD_FW_G.context_update_requested = 0;
-    }
-
     if ((VD_FW_G.w != VD_FW_G.next_frame.w) || (VD_FW_G.h != VD_FW_G.next_frame.h)) {
         VD_FW_G.next_frame.w = VD_FW_G.w;
         VD_FW_G.next_frame.h = VD_FW_G.h;
         VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_SIZE_CHANGED;
+
     }
 
     VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_WAKE_COND_VAR;
+    [VD_FW_G.gl_context update];
 
     pthread_cond_signal(&VD_FW_G.n_paint);
     pthread_cond_wait(&VD_FW_G.n_paint, &VD_FW_G.m_paint);
@@ -12760,14 +12748,19 @@ static void vd_fw__mac_check_frame_lock(void)
     CGFloat scale = win.backingScaleFactor;
     VD_FW_G.scale = scale;
 
-    NSRect rect = [[VD_FW_G.window contentView] frame];
-    VD_FW_G.w = (int)rect.size.width * VD_FW_G.scale;
-    VD_FW_G.h = (int)rect.size.height * VD_FW_G.scale;
-    vd_fw__mac_check_frame_lock();
-    if (!VD_FW_G.context_update_requested) {
+    // if (VD_FW_G.context_update_requested) {
+    //     [VD_FW_G.gl_context update];
+    //     VD_FW_G.context_update_requested = 0;
+    // }
+
+    // NSRect rect = [[VD_FW_G.window contentView] frame];
+    // VD_FW_G.w = (int)rect.size.width * VD_FW_G.scale;
+    // VD_FW_G.h = (int)rect.size.height * VD_FW_G.scale;
+    // // vd_fw__mac_check_frame_lock();
+    // if (!VD_FW_G.context_update_requested) {
     //     sem_post(VD_FW_G.s_main_thread_context_needs_update);
-        VD_FW_G.context_update_requested = 1;
-    }
+    //     VD_FW_G.context_update_requested = 1;
+    // }
 }
 
 - (void)windowDidBecomeKey:(NSNotification *)notification {
@@ -12857,6 +12850,8 @@ static void vd_fw__mac_check_frame_lock(void)
     }
 
 
+    vd_fw__mac_check_frame_lock();
+
     // CGLContextObj ctx = CGLGetCurrentContext();
     // CGLLockContext(ctx);
     // [VD_FW_G.gl_context update];
@@ -12909,20 +12904,16 @@ static void vd_fw__mac_check_frame_lock(void)
 @end
 
 @implementation VdFwWindow
-- (BOOL)_usesCustomDrawing {
-    return YES;
-}
-
 @end
 
 @implementation VdFwContentView
 
 - (void)drawRect:(NSRect)dirtyRect {
 
+    // printf("DRAW\n");
     NSRect rect = [[VD_FW_G.window contentView] frame];
     VD_FW_G.w = (int)rect.size.width * VD_FW_G.scale;
     VD_FW_G.h = (int)rect.size.height * VD_FW_G.scale;
-    vd_fw__mac_check_frame_lock();
 }
 
 - (void)keyUp:(NSEvent*)evt
@@ -13498,6 +13489,9 @@ VD_FW_API void vd_fw_lock(void)
 
 VD_FW_API void vd_fw_unlock(void)
 {
+
+    [VD_FW_G.gl_context flushBuffer];
+
     if (VD_FW_G.fullscreen_changed_this_frame) {
         for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
             VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
@@ -13507,7 +13501,6 @@ VD_FW_API void vd_fw_unlock(void)
         VD_FW_G.fullscreen_changed_this_frame = 0;
     }
 
-    [VD_FW_G.gl_context flushBuffer];
 
     if (VD_FW_G.curr_frame.flags & VD_FW__MAC_FLAGS_WAKE_COND_VAR) {
         pthread_cond_signal(&VD_FW_G.n_paint);
@@ -14086,208 +14079,6 @@ static int vd_fw__msgbuf_w(VdFw__MacMessage *message)
     __atomic_exchange_n(&VD_FW_G.msgbuf_w, nw, __ATOMIC_SEQ_CST);
 
     return 1;
-}
-
-static void vd_fw__mac_hid_device_added_callback(void *context, IOReturn result, void *sender, IOHIDDeviceRef device)
-{
-    CFTypeRef ref_usage = IOHIDDeviceGetProperty(device, CFSTR(kIOHIDPrimaryUsageKey));
-    if (!ref_usage) {
-        return;
-    }
-
-    int usage = 0;
-    CFNumberGetValue(ref_usage, kCFNumberIntType, (void*)&usage);
-
-    if ((usage != kHIDUsage_GD_Joystick) &&
-        (usage != kHIDUsage_GD_GamePad) &&
-        (usage != kHIDUsage_GD_MultiAxisController))
-    {
-        return;
-    }
-
-    int new_device_index = VD_FW_G.winthread_num_gamepads++;
-    VdFw__MacGamepadInfo *gamepad_info = &VD_FW_G.gamepad_infos[new_device_index];
-
-    VdFwU32 product_id = 0;
-    VdFwU32 vendor_id = 0;
-    VdFwU32 version = 0;
-    char product_name[128];
-
-    {
-        CFStringRef prop = (CFStringRef)IOHIDDeviceGetProperty(device, CFSTR(kIOHIDProductKey));
-        if (prop) {
-            CFStringGetCString(prop, product_name, sizeof(product_name), kCFStringEncodingUTF8);
-        }
-    }
-
-    {
-        CFTypeRef prop = IOHIDDeviceGetProperty(device, CFSTR(kIOHIDVendorIDKey));
-        if (prop) {
-            CFNumberGetValue((CFNumberRef)prop, (CFNumberType)kCFNumberSInt32Type, (void*)&vendor_id);
-        }
-    }
-
-    {
-        CFTypeRef prop = IOHIDDeviceGetProperty(device, CFSTR(kIOHIDProductIDKey));
-        if (prop) {
-            CFNumberGetValue((CFNumberRef)prop, (CFNumberType)kCFNumberSInt32Type, (void*)&product_id);
-        }
-    }
-
-    {
-        CFTypeRef prop = IOHIDDeviceGetProperty(device, CFSTR(kIOHIDVersionNumberKey));
-        if (prop) {
-            CFNumberGetValue((CFNumberRef)prop, (CFNumberType)kCFNumberSInt32Type, (void*)&version);
-        }
-    }
-
-    VdFwGuid guid = vd_fw__make_gamepad_guid(0x03, (VdFwU16)vendor_id, (VdFwU16)product_id, (VdFwU16)version,
-                                             NULL, NULL,
-                                             0x00, 0x00);
-
-    char guid_str[33] = {0};
-    vd_fw_gamepad_guid_to_cstr(&guid, guid_str);
-
-    gamepad_info->device = device;
-    if (!vd_fw__map_gamepad(guid, &gamepad_info->map)) {
-        vd_fw__def_gamepad(&gamepad_info->map);
-    }
-
-    VdFw__MacMessage msg;
-    msg.type = VD_FW__MAC_MESSAGE_GAMEPAD_CONNECTED;
-    msg.dat.gamepad_connected.gamepad_index = new_device_index;
-    vd_fw__msgbuf_w(&msg); 
-    IOHIDDeviceRegisterInputValueCallback(device, vd_fw__mac_hid_value_callback, (void*)device);
-}
-
-static void vd_fw__mac_hid_device_removed_callback(void *context, IOReturn result, void *sender, IOHIDDeviceRef device)
-{
-    int disconnected_gamepad_index = -1;
-    for (int i = 0; i < VD_FW_G.winthread_num_gamepads; ++i) {
-        if (VD_FW_G.gamepad_infos[i].device == device) {
-            disconnected_gamepad_index = i;
-            break;
-        }
-    }
-
-    if (disconnected_gamepad_index == -1) {
-        return;
-    }
-
-    for (int i = disconnected_gamepad_index; i < (VD_FW_G.winthread_num_gamepads - 1); ++i) {
-        VD_FW_G.gamepad_infos[i] = VD_FW_G.gamepad_infos[i + 1];
-    }
-
-    VD_FW_MEMSET(&VD_FW_G.gamepad_infos[VD_FW_G.winthread_num_gamepads - 1], 0, sizeof(VD_FW_G.gamepad_infos[0]));
-
-    VdFw__MacMessage msg;
-    msg.type = VD_FW__MAC_MESSAGE_GAMEPAD_DISCONNECTED;
-    msg.dat.gamepad_disconnected.gamepad_index = disconnected_gamepad_index;
-    vd_fw__msgbuf_w(&msg); 
-    VD_FW_G.winthread_num_gamepads--;
-}
-
-static void vd_fw__mac_hid_value_callback(void *context, IOReturn result, void *sender, IOHIDValueRef value)
-{
-    IOHIDDeviceRef device = (IOHIDDeviceRef)context;
-    // @todo(mdodis): Find a way to deregister + re-register device callbacks upon device reassignment
-    int gamepad_index = -1;
-    for (int i = 0; i < VD_FW_G.winthread_num_gamepads; ++i) {
-        if (VD_FW_G.gamepad_infos[i].device == device) {
-            gamepad_index = i;
-            break;
-        }
-    }
-
-    if (gamepad_index == -1) {
-        return;
-    }
-
-    IOHIDElementRef element = IOHIDValueGetElement(value);
-    IOHIDDeviceRef device_from_element = IOHIDElementGetDevice(element);
-
-    VdFwU32 usage_page = IOHIDElementGetUsagePage(element);
-    VdFwU32 usage = IOHIDElementGetUsage(element);
-    CFIndex int_value = IOHIDValueGetIntegerValue(value);
-    float   float_value = (float)int_value;
-
-    if (device_from_element != device) {
-        return;
-    }
-
-    VdFwGamepadMappingSourceKind source_match = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON;
-
-    // @todo(mdodis): Proper axis mapping (usages -> indices <-> targets)
-    switch (usage_page) {
-        case kHIDPage_GenericDesktop: {
-            source_match = VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS;
-            CFIndex logical_min = IOHIDElementGetLogicalMin(element);
-            CFIndex logical_max = IOHIDElementGetLogicalMax(element);
-
-            if (logical_min > int_value) {
-                int_value = logical_min;
-            }
-
-            if (logical_max < int_value) {
-                int_value = logical_max;
-            }
-
-            float_value = -1.f + ((int_value - logical_min) * 2.f) / ((float)(logical_max - logical_min));
-
-        } break;
-
-        default: break;
-    }
-
-    VdFw__MacGamepadInfo *gamepad_info = &VD_FW_G.gamepad_infos[gamepad_index];
-    VdFwGamepadMapEntry *matched_entry = 0;
-
-    int matched_entry_index = -1;
-    for (int entry_index = 0;
-             ((entry_index < VD_FW_GAMEPAD_MAX_MAPPINGS) && 
-             !vd_fw_gamepad_map_entry_is_none(&gamepad_info->map.mappings[entry_index]));
-         ++entry_index)
-    {
-        VdFwGamepadMapEntry *entry = &gamepad_info->map.mappings[entry_index];
-
-        if ((entry->kind & VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_MASK) != source_match) {
-            continue;
-        }
-
-        switch (source_match) {
-            case VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON: {
-                if (entry->index == (usage - 1)) {
-                    matched_entry = entry;
-                    matched_entry_index = entry_index;
-                    break;
-                }
-            } break;
-
-            case VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS: {
-
-                if (entry->index == (usage - 0x30)) {
-                    matched_entry = entry;
-                    matched_entry_index = entry_index;
-                    break;
-                }
-            } break;
-
-            default: break;
-        }
-
-    }
-
-    if (!matched_entry) {
-        return;
-    }
-
-    VdFw__MacMessage msg;
-    msg.type = VD_FW__MAC_MESSAGE_GAMEPAD_INPUT;
-    msg.dat.gamepad_input.entry = *matched_entry;
-    msg.dat.gamepad_input.gamepad_index = gamepad_index;
-    msg.dat.gamepad_input.value = int_value;
-    msg.dat.gamepad_input.float_value = float_value;
-    vd_fw__msgbuf_w(&msg); 
 }
 
 #elif defined(__linux__)
@@ -17682,10 +17473,6 @@ VD_FW_API int vd_fw_parse_gamepad_db_entry(const char *s, int s_len, VdFwGamepad
     return 1;
 }
 
-#ifdef __clang__
-#   pragma clang diagnostic push
-#   pragma clang diagnostic ignored "-Wmissing-braces"
-#endif
 #if VD_FW_GAMEPAD_DB_DEFAULT
 #if defined(VD_FW_GAMEPAD_DB_DEFAULT_EXTERNAL)
 #include "builtin.rgcdb.c"
@@ -17750,9 +17537,6 @@ VdFwGamepadDBEntry Vd_Fw__Gamepad_Db_Entries[] = {
 };
 #endif // VD_FW_GAMEPAD_DB_DEFAULT_EXTERNAL
 #endif // VD_FW_GAMEPAD_DB_DEFAULT
-#ifdef __clang__
-#   pragma clang diagnostic pop
-#endif
 
 static int vd_fw__guid_matches(VdFwGuid *detected_guid, VdFwGuid *candidate_guid)
 {
@@ -17797,7 +17581,4 @@ VD_FW_API int vd_fw__map_gamepad(VdFwGuid guid, VdFwGamepadMap *map)
     return 1;
 }
 
-#if defined(__APPLE__)
-#pragma clang diagnostic pop
-#endif
 #endif // VD_FW_IMPL
