@@ -599,18 +599,22 @@ int vd_ui_demo(void)
                 }
                 vd_ui__demo_section_end();
 
-                vd_ui__demo_section_begin("Popups - Basic");
+                vd_ui__demo_section_begin("Popups");
                 VdUiReply button_w_popup = vd_ui_buttonf("Click for Popup");
                 if (button_w_popup.clicked) {
                     vd_ui_popup_push(VD_UI_LIT("##popup-basic"));
                 }
 
-                VdUiDiv *popup;
+                VdUiReply button_w_popup2 = vd_ui_buttonf("Another Popup");
+                if (button_w_popup2.clicked) {
+                    vd_ui_popup_push(VD_UI_LIT("##popup-basic2"));
+                }
+
                 VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.05f, 0.05f, 0.05f, 0.87f))
                 VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISH, 0)
                 VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 0)
                 {
-                    if ((popup = vd_ui_popup_begin(VD_UI_LIT("##popup-basic"), VD_UI_FLAG_BACKGROUND, button_w_popup.div)) != 0) {
+                    if (vd_ui_popup_begin(VD_UI_LIT("##popup-basic"), VD_UI_FLAG_BACKGROUND, button_w_popup.div)) {
                         vd_ui_labelf("I am a popup!");
 
                         VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.75f, 0.05f, 0.05f, 1.f))
@@ -624,6 +628,22 @@ int vd_ui_demo(void)
 
                         vd_ui_popup_end();
                     }
+
+                    if (vd_ui_popup_begin(VD_UI_LIT("##popup-basic2"), VD_UI_FLAG_BACKGROUND, button_w_popup2.div)) {
+                        vd_ui_labelf("I am another popup!");
+
+                        VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.75f, 0.05f, 0.05f, 1.f))
+                        VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_TEXT_CONTENT, 1, 1)
+                        VD_UI_WITH_STYLE_SIZE(VD_UI_AXISV, VD_UI_SIZE_MODE_TEXT_CONTENT, 1, 1)
+                        {
+                            if (vd_ui_buttonf("Close").clicked) {
+                                vd_ui_popup_pop();
+                            }
+                        }
+
+                        vd_ui_popup_end();
+                    }
+
 
                     vd_ui_labelf("Popups work like this");
                 }

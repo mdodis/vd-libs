@@ -76,6 +76,7 @@
 
 /* ----CONFIGURATION------------------------------------------------------------------------------------------------- */
 #include <stdarg.h>
+#include <stdint.h>
 
 #ifndef VD_UNUSED
 #   define VD_UNUSED(x) ((void)(x))
@@ -283,8 +284,19 @@ enum {
     VD_UI_KEYSTROKE_FLAG_KEY  = 0 << 0,
     VD_UI_KEYSTROKE_FLAG_CHAR = 1 << 0,
 };
-typedef int VdUiFlags;
-typedef int VdUiMod;
+typedef int32_t VdUiFlags;
+typedef int32_t VdUiMod;
+typedef uint64_t VdUiHash;
+
+enum {
+    VD_UI_SIG_MOUSE_LEFT  = 1 << 0,
+    VD_UI_SIG_MOUSE_RIGHT = 1 << 1,
+    VD_UI_SIG_MOUSE_MIDDLE= 1 << 2,
+    VD_UI_SIG_KEY_ENTER   = 1 << 3,
+    VD_UI_SIG_KEY_CHANGE  = 1 << 4,
+    VD_UI_SIG_KEY_EXPAND  = 1 << 5,
+};
+typedef int32_t VdUiSig;
 
 enum {
     VD_UI_SIZE_MODE_TEXT_CONTENT = 0,
@@ -596,9 +608,10 @@ typedef struct {
     float    mouse[2];
     float    drag[2];
     float    scroll[2];
-    VdUiBool pressed;
-    VdUiBool released;
-    VdUiBool clicked;
+    VdUiSig  pressed;
+    VdUiSig  released;
+    VdUiSig  down;
+    VdUiSig  clicked;
     VdUiBool hovering;
     VdUiBool focused;
     float    click_timeout;
@@ -2190,6 +2203,7 @@ typedef struct {
     size_t h;
     float  pos[2];
     size_t anchor;
+    float  rect[4];
 } VdUi__Popup;
 
 struct VdUiContext {
@@ -3956,7 +3970,7 @@ VD_UI_API VdUiDiv *vd_ui_scrollbar(VdUiStr label, VdUiAxis scroll_axis,
             float max_grip_size = track_size;
             float grip_size = track_size * window_content_ratio;
 
-            if (decrease.pressed && can_decrease) {
+            if ((decrease.down & VD_UI_SIG_MOUSE_LEFT) && can_decrease) {
                 *v -= options->button_speed * vd_ui_dt();
             }
 
@@ -3993,7 +4007,7 @@ VD_UI_API VdUiDiv *vd_ui_scrollbar(VdUiStr label, VdUiAxis scroll_axis,
             if (scrollable_window_area_size > 0.f) {
                 VdUiReply grip_reply = vd_ui_call(grip);
 
-                if (grip_reply.pressed) {
+                if (grip_reply.down & VD_UI_SIG_MOUSE_LEFT) {
 
                     // Save the position of the mouse relative to the grip when it was first pressed
                     // clicked returns 1 on the frame the mouse was pressed and reply.pressed is 1 while grip is pressed.
@@ -4027,7 +4041,7 @@ VD_UI_API VdUiDiv *vd_ui_scrollbar(VdUiStr label, VdUiAxis scroll_axis,
 
             // Call logic for clicking on track
             VdUiReply track_reply = vd_ui_call(track);
-            if (track_reply.pressed) {
+            if (track_reply.down & VD_UI_SIG_MOUSE_LEFT) {
                 float mouse_click_pos[2];
                 vd_ui_transform_point(grip, track_reply.mouse, mouse_click_pos);
 
@@ -4063,7 +4077,7 @@ VD_UI_API VdUiDiv *vd_ui_scrollbar(VdUiStr label, VdUiAxis scroll_axis,
             increase = vd_ui_icon_button(options->increase, VD_UI_LIT("##increase"));
         }
 
-        if (increase.pressed && can_increase) {
+        if ((increase.down & VD_UI_SIG_MOUSE_LEFT) && can_increase) {
             *v += options->button_speed * vd_ui_dt();
         }
     }
@@ -4124,6 +4138,10 @@ VD_UI_API VdUiDiv *vd_ui_popup_begin(VdUiStr hstr, VdUiFlags flags, VdUiDiv *par
 
         result->comp_pos_rel[0] = ctx->popup_stack[i].pos[0];
         result->comp_pos_rel[1] = ctx->popup_stack[i].pos[1];
+
+        for (int j = 0; j < 4; ++j) {
+            ctx->popup_stack[i].rect[j] = result->rect[j];
+        }
 
         vd_ui_parent_push(result);
     }
@@ -4637,15 +4655,30 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
         } while (parent != &ctx->sent);
     }
 
+
     float clipped_rect[4];
     vd_ui_clip_rect(div->rect, clipped_rect);
 
     VdUiEvent evt = vd_ui_event_first();
     while (vd_ui_event_next(&evt)) {
+
+        int mouse_in_popup = 0;
+        for (int i = 0; i < ctx->popup_stack_count; ++i) {
+            int in_this_popup = vd_ui__point_in_rect(evt.mouse, ctx->popup_stack[i].rect);
+            mouse_in_popup = mouse_in_popup || in_this_popup;
+        }
+
         int consume      = 0;
         int in_bounds    = vd_ui__point_in_rect(evt.mouse, clipped_rect);
+        in_bounds = in_bounds && (div_is_popup_root_ancestor || !(mouse_in_popup));
         int is_mouse_btn = (evt.key >= VD_UI_EVENT_KEY_MOUSE_LEFT) && (evt.key <= VD_UI_EVENT_KEY_MOUSE_MIDDLE);
-
+        VdUiSig sig = 0;
+        switch (evt.key) {
+            case VD_UI_EVENT_KEY_MOUSE_LEFT:   sig = VD_UI_SIG_MOUSE_LEFT; break;
+            case VD_UI_EVENT_KEY_MOUSE_RIGHT:  sig = VD_UI_SIG_MOUSE_RIGHT; break;
+            case VD_UI_EVENT_KEY_MOUSE_MIDDLE: sig = VD_UI_SIG_MOUSE_MIDDLE; break;
+            default: break;
+        }
 
         // Press mouse button down on div
         if (1
@@ -4657,7 +4690,7 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
         {
             ctx->hot      = div->h;
             ctx->active   = div->h;
-            reply.pressed = 1;
+            reply.pressed |= sig;
             consume       = 1;
         }
 
@@ -4671,8 +4704,8 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
             )
         {
             ctx->active    = 0;
-            reply.released = 1;
-            reply.clicked  = 1;
+            reply.released |= sig;
+            reply.clicked  |= sig;
             consume        = 1;
         }
 
@@ -4686,8 +4719,8 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
             )
         {
             ctx->active = 0;
-            reply.released = 1;
-            reply.clicked = 0;
+            reply.released |= sig;
+            reply.clicked &= ~sig;
             consume = 1;
         }
 
@@ -4729,12 +4762,15 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
 
     if (1
         && (div->flags & VD_UI_FLAG_CLICKABLE)
-        && vd_ui_mouse_down(VD_UI_MOUSE_LEFT)
-        // && in_bounds
         && (ctx->active == div->h)
         )
     {
-        reply.pressed = 1;
+        VdUiSig down_state = 0
+                             | (vd_ui_mouse_down(VD_UI_MOUSE_LEFT) * VD_UI_SIG_MOUSE_LEFT)
+                             | (vd_ui_mouse_down(VD_UI_MOUSE_RIGHT) * VD_UI_SIG_MOUSE_RIGHT)
+                             | (vd_ui_mouse_down(VD_UI_MOUSE_MIDDLE) * VD_UI_SIG_MOUSE_MIDDLE)
+                             ;
+        reply.down = down_state;
     }
 
     // Close popup if click outside
