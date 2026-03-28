@@ -249,6 +249,7 @@ enum {
     VD_UI_FLAG_VIEW_SCROLLABLE  = 1 << 10,
     VD_UI_FLAG_FOCUSABLE        = 1 << 11,
     VD_UI_FLAG_NAVIGABLE        = 1 << 12,
+    VD_UI_FLAG_KB_CLICKABLE     = 1 << 13,
 
     // Mouse Enumerations
     VD_UI_MOUSE_LEFT        = 0,
@@ -3156,27 +3157,12 @@ static size_t vd_ui__hash(void *begin, int len)
 
 VD_UI_API VdUiReply vd_ui_button(VdUiStr str)
 {
-    VdUiDiv *div = vd_ui_div_new(VD_UI_FLAG_TEXT |
-                                 VD_UI_FLAG_BACKGROUND |
-                                 VD_UI_FLAG_CLICKABLE,
-                                 str);
-
-    // div->style.size[0].mode  = VD_UI_SIZE_MODE_TEXT_CONTENT;
-    // div->style.size[1].mode  = VD_UI_SIZE_MODE_TEXT_CONTENT;
-    // div->style.padding[VD_UI_LEFT]   = 4.f;
-    // div->style.padding[VD_UI_TOP]    = 4.f;
-    // div->style.padding[VD_UI_RIGHT]  = 4.f;
-    // div->style.padding[VD_UI_BOTTOM] = 4.f;
-    // div->style.background.corner_radius    = 6.f;
-    // div->style.background.edge_softness    = 0.25f;
-    // div->style.background.coloring.normal = vd_ui_gradient(vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f),
-    //                                         vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f), vd_ui_f4(0.2f, 0.2f, 0.2f, 1.f));
-
-    // div->style.background.coloring.hot    = vd_ui_gradient(vd_ui_f4(0.52f, 0.52f, 0.52f, 1.f), vd_ui_f4(0.52f, 0.52f, 0.52f, 1.f),
-    //                                         vd_ui_f4(0.52f, 0.52f, 0.52f, 1.f), vd_ui_f4(0.52f, 0.52f, 0.52f, 1.f));
-
-    // div->style.background.coloring.active = vd_ui_gradient(vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f),
-    //                                         vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f), vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f));
+    VdUiDiv *div = vd_ui_div_new(0
+                                 | VD_UI_FLAG_TEXT
+                                 | VD_UI_FLAG_BACKGROUND
+                                 | VD_UI_FLAG_CLICKABLE
+                                 | VD_UI_FLAG_KB_CLICKABLE
+                                 , str);
     return vd_ui_call(div);
 }
 
@@ -4738,6 +4724,24 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
             consume = 1;
         }
 
+        // Keyboard Press Enter/Change/Expand
+        if (1
+            && (div->flags & VD_UI_FLAG_KB_CLICKABLE)
+            && (vd_ui_div_is_focused(div))
+            && (evt.type == VD_UI_EVENT_TYPE_PRESS)
+            && !is_mouse_btn
+            )
+        {
+            ctx->hot      = div->h;
+            ctx->active   = div->h;
+            consume = 1;
+            switch (evt.key) {
+                case VD_UI_EVENT_KEY_ENTER: reply.clicked |= VD_UI_SIG_KEY_ENTER; break;
+                case VD_UI_EVENT_KEY_SPACE: reply.clicked |= VD_UI_SIG_KEY_CHANGE; break;
+                default: consume = 0; break;
+            }
+        }
+
         if (consume) {
             vd_ui_event_take(&evt);
         }
@@ -4750,6 +4754,7 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
         // reply.hovering = 1;
     }
 
+    // Focus pressed div
     if (1
         && reply.pressed
         // && (div->flags & VD_UI_FLAG_FOCUSABLE)
@@ -4760,6 +4765,7 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
         reply.focused = !was_focused && (ctx->focused == div->h);
     }
 
+    // Down mouse state on active div
     if (1
         && (div->flags & VD_UI_FLAG_CLICKABLE)
         && (ctx->active == div->h)
@@ -4770,20 +4776,39 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
                              | (vd_ui_mouse_down(VD_UI_MOUSE_RIGHT) * VD_UI_SIG_MOUSE_RIGHT)
                              | (vd_ui_mouse_down(VD_UI_MOUSE_MIDDLE) * VD_UI_SIG_MOUSE_MIDDLE)
                              ;
-        reply.down = down_state;
+        reply.down |= down_state;
     }
+
+    // Down keyboard state on active div
+    if (1
+        && (div->flags & VD_UI_FLAG_KB_CLICKABLE)
+        && (ctx->active == div->h)
+        )
+    {
+        VdUiSig down_state = 0
+                             | (vd_ui_key_down(VD_UI_EVENT_KEY_ENTER) * VD_UI_SIG_KEY_ENTER)
+                             | (vd_ui_key_down(VD_UI_EVENT_KEY_SPACE) * VD_UI_SIG_KEY_CHANGE)
+                             ;
+        reply.down |= down_state;
+    }
+
 
     // Close popup if click outside
     if (1
         && popup_exists
         && div_is_popup_root
-        && vd_ui_mouse_just_pressed(VD_UI_MOUSE_LEFT))
+        )
     {
-        if (!in_bounds) {
+        int press = 0
+                    || vd_ui_mouse_just_pressed(VD_UI_MOUSE_LEFT)
+                    || vd_ui_mouse_just_pressed(VD_UI_MOUSE_RIGHT)
+                    || vd_ui_mouse_just_pressed(VD_UI_MOUSE_MIDDLE)
+                    ;
+
+        if (press & !in_bounds) {
             vd_ui_popup_pop();
         }
     }
-
 
     // Hover over div, and no other div is hot
     if (1
