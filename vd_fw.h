@@ -12910,7 +12910,6 @@ static void vd_fw__mac_check_frame_lock(void)
 
 - (void)drawRect:(NSRect)dirtyRect {
 
-    // printf("DRAW\n");
     NSRect rect = [[VD_FW_G.window contentView] frame];
     VD_FW_G.w = (int)rect.size.width * VD_FW_G.scale;
     VD_FW_G.h = (int)rect.size.height * VD_FW_G.scale;
@@ -13481,10 +13480,15 @@ VD_FW_API int vd_fw_running(void)
 
 VD_FW_API void vd_fw_lock(void)
 {
+    static int _i = 0;
     pthread_mutex_lock(&VD_FW_G.m_paint);
     VD_FW_G.curr_frame = VD_FW_G.next_frame;
     VD_FW_G.next_frame.flags = 0;
     pthread_mutex_unlock(&VD_FW_G.m_paint);
+    if (!_i) {
+        _i = 1;
+        printf("My next frame %d %d\n", VD_FW_G.curr_frame.w, VD_FW_G.curr_frame.h);
+    }
 }
 
 VD_FW_API void vd_fw_unlock(void)
@@ -13981,6 +13985,7 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
         // [[fw_view layer] setDrawsAsynchronously: YES];
 
         [VD_FW_G.gl_context setView: fw_view];
+        [VD_FW_G.gl_context update];
 
 
         [VD_FW_G.window setDelegate:delegate];
@@ -13993,8 +13998,16 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
                                               object: VD_FW_G.window];
 
     }
+    printf("scale is %f\n", VD_FW_G.scale);
     VD_FW_G.w = 640 * VD_FW_G.scale;
     VD_FW_G.h = 480 * VD_FW_G.scale;
+
+    VD_FW_G.next_frame.w = VD_FW_G.w;
+    VD_FW_G.next_frame.h = VD_FW_G.h;
+    VD_FW_G.next_frame.flags = VD_FW__MAC_FLAGS_SIZE_CHANGED;
+    VD_FW_G.curr_frame.w = VD_FW_G.w;
+    VD_FW_G.curr_frame.h = VD_FW_G.h;
+    VD_FW_G.curr_frame.flags = VD_FW__MAC_FLAGS_SIZE_CHANGED;
 
     VdFwGlConfig conf = {0};
     conf.version = version;
