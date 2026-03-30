@@ -190,7 +190,7 @@ int vd_ui_demo(void)
         // Menubar
         if (show_menubar) {
             static uint32_t main_menubar = 0;
-            #if 1
+            #if 0
 
             VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f)
             VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 0.f)
@@ -328,6 +328,7 @@ int vd_ui_demo(void)
             VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f)
             VD_UI_WITH_STYLE_SIZE(VD_UI_AXISV, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 0.f)
             VD_UI_WITH_STYLE_CHILD_GAP(32.f)
+            VD_UI_WITH_STYLE_CHILD_ALIGNMENT(VD_UI_ALIGNMENT_CENTER)
             {
                 vd_ui_parent_new(VD_UI_FLAG_ALIGN_CENTER, VD_UI_LIT("##layout-examples"));
             }
@@ -602,19 +603,21 @@ int vd_ui_demo(void)
                 vd_ui__demo_section_begin("Popups");
                 VdUiReply button_w_popup = vd_ui_buttonf("Click for Popup");
                 if (button_w_popup.clicked) {
+                    vd_ui_popup_next_placement(VD_UI_POPUP_PLACEMENT_OVER_ANCHOR);
+                    vd_ui_popup_next_anchor(button_w_popup.div);
                     vd_ui_popup_push(VD_UI_LIT("##popup-basic"));
                 }
 
                 VdUiReply button_w_popup2 = vd_ui_buttonf("Another Popup");
-                if (button_w_popup2.clicked) {
-                    vd_ui_popup_push(VD_UI_LIT("##popup-basic2"));
+                if (button_w_popup2.clicked & VD_UI_SIG_MOUSE_RIGHT) {
+                    vd_ui_menu_open(VD_UI_LIT("##popup-basic2"));
                 }
 
                 VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.05f, 0.05f, 0.05f, 0.87f))
                 VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISH, 0)
                 VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 0)
                 {
-                    if (vd_ui_popup_begin(VD_UI_LIT("##popup-basic"), VD_UI_FLAG_BACKGROUND, button_w_popup.div)) {
+                    if (vd_ui_popup_begin(VD_UI_LIT("##popup-basic"), VD_UI_FLAG_BACKGROUND)) {
                         vd_ui_labelf("I am a popup!");
 
                         VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.75f, 0.05f, 0.05f, 1.f))
@@ -629,19 +632,52 @@ int vd_ui_demo(void)
                         vd_ui_popup_end();
                     }
 
-                    if (vd_ui_popup_begin(VD_UI_LIT("##popup-basic2"), VD_UI_FLAG_BACKGROUND, button_w_popup2.div)) {
-                        vd_ui_labelf("I am another popup!");
-
-                        VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.75f, 0.05f, 0.05f, 1.f))
-                        VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_TEXT_CONTENT, 1, 1)
-                        VD_UI_WITH_STYLE_SIZE(VD_UI_AXISV, VD_UI_SIZE_MODE_TEXT_CONTENT, 1, 1)
+                    if (vd_ui_menu_begin(VD_UI_LIT("##popup-basic2"))) {
+                        VD_UI_WITH_STYLE_BACKGROUND_COLORING(vd_ui_coloring(vd_ui_gradient1(vd_ui_f4(0.2f,0.2f,0.2f,0.0f)),
+                                                                            vd_ui_gradient1(vd_ui_f4(0.6f,0.6f,0.6f,0.4f)),
+                                                                            vd_ui_gradient1(vd_ui_f4(0.2f,0.2f,0.2f,0.8f))))
                         {
-                            if (vd_ui_buttonf("Close").clicked) {
-                                vd_ui_popup_pop();
+                            if (vd_ui_menu_item(VD_UI_LIT("Operations"), VD_UI_LIT("##ops")))
+                            {
+                                vd_ui_menu_item(VD_UI_LIT("Copy"), vd_ui_str_null());
+                                vd_ui_menu_item(VD_UI_LIT("Paste"), vd_ui_str_null());
+                                vd_ui_menu_end();    
                             }
-                        }
 
-                        vd_ui_popup_end();
+                            vd_ui_menu_item(VD_UI_LIT("Modulate"), vd_ui_str_null());
+                            vd_ui_menu_item(VD_UI_LIT("Close"), vd_ui_str_null());
+                        }
+                        // vd_ui_labelf("I am another popup!");
+
+                        // // VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.75f, 0.05f, 0.05f, 1.f))
+                        // // VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1, 1)
+                        // // VD_UI_WITH_STYLE_SIZE(VD_UI_AXISV, VD_UI_SIZE_MODE_TEXT_CONTENT, 1, 1)
+                        // {
+                        //     VdUiReply ops = vd_ui_buttonf("Operations");
+                        //     if (ops.hovered) {
+                        //         vd_ui_popup_pop_at_current_level();
+                        //         vd_ui_popup_next_anchor(ops.div);
+                        //         vd_ui_popup_next_placement(VD_UI_POPUP_PLACEMENT_RIGHT_OF_ANCHOR);
+                        //         vd_ui_popup_push(VD_UI_LIT("##popup-ops"));
+                        //     }
+
+                        //     if (vd_ui_popup_begin(VD_UI_LIT("##popup-ops"), VD_UI_FLAG_BACKGROUND)) {
+                        //         VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1, 1)
+                        //         VD_UI_WITH_STYLE_SIZE(VD_UI_AXISV, VD_UI_SIZE_MODE_TEXT_CONTENT, 1, 1)
+                        //         {
+                        //             vd_ui_buttonf("Add");
+                        //             vd_ui_buttonf("Subtract");
+                        //             vd_ui_buttonf("Multiply");
+                        //         }
+                        //         vd_ui_popup_end();
+                        //     }
+
+                        //     if (vd_ui_buttonf("Close").clicked) {
+                        //         vd_ui_popup_pop();
+                        //     }
+                        // }
+
+                        vd_ui_menu_end();
                     }
 
 
