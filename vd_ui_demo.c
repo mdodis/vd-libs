@@ -315,13 +315,10 @@ int vd_ui_demo(void)
             #endif
         }
 
-        static float scrollx = 0.f;
-        static float scrolly = 0.f;
-
         VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
         VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1, 1)
         {
-            vd_ui_scrollview_begin(VD_UI_LIT("##main-scroll-view"), 0, &scrolly);
+            vd_ui_scrollview_begin(VD_UI_LIT("##main-scroll-view"), 0, 1);
         }
         {
 
@@ -349,7 +346,7 @@ int vd_ui_demo(void)
                 vd_ui__demo_section_begin("Basics - Horizontal Layout");
                 vd_ui__demo_code(VD_UI_LIT("code"), "VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(400, 200, 0, 0)\nVD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.05f, 0.05f, 0.05f, 1.f))\n{\n    vd_ui_parent_newf(0\n                      | VD_UI_FLAG_FLEX_HORIZONTAL\n                      | (layout_1_align_center ? VD_UI_FLAG_ALIGN_CENTER : 0) \n                      | VD_UI_FLAG_BACKGROUND\n                      , \"##rect-container-0\");\n}\n{\n\n    VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(40, 40, 0, 0)\n    VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.5f, 0.3f, 0.2f, 1.f))\n    {\n        vd_ui_div_newf(VD_UI_FLAG_BACKGROUND, \"##rect-0\");\n    }\n\n    VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(80, 40, 0, 0)\n    VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.4f, 0.7f, 0.2f, 1.f))\n    {\n        vd_ui_div_newf(VD_UI_FLAG_BACKGROUND, \"##rect-1\");\n    }\n\n    VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(40, 90, 0, 0)\n    VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.2f, 0.3f, 0.5f, 1.f))\n    {\n        vd_ui_div_newf(VD_UI_FLAG_BACKGROUND, \"##rect-2\");\n    }\n}\nvd_ui_parent_pop();\n");
 
-                static int layout_1_align_center = 0;
+                static VdUiAlignment layout_1_alignment = VD_UI_ALIGNMENT_START;
                 VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISH, 1.f)
                 VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 1.f)
                 {
@@ -358,10 +355,10 @@ int vd_ui_demo(void)
                 {
                     VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(400, 200, 0, 0)
                     VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.05f, 0.05f, 0.05f, 1.f))
+                    VD_UI_WITH_STYLE_CHILD_ALIGNMENT(layout_1_alignment)
                     {
                         vd_ui_parent_newf(0
                                           | VD_UI_FLAG_FLEX_HORIZONTAL
-                                          | (layout_1_align_center ? VD_UI_FLAG_ALIGN_CENTER : 0) 
                                           | VD_UI_FLAG_BACKGROUND
                                           , "##rect-container-0");
                     }
@@ -387,7 +384,25 @@ int vd_ui_demo(void)
                     }
                     vd_ui_parent_pop();
                 }
-                vd_ui_checkboxf(&layout_1_align_center, "Center##align-center-1");
+
+                static VdUiAlignment alignment = VD_UI_ALIGNMENT_START;
+
+                VD_UI_WITH_STYLE_CHILD_GAP(8)
+                VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 0)
+                VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISH, 0)
+                {
+                    vd_ui_parent_new(0
+                                     , VD_UI_LIT("##layout-1-grp"));
+                }
+                {
+                    vd_ui_radiof(&layout_1_alignment, VD_UI_ALIGNMENT_START, "start");
+                    vd_ui_radiof(&layout_1_alignment, VD_UI_ALIGNMENT_CENTER, "center");
+                    vd_ui_radiof(&layout_1_alignment, VD_UI_ALIGNMENT_END, "end");
+                    vd_ui_radiof(&layout_1_alignment, VD_UI_ALIGNMENT_FILL, "fill");
+                }
+                vd_ui_parent_pop();
+
+                // vd_ui_checkboxf(&layout_1_align_center, "Center##align-center-1");
                 vd_ui_parent_pop();
                 vd_ui__demo_section_end();
 

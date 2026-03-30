@@ -27,6 +27,7 @@
  * | Single Line Label                     | vd_ui_label*                                                       | X |
  * | Button                                | vd_ui_button* vd_ui_icon_button*                                   | X |
  * | Slider                                | vd_ui_slider*                                                      | ~ |
+ * | Radio Buttons                         | vd_ui_radio*                                                       | X |
  * | Text Box                              | vd_ui_textbox*                                                     | ~ |
  * | |                                     | Move   character                                                   | X |
  * | |                                     | Move   word                                                        | X |
@@ -230,6 +231,7 @@ VD_UI_INL VdUiF4           vd_ui_fall4(float s);
 VD_UI_INL VdUiGradient     vd_ui_gradient(VdUiF4 top_left, VdUiF4 top_right, VdUiF4 bottom_left, VdUiF4 bottom_right);
 VD_UI_INL VdUiGradient     vd_ui_gradient1(VdUiF4 all);
 VD_UI_INL VdUiSymbol       vd_ui_symbol(VdUiFontId id, unsigned int codepoint);
+VD_UI_INL VdUiSymbol       vd_ui_symbol_null(void);
 VD_UI_INL int              vd_ui_symbol_valid(VdUiSymbol symbol);
 VD_UI_INL VdUiStr          vd_ui_symbol_as_str(VdUiSymbol symbol);
 VD_UI_INL float            vd_ui_fremap(float value, float low1, float high1, float low2, float high2);
@@ -252,6 +254,8 @@ enum {
     VD_UI_FLAG_FOCUSABLE        = 1 << 11,
     VD_UI_FLAG_NAVIGABLE        = 1 << 12,
     VD_UI_FLAG_KB_CLICKABLE     = 1 << 13,
+    VD_UI_FLAG_VIEW_SCROLL_LOCKX= 1 << 14,
+    VD_UI_FLAG_VIEW_SCROLL_LOCKY= 1 << 15,
 
     // Mouse Enumerations
     VD_UI_MOUSE_LEFT        = 0,
@@ -423,12 +427,13 @@ typedef struct VdUiStyleText {
     VdUiVisibility  symbol_visibility;
 } VdUiStyleText;
 
-typedef enum {
+enum VD_UI_ALIGNMENT_ {
     VD_UI_ALIGNMENT_START   = 0,
     VD_UI_ALIGNMENT_CENTER  = 1,
     VD_UI_ALIGNMENT_END     = 2,
     VD_UI_ALIGNMENT_FILL    = 3,
-} VdUiAlignment;
+};
+typedef int VdUiAlignment;
 
 typedef struct VdUiStyle {
     /** Size preferences for each axis */
@@ -735,6 +740,10 @@ VD_UI_API VdUiReply        vd_ui_icon_button(VdUiSymbol symbol, VdUiStr str);
  */
 VD_UI_INL VdUiReply        vd_ui_icon_buttonf(VdUiSymbol symbol, const char *label, ...)                                { VD_UI_DOTTOSTR(label); return vd_ui_icon_button(symbol, str); }
 
+VD_UI_API VdUiDiv*         vd_ui_radio(int *item, int index, VdUiStr label);
+
+VD_UI_INL VdUiDiv*         vd_ui_radiof(int *item, int index, const char *label, ...)                                   { VD_UI_DOTTOSTR(label); return vd_ui_radio(item, index, str); }
+
 /**
  * Show a draggable slider
  * @param  value     Pointer to current value of the slider
@@ -764,7 +773,7 @@ typedef struct {
 VD_UI_API void             vd_ui_scroll_begin(VdUiStr str, float *x, float *y, VdUiScrollOptions *options);
 VD_UI_API void             vd_ui_scroll_end(void);
 
-VD_UI_API VdUiDiv*         vd_ui_scrollview_begin(VdUiStr str, float *x, float *y);
+VD_UI_API VdUiDiv*         vd_ui_scrollview_begin(VdUiStr str, int allow_x, int allow_y);
 VD_UI_API void             vd_ui_scrollview_end(void);
 
 typedef struct {
@@ -1060,6 +1069,14 @@ VD_UI_API void             vd_ui_style_rounding_pop(VdUiFlags mask);
     VD_UI_WITH_STYLE_ROUNDING_ALL(VD_UI_FLAG_BACKGROUND, rounding)
 #define VD_UI_WITH_STYLE_BORDER_ROUNDING_ALL(rounding) \
     VD_UI_WITH_STYLE_ROUNDING_ALL(VD_UI_FLAG_BORDER, rounding)
+
+VD_UI_API void             vd_ui_style_edge_softness_push(VdUiFlags mask, float softness);
+VD_UI_API float            vd_ui_style_edge_softness_get(VdUiFlags mask);
+VD_UI_API void             vd_ui_style_edge_softness_pop(VdUiFlags mask);
+#define VD_UI_WITH_STYLE_EDGE_SOFTNESS(mask, value) \
+    VD_UI_WITH_SCOPE(vd_ui_style_edge_softness_push(mask, value), vd_ui_style_edge_softness_pop(mask))
+#define VD_UI_WITH_STYLE_EDGE_SOFTNESS_ALL(value) \
+    VD_UI_WITH_STYLE_EDGE_SOFTNESS(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_BORDER, value)
 
 VD_UI_API void             vd_ui_style_coloring_push(VdUiFlags mask, VdUiColoring coloring);
 VD_UI_API VdUiColoring*    vd_ui_style_coloring_get(VdUiFlags mask);
@@ -1590,6 +1607,13 @@ static inline VdUiSymbol vd_ui_symbol(VdUiFontId id, unsigned int codepoint)
     return result;
 }
 
+VD_UI_INL VdUiSymbol vd_ui_symbol_null(void)
+{
+    VdUiFontId zero_id;
+    zero_id.id = 0;
+    return vd_ui_symbol(zero_id, 0);
+}
+
 static inline int vd_ui_symbol_valid(VdUiSymbol symbol)
 {
     return (symbol.font.id != 0) && (symbol.codepoint != 0);
@@ -2053,6 +2077,10 @@ static VdUiColoring  Vd_Ui__Coloring_Tx_Default;
 #   define VD_UI_STYLE_ROUNDING_STACK_COUNT     32
 #endif // !VD_UI_STYLE_ROUNDING_STACK_COUNT
 
+#ifndef VD_UI_STYLE_EDGE_SOFTNESS_STACK_COUNT
+#   define VD_UI_STYLE_EDGE_SOFTNESS_STACK_COUNT 32
+#endif // !VD_UI_STYLE_EDGE_SOFTNESS_STACK_COUNT
+
 #ifndef VD_UI_STYLE_CHILD_GAP_STACK_MAX
 #   define VD_UI_STYLE_CHILD_GAP_STACK_MAX      16
 #endif // !VD_UI_STYLE_CHILD_GAP_STACK_MAX
@@ -2394,6 +2422,12 @@ struct VdUiContext {
 
     unsigned int            rounding_bd_stack_count;
     VdUiF4                  rounding_bd_stack[VD_UI_STYLE_ROUNDING_STACK_COUNT];
+
+    unsigned int            edge_softness_bg_stack_count;
+    float                   edge_softness_bg_stack[VD_UI_STYLE_EDGE_SOFTNESS_STACK_COUNT];
+
+    unsigned int            edge_softness_bd_stack_count;
+    float                   edge_softness_bd_stack[VD_UI_STYLE_EDGE_SOFTNESS_STACK_COUNT];
 
     unsigned int            font_size_stack_count;
     float                   font_size_stack[VD_UI_STYLE_FONT_SIZE_STACK_COUNT];    // Text Font Size
@@ -3374,6 +3408,69 @@ VD_UI_API VdUiReply vd_ui_icon_button(VdUiSymbol symbol, VdUiStr str)
     return vd_ui_call(div);
 }
 
+VD_UI_API VdUiDiv *vd_ui_radio(int *item, int index, VdUiStr label)
+{
+    VdUiDiv *div;
+    VdUiDiv *circ;
+    VdUiDiv *txt;
+    VdUiDiv *sel;
+
+    float circle_size = 16.f * vd_ui_get_scale();
+    float circle_rounding = circle_size * 0.5f;
+    float inner_ratio = 0.75f;
+    float inner_size = circle_size * inner_ratio;
+    float inner_rounding = inner_size * 0.5f;
+
+    VD_UI_WITH_STYLE_EDGE_SOFTNESS_ALL(0.75f)
+    {
+        VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 0, 0)
+        VD_UI_WITH_STYLE_SIZE(VD_UI_AXISV, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 0, 0)
+        VD_UI_WITH_STYLE_CHILD_GAP(4)
+        {
+            div = vd_ui_div_new(0
+                                | VD_UI_FLAG_CLICKABLE
+                                | VD_UI_FLAG_KB_CLICKABLE
+                                | VD_UI_FLAG_FLEX_HORIZONTAL
+                                , label);
+        }
+
+        vd_ui_parent_push(div);
+        {
+            VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(circle_size, circle_size, 0, 0)
+            VD_UI_WITH_STYLE_ROUNDING_ALL(VD_UI_FLAG_BACKGROUND, circle_rounding)
+            VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.3f, 0.3f, 0.3f, 1.f))
+            {
+                circ = vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("##circ"));
+            }
+
+            txt = vd_ui_labelf("%.*s##txt", label.l, label.s);
+
+            vd_ui_parent_push(circ);
+            {
+                if ((*item) == index) {
+
+                    VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.4f, 0.6f, 0.7f, 1.f))
+                    VD_UI_WITH_STYLE_ROUNDING_ALL(VD_UI_FLAG_BACKGROUND, inner_rounding)
+                    VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(inner_size, inner_size,0,0)
+                    {
+                        sel = vd_ui_div_new(VD_UI_FLAG_FLOAT | VD_UI_FLAG_BACKGROUND, VD_UI_LIT("##sel"));
+                    }
+                    sel->comp_pos_rel[0] = circ->comp_size[0] * 0.5f - sel->comp_size[0] * 0.5f;
+                    sel->comp_pos_rel[1] = circ->comp_size[1] * 0.5f - sel->comp_size[1] * 0.5f;
+                }
+            }
+            vd_ui_parent_pop();
+        }
+        vd_ui_parent_pop();
+
+        if (vd_ui_call(div).clicked) {
+            *item = index;
+        }
+    }
+
+    return div;
+}
+
 VD_UI_API int vd_ui_slider(void *value, void *min_value, void *max_value,
                            VdUiDataType type, VdUiAxis orientation,
                            VdUiStr label)
@@ -4311,6 +4408,7 @@ VD_UI_API VdUiDiv *vd_ui_menu_begin(VdUiStr hstr)
     VdUiDiv *result;
     VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 0, 0)
     VD_UI_WITH_STYLE_SIZE(VD_UI_AXISV, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 0, 0)
+    VD_UI_WITH_STYLE_CHILD_ALIGNMENT(VD_UI_ALIGNMENT_FILL)
     {
         result = vd_ui_popup_begin(hstr, VD_UI_FLAG_BACKGROUND);
     }
@@ -4323,7 +4421,7 @@ VD_UI_API int vd_ui_menu_item(VdUiStr label, VdUiStr submenu_str)
 
     VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_TEXT_CONTENT, 0, 0)
     VD_UI_WITH_STYLE_SIZE(VD_UI_AXISV, VD_UI_SIZE_MODE_TEXT_CONTENT, 0, 0)
-    VD_UI_WITH_STYLE_PADDING4(24.f, 0, 0, 0)
+    VD_UI_WITH_STYLE_PADDING4(24.f, 0, 8, 0)
     {
         reply = vd_ui_button(label);
     }
@@ -4340,7 +4438,7 @@ VD_UI_API int vd_ui_menu_item(VdUiStr label, VdUiStr submenu_str)
         }
         return reply.clicked;
     } else {
-        if (reply.hovered) {
+        if (reply.hovered || (reply.clicked & VD_UI_SIG_KEY_ENTER)) {
             VdUiContext *ctx = vd_ui_context_get();
             vd_ui_popup_next_anchor(ctx->div_last);
             vd_ui_popup_next_placement(VD_UI_POPUP_PLACEMENT_RIGHT_OF_ANCHOR);
@@ -4363,9 +4461,8 @@ VD_UI_API void vd_ui_scroll_end()
     vd_ui_parent_pop();
 }
 
-VD_UI_API VdUiDiv* vd_ui_scrollview_begin(VdUiStr str, float *x, float *y)
+VD_UI_API VdUiDiv* vd_ui_scrollview_begin(VdUiStr str, int allow_x, int allow_y)
 {
-    (void)x;
     VdUiDiv *content_area;
     float mouse[2];
     vd_ui_mouse_pos(mouse);
@@ -4400,20 +4497,23 @@ VD_UI_API VdUiDiv* vd_ui_scrollview_begin(VdUiStr str, float *x, float *y)
             }
             vd_ui_parent_push(view_with_hscroll);
             {
-                if (x) {
+                VdUiFlags scroll_lock_flags = 0;
+                if (allow_x) {
                     vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1, 0);
                 } else {
+                    scroll_lock_flags |= VD_UI_FLAG_VIEW_SCROLL_LOCKX;
                     vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1, 0);
                 }
 
-                if (y) {
+                if (allow_y) {
                     vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1, 0);
                 } else {
+                    scroll_lock_flags |= VD_UI_FLAG_VIEW_SCROLL_LOCKY;
                     vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1, 0);
                 }
 
                 {
-                    content_area = vd_ui_div_new(VD_UI_FLAG_VIEW_SCROLLABLE, VD_UI_LIT("##content-area"));
+                    content_area = vd_ui_div_new(scroll_lock_flags | VD_UI_FLAG_VIEW_SCROLLABLE, VD_UI_LIT("##content-area"));
                 }
 
                 vd_ui_style_size_pop(VD_UI_AXISV);
@@ -4421,7 +4521,7 @@ VD_UI_API VdUiDiv* vd_ui_scrollview_begin(VdUiStr str, float *x, float *y)
             }
             vd_ui_parent_pop();
 
-            if (y) {
+            if (allow_y) {
                 float window_size = view_with_vscroll->comp_size[1];
                 float content_size = content_area->children_comp_size[1];
 
@@ -4438,13 +4538,13 @@ VD_UI_API VdUiDiv* vd_ui_scrollview_begin(VdUiStr str, float *x, float *y)
             vd_ui_parent_new(VD_UI_FLAG_FLEX_HORIZONTAL, VD_UI_LIT("##scrollbar-x-container"));
         }
         {
-            if (x) {
+            if (allow_x) {
                 float window_size = view_with_hscroll->comp_size[0];
                 float content_size = content_area->children_comp_size[0];
                 scrollh = vd_ui_scrollbar(VD_UI_LIT("##scrollbar-x"), VD_UI_AXISH, &content_area->view_scroll[0], window_size, content_size, wheel_scrollable, 0);
                 // content_area->offset[0] = -(*x);
 
-                if (y) {
+                if (allow_y) {
                     VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(scrollv->comp_size[0], scrollh->comp_size[1], 0, 0)
                     {
                         vd_ui_div_new(0, VD_UI_LIT("##corner"));
@@ -4457,24 +4557,8 @@ VD_UI_API VdUiDiv* vd_ui_scrollview_begin(VdUiStr str, float *x, float *y)
     }
     vd_ui_parent_pop();
 
-    VdUiReply content_area_reply = vd_ui_call(content_area);
-
-    VdUiReply main_view_reply = vd_ui_call(main_view);
-    // VdUiContext *ctx = vd_ui_context_get();
-    // if (ctx->focused_changed) {
-    //     if (ctx->focused == main_view->h) {
-    //         vd_ui_nav_anchor_push(main_view->h);
-    //     } else if (vd_ui_nav_anchor_top() == main_view->h) {
-    //         vd_ui_nav_anchor_pop();
-    //     }
-    // }
-
-    // if (x) {
-    //     *x -= main_view_reply.scroll[0] * 64.f;
-    // }
-    // if (y) {
-    //     *y -= main_view_reply.scroll[1] * 64.f;
-    // }
+    vd_ui_call(content_area);
+    vd_ui_call(main_view);
 
     vd_ui_parent_push(view_with_hscroll); // We only do this to activate clipping
     vd_ui_parent_push(content_area);
@@ -4669,9 +4753,23 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
 
                 if (index == 0) {
                     result = &ctx->sent;
+                    VD_UI_ASSERT(0);
+                    // Should never hit here
                 } else {
                     result = &ctx->divs[index];
+
+                    if (result->hprev) {
+                        result->hprev->hnext = result->hnext;
+                    }
+
+                    if (result->hnext) {
+                        result->hnext->hprev = result->hprev;
+                    }
+
+                    VD_UI_MEMSET(result, 0, sizeof(*result));
+
                     curr->hnext = result;
+                    result->hprev = curr;
                 }
 
                 result->hnext = 0;
@@ -4777,23 +4875,28 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     result->style.background.coloring.active     = vd_ui_style_coloring_get(VD_UI_FLAG_BACKGROUND)->active;
     result->style.background.corner_radius       = vd_ui_style_rounding_get(VD_UI_FLAG_BACKGROUND);
     result->style.background.border_thickness    = vd_ui_style_border_size_get(VD_UI_FLAG_BACKGROUND);
+    result->style.background.edge_softness       = vd_ui_style_edge_softness_get(VD_UI_FLAG_BACKGROUND);
     result->style.border.coloring.normal         = vd_ui_style_coloring_get(VD_UI_FLAG_BORDER)->normal;
     result->style.border.coloring.hot            = vd_ui_style_coloring_get(VD_UI_FLAG_BORDER)->hot;
     result->style.border.coloring.active         = vd_ui_style_coloring_get(VD_UI_FLAG_BORDER)->active;
     result->style.border.corner_radius           = vd_ui_style_rounding_get(VD_UI_FLAG_BORDER);
     result->style.border.border_thickness        = vd_ui_style_border_size_get(VD_UI_FLAG_BORDER);
+    result->style.border.edge_softness           = vd_ui_style_edge_softness_get(VD_UI_FLAG_BORDER);
     result->style.text.coloring.normal           = vd_ui_style_coloring_get(VD_UI_FLAG_TEXT)->normal;
     result->style.text.coloring.hot              = vd_ui_style_coloring_get(VD_UI_FLAG_TEXT)->hot;
     result->style.text.coloring.active           = vd_ui_style_coloring_get(VD_UI_FLAG_TEXT)->active;
     result->style.text.halign                    = vd_ui_style_text_halign_get();
     result->style.text.valign                    = vd_ui_style_text_valign_get();
     result->style.text.font_size                 = vd_ui_style_font_size_get() * ctx->dpi_scale;
+    result->style.text.symbol                    = vd_ui_symbol_null();
     result->style.padding[VD_UI_LEFT]            = vd_ui_style_padding_get(VD_UI_LEFT);
     result->style.padding[VD_UI_TOP]             = vd_ui_style_padding_get(VD_UI_TOP);
     result->style.padding[VD_UI_RIGHT]           = vd_ui_style_padding_get(VD_UI_RIGHT);
     result->style.padding[VD_UI_BOTTOM]          = vd_ui_style_padding_get(VD_UI_BOTTOM);
     result->style.child_gap                      = vd_ui_style_child_gap_get();
     result->style.child_alignment                = vd_ui_style_child_alignment_get();
+    result->draw_proc                            = 0;
+    result->draw_proc_data                       = 0;
 
     return result;
 }
@@ -4900,8 +5003,14 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
         {
             reply.scroll[0] += evt.v2[0];
             reply.scroll[1] += evt.v2[1];
-            div->view_scroll[0] -= evt.v2[0] * 64.f;
-            div->view_scroll[1] -= evt.v2[1] * 64.f;
+            if (!(div->flags & VD_UI_FLAG_VIEW_SCROLL_LOCKX)) {
+                div->view_scroll[0] -= evt.v2[0] * 64.f;
+            }
+
+            if (!(div->flags & VD_UI_FLAG_VIEW_SCROLL_LOCKY)) {
+                div->view_scroll[1] -= evt.v2[1] * 64.f;
+            }
+
             consume = 1;
         }
 
@@ -4927,6 +5036,8 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
             vd_ui_event_take(&evt);
         }
     }
+
+    float mouse_delta[2] = { ctx->mouse[0] - ctx->mouse_last[0], ctx->mouse[1] - ctx->mouse_last[1] };
 
     int in_bounds = vd_ui__point_in_rect(ctx->mouse, clipped_rect);
     reply.mouse[0] = ctx->mouse[0]; reply.mouse[1] = ctx->mouse[1];
@@ -4958,6 +5069,9 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
                              | (vd_ui_mouse_down(VD_UI_MOUSE_MIDDLE) * VD_UI_SIG_MOUSE_MIDDLE)
                              ;
         reply.down |= down_state;
+
+        reply.drag[0] = mouse_delta[0];
+        reply.drag[1] = mouse_delta[1];
     }
 
     // Down keyboard state on active div
@@ -5492,6 +5606,56 @@ VD_UI_API void vd_ui_style_rounding_pop(VdUiFlags mask)
     if (mask & VD_UI_FLAG_BORDER) {
         VD_UI_ASSERT(ctx->rounding_bd_stack_count > 0);
         ctx->rounding_bd_stack_count--;
+    }
+}
+
+VD_UI_API void vd_ui_style_edge_softness_push(VdUiFlags mask, float softness)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    if (mask & VD_UI_FLAG_BACKGROUND) {
+        VD_UI_ASSERT(ctx->edge_softness_bg_stack_count < VD_UI_STYLE_EDGE_SOFTNESS_STACK_COUNT);
+        ctx->edge_softness_bg_stack[ctx->edge_softness_bg_stack_count++] = softness;
+    }
+
+    if (mask & VD_UI_FLAG_BORDER) {
+        VD_UI_ASSERT(ctx->edge_softness_bd_stack_count < VD_UI_STYLE_EDGE_SOFTNESS_STACK_COUNT);
+        ctx->edge_softness_bd_stack[ctx->edge_softness_bd_stack_count++] = softness;
+    }
+}
+
+VD_UI_API float vd_ui_style_edge_softness_get(VdUiFlags mask)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    if (mask & VD_UI_FLAG_BACKGROUND) {
+        if (ctx->edge_softness_bg_stack_count) {
+            return ctx->edge_softness_bg_stack[ctx->edge_softness_bg_stack_count - 1];
+        } else {
+            return 0.f;
+        }
+    }
+
+    if (mask & VD_UI_FLAG_BACKGROUND) {
+        if (ctx->edge_softness_bd_stack_count) {
+            return ctx->edge_softness_bd_stack[ctx->edge_softness_bd_stack_count - 1];
+        } else {
+            return 0.f;
+        }
+    }
+
+    return 0.f;
+}
+
+VD_UI_API void vd_ui_style_edge_softness_pop(VdUiFlags mask)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    if (mask & VD_UI_FLAG_BACKGROUND) {
+        VD_UI_ASSERT(ctx->edge_softness_bg_stack_count > 0);
+        ctx->edge_softness_bg_stack_count--;
+    }
+
+    if (mask & VD_UI_FLAG_BORDER) {
+        VD_UI_ASSERT(ctx->edge_softness_bd_stack_count > 0);
+        ctx->edge_softness_bd_stack_count--;
     }
 }
 
@@ -8003,6 +8167,10 @@ static void vd_ui__do_inspector_details(size_t curr_div_h)
                 vd_ui_labelf("Size X##size-x");
                 vd_ui_labelf("Size Y##size-y");
                 vd_ui_labelf("Flex##flex");
+                vd_ui_labelf("View Scroll X##view-scroll-x");
+                vd_ui_labelf("View Scroll Y##view-scroll-y");
+                vd_ui_labelf("Offset X##offset-x");
+                vd_ui_labelf("Offset Y##offset-y");
             }
             vd_ui_parent_pop();
 
@@ -8018,6 +8186,10 @@ static void vd_ui__do_inspector_details(size_t curr_div_h)
                 vd_ui_labelf("%s##size-x", vd_ui_size_mode_to_str(curr_div->style.size[0].mode));
                 vd_ui_labelf("%s##size-y", vd_ui_size_mode_to_str(curr_div->style.size[1].mode));
                 vd_ui_labelf("%s##flex", flex_str);
+                vd_ui_labelf("%3.2f##view-scroll-x", curr_div->view_scroll[0]);
+                vd_ui_labelf("%3.2f##view-scroll-y", curr_div->view_scroll[1]);
+                vd_ui_labelf("%3.2f##offset-x", curr_div->offset[0]);
+                vd_ui_labelf("%3.2f##offset-y", curr_div->offset[1]);
 
             }
             vd_ui_parent_pop();
@@ -8202,13 +8374,11 @@ static void vd_ui__do_inspector(VdUiContext *ctx)
 
             int count_items = vd_ui_get_root()->last_descendant_count - inspector->last_descendant_count;
             vd_ui_labelf("Total Divs: %d", count_items);
-            static float scroll_x = 0.f;
-            static float scroll_y = 0.f;
             VdUiDiv *scroll_view;
             VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISV, 1.f, 1.f)
             VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1.f, 1.f)
             {
-                scroll_view = vd_ui_scrollview_begin(VD_UI_LIT("##tree"), 0, &scroll_y);
+                scroll_view = vd_ui_scrollview_begin(VD_UI_LIT("##tree"), 0, 1);
             }
             {
                 float viewport = scroll_view->comp_size[1];
