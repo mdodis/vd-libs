@@ -80,7 +80,7 @@ static void vd_ui__demo_code(VdUiStr label, char *code)
 {
     size_t len = vd_ui_strlen(code);
     vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_ABSOLUTE, 600 * vd_ui_get_scale(), 0.f);
-    vd_ui_textbox(label, code, &len, len);
+    vd_ui_textbox(label, code, &len, len, 0);
     vd_ui_style_size_pop(VD_UI_AXISH);
 }
 
@@ -701,12 +701,14 @@ int vd_ui_demo(void)
                 vd_ui__demo_section_end();
 
                 vd_ui__demo_section_begin("Text Boxes");
-                static char buf[64] = "Text Box";
+                static char buf[128] = "Text Box";
                 static size_t len = 8;
                 VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
                 VD_UI_WITH_STYLE_SIZE_ABSOLUTE(VD_UI_AXISV, 200, 0)
                 {
-                    vd_ui_textbox(VD_UI_LIT("##textbox"), buf, &len, 64);
+                    VdUiTextBoxOptions options = {0};
+                    options.single_line = 1;
+                    vd_ui_textbox(VD_UI_LIT("##textbox"), buf, &len, sizeof(buf), &options);
                 }
                 vd_ui__demo_section_end();
             }

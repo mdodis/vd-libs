@@ -48,7 +48,6 @@
  * | |                                     | Dynamic Resize Buffer                                              |   |
  * 
  * @todo(mdodis):
- * - Add activation mask depending on mouse input buttons the user wants
  * - Sliders
  * - Introduce Tree concept
  *   > Right now, the whole UI system is done in one VdUiContext
@@ -60,8 +59,6 @@
  * - Text Input
  * - Images
  * - Glyph paging
- * - Support more of printf
- * - Cache div full size and compare to stop doing size_changed for VD_UI_SIZE_MODE_CONTAIN_CHILDREN
  * - New and improved render pass api using texture id + scissor + layer id as keys
  * - Tagging/Theming system
  *
@@ -159,16 +156,19 @@ VD_UI_API void             vd_ui_frame_begin(float delta_seconds);
  */
 VD_UI_API void             vd_ui_frame_end(void);
 
-
 /* ----DATA TYPES---------------------------------------------------------------------------------------------------- */
 typedef struct {
     char *s;
     int  l;
 } VdUiStr;
 
+/** Make null string */
 VD_UI_INL VdUiStr          vd_ui_str_null(void);
+/** Make string for ptr + len */
 VD_UI_INL VdUiStr          vd_ui_str(char *s, int l);
+/** Compare 2 strings */
 VD_UI_INL int              vd_ui_str_eq(VdUiStr a, VdUiStr b);
+/** Check if string is null */
 VD_UI_INL int              vd_ui_str_is_null(VdUiStr s);
 
 typedef union {
@@ -549,6 +549,14 @@ typedef struct {
     VdUiStr         replace_str;
 } VdUiTextOp;
 
+// @todo(mdodis): TextIterator
+// - compute screen space position of characters
+// - hit testing from mouse
+typedef struct {
+    VdUiStr str;
+    VdUiSel sel;
+} VdUiTextIterator;
+
 VD_UI_INL int           vd_ui_text_point_eq(VdUiTextPoint a, VdUiTextPoint b);
 VD_UI_INL void          vd_ui_text_point_minmax(VdUiTextPoint a, VdUiTextPoint b, VdUiTextPoint *min, VdUiTextPoint *max);
 VD_UI_INL VdUiTextPoint vd_ui_text_point_clamp(VdUiTextPoint pt, long long len);
@@ -558,6 +566,7 @@ VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_line(VdUiTextPoint pt, long lon
 VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_word(VdUiTextPoint pt, char *buf, long long len, int fwd);
 VD_UI_INL VdUiTextPoint vd_ui_text_point_move_by_borders(VdUiTextPoint pt, char *buf, long long len, int end);
 VD_UI_API VdUiTextOp    vd_ui_text_op_from_event(VdUiEvent evt, VdUiTextPoint c, VdUiTextPoint m);
+VD_UI_API int           vd_ui_text_op_will_add_newline(VdUiTextOp op);
 VD_UI_API void          vd_ui_text_op_exec(VdUiTextOp op, VdUiSel *sel, char *buf, size_t *len, size_t capacity);
 typedef struct VdUiDiv VdUiDiv;
 
@@ -565,61 +574,95 @@ typedef struct VdUiDiv VdUiDiv;
 typedef VD_UI_DRAW_PROC(VdUiDrawProc);
 
 struct VdUiDiv {
-    /* The first child of this div */
+    // -------------------------------------------------------------------------------------------------------------Tree
+    // The first child of this div
     VdUiDiv         *first;
-    /* The next sibling of this div */
+    // The next sibling of this div
     VdUiDiv         *next;
-    /* The prev sibling of this div */
+    // The prev sibling of this div
     VdUiDiv         *prev;
-    /* The parent of this div */
+    // The parent of this div
     VdUiDiv         *parent;
-    /* The count of children */
+    // The count of children
     int             child_count;
+    // The running count of all of this div's descendants. Don't use this
     int             descendant_count;
+    // The last count of all of this div's descendants. Use this one
     int             last_descendant_count;
 
+    // ------------------------------------------------------------------------------------------------------Interaction
+    // @todo: Determines when the div gets focus. Currently unused. Probably useless?
     VdUiFocusMode   focus_mode;
+    // The navigation index of this div. Given based on the order of vd_ui_div_new* calls
     int             nav_index;
-
+    // The flags of the div. Determines basic layout functionality, as well as interaction behavior
     VdUiFlags       flags;
-    int             activation_mouse_button;
-    VdUiStyle       style;
-
-    size_t          h;
-    size_t          last_frame_touched;
-    int             size_changed;
-
-    VdUiDiv         *hnext;
-    VdUiDiv         *hprev;
-
-    VdUiStr         content_str;
-    VdUiStr         id_str;
-
-    VdUiDrawProc    *draw_proc;
-    void            *draw_proc_data;
-
-
-    float           text_size[VD_UI_AXES];
-    float           comp_pos_rel[VD_UI_AXES];
-    float           comp_size[VD_UI_AXES];
-    float           children_comp_size[VD_UI_AXES];
-    float           comp_size_last[VD_UI_AXES];
-    float           view_scroll[VD_UI_AXES];
-    float           rect[4];
-    int             zoffset;
-
+    // The selection state if this div is a text box
     VdUiSel         sel;
 
-    float           hot_t;
-    float           active_t;
-    float           timeout_t;
-    float           timeout_inv_t;
-    float           size_timeout_t;
+    // ----------------------------------------------------------------------------------------------------------Styling
+    // The style of this div. Contains options for appearance and more layout stuff
+    VdUiStyle       style;
 
+    // ----------------------------------------------------------------------------------------------------------Hashing
+    // The full hashcode of this div. Used to determine if 2 divs are the same across frames
+    size_t          h;
+    // The last frame this div was touched by vd_ui_div_new. Used for slot recycling
+    size_t          last_frame_touched;
+    // The next div in the hash chain on the div hashtable
+    VdUiDiv         *hnext;
+    // The prev div in the hash chain on the div hashtable
+    VdUiDiv         *hprev;
+    // True for spacer divs which generally don't have an id or a content str
+    VdUiBool        is_null;
+
+    // -------------------------------------------------------------------------------------------------------------Text
+    // The textual content that will be displayed (if VD_UI_FLAG_TEXT is in flags)
+    VdUiStr         content_str;
+    // The identifier string of the div. Can be just content_str but also anything after '##'
+    VdUiStr         id_str;
+    // The custom draw procedure of this div. Called after every other part of the div has finished drawing
+
+    // ----------------------------------------------------------------------------------------------------------Drawing
+    VdUiDrawProc    *draw_proc;
+    // Custom user data passed to draw_proc
+    void            *draw_proc_data;
+    // Set this to 1 to push a new render pass for cases where this div needs to appear on top of its siblings
+    int             zoffset;
+
+    // -----------------------------------------------------------------------------------------------------------Layout
+    // Whether the size changed the previous frame
+    int             size_changed;
+    // The computed text size of this div (if any)
+    float           text_size[VD_UI_AXES];
+    // The relative position (based on the parent) of this div
+    float           comp_pos_rel[VD_UI_AXES];
+    // The computed size of this div during layout, or VD_UI_FLAG_FLOAT
+    float           comp_size[VD_UI_AXES];
+    // The computed size of this div's children
+    float           children_comp_size[VD_UI_AXES];
+    // The last computed size of this div's children. Used to determine if VD_UI_SIZE_MODE_CONTAIN_CHILDREN divs changed
+    float           comp_size_last[VD_UI_AXES];
+    // The scroll amount if this div implements a scrollable view
+    float           view_scroll[VD_UI_AXES];
+    // The last computed rect of the div, after layout
+    float           rect[4];
+    // Offset added at the end of layout
     float           offset[VD_UI_AXES];
+    // Scale multiplied at the end of layout (@todo)
     float           scale[VD_UI_AXES];
 
-    VdUiBool        is_null;
+    // --------------------------------------------------------------------------------------------------------Animation
+    // The hot amount [0, 1] of this div. Use for animating hover
+    float           hot_t;
+    // The active amount [0, 1] of this div. Use for animating interactions
+    float           active_t;
+    // The click timeout of this div. Use for animating interactions, after the mouse was released
+    float           timeout_t;
+    // Inverse of timeout_t
+    float           timeout_inv_t;
+    // A vlaue constantly going from 1 to 0. It's set to 1 when the size of this div was changed
+    float           size_timeout_t;
 };
 
 typedef struct {
@@ -657,37 +700,48 @@ static inline void*        vd_ui_memcpy(void *dst, void *src, size_t count);
 VD_UI_INL void*            vd_ui_memmove(void *dest, void *src, size_t num);
 VD_UI_API void*            vd_ui_mem_push(size_t size);
 
+/**
+ * @brief Get the diagonal axis
+ * @param  axis The current axis
+ * @return      VD_UI_AXISH for VD_UI_AXISV, VD_UI_AXISV for VD_UI_AXISH
+ */
 VD_UI_INL VdUiAxis         vd_ui_diagonal_axis(VdUiAxis axis);
+
+/**
+ * @brief Get the flex flag based on the flexible axis
+ * @param  axis The axis
+ * @return      VD_UI_FLAG_FLEX_HORIZONTAL for VD_UI_AXISH, 0 otherwise
+ */
 VD_UI_INL VdUiFlags        vd_ui_flex_flag_from_axis(VdUiAxis axis);
 /* ----BASIC WIDGETS------------------------------------------------------------------------------------------------- */
 /**
- * Displays a button with text
+ * @brief Displays a button with text
  * @param  str The text to use
  * @return     The interaction result
  */
 VD_UI_API VdUiReply        vd_ui_button(VdUiStr str);
 
 /**
- * Displays a button with text (printf version)
+ * @brief Displays a button with text (printf version)
  * @param  label The format text
  * @return       The interaction result
  */
 VD_UI_INL VdUiReply        vd_ui_buttonf(const char *label, ...)                                                        { VD_UI_DOTTOSTR(label); return vd_ui_button(str); }
 
 /**
- * Displays a label
+ * @brief Displays a label
  * @param  str The text to display
  */
 VD_UI_API VdUiDiv*         vd_ui_label(VdUiStr str);
 
 /**
- * Displays a label (printf version)
+ * @brief Displays a label (printf version)
  * @param  str The text to display
  */
 VD_UI_INL VdUiDiv*         vd_ui_labelf(const char *label, ...)                                                         { VD_UI_DOTTOSTR(label); return vd_ui_label(str); }
 
 /**
- * Displays a checkbox
+ * @brief Displays a checkbox
  * @param  b   Pointer to flag, this will be toggled when the user clicks on the checkbox
  * @param  str The text to display
  * @return     The interaction result
@@ -695,7 +749,7 @@ VD_UI_INL VdUiDiv*         vd_ui_labelf(const char *label, ...)                 
 VD_UI_API VdUiReply        vd_ui_checkbox(int *b, VdUiStr str);
 
 /**
- * Displays a checkbox (printf version)
+ * @brief Displays a checkbox (printf version)
  * @param  b     Pointer to flag, this will be toggled when the user clicks on the checkbox
  * @param  label The text to display
  * @return       The interaction result
@@ -703,22 +757,30 @@ VD_UI_API VdUiReply        vd_ui_checkbox(int *b, VdUiStr str);
 VD_UI_INL VdUiReply        vd_ui_checkboxf(int *b, const char *label, ...)                                              { VD_UI_DOTTOSTR(label); return vd_ui_checkbox(b, str); }
 
 /**
- * Consumes all available space within the parent
+ * @brief Consumes all available space within the parent
  * @param  axis The axis to space to
  */
 VD_UI_API void             vd_ui_spacer(VdUiAxis axis);
 
+/**
+ * @brief Customized version of vd_ui_spacer
+ * @param  axis      Axis to take up space on
+ * @param  size_mode Size mode
+ * @param  value     Size value
+ * @param  niceness  Size niceness (i.e shrink)
+ * @return           The spacer div
+ */
 VD_UI_API VdUiDiv*         vd_ui_spacerex(VdUiAxis axis, VdUiSizeMode size_mode, float value, float niceness);
 
 /**
- * Displays an icon with (optional) text
+ * @brief Displays an icon with (optional) text
  * @param  symbol The symbol to use
  * @param  str    The id (and/or text) to use
  */
 VD_UI_API void             vd_ui_icon(VdUiSymbol symbol, VdUiStr str);
 
 /**
- * Displays an icon with (optional) text (printf version)
+ * @brief Displays an icon with (optional) text (printf version)
  * @param  symbol The symbol to use
  * @param  str    The id (and/or text) to use
  * @return        The interaction result
@@ -726,7 +788,7 @@ VD_UI_API void             vd_ui_icon(VdUiSymbol symbol, VdUiStr str);
 VD_UI_INL void             vd_ui_iconf(VdUiSymbol symbol, const char *label, ...)                                       { VD_UI_DOTTOSTR(label); vd_ui_icon(symbol, str); }
 
 /**
- * Displays a clickable icon with (optional) text
+ * @brief Displays a clickable icon with (optional) text
  * @param  symbol The symbol to use
  * @param  str    The id (and/or text) to use
  * @return        The interaction result
@@ -734,19 +796,33 @@ VD_UI_INL void             vd_ui_iconf(VdUiSymbol symbol, const char *label, ...
 VD_UI_API VdUiReply        vd_ui_icon_button(VdUiSymbol symbol, VdUiStr str);
 
 /**
- * Displays a clickable icon with (optional) text (printf version)
+ * @brief Displays a clickable icon with (optional) text (printf version)
  * @param  symbol The symbol to use
  * @param  str    The id (and/or text) to use
  * @return        The interaction result
  */
 VD_UI_INL VdUiReply        vd_ui_icon_buttonf(VdUiSymbol symbol, const char *label, ...)                                { VD_UI_DOTTOSTR(label); return vd_ui_icon_button(symbol, str); }
 
+/**
+ * @brief Displays a radio widget.
+ * @param  item  Currently selected item
+ * @param  index Integer value of this radio button's value
+ * @param  label The label to display on the right of the widget
+ * @return       The parent div of the widget
+ */
 VD_UI_API VdUiDiv*         vd_ui_radio(int *item, int index, VdUiStr label);
 
+/**
+ * @brief Displays a radio widget (printf version).
+ * @param  item  Currently selected item
+ * @param  index Integer value of this radio button's value
+ * @param  label The label to display on the right of the widget
+ * @return       The parent div of the widget
+ */
 VD_UI_INL VdUiDiv*         vd_ui_radiof(int *item, int index, const char *label, ...)                                   { VD_UI_DOTTOSTR(label); return vd_ui_radio(item, index, str); }
 
 /**
- * Show a draggable slider
+ * @brief Displays a draggable slider
  * @param  value     Pointer to current value of the slider
  * @param  min_value Pointer to minimum value
  * @param  max_value Pointer to maximum value
@@ -763,7 +839,11 @@ VD_UI_INL int              vd_ui_sliderf_float(float *value, float min_value, fl
                                                VdUiAxis orientation,
                                                const char *label, ...)                                                  { VD_UI_DOTTOSTR(label); float ivp = min_value; float mvp = max_value; return vd_ui_slider(value, &ivp, &mvp, VD_UI_DATA_TYPE_FLOAT, orientation, str); }
 
-VD_UI_API VdUiReply        vd_ui_textbox(VdUiStr label, char *buf, size_t *len, size_t capacity);
+typedef struct {
+    int single_line;
+} VdUiTextBoxOptions;
+
+VD_UI_API VdUiReply        vd_ui_textbox(VdUiStr label, char *buf, size_t *len, size_t capacity, VdUiTextBoxOptions *options);
 
 // @todo(mdodis): Replace with tag system
 //                Each div can optionally declare a tag upon creation which gets/sets some default parameters
@@ -1128,11 +1208,6 @@ VD_UI_API void             vd_ui_style_text_valign_pop(void);
 
 #define VD_UI_WITH_STYLE_TEXT_ALIGNMENT(halign, valign) \
     VD_UI_WITH_STYLE_TEXT_HALIGN(halign) VD_UI_WITH_STYLE_TEXT_VALIGN(valign)
-
-VD_UI_API void             vd_ui_activation_button_push(unsigned char button);
-VD_UI_API int              vd_ui_activation_button_get(void);
-VD_UI_API void             vd_ui_activation_button_pop(void);
-
 /* ----RENDERING----------------------------------------------------------------------------------------------------- */
 enum {
     VD_UI_VERTEX_FLAG_TEXTURE_IS_ALPHA_BUFFER = 1 << 0,
@@ -2959,6 +3034,18 @@ VD_UI_API VdUiTextOp vd_ui_text_op_from_event(VdUiEvent evt, VdUiTextPoint c, Vd
     return op;
 }
 
+VD_UI_API int vd_ui_text_op_will_add_newline(VdUiTextOp op)
+{
+    for (int i = 0; i < op.replace_str.l; ++i) {
+        char c = op.replace_str.s[i];
+        if (c == '\n' || c == '\r') {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+
 VD_UI_API void vd_ui_text_op_exec(VdUiTextOp op, VdUiSel *sel, char *buf, size_t *len, size_t capacity)
 {
     if (op.flags == 0) {
@@ -3608,6 +3695,8 @@ VD_UI_DRAW_PROC(vd_ui_text_box_draw)
     VdUiContext *ctx = vd_ui_context_get();
     VdUi__ArenaSave save = vd_ui__arena_save(&ctx->frame_arena);
 
+    vd_ui__push_clip(ctx, rect);
+
     VdUi__TextBoxDrawData *draw_data = (VdUi__TextBoxDrawData*)usr;
 
     VdUiFontId font_id = {0};
@@ -3624,7 +3713,7 @@ VD_UI_DRAW_PROC(vd_ui_text_box_draw)
     VdUi__TextBoxDrawNode sel_draw_first = {0};
     VdUi__TextBoxDrawNode *sel_draw_curr = 0;
 
-    float caret_len = 16.f;
+    float caret_len = font_height;
     float caret_h_len = caret_len * 0.5f;
 
     VdUiStr str = draw_data->str;
@@ -3767,10 +3856,19 @@ VD_UI_DRAW_PROC(vd_ui_text_box_draw)
     vd_ui_push_rectgrad(caret_rect, caret_grad.e, zero_corner_radius, 0.2f, 0.f);
 
     vd_ui__arena_restore(save);
+
+    vd_ui__pop_clip(ctx);
 }
 
-VD_UI_API VdUiReply vd_ui_textbox(VdUiStr label, char *buf, size_t *len, size_t capacity)
+VD_UI_API VdUiReply vd_ui_textbox(VdUiStr label, char *buf, size_t *len, size_t capacity, VdUiTextBoxOptions *options)
 {
+    VdUiTextBoxOptions default_options;
+    default_options.single_line = 0;
+
+    if (options == 0) {
+        options = &default_options;
+    }
+
     VdUiContext *ctx = vd_ui_context_get();
     // VdUiColoring cursor_style = vd_ui_coloring_all4(vd_ui_f4(0.0, 0.7f, 1.f, 1.f));
 
@@ -3779,6 +3877,9 @@ VD_UI_API VdUiReply vd_ui_textbox(VdUiStr label, char *buf, size_t *len, size_t 
                                  | VD_UI_FLAG_CLICKABLE 
                                  | VD_UI_FLAG_KB_CLICKABLE 
                                  | VD_UI_FLAG_CLIP_CONTENT
+                                 | VD_UI_FLAG_VIEW_SCROLLABLE   // We enable view scrolling, but disable scrolling
+                                 | VD_UI_FLAG_VIEW_SCROLL_LOCKX // via mouse wheel
+                                 | VD_UI_FLAG_VIEW_SCROLL_LOCKY
                                  , label);
     box->style.padding[VD_UI_TOP] = 4.f;
     box->style.padding[VD_UI_LEFT] = 4.f;
@@ -3812,6 +3913,13 @@ VD_UI_API VdUiReply vd_ui_textbox(VdUiStr label, char *buf, size_t *len, size_t 
             VdUi__ArenaSave save = vd_ui__arena_save(&ctx->frame_arena);
 
             VdUiTextOp op = vd_ui_text_op_from_event(evt, sel->c, sel->m);
+            if (options->single_line) {
+                // Ignore newlines
+                if (vd_ui_text_op_will_add_newline(op)) {
+                    op.flags = 0;
+                }
+            }
+
             if (op.flags != 0) {
                 vd_ui_text_op_exec(op, sel, buf, len, capacity);
                 consume = 1;
@@ -4904,7 +5012,6 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     // }
 
     // Resolve Styles
-    result->activation_mouse_button              = vd_ui_activation_button_get();
     result->focus_mode                           = vd_ui_focus_mode_get();
     result->style.size[VD_UI_AXISH]              = *vd_ui_style_size_get(VD_UI_AXISH);
     result->style.size[VD_UI_AXISV]              = *vd_ui_style_size_get(VD_UI_AXISV);
@@ -5925,30 +6032,6 @@ VD_UI_API void vd_ui_style_text_valign_pop(void)
     VdUiContext *ctx = vd_ui_context_get();
     VD_UI_ASSERT(ctx->text_valign_stack_count > 0);
     ctx->text_valign_stack_count--;
-}
-
-VD_UI_API void vd_ui_activation_button_push(unsigned char button)
-{
-    VdUiContext *ctx = vd_ui_context_get();
-    VD_UI_ASSERT(ctx->activation_mouse_button_stack_count < VD_UI_ACTIVATION_MOUSE_BUTTON_STACK_COUNT);
-    ctx->activation_mouse_button_stack[ctx->activation_mouse_button_stack_count++] = button;
-}
-
-VD_UI_API int vd_ui_activation_button_get(void)
-{
-    VdUiContext *ctx = vd_ui_context_get();
-    if (ctx->activation_mouse_button_stack_count) {
-        return ctx->activation_mouse_button_stack[ctx->activation_mouse_button_stack_count-1];
-    } else {
-        return VD_UI_MOUSE_LEFT;
-    }
-}
-
-VD_UI_API void vd_ui_activation_button_pop(void)
-{
-    VdUiContext *ctx = vd_ui_context_get();
-    VD_UI_ASSERT(ctx->activation_mouse_button_stack_count > 0);
-    ctx->activation_mouse_button_stack_count--;
 }
 
 static void vd_ui__get_axes_for_div(VdUiDiv *div, int *daxis, int *faxis, int *daxisf, int *faxisf)
