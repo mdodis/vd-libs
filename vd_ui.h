@@ -492,6 +492,7 @@ typedef enum {
     VD_UI_EVENT_KEY_DEL,
     VD_UI_EVENT_KEY_SPACE,
     VD_UI_EVENT_KEY_TAB,
+    VD_UI_EVENT_KEY_ESCAPE,
     VD_UI_EVENT_KEY_A, VD_UI_EVENT_KEY_B, VD_UI_EVENT_KEY_C, VD_UI_EVENT_KEY_D,
     VD_UI_EVENT_KEY_E, VD_UI_EVENT_KEY_F, VD_UI_EVENT_KEY_G, VD_UI_EVENT_KEY_H,
     VD_UI_EVENT_KEY_I, VD_UI_EVENT_KEY_J, VD_UI_EVENT_KEY_K, VD_UI_EVENT_KEY_L,
@@ -3773,7 +3774,12 @@ VD_UI_API VdUiReply vd_ui_textbox(VdUiStr label, char *buf, size_t *len, size_t 
     VdUiContext *ctx = vd_ui_context_get();
     // VdUiColoring cursor_style = vd_ui_coloring_all4(vd_ui_f4(0.0, 0.7f, 1.f, 1.f));
 
-    VdUiDiv *box = vd_ui_div_new(VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_CLICKABLE | VD_UI_FLAG_CLIP_CONTENT, label);
+    VdUiDiv *box = vd_ui_div_new(0
+                                 | VD_UI_FLAG_BACKGROUND 
+                                 | VD_UI_FLAG_CLICKABLE 
+                                 | VD_UI_FLAG_KB_CLICKABLE 
+                                 | VD_UI_FLAG_CLIP_CONTENT
+                                 , label);
     box->style.padding[VD_UI_TOP] = 4.f;
     box->style.padding[VD_UI_LEFT] = 4.f;
     box->style.padding[VD_UI_RIGHT] = 4.f;
@@ -3783,10 +3789,26 @@ VD_UI_API VdUiReply vd_ui_textbox(VdUiStr label, char *buf, size_t *len, size_t 
 
     VdUiSel *sel = &box->sel;
 
-    if (vd_ui_div_is_focused(box)) {
+    if (reply.clicked & (VD_UI_SIG_KEY_ENTER | VD_UI_SIG_MOUSE_LEFT)) {
+        if (vd_ui_nav_anchor_top() != box->h) {
+            vd_ui_nav_anchor_push(box->h);
+        }
+    }
+
+    if (vd_ui_nav_anchor_top() == box->h) {
         VdUiEvent evt = vd_ui_event_first();
         while (vd_ui_event_next(&evt)) {
             int consume = 0;
+
+            if (1
+                && (evt.type == VD_UI_EVENT_TYPE_PRESS)
+                && (evt.key == VD_UI_EVENT_KEY_ESCAPE)
+                && (evt.mods == 0))
+            {
+                consume = 1;
+                vd_ui_nav_anchor_pop();
+            }
+
             VdUi__ArenaSave save = vd_ui__arena_save(&ctx->frame_arena);
 
             VdUiTextOp op = vd_ui_text_op_from_event(evt, sel->c, sel->m);
@@ -8855,6 +8877,7 @@ VD_UI_API VdUiEventKey vd_ui_vd_fw_key_translate(VdFwKey key)
         case VD_FW_KEY_DEL:         result = VD_UI_EVENT_KEY_DEL;         break;
         case VD_FW_KEY_SPACE:       result = VD_UI_EVENT_KEY_SPACE;       break;
         case VD_FW_KEY_TAB:         result = VD_UI_EVENT_KEY_TAB;         break;
+        case VD_FW_KEY_ESCAPE:      result = VD_UI_EVENT_KEY_ESCAPE;      break;
         case VD_FW_KEY_A:           result = VD_UI_EVENT_KEY_A;           break;
         case VD_FW_KEY_B:           result = VD_UI_EVENT_KEY_B;           break;
         case VD_FW_KEY_C:           result = VD_UI_EVENT_KEY_C;           break;
