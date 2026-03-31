@@ -2933,8 +2933,9 @@ VD_UI_API VdUiTextOp vd_ui_text_op_from_event(VdUiEvent evt, VdUiTextPoint c, Vd
             case VD_UI_EVENT_KEY_A: {
                 if (evt.mods & (1 << VD_UI_MOD_CONTROL)) {
                     op.flags = VD_UI_TEXT_OP_FLAGS_SCAN_BORDERS | VD_UI_TEXT_OP_FLAGS_ZERO_MARK | VD_UI_TEXT_OP_FLAGS_KEEP_MARK;
+                } else {
+                    key_consumed = 0;
                 }
-
             } break;
 
             default: {
@@ -2967,6 +2968,21 @@ VD_UI_API void vd_ui_text_op_exec(VdUiTextOp op, VdUiSel *sel, char *buf, size_t
     VdUiTextPoint new_m = sel->m;
 
     if (op.replace_str.l > 0) {
+
+        if (!vd_ui_text_point_eq(new_c, new_m)) {
+            // Delete everything within range
+            VdUiTextPoint min, max;
+            vd_ui_text_point_minmax(new_c, new_m, &min, &max);
+
+            size_t dist = max.b - min.b;
+            size_t amount_to_move = *len - min.b;
+            VD_UI_MEMCPY(buf + min.b, buf + max.b, amount_to_move);
+
+            new_c = min;
+
+            (*len) -= dist;
+        }
+
         size_t space_remaining = capacity - (*len);
         if (op.replace_str.l > space_remaining) {
             op.replace_str.l = (int)space_remaining;

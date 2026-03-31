@@ -42,21 +42,6 @@ typedef struct {
 
 #pragma pack(pop)
 
-#define VD_LBP_ADD(ser, field, type, version_added) \
-    do { \
-        if (ser->ver >= version_added) { \
-            VD_LBP_SER(ser, field, type); \
-        } \
-    } while (0)
-
-#define VD_LBP_REM(ser, field, type, version_added, version_removed) \
-    type field = {0}; \
-    do { \
-        if ((ser->ver >= version_added) && (ser->ver < version_removed)) { \
-            VD_LBP_SERIALIZE(ser, field, type); \
-        } \
-    } while (0)
-
 VD_LBP_SER_IMPL(LevelDataRelease)
 {
     VD_LBP_ADD(ser, num_orcs, int32_t, VERSION_INITIAL_RELEASE);
