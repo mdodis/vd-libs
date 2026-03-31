@@ -615,6 +615,57 @@ int vd_ui_demo(void)
                 }
                 vd_ui__demo_section_end();
 
+                vd_ui__demo_section_begin("Combos");
+                {
+                    const char *options[] = {
+                        "AAAA",
+                        "BBBB",
+                        "CCCC",
+                        "DDDD",
+                        "EEEE",
+                        "FFFF",
+                        "GGGG",
+                        "HHHH",
+                        "IIII",
+                        "JJJJ",
+                        "KKKK",
+                    };
+                    int count_options = sizeof(options) / sizeof(options[0]);
+                    static int current_option = 0;
+
+                    VdUiStr preview = vd_ui_str(options[current_option], (int)strlen(options[current_option]));
+
+                    VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
+                    VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 0)
+                    {
+                        if (vd_ui_combo_begin(0, preview, VD_UI_LIT("##combo-basic"))) {
+                            VdUiColoring coloring = vd_ui_coloring(vd_ui_gradient1(vd_ui_f4(0.2f, 0.3f, 0.7f, 0.0f)),
+                                                                   vd_ui_gradient1(vd_ui_f4(0.2f, 0.3f, 0.7f, 0.5f)),
+                                                                   vd_ui_gradient1(vd_ui_f4(0.2f, 0.3f, 0.7f, 0.7f)));
+                            for (int i = 0; i < count_options; ++i) {
+                                VdUiStr str = vd_ui_str(options[i], (int)strlen(options[i]));
+                                int selected = 0;
+                                VD_UI_WITH_STYLE_BACKGROUND_COLORING(coloring)
+                                VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_TEXT_CONTENT, 0, 0)
+                                VD_UI_WITH_STYLE_SIZE(VD_UI_AXISV, VD_UI_SIZE_MODE_TEXT_CONTENT, 0, 0)
+                                {
+                                    selected = vd_ui_selectable(0
+                                                                | VD_UI_FLAG_BACKGROUND
+                                                                | VD_UI_FLAG_TEXT
+                                                                , str);
+                                }
+
+                                if (selected) {
+                                    current_option = i;
+                                }
+
+                            }
+                            vd_ui_combo_end();
+                        }
+                    }
+                }
+                vd_ui__demo_section_end();
+
                 vd_ui__demo_section_begin("Popups");
                 VdUiReply button_w_popup = vd_ui_buttonf("Click for Popup");
                 if (button_w_popup.clicked) {

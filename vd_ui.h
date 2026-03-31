@@ -821,6 +821,12 @@ VD_UI_API VdUiDiv*         vd_ui_radio(int *item, int index, VdUiStr label);
  */
 VD_UI_INL VdUiDiv*         vd_ui_radiof(int *item, int index, const char *label, ...)                                   { VD_UI_DOTTOSTR(label); return vd_ui_radio(item, index, str); }
 
+VD_UI_API VdUiDiv*         vd_ui_combo_begin(VdUiFlags flags, VdUiStr preview_str, VdUiStr id_str);
+VD_UI_INL VdUiDiv*         vd_ui_combo_beginf(VdUiFlags flags, VdUiStr preview_str, const char *fmt, ...)               { VD_UI_DOTTOSTR(fmt); return vd_ui_combo_begin(flags, preview_str, str); }
+VD_UI_API int              vd_ui_selectable(VdUiFlags flags, VdUiStr s);
+VD_UI_INL int              vd_ui_selectablef(VdUiFlags flags, const char *fmt, ...)                                     { VD_UI_DOTTOSTR(fmt); return vd_ui_selectable(flags, str); }
+VD_UI_API void             vd_ui_combo_end(void);
+
 /**
  * @brief Displays a draggable slider
  * @param  value     Pointer to current value of the slider
@@ -876,8 +882,14 @@ VD_UI_API VdUiDiv*         vd_ui_scrollbar(VdUiStr label, VdUiAxis scroll_axis,
                                            int wheel_scrollable, VdUiScrollbarOptions *options);
 
 typedef enum {
+    VD_UI_POPUP_PLACEMENT_POSITION_MASK          = 0b11,
     VD_UI_POPUP_PLACEMENT_OVER_ANCHOR            = 0,
     VD_UI_POPUP_PLACEMENT_RIGHT_OF_ANCHOR        = 1,
+    VD_UI_POPUP_PLACEMENT_UNDER_ANCHOR           = 2,
+    VD_UI_POPUP_PLACEMENT_SIZE_MASK              = ~(VD_UI_POPUP_PLACEMENT_POSITION_MASK),
+    VD_UI_POPUP_PLACEMENT_TAKE_SIZE_OF_ANCHOR    = 1 << 3,
+    VD_UI_POPUP_PLACEMENT_TAKE_SIZE_AXISV        = 1 << 4,
+
 } VdUiPopupPlacement;
 
 VD_UI_API VdUiDiv*         vd_ui_popup_begin(VdUiStr hstr, VdUiFlags flags);
@@ -1173,6 +1185,11 @@ VD_UI_API VdUiColoring     vd_ui_coloring_all(float v);
     VD_UI_WITH_STYLE_COLORING(VD_UI_FLAG_BACKGROUND, coloring)
 #define VD_UI_WITH_STYLE_BACKGROUND_COLOR(f4) \
     VD_UI_WITH_STYLE_COLOR(VD_UI_FLAG_BACKGROUND, f4)
+#define VD_UI_WITH_STYLE_BORDER_COLORING(coloring) \
+    VD_UI_WITH_STYLE_COLORING(VD_UI_FLAG_BORDER, coloring)
+#define VD_UI_WITH_STYLE_BORDER_COLOR(f4) \
+    VD_UI_WITH_STYLE_COLOR(VD_UI_FLAG_BORDER, f4)
+
 #define VD_UI_WITH_STYLE_TEXT_COLORING(coloring) \
     VD_UI_WITH_STYLE_COLORING(VD_UI_FLAG_TEXT, coloring)
 #define VD_UI_WITH_STYLE_TEXT_COLOR(f4) \
@@ -2445,6 +2462,7 @@ struct VdUiContext {
     int                     focus;                                                 // Determines if this UI tree has any focus
 
     int                     mouse_over_any_visible_div;                            // Whether the mouse is over any visible div
+    int                     new_mouse_over_any_visible_div;                        // Whether the mouse is over any visible div (next value)
     float                   mouse[VD_UI_AXES];                                     // The current mouse coordinates. Passed via vd_ui_event_mouse_location()
     float                   mouse_last[VD_UI_AXES];                                // The last known mouse coordinates.
 
@@ -2601,7 +2619,8 @@ VD_UI_API void vd_ui_frame_begin(float delta_seconds)
 
     ctx->strbuf_len           = 0;
     ctx->null_divs_len        = 0;
-    ctx->mouse_over_any_visible_div = 0;
+    ctx->mouse_over_any_visible_div = ctx->new_mouse_over_any_visible_div;
+    ctx->new_mouse_over_any_visible_div = 0;
 
     for (int i = 0; i < VD_UI_EVENT_KEY_MAX; ++i) {
         ctx->key_states[i] = ctx->key_states[i] << 1;
@@ -2674,9 +2693,6 @@ VD_UI_API void vd_ui_frame_end(void)
 
         if (nav_next || nav_prev) {
             vd_ui_focus(new_focused);
-            if (!new_focused) {
-                printf("adasa\n");
-            }
 
             VdUiDiv *f = vd_ui_get_div(new_focused);
             if (!vd_ui_div_is_nil(f)) {
@@ -3575,6 +3591,105 @@ VD_UI_API VdUiDiv *vd_ui_radio(int *item, int index, VdUiStr label)
     return div;
 }
 
+VD_UI_API VdUiDiv *vd_ui_combo_begin(VdUiFlags flags, VdUiStr preview_str, VdUiStr id_str)
+{
+    VdUiDiv *div;
+
+    VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.1f, 0.1f, 0.1f, 1.f))
+    VD_UI_WITH_STYLE_BORDER_COLOR(vd_ui_f4(1,1,1, 0.7f))
+    VD_UI_WITH_STYLE_BORDER_SIZE(VD_UI_FLAG_BORDER, 2.f)
+    VD_UI_WITH_STYLE_CHILD_GAP(4)
+    VD_UI_WITH_STYLE_CHILD_ALIGNMENT(VD_UI_ALIGNMENT_CENTER)
+    VD_UI_WITH_STYLE_PADDING_ALL(4)
+    {
+        div = vd_ui_div_newf(0
+                             | VD_UI_FLAG_FLEX_HORIZONTAL
+                             | VD_UI_FLAG_BACKGROUND
+                             | VD_UI_FLAG_BORDER
+                             | VD_UI_FLAG_CLICKABLE
+                             | VD_UI_FLAG_NAVIGABLE
+                             | VD_UI_FLAG_KB_CLICKABLE
+                             , "##%.*scombo", id_str.l, id_str.s);
+    }
+
+    vd_ui_parent_push(div);
+    {
+        VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_TEXT_CONTENT, 0, 1)
+        VD_UI_WITH_STYLE_SIZE(VD_UI_AXISV, VD_UI_SIZE_MODE_TEXT_CONTENT, 0, 0)
+        {
+            vd_ui_labelf("%.*s##preview", preview_str.l, preview_str.s);
+        }
+
+        vd_ui_spacer(VD_UI_AXISH);
+
+        VdUiFontId font_id = {1};
+        VD_UI_WITH_STYLE_FONT_SIZE(12)
+        VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(12.f * vd_ui_get_scale(), 12.f * vd_ui_get_scale(), 0, 0)
+        {
+            vd_ui_icon(vd_ui_symbol(font_id, VD_UI_DEFAULT_ICONS_DOWN_OPEN), VD_UI_LIT("##arrow"));
+        }
+
+    }
+    vd_ui_parent_pop();
+
+    VdUiReply reply = vd_ui_call(div);
+
+    if (reply.clicked & VD_UI_SIG_MOUSE_LEFT) {
+        vd_ui_popup_pop_at_current_level();
+        vd_ui_popup_next_anchor(div);
+        VdUiPopupPlacement placement = 0
+                                       | VD_UI_POPUP_PLACEMENT_UNDER_ANCHOR
+                                       | VD_UI_POPUP_PLACEMENT_TAKE_SIZE_OF_ANCHOR
+                                       ;
+        vd_ui_popup_next_placement(placement);
+        vd_ui_popup_push(id_str);
+    }
+
+    VdUiDiv *popup;
+    VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_ABSOLUTE, 128, 0)
+    VD_UI_WITH_STYLE_SIZE(VD_UI_AXISV, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 0, 0)
+    VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.1f, 0.1f, 0.1f, 1.f))
+    VD_UI_WITH_STYLE_BORDER_COLOR(vd_ui_f4(1, 1, 1, 0.7f))
+    VD_UI_WITH_STYLE_BORDER_SIZE(VD_UI_FLAG_BORDER, 2)
+    {
+        popup = vd_ui_popup_begin(id_str, VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_BORDER);
+    }
+
+    if (popup) {
+        VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1, 1)
+        VD_UI_WITH_STYLE_SIZE(VD_UI_AXISV, VD_UI_SIZE_MODE_ABSOLUTE, 128, 1)
+        VD_UI_WITH_STYLE_CHILD_ALIGNMENT(VD_UI_ALIGNMENT_FILL)
+        {
+            vd_ui_scrollview_begin(VD_UI_LIT("##scroll"), 0, 1);
+        }
+        return div;
+    } else {
+        return 0;
+    }
+}
+
+VD_UI_API int vd_ui_selectable(VdUiFlags flags, VdUiStr s)
+{
+    VdUiDiv *div;
+
+    div = vd_ui_div_new(0
+                        | VD_UI_FLAG_CLICKABLE
+                        | flags
+                        , s);
+    if (vd_ui_call(div).clicked) {
+        vd_ui_popup_pop_all();
+        return 1;
+    }
+
+    return 0;
+}
+
+VD_UI_API void vd_ui_combo_end(void)
+{
+    vd_ui_scrollview_end();
+    vd_ui_popup_end();
+}
+
 VD_UI_API int vd_ui_slider(void *value, void *min_value, void *max_value,
                            VdUiDataType type, VdUiAxis orientation,
                            VdUiStr label)
@@ -4414,9 +4529,10 @@ VD_UI_API VdUiDiv *vd_ui_popup_begin(VdUiStr hstr, VdUiFlags flags)
             anchor = vd_ui_get_div(popup->anchor);
         }
 
-        switch (popup->placement) {
-            case VD_UI_POPUP_PLACEMENT_OVER_ANCHOR: {
-                if (anchor) {
+        VdUiPopupPlacement position_placement = popup->placement & VD_UI_POPUP_PLACEMENT_POSITION_MASK;
+        if (anchor) {
+            switch (position_placement) {
+                case VD_UI_POPUP_PLACEMENT_OVER_ANCHOR: {
                     float pos[2];
 
                     pos[0] = anchor->rect[0];
@@ -4426,26 +4542,42 @@ VD_UI_API VdUiDiv *vd_ui_popup_begin(VdUiStr hstr, VdUiFlags flags)
 
                     popup->pos[0] = pos[0];
                     popup->pos[1] = pos[1];
-                } else {
-                    popup->pos[0] = popup->mouse[0];
-                    popup->pos[1] = popup->mouse[1];
-                }
-            } break;
+                } break;
 
-            case VD_UI_POPUP_PLACEMENT_RIGHT_OF_ANCHOR: {
-                if (anchor) {
+                case VD_UI_POPUP_PLACEMENT_RIGHT_OF_ANCHOR: {
                     float pos[2];
                     pos[0] = anchor->rect[0] + (anchor->rect[VD_UI_RIGHT] - anchor->rect[VD_UI_LEFT]);
                     pos[1] = anchor->rect[1];
                     popup->pos[0] = pos[0];
                     popup->pos[1] = pos[1];
-                } else {
-                    popup->pos[0] = popup->mouse[0];
-                    popup->pos[1] = popup->mouse[1];
-                }
-            } break;
+                } break;
 
-            default: break;
+                case VD_UI_POPUP_PLACEMENT_UNDER_ANCHOR: {
+                    float pos[2];
+                    pos[0] = anchor->rect[VD_UI_LEFT];
+                    pos[1] = anchor->rect[VD_UI_BOTTOM];
+                    popup->pos[0] = pos[0];
+                    popup->pos[1] = pos[1];
+                } break;
+
+                default: break;
+            }
+
+        } else {
+            popup->pos[0] = popup->mouse[0];
+            popup->pos[1] = popup->mouse[1];
+        }
+
+        VdUiPopupPlacement size_placement = popup->placement & VD_UI_POPUP_PLACEMENT_SIZE_MASK;
+        if (anchor && (size_placement & VD_UI_POPUP_PLACEMENT_TAKE_SIZE_OF_ANCHOR)) {
+            VdUiAxis axis = VD_UI_AXISH;
+            if (size_placement & VD_UI_POPUP_PLACEMENT_TAKE_SIZE_AXISV) {
+                axis = VD_UI_AXISV;
+            }
+
+            result->style.size[axis].mode = VD_UI_SIZE_MODE_ABSOLUTE;
+            result->style.size[axis].value = anchor->comp_size[axis];
+            result->style.size[axis].niceness = 0.f;
         }
 
         result->comp_pos_rel[0] = popup->pos[0];
@@ -5245,7 +5377,7 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
                     || vd_ui_mouse_just_pressed(VD_UI_MOUSE_MIDDLE)
                     ;
 
-        if (press & !in_bounds) {
+        if (press && !in_bounds) {
             vd_ui_popup_pop_all();
         }
     }
@@ -6461,7 +6593,7 @@ static int vd_ui__calc_positions(VdUiContext *ctx, VdUiDiv *curr)
                                  || (child->flags & VD_UI_FLAG_BORDER)
                                  || (child->flags & VD_UI_FLAG_CLICKABLE);
             if (child_is_visible && vd_ui__point_in_rect(ctx->mouse, child->rect)) {
-                ctx->mouse_over_any_visible_div = 1;
+                ctx->new_mouse_over_any_visible_div = 1;
             }
 
             child = child->next;
