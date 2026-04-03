@@ -2264,7 +2264,6 @@ static void vd_ui__push_clip(VdUiContext *ctx, float clip[4]);
 static void vd_ui__pop_clip(VdUiContext *ctx);
 static void vd_ui__get_clip(VdUiContext *ctx, float *out_clip);
 static int  vd_ui__is_clipped(VdUiContext *ctx, VdUiDiv *div);
-static unsigned int vd_ui__get_clip_index(VdUiContext *ctx);
 
 static void vd_ui__push_rect(VdUiContext *ctx, float rect[4], float color[4]);
 static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId *texture, float p0[2], float p1[2],
@@ -3532,7 +3531,6 @@ VD_UI_API VdUiDiv *vd_ui_radio(int *item, int index, VdUiStr label)
 {
     VdUiDiv *div;
     VdUiDiv *circ;
-    VdUiDiv *txt;
     VdUiDiv *sel;
 
     float circle_size = 16.f * vd_ui_get_scale();
@@ -3563,7 +3561,7 @@ VD_UI_API VdUiDiv *vd_ui_radio(int *item, int index, VdUiStr label)
                 circ = vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("##circ"));
             }
 
-            txt = vd_ui_labelf("%.*s##txt", label.l, label.s);
+            vd_ui_labelf("%.*s##txt", label.l, label.s);
 
             vd_ui_parent_push(circ);
             {
@@ -7060,12 +7058,6 @@ static int vd_ui__is_clipped(VdUiContext *ctx, VdUiDiv *div)
     return 0;
 }
 
-static unsigned int vd_ui__get_clip_index(VdUiContext *ctx)
-{
-    VD_UI_ASSERT(ctx->clip_stack_count > 0);
-    return ctx->clip_stack_count - 1;
-}
-
 /* ----GLYPH CACHE IMPL---------------------------------------------------------------------------------------------- */
 static void vd_ui__update_all_fonts(VdUiContext *ctx)
 {
@@ -8199,16 +8191,15 @@ static void vd_ui__inspector_do_div(VdUiDiv *cur)
 
     }
 
-    VdUiDiv *p = 0;
     VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISH, 0)
     VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 0)
     VD_UI_WITH_STYLE_PADDING4(8.f, 0, 0, 0)
     VD_UI_WITH_STYLE_BACKGROUND_COLORING(color)
     {
-        p = vd_ui_parent_newf(0
-                              | VD_UI_FLAG_BACKGROUND
-                              | VD_UI_FLAG_FLEX_VERTICAL
-                              ,"##inspector_children-%.*s", cur->id_str.l, cur->id_str.s);
+        vd_ui_parent_newf(0
+                          | VD_UI_FLAG_BACKGROUND
+                          | VD_UI_FLAG_FLEX_VERTICAL
+                          ,"##inspector_children-%.*s", cur->id_str.l, cur->id_str.s);
     }
 
     VdUiDiv *lbl;
@@ -8509,8 +8500,6 @@ static void vd_ui__do_inspector(VdUiContext *ctx)
     static size_t curr_div_h = 0;
     static float  inspector_w = 400.f;
     static float  details_h = 200.f;
-    static int    bananas = 0;
-    static float  bananas_scale = 1.f;
     static int    curr_tab_index = 0;
     VdUiDiv *inspector;
     VD_UI_WITH_STYLE_SIZE_ABSOLUTE_W(inspector_w, 0.f)

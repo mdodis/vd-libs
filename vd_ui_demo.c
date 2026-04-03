@@ -189,7 +189,6 @@ int vd_ui_demo(void)
     {
         // Menubar
         if (show_menubar) {
-            static uint32_t main_menubar = 0;
             #if 0
 
             VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f)
@@ -260,8 +259,6 @@ int vd_ui_demo(void)
             vd_ui_menu_group_end(&main_menubar);
 
             #else
-            VdUiDiv *menu;
-
             int prev_active = demo_menubar_active;
             demo_menubar_hovering = 0;
 
@@ -269,11 +266,11 @@ int vd_ui_demo(void)
             VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 0.f)
             VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(0.1f, 0.1f, 0.1f, 1.f))
             {
-                menu = vd_ui_parent_new(0
-                                        | VD_UI_FLAG_BACKGROUND
-                                        // | VD_UI_FLAG_CLICKABLE
-                                        | VD_UI_FLAG_FLEX_HORIZONTAL
-                                        , VD_UI_LIT("##menu"));
+                vd_ui_parent_new(0
+                                 | VD_UI_FLAG_BACKGROUND
+                                 // | VD_UI_FLAG_CLICKABLE
+                                 | VD_UI_FLAG_FLEX_HORIZONTAL
+                                 , VD_UI_LIT("##menu"));
             }
             {
                 if (vd_ui__demo_menu_section_begin("File")) {
@@ -384,8 +381,6 @@ int vd_ui_demo(void)
                     }
                     vd_ui_parent_pop();
                 }
-
-                static VdUiAlignment alignment = VD_UI_ALIGNMENT_START;
 
                 VD_UI_WITH_STYLE_CHILD_GAP(8)
                 VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 0)
@@ -506,20 +501,16 @@ int vd_ui_demo(void)
                 vd_ui__demo_section_begin("Nesting - 1");
                 vd_ui__demo_fixed_rect_parent("layout-5", 0, 400, 200, vd_ui_f4(0.05f, 0.05f, 0.05f, 1.f));
                 {
-                    VdUiDiv *pa = 0;
-                    VdUiDiv *pb = 0;
-                    VdUiDiv *pc = 0;
-
-                    pa = vd_ui__demo_dyn_rect_parent2("dynamic-a", VD_UI_FLAG_FLEX_HORIZONTAL,
-                                                      VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
-                                                      VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
-                                                      vd_ui_f4(0.01f, 0.15f, 0.15f, 1.f));
+                    vd_ui__demo_dyn_rect_parent2("dynamic-a", VD_UI_FLAG_FLEX_HORIZONTAL,
+                                                 VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
+                                                 VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
+                                                 vd_ui_f4(0.01f, 0.15f, 0.15f, 1.f));
                     {
 
-                        pb = vd_ui__demo_dyn_rect_parent2("dynamic-b", 0,
-                                                          VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 0.f,
-                                                          VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
-                                                          vd_ui_f4(0.01f, 0.15f, 0.15f, 1.f));
+                        vd_ui__demo_dyn_rect_parent2("dynamic-b", 0,
+                                                     VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 0.f,
+                                                     VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
+                                                     vd_ui_f4(0.01f, 0.15f, 0.15f, 1.f));
                         {
                             vd_ui__demo_dyn_rect2("x", 0,
                                                        VD_UI_SIZE_MODE_ABSOLUTE, 100.f, 0.f,
@@ -533,10 +524,10 @@ int vd_ui_demo(void)
                         }
                         vd_ui_parent_pop();
 
-                        pc = vd_ui__demo_dyn_rect_parent2("dynamic-c", 0,
-                                                          VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
-                                                          VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
-                                                          vd_ui_f4(0.15f, 0.01f, 0.15f, 1.f));
+                        vd_ui__demo_dyn_rect_parent2("dynamic-c", 0,
+                                                     VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
+                                                     VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
+                                                     vd_ui_f4(0.15f, 0.01f, 0.15f, 1.f));
                         {
                             vd_ui__demo_dyn_rect2("x", 0,
                                                        VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
@@ -559,20 +550,17 @@ int vd_ui_demo(void)
                 float layout_6_length[2];
                 vd_ui__demo_fixed_rect_parent("layout-6", 0, 400, 200, vd_ui_f4(0.05f, 0.05f, 0.05f, 1.f));
                 {
-                    VdUiDiv *pa = 0;
-                    VdUiDiv *pb = 0;
-                    VdUiDiv *pc = 0;
-
-                    pa = vd_ui__demo_dyn_rect_parent2("dynamic-a", 0,
-                                                      VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
-                                                      VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
-                                                      vd_ui_f4(0.01f, 0.15f, 0.15f, 1.f));
+                    VdUiDiv *pa;
+                    vd_ui__demo_dyn_rect_parent2("dynamic-a", 0,
+                                                 VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
+                                                 VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
+                                                 vd_ui_f4(0.01f, 0.15f, 0.15f, 1.f));
                     {
 
-                        pb = vd_ui__demo_dyn_rect_parent2("dynamic-b", VD_UI_FLAG_FLEX_HORIZONTAL,
-                                                          VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
-                                                          VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 0.f,
-                                                          vd_ui_f4(0.01f, 0.15f, 0.15f, 1.f));
+                        vd_ui__demo_dyn_rect_parent2("dynamic-b", VD_UI_FLAG_FLEX_HORIZONTAL,
+                                                     VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
+                                                     VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 0.f,
+                                                     vd_ui_f4(0.01f, 0.15f, 0.15f, 1.f));
                         {
                             vd_ui__demo_dyn_rect2("x", 0,
                                                        VD_UI_SIZE_MODE_ABSOLUTE, 64.f, 1.f,
@@ -586,10 +574,10 @@ int vd_ui_demo(void)
                         }
                         vd_ui_parent_pop();
 
-                        pc = vd_ui__demo_dyn_rect_parent2("dynamic-c", VD_UI_FLAG_FLEX_HORIZONTAL,
-                                                          VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
-                                                          VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
-                                                          vd_ui_f4(0.15f, 0.01f, 0.15f, 1.f));
+                        vd_ui__demo_dyn_rect_parent2("dynamic-c", VD_UI_FLAG_FLEX_HORIZONTAL,
+                                                     VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
+                                                     VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f,
+                                                     vd_ui_f4(0.15f, 0.01f, 0.15f, 1.f));
                         {
                             vd_ui__demo_dyn_rect2("x", 0,
                                                        VD_UI_SIZE_MODE_ABSOLUTE, 80.f, 1.f,
@@ -633,7 +621,7 @@ int vd_ui_demo(void)
                     int count_options = sizeof(options) / sizeof(options[0]);
                     static int current_option = 0;
 
-                    VdUiStr preview = vd_ui_str(options[current_option], (int)strlen(options[current_option]));
+                    VdUiStr preview = vd_ui_str((char*)options[current_option], (int)strlen(options[current_option]));
 
                     VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
                     VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 0)
@@ -643,7 +631,7 @@ int vd_ui_demo(void)
                                                                    vd_ui_gradient1(vd_ui_f4(0.2f, 0.3f, 0.7f, 0.5f)),
                                                                    vd_ui_gradient1(vd_ui_f4(0.2f, 0.3f, 0.7f, 0.7f)));
                             for (int i = 0; i < count_options; ++i) {
-                                VdUiStr str = vd_ui_str(options[i], (int)strlen(options[i]));
+                                VdUiStr str = vd_ui_str((char*)options[i], (int)strlen(options[i]));
                                 int selected = 0;
                                 VD_UI_WITH_STYLE_BACKGROUND_COLORING(coloring)
                                 VD_UI_WITH_STYLE_SIZE(VD_UI_AXISH, VD_UI_SIZE_MODE_TEXT_CONTENT, 0, 0)
