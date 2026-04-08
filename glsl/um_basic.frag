@@ -7,6 +7,8 @@ flat in uint f_mode;
 out vec4 r_col;
 flat in vec4 f_param;
 
+uniform vec2 u_resolution;
+
 
 void do_line() {
     vec2 uv = f_texcoord * 2.0 - 1.0;
@@ -50,7 +52,7 @@ float grid(vec2 lineWidth, vec2 texcoord) {
 }
 void do_grid() {
     float grid1 = grid(vec2(0.005), f_texcoord * 1.0);
-    float grid2 = grid(vec2(0.005), f_texcoord * 2.0);
+    float grid2 = grid(vec2(0.005), f_texcoord * 10.0);
     vec3 color1 = vec3(1.0,1.0,1.0);
     vec3 color2 = vec3(0.7,0.7,0.7);
     float a1 = grid1;

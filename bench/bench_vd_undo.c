@@ -65,11 +65,11 @@ static void s1_record(uint32_t loops, uint32_t mutation_count, uint32_t skip_cou
 
     if (output) {
         double avg_cy_per_check = (double)cy_diff_total / (double)loops;
-        double avg_cy_per_byte  = avg_cy_per_check / (double)(state_size);
+        double avg_cy_per_state  = avg_cy_per_check / (double)(state_size);
 
-        printf("\n");
-        // printf("%s,%s,%s,%s,%s,%s,%s,\n", "Scenario 1", "State Size", "Buffer Cap", "Loops", "Mut. Count", "Skip Count", "cy/byte");
-        printf("%s,%u,%u,%u,%u,%u,%.2f\n", "", state_size, buffer_cap, loops, mutation_count, skip_count, avg_cy_per_byte);
+        // printf("\n");
+        // printf("%s,%s,%s,%s,%s,%s,%s,\n", "Scenario 1", "State Size", "Buffer Cap", "Loops", "Mut. Count", "Skip Count", "cy/state");
+        printf("%s,%u,%u,%u,%u,%u,%.2f,%.2f\n", "", state_size, buffer_cap, loops, mutation_count, skip_count, avg_cy_per_state, avg_cy_per_check);
         // printf("%s%.2f\n", "AVG cy/check", avg_cy_per_check);
         // printf("%s%.2f\n", "AVG cy/byte", avg_cy_per_byte);
     }

@@ -131,101 +131,179 @@ float clampf(float min, float x, float max)
     return x < min ? min : x;
 }
 
-int audio_thread_proc(void *_arg)
-{
-    (void)_arg;
+void audio_callback(int frames, float *ptr, void *user_data) {
 
-    while (1) {
-        int frames_available = vd_au_endpoint_frames_available(&Audio_Output);
-        uint8_t *ptr = 0;
-        VdAuStat stat = vd_au_endpoint_write_begin(&Audio_Output, frames_available, &ptr);
-        if (stat == VD_AU_STAT_OK) {
+    float scale = (float)Audio_Output.frame_rate / (float)Audio_Source.rate;
 
-            float scale = (float)Audio_Output.frame_rate / (float)Audio_Source.rate;
+    uint32_t source_frames_to_read = resample_hermite_input_count_from_output_count(frames, scale);
 
-            uint32_t source_frames_to_read = resample_hermite_input_count_from_output_count(frames_available, scale);
+    // Read Audio Chunks
+    uint32_t source_frames_read = 0;
+    while (source_frames_read < source_frames_to_read) {
 
-            // Read Audio Chunks
-            uint32_t source_frames_read = 0;
-            while (source_frames_read < source_frames_to_read) {
+        uint32_t channel_stride = Audio_Source.channels;
+        uint32_t sample_stride = (Audio_Source.bits / 8);
+        uint32_t data_size = (source_frames_to_read - source_frames_read) * channel_stride * sample_stride;
 
-                uint32_t channel_stride = Audio_Source.channels;
-                uint32_t sample_stride = (Audio_Source.bits / 8);
-                uint32_t data_size = (source_frames_to_read - source_frames_read) * channel_stride * sample_stride;
-
-                if (!Audio_Source.currently_in_chunk) {
-                    WaveChunkHeader hdr;
-                    if (!fread(&hdr, sizeof(hdr), 1, Audio_Source.f)) {
-                        break;
-                    }
-
-                    if (hdr.id != WAVE_ID_DATA) {
-                        // Skip chunk
-                        fseek(Audio_Source.f, hdr.size, SEEK_CUR);
-                        continue;
-                    }
-
-                    Audio_Source.currently_in_chunk = 1;
-                    Audio_Source.curr_chunk_remaining = hdr.size;
-                }
-
-                if (Audio_Source.curr_chunk_remaining < data_size) {
-                    data_size = Audio_Source.curr_chunk_remaining;
-                }
-
-                if (data_size > sizeof(read_buf)) {
-                    data_size = sizeof(read_buf);
-                }
-
-                if (fread(read_buf, data_size, 1, Audio_Source.f)) {
-                    // Actually process audio here
-
-                    uint32_t frames_in = data_size / (sample_stride * channel_stride);
-
-                    for (uint32_t f = 0; f < frames_in; ++f) {
-                        for (uint32_t c = 0; c < channel_stride; ++c) {
-                            uint8_t *sample_in  = &read_buf[f * sample_stride * channel_stride + c * sample_stride];
-                            float   *sample_out = &source_buf[source_frames_read * channel_stride + f * channel_stride + c];
-
-                            switch (sample_stride) {
-                                case 2: {
-                                    // 16 bit
-                                    int16_t sample = *(int16_t*)sample_in;
-
-                                    float value = clampf(-1.f, ((float)sample / 32767.f), 1.f);
-
-                                    *sample_out = value;
-                                } break;
-                                default: break;
-                            }
-                        }
-                    }
-                    source_frames_read += frames_in;
-
-                    Audio_Source.curr_chunk_remaining -= data_size;
-                    Audio_Source.currently_in_chunk = Audio_Source.curr_chunk_remaining > 0;
-                } else {
-                    break;
-                }
-                
-            }
-            uint32_t output_frames_produced = resample_hermite(source_buf, Audio_Source.channels, source_frames_read,
-                                                               (float*)ptr, scale);
-
-            while (output_frames_produced < (uint32_t)frames_available) {
-                ((float*)ptr)[output_frames_produced++] = 0.f;
+        if (!Audio_Source.currently_in_chunk) {
+            WaveChunkHeader hdr;
+            if (!fread(&hdr, sizeof(hdr), 1, Audio_Source.f)) {
+                break;
             }
 
-            vd_au_endpoint_write_end(&Audio_Output);
-        } else if (stat > 0) {
-            break;
+            if (hdr.id != WAVE_ID_DATA) {
+                // Skip chunk
+                fseek(Audio_Source.f, hdr.size, SEEK_CUR);
+                continue;
+            }
+
+            Audio_Source.currently_in_chunk = 1;
+            Audio_Source.curr_chunk_remaining = hdr.size;
+        }
+
+        if (Audio_Source.curr_chunk_remaining < data_size) {
+            data_size = Audio_Source.curr_chunk_remaining;
+        }
+
+        if (data_size > sizeof(read_buf)) {
+            data_size = sizeof(read_buf);
+        }
+
+        if (fread(read_buf, data_size, 1, Audio_Source.f)) {
+            // Actually process audio here
+
+            uint32_t frames_in = data_size / (sample_stride * channel_stride);
+
+            for (uint32_t f = 0; f < frames_in; ++f) {
+                for (uint32_t c = 0; c < channel_stride; ++c) {
+                    uint8_t *sample_in  = &read_buf[f * sample_stride * channel_stride + c * sample_stride];
+                    float   *sample_out = &source_buf[source_frames_read * channel_stride + f * channel_stride + c];
+
+                    switch (sample_stride) {
+                        case 2: {
+                            // 16 bit
+                            int16_t sample = *(int16_t*)sample_in;
+
+                            float value = clampf(-1.f, ((float)sample / 32767.f), 1.f);
+
+                            *sample_out = value;
+                        } break;
+                        default: break;
+                    }
+                }
+            }
+            source_frames_read += frames_in;
+
+            Audio_Source.curr_chunk_remaining -= data_size;
+            Audio_Source.currently_in_chunk = Audio_Source.curr_chunk_remaining > 0;
         } else {
-            thrd_yield();
+            break;
         }
     }
 
-    return 0;
+    uint32_t output_frames_produced = resample_hermite(source_buf, Audio_Source.channels, source_frames_read,
+                                                       (float*)ptr, scale);
+
+    while (output_frames_produced < (uint32_t)frames) {
+        ((float*)ptr)[output_frames_produced++] = 0.f;
+    }
 }
+
+// int audio_thread_proc(void *_arg)
+// {
+//     (void)_arg;
+
+//     while (1) {
+//         int frames_available = vd_au_endpoint_frames_available(&Audio_Output);
+//         uint8_t *ptr = 0;
+//         VdAuStat stat = vd_au_endpoint_write_begin(&Audio_Output, frames_available, &ptr);
+//         if (stat == VD_AU_STAT_OK) {
+
+//             float scale = (float)Audio_Output.frame_rate / (float)Audio_Source.rate;
+
+//             uint32_t source_frames_to_read = resample_hermite_input_count_from_output_count(frames_available, scale);
+
+//             // Read Audio Chunks
+//             uint32_t source_frames_read = 0;
+//             while (source_frames_read < source_frames_to_read) {
+
+//                 uint32_t channel_stride = Audio_Source.channels;
+//                 uint32_t sample_stride = (Audio_Source.bits / 8);
+//                 uint32_t data_size = (source_frames_to_read - source_frames_read) * channel_stride * sample_stride;
+
+//                 if (!Audio_Source.currently_in_chunk) {
+//                     WaveChunkHeader hdr;
+//                     if (!fread(&hdr, sizeof(hdr), 1, Audio_Source.f)) {
+//                         break;
+//                     }
+
+//                     if (hdr.id != WAVE_ID_DATA) {
+//                         // Skip chunk
+//                         fseek(Audio_Source.f, hdr.size, SEEK_CUR);
+//                         continue;
+//                     }
+
+//                     Audio_Source.currently_in_chunk = 1;
+//                     Audio_Source.curr_chunk_remaining = hdr.size;
+//                 }
+
+//                 if (Audio_Source.curr_chunk_remaining < data_size) {
+//                     data_size = Audio_Source.curr_chunk_remaining;
+//                 }
+
+//                 if (data_size > sizeof(read_buf)) {
+//                     data_size = sizeof(read_buf);
+//                 }
+
+//                 if (fread(read_buf, data_size, 1, Audio_Source.f)) {
+//                     // Actually process audio here
+
+//                     uint32_t frames_in = data_size / (sample_stride * channel_stride);
+
+//                     for (uint32_t f = 0; f < frames_in; ++f) {
+//                         for (uint32_t c = 0; c < channel_stride; ++c) {
+//                             uint8_t *sample_in  = &read_buf[f * sample_stride * channel_stride + c * sample_stride];
+//                             float   *sample_out = &source_buf[source_frames_read * channel_stride + f * channel_stride + c];
+
+//                             switch (sample_stride) {
+//                                 case 2: {
+//                                     // 16 bit
+//                                     int16_t sample = *(int16_t*)sample_in;
+
+//                                     float value = clampf(-1.f, ((float)sample / 32767.f), 1.f);
+
+//                                     *sample_out = value;
+//                                 } break;
+//                                 default: break;
+//                             }
+//                         }
+//                     }
+//                     source_frames_read += frames_in;
+
+//                     Audio_Source.curr_chunk_remaining -= data_size;
+//                     Audio_Source.currently_in_chunk = Audio_Source.curr_chunk_remaining > 0;
+//                 } else {
+//                     break;
+//                 }
+                
+//             }
+//             uint32_t output_frames_produced = resample_hermite(source_buf, Audio_Source.channels, source_frames_read,
+//                                                                (float*)ptr, scale);
+
+//             while (output_frames_produced < (uint32_t)frames_available) {
+//                 ((float*)ptr)[output_frames_produced++] = 0.f;
+//             }
+
+//             vd_au_endpoint_write_end(&Audio_Output);
+//         } else if (stat > 0) {
+//             break;
+//         } else {
+//             thrd_yield();
+//         }
+//     }
+
+//     return 0;
+// }
 
 int main(int argc, char const *argv[])
 {
@@ -294,10 +372,12 @@ int main(int argc, char const *argv[])
     Output_Buffer = (float*)malloc(Buffer_Size);
     memset(Output_Buffer, 0, Buffer_Size);
 
+    Audio_Output.callback = audio_callback;
+    Audio_Output.callback_user_data = 0;
     vd_au_endpoint_start(&Audio_Output);
 
-    thrd_t audio_thread_handle;
-    thrd_create(&audio_thread_handle, audio_thread_proc, 0);
+    // thrd_t audio_thread_handle;
+    // thrd_create(&audio_thread_handle, audio_thread_proc, 0);
 
     while (vd_fw_running()) {
         vd_fw_poll(0);

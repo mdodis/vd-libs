@@ -10,6 +10,7 @@ layout (location = 6) in vec2 timeout;
 
 uniform mat4 u_proj;
 uniform mat4 u_view;
+uniform vec2 u_resolution;
 
 out vec4 f_col;
 flat out uint f_mode;
@@ -119,10 +120,57 @@ vec2 uv_worldspace_from_orientation(vec3 worldspace_origin, vec3 vertex_position
 
 void do_line()
 {
-    gl_Position = pos_viewspace_rectangle_aligned_on_positions(v_v0, v_v1, thickness);
+
+    vec3 p0 = v_v0;
+    vec3 p1 = v_v1;
+    float width = thickness;
+    // = pos_viewspace_rectangle_aligned_on_positions(v_v0, v_v1, thickness);
+
+    vec4 Pv0 = u_view * vec4(p0, 1.0);
+    vec4 Pv1 = u_view * vec4(p1, 1.0);
+    vec2 movements[6] = vec2[](
+        vec2(+1.0, 1.0),
+        vec2(-1.0, 1.0),
+        vec2(+1.0, 0.0),
+        vec2(+1.0, 0.0),
+        vec2(-1.0, 1.0),
+        vec2(-1.0, 0.0)
+    );
+    float L = distance(Pv1.xyz, Pv0.xyz);
+    vec3 F = normalize(Pv1.xyz - Pv0.xyz);
+    vec3 closest = Pv0.xyz + F * (-dot(Pv0.xyz, F) / dot(F, F));
+    float H = width / 2.0;
+    vec3 M = -normalize(closest);
+    vec3 R = cross(M, F);
+    vec3 vertex = Pv0.xyz + movements[gl_VertexID].x * H * R + movements[gl_VertexID].y * L * F;
+    gl_Position = u_proj * vec4(vertex, 1.0);
     f_col = v_col;
     f_mode = mode;
     f_texcoord = uv_rectangle();
+
+    // vec4 view_0 = u_view * vec4(v_v0, 1.0);
+    // vec4 view_1 = u_view * vec4(v_v1, 1.0);
+
+    // vec4 ndc_0 = u_proj * view_0;
+    // vec4 ndc_1 = u_proj * view_1;
+
+    // vec2 screen_0 = u_resolution * ((ndc_0.xy / ndc_0.w) + 1.0) / 2.0;
+    // vec2 screen_1 = u_resolution * ((ndc_1.xy / ndc_1.w) + 1.0) / 2.0;
+
+    // float antialias = 3.0;
+    // float w = thickness / 2.0 + antialias;
+    // float l = distance(screen_1.xy, screen_0.xy);
+    // vec2  D = normalize(screen_1.xy - screen_0.xy);
+    // vec2  O = normalize(vec2(-D.y, D.x));
+    // vec2 uv = uv_rectangle() - vec2(0.0, 0.5);
+    // float t = uv.x;
+    // float depth = mix(ndc_0.z, ndc_1.z, t);
+    // float w_interp = ndc_0.w; // mix(ndc_0.w, ndc_1.w, t);
+
+    // vec2 position;
+    // position = screen_0.xy + D * uv.x * l + O * uv.y * w;
+    // gl_Position = vec4((2.0 * position / u_resolution - 1.0), ndc_0.z / w_interp, 1.0);
+    // f_mode = 3u;
 }
 
 void do_triangle() {

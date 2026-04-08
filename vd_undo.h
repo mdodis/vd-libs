@@ -1,26 +1,11 @@
-/* vd_undo.h - Basic Undo System
- * ---------------------------------------------------------------------------------------------------------------------
- * zlib License
- * 
- * (C) Copyright 2025-2026 Michael Dodis (michaeldodisgr@gmail.com)
+/**
+ * vd_undo.h
+ * Author: Michael Dodis
  *
- * This software is provided 'as-is', without any express or implied
- * warranty.  In no event will the authors be held liable for any damages
- * arising from the use of this software.
+ * @todo:
  * 
- * Permission is granted to anyone to use this software for any purpose,
- * including commercial applications, and to alter it and redistribute it
- * freely, subject to the following restrictions:
- * 
- * 1. The origin of this software must not be misrepresented; you must not
- *    claim that you wrote the original software. If you use this software
- *    in a product, an acknowledgment in the product documentation would be
- *    appreciated but is not required.
- * 2. Altered source versions must be plainly marked as such, and must not be
- *    misrepresented as being the original software.
- * 3. This notice may not be removed or altered from any source distribution.
- * ---------------------------------------------------------------------------------------------------------------------
  */
+
 #ifndef VD_UNDO_H
 #define VD_UNDO_H
 
@@ -37,6 +22,7 @@ typedef struct {
 
 VdUndo   vd_undo_make(uint8_t *buf, uint32_t capacity, uint32_t state_size);
 int      vd_undo_invalidate(VdUndo *u, void *before, void *after, size_t size);
+int      vd_undo_invalidate_mut_before(VdUndo *u, void *before, void *after, size_t size);
 int      vd_undo_undo(VdUndo *u, void *output, size_t size);
 int      vd_undo_redo(VdUndo *u, void *output, size_t size);
 #endif // !VD_UNDO_H
@@ -189,6 +175,7 @@ uint32_t vd_undo__append(VdUndo *u, uint32_t size, int *overwrite)
     // Clear everything between new_start and new_end
     {
         VdUndo__BlockFooter curr = first;
+        VdUndo__BlockFooter prev_curr;
         do {
             uint32_t curr_start = vd_undo_block_off(u, curr);
             uint32_t curr_end   = vd_undo_block_end(u, curr);
@@ -211,6 +198,7 @@ uint32_t vd_undo__append(VdUndo *u, uint32_t size, int *overwrite)
                 hit = 1;
             }
 
+            prev_curr = curr;
             curr = vd_undo__next(u, curr);
 
             if (hit) {
@@ -230,7 +218,9 @@ uint32_t vd_undo__append(VdUndo *u, uint32_t size, int *overwrite)
             } else {
                 break;
             }
-        } while (!vd_undo__block_eq(curr, last));
+
+            prev_curr = vd_undo__get(u, curr.prev);
+        } while (!vd_undo__block_eq(curr, prev_curr));
     }
 
     last.next = new_end;
@@ -269,7 +259,8 @@ int vd_undo_push(VdUndo *u, uint32_t *out_start, uint32_t size, int handle_overw
         change.start = 0;
         int unused_overwrite;
         uint32_t prev_curr = u->curr;
-        vd_undo__append(u, sizeof(change), &unused_overwrite);
+        write_start = vd_undo__append(u, sizeof(change), &unused_overwrite);
+        vd_undo__buf_w(u, write_start, &change, sizeof(change));
         u->first = u->curr;
         u->curr = prev_curr;
     }
@@ -299,6 +290,66 @@ int vd_undo_invalidate(VdUndo *u, void *before, void *after, size_t size)
             overall_change_size += sizeof(VdUndo__Change) + (i - before_i);
         }
     }
+
+    uint32_t write_start = ~0u;
+    if (overall_change_size > 0) {
+        result = vd_undo_push(u, &write_start, overall_change_size, 1);
+    }
+
+    if (result) {
+        uint32_t curr = write_start;
+        uint32_t written = 0;
+        for (uint32_t i = 0; i < size; ++i) {
+            uint32_t before_i = i;
+            while ((i < size) && (abytes[i] != bbytes[i])) {
+                i++;
+            }
+
+            if (before_i < i) {
+                written += sizeof(VdUndo__Change) + (i - before_i);
+
+                VdUndo__Change change;
+                change.start = before_i;
+                change.size = i - before_i;
+                curr = vd_undo__buf_w(u, curr, &change, sizeof(change));
+
+                for (uint32_t j = before_i; j < i; ++j) {
+                    uint8_t diff = abytes[j] - bbytes[j];
+                    curr = vd_undo__buf_w(u, curr, &diff, 1);
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
+int vd_undo_invalidate_mut_before(VdUndo *u, void *before, void *after, size_t size)
+{
+    int result = 0;
+
+    if (u->state_size != size) {
+        return 0;
+    }
+
+    uint8_t *abytes = (uint8_t*)after;
+    uint8_t *bbytes = (uint8_t*)before;
+
+    uint32_t overall_change_size = 0;
+
+    for (uint32_t i = 0; i < size; ++i) {
+
+        // Diff the before & after structs
+        bbytes[i] = abytes[i] - bbytes[i];
+        if (bbytes[i] != 0) {
+            overall_change_size++;
+        }
+    }
+
+    if (overall_change_size == 0) {
+        return 0;
+    }
+
 
     uint32_t write_start = ~0u;
     if (overall_change_size > 0) {
