@@ -2799,13 +2799,15 @@ VD_UI_API void vd_ui_frame_end(void)
         ctx->nc_area.now.rect[2] = (int)nc_div->rect[2];  ctx->nc_area.now.rect[3] = (int)nc_div->rect[3];
 
         // Output child areas
-        VdUiDiv *child = nc_div->first;
-        while (child != 0) {
-            vd_ui_ws_nc_area__calc(ctx, child,
-                                        VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX,
-                                        &ctx->nc_area.now.num_excluded_unbound,
-                                        &ctx->nc_area.now.num_excluded, ctx->nc_area.now.excluded);
-            child = child->next;
+        if (nc_div->first != &ctx->sent) {
+            VdUiDiv *child = nc_div->first;
+            do {
+                vd_ui_ws_nc_area__calc(ctx, child,
+                                            VD_UI_WS_NC_AREA_EXCLUDE_RECTS_MAX,
+                                            &ctx->nc_area.now.num_excluded_unbound,
+                                            &ctx->nc_area.now.num_excluded, ctx->nc_area.now.excluded);
+                child = child->next;
+            } while (child != nc_div->first);
         }
 
         int changed = 0;
@@ -8099,17 +8101,18 @@ static int vd_ui_ws_nc_area__calc(VdUiContext *ctx, VdUiDiv *curr, int num_max_e
         }
     }
 
-    VdUiDiv *child = curr->first;
-    while (child != 0) {
+    if (curr->first != &ctx->sent) {
+        VdUiDiv *child = curr->first;
+        do {
+            int child_changed = vd_ui_ws_nc_area__calc(ctx, child,
+                                                       num_max_exclude_rects, num_total_exclude_rects,
+                                                       num_exclude_rects,
+                                                       exclude_rects);
 
-        int child_changed = vd_ui_ws_nc_area__calc(ctx, child,
-                                                   num_max_exclude_rects, num_total_exclude_rects,
-                                                   num_exclude_rects,
-                                                   exclude_rects);
+            changed = changed || child_changed;
 
-        changed = changed || child_changed;
-
-        child = child->next;
+            child = child->next;
+        } while (child != curr->first);
     }
  
     return changed;
