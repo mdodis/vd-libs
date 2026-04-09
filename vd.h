@@ -1195,11 +1195,12 @@ VD_INLINE VdStr vd_str_builder_compose(VdStrBuilder *builder, VdArena *opt_arena
             default: VD_IMPOSSIBLE();
         }
 
+        Vdusize request_size = mem_size + req_size;
         if (allocate_space_for_null && (it == last_node)) {
-            req_size += 1;
+            request_size += 1;
         }
 
-        mem_result = (char*)vd_arena_resize(arena, mem_result, mem_size, mem_size + req_size);
+        mem_result = (char*)vd_arena_resize(arena, mem_result, mem_size, request_size);
 
         switch (node->type) {
             case VD__STR_BUILDER_NODE_TYPE_STRING: {
@@ -1211,13 +1212,15 @@ VD_INLINE VdStr vd_str_builder_compose(VdStrBuilder *builder, VdArena *opt_arena
             default: VD_IMPOSSIBLE();
         }
 
-        mem_result[mem_size + req_size] = 0;
+        if (allocate_space_for_null && (it == last_node)) {
+            mem_result[mem_size + req_size] = 0;
+        }
+
         mem_size += req_size;
     }
 
     VdStr result = { mem_result, mem_size };
-    return result;
-}
+    return result;}
 
 #if VD_MACRO_ABBREVIATIONS
 #define StrBuilder                 VdStrBuilder

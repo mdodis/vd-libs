@@ -286,6 +286,16 @@ VD_CG_INL F4          fscale4          (F4 v, F1 s)                            {
 VD_CG_INL D4          dscale4          (D4 v, D1 s)                            { return dm4(v.x * s, v.y * s, v.z * s, v.w * s); }
 VD_CG_INL S4          sscale4          (S4 v, S1 s)                            { return sm4(v.x * s, v.y * s, v.z * s, v.w * s); }
 
+VD_CG_INL F2          fcmul2           (F2 a, F2 b)                            { return fm2(a.x * b.x, a.y * b.y); }
+VD_CG_INL D2          dcmul2           (D2 a, D2 b)                            { return dm2(a.x * b.x, a.y * b.y); }
+VD_CG_INL S2          scmul2           (S2 a, S2 b)                            { return sm2(a.x * b.x, a.y * b.y); }
+VD_CG_INL F3          fcmul3           (F3 a, F3 b)                            { return fm3(a.x * b.x, a.y * b.y, a.z * b.z); }
+VD_CG_INL D3          dcmul3           (D3 a, D3 b)                            { return dm3(a.x * b.x, a.y * b.y, a.z * b.z); }
+VD_CG_INL S3          scmul3           (S3 a, S3 b)                            { return sm3(a.x * b.x, a.y * b.y, a.z * b.z); }
+VD_CG_INL F4          fcmul4           (F4 a, F4 b)                            { return fm4(a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w); }
+VD_CG_INL D4          dcmul4           (D4 a, D4 b)                            { return dm4(a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w); }
+VD_CG_INL S4          scmul4           (S4 a, S4 b)                            { return sm4(a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w); }
+
 VD_CG_INL F2          fdiv2            (F2 v, F1 s)                            { return fm2(v.x / s, v.y / s); }
 VD_CG_INL D2          ddiv2            (D2 v, D1 s)                            { return dm2(v.x / s, v.y / s); }
 VD_CG_INL S2          sdiv2            (S2 v, S1 s)                            { return sm2(v.x / s, v.y / s); }
