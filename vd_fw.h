@@ -155,6 +155,10 @@
 #   define VD_FW_LOG(fmt, ...)
 #endif // !VD_FW_LOG
 
+#ifndef VD_FW_PROFILE_ZONE
+#   define VD_FW_PROFILE_ZONE(name)
+#endif // !VD_FW_PROFILE_ZONE
+
 #define VD_FW_ENDIANNESS_LE 1
 #define VD_FW_ENDIANNESS_BE 0
 #ifndef VD_FW_ENDIANNESS
@@ -9381,24 +9385,33 @@ VD_FW_API void vd_fw_lock(void)
 VD_FW_API void vd_fw_unlock(void)
 {
     if (VD_FW_G.graphics_api != VD_FW_GRAPHICS_API_CUSTOM) {
-        VdFwSwapBuffers(VD_FW_G.hdc);
-    }
-
-    // @note(mdodis): This needs to happen, otherwise the window animations and taskbar don't get redrawn if the window
-    // is maximized to either section of the screen or the whole screen
-    if (!VD_FW_G.draw_decorations) {
-        VdFwDwmFlush();
-    }
-
-    if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
-        if (glFenceSync && glClientWaitSync && glDeleteSync) {
-            GLsync fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-            if (fence) {
-                glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, 1000000000ULL);
-                glDeleteSync(fence);
-            }
+        VD_FW_PROFILE_ZONE(vd_fw_win32_swap_buffer_opengl)
+        {
+            VdFwSwapBuffers(VD_FW_G.hdc);
         }
     }
+
+    VD_FW_PROFILE_ZONE(vd_fw_win32_dwm_flush)
+    {
+        // @note(mdodis): This needs to happen, otherwise the window animations and taskbar don't get redrawn if the window
+        // is maximized to either section of the screen or the whole screen
+        if (!VD_FW_G.draw_decorations) {
+            VdFwDwmFlush();
+        }
+    }
+
+    // if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
+    //     if (glFenceSync && glClientWaitSync && glDeleteSync) {
+    //         VD_FW_PROFILE_ZONE(vd_fw_win32_fence_sync_opengl)
+    //         {
+    //             GLsync fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+    //             if (fence) {
+    //                 glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, 1000000000ULL);
+    //                 glDeleteSync(fence);
+    //             }
+    //         }
+    //     }
+    // }
 
     if (VD_FW_G.curr_frame.flags & VD_FW_WIN32_FLAGS_WAKE_COND_VAR) {
         WakeConditionVariable(&VD_FW_G.cond_var);

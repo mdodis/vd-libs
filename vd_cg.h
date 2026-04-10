@@ -250,10 +250,19 @@ VD_CG_INL F2          swiden2f         (S2 v)                                  {
 
 /* ----UTILITY------------------------------------------------------------------------------------------------------- */
 VD_CG_INL F1          fwrap_degrees    (F1 d)                                  { return d - F_TAU * ffloor(d / F_TAU); }
-VD_CG_INL F1          fclamp           (F1 min, F1 x, F1 max)                  { if (x < min) return min; if (x > max) return max; return x; }
+VD_CG_INL F1          fclamp           (F1 i, F1 x, F1 a)                      { if (x < i) return i; if (x > a) return a; return x; }
 VD_CG_INL F1          flerp            (F1 a, F1 b, F1 t)                      { return a + t * (b - a); }
-VD_CG_INL int         feq              (F1 a, F1 b)                            { return fabs(b - a) <= F_EPSILON; }
-VD_CG_INL int         deq              (D1 a, D1 b)                            { return dabs(b - a) <= D_EPSILON; }
+VD_CG_INL F1          fsmax            (F1 a, F1 b)                            { return a > b ? a : b; }
+VD_CG_INL D1          dsmax            (D1 a, D1 b)                            { return a > b ? a : b; }
+VD_CG_INL S1          ssmax            (S1 a, S1 b)                            { return a > b ? a : b; }
+VD_CG_INL F1          fsmin            (F1 a, F1 b)                            { return a < b ? a : b; }
+VD_CG_INL D1          dsmin            (D1 a, D1 b)                            { return a < b ? a : b; }
+VD_CG_INL S1          ssmin            (S1 a, S1 b)                            { return a < b ? a : b; }
+VD_CG_INL F1          fsabs            (F1 a)                                  { return a < 0.f ? -a : a; }
+VD_CG_INL D1          dsabs            (D1 a)                                  { return a < 0.0 ? -a : a; }
+VD_CG_INL S1          ssabs            (S1 a)                                  { return a < 0 ? -a : a; }
+VD_CG_INL int         feq              (F1 a, F1 b)                            { return fsabs(b - a) <= F_EPSILON; }
+VD_CG_INL int         deq              (D1 a, D1 b)                            { return dsabs(b - a) <= D_EPSILON; }
 
 /* ----VECTOR ALGEBRA------------------------------------------------------------------------------------------------ */
 VD_CG_INL F2          fadd2            (F2 a, F2 b)                            { return fm2(a.x + b.x, a.y + b.y); }

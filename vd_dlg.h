@@ -765,6 +765,7 @@ VD_DLG_API int vd_dlg_message_box(int title_len, const char *title, int descript
 
 VD_DLG_API VdDlgFileResult vd_dlg_open_file(int title_len, const char *title, int path_len, const char *path, int num_filters, VdDlgFileFilter *filters, int default_filter, VdDlgOpenFileOptions options)
 {
+    vd_dlg__win32_initialize();
     VdDlgIFileDialog *pfd = NULL;
     VD_DLG__WIN32_CHECK_HRESULT(VdDlgCoCreateInstance(&VD_DLG_CLSID_FileOpenDialog, NULL,
                                                       VD_DLG_CLSCTX_INPROC_SERVER,
