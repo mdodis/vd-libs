@@ -11088,7 +11088,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
             vd_fw__msgbuf_w(&evt);
 
-            result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
+            // result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
         } break;
 
         case WM_UNICHAR: {
