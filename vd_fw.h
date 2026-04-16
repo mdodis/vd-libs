@@ -1272,9 +1272,10 @@ VD_FW_API int                vd_fw_link_program(unsigned int program);
  * @param  last_compile       Pointer to last compilation time, initialize it to zero before rendering loop, and don't use it in any other way
  * @param  vertex_file_path   The relative (or absolute) path to the vertex shader source
  * @param  fragment_file_path The relative (or absolute) path to the fragment shader source
+ * @param  compute_file_path  The relative (or absolute) path to the compute shader source
  * @return                    1 if successful, 0 if encountered any breaking error. You don't really need to check this.
  */
-VD_FW_API int                vd_fw_compile_or_hotload_program(unsigned int *program, unsigned long long *last_compile, const char *vertex_file_path, const char *fragment_file_path);
+VD_FW_API int                vd_fw_compile_or_hotload_program(unsigned int *program, unsigned long long *last_compile, const char *vertex_file_path, const char *fragment_file_path, const char *compute_file_path);
 
 /**
  * @brief Construct an orthographic projection matrix
@@ -16214,18 +16215,20 @@ VD_FW_API int vd_fw_link_program(unsigned int program)
 
 VD_FW_API int vd_fw_compile_or_hotload_program(unsigned int *program, unsigned long long *last_compile,
                                                               const char *vertex_file_path,
-                                                              const char *fragment_file_path)
+                                                              const char *fragment_file_path,
+                                                              const char *compute_file_path)
 {
     int needs_recompile = 0;
     if (*last_compile == 0) {
         needs_recompile = 1;
     }
 
-    const char *files[2];
+    const char *files[3];
     files[0] = vertex_file_path;
     files[1] = fragment_file_path;
+    files[2] = compute_file_path;
 
-    if (vd_fw__any_time_higher(2, files, last_compile)) {
+    if (vd_fw__any_time_higher(3, files, last_compile)) {
         needs_recompile = 1;
     }
 
@@ -16235,35 +16238,65 @@ VD_FW_API int vd_fw_compile_or_hotload_program(unsigned int *program, unsigned l
 
     int result = 1;
 
-    size_t srv_sz, srf_sz;
+    size_t srv_sz, srf_sz, src_sz;
     char *srv = vd_fw__debug_dump_file_text(vertex_file_path, &srv_sz);
     char *srf = vd_fw__debug_dump_file_text(fragment_file_path, &srf_sz);
+    char *src = vd_fw__debug_dump_file_text(compute_file_path, &src_sz);
 
-    unsigned int vshd = vd_fw_compile_shader(GL_VERTEX_SHADER, srv);
-    unsigned int fshd = vd_fw_compile_shader(GL_FRAGMENT_SHADER, srf);
+    unsigned int vshd = 0;
+    if (srv) vshd = vd_fw_compile_shader(GL_VERTEX_SHADER, srv);
+    unsigned int fshd = 0;
+    if (srf) fshd = vd_fw_compile_shader(GL_FRAGMENT_SHADER, srf);
+    unsigned int cshd = 0;
+    if (src) cshd = vd_fw_compile_shader(GL_COMPUTE_SHADER, src);
 
     unsigned int new_program;
-    if (vshd == 0 || fshd == 0) {
-        result = 0;
-    } else {
+
+    if (srv) {
         VD_FW_FREE(srv, srv_sz);
+    }
+
+    if (srf) {
         VD_FW_FREE(srf, srf_sz);
+    }
 
-        new_program = glCreateProgram();
+    if (src) {
+        VD_FW_FREE(src, src_sz);
+    }
+
+    new_program = glCreateProgram();
+    if (vshd) {
         glAttachShader(new_program, vshd);
+    }
+
+    if (fshd) {
         glAttachShader(new_program, fshd);
+    }
 
-        if (vd_fw_link_program(new_program)) {
+    if (cshd) {
+        glAttachShader(new_program, cshd);
+    }
+
+    if (vd_fw_link_program(new_program)) {
+        if (vshd) {
             glDeleteShader(vshd);
-            glDeleteShader(fshd);
-            if (*program != 0) {
-                glDeleteProgram(*program);
-            }
-
-            *program = new_program;
-        } else {
-            result = 0;
         }
+
+        if (fshd) {
+            glDeleteShader(fshd);
+        }
+
+        if (cshd) {
+            glDeleteShader(cshd);
+        }
+
+        if (*program != 0) {
+            glDeleteProgram(*program);
+        }
+
+        *program = new_program;
+    } else {
+        result = 0;
     }
 
     return result;
