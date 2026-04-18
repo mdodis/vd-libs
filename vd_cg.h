@@ -122,6 +122,10 @@ typedef struct __VD_CG_dray { D3 origin; D3 direction; } DRay;
 
 typedef struct __VD_CG_fcylinder { F3 p; F3 q; F1 r; } FCylinder;
 typedef struct __VD_CG_dcylinder { D3 p; D3 q; D1 r; } DCylinder;
+
+typedef struct __VD_CG_fsphere { F3 c; F1 r; } FSphere;
+typedef struct __VD_CG_dsphere { D3 c; D1 r; } DSphere;
+
 #pragma pack(pop)
 
 /* ----INITIALIZATION------------------------------------------------------------------------------------------------ */
@@ -209,6 +213,9 @@ VD_CG_INL FRay        fmray            (F3 origin, F3 direction)               {
 VD_CG_INL DRay        dmray            (D3 origin, D3 direction)               { DRay r; r.origin = origin; r.direction = direction; return r; }
 VD_CG_INL FCylinder   fmcylinder       (F3 p, F3 q, F1 r)                      { FCylinder c; c.p = p; c.q = q; c.r = r; return c; }
 VD_CG_INL DCylinder   dmcylinder       (D3 p, D3 q, D1 r)                      { DCylinder c; c.p = p; c.q = q; c.r = r; return c; }
+
+VD_CG_INL FSphere     fmsphere         (F3 c, F1 r)                            { FSphere s; s.c = c; s.r = r; return s; }
+VD_CG_INL DSphere     dmsphere         (D3 c, D1 r)                            { DSphere s; s.c = c; s.r = r; return s; }
 
 /* ----TRUNCATION---------------------------------------------------------------------------------------------------- */
 VD_CG_INL S1          ftos1            (F1 v)                                  { return (S1)v; }
@@ -916,6 +923,33 @@ VD_CG_INL F3            fclosest_point_tri  (F3 p, F3 t0, F3 t1, F3 t2)
     F3 result = fadd3(a, fscale3(ab, v));
     result = fadd3(result, fscale3(ac, w));
     return result;
+}
+
+VD_CG_INL int           fray_vs_sphere(FRay ray, FSphere sphere, F1 *t0, F1 *t1)
+{
+    F3 m = fsub3(ray.origin, sphere.c);
+    F1 b = fdot3(m, ray.direction);
+    F1 c = flensq3(m) - (sphere.r * sphere.r);
+
+    if (c > 0.f && b > 0.f) {
+        return 0;
+    }
+
+    F1 D = b * b - c;
+
+    if (D < 0.f) {
+        return 0;
+    }
+
+    if (t0) {
+        *t0 = -b - fsqrt(D);
+    }
+
+    if (t1) {
+        *t1 = -b + fsqrt(D);
+    }
+
+    return 1;
 }
 
 VD_CG_INL int           fline_vs_cylinder  (FLine *line, FCylinder *cylinder, F1 *t)
