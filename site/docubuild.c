@@ -128,7 +128,7 @@ static void process_apigen(VdDspcSection *section, FILE *out, int depth)
     str_builder_null_terminate(&bld);
     const char *filepath = str_builder_compose(&bld, NULL).s;
 
-    LOGF("Reading api from: %s", filepath);
+    // LOGF("Reading api from: %s", filepath);
 
     FILE *f = fopen(filepath, "rb");
 
@@ -377,7 +377,7 @@ static void process_text(VdDspcSection *section, FILE *out, int depth)
     VdDspcStrNode *node = vd_dspc_str_list_first_node(&section->text_content);
     while (node) {
 
-        PUT_LINE("%.*s", STR_EXPAND(make_str_from_str_node(node)));
+        PUT("%.*s", STR_EXPAND(make_str_from_str_node(node)));
 
         node = vd_dspc_str_list_next_node(node);
     }
@@ -389,10 +389,27 @@ static void process_para(VdDspcSection *section, FILE *out, int depth)
     VdDspcStrNode *node = vd_dspc_str_list_first_node(&section->text_content);
     while (node) {
 
-        PUT_LINE("%.*s", STR_EXPAND(make_str_from_str_node(node)));
+        if (node->flags & VD_DSPC_STR_NODE_FLAGS_ITALIC) {
+            PUT("<i>");
+        }
 
+        if (node->flags & VD_DSPC_STR_NODE_FLAGS_BOLD) {
+            PUT("<b>");
+        }
+
+        Str s = make_str_from_str_node(node);
+        PUT_LINE("%.*s", STR_EXPAND(s));
+
+        if (node->flags & VD_DSPC_STR_NODE_FLAGS_BOLD) {
+            PUT("</b>");
+        }
+
+        if (node->flags & VD_DSPC_STR_NODE_FLAGS_ITALIC) {
+            PUT("</i>");
+        }
         node = vd_dspc_str_list_next_node(node);
     }
+    PUT("\n");   
     PUT_LINE("</p>");
 }
 
@@ -541,7 +558,7 @@ static void parse_api_function(char *buf, size_t buf_len, FILE *f, FILE *out, Ar
         id_str.len = paren_pos - id_pos - 1;
 
     }
-    LOGF("%.*s", STR_EXPAND(id_str));
+    // LOGF("%.*s", STR_EXPAND(id_str));
 
     Str func_decl_pretty = func_decl_str;
     // Get decl without _API, etc, i.e skip first word
@@ -778,6 +795,19 @@ int main(int argc, char const *argv[])
 
         {
             vd_dspc_document_add(&workspace.document, (char*)file, len, source_file);
+
+            VdDspcError *err = vd_dspc_document_first_error(&workspace.document);
+            while (vd_dspc_error_valid(err)) {
+                char message[128];
+                int message_size = vd_dspc_error_get_message(err, sizeof(message), message);
+
+                fprintf(stderr, "%.*s:%zu:%zu %.*s\n",
+                                STR_EXPAND(source_file->file_path_relative_to_source_dir),
+                                err->line + 1, err->column + 1,
+                                message_size, message);
+
+                err = vd_dspc_error_next(err);
+            }
         }
 
         VD_RETURN_SCRATCH_ARENA(temp_arena);

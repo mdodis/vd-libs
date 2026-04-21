@@ -24,6 +24,10 @@
  */
 #ifndef VD_DSPC_H
 #define VD_DSPC_H
+#define VD_DSPC_VERSION_MAJOR    1
+#define VD_DSPC_VERSION_MINOR    0
+#define VD_DSPC_VERSION_PATCH    0
+#define VD_DSPC_VERSION          ((VD_DSPC_VERSION_MAJOR << 16) | (VD_DSPC_VERSION_MINOR << 8) | (VD_DSPC_VERSION_PATCH))
 
 #ifdef VD_DSPC_STATIC
 #define VD_DSPC_API static
@@ -60,12 +64,26 @@ typedef struct VdDspcStr {
     size_t     l;
 } VdDspcStr;
 
+enum VD_DSPC_STR_NODE_FLAGS_ {
+    VD_DSPC_STR_NODE_FLAG_ITALIC_BIT = 0,
+    VD_DSPC_STR_NODE_FLAG_BOLD_BIT = 1,
+    VD_DSPC_STR_NODE_FLAG_LINK_BIT = 2,
+    VD_DSPC_STR_NODE_FLAGS_COUNT  = 3,
+
+    VD_DSPC_STR_NODE_FLAGS_ITALIC = 1 << VD_DSPC_STR_NODE_FLAG_ITALIC_BIT,
+    VD_DSPC_STR_NODE_FLAGS_BOLD   = 1 << VD_DSPC_STR_NODE_FLAG_BOLD_BIT,
+    VD_DSPC_STR_NODE_FLAGS_LINK   = 1 << VD_DSPC_STR_NODE_FLAG_LINK_BIT,
+}; 
+typedef int VdDspcStrNodeFlags;
+
 typedef struct VdDspcStrNode VdDspcStrNode; 
 struct VdDspcStrNode {
-    VdDspcStrNode *next;
-    VdDspcStrNode *prev;
-    const char    *str;
-    size_t        len;
+    VdDspcStrNode      *next;
+    VdDspcStrNode      *prev;
+    const char         *str;
+    size_t             len;
+    VdDspcStrNodeFlags flags;
+    VdDspcStr          link_str;
 };
 
 typedef struct VdDspcStrList {
@@ -111,6 +129,8 @@ typedef struct VdDspc__Lex {
     size_t     cur_back;
     size_t     line;
     size_t     column;
+    size_t     line_back;
+    size_t     column_back;
 } VdDspc__Lex;
 
 typedef struct VdDspc__Lang {
@@ -144,6 +164,27 @@ typedef struct VdDspc__Token {
     } dat;
 } VdDspc__Token;
 
+enum VD_DSPC_ERROR_KIND {
+    VD_DSPC_ERROR_KIND_UNKNOWN = 0,
+    VD_DSPC_ERROR_KIND_UNEXPECTED_TOKEN,
+    VD_DSPC_ERROR_KIND_INDETERMINATE_TAG_MARKUP,
+    VD_DSPC_ERROR_KIND_UNTERMINATED_MARKUP,
+    VD_DSPC_ERROR_KIND_UNTERMINATED_INLINE_MARKUP,
+    VD_DSPC_ERROR_KIND_INVALID_MARKUP_AFTER_LITERAL,
+};
+typedef int VdDspcErrorKind;
+
+typedef struct VdDspcError VdDspcError;
+struct VdDspcError {
+    size_t              line, column;
+    VdDspcErrorKind     kind;
+    char                character;
+    VdDspc__TokenType   expect_type;
+    VdDspc__TokenType   got_type;
+    VdDspcError         *next;
+    VdDspcError         *prev;
+};
+
 typedef struct VdDspcDocument {
     VdDspcTree      sentinel;
     void*           (*alloc)(void *, size_t, size_t);
@@ -154,8 +195,9 @@ typedef struct VdDspcDocument {
 
     VdDspcSection   *curr_section;
     VdDspc__Lex     lexstate;
-} VdDspcDocument;
 
+    VdDspcError     error_sent;
+} VdDspcDocument;
 #define VD_DSPC_PROC_LOG(name) void name(const char *message)
 typedef VD_DSPC_PROC_LOG(VdDspcProcLog);
 
@@ -170,8 +212,13 @@ VD_DSPC_API VdDspcTag*       vd_dspc_section_first_tag(VdDspcSection *section);
 VD_DSPC_API VdDspcTag*       vd_dspc_section_next_tag(VdDspcSection *section, VdDspcTag *tag);
 VD_DSPC_API VdDspcTag*       vd_dspc_section_find_tag_with_name(VdDspcSection *section, const char *search);
 VD_DSPC_API VdDspcStrNode*   vd_dspc_str_list_first_node(VdDspcStrList *list);
+VD_DSPC_API VdDspcStrNode*   vd_dspc_str_list_last_node(VdDspcStrList *list);
 VD_DSPC_API VdDspcStrNode*   vd_dspc_str_list_next_node(VdDspcStrNode *node);
 VD_DSPC_API int              vd_dspc_str_list_is_empty(VdDspcStrList *list);
+VD_DSPC_API VdDspcError*     vd_dspc_document_first_error(VdDspcDocument *doc);
+VD_DSPC_API int              vd_dspc_error_valid(VdDspcError *err);
+VD_DSPC_API VdDspcError*     vd_dspc_error_next(VdDspcError *err);
+VD_DSPC_API int              vd_dspc_error_get_message(VdDspcError *err, size_t capacity, char *message);
 
 #endif // !VD_DSPC_H
 
@@ -221,12 +268,17 @@ static int             vd_dspc__is_whitespace(int c);
 static int             vd_dspc__is_newline(int c);
 static int             vd_dspc__is_consumable_whitespace(int c);
 static int             vd_dspc__is_valid_id_continue(int c);
-static char*           vd_dspc__token_type_to_string(VdDspc__TokenType ttype);
+static VdDspcStr       vd_dspc__token_type_to_string(VdDspc__TokenType ttype);
 static size_t          vd_dspc__token_string_size(VdDspc__Token *tok);
 static char*           vd_dspc__token_string_begin(VdDspc__Token *tok);
+static int             vd_dspc__is_inline_char(int c);
+static VdDspcStrNodeFlags vd_dpsc__inline_char_to_flag(int c, int *bit);
 
 /* ----ARENAS-------------------------------------------------------------------------------------------------------- */
 static void*           vd_dspc__push(VdDspcDocument *doc, size_t size);
+
+/* ----ERRORS-------------------------------------------------------------------------------------------------------- */
+static VdDspcError*    vd_dspc__push_error(VdDspcDocument *doc);
 
 /* ----TREES--------------------------------------------------------------------------------------------------------- */
 static VdDspcTree*     vd_dspc__push_tree(VdDspcDocument *doc);
@@ -240,7 +292,7 @@ static VdDspcTag*      vd_dspc__push_tag(VdDspcDocument *doc, VdDspcSection *sec
                                          VdDspcStr tag_name, VdDspcStr tag_value);
 
 /* ----STRLIST------------------------------------------------------------------------------------------------------- */
-static void            vd_dspc__str_list_push_token(VdDspcDocument *doc, VdDspcStrList *list, VdDspc__Token *tok);
+static void            vd_dspc__str_list_push_token(VdDspcDocument *doc, VdDspcStrList *list, VdDspc__Token *tok, VdDspcStrNodeFlags flags);
 static void            vd_dspc__str_list_push_verbatim(VdDspcDocument *doc, VdDspcStrList *list, VdDspc__Token *tok);
 static VdDspcStrNode*  vd_dspc__push_str_node(VdDspcDocument *doc);
 
@@ -248,14 +300,15 @@ static VdDspcStrNode*  vd_dspc__push_str_node(VdDspcDocument *doc);
 static int             vd_dspc__lex_end(VdDspc__Lex *lex);
 static int             vd_dspc__lex_nextn(VdDspc__Lex *lex, size_t n);
 static int             vd_dspc__lex_char(VdDspc__Lex *lex);
+static int             vd_dspc__lex_peek(VdDspc__Lex *lex);
 static VdDspc__Token   vd_dspc__lex_token(VdDspcDocument *doc, VdDspc__Lex *lex);
 static void            vd_dspc__lex_consume(VdDspc__Lex *lex, VdDspc__Token *token);
 static VdDspc__Token   vd_dspc__token_new(VdDspc__Lex *lex, VdDspc__TokenType type);
-static void            vd_dspc__token_log(VdDspc__Token *tok);
 static int             vd_dspc__skip_whitespace_all(VdDspc__Lex *lex);
 static int             vd_dspc__skip_newlines(VdDspc__Lex *lex);
 static VdDspc__Lex     vd_dspc__lex_save(VdDspc__Lex *lex);
 static void            vd_dspc__lex_load(VdDspc__Lex *target, VdDspc__Lex *src);
+static void            vd_dspc__lex_sync(VdDspc__Lex *lex);
 
 /* ----PARSER-------------------------------------------------------------------------------------------------------- */
 static int             vd_dspc__lang_section(VdDspcDocument *doc);
@@ -293,6 +346,10 @@ VD_DSPC_API int vd_dspc_document_add(VdDspcDocument *doc, const char *content, s
     doc->lexstate.cur_back     = 0;
     doc->lexstate.line         = 0;
     doc->lexstate.column       = 0;
+
+    doc->error_sent.next = &doc->error_sent;
+    doc->error_sent.prev = &doc->error_sent;
+    doc->error_sent.kind = VD_DSPC_ERROR_KIND_UNKNOWN;
 
     while (!vd_dspc__lex_end(&doc->lexstate)) {
         if (!vd_dspc__lang_section(doc)) {
@@ -341,7 +398,7 @@ static int vd_dspc_str_eq(VdDspcStr a, VdDspcStr b)
 
 VD_DSPC_API VdDspcTag *vd_dspc_section_find_tag_with_name(VdDspcSection *section, const char *search)
 {
-    int len = search == 0 ? 0 : strlen(search);
+    size_t len = ((search == 0) ? 0 : strlen(search));
 
     VdDspcStr search_str = { search, len };
 
@@ -363,6 +420,11 @@ VD_DSPC_API VdDspcStrNode *vd_dspc_str_list_first_node(VdDspcStrList *list)
     return list->first;
 }
 
+VD_DSPC_API VdDspcStrNode *vd_dspc_str_list_last_node(VdDspcStrList *list)
+{
+    return list->last; 
+}
+
 VD_DSPC_API VdDspcStrNode *vd_dspc_str_list_next_node(VdDspcStrNode *node)
 {
     return node->next;
@@ -371,6 +433,107 @@ VD_DSPC_API VdDspcStrNode *vd_dspc_str_list_next_node(VdDspcStrNode *node)
 VD_DSPC_API int vd_dspc_str_list_is_empty(VdDspcStrList *list)
 {
     return list->first == 0;
+}
+
+VD_DSPC_API VdDspcError *vd_dspc_document_first_error(VdDspcDocument *doc)
+{
+    return doc->error_sent.next;
+}
+
+VD_DSPC_API int vd_dspc_error_valid(VdDspcError *err)
+{
+    return err->kind != VD_DSPC_ERROR_KIND_UNKNOWN;    
+}
+
+VD_DSPC_API VdDspcError *vd_dspc_error_next(VdDspcError *err)
+{
+    return err->next;
+}
+
+VD_DSPC_API int vd_dspc_error_get_message(VdDspcError *err, size_t capacity, char *message)
+{
+    if (capacity < 128) {
+        return 0;
+    }
+
+
+    int result = 0;
+    VdDspcStr main_message;
+    int write_token = 0;
+    int write_character = 0;
+
+#define VD_DSPC_PUSH_STRING(str) do { for (size_t i = 0; i < str.l; ++i) { if (result < capacity) { message[result++] = str.s[i]; } } } while (0)
+#define VD_DSPC_MAKE_LIT(at, lit) at.s = lit; at.l = sizeof(lit) - 1
+
+    switch (err->kind) {
+        default:
+        case VD_DSPC_ERROR_KIND_UNKNOWN: {
+            main_message.s = 0;
+            main_message.l = 0;
+        } break;
+
+        case VD_DSPC_ERROR_KIND_UNEXPECTED_TOKEN: {
+            main_message.s = "Unexpected token ";
+            main_message.l = sizeof("Unexpected token ") - 1;
+            write_token = 1;
+        } break;
+
+        case VD_DSPC_ERROR_KIND_INDETERMINATE_TAG_MARKUP: {
+            main_message.s = "Expected either default tag or named tag assigment ";
+            main_message.l = sizeof("Expected either default tag or named tag assigment ") - 1;
+            write_token = 1;
+        } break;
+
+        case VD_DSPC_ERROR_KIND_UNTERMINATED_MARKUP: {
+            main_message.s = "Unterminated markup ";
+            main_message.l = sizeof("Unterminated markup ") - 1;
+            write_character = 1;
+        } break;
+
+        case VD_DSPC_ERROR_KIND_UNTERMINATED_INLINE_MARKUP: {
+            main_message.s = "Unterminated inline markup ";
+            main_message.l = sizeof("Unterminated inline markup ") - 1;
+            write_character = 1;
+        } break;
+
+        case VD_DSPC_ERROR_KIND_INVALID_MARKUP_AFTER_LITERAL: {
+            main_message.s = "Invalid markup after literal ";
+            main_message.l = sizeof("Invalid markup after literal ") - 1;
+            write_character = 1;
+        } break;
+    }
+
+    VD_DSPC_PUSH_STRING(main_message);
+    if (write_token) {
+        VdDspcStr s;
+        VD_DSPC_MAKE_LIT(s, "Expected ");
+        VD_DSPC_PUSH_STRING(s);
+
+        VdDspcStr e = vd_dspc__token_type_to_string(err->expect_type);
+        VD_DSPC_PUSH_STRING(e);
+
+        VD_DSPC_MAKE_LIT(s, ", but got ");
+        VD_DSPC_PUSH_STRING(s);
+
+        VdDspcStr g = vd_dspc__token_type_to_string(err->got_type);
+        VD_DSPC_PUSH_STRING(g);
+    }
+
+    if (write_character) {
+        char buf[3] = {
+            '\'', err->character, '\'',
+        };
+        VdDspcStr s;
+        s.s = buf;
+        s.l = 3;
+        VD_DSPC_PUSH_STRING(s);
+    }
+
+    message[result] = 0;
+
+#undef VD_DSPC_PUSH_STRING
+#undef VD_DSPC_MAKE_LIT
+    return result;
 }
 
 /* ----PARSER IMPL--------------------------------------------------------------------------------------------------- */
@@ -393,9 +556,12 @@ static int vd_dspc__lang_section(VdDspcDocument *doc)
 
         VdDspc__Token id_token = vd_dspc__lex_token(doc, &doc->lexstate);
         if (id_token.type != VD_DSPC__TOKEN_TYPE_ID) {
-            VD_DSPC_LOG("Error: %zu:%zu expected: id token, instead got: %s",
-                id_token.lexstate.line + 1, id_token.lexstate.column + 1,
-                vd_dspc__token_type_to_string(id_token.type));
+            VdDspcError *err = vd_dspc__push_error(doc);
+            err->line = id_token.lexstate.line + 1;
+            err->column = id_token.lexstate.column + 1;
+            err->kind = VD_DSPC_ERROR_KIND_UNEXPECTED_TOKEN;
+            err->expect_type = VD_DSPC__TOKEN_TYPE_ID;
+            err->got_type = id_token.type;
             return 0;
         }
         vd_dspc__lex_consume(&doc->lexstate, &id_token);
@@ -408,10 +574,12 @@ static int vd_dspc__lang_section(VdDspcDocument *doc)
         // Parse tags
         VdDspc__Token tags_begin_token = vd_dspc__lex_token(doc, &doc->lexstate);
         if (tags_begin_token.type != VD_DSPC__TOKEN_TYPE_TAGS_BEGIN) {
-
-            VD_DSPC_LOG("Error: %zu:%zu expected: '(' token, instead got: %s",
-                tags_begin_token.lexstate.line + 1, tags_begin_token.lexstate.column + 1,
-                vd_dspc__token_type_to_string(tags_begin_token.type));
+            VdDspcError *err = vd_dspc__push_error(doc);
+            err->line = tags_begin_token.lexstate.line + 1;
+            err->column = tags_begin_token.lexstate.column + 1;
+            err->kind = VD_DSPC_ERROR_KIND_UNEXPECTED_TOKEN;
+            err->expect_type = VD_DSPC__TOKEN_TYPE_TAGS_BEGIN;
+            err->got_type = tags_begin_token.type;
         }
         vd_dspc__lex_consume(&doc->lexstate, &tags_begin_token);
 
@@ -434,27 +602,36 @@ static int vd_dspc__lang_section(VdDspcDocument *doc)
                 // Expect = "quoted"
                 VdDspc__Token assignment_token = vd_dspc__lex_token(doc, &doc->lexstate);
                 if (assignment_token.type != VD_DSPC__TOKEN_TYPE_ASSIGNMENT) {
-                    VD_DSPC_LOG("Error: %zu:%zu expected: '=' token, instead got: %s",
-                        assignment_token.lexstate.line + 1, assignment_token.lexstate.column + 1,
-                        vd_dspc__token_type_to_string(assignment_token.type));
+                    VdDspcError *err = vd_dspc__push_error(doc);
+                    err->line = assignment_token.lexstate.line + 1;
+                    err->column = assignment_token.lexstate.column + 1;
+                    err->kind = VD_DSPC_ERROR_KIND_UNEXPECTED_TOKEN;
+                    err->expect_type = VD_DSPC__TOKEN_TYPE_ASSIGNMENT;
+                    err->got_type = assignment_token.type;
                     return 0;
                 }
                 vd_dspc__lex_consume(&doc->lexstate, &assignment_token);
 
                 VdDspc__Token value_token = vd_dspc__lex_token(doc, &doc->lexstate);
                 if (value_token.type != VD_DSPC__TOKEN_TYPE_QUOTED_STRING) {
-                    VD_DSPC_LOG("Error: %zu:%zu expected: '\"quoted string\"' token, instead got: %s",
-                        value_token.lexstate.line + 1, value_token.lexstate.column + 1,
-                        vd_dspc__token_type_to_string(value_token.type));
+                    VdDspcError *err = vd_dspc__push_error(doc);
+                    err->line = value_token.lexstate.line + 1;
+                    err->column = value_token.lexstate.column + 1;
+                    err->kind = VD_DSPC_ERROR_KIND_UNEXPECTED_TOKEN;
+                    err->expect_type = VD_DSPC__TOKEN_TYPE_QUOTED_STRING;
+                    err->got_type = value_token.type;
                     return 0;
                 }
 
                 tag_value = value_token.dat.quoted_string;
                 vd_dspc__lex_consume(&doc->lexstate, &value_token);
             } else {
-                VD_DSPC_LOG("Error: %zu:%zu expected either unnamed value or named valued, instead got: %s",
-                    t.lexstate.line + 1, t.lexstate.column + 1,
-                    vd_dspc__token_type_to_string(t.type));
+                VdDspcError *err = vd_dspc__push_error(doc);
+                err->line = t.lexstate.line + 1;
+                err->column = t.lexstate.column + 1;
+                err->kind = VD_DSPC_ERROR_KIND_INDETERMINATE_TAG_MARKUP;
+                err->got_type = t.type;
+                err->expect_type = VD_DSPC__TOKEN_TYPE_UNKNOWN;
                 return 0;
             }
 
@@ -490,9 +667,12 @@ static int vd_dspc__lang_section(VdDspcDocument *doc)
 
         t = vd_dspc__lex_token(doc, &doc->lexstate);
         if (t.type != VD_DSPC__TOKEN_TYPE_SECTION_END) {
-            VD_DSPC_LOG("Error: %zu:%zu expected '}', instead got: %s",
-                t.lexstate.line + 1, t.lexstate.column + 1,
-                vd_dspc__token_type_to_string(t.type));
+            VdDspcError *err = vd_dspc__push_error(doc);
+            err->line = t.lexstate.line + 1;
+            err->column = t.lexstate.column + 1;
+            err->kind = VD_DSPC_ERROR_KIND_UNEXPECTED_TOKEN;
+            err->expect_type = VD_DSPC__TOKEN_TYPE_SECTION_END;
+            err->got_type = t.type;
         }
 
         doc->curr_section = new_section->parent;
@@ -556,12 +736,26 @@ static int vd_dspc__lex_char(VdDspc__Lex *lex)
     return lex->content[lex->cur_fwd];
 }
 
+static int vd_dspc__lex_peek(VdDspc__Lex *lex)
+{
+    VdDspc__Lex save = *lex;
+    vd_dspc__lex_nextn(&save, 1);
+
+    if (vd_dspc__lex_end(&save)) {
+        return -1;
+    }
+
+    return save.content[save.cur_fwd];
+}
+
 static int vd_dspc__lex_literal(VdDspcDocument *doc, VdDspc__Token *result, const char *identifier, size_t identifier_size, VdDspc__TokenType resulting_type)
 {
     const char *text = identifier;
     size_t text_len = identifier_size;
     int id_is_equal_to_text = 0;
     size_t id_size = result->lexstate.cur_fwd - result->lexstate.cur_back;
+
+    int allow_markup = resulting_type == VD_DSPC__TOKEN_TYPE_PARAGRAPH;
 
     if (id_size == text_len) {
         const char *content = result->lexstate.content;
@@ -579,8 +773,12 @@ static int vd_dspc__lex_literal(VdDspcDocument *doc, VdDspc__Token *result, cons
             vd_dspc__skip_whitespace_all(&result->lexstate);
 
             if (vd_dspc__lex_char(&result->lexstate) != '{') {
-                VD_DSPC_LOG("Error: %zu:%zu Expected \'{\' after \'text\' section.",
-                            result->lexstate.line + 1, result->lexstate.column + 1);
+                VdDspcError *err = vd_dspc__push_error(doc);
+                err->line = result->lexstate.line + 1;
+                err->column = result->lexstate.column + 1;
+                err->kind = VD_DSPC_ERROR_KIND_INVALID_MARKUP_AFTER_LITERAL;
+                err->character = '{';
+
                 result->type = VD_DSPC__TOKEN_TYPE_UNKNOWN;
                 return 0;
             }
@@ -590,15 +788,160 @@ static int vd_dspc__lex_literal(VdDspcDocument *doc, VdDspc__Token *result, cons
             vd_dspc__skip_whitespace_all(&result->lexstate);
 
             VdDspc__Token text_content_token = *result;
-            text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
+            vd_dspc__lex_sync(&text_content_token.lexstate);
 
             int text_parsing_ended = 0;
 
             VdDspcStrList list = {0};
 
+            VdDspcStrNodeFlags flags = 0;
+            VdDspc__Lex     flags_last[VD_DSPC_STR_NODE_FLAGS_COUNT];
+
+            int prev_c = 0;
             while (!text_parsing_ended) {
 
                 int c = vd_dspc__lex_char(&text_content_token.lexstate);
+                int pc = vd_dspc__lex_peek(&text_content_token.lexstate);
+
+                if (allow_markup && (c == '\\')) {
+                    switch (pc) {
+                        case '*':
+                        case '#':
+                        case '_': {
+                            vd_dspc__str_list_push_token(doc, &list, &text_content_token, flags);
+                            vd_dspc__lex_sync(&text_content_token.lexstate);
+
+                            vd_dspc__lex_nextn(&text_content_token.lexstate, 1);
+                            vd_dspc__lex_sync(&text_content_token.lexstate);
+
+                        } break;
+
+                        default: {
+
+                        } break;
+                    }
+                }
+
+
+                // Handle inline '*','_'
+                if (allow_markup) {
+                    VdDspcStrNodeFlags c_flags = flags;
+                    VdDspcStrNodeFlags p_flags = flags;
+                    VdDspc__Lex saved_state = text_content_token.lexstate;
+
+                    while (vd_dspc__is_inline_char(c)) {
+                        vd_dspc__lex_nextn(&text_content_token.lexstate, 1);
+
+                        int bit;
+                        VdDspcStrNodeFlags f = vd_dpsc__inline_char_to_flag(c, &bit);
+                        if (c_flags & f) {
+                            c_flags &= ~f;
+                        } else {
+                            {
+                                flags_last[bit] = text_content_token.lexstate;
+                            }
+
+                            c_flags |= f;
+                        }
+
+                        c = vd_dspc__lex_char(&text_content_token.lexstate);
+                    }
+
+                    if (c_flags != flags) {
+                        VdDspc__Lex new_state = text_content_token.lexstate;
+                        text_content_token.lexstate = saved_state;
+                        vd_dspc__str_list_push_token(doc, &list, &text_content_token, flags);
+                        vd_dspc__lex_nextn(&text_content_token.lexstate, 1);
+                        text_content_token.lexstate = new_state;
+                        vd_dspc__lex_sync(&text_content_token.lexstate);
+
+                        flags = c_flags;
+                    }
+
+                    if ((p_flags & VD_DSPC_STR_NODE_FLAGS_LINK) && !(flags & VD_DSPC_STR_NODE_FLAGS_LINK)) {
+                        saved_state = text_content_token.lexstate;
+                        int angled_c = vd_dspc__lex_char(&saved_state);
+                        if (angled_c == '<') {
+                            VdDspc__Lex angled_start_state = saved_state;
+
+                            vd_dspc__lex_nextn(&saved_state, 1);
+                            vd_dspc__lex_sync(&saved_state);
+                            while ((angled_c != -1) && (angled_c != '>')) {
+                                vd_dspc__lex_nextn(&saved_state, 1);
+                                angled_c = vd_dspc__lex_char(&saved_state);
+                            }
+
+                            if (angled_c == '>') {
+                                size_t off = saved_state.cur_fwd - saved_state.cur_back;
+                                // VD_DSPC_LOG("Found link: %.*s", (int)off, saved_state.content + saved_state.cur_back);
+
+                                VdDspcStrNode *curr = vd_dspc_str_list_last_node(&list);
+                                do {
+                                    if (!(curr->flags & VD_DSPC_STR_NODE_FLAGS_LINK)) {
+                                        break;
+                                    }
+
+                                    if (curr->link_str.s != 0) {
+                                        break;
+                                    }
+
+                                    curr->link_str.s = saved_state.content + saved_state.cur_back;
+                                    curr->link_str.l = off;
+
+                                    curr = curr->prev;
+                                } while (curr != 0);
+                                vd_dspc__lex_nextn(&saved_state, 1);
+                                vd_dspc__lex_sync(&saved_state);
+                                text_content_token.lexstate = saved_state;
+                                c = vd_dspc__lex_char(&text_content_token.lexstate);
+                            } else {
+                                VdDspcError *err = vd_dspc__push_error(doc);
+                                err->kind = VD_DSPC_ERROR_KIND_UNTERMINATED_INLINE_MARKUP;
+                                err->line = angled_start_state.line + 1;
+                                err->column = angled_start_state.column + 1;
+                                err->character = '>';
+                            }
+                        }
+                    }
+                }
+
+                // if ((c == '_') && (prev_c != '\\')) {
+                //     if (flags & VD_DSPC_STR_NODE_FLAGS_ITALIC) {
+                //         vd_dspc__str_list_push_token(doc, &list, &text_content_token, flags);
+                //         text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
+
+                //         vd_dspc__lex_nextn(&text_content_token.lexstate, 1);
+                //         text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
+                //         flags &= ~VD_DSPC_STR_NODE_FLAGS_ITALIC;
+                //     } else {
+                //         vd_dspc__str_list_push_token(doc, &list, &text_content_token, flags);
+                //         text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
+
+                //         italic_last = text_content_token.lexstate;
+
+                //         vd_dspc__lex_nextn(&text_content_token.lexstate, 1);
+                //         text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
+                //         flags |= VD_DSPC_STR_NODE_FLAGS_ITALIC;
+                //     }
+                // } else if ((c == '*') && (prev_c != '\\')) {
+                //     if (flags & VD_DSPC_STR_NODE_FLAGS_BOLD) {
+                //         vd_dspc__str_list_push_token(doc, &list, &text_content_token, flags);
+                //         text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
+
+                //         vd_dspc__lex_nextn(&text_content_token.lexstate, 1);
+                //         text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
+                //         flags &= ~VD_DSPC_STR_NODE_FLAGS_BOLD;
+                //     } else {
+                //         vd_dspc__str_list_push_token(doc, &list, &text_content_token, flags);
+                //         text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
+
+                //         bold_last = text_content_token.lexstate;
+
+                //         vd_dspc__lex_nextn(&text_content_token.lexstate, 1);
+                //         text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
+                //         flags |= VD_DSPC_STR_NODE_FLAGS_BOLD;
+                //     }
+                // }
 
                 if (c == '}') {
                     text_parsing_ended = 1;
@@ -606,22 +949,42 @@ static int vd_dspc__lex_literal(VdDspcDocument *doc, VdDspc__Token *result, cons
                 }
 
                 if (vd_dspc__is_consumable_whitespace(c)) {
-                    vd_dspc__str_list_push_token(doc, &list, &text_content_token);
+                    vd_dspc__str_list_push_token(doc, &list, &text_content_token, flags);
 
                     vd_dspc__skip_whitespace_all(&text_content_token.lexstate);
-                    text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
+                    vd_dspc__lex_sync(&text_content_token.lexstate);
                 } else {
                     vd_dspc__lex_nextn(&text_content_token.lexstate, 1);
                 }
+                prev_c = c;
             }
 
             if (text_content_token.lexstate.cur_fwd != text_content_token.lexstate.cur_back) {
-                vd_dspc__str_list_push_token(doc, &list, &text_content_token);
+                vd_dspc__str_list_push_token(doc, &list, &text_content_token, flags);
+            }
+
+            if (flags != 0) {
+                if (flags & VD_DSPC_STR_NODE_FLAGS_ITALIC) {
+                    VdDspcError *err = vd_dspc__push_error(doc);
+                    err->line = flags_last[VD_DSPC_STR_NODE_FLAG_ITALIC_BIT].line + 1;
+                    err->column = flags_last[VD_DSPC_STR_NODE_FLAG_ITALIC_BIT].column + 1;
+                    err->kind = VD_DSPC_ERROR_KIND_UNTERMINATED_INLINE_MARKUP;
+                    err->character = '_';
+                }
+
+                if (flags & VD_DSPC_STR_NODE_FLAGS_BOLD) {
+                    VdDspcError *err = vd_dspc__push_error(doc);
+                    err->line = flags_last[VD_DSPC_STR_NODE_FLAG_BOLD_BIT].line + 1;
+                    err->column = flags_last[VD_DSPC_STR_NODE_FLAG_BOLD_BIT].column + 1;
+                    err->kind = VD_DSPC_ERROR_KIND_UNTERMINATED_INLINE_MARKUP;
+                    err->character = '*';
+                }
             }
 
             vd_dspc__lex_nextn(&text_content_token.lexstate, 1);
 
-            result->lexstate.cur_fwd = text_content_token.lexstate.cur_fwd;
+            // result->lexstate.cur_fwd = text_content_token.lexstate.cur_fwd;
+            result->lexstate = text_content_token.lexstate;
             result->dat.text_content = list;
             return 1;
         }
@@ -657,8 +1020,11 @@ static VdDspc__Token vd_dspc__lex_token(VdDspcDocument *doc, VdDspc__Lex *lex)
             while (c != '\"') {
 
                 if (!vd_dspc__lex_nextn(&result.lexstate, 1)) {
-                    VD_DSPC_LOG("Error: %zu:%zu: Quoted string starting here was never unquoted!",
-                                saved_state.line, saved_state.column);
+                    VdDspcError *err = vd_dspc__push_error(doc);
+                    err->line = saved_state.line + 1;
+                    err->column = saved_state.column + 1;
+                    err->kind = VD_DSPC_ERROR_KIND_UNTERMINATED_MARKUP;
+                    err->character = '\"';
                     return result;
                 }
 
@@ -695,77 +1061,6 @@ static VdDspc__Token vd_dspc__lex_token(VdDspcDocument *doc, VdDspc__Lex *lex)
                     break;
                 }
 
-                if (0) {
-                    const char *text = "text";
-                    size_t text_len = 4;
-                    int id_is_equal_to_text = 0;
-                    size_t id_size = result.lexstate.cur_fwd - result.lexstate.cur_back;
-
-                    if (id_size == text_len) {
-                        const char *content = result.lexstate.content;
-                        id_is_equal_to_text = 
-                            (content[result.lexstate.cur_back + 0] == text[0]) &&
-                            (content[result.lexstate.cur_back + 1] == text[1]) &&
-                            (content[result.lexstate.cur_back + 2] == text[2]) &&
-                            (content[result.lexstate.cur_back + 3] == text[3]);
-
-                        if (id_is_equal_to_text) {
-                            result.type = VD_DSPC__TOKEN_TYPE_TEXT_CONTENT;
-                            // Go into inner loop to get the text content
-
-                            // Skip whitespace and find '{'
-                            vd_dspc__skip_whitespace_all(&result.lexstate);
-
-                            if (vd_dspc__lex_char(&result.lexstate) != '{') {
-                                VD_DSPC_LOG("Error: %zu:%zu Expected \'{\' after \'text\' section.",
-                                            result.lexstate.line + 1, result.lexstate.column + 1);
-                                result.type = VD_DSPC__TOKEN_TYPE_UNKNOWN;
-                                return result;
-                            }
-                            vd_dspc__lex_nextn(&result.lexstate, 1);
-
-                            // Skip leading whitespace, if any
-                            vd_dspc__skip_whitespace_all(&result.lexstate);
-
-                            VdDspc__Token text_content_token = result;
-                            text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
-
-                            int text_parsing_ended = 0;
-
-                            VdDspcStrList list = {0};
-
-                            while (!text_parsing_ended) {
-
-                                c = vd_dspc__lex_char(&text_content_token.lexstate);
-
-                                if (c == '}') {
-                                    text_parsing_ended = 1;
-                                    continue;
-                                }
-
-                                if (vd_dspc__is_consumable_whitespace(c)) {
-                                    vd_dspc__str_list_push_token(doc, &list, &text_content_token);
-
-                                    vd_dspc__skip_whitespace_all(&text_content_token.lexstate);
-                                    text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
-                                } else {
-                                    vd_dspc__lex_nextn(&text_content_token.lexstate, 1);
-                                }
-                            }
-
-                            if (text_content_token.lexstate.cur_fwd != text_content_token.lexstate.cur_back) {
-                                vd_dspc__str_list_push_token(doc, &list, &text_content_token);
-                            }
-
-                            vd_dspc__lex_nextn(&text_content_token.lexstate, 1);
-
-                            result.lexstate.cur_fwd = text_content_token.lexstate.cur_fwd;
-                            result.dat.text_content = list;
-                            break;
-                        }
-                    }
-                }
-
                 // CODE CONTENT
                 {
                     const char *code = "verb";
@@ -791,8 +1086,12 @@ static VdDspc__Token vd_dspc__lex_token(VdDspcDocument *doc, VdDspc__Lex *lex)
 
                                 while (count < 3) {
                                     if (vd_dspc__lex_char(&result.lexstate) != '`') {
-                                        VD_DSPC_LOG("Error: %zu:%zu Expected \'```\' after \'code\' section.",
-                                                    result.lexstate.line + 1, result.lexstate.column + 1);
+                                        VdDspcError *err = vd_dspc__push_error(doc);
+                                        err->line = result.lexstate.line + 1;
+                                        err->column = result.lexstate.column + 1;
+                                        err->kind = VD_DSPC_ERROR_KIND_UNTERMINATED_MARKUP;
+                                        err->character = '`';
+
                                         result.type = VD_DSPC__TOKEN_TYPE_UNKNOWN;
                                         return result;
                                     }
@@ -804,7 +1103,7 @@ static VdDspc__Token vd_dspc__lex_token(VdDspcDocument *doc, VdDspc__Lex *lex)
                             vd_dspc__skip_newlines(&result.lexstate);
 
                             VdDspc__Token code_content_token = result;
-                            code_content_token.lexstate.cur_back = code_content_token.lexstate.cur_fwd;
+                            vd_dspc__lex_sync(&code_content_token.lexstate);
                             int text_parsing_ended = 0;
 
                             while (!text_parsing_ended) {
@@ -861,24 +1160,6 @@ static VdDspc__Token vd_dspc__token_new(VdDspc__Lex *lex, VdDspc__TokenType type
     return result;
 }
 
-static void vd_dspc__token_log(VdDspc__Token *tok)
-{
-    VD_DSPC_LOG("%zu:%zu: %s", tok->lexstate.line + 1, tok->lexstate.column + 1,
-                                 vd_dspc__token_type_to_string(tok->type));
-    if (tok->type == VD_DSPC__TOKEN_TYPE_TEXT_CONTENT) {
-
-        VdDspcStrNode *curr_node = tok->dat.text_content.first;
-
-        while (curr_node) {
-            VD_DSPC_LOG("%.*s", (int)curr_node->len, curr_node->str);
-            curr_node = curr_node->next;
-        }
-
-    } else {
-        VD_DSPC_LOG("%.*s", (int)vd_dspc__token_string_size(tok), vd_dspc__token_string_begin(tok));
-    }
-}
-
 static int vd_dspc__skip_whitespace_all(VdDspc__Lex *lex)
 {
     int c = vd_dspc__lex_char(lex);
@@ -895,7 +1176,7 @@ static int vd_dspc__skip_whitespace_all(VdDspc__Lex *lex)
         if (vd_dspc__is_whitespace(c)) {
             vd_dspc__lex_nextn(lex, 1);
         }
-        lex->cur_back = lex->cur_fwd;
+        vd_dspc__lex_sync(lex);
     }
 
     return 1;
@@ -917,7 +1198,7 @@ static int vd_dspc__skip_newlines(VdDspc__Lex *lex)
         if (vd_dspc__is_newline(c)) {
             vd_dspc__lex_nextn(lex, 1);
         }
-        lex->cur_back = lex->cur_fwd;
+        vd_dspc__lex_sync(lex);
     }
 
     return 1;
@@ -934,10 +1215,17 @@ static void vd_dspc__lex_load(VdDspc__Lex *target, VdDspc__Lex *src)
     *target = *src;
 }
 
+static void vd_dspc__lex_sync(VdDspc__Lex *lex)
+{
+    lex->cur_back = lex->cur_fwd;
+    lex->line_back = lex->line;
+    lex->column_back = lex->column;
+}
+
 /* ----TREES IMPL---------------------------------------------------------------------------------------------------- */
 static VdDspcTree *vd_dspc__push_tree(VdDspcDocument *doc)
 {
-    VdDspcTree *new_tree = vd_dspc__push(doc, sizeof(VdDspcTree));
+    VdDspcTree *new_tree = (VdDspcTree*)vd_dspc__push(doc, sizeof(VdDspcTree));
     new_tree->next           = &doc->sentinel;
     new_tree->prev           = doc->sentinel.prev;
     doc->sentinel.prev->next = new_tree;
@@ -958,7 +1246,7 @@ static VdDspcTree *vd_dspc__push_tree(VdDspcDocument *doc)
 
 static VdDspcStrNode *vd_dspc__push_str_node(VdDspcDocument *doc)
 {
-    VdDspcStrNode *new_node = vd_dspc__push(doc, sizeof(VdDspcStrNode));
+    VdDspcStrNode *new_node = (VdDspcStrNode*)vd_dspc__push(doc, sizeof(VdDspcStrNode));
     new_node->next = 0;
     new_node->prev = 0;
     return new_node;
@@ -968,7 +1256,7 @@ static VdDspcStrNode *vd_dspc__push_str_node(VdDspcDocument *doc)
 static VdDspcSection *vd_dspc__push_section(VdDspcDocument *doc, const char *id_begin_string, size_t id_len_string)
 {
     VdDspcSection *parent = doc->curr_section;
-    VdDspcSection *new_section = vd_dspc__push(doc, sizeof(VdDspcSection));
+    VdDspcSection *new_section = (VdDspcSection*)vd_dspc__push(doc, sizeof(VdDspcSection));
 
     new_section->first = 0;
     new_section->last = 0;
@@ -1000,7 +1288,7 @@ static VdDspcSection *vd_dspc__push_section(VdDspcDocument *doc, const char *id_
 static VdDspcTag *vd_dspc__push_tag(VdDspcDocument *doc, VdDspcSection *section,
                                     VdDspcStr tag_name, VdDspcStr tag_value)
 {
-    VdDspcTag *new_tag = vd_dspc__push(doc, sizeof(VdDspcTag));
+    VdDspcTag *new_tag = (VdDspcTag*)vd_dspc__push(doc, sizeof(VdDspcTag));
 
     new_tag->prev = section->tag_sentinel.prev;
     section->tag_sentinel.prev->next = new_tag;
@@ -1012,8 +1300,11 @@ static VdDspcTag *vd_dspc__push_tag(VdDspcDocument *doc, VdDspcSection *section,
 }
 
 /* ----STRLIST IMPL-------------------------------------------------------------------------------------------------- */
-static void vd_dspc__str_list_push_token(VdDspcDocument *doc, VdDspcStrList *list, VdDspc__Token *tok)
+static void vd_dspc__str_list_push_token(VdDspcDocument *doc, VdDspcStrList *list, VdDspc__Token *tok, VdDspcStrNodeFlags flags)
 {
+    if (tok->lexstate.cur_back == tok->lexstate.cur_fwd) {
+        return;
+    }
     VdDspcStrNode *node = vd_dspc__push_str_node(doc);
     if (list->first == 0) {
         list->first = node;
@@ -1026,6 +1317,7 @@ static void vd_dspc__str_list_push_token(VdDspcDocument *doc, VdDspcStrList *lis
 
     node->str = tok->lexstate.content + tok->lexstate.cur_back;
     node->len = tok->lexstate.cur_fwd - tok->lexstate.cur_back;
+    node->flags = flags;
 }
 
 static void vd_dspc__str_list_push_verbatim(VdDspcDocument *doc, VdDspcStrList *list, VdDspc__Token *tok)
@@ -1074,8 +1366,8 @@ static void *vd_dspc__push(VdDspcDocument *doc, size_t size)
 
         if (doc->arenas_len == doc->arenas_cap) {
             // resize arena ptr array
-            doc->arenas = doc->alloc(doc->arenas, (doc->arenas_cap)     * sizeof(VdDspc__Arena),
-                                                  (doc->arenas_cap * 2) * sizeof(VdDspc__Arena));
+            doc->arenas = (VdDspc__Arena*)doc->alloc(doc->arenas, (doc->arenas_cap)     * sizeof(VdDspc__Arena),
+                                                                  (doc->arenas_cap * 2) * sizeof(VdDspc__Arena));
             doc->arenas_cap *= 2;
         }
 
@@ -1088,6 +1380,17 @@ static void *vd_dspc__push(VdDspcDocument *doc, size_t size)
     void *result = (void*)&doc->arenas[curr_arena].buf[doc->arenas[curr_arena].curr_offset];
     doc->arenas[curr_arena].curr_offset += size;
     return result;
+}
+
+static VdDspcError *vd_dspc__push_error(VdDspcDocument *doc)
+{
+    VdDspcError *new_err = vd_dspc__push(doc, sizeof(VdDspcError));
+    doc->error_sent.prev->next = new_err;
+    new_err->next = &doc->error_sent;
+    new_err->prev = doc->error_sent.prev;
+    doc->error_sent.prev = new_err;
+
+    return new_err;
 }
 
 /* ----UTILITIES IMPL------------------------------------------------------------------------------------------------ */
@@ -1134,26 +1437,44 @@ static char *vd_dspc__token_string_begin(VdDspc__Token *tok)
     return (char*)tok->lexstate.content + tok->lexstate.cur_back;
 }
 
-static char *vd_dspc__token_type_to_string(VdDspc__TokenType ttype)
+static int vd_dspc__is_inline_char(int c)
 {
+    return (c == '*') || (c == '_') || (c == '#');
+}
+
+static VdDspcStrNodeFlags vd_dpsc__inline_char_to_flag(int c, int *bit)
+{
+    switch (c) {
+        case '*': *bit = VD_DSPC_STR_NODE_FLAG_BOLD_BIT;   return VD_DSPC_STR_NODE_FLAGS_BOLD;   break;
+        case '_': *bit = VD_DSPC_STR_NODE_FLAG_ITALIC_BIT; return VD_DSPC_STR_NODE_FLAGS_ITALIC; break;
+        case '#': *bit = VD_DSPC_STR_NODE_FLAG_LINK_BIT;   return VD_DSPC_STR_NODE_FLAGS_LINK;   break;
+        default: return 0;
+    }
+}
+
+static VdDspcStr vd_dspc__token_type_to_string(VdDspc__TokenType ttype)
+{
+    VdDspcStr result;
+#define VD_DSPC_MAKE_LIT(lit) result.s = lit; result.l = sizeof(lit) - 1
     switch (ttype) {
-        case VD_DSPC__TOKEN_TYPE_UNKNOWN:       return "unknown";
-        case VD_DSPC__TOKEN_TYPE_AT:            return "at";
-        case VD_DSPC__TOKEN_TYPE_ID:            return "id";
-        case VD_DSPC__TOKEN_TYPE_END:           return "end";
-        case VD_DSPC__TOKEN_TYPE_TAGS_BEGIN:    return "tags_begin";
-        case VD_DSPC__TOKEN_TYPE_TAGS_END:      return "tags_end";
-        case VD_DSPC__TOKEN_TYPE_QUOTED_STRING: return "\"quoted\"";
-        case VD_DSPC__TOKEN_TYPE_SECTION_BEGIN: return "section_begin";
-        case VD_DSPC__TOKEN_TYPE_SECTION_END:   return "section_end";
-        case VD_DSPC__TOKEN_TYPE_TEXT_CONTENT:  return "text_content";
-        case VD_DSPC__TOKEN_TYPE_PARAGRAPH:     return "paragraph";
-        case VD_DSPC__TOKEN_TYPE_ASSIGNMENT:    return "=";
-        case VD_DSPC__TOKEN_TYPE_CODE_CONTENT:  return "code";
-        default: break;
+        case VD_DSPC__TOKEN_TYPE_UNKNOWN:       VD_DSPC_MAKE_LIT("unknown"); break;
+        case VD_DSPC__TOKEN_TYPE_AT:            VD_DSPC_MAKE_LIT("at"); break;
+        case VD_DSPC__TOKEN_TYPE_ID:            VD_DSPC_MAKE_LIT("id"); break;
+        case VD_DSPC__TOKEN_TYPE_END:           VD_DSPC_MAKE_LIT("end"); break;
+        case VD_DSPC__TOKEN_TYPE_TAGS_BEGIN:    VD_DSPC_MAKE_LIT("tags_begin"); break;
+        case VD_DSPC__TOKEN_TYPE_TAGS_END:      VD_DSPC_MAKE_LIT("tags_end"); break;
+        case VD_DSPC__TOKEN_TYPE_QUOTED_STRING: VD_DSPC_MAKE_LIT("\"quoted\""); break;
+        case VD_DSPC__TOKEN_TYPE_SECTION_BEGIN: VD_DSPC_MAKE_LIT("section_begin"); break;
+        case VD_DSPC__TOKEN_TYPE_SECTION_END:   VD_DSPC_MAKE_LIT("section_end"); break;
+        case VD_DSPC__TOKEN_TYPE_TEXT_CONTENT:  VD_DSPC_MAKE_LIT("text_content"); break;
+        case VD_DSPC__TOKEN_TYPE_PARAGRAPH:     VD_DSPC_MAKE_LIT("paragraph"); break;
+        case VD_DSPC__TOKEN_TYPE_ASSIGNMENT:    VD_DSPC_MAKE_LIT("="); break;
+        case VD_DSPC__TOKEN_TYPE_CODE_CONTENT:  VD_DSPC_MAKE_LIT("code"); break;
+        default:                                VD_DSPC_MAKE_LIT("<?>"); break;
     }
 
-    return "<?>";
+    return result;
+#undef VD_DSPC_MAKE_LIT
 }
 
 static VD_DSPC_PROC_LOG(vd_dspc__log_stdout)

@@ -5,15 +5,15 @@
 @section("FAQ") {
     @accordion(id="faq") {
         @accordion-item("What is this?") {
-            text {
+            para {
                 A collection of header-only libraries for C & C++ that are written to be concise and as dependency
                 free as possible.
             }
         }
 
         @accordion-item("What's the license?") {
-            text {
-                These libraries use the <a href="https://choosealicense.com/licenses/zlib/">zlib</a> license.
+            para {
+                These libraries use the #zlib#<https://choosealicense.com/licenses/zlib/> license.
                 If it prevents you from using the libraries, or a dual licensing
                 scheme would be better, please let me know in the issues!
             }
@@ -38,7 +38,7 @@
                     @div(class="card-body") {
                         @h5(class="card-title") {
                             text {
-                                vd_fw.h
+                                vd\_fw.h
                             }
                         }
                         @p(class="card-text") {
@@ -64,7 +64,7 @@
                     @div(class="card-body") {
                         @h5(class="card-title") {
                             text {
-                                vd_fc.h
+                                vd\_fc.h
                             }
                         }
                         @p(class="card-text") {
@@ -90,7 +90,7 @@
                     @div(class="card-body") {
                         @h5(class="card-title") {
                             text {
-                                vd_dlg.h
+                                vd\_dlg.h
                             }
                         }
                         @p(class="card-text") {
@@ -109,24 +109,29 @@
 @section("Purpose") {
     para {
         Dear reader,
+    }
 
-        <br> <br>
-
+    para {
         In the modern day, programming has become complex. Too complex for what most of the applications
         can actually do.
+    }
 
-        <br> <br>
+    para {
 
         One common theme that one will see mentioned in various topics, like building a rendering engine,
         or even something as simple as a static website, is The Stack&trade;: A collection of
-        libraries and frameworks for building solutions to problems <i>the right way</i>.
+        libraries and frameworks for building solutions to problems _the right way_.
 
-        <br> <br>
+    }
+
+    para {
 
         This is most commonly sourced from an aggregate of opinions, an admiration of complexity, even
         sheer ego, but it rarely comes from the complexity or expansiveness of the problem itself.
 
-        <br> <br>
+    }
+
+    para {
 
         And partially, it's to be expected; not just because software is affected by business decisions,
         timelines, and all the various aspects of every-day life - but because it's easy to admire a
@@ -134,7 +139,9 @@
         imposing sculptures, because that's a signal of dedication and craftsmanship; to some, even
         divine intervention.
 
-        <br> <br>
+    }
+
+    para {
 
         The reality though, at least for software, is that in most situations complicated doesn't mean
         good. For that matter, small and compact doesn't mean good either. There is few to no material about
@@ -144,7 +151,9 @@
         and other build tool specific scripts which download libraries off the internet, and end up importing a big
         complex library that usually introduces more problems than it solves.
 
-        <br> <br>
+    }
+
+    para {
 
         Let me be clear; I don't mean that everyone should go back to C, or program in Assembly,
         and I don't expect anyone to do so, because this pattern of library overuse
@@ -152,7 +161,9 @@
         C/C++ programmers doing it (mainly C now...) is that it's harder to source external libraries
         than to actually write them yourself.
 
-        <br> <br>
+    }
+
+    para {
 
         I encourage you to take a look at any modern project of say, a calculator,
         and try to tell me that it doesn't look a <b>tad</b> too complicated. Because, in most cases you
@@ -172,48 +183,63 @@
         the best way possible, and are portable and cross-platform (or cross-browser), so this is just
         the price you have to pay nowadays.
 
-        <br> <br>
+    }
+
+    para {
 
         I don't necessarily disagree with this take. I will <b>just</b> point out, that usually, for most
         of the dependencies these projects bring in into the codebase, they only use a small fraction of
         the functionalities they provide.
 
-        <br> <br>
+    }
+
+    para {
 
         And if you, dear reader, think that because you program in C/C++, you are exempted from this,
         please consider that there are a ton of projects out there that bring in a huge dependency, like
         SDL (I've got nothing against SDL, just using it as an example), and then proceed to use C++ threads, spdlog,
         printf, <code>std::cout</code>, instead of the portable functions that SDL already provides.
 
-        <br> <br>
+    }
+
+    para {
 
         I won't say that those projects are doing something inherently wrong; if it works, it works.
         But I will say that there are hidden or unnoticeable costs to bringing in any dependency into
         a project.
 
-        <br> <br>
+    }
+
+    para {
 
         And here we come back to the first point of this section. Why do people use SDL, and what do
         they use it for?
 
-        <br> <br>
+    }
+
+    para {
 
         I'll wager that most people use it because that's what they've been told to do, or because
         someone told them the Win32 API is too complicated, or even convinced them that it'll be better
         to bring it in early, because then their application will be cross-platform without much work.
 
-        <br> <br>
+    }
+
+    para {
 
         (Note that I'm using Win32 API as an example here, but this is the same for any platform.)
 
-        <br> <br>
+    }
+
+    para {
 
         It's not. Really. It's not that complicated, and you can make a wrapper for it in 5 days at
         most, that will get you 99% of the way there and cover what all of these libraries do for the
         common case. And you will not have to learn another API to use this one, or look out for
         updates, or have to fiddle with those libraries' deprecations and introcacies.
+    }
 
-        <br> <br>
+    para {
 
         So then, why are those libraries so big? The answer is simple: they do considerably more stuff than what you use
         them for; in essence, they just provide a layer of abstraction over the underlying one. A heavily limited layer,
@@ -221,14 +247,18 @@
         your problem isn't actually solved; you still have the same problem, but now you have a different language to
         express its solution.
 
-        <br> <br>
+    }
+
+    para {
 
         And this is the purpose of the libraries in here. As I'm writing my stuff, I've wrapped the
         functionality I actually want into libraries that provide solutions to specific problems, and not general ones.
         What this means, is that I try to optimize each library's ergonomics to solve the common case in the best
         way possible for the platforms & use cases it supports.
 
-        <br> <br>
+    }
+
+    para {
 
         I encourage everyone to read the code themselves, not because it's the best or the most bug
         free, but because I want you, dear reader, to see how simple things can be, even for

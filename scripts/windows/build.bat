@@ -43,7 +43,6 @@ if "%~1"=="-m" (
     set SAMPLE_TO_COMPILE=%~2
     shift
     shift
-
 ) else (
     echo Unknown option: %~1
     exit /b 1

@@ -144,12 +144,15 @@ int main() {
     para {
         This library is distributed as a single, header-only file, thus the following instructions
         are meant to be considered for your final application/dynamic library.
-        <br> <br>
+    }
+
+    para {
 
         In general, I make use of the up-to-date platform specific APIs, that should be available
         with every distribution of said platform's development environment.
-        <br> <br>
+    }
 
+    para {
         Some preprocessor directives to set depending on your needs:
     }
 
