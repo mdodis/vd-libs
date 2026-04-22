@@ -754,6 +754,37 @@ static int vd_dspc__lex_peek(VdDspc__Lex *lex)
     return save.content[save.cur_fwd];
 }
 
+static int vd_dspc__skip_escape(VdDspcDocument *doc, VdDspcStrList *list, VdDspc__Token *text_content_token, VdDspcStrNodeFlags flags)
+{
+    int c = vd_dspc__lex_char(&text_content_token->lexstate);
+    int pc = vd_dspc__lex_peek(&text_content_token->lexstate);
+
+    if (c == '\\') {
+        switch (pc) {
+            case '*':
+            case '#':
+            case '~':
+            case '`':
+            case '_': {
+                if ((text_content_token->lexstate.cur_fwd - text_content_token->lexstate.cur_back) > 1) {
+                    vd_dspc__str_list_push_token(doc, list, text_content_token, flags);
+                }
+                vd_dspc__lex_sync(&text_content_token->lexstate);
+
+                vd_dspc__lex_nextn(&text_content_token->lexstate, 1);
+                vd_dspc__lex_sync(&text_content_token->lexstate);
+                return 1;
+            } break;
+
+            default: {
+
+            } break;
+        }
+    }
+
+    return 0;
+}
+
 static int vd_dspc__lex_literal(VdDspcDocument *doc, VdDspc__Token *result, const char *identifier, size_t identifier_size, VdDspc__TokenType resulting_type)
 {
     const char *text = identifier;
@@ -805,29 +836,8 @@ static int vd_dspc__lex_literal(VdDspcDocument *doc, VdDspc__Token *result, cons
             while (!text_parsing_ended) {
 
                 int c = vd_dspc__lex_char(&text_content_token.lexstate);
-                int pc = vd_dspc__lex_peek(&text_content_token.lexstate);
 
-                if (c == '\\') {
-                    switch (pc) {
-                        case '*':
-                        case '#':
-                        case '~':
-                        case '`':
-                        case '_': {
-                            vd_dspc__str_list_push_token(doc, &list, &text_content_token, flags);
-                            vd_dspc__lex_sync(&text_content_token.lexstate);
-
-                            vd_dspc__lex_nextn(&text_content_token.lexstate, 1);
-                            vd_dspc__lex_sync(&text_content_token.lexstate);
-
-                        } break;
-
-                        default: {
-
-                        } break;
-                    }
-                }
-
+                // vd_dspc__skip_escape(doc, &list, &text_content_token, flags);
 
                 // Handle inline '*','_','#','~','`'
                 {
@@ -835,7 +845,11 @@ static int vd_dspc__lex_literal(VdDspcDocument *doc, VdDspc__Token *result, cons
                     VdDspcStrNodeFlags p_flags = flags;
                     VdDspc__Lex saved_state = text_content_token.lexstate;
 
-                    while (vd_dspc__is_inline_char(c)) {
+                    while (vd_dspc__is_inline_char(c) || (c == '\\')) {
+                        if (vd_dspc__skip_escape(doc, &list, &text_content_token, flags)) {
+                            vd_dspc__lex_sync(&text_content_token.lexstate);
+                            break;
+                        }
                         vd_dspc__lex_nextn(&text_content_token.lexstate, 1);
 
                         int bit;
@@ -911,44 +925,6 @@ static int vd_dspc__lex_literal(VdDspcDocument *doc, VdDspc__Token *result, cons
                     }
                 }
 
-                // if ((c == '_') && (prev_c != '\\')) {
-                //     if (flags & VD_DSPC_STR_NODE_FLAGS_ITALIC) {
-                //         vd_dspc__str_list_push_token(doc, &list, &text_content_token, flags);
-                //         text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
-
-                //         vd_dspc__lex_nextn(&text_content_token.lexstate, 1);
-                //         text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
-                //         flags &= ~VD_DSPC_STR_NODE_FLAGS_ITALIC;
-                //     } else {
-                //         vd_dspc__str_list_push_token(doc, &list, &text_content_token, flags);
-                //         text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
-
-                //         italic_last = text_content_token.lexstate;
-
-                //         vd_dspc__lex_nextn(&text_content_token.lexstate, 1);
-                //         text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
-                //         flags |= VD_DSPC_STR_NODE_FLAGS_ITALIC;
-                //     }
-                // } else if ((c == '*') && (prev_c != '\\')) {
-                //     if (flags & VD_DSPC_STR_NODE_FLAGS_BOLD) {
-                //         vd_dspc__str_list_push_token(doc, &list, &text_content_token, flags);
-                //         text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
-
-                //         vd_dspc__lex_nextn(&text_content_token.lexstate, 1);
-                //         text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
-                //         flags &= ~VD_DSPC_STR_NODE_FLAGS_BOLD;
-                //     } else {
-                //         vd_dspc__str_list_push_token(doc, &list, &text_content_token, flags);
-                //         text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
-
-                //         bold_last = text_content_token.lexstate;
-
-                //         vd_dspc__lex_nextn(&text_content_token.lexstate, 1);
-                //         text_content_token.lexstate.cur_back = text_content_token.lexstate.cur_fwd;
-                //         flags |= VD_DSPC_STR_NODE_FLAGS_BOLD;
-                //     }
-                // }
-
                 if (c == '}') {
                     text_parsing_ended = 1;
                     continue;
@@ -993,6 +969,14 @@ static int vd_dspc__lex_literal(VdDspcDocument *doc, VdDspc__Token *result, cons
                     err->kind = VD_DSPC_ERROR_KIND_UNTERMINATED_INLINE_MARKUP;
                     err->character = '*';
                 }
+
+                if (flags & VD_DSPC_STR_NODE_FLAGS_STRIKE) {
+                    VdDspcError *err = vd_dspc__push_error(doc);
+                    err->line = flags_last[VD_DSPC_STR_NODE_FLAG_BOLD_BIT].line + 1;
+                    err->column = flags_last[VD_DSPC_STR_NODE_FLAG_BOLD_BIT].column + 1;
+                    err->kind = VD_DSPC_ERROR_KIND_UNTERMINATED_INLINE_MARKUP;
+                    err->character = '~';
+                }
             }
 
             vd_dspc__lex_nextn(&text_content_token.lexstate, 1);
@@ -1017,6 +1001,22 @@ static VdDspc__Token vd_dspc__lex_token(VdDspcDocument *doc, VdDspc__Lex *lex)
     result.lexstate = saved_state;
 
     int c = vd_dspc__lex_char(lex);
+
+    while (c == '/') {
+        vd_dspc__lex_nextn(&result.lexstate, 1);
+        if (vd_dspc__lex_char(&result.lexstate) == '/') {
+
+            while (!vd_dspc__is_newline(c)) {
+                vd_dspc__lex_nextn(&result.lexstate, 1);
+                c = vd_dspc__lex_char(&result.lexstate);
+            }
+
+            vd_dspc__skip_whitespace_all(&result.lexstate);
+            c = vd_dspc__lex_char(&result.lexstate);
+        } else {
+            return result;
+        }
+    }
 
     switch (c) {
         case '@':  result.type = VD_DSPC__TOKEN_TYPE_AT;            vd_dspc__lex_nextn(&result.lexstate, 1); break;
@@ -1052,6 +1052,7 @@ static VdDspc__Token vd_dspc__lex_token(VdDspcDocument *doc, VdDspc__Lex *lex)
             result.dat.quoted_string.l = vd_dspc__token_string_size(&result) - 2;
 
         } break;
+
         default: {
             // Attempt to parse identifier
             if (vd_dspc__is_alpha(c)) {
@@ -1398,7 +1399,7 @@ static void *vd_dspc__push(VdDspcDocument *doc, size_t size)
 
 static VdDspcError *vd_dspc__push_error(VdDspcDocument *doc)
 {
-    VdDspcError *new_err = vd_dspc__push(doc, sizeof(VdDspcError));
+    VdDspcError *new_err = (VdDspcError*)vd_dspc__push(doc, sizeof(VdDspcError));
     doc->error_sent.prev->next = new_err;
     new_err->next = &doc->error_sent;
     new_err->prev = doc->error_sent.prev;

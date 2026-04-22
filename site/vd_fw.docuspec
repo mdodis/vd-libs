@@ -21,16 +21,16 @@
 
     para {
         This library can:
+    }
 
-        <ul>
-            <li>Open a window, handle input from keyboard/mouse/gamepad</li>
-            <li>Draw while resizing the window</li>
-            <li>Disable window decorations, but still be able to tile the window, customize the drag area, etc...</li>
-            <li>Load OpenGL (without using a loader library)</li>
-            <li>Or let you use your Graphics API of choice</li>
-            <li>Set the window icon</li>
-            <li>All of that, with as minimal dependencies as possible</li>
-        </ul>
+    @list("u") {
+        @item() { text { Open a window, handle input from keyboard/mouse/gamepad } }
+        @item() { text { Draw while resizing the window } }
+        @item() { text { Disable window decorations, but still be able to tile the window, customize the drag area, etc... } }
+        @item() { text { Load OpenGL (without using a loader library) } }
+        @item() { text { Or let you use your Graphics API of choice } }
+        @item() { text { Set the window icon } }
+        @item() { text { All of that, with as minimal dependencies as possible } }
     }
 
     para {
@@ -42,31 +42,36 @@
 
     para {
         Additionally, this library:
-        <ul>
-            <li>Provides custom implementations of several math functions, like sinf</li>
-            <li>Doesn't use the standard C library (where possible)</li>
-            <li>Provides convenience functions that can, for example, construct a perpsective projection matrix for OpenGL</li>
-            <li>Automatically sets up OpenGL debugging infrastructure</li>
-        </ul>
+    }
+
+    @list("u") {
+        @item() { text { Provides custom implementations of several math functions, like sinf } }
+        @item() { text { Doesn't use the standard C library (where possible) } }
+        @item() { text { Provides convenience functions that can, for example, construct a perpsective projection matrix for OpenGL } }
+        @item() { text { Automatically sets up OpenGL debugging infrastructure } }
     }
 
     para {
-        <b>Why should you use this library over, GLFW, SDL, SFML, ...?</b>
-        <br>
+        *Why should you use this library over, GLFW, SDL, SFML, ...?*
+    }
 
+    para {
         Those libraries solve a <b>much more</b> general problem than the one most developers have:
-        <ul>
-            <li>Create one or more windows</li>
-            <li>Handle child/parent window relationships</li>
-            <li>Provide aliases for common usermode operations (show file dialog, message box)</li>
-            <li>Support many more platforms, even ones that don't include a windowing system.</li>
-            <li>Support multiple graphics APIs for initialization.</li>
-            <li>Provide a high level drawing interface.</li>
-            <li>Provide a high level sound interface.</li>
-            <li>Allow for entirely customized windows.</li>
-            <li>And much more...</li>
-        </ul>
+    }
 
+    @list("u") {
+        @item() { text { Create one or more windows } }
+        @item() { text { Handle child/parent window relationships } }
+        @item() { text { Provide aliases for common usermode operations (show file dialog, message box) } }
+        @item() { text { Support many more platforms, even ones that don't include a windowing system. } }
+        @item() { text { Support multiple graphics APIs for initialization. } }
+        @item() { text { Provide a high level drawing interface. } }
+        @item() { text { Provide a high level sound interface. } }
+        @item() { text { Allow for entirely customized windows. } }
+        @item() { text { And much more... } }
+    }
+
+    para {
         But in their attempt to be "generic" and "robust", they fail to provide a good and simple
         interface that covers 90% of the use cases, and is implemented in the best way possible for
         each platform.
@@ -79,21 +84,26 @@
         This is an introcacy of the Win32 API (and actually the same is true for MacOS), and the
         recommended way is not exactly obvious to a new developer, or one unfamiliar with the
         platform.
-        <br>
     }
 
     @div(class="alert alert-primary d-flex align-items-center" role="alert") {
         text {
             Note that you don't need to use an OpenGL loader or include any OS specific OpenGL
             libraries.
-            <br>
+        }
+
+        @br()
+
+        text {
             The library does the loading for you.
         }
     }
 
     para {
         Here is all you need (and should need) to create a simple window.
-        <br>
+    }
+
+    para {
         By default it creates an OpenGL 3.3 core profile context:
     }
     verb ```
@@ -179,27 +189,27 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>VD_FW_VERSION</code>}}
+                @td() { text{`VD\_FW\_VERSION`}}
                 @td() { text{Combined version (major, minor, patch) number of the library}}
             }
 
             @tr() {
-                @td() { text{<code>\#define VD\_FW\_STATIC</code>}}
+                @td() { text{`\#define VD\_FW\_STATIC`}}
                 @td() { text{Set to use this library statically.}}
             }
 
             @tr() {
-                @td() { text{<code>\#define VD\_FW\_API // (static, extern, ...dllexport)</code>}}
+                @td() { text{`\#define VD\_FW\_API // (static, extern, ...dllexport)`}}
                 @td() { text{Set to change the function signature (useful for precompiling the library).}}
             }
 
             @tr() {
-                @td() { text{<code>\#define VD\_FW\_INL}}
+                @td() { text{`\#define VD\_FW\_INL`}}
                 @td() { text{Set to change the inline function signature. }}
             }
 
             @tr() {
-                @td() { text{<code>\#define VD\_FW\_SIN</code>}}
+                @td() { text{`\#define VD\_FW\_SIN`}}
                 @td() {
                     text {
                         Can be predefined to your implementation of sinf. Otherwise uses math.h
@@ -208,7 +218,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>\#define VD\_FW\_COS</code>}}
+                @td() { text{`\#define VD\_FW\_COS`}}
                 @td() {
                     text {
                         Can be defined to your implementation of cosf. Otherwise uses math.h
@@ -217,7 +227,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>\#define VD\_FW\_TAN</code>}}
+                @td() { text{`\#define VD\_FW\_TAN`}}
                 @td() {
                     text {
                         Can be defined to your implementation of tanf. Otherwise uses math.h
@@ -226,7 +236,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>\#define VD\_FW\_SQRT</code>}}
+                @td() { text{`\#define VD\_FW\_SQRT`}}
                 @td() {
                     text {
                         Can be defined to your implementation of sqrtf. Otherwise uses math.h
@@ -235,7 +245,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>\#define VD_FW_MEMCPY</code>}}
+                @td() { text{`\#define VD\_FW\_MEMCPY`}}
                 @td() {
                     text {
                         Can be defined to your implementation of memcpy. Otherwise uses stdlib.h
@@ -244,7 +254,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>\#define VD_FW_MEMSET</code>}}
+                @td() { text{`\#define VD\_FW\_MEMSET`}}
                 @td() {
                     text {
                         Can be defined to your implementation of memset. Otherwise uses stdlib.h
@@ -253,7 +263,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>\#define VD_FW_REALLOC</code>}}
+                @td() { text{`\#define VD\_FW\_REALLOC`}}
                 @td() {
                     text {
                         Can be defined to your implementation of realloc. Otherwise uses stdlib.h
@@ -263,7 +273,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>\#define VD_FW_FREE</code>}}
+                @td() { text{`\#define VD\_FW\_FREE`}}
                 @td() {
                     text {
                         Can be defined to your implementation of free. Otherwise uses stdlib.h
@@ -273,7 +283,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>\#define VD_FW_LOG</code>}}
+                @td() { text{`\#define VD\_FW\_LOG`}}
                 @td() {
                     text {
                         Use to define the macro used by the library to log errors or other information.
@@ -282,7 +292,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>\#define VD_FW_ENDIANNESS</code>}}
+                @td() { text{`\#define VD\_FW\_ENDIANNESS`}}
                 @td() {
                     text {
                         Defines the byte order of the platform. Suggested to leave as is.
@@ -291,7 +301,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>\#define VD\_FW\_CUSTOM\_TYPEDEFS</code>}}
+                @td() { text{`\#define VD\_FW\_CUSTOM\_TYPEDEFS`}}
                 @td() {
                     text {
                         Use to override the primitive typedefs used by the library. The defaults are:
@@ -308,7 +318,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>\#define VD\_FW\_GAMEPAD\_COUNT\_MAX 16</code>}}
+                @td() { text{`\#define VD\_FW\_GAMEPAD\_COUNT\_MAX 16`}}
                 @td() {
                     text {
                         The maximum number of simulataneously connected gamepads that the library will support.
@@ -318,7 +328,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>\#define VD\_FW\_GAMEPAD\_DB\_DEFAULT</code>}}
+                @td() { text{`\#define VD\_FW\_GAMEPAD\_DB\_DEFAULT`}}
                 @td() {
                     text {
                         Use to include (or not) the default gamepad DB.
@@ -327,7 +337,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>\#define VD\_FW\_GAMEPAD\_DB\_DEFAULT\_EXTERNAL</code>}}
+                @td() { text{`\#define VD\_FW\_GAMEPAD\_DB\_DEFAULT\_EXTERNAL`}}
                 @td() {
                     text {
                         Use with VD\_FW\_GAMEPAD\_DB\_DEFAULT to instruct the library to include a C file generated by
@@ -337,7 +347,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>\#define VD\_FW\_NCRECTS\_MAX 16</code>}}
+                @td() { text{`\#define VD\_FW\_NCRECTS\_MAX 16`}}
                 @td() {
                     text {
                         The maximum number of non-client rectangles that will be supported by the library.
@@ -347,7 +357,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>\#define VD\_FW\_CODEPOINT\_BUFFER\_COUNT 8</code>}}
+                @td() { text{`\#define VD\_FW\_CODEPOINT\_BUFFER\_COUNT 8`}}
                 @td() {
                     text {
                         The size (in characters) of the character input history buffer.
@@ -358,11 +368,9 @@ int main() {
 
             @tr() {
                 @td() {
-                    text {
-                        <code>\#define VD\_FW\_PREFER\_DISCRETE\_GPU</code><br>
-                        <code>// Or</code><br>
-                        <code>\#define VD\_FW\_PREFER\_INTEGRATED\_GPU</code><br>
-                    }
+                    text { `\#define VD\_FW\_PREFER\_DISCRETE\_GPU` } @br()
+                    text { `// Or` } @br()
+                    text { `\#define VD\_FW\_PREFER\_INTEGRATED\_GPU` } @br()
                 }
                 @td() {
                     text {
@@ -372,12 +380,12 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<b>Win32 Specific</b>}}
+                @td() { text{*Win32 Specific*}}
                 @td() {}
             }
 
             @tr() {
-                @td() { text{<code>\#define VD\_FW\_WIN32\_NO\_LINKER\_COMMENTS</code>}}
+                @td() { text{`\#define VD\_FW\_WIN32\_NO\_LINKER\_COMMENTS`}}
                 @td() {
                     text {
                         Disable automatic linker comments (Windows only).
@@ -791,8 +799,8 @@ int main(int argc, char const *argv[])
 
     @section("Create a Borderless Window") {
         para {
-            To create a borderless window, create a <code>VdFwInitInfo</code> struct, set
-            <code>VdFwInitInfo::window_options::borderless</code> to 1, and pass it to <code>vd_fw_init</code>.
+            To create a borderless window, create a `VdFwInitInfo` struct, set
+            `VdFwInitInfo::window\_options::borderless` to 1, and pass it to `vd\_fw\_init`.
         } 
 
         verb ```
@@ -870,8 +878,8 @@ glLinkProgram(program);
         ```
 
         para {
-            In most tutorials, you'll be prompted to do error checking by doing <code>glGetShaderiv</code>,
-            then <code>glGetShaderInfoLog</code> and printing it out...
+            In most tutorials, you'll be prompted to do error checking by doing `glGetShaderiv`,
+            then `glGetShaderInfoLog` and printing it out...
         }
 
         para {
@@ -884,8 +892,8 @@ GLuint fragment_shader = vd_fw_compile_shader(GL_FRAGMENT_SHADER, FRAGMENT_SOURC
         ```
 
         para {
-            For error logging, make sure to set <code>VdFwInitInfo::gl::debug_on</code> to 1 when initializing the library.
-            Here's the <code>vd_fw_init</code> call we'll be using for the rest of these tutorials:
+            For error logging, make sure to set `VdFwInitInfo::gl::debug\_on` to 1 when initializing the library.
+            Here's the `vd\_fw\_init` call we'll be using for the rest of these tutorials:
         }
 
         verb ```
@@ -929,8 +937,8 @@ glEnableVertexAttribArray(0);
         }
 
         para {
-            We'll use orthographic projection. vd_fw.h provides a simple utility function to compute it:
-            <code>vd_fw_u_ortho</code>
+            We'll use orthographic projection. vd\_fw.h provides a simple utility function to compute it:
+            <code>vd\_fw\_u\_ortho</code>
         }
 
         verb ```
@@ -984,7 +992,7 @@ glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
         para {
             In a borderless window, there is no specified non-client area. So to allow the user to drag the window
-            only from a specific place, we'll use <code>vd_fw_set_ncrects</code>.
+            only from a specific place, we'll use `vd\_fw\_set\_ncrects`.
         }
 
         verb ```
@@ -1005,12 +1013,15 @@ vd_fw_set_ncrects(draggable_rect, 0, 0);
              src="./assets/fw/tutorials-ncrects-drag-frame.gif")
         
         para {
-            Now, for the 2 last parameters to <code>vd_fw_set_ncrects</code>:
-            <ul>
-                <li>count: Number of excluded rects</li>
-                <li>rects: Pointer to array of <code>count</code> rects</li>
-            </ul>
+            Now, for the 2 last parameters to `vd\_fw\_set\_ncrects`:
+        }
 
+        @list("u") {
+            @item() { text { count: Number of excluded rects } }
+            @item() { text { rects: Pointer to array of `count` rects } }
+        }
+
+        para {
             These allow you to set areas inside the drag area, that are not draggable.
         }
 
@@ -1044,11 +1055,13 @@ glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
              src="./assets/fw/tutorials-ncrects-button.gif")
 
         para {
-            As you can see, we can still drag the window even if the mouse is on the button. <br>
+            As you can see, we can still drag the window even if the mouse is on the button.
         }
 
+        @br()
+
         para {
-            To fix that, we have to update our call to <code>vd_fw_set_ncrects</code>:
+            To fix that, we have to update our call to `vd\_fw\_set\_ncrects`:
         }
 
         verb ```
@@ -1194,7 +1207,7 @@ glGenerateMipmap(GL_TEXTURE_2D);
         ```
 
         para {
-            Since we'll be rendering both 3D and 2D, we'll need to make sure GL_DEPTH_TEST is only
+            Since we'll be rendering both 3D and 2D, we'll need to make sure GL\_DEPTH\_TEST is only
             enabled for the 3D part of our rendering:
         }
 
@@ -1310,14 +1323,15 @@ glDrawArrays(GL_TRIANGLES, 0, 36);
         para {
             We've already seen some mouse state handling, but let's look at the main functions used for
             input:
-            <ul>
-                <li><code>vd_fw_delta_s</code>, to get delta time since last frame</li>
-                <li><code>vd_fw_get_mouse_state</code>, to read the mouse state</li>
-                <li><code>vd_fw_get_mouse_delta</code>, to read how much the mouse moved since last frame</li>
-                <li><code>vd_fw_get_key_down</code>, to check if a key is currently down</li>
-                <li><code>vd_fw_get_key_pressed</code>, to check if a key was just pressed</li>
-                <li><code>vd_fw_set_mouse_locked</code>, to hide and confine the mouse to the window</li>
-            </ul>
+        }
+
+        @list("u") {
+            @item() { text { `vd\_fw\_delta\_s`, to get delta time since last frame } } 
+            @item() { text { `vd\_fw\_get\_mouse\_state`, to read the mouse state } } 
+            @item() { text { `vd\_fw\_get\_mouse\_delta`, to read how much the mouse moved since last frame } } 
+            @item() { text { `vd\_fw\_get\_key\_down`, to check if a key is currently down } } 
+            @item() { text { `vd\_fw\_get\_key\_pressed`, to check if a key was just pressed } } 
+            @item() { text { `vd\_fw\_set\_mouse\_locked`, to hide and confine the mouse to the window } } 
         }
 
         para {
@@ -1478,10 +1492,11 @@ vd_fw_set_app_icon(icon_pixels, 32, 32);
 
         para {
             On Windows, the icon will also be shown in:
-            <ul>
-                <li>The App Bar (Taskbar), and</li>
-                <li>The Window switcher (Alt + Tab)</li>
-            </ul>
+        }
+
+        @list("u") {
+            @item() { text { The App Bar (Taskbar), and } }
+            @item() { text { The Window switcher (Alt + Tab) } }
         }
     }
 
@@ -1792,20 +1807,25 @@ typedef enum {
 
             para {
                 My suggestion is:
-                <ul>
-                    <li>
-                        For GUI applications:<br> 
-                        <b>Don't set any GPU preference</b>. These apps are supposed to use few system
-                        resources anyway. This should guarantee that resizing, going fullscreen, etc.. will
-                        match the display context to the currently used one by other applications.
-                    </li>
-                    <li>
-                        For games:<br>
-                        <b>Always use the discrete GPU</b>, since those are the ones that implement the most
-                        OpenGL extensions, as well as the fastest ones. But be aware that initial startup
-                        time (especially on gaming laptops with 2 GPUs), will be affected.        
-                    </li>
-                </ul>
+            }
+
+            @list("u") {
+                @item() {
+                    text { For GUI applications: }
+                    @br()
+                    text {
+                    *Don't set any GPU preference*. These apps are supposed to use few system
+                    resources anyway. This should guarantee that resizing, going fullscreen, etc.. will
+                    match the display context to the currently used one by other applications.
+                }}
+                @item() {
+                    text {For games: }
+                    @br()
+                    text {
+                    *Always use the discrete GPU*, since those are the ones that implement the most
+                    OpenGL extensions, as well as the fastest ones. But be aware that initial startup
+                    time (especially on gaming laptops with 2 GPUs), will be affected.        
+                }}
             }
         }
     }
@@ -1814,10 +1834,11 @@ typedef enum {
         para {
             This library now also supports Vulkan. If you've used it before you should know that at the very least
             you need to;
-            <ul>
-                <li>Get the required instance extensions to create a VkSurfaceKHR</li>
-                <li>Create a VkSurfaceKHR</li>
-            </ul>
+        }
+
+        @list("u") {
+            @item() { text { Get the required instance extensions to create a VkSurfaceKHR } }
+            @item() { text { Create a VkSurfaceKHR } }
         }
 
         para {
@@ -1868,15 +1889,16 @@ result = vd_fw_vk_wsi_surface_create((void*)instance, (void*)alloc, (void*)&surf
 
         para {
             Options:
-            <ul>
-                <li>OpenGL (default): <code>VD_FW_GRAPHICS_API_OPENGL</code></li>
-                <li>Custom: <code>VD_FW_GRAPHICS_API_CUSTOM</code></li>
-                <li>Software Rendering (in progress): <code>VD_FW_GRAPHICS_API_PIXEL_BUFFER</code></li>
-            </ul>
+        }
+
+        @list("u") {
+            @item() { text { OpenGL (default): `VD\_FW\_GRAPHICS\_API\_OPENGL` } }
+            @item() { text { Custom: `VD\_FW\_GRAPHICS\_API\_CUSTOM` } }
+            @item() { text { Software Rendering (in progress): `VD\_FW\_GRAPHICS\_API\_PIXEL\_BUFFER` } }
         }
 
         para {
-            Additionally, you can switch graphics APIs at runtime using <code>vd_fw_set_graphics_api</code>:
+            Additionally, you can switch graphics APIs at runtime using `vd\_fw\_set\_graphics\_api`:
         }
 
         verb```
@@ -1884,7 +1906,7 @@ vd_fw_set_graphics_api(VD_FW_GRAPHICS_API_CUSTOM, NULL);
         ```
 
         para {
-            A sample is provided <a href="https://github.com/mdodis/vd-libs/tree/main/samples/fw_all.cpp">here</a>.
+            A sample is provided #here#<https://github.com/mdodis/vd-libs/tree/main/samples/fw_all.cpp>.
             Currently it switches between OpenGL and DirectX11 using the spacebar. Each graphics API will then draw a
             simple texture at the center of the screen to indicate which is the current API it's using:
         }
@@ -1965,8 +1987,8 @@ static void switch_to_graphics_backend(GraphicsBackendImpl *impl)
         ```
 
         para {
-            We can set <code>VdFwInitInfo::api</code> to <code>VD_FW_GRAPHICS_API_INVALID</code> so that no
-            initialization is attempted during <code>vd_fw_init</code>, and right after call our function to switch the
+            We can set `VdFwInitInfo::api` to `VD\_FW\_GRAPHICS\_API\_INVALID` so that no
+            initialization is attempted during `vd\_fw\_init`, and right after call our function to switch the
             backend so as to have everything following the same codepath:
         }
 
@@ -1979,8 +2001,8 @@ switch_to_graphics_backend(Graphics_Backends[current_backend_index]);
         ```
 
         para {
-            In the game loop, we check for the event that will cause the graphics API to change, and <b>after</b>
-            <code>vd_fw_unlock</code>, we switch our graphics context:
+            In the game loop, we check for the event that will cause the graphics API to change, and *after*
+            `vd\_fw\_unlock`, we switch our graphics context:
         }
 
         verb```
@@ -2043,8 +2065,8 @@ vd_fw_set_block_while_sizing(1 /* or 0 */);
     }
 
     para {
-        <b>What is the intended/typical functionality a developer may want out of this part of a windowing/input
-        library?</b>
+        *What is the intended/typical functionality a developer may want out of this part of a windowing/input
+        library?*
     }
 
     para {
@@ -2053,52 +2075,51 @@ vd_fw_set_block_while_sizing(1 /* or 0 */);
     }
 
     para {
-        This means, for example, that unlike a lot of other libraries you <b>don't</b> get to figure out which OpenGL
-        loader you need/(should use), and you just want to write a program targeting <b>some OpenGL version</b>, or <b>
-        some other graphics API</b>. Targeting OpenGL for windowing will make sense to someone familiar with its
+        This means, for example, that unlike a lot of other libraries you *don't* get to figure out which OpenGL
+        loader you need/(should use), and you just want to write a program targeting _some OpenGL version_, or _
+        some other graphics API_. Targeting OpenGL for windowing will make sense to someone familiar with its
         implementation on various platforms, but the gist of it is: It's a highly platform dependent library and heavily 
         tied to the windowing system of that platform.
     }
 
     para {
-        Another example would be the <b>absence</b> of an event API. Event APIs are one of the <b>most granular</b>
-        forms of generalizing a variable input matrix over non-contiguous time. But even those APIs have their <b>
-        limits</b>; and that mostly has to do with the format and intended usage of the data presented to the user.
+        Another example would be the _absence_ of an event API. Event APIs are one of the _most granular_
+        forms of generalizing a variable input matrix over non-contiguous time. But even those APIs have their _
+        limits_; and that mostly has to do with the format and intended usage of the data presented to the user.
     }
 
     para {
-        A good case for this, is handling touch gestures in a way that's <b>consistent</b> with the platform's vendor's 
-        <b>Human Interface Guidelines</b>. Typically, event based APIs will expose some kind of <b>high-granularity</b> 
-        touch point down/up event and some <b>lower-granularity</b> gestures like swipe, pinch and tap. But from what 
-        I've seen, <b>few if any</b> libraries actually <b>follow the convention</b> set by the vendor.
+        A good case for this, is handling touch gestures in a way that's consistent with the platform's vendor's 
+        Human Interface Guidelines. Typically, event based APIs will expose some kind of high-granularity 
+        touch point down/up event and some lower-granularity gestures like swipe, pinch and tap. But from what 
+        I've seen, _few if any_ libraries actually follow the convention set by the vendor.
     }
 
     para {
-        This of course is <b>not entirely the author's fault</b>; newer input APIs are generally harder to use and
-        <b>little to no</b> documentation is provided by the platform vendor. But, this <b>does not waive</b> an input
-        library's obligation to provide the <b>best possible solution</b> for a problem like viewport manipuation
+        This of course is not entirely the author's fault; newer input APIs are generally harder to use and
+        _little to no_ documentation is provided by the platform vendor. But, this does not waive an input
+        library's obligation to provide the best possible solution for a problem like viewport manipuation
         (scrolling, zooming, etc...).
     }
 
     para {
-        For the sake of brevity, most libraries on Win32 will expose some events that are driven by the <b>Message Queue
-        </b> related to touch, scroll and more. But I've seen no general adoption of APIs like 
-        <b>DirectManipulation</b>, even if bigger software packages like <b>browsers</b> actually <b>support</b> that 
-        API.
+        For the sake of brevity, most libraries on Win32 will expose some events that are driven by the Message Queue
+        related to touch, scroll and more. But I've seen no general adoption of APIs like 
+        DirectManipulation, even if bigger software packages like browsers actually support that API.
     }
 
     para {
-        I will wager that besides the sparse documentation, the API of DirectManipulation is <b>so different</b>
+        I will wager that besides the sparse documentation, the API of DirectManipulation is so different
         compared to an event API that its modelling on the format provided by those libraries is either an undesireable
-        venture, <b>or out of the defined scope</b> of that library. As such, we're left with so many useful
-        applications that essentially <b>map touchpad scrolling to a virtual mousewheel</b> and <b>try</b> to
+        venture, or out of the defined scope of that library. As such, we're left with so many useful
+        applications that essentially map touchpad scrolling to a virtual mousewheel and try to
         animate/smooth the provided scroll wheel events sent by windows to emulate this behavior.
     }
 
     para {
-        While impressive, it will only take the user <b>1 second to realize that this is a non-conformant
-        application</b>, despite all of the effort in animating input that is essentially <b>wrong in terms of intended
-        usage</b>. 
+        While impressive, it will only take the user 1 second to realize that this is a non-conformant
+        application, despite all of the effort in animating input that is essentially wrong in terms of intended
+        usage. 
     }
 
     para {
@@ -2111,8 +2132,8 @@ vd_fw_set_block_while_sizing(1 /* or 0 */);
     }
 
     para {
-        <b>Given a typical application/game on this target platform, what is the expected behavior given some user 
-        input?</b>
+        *Given a typical application/game on this target platform, what is the expected behavior given some user 
+        input?*
     }
 
     para {

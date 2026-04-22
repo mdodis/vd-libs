@@ -58,6 +58,21 @@ VD_TEST("Inline Placements - 1 Character long") {
     VD_TEST_OK();
 }
 
+VD_TEST("Inline Placements - Escapes") {
+    VdStr s = VD_LIT("text {`\\#text with \\_ stuf`} ");
+    VdDspcDocument doc;
+    vd_dspc_document_init(&doc, 0);
+    vd_dspc_document_add(&doc, s.s, s.len, 0);
+    VdDspcTree *tree = (VdDspcTree*)vd_dspc_document_first_tree(&doc);
+    VdDspcSection *section = vd_dspc_tree_first_section(tree)->first;
+
+    VdDspcStrNode *node = vd_dspc_str_list_first_node(&section->text_content);
+
+    VD_TEST_EQ("Single node flags", node->flags, VD_DSPC_STR_NODE_FLAGS_CODE);
+
+    VD_TEST_OK();
+}
+
 VD_TEST("Multistring Inline Link") {
     VdStr s = VD_LIT("text {#my\nlink#<linkname>} ");
     VdDspcDocument doc;
@@ -68,7 +83,7 @@ VD_TEST("Multistring Inline Link") {
 
     VdDspcStrNode *node = vd_dspc_str_list_first_node(&section->text_content);
 
-    VD_TEST_EQ("Part 1 of link is a link", node->flags, VD_DSPC_STR_NODE_FLAGS_LINK);
+    VD_TEST_EQ("Part 1 of link is a link", node->flags, VD_DSPC_STR_NODE_FLAGS_SPACE | VD_DSPC_STR_NODE_FLAGS_LINK);
     VD_TEST_EQ("Part 2 of link is a link", node->next->flags, VD_DSPC_STR_NODE_FLAGS_LINK);
 
     VD_TEST_EQ("Part 1 of link is strlen(linkname)", node->link_str.l, 8);
