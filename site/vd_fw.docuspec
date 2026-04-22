@@ -164,17 +164,17 @@ int main() {
         }
         @tbody() {
             @tr() {
-                @td() { text{<code>VD_FW_VERSION_MAJOR</code>}}
+                @td() { text{`VD\_FW\_VERSION\_MAJOR`}}
                 @td() { text{Major version number of the library}}
             }
 
             @tr() {
-                @td() { text{<code>VD_FW_VERSION_MINOR</code>}}
+                @td() { text{`VD\_FW\_VERSION\_MINOR`}}
                 @td() { text{Minor version number of the library}}
             }
 
             @tr() {
-                @td() { text{<code>VD_FW_VERSION_PATCH</code>}}
+                @td() { text{`VD\_FW\_VERSION\_PATCH`}}
                 @td() { text{Patch version number of the library}}
             }
 
@@ -184,22 +184,22 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>#define VD_FW_STATIC</code>}}
+                @td() { text{<code>\#define VD\_FW\_STATIC</code>}}
                 @td() { text{Set to use this library statically.}}
             }
 
             @tr() {
-                @td() { text{<code>#define VD_FW_API // (static, extern, ...dllexport)</code>}}
+                @td() { text{<code>\#define VD\_FW\_API // (static, extern, ...dllexport)</code>}}
                 @td() { text{Set to change the function signature (useful for precompiling the library).}}
             }
 
             @tr() {
-                @td() { text{<code>#define VD_FW_INL}}
+                @td() { text{<code>\#define VD\_FW\_INL}}
                 @td() { text{Set to change the inline function signature. }}
             }
 
             @tr() {
-                @td() { text{<code>#define VD_FW_SIN</code>}}
+                @td() { text{<code>\#define VD\_FW\_SIN</code>}}
                 @td() {
                     text {
                         Can be predefined to your implementation of sinf. Otherwise uses math.h
@@ -208,7 +208,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>#define VD_FW_COS</code>}}
+                @td() { text{<code>\#define VD\_FW\_COS</code>}}
                 @td() {
                     text {
                         Can be defined to your implementation of cosf. Otherwise uses math.h
@@ -217,7 +217,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>#define VD_FW_TAN</code>}}
+                @td() { text{<code>\#define VD\_FW\_TAN</code>}}
                 @td() {
                     text {
                         Can be defined to your implementation of tanf. Otherwise uses math.h
@@ -226,7 +226,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>#define VD_FW_SQRT</code>}}
+                @td() { text{<code>\#define VD\_FW\_SQRT</code>}}
                 @td() {
                     text {
                         Can be defined to your implementation of sqrtf. Otherwise uses math.h
@@ -235,7 +235,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>#define VD_FW_MEMCPY</code>}}
+                @td() { text{<code>\#define VD_FW_MEMCPY</code>}}
                 @td() {
                     text {
                         Can be defined to your implementation of memcpy. Otherwise uses stdlib.h
@@ -244,7 +244,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>#define VD_FW_MEMSET</code>}}
+                @td() { text{<code>\#define VD_FW_MEMSET</code>}}
                 @td() {
                     text {
                         Can be defined to your implementation of memset. Otherwise uses stdlib.h
@@ -253,7 +253,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>#define VD_FW_REALLOC</code>}}
+                @td() { text{<code>\#define VD_FW_REALLOC</code>}}
                 @td() {
                     text {
                         Can be defined to your implementation of realloc. Otherwise uses stdlib.h
@@ -263,7 +263,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>#define VD_FW_FREE</code>}}
+                @td() { text{<code>\#define VD_FW_FREE</code>}}
                 @td() {
                     text {
                         Can be defined to your implementation of free. Otherwise uses stdlib.h
@@ -273,7 +273,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>#define VD_FW_LOG</code>}}
+                @td() { text{<code>\#define VD_FW_LOG</code>}}
                 @td() {
                     text {
                         Use to define the macro used by the library to log errors or other information.
@@ -282,7 +282,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>#define VD_FW_ENDIANNESS</code>}}
+                @td() { text{<code>\#define VD_FW_ENDIANNESS</code>}}
                 @td() {
                     text {
                         Defines the byte order of the platform. Suggested to leave as is.
@@ -291,7 +291,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>#define VD_FW_CUSTOM_TYPEDEFS</code>}}
+                @td() { text{<code>\#define VD\_FW\_CUSTOM\_TYPEDEFS</code>}}
                 @td() {
                     text {
                         Use to override the primitive typedefs used by the library. The defaults are:
@@ -308,7 +308,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>#define VD_FW_GAMEPAD_COUNT_MAX 16</code>}}
+                @td() { text{<code>\#define VD\_FW\_GAMEPAD\_COUNT\_MAX 16</code>}}
                 @td() {
                     text {
                         The maximum number of simulataneously connected gamepads that the library will support.
@@ -318,7 +318,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>#define VD_FW_GAMEPAD_DB_DEFAULT</code>}}
+                @td() { text{<code>\#define VD\_FW\_GAMEPAD\_DB\_DEFAULT</code>}}
                 @td() {
                     text {
                         Use to include (or not) the default gamepad DB.
@@ -327,17 +327,17 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>#define VD_FW_GAMEPAD_DB_DEFAULT_EXTERNAL</code>}}
+                @td() { text{<code>\#define VD\_FW\_GAMEPAD\_DB\_DEFAULT\_EXTERNAL</code>}}
                 @td() {
                     text {
-                        Use with VD_FW_GAMEPAD_DB_DEFAULT to instruct the library to include a C file generated by
-                        <a href="https://github.com/mdodis/vd-libs/blob/main/programs/gamecontrollerdb_gen.c">gamecontrollerdb.c</a>.
+                        Use with VD\_FW\_GAMEPAD\_DB\_DEFAULT to instruct the library to include a C file generated by
+                        #gamecontrollerdb.c#<https://github.com/mdodis/vd-libs/blob/main/programs/gamecontrollerdb_gen.c>
                     }
                 }
             }
 
             @tr() {
-                @td() { text{<code>#define VD_FW_NCRECTS_MAX 16</code>}}
+                @td() { text{<code>\#define VD\_FW\_NCRECTS\_MAX 16</code>}}
                 @td() {
                     text {
                         The maximum number of non-client rectangles that will be supported by the library.
@@ -347,7 +347,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>#define VD_FW_CODEPOINT_BUFFER_COUNT 8</code>}}
+                @td() { text{<code>\#define VD\_FW\_CODEPOINT\_BUFFER\_COUNT 8</code>}}
                 @td() {
                     text {
                         The size (in characters) of the character input history buffer.
@@ -359,9 +359,9 @@ int main() {
             @tr() {
                 @td() {
                     text {
-                        <code>#define VD_FW_PREFER_DISCRETE_GPU</code><br>
+                        <code>\#define VD\_FW\_PREFER\_DISCRETE\_GPU</code><br>
                         <code>// Or</code><br>
-                        <code>#define VD_FW_PREFER_INTEGRATED_GPU</code><br>
+                        <code>\#define VD\_FW\_PREFER\_INTEGRATED\_GPU</code><br>
                     }
                 }
                 @td() {
@@ -377,7 +377,7 @@ int main() {
             }
 
             @tr() {
-                @td() { text{<code>#define VD_FW_WIN32_NO_LINKER_COMMENTS</code>}}
+                @td() { text{<code>\#define VD\_FW\_WIN32\_NO\_LINKER\_COMMENTS</code>}}
                 @td() {
                     text {
                         Disable automatic linker comments (Windows only).
@@ -390,26 +390,25 @@ int main() {
     @section("Windows") {
         para {
             With MSVC you don't really need to link anything since linker directives in the
-            translation unit that includes vd_fw.h are defined, so that the appropriate libraries
-            are used. Additionally, several core libraries are <b>dynamically</b> loaded in vd_fw_init.
-            The only library required during compilation is <code>kernel32.lib</code>. For reference, here are the
-            libraries this library tries to load during vd_fw_init:
+            translation unit that includes vd\_fw.h are defined, so that the appropriate libraries
+            are used. Additionally, several core libraries are *dynamically* loaded in vd\_fw\_init.
+            The only library required during compilation is `kernel32.lib`. For reference, here are the
+            libraries this library tries to load during `vd\_fw\_init`:
+        }
 
-            <ol class="list-group">
-                <li class="list-group-item">User32.dll</li>
-                <li class="list-group-item">OpenGL32.dll</li>
-                <li class="list-group-item">Dwmapi.dll</li>
-                <li class="list-group-item">Gdi32.dll</li>
-                <li class="list-group-item">uxtheme.dll</li>
-                <li class="list-group-item">shell32.dll</li>
-                <li class="list-group-item">winmm.dll</li>
-                <li class="list-group-item">SetupAPI.dll</li>
-                <li class="list-group-item">Advapi32.dll</li>
-                <li class="list-group-item">xinput1_4.dll</li>
-                <li class="list-group-item">xinput1_3.dll</li>
-                <li class="list-group-item">xinput9_1_0.dll</li>
-            </ol>
-            <br>
+        @list("f") {
+            @item() { text { User32.dll } }
+            @item() { text { OpenGL32.dll } }
+            @item() { text { Dwmapi.dll } }
+            @item() { text { Gdi32.dll } }
+            @item() { text { uxtheme.dll } }
+            @item() { text { shell32.dll } }
+            @item() { text { winmm.dll } }
+            @item() { text { SetupAPI.dll } }
+            @item() { text { Advapi32.dll } }
+            @item() { text { xinput1\_4.dll } }
+            @item() { text { xinput1\_3.dll } }
+            @item() { text { xinput9\_1\_0.dll } }
         }
 
         para {
@@ -441,7 +440,7 @@ static VdFwProcCreateBitmap *VdFwCreateBitmap;
         ```
 
         para {
-            The relevant functions are then loaded when you call vd_fw_init:
+            The relevant functions are then loaded when you call vd\_fw\_init:
         }
 
         verb```
@@ -451,7 +450,7 @@ VdFwCreateBitmap          =          (VdFwProcCreateBitmap*)GetProcAddress(m, "C
         ```
 
         para {
-            Note that all platform specific functions/typedefs/structs are prefixed with 'VdFw' or 'VD_FW_' so as not to
+            Note that all platform specific functions/typedefs/structs are prefixed with 'VdFw' or 'VD\_FW\_' so as not to
             induce collisions in cases where you need to include Windows functionality yourself.
         }
     }
@@ -459,30 +458,30 @@ VdFwCreateBitmap          =          (VdFwProcCreateBitmap*)GetProcAddress(m, "C
     @section("MacOS") {
         para {
             For MacOS, it's a bit different. with clang, you must link several frameworks (via 
-            <code>-framework framework_name</code>). Additionally, <code>-x objective-c</code> must be used since the
+            `-framework framework\_name`). Additionally, `-x objective-c` must be used since the
             Mac APIs use Objective-C.
+        }
 
-            <ol class="list-group">
-                <li class="list-group-item">pthread (compiler flag)</li>
-                <li class="list-group-item">Cocoa</li>
-                <li class="list-group-item">Metal</li>
-                <li class="list-group-item">QuartzCore</li>
-                <li class="list-group-item">CoreGraphics</li>
-                <li class="list-group-item">IOSurface</li>
-                <li class="list-group-item">IOKit</li>
-                <li class="list-group-item">Foundation</li>
-                <li class="list-group-item">OpenGL</li>
-            </ol>
+        @list("f") {
+            @item() { text { pthread (compiler flag) } }
+            @item() { text { Cocoa } }
+            @item() { text { Metal } }
+            @item() { text { QuartzCore } }
+            @item() { text { CoreGraphics } }
+            @item() { text { IOSurface } }
+            @item() { text { IOKit } }
+            @item() { text { Foundation } }
+            @item() { text { OpenGL } }
         }
 
         para {
             OpenGL on MacOS is deprecated, and including it will throw a ton of warnings about
-            each function. Its maximum supported version of OpenGL is <b>4.1</b>.
+            each function. Its maximum supported version of OpenGL is *4.1*.
         }
 
         para {
             To disable those warnings, you can create the following header file and use it
-            before and after including vd_fw.h:
+            before and after including vd\_fw.h:
         }
 
         verb ```
@@ -535,12 +534,12 @@ freely, subject to the following restrictions:
     }
 
     para {
-        <a class="link-opacity-100" href="https://github.com/mdodis/vd-libs/issues/new">Submit issues here</a>
+        #Submit issues here#<https://github.com/mdodis/vd-libs/issues/new>
     }
 
     @section("Platforms") {
         para {
-            Due to platform limitations, platform-specific APIs and frameworks, vd_fw.h will
+            Due to platform limitations, platform-specific APIs and frameworks, vd\_fw.h will
             never have support for some platforms. One example is Android, where Java is required.
         }
 
@@ -604,7 +603,7 @@ freely, subject to the following restrictions:
                     @td(){text{Not Planned}}
                 }
                 @tr() {
-                    @td(){text{MacOS (Legacy/x86_64)}}
+                    @td(){text{MacOS (Legacy/x86\_64)}}
                     @td(){text{Not Planned}}
                 }
                 @tr() {
@@ -631,85 +630,70 @@ freely, subject to the following restrictions:
 
         @rev() {
             @rev-item(version="1.1.0" date="xx/xx/xxxx" available="no") {
-                text {
-                    <ul>
-                        <li>Distribution documentation for each platform</li>
-                        <li>Win32: DirectManipulation Support</li>
-                    </ul>
-                } 
+                @list("u") {
+                    @item() { text { Distribution documentation for each platform } }
+                    @item() { text { Win32: DirectManipulation Support } }
+                }
             } 
 
             @rev-item(version="1.0.0" date="xx/xx/xxxx" available="no") {
-                text {
-                    Initial Release:
-                    <ul>
-                        <li>Win32: Full Support</li>
-                        <li>MacOS: Full Support</li>
-                        <li>Linux (X11): Full Support</li>
-                        <li>OpenGL Extensions</li>
-                        <li>Vulkan/Metal Support</li>
-                    </ul>
+
+                @list("u") {
+                    @item() { text { Win32: Full Support } }
+                    @item() { text { MacOS: Full Support } }
+                    @item() { text { Linux (X11): Full Support } }
+                    @item() { text { OpenGL Extensions } }
+                    @item() { text { Vulkan/Metal Support } }
                 }
             }
 
             @rev-item(version="0.1.0" date="xx/xx/xxxx" available="yes") {
-                text {
-                    In Development version
-                    <ul>
-                        <li>Win32: Support Vulkan</li>
-                        <li>Linux: Initial Support</li>
-                        <li>Gamepad input is being moved to a separate library</li>
-                    </ul>
+                @list("u") {
+                    @item() { text { Win32: Support Vulkan }} 
+                    @item() { text { Linux: Initial Support }} 
+                    @item() { text { Gamepad input is being moved to a separate library }} 
                 }
             }
 
             @rev-item(version="0.0.2" date="03/11/2025" available="yes") {
-                text {
-                    In Development version
-                    <ul>
-                        <li>Win32: Support gamepads</li>
-                        <li>Win32: Support gamepad rumble via WriteFile (for DualShock)</li>
-                        <li>Win32: Support DirectX API</li>
-                        <li>MacOS: Windowing/Input Support with live resize</li>
-                        <li>GamepadDB: Database definition, entry parsing</li>
-                    </ul>
+                @list("u") {
+                    @item() { text { Win32: Support gamepads } }
+                    @item() { text { Win32: Support gamepad rumble via WriteFile (for DualShock) } }
+                    @item() { text { Win32: Support DirectX API } }
+                    @item() { text { MacOS: Windowing/Input Support with live resize } }
+                    @item() { text { GamepadDB: Database definition, entry parsing } }
                 }
             }
 
             @rev-item(version="0.0.1" date="12/10/2025" available="yes") {
-                text {
-                    In Development version
-                    <ul>
-                        <li>Win32 support</li>
-                    </ul>
+                @list("u") {
+                    @item() { text { Win32 support } }
                 }
             }
         }
     }
 
     @section("Attributions") {
-        text {
-            <ul>
-                <li>
-                    <a href="https://github.com/CookedNick">CookedNick</a><br>
-                    For the render thread with Win32 example in jai
-                </li>
-                <li>
-                    <a href="https://github.com/idrassi/">idrassi</a><br>
-                    For the ported jai code for Win32 example
-                </li>
-                <li>
-                    <a href="https://github.com/melak47/BorderlessWindow">melak47</a><br>
-                    For the borderless window with Win32 example
-                </li>
-                <li>
-                    <a href="https://github.com/TheoBendixson">TheoBendixson</a><br>
-                    For his Handmade Mac platform layer
-                </li>
-                <li>
-                    <a href="https://ofekshilon.com/2014/06/19/reading-specific-monitor-dimensions/">Ofek</a><br>
-                    For the display monitor enumeration code sample
-            </ul>
+        @list("u") {
+                @item() { text { #CookedNick#<https://github.com/CookedNick> }
+                          @br()
+                          text { For the render thread with Win32 example in jai } }
+
+                @item() { text { #idrassi#<https://github.com/idrassi/> }
+                          @br()
+                          text { For the ported jai code for Win32 example } }
+
+                @item() { text { #melak47#<https://github.com/melak47/BorderlessWindow> }
+                          @br()
+                          text { For the borderless window with Win32 example } }
+
+                @item() { text { #TheoBendixson#<https://github.com/TheoBendixson> }
+                          @br()
+                          text { For his Handmade Mac platform layer } }
+
+                @item() { text { #Ofek#<https://ofekshilon.com/2014/06/19/reading-specific-monitor-dimensions/> }
+                          @br()
+                          text { For the display monitor enumeration code sample } }
         }
     }
 }
@@ -721,25 +705,28 @@ freely, subject to the following restrictions:
 
     para {
         These do not show proper code, nor do they show correct OpenGL API usage, but they show various
-        features of vd_fw.h
+        features of vd\_fw.h
     }
 
     para {
         We will start by creating a simple window, and continue with:
-        <ul>
-            <li>Making it borderless</li>
-            <li>Drawing a rectangle</li>
-            <li>Setting the drag area</li>
-            <li>Drawing some 3D geometry</li>
-            <li>Handling input in a user-friendly way</li>
-        </ul>
+    }
 
+    @list("u") {
+        @item() { text { Making it borderless } }
+        @item() { text { Drawing a rectangle } }
+        @item() { text { Setting the drag area } }
+        @item() { text { Drawing some 3D geometry } }
+        @item() { text { Handling input in a user-friendly way } }
+    }
+
+    para {
         You can safely read each tutorial on its own, or in order. It will guide you through
         almost all of the parts of the API
     }
 
     para {
-        Additionally, several samples are available <a href="https://github.com/mdodis/vd-libs/tree/main/samples">here</a>,
+        Additionally, several samples are available #here#<https://github.com/mdodis/vd-libs/tree/main/samples>,
         which map to several parts of the tutorial.
     }
 

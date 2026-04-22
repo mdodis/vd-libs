@@ -168,17 +168,18 @@
         I encourage you to take a look at any modern project of say, a calculator,
         and try to tell me that it doesn't look a <b>tad</b> too complicated. Because, in most cases you
         will see:
+    }
 
-        <ul>
-            <li>Some kind of package manager manifest</li>
-            <li>A UI library (depending on the language context)</li>
-            <li>Some kind of math library</li>
-            <li>And right after the important ones, a ton of other small libraries that do random things
-            </li>
-            <li>Not to mention that each package has dependencies which all get resolved into at least
-                a medium size codebase</li>
-        </ul>
+    @list("u") {
+        @item() { text { Some kind of package manager manifest }}
+        @item() { text { A UI library (depending on the language context) }}
+        @item() { text { Some kind of math library }}
+        @item() { text { And right after the important ones, a ton of other small libraries that do random things }}
+        @item() { text { Not to mention that each package has dependencies which all get resolved into at least
+                a medium size codebase }}
+    }
 
+    para {
         People will argue that these complexities are required because they solve various problems in
         the best way possible, and are portable and cross-platform (or cross-browser), so this is just
         the price you have to pay nowadays.
@@ -198,7 +199,7 @@
         And if you, dear reader, think that because you program in C/C++, you are exempted from this,
         please consider that there are a ton of projects out there that bring in a huge dependency, like
         SDL (I've got nothing against SDL, just using it as an example), and then proceed to use C++ threads, spdlog,
-        printf, <code>std::cout</code>, instead of the portable functions that SDL already provides.
+        printf, `std::cout`, instead of the portable functions that SDL already provides.
 
     }
 
@@ -259,7 +260,6 @@
     }
 
     para {
-
         I encourage everyone to read the code themselves, not because it's the best or the most bug
         free, but because I want you, dear reader, to see how simple things can be, even for
         someone who's not a massive genius or expert in the field.
@@ -268,7 +268,10 @@
 
 @section("About Me") {
     para {
-        Hi, I'm Michael Dodis.<br>
+        Hi, I'm Michael Dodis.
+    }
+
+    para {
         A software engineer from Greece, and I love working on low-level stuff,
         graphics especially.
     }

@@ -74,6 +74,8 @@ static void process_accordion(VdDspcSection *section, FILE *out, int depth);
 static void process_section(VdDspcSection *section, FILE *out, int depth);
 static void process_text(VdDspcSection *section, FILE *out, int depth);
 static void process_para(VdDspcSection *section, FILE *out, int depth);
+static void process_list(VdDspcSection *section, FILE *out, int depth);
+static void process_item(VdDspcSection *section, FILE *out, int depth);
 static Processor Processor_Table[] = {
     {LIT_INLINE("paste"),             process_paste},
     {LIT_INLINE("notoc"),             process_notoc},
@@ -107,6 +109,8 @@ static Processor Processor_Table[] = {
     {LIT_INLINE("tbody"),             process_verbatim_html},
     {LIT_INLINE("button"),            process_verbatim_html},
     {LIT_INLINE("script"),            process_verbatim_html},
+    {LIT_INLINE("list"),              process_list},
+    {LIT_INLINE("item"),              process_item},
 };
 
 
@@ -377,10 +381,101 @@ static void process_text(VdDspcSection *section, FILE *out, int depth)
     VdDspcStrNode *node = vd_dspc_str_list_first_node(&section->text_content);
     while (node) {
 
-        PUT("%.*s", STR_EXPAND(make_str_from_str_node(node)));
+        if (node->flags & VD_DSPC_STR_NODE_FLAGS_ITALIC) {
+            PUT("<i>");
+        }
 
+        if (node->flags & VD_DSPC_STR_NODE_FLAGS_BOLD) {
+            PUT("<b>");
+        }
+
+        if (node->flags & VD_DSPC_STR_NODE_FLAGS_CODE) {
+            PUT("<code>");
+        }
+
+        if (node->flags & VD_DSPC_STR_NODE_FLAGS_STRIKE) {
+            PUT("<s>");
+        }
+
+        if (node->flags & VD_DSPC_STR_NODE_FLAGS_LINK) {
+            PUT("<a href=\"%.*s\">", (int)node->link_str.l, node->link_str.s); 
+        }
+
+        Str s = make_str_from_str_node(node);
+        PUT("%.*s", STR_EXPAND(s));
+
+        if (node->flags & VD_DSPC_STR_NODE_FLAGS_SPACE) {
+            PUT(" ");
+        }
+
+        if (node->flags & VD_DSPC_STR_NODE_FLAGS_LINK) {
+            PUT("</a>"); 
+        }
+
+        if (node->flags & VD_DSPC_STR_NODE_FLAGS_STRIKE) {
+            PUT("</s>");
+        }
+
+        if (node->flags & VD_DSPC_STR_NODE_FLAGS_CODE) {
+            PUT("</code>");
+        }
+
+        if (node->flags & VD_DSPC_STR_NODE_FLAGS_BOLD) {
+            PUT("</b>");
+        }
+
+        if (node->flags & VD_DSPC_STR_NODE_FLAGS_ITALIC) {
+            PUT("</i>");
+        }
         node = vd_dspc_str_list_next_node(node);
     }
+}
+
+typedef enum {
+    LIST_MODE_ORD = 'o',
+    LIST_MODE_UNORD = 'u',
+    LIST_MODE_FANCY = 'f',
+} ListMode;
+
+static void process_list(VdDspcSection *section, FILE *out, int depth)
+{
+    VdDspcTag *mode = vd_dspc_section_first_tag(section);
+    Str mode_str = make_str_from_tag_value(mode);
+
+    ListMode list_mode = LIST_MODE_ORD;
+    const char *tag = "ol";
+    const char *klass = "";
+
+    if (0) {
+    } else if (str_eq(mode_str, LIT("o"))) {
+        list_mode = LIST_MODE_ORD;
+    } else if (str_eq(mode_str, LIT("u"))) {
+        list_mode = LIST_MODE_UNORD;
+        tag = "ul";
+    } else if (str_eq(mode_str, LIT("f"))) {
+        list_mode = LIST_MODE_FANCY;
+        klass = "list-group";
+    }
+
+    PUT_LINE("<%s class=\"%s\">", tag, klass);
+
+    process_children(section, out, depth);
+
+    PUT_LINE("</%s>", tag);
+}
+
+static void process_item(VdDspcSection *section, FILE *out, int depth)
+{
+    VdDspcTag *mode = vd_dspc_section_first_tag(section->parent);
+    Str mode_str = make_str_from_tag_value(mode);
+    const char *klass = "";
+    if (str_eq(mode_str, LIT("f"))) {
+        klass = "list-group-item";
+    }
+
+    PUT("<li class=\"%s\">", klass);
+    process_children(section, out, depth);
+    PUT("</li>");
 }
 
 static void process_para(VdDspcSection *section, FILE *out, int depth)
@@ -397,8 +492,36 @@ static void process_para(VdDspcSection *section, FILE *out, int depth)
             PUT("<b>");
         }
 
+        if (node->flags & VD_DSPC_STR_NODE_FLAGS_CODE) {
+            PUT("<code>");
+        }
+
+        if (node->flags & VD_DSPC_STR_NODE_FLAGS_STRIKE) {
+            PUT("<s>");
+        }
+
+        if (node->flags & VD_DSPC_STR_NODE_FLAGS_LINK) {
+            PUT("<a href=\"%.*s\">", (int)node->link_str.l, node->link_str.s); 
+        }
+
         Str s = make_str_from_str_node(node);
-        PUT_LINE("%.*s", STR_EXPAND(s));
+        PUT("%.*s", STR_EXPAND(s));
+
+        if (node->flags & VD_DSPC_STR_NODE_FLAGS_SPACE) {
+            PUT(" ");
+        }
+
+        if (node->flags & VD_DSPC_STR_NODE_FLAGS_LINK) {
+            PUT("</a>"); 
+        }
+
+        if (node->flags & VD_DSPC_STR_NODE_FLAGS_STRIKE) {
+            PUT("</s>");
+        }
+
+        if (node->flags & VD_DSPC_STR_NODE_FLAGS_CODE) {
+            PUT("</code>");
+        }
 
         if (node->flags & VD_DSPC_STR_NODE_FLAGS_BOLD) {
             PUT("</b>");
@@ -803,7 +926,7 @@ int main(int argc, char const *argv[])
 
                 fprintf(stderr, "%.*s:%zu:%zu %.*s\n",
                                 STR_EXPAND(source_file->file_path_relative_to_source_dir),
-                                err->line + 1, err->column + 1,
+                                err->line, err->column,
                                 message_size, message);
 
                 err = vd_dspc_error_next(err);

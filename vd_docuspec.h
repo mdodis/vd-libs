@@ -66,13 +66,19 @@ typedef struct VdDspcStr {
 
 enum VD_DSPC_STR_NODE_FLAGS_ {
     VD_DSPC_STR_NODE_FLAG_ITALIC_BIT = 0,
-    VD_DSPC_STR_NODE_FLAG_BOLD_BIT = 1,
-    VD_DSPC_STR_NODE_FLAG_LINK_BIT = 2,
-    VD_DSPC_STR_NODE_FLAGS_COUNT  = 3,
+    VD_DSPC_STR_NODE_FLAG_BOLD_BIT   = 1,
+    VD_DSPC_STR_NODE_FLAG_LINK_BIT   = 2,
+    VD_DSPC_STR_NODE_FLAG_STRIKE_BIT = 3,
+    VD_DSPC_STR_NODE_FLAG_CODE_BIT   = 4,
+    VD_DSPC_STR_NODE_FLAGS_COUNT,
+    VD_DSPC_STR_NODE_FLAGS_SPACE_BIT = 5,
 
     VD_DSPC_STR_NODE_FLAGS_ITALIC = 1 << VD_DSPC_STR_NODE_FLAG_ITALIC_BIT,
     VD_DSPC_STR_NODE_FLAGS_BOLD   = 1 << VD_DSPC_STR_NODE_FLAG_BOLD_BIT,
     VD_DSPC_STR_NODE_FLAGS_LINK   = 1 << VD_DSPC_STR_NODE_FLAG_LINK_BIT,
+    VD_DSPC_STR_NODE_FLAGS_STRIKE = 1 << VD_DSPC_STR_NODE_FLAG_STRIKE_BIT,
+    VD_DSPC_STR_NODE_FLAGS_CODE   = 1 << VD_DSPC_STR_NODE_FLAG_CODE_BIT,
+    VD_DSPC_STR_NODE_FLAGS_SPACE  = 1 << VD_DSPC_STR_NODE_FLAGS_SPACE_BIT,
 }; 
 typedef int VdDspcStrNodeFlags;
 
@@ -755,8 +761,6 @@ static int vd_dspc__lex_literal(VdDspcDocument *doc, VdDspc__Token *result, cons
     int id_is_equal_to_text = 0;
     size_t id_size = result->lexstate.cur_fwd - result->lexstate.cur_back;
 
-    int allow_markup = resulting_type == VD_DSPC__TOKEN_TYPE_PARAGRAPH;
-
     if (id_size == text_len) {
         const char *content = result->lexstate.content;
         id_is_equal_to_text = 
@@ -803,10 +807,12 @@ static int vd_dspc__lex_literal(VdDspcDocument *doc, VdDspc__Token *result, cons
                 int c = vd_dspc__lex_char(&text_content_token.lexstate);
                 int pc = vd_dspc__lex_peek(&text_content_token.lexstate);
 
-                if (allow_markup && (c == '\\')) {
+                if (c == '\\') {
                     switch (pc) {
                         case '*':
                         case '#':
+                        case '~':
+                        case '`':
                         case '_': {
                             vd_dspc__str_list_push_token(doc, &list, &text_content_token, flags);
                             vd_dspc__lex_sync(&text_content_token.lexstate);
@@ -823,8 +829,8 @@ static int vd_dspc__lex_literal(VdDspcDocument *doc, VdDspc__Token *result, cons
                 }
 
 
-                // Handle inline '*','_'
-                if (allow_markup) {
+                // Handle inline '*','_','#','~','`'
+                {
                     VdDspcStrNodeFlags c_flags = flags;
                     VdDspcStrNodeFlags p_flags = flags;
                     VdDspc__Lex saved_state = text_content_token.lexstate;
@@ -949,7 +955,7 @@ static int vd_dspc__lex_literal(VdDspcDocument *doc, VdDspc__Token *result, cons
                 }
 
                 if (vd_dspc__is_consumable_whitespace(c)) {
-                    vd_dspc__str_list_push_token(doc, &list, &text_content_token, flags);
+                    vd_dspc__str_list_push_token(doc, &list, &text_content_token, flags | VD_DSPC_STR_NODE_FLAGS_SPACE);
 
                     vd_dspc__skip_whitespace_all(&text_content_token.lexstate);
                     vd_dspc__lex_sync(&text_content_token.lexstate);
@@ -964,6 +970,14 @@ static int vd_dspc__lex_literal(VdDspcDocument *doc, VdDspc__Token *result, cons
             }
 
             if (flags != 0) {
+                if (flags & VD_DSPC_STR_NODE_FLAGS_LINK) {
+                    VdDspcError *err = vd_dspc__push_error(doc);
+                    err->line = flags_last[VD_DSPC_STR_NODE_FLAG_LINK_BIT].line + 1;
+                    err->column = flags_last[VD_DSPC_STR_NODE_FLAG_LINK_BIT].column + 1;
+                    err->kind = VD_DSPC_ERROR_KIND_UNTERMINATED_INLINE_MARKUP;
+                    err->character = '#';
+                }
+
                 if (flags & VD_DSPC_STR_NODE_FLAGS_ITALIC) {
                     VdDspcError *err = vd_dspc__push_error(doc);
                     err->line = flags_last[VD_DSPC_STR_NODE_FLAG_ITALIC_BIT].line + 1;
@@ -1133,7 +1147,7 @@ static VdDspc__Token vd_dspc__lex_token(VdDspcDocument *doc, VdDspc__Lex *lex)
 
                             result.dat.verbatim_string.s = vd_dspc__token_string_begin(&code_content_token);
                             result.dat.verbatim_string.l = vd_dspc__token_string_size(&code_content_token) - 3;
-                            result.lexstate.cur_fwd = code_content_token.lexstate.cur_fwd;
+                            result.lexstate = code_content_token.lexstate;
                             break;
                         }
                     }
@@ -1439,7 +1453,7 @@ static char *vd_dspc__token_string_begin(VdDspc__Token *tok)
 
 static int vd_dspc__is_inline_char(int c)
 {
-    return (c == '*') || (c == '_') || (c == '#');
+    return (c == '*') || (c == '_') || (c == '#') || (c == '~') || (c == '`');
 }
 
 static VdDspcStrNodeFlags vd_dpsc__inline_char_to_flag(int c, int *bit)
@@ -1448,6 +1462,8 @@ static VdDspcStrNodeFlags vd_dpsc__inline_char_to_flag(int c, int *bit)
         case '*': *bit = VD_DSPC_STR_NODE_FLAG_BOLD_BIT;   return VD_DSPC_STR_NODE_FLAGS_BOLD;   break;
         case '_': *bit = VD_DSPC_STR_NODE_FLAG_ITALIC_BIT; return VD_DSPC_STR_NODE_FLAGS_ITALIC; break;
         case '#': *bit = VD_DSPC_STR_NODE_FLAG_LINK_BIT;   return VD_DSPC_STR_NODE_FLAGS_LINK;   break;
+        case '~': *bit = VD_DSPC_STR_NODE_FLAG_STRIKE_BIT; return VD_DSPC_STR_NODE_FLAGS_STRIKE; break;
+        case '`': *bit = VD_DSPC_STR_NODE_FLAG_CODE_BIT;   return VD_DSPC_STR_NODE_FLAGS_CODE;   break;
         default: return 0;
     }
 }
