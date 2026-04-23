@@ -5,39 +5,76 @@ file_extensions:
   - docuspec
 scope: source.docuspec
 
+variables:
+  ident: '[A-Za-z][A-Za-z0-9_-]*'
+
 contexts:
   main:
-    - match: '(@section)\s*\((\".*\")\)'
+    - include: line-comment
+    - match: '(@section)(\s*)(\()'
       captures:
         1: keyword.control.annotation.docuspec
-        2: entity.name.section.section.docuspec
-           string.quoted.double.docuspec
-
-    - match: '(@[a-z\-\_0-9]+)\s*'
+        3: punctuation.section.group.begin.docuspec
+      push: section-args-section
+    - match: '(@)({{ident}})(\s*)(\()'
       captures:
-        1: keyword.control.annotation.docuspec
+        1: punctuation.definition.annotation.docuspec
+        2: entity.name.section.docuspec
+        4: punctuation.section.group.begin.docuspec
       push: section-args
-    - match: '(text|para)\s*\{'
+    - match: '\b(text|para)\b(\s*)(\{)'
       captures:
         1: keyword.operator.textblock.docuspec
+        3: punctuation.section.block.begin.docuspec
       push: text-block
-    - match: '(verb)\s*```'
+    - match: '\b(verb)\b(\s*)(```)'
       captures:
         1: keyword.operator.codeblock.docuspec
+        3: punctuation.definition.raw.begin.docuspec
       push: code-block
+    - match: '\{'
+      scope: punctuation.section.block.begin.docuspec
+    - match: '\}'
+      scope: punctuation.section.block.end.docuspec
 
   section-args:
-    - meta_scope: meta.annotation.args.docuspec
-    - match: '(\w+)(=)'
+    - include: line-comment
+    - meta_scope: meta.annotation.arguments.docuspec
+    - match: '\b({{ident}})\b(\s*)(=)'
       captures:
         1: entity.other.attribute-name.docuspec
-        2: punctuation.separator.key-value.docuspec
+        3: punctuation.separator.key-value.docuspec
     - match: '"'
       scope: punctuation.definition.string.begin.docuspec
       push: string
     - match: '\)'
-      scope: punctuation.section.taglist.end.docuspec
+      scope: punctuation.section.group.end.docuspec
       pop: true
+
+  section-args-section:
+    - include: line-comment
+    - meta_scope: meta.annotation.section.arguments.docuspec
+    - match: '"'
+      scope: punctuation.definition.string.begin.docuspec
+      set:
+        - section-args
+        - section-title-string
+    - include: section-args
+
+  section-title-string:
+    - meta_scope: entity.name.section.section.docuspec string.quoted.double.docuspec
+    - match: '"'
+      scope: punctuation.definition.string.end.docuspec
+      pop: true
+    - match: '\\.'
+      scope: constant.character.escape.docuspec
+
+  line-comment:
+    - match: '(//).*$'
+      scope: comment.line.double-slash.docuspec
+      captures:
+        1: punctuation.definition.comment.docuspec
+
   string:
     - meta_scope: string.quoted.double.docuspec
     - match: '"'
@@ -45,10 +82,82 @@ contexts:
       pop: true
     - match: '\\.'
       scope: constant.character.escape.docuspec
+
   text-block:
+    - meta_scope: meta.block.text.docuspec
     - match: '\}'
+      scope: punctuation.section.block.end.docuspec
       pop: true
+    - include: inline-markup
+
   code-block:
-    - meta_scope: markup.raw.code-block.markdown
+    - meta_scope: markup.raw.block.docuspec
     - match: '```'
+      scope: punctuation.definition.raw.end.docuspec
+      pop: true
+
+  inline-markup:
+    - match: '\\[*_#~`]'
+      scope: constant.character.escape.docuspec
+    - match: '`'
+      scope: punctuation.definition.raw.begin.docuspec
+      push: inline-code
+    - match: '\*'
+      scope: punctuation.definition.bold.begin.docuspec
+      push: inline-bold
+    - match: '_'
+      scope: punctuation.definition.italic.begin.docuspec
+      push: inline-italic
+    - match: '~'
+      scope: punctuation.definition.strike.begin.docuspec
+      push: inline-strike
+    - match: '#'
+      scope: punctuation.definition.link.begin.docuspec
+      push: inline-link-text
+
+  inline-code:
+    - meta_scope: markup.raw.inline.docuspec
+    - match: '`'
+      scope: punctuation.definition.raw.end.docuspec
+      pop: true
+
+  inline-bold:
+    - meta_scope: markup.bold.docuspec
+    - match: '\*'
+      scope: punctuation.definition.bold.end.docuspec
+      pop: true
+    - include: inline-markup
+
+  inline-italic:
+    - meta_scope: markup.italic.docuspec
+    - match: '_'
+      scope: punctuation.definition.italic.end.docuspec
+      pop: true
+    - include: inline-markup
+
+  inline-strike:
+    - meta_scope: markup.strikethrough.docuspec
+    - match: '~'
+      scope: punctuation.definition.strike.end.docuspec
+      pop: true
+    - include: inline-markup
+
+  inline-link-text:
+    - meta_scope: meta.link.inline.docuspec
+    - meta_content_scope: markup.underline.link.docuspec
+    - match: '#(?=<)'
+      scope: punctuation.definition.link.end.docuspec
+      set: inline-link-destination
+    - match: '#'
+      scope: punctuation.definition.link.end.docuspec
+      pop: true
+    - include: inline-markup
+
+  inline-link-destination:
+    - meta_scope: meta.link.destination.docuspec
+    - match: '(<)([^>\n]*)(>)'
+      captures:
+        1: punctuation.definition.link.destination.begin.docuspec
+        2: string.unquoted.link.docuspec
+        3: punctuation.definition.link.destination.end.docuspec
       pop: true

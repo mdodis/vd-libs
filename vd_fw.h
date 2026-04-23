@@ -825,6 +825,15 @@ VD_FW_API int                vd_fw_get_last_key_pressed(void);
  */
 VD_FW_INL const char*        vd_fw_get_key_name(VdFwKey k);
 
+/* ----PIXEL BUFFER-------------------------------------------------------------------------------------------------- */
+
+/**
+ * @brief Set the pointer to buffer to render to the window (when graphics api is VD_FW_GRAPHICS_API_PIXEL_BUFFER)
+ * @param  buffer Pointer to the buffer
+ * @param  w      Width in pixels
+ * @param  h      Height in pixels
+ */
+VD_FW_API void               vd_fw_set_pixel_buffer(void *buffer, int w, int h);
 
 /* ----VULKAN INTEGRATION-------------------------------------------------------------------------------------------- */
 typedef void (*VdFwVkVoidFunction)(void);
@@ -7751,6 +7760,10 @@ enum VdFwDWMNCRENDERINGPOLICY {
 /* ----Gdi32.dll----------------------------------------------------------------------------------------------------- */
 typedef void* VdFwHGDIOBJ;
 
+#define VD_FW_SRCCOPY             (VdFwDWORD)0x00CC0020 /* dest = source                   */
+#define VD_FW_BLACKNESS           (VdFwDWORD)0x00000042 /* dest = BLACK                    */
+#define VD_FW_DIB_RGB_COLORS      0 /* color table in RGBs */
+
 typedef struct VdFwtagPIXELFORMATDESCRIPTOR
 {
     VdFwWORD  nSize;
@@ -8272,6 +8285,8 @@ X(int,          DescribePixelFormat, (VdFwHDC hdc, int iPixelFormat, VdFwUINT nB
 X(VdFwHGDIOBJ,  GetStockObject, (int i)) \
 X(VdFwBOOL,     SetPixelFormat, (VdFwHDC hdc, int format, const VdFwPIXELFORMATDESCRIPTOR* ppfd)) \
 X(VdFwHBITMAP,  CreateDIBSection, (VdFwHDC hdc, const VdFwBITMAPINFO* pbmi, VdFwUINT usage, void** ppvBits, VdFwHANDLE hSection, VdFwDWORD offset)) \
+X(int,          StretchDIBits, (VdFwHDC hdc, int xDest, int yDest, int DestWidth, int DestHeight, int xSrc, int ySrc, int SrcWidth, int SrcHeight, const void *lpBits, const VdFwBITMAPINFO *lpbmi, VdFwUINT iUsage, VdFwDWORD rop)) \
+X(VdFwBOOL,     PatBlt, (VdFwHDC hdc, int x, int y, int w, int h, VdFwDWORD rop)) \
 X(VdFwBOOL,     SwapBuffers, (VdFwHDC unnamedParam1)) \
 VE() \
 V("Hid.dll") \
@@ -8446,6 +8461,7 @@ typedef VdFwBOOL  (*VdFwProcwglChoosePixelFormatARB)(VdFwHDC hdc, const int* piA
 #define WGL_STENCIL_BITS_ARB                        0x2023
 #define WGL_CONTEXT_FLAGS_ARB                       0x2094
 #define WGL_CONTEXT_DEBUG_BIT_ARB                   0x00000001
+
 
 #define VD_FW_DISPLAY_PREFERENCE_DGPU 1
 #define VD_FW_DISPLAY_PREFERENCE_IGPU 2
@@ -8668,6 +8684,8 @@ typedef struct {
     VdFwVkGetInstanceProcAddrProc vk_get_instance_proc_addr;
     float                       scale;
     int                         scale_changed;
+    VdFwBITMAPINFO              pixel_info;
+    void                        *pixel_buffer;
 
 /* ----RENDER THREAD - WINDOW THREAD DATA---------------------------------------------------------------------------- */
     VdFwEvent                   msgbuf[VD_FW_WIN32_MESSAGE_BUFFER_SIZE];
@@ -9077,6 +9095,14 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     VD_FW_G.block_while_sizing = 0;
     VD_FW_G.winthread_block_while_sizing = 0;
 
+    VD_FW_MEMSET(&VD_FW_G.pixel_info, 0, sizeof(VD_FW_G.pixel_info));
+    VD_FW_G.pixel_info.bmiHeader.biSize = sizeof(VD_FW_G.pixel_info.bmiHeader);
+    VD_FW_G.pixel_info.bmiHeader.biWidth = 0;
+    VD_FW_G.pixel_info.bmiHeader.biHeight = 0;
+    VD_FW_G.pixel_info.bmiHeader.biPlanes = 1;
+    VD_FW_G.pixel_info.bmiHeader.biBitCount = 32;
+    VD_FW_G.pixel_info.bmiHeader.biCompression = 0 /*BI_RGB*/;
+
     VD_FW_G.next_width = 640;
     VD_FW_G.next_height = 480;
 
@@ -9385,11 +9411,30 @@ VD_FW_API void vd_fw_lock(void)
 
 VD_FW_API void vd_fw_unlock(void)
 {
-    if (VD_FW_G.graphics_api != VD_FW_GRAPHICS_API_CUSTOM) {
+    if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
         VD_FW_PROFILE_ZONE(vd_fw_win32_swap_buffer_opengl)
         {
             VdFwSwapBuffers(VD_FW_G.hdc);
         }
+    }
+
+    if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_PIXEL_BUFFER) {
+        int source_width = VD_FW_G.pixel_info.bmiHeader.biWidth;
+        int source_height = -VD_FW_G.pixel_info.bmiHeader.biHeight;
+        int dest_width = VD_FW_G.curr_frame.w;
+        int dest_height = VD_FW_G.curr_frame.h;
+
+        VdFwStretchDIBits(VD_FW_G.hdc,
+                          0, 0,
+                          dest_width, dest_height,
+                          0, 0,
+                          source_width, source_height,
+                          VD_FW_G.pixel_buffer,
+                          &VD_FW_G.pixel_info,
+                          VD_FW_DIB_RGB_COLORS, VD_FW_SRCCOPY);
+
+        int err = GetLastError();
+
     }
 
     VD_FW_PROFILE_ZONE(vd_fw_win32_dwm_flush)
@@ -9760,12 +9805,23 @@ LOOP_END:
 
         } break;
 
+        case VD_FW_GRAPHICS_API_PIXEL_BUFFER: {
+            VD_FW_G.hdc = VdFwGetDC(VD_FW_G.hwnd);
+        } break;
+
         default: break;
     }
 
     VD_FW_G.graphics_api = api;
     VD_FW_WIN32_PROFILE_END(vd_fw_set_graphics_api);
     return result;
+}
+
+VD_FW_API void vd_fw_set_pixel_buffer(void *buffer, int w, int h)
+{
+    VD_FW_G.pixel_info.bmiHeader.biWidth = w;
+    VD_FW_G.pixel_info.bmiHeader.biHeight = -h;
+    VD_FW_G.pixel_buffer = buffer;
 }
 
 VD_FW_API int vd_fw_get_size(int *w, int *h)
