@@ -1939,6 +1939,7 @@ extern void vd_test_main(void);
 #define VD_TEST_TRUE(desc, x)     do { if (!(x))       { VD_TEST_ERR(desc "\nExpected: " #x " == true");        } } while (0)
 #define VD_TEST_FALSE(desc, x)    do { if ( (x))       { VD_TEST_ERR(desc "\nExpected: " #x " == false");       } } while (0)
 #define VD_TEST_EQ(desc, x, y)    do { if ((x) != (y)) { VD_TEST_ERR(desc "\nExpected: " #x " == " #y );        } } while (0)
+#define VD_TEST_NONZERO(desc, x)  do { if ((x) == 0)   { VD_TEST_ERR(desc "\nExpected: " #x " to be non-zero"); } } while (0)
 #define VD_TEST_NEQ(desc, x, y)   do { if ((x) == (y)) { VD_TEST_ERR(desc "\nExpected: " #x " != " #y );        } } while (0)
 #define VD_TEST_LT(desc, x, y)    do { if ((x) >= (y)) { VD_TEST_ERR(desc "\nExpected: " #x " < " #y );         } } while (0)
 #define VD_TEST_GT(desc, x, y)    do { if ((x) <= (y)) { VD_TEST_ERR(desc "\nExpected: " #x " > " #y );         } } while (0)

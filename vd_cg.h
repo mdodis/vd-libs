@@ -1024,11 +1024,1455 @@ VD_CG_INL int           fline_vs_cylinder  (FLine *line, FCylinder *cylinder, F1
 
     return 1;
 }
+
+/* ----SWIZZLING----------------------------------------------------------------------------------------------------- */
+VD_CG_INL F2 fxx2(F2 v) { return fm2(v.x, v.x); }
+VD_CG_INL F2 fxy2(F2 v) { return fm2(v.x, v.y); }
+VD_CG_INL F2 fyx2(F2 v) { return fm2(v.y, v.x); }
+VD_CG_INL F2 fyy2(F2 v) { return fm2(v.y, v.y); }
+VD_CG_INL F3 fxxx2(F2 v) { return fm3(v.x, v.x, v.x); }
+VD_CG_INL F3 fxxy2(F2 v) { return fm3(v.x, v.x, v.y); }
+VD_CG_INL F3 fxyx2(F2 v) { return fm3(v.x, v.y, v.x); }
+VD_CG_INL F3 fxyy2(F2 v) { return fm3(v.x, v.y, v.y); }
+VD_CG_INL F3 fyxx2(F2 v) { return fm3(v.y, v.x, v.x); }
+VD_CG_INL F3 fyxy2(F2 v) { return fm3(v.y, v.x, v.y); }
+VD_CG_INL F3 fyyx2(F2 v) { return fm3(v.y, v.y, v.x); }
+VD_CG_INL F3 fyyy2(F2 v) { return fm3(v.y, v.y, v.y); }
+VD_CG_INL F4 fxxxx2(F2 v) { return fm4(v.x, v.x, v.x, v.x); }
+VD_CG_INL F4 fxxxy2(F2 v) { return fm4(v.x, v.x, v.x, v.y); }
+VD_CG_INL F4 fxxyx2(F2 v) { return fm4(v.x, v.x, v.y, v.x); }
+VD_CG_INL F4 fxxyy2(F2 v) { return fm4(v.x, v.x, v.y, v.y); }
+VD_CG_INL F4 fxyxx2(F2 v) { return fm4(v.x, v.y, v.x, v.x); }
+VD_CG_INL F4 fxyxy2(F2 v) { return fm4(v.x, v.y, v.x, v.y); }
+VD_CG_INL F4 fxyyx2(F2 v) { return fm4(v.x, v.y, v.y, v.x); }
+VD_CG_INL F4 fxyyy2(F2 v) { return fm4(v.x, v.y, v.y, v.y); }
+VD_CG_INL F4 fyxxx2(F2 v) { return fm4(v.y, v.x, v.x, v.x); }
+VD_CG_INL F4 fyxxy2(F2 v) { return fm4(v.y, v.x, v.x, v.y); }
+VD_CG_INL F4 fyxyx2(F2 v) { return fm4(v.y, v.x, v.y, v.x); }
+VD_CG_INL F4 fyxyy2(F2 v) { return fm4(v.y, v.x, v.y, v.y); }
+VD_CG_INL F4 fyyxx2(F2 v) { return fm4(v.y, v.y, v.x, v.x); }
+VD_CG_INL F4 fyyxy2(F2 v) { return fm4(v.y, v.y, v.x, v.y); }
+VD_CG_INL F4 fyyyx2(F2 v) { return fm4(v.y, v.y, v.y, v.x); }
+VD_CG_INL F4 fyyyy2(F2 v) { return fm4(v.y, v.y, v.y, v.y); }
+VD_CG_INL F2 fxx3(F3 v) { return fm2(v.x, v.x); }
+VD_CG_INL F2 fxy3(F3 v) { return fm2(v.x, v.y); }
+VD_CG_INL F2 fxz3(F3 v) { return fm2(v.x, v.z); }
+VD_CG_INL F2 fyx3(F3 v) { return fm2(v.y, v.x); }
+VD_CG_INL F2 fyy3(F3 v) { return fm2(v.y, v.y); }
+VD_CG_INL F2 fyz3(F3 v) { return fm2(v.y, v.z); }
+VD_CG_INL F2 fzx3(F3 v) { return fm2(v.z, v.x); }
+VD_CG_INL F2 fzy3(F3 v) { return fm2(v.z, v.y); }
+VD_CG_INL F2 fzz3(F3 v) { return fm2(v.z, v.z); }
+VD_CG_INL F3 fxxx3(F3 v) { return fm3(v.x, v.x, v.x); }
+VD_CG_INL F3 fxxy3(F3 v) { return fm3(v.x, v.x, v.y); }
+VD_CG_INL F3 fxxz3(F3 v) { return fm3(v.x, v.x, v.z); }
+VD_CG_INL F3 fxyx3(F3 v) { return fm3(v.x, v.y, v.x); }
+VD_CG_INL F3 fxyy3(F3 v) { return fm3(v.x, v.y, v.y); }
+VD_CG_INL F3 fxyz3(F3 v) { return fm3(v.x, v.y, v.z); }
+VD_CG_INL F3 fxzx3(F3 v) { return fm3(v.x, v.z, v.x); }
+VD_CG_INL F3 fxzy3(F3 v) { return fm3(v.x, v.z, v.y); }
+VD_CG_INL F3 fxzz3(F3 v) { return fm3(v.x, v.z, v.z); }
+VD_CG_INL F3 fyxx3(F3 v) { return fm3(v.y, v.x, v.x); }
+VD_CG_INL F3 fyxy3(F3 v) { return fm3(v.y, v.x, v.y); }
+VD_CG_INL F3 fyxz3(F3 v) { return fm3(v.y, v.x, v.z); }
+VD_CG_INL F3 fyyx3(F3 v) { return fm3(v.y, v.y, v.x); }
+VD_CG_INL F3 fyyy3(F3 v) { return fm3(v.y, v.y, v.y); }
+VD_CG_INL F3 fyyz3(F3 v) { return fm3(v.y, v.y, v.z); }
+VD_CG_INL F3 fyzx3(F3 v) { return fm3(v.y, v.z, v.x); }
+VD_CG_INL F3 fyzy3(F3 v) { return fm3(v.y, v.z, v.y); }
+VD_CG_INL F3 fyzz3(F3 v) { return fm3(v.y, v.z, v.z); }
+VD_CG_INL F3 fzxx3(F3 v) { return fm3(v.z, v.x, v.x); }
+VD_CG_INL F3 fzxy3(F3 v) { return fm3(v.z, v.x, v.y); }
+VD_CG_INL F3 fzxz3(F3 v) { return fm3(v.z, v.x, v.z); }
+VD_CG_INL F3 fzyx3(F3 v) { return fm3(v.z, v.y, v.x); }
+VD_CG_INL F3 fzyy3(F3 v) { return fm3(v.z, v.y, v.y); }
+VD_CG_INL F3 fzyz3(F3 v) { return fm3(v.z, v.y, v.z); }
+VD_CG_INL F3 fzzx3(F3 v) { return fm3(v.z, v.z, v.x); }
+VD_CG_INL F3 fzzy3(F3 v) { return fm3(v.z, v.z, v.y); }
+VD_CG_INL F3 fzzz3(F3 v) { return fm3(v.z, v.z, v.z); }
+VD_CG_INL F4 fxxxx3(F3 v) { return fm4(v.x, v.x, v.x, v.x); }
+VD_CG_INL F4 fxxxy3(F3 v) { return fm4(v.x, v.x, v.x, v.y); }
+VD_CG_INL F4 fxxxz3(F3 v) { return fm4(v.x, v.x, v.x, v.z); }
+VD_CG_INL F4 fxxyx3(F3 v) { return fm4(v.x, v.x, v.y, v.x); }
+VD_CG_INL F4 fxxyy3(F3 v) { return fm4(v.x, v.x, v.y, v.y); }
+VD_CG_INL F4 fxxyz3(F3 v) { return fm4(v.x, v.x, v.y, v.z); }
+VD_CG_INL F4 fxxzx3(F3 v) { return fm4(v.x, v.x, v.z, v.x); }
+VD_CG_INL F4 fxxzy3(F3 v) { return fm4(v.x, v.x, v.z, v.y); }
+VD_CG_INL F4 fxxzz3(F3 v) { return fm4(v.x, v.x, v.z, v.z); }
+VD_CG_INL F4 fxyxx3(F3 v) { return fm4(v.x, v.y, v.x, v.x); }
+VD_CG_INL F4 fxyxy3(F3 v) { return fm4(v.x, v.y, v.x, v.y); }
+VD_CG_INL F4 fxyxz3(F3 v) { return fm4(v.x, v.y, v.x, v.z); }
+VD_CG_INL F4 fxyyx3(F3 v) { return fm4(v.x, v.y, v.y, v.x); }
+VD_CG_INL F4 fxyyy3(F3 v) { return fm4(v.x, v.y, v.y, v.y); }
+VD_CG_INL F4 fxyyz3(F3 v) { return fm4(v.x, v.y, v.y, v.z); }
+VD_CG_INL F4 fxyzx3(F3 v) { return fm4(v.x, v.y, v.z, v.x); }
+VD_CG_INL F4 fxyzy3(F3 v) { return fm4(v.x, v.y, v.z, v.y); }
+VD_CG_INL F4 fxyzz3(F3 v) { return fm4(v.x, v.y, v.z, v.z); }
+VD_CG_INL F4 fxzxx3(F3 v) { return fm4(v.x, v.z, v.x, v.x); }
+VD_CG_INL F4 fxzxy3(F3 v) { return fm4(v.x, v.z, v.x, v.y); }
+VD_CG_INL F4 fxzxz3(F3 v) { return fm4(v.x, v.z, v.x, v.z); }
+VD_CG_INL F4 fxzyx3(F3 v) { return fm4(v.x, v.z, v.y, v.x); }
+VD_CG_INL F4 fxzyy3(F3 v) { return fm4(v.x, v.z, v.y, v.y); }
+VD_CG_INL F4 fxzyz3(F3 v) { return fm4(v.x, v.z, v.y, v.z); }
+VD_CG_INL F4 fxzzx3(F3 v) { return fm4(v.x, v.z, v.z, v.x); }
+VD_CG_INL F4 fxzzy3(F3 v) { return fm4(v.x, v.z, v.z, v.y); }
+VD_CG_INL F4 fxzzz3(F3 v) { return fm4(v.x, v.z, v.z, v.z); }
+VD_CG_INL F4 fyxxx3(F3 v) { return fm4(v.y, v.x, v.x, v.x); }
+VD_CG_INL F4 fyxxy3(F3 v) { return fm4(v.y, v.x, v.x, v.y); }
+VD_CG_INL F4 fyxxz3(F3 v) { return fm4(v.y, v.x, v.x, v.z); }
+VD_CG_INL F4 fyxyx3(F3 v) { return fm4(v.y, v.x, v.y, v.x); }
+VD_CG_INL F4 fyxyy3(F3 v) { return fm4(v.y, v.x, v.y, v.y); }
+VD_CG_INL F4 fyxyz3(F3 v) { return fm4(v.y, v.x, v.y, v.z); }
+VD_CG_INL F4 fyxzx3(F3 v) { return fm4(v.y, v.x, v.z, v.x); }
+VD_CG_INL F4 fyxzy3(F3 v) { return fm4(v.y, v.x, v.z, v.y); }
+VD_CG_INL F4 fyxzz3(F3 v) { return fm4(v.y, v.x, v.z, v.z); }
+VD_CG_INL F4 fyyxx3(F3 v) { return fm4(v.y, v.y, v.x, v.x); }
+VD_CG_INL F4 fyyxy3(F3 v) { return fm4(v.y, v.y, v.x, v.y); }
+VD_CG_INL F4 fyyxz3(F3 v) { return fm4(v.y, v.y, v.x, v.z); }
+VD_CG_INL F4 fyyyx3(F3 v) { return fm4(v.y, v.y, v.y, v.x); }
+VD_CG_INL F4 fyyyy3(F3 v) { return fm4(v.y, v.y, v.y, v.y); }
+VD_CG_INL F4 fyyyz3(F3 v) { return fm4(v.y, v.y, v.y, v.z); }
+VD_CG_INL F4 fyyzx3(F3 v) { return fm4(v.y, v.y, v.z, v.x); }
+VD_CG_INL F4 fyyzy3(F3 v) { return fm4(v.y, v.y, v.z, v.y); }
+VD_CG_INL F4 fyyzz3(F3 v) { return fm4(v.y, v.y, v.z, v.z); }
+VD_CG_INL F4 fyzxx3(F3 v) { return fm4(v.y, v.z, v.x, v.x); }
+VD_CG_INL F4 fyzxy3(F3 v) { return fm4(v.y, v.z, v.x, v.y); }
+VD_CG_INL F4 fyzxz3(F3 v) { return fm4(v.y, v.z, v.x, v.z); }
+VD_CG_INL F4 fyzyx3(F3 v) { return fm4(v.y, v.z, v.y, v.x); }
+VD_CG_INL F4 fyzyy3(F3 v) { return fm4(v.y, v.z, v.y, v.y); }
+VD_CG_INL F4 fyzyz3(F3 v) { return fm4(v.y, v.z, v.y, v.z); }
+VD_CG_INL F4 fyzzx3(F3 v) { return fm4(v.y, v.z, v.z, v.x); }
+VD_CG_INL F4 fyzzy3(F3 v) { return fm4(v.y, v.z, v.z, v.y); }
+VD_CG_INL F4 fyzzz3(F3 v) { return fm4(v.y, v.z, v.z, v.z); }
+VD_CG_INL F4 fzxxx3(F3 v) { return fm4(v.z, v.x, v.x, v.x); }
+VD_CG_INL F4 fzxxy3(F3 v) { return fm4(v.z, v.x, v.x, v.y); }
+VD_CG_INL F4 fzxxz3(F3 v) { return fm4(v.z, v.x, v.x, v.z); }
+VD_CG_INL F4 fzxyx3(F3 v) { return fm4(v.z, v.x, v.y, v.x); }
+VD_CG_INL F4 fzxyy3(F3 v) { return fm4(v.z, v.x, v.y, v.y); }
+VD_CG_INL F4 fzxyz3(F3 v) { return fm4(v.z, v.x, v.y, v.z); }
+VD_CG_INL F4 fzxzx3(F3 v) { return fm4(v.z, v.x, v.z, v.x); }
+VD_CG_INL F4 fzxzy3(F3 v) { return fm4(v.z, v.x, v.z, v.y); }
+VD_CG_INL F4 fzxzz3(F3 v) { return fm4(v.z, v.x, v.z, v.z); }
+VD_CG_INL F4 fzyxx3(F3 v) { return fm4(v.z, v.y, v.x, v.x); }
+VD_CG_INL F4 fzyxy3(F3 v) { return fm4(v.z, v.y, v.x, v.y); }
+VD_CG_INL F4 fzyxz3(F3 v) { return fm4(v.z, v.y, v.x, v.z); }
+VD_CG_INL F4 fzyyx3(F3 v) { return fm4(v.z, v.y, v.y, v.x); }
+VD_CG_INL F4 fzyyy3(F3 v) { return fm4(v.z, v.y, v.y, v.y); }
+VD_CG_INL F4 fzyyz3(F3 v) { return fm4(v.z, v.y, v.y, v.z); }
+VD_CG_INL F4 fzyzx3(F3 v) { return fm4(v.z, v.y, v.z, v.x); }
+VD_CG_INL F4 fzyzy3(F3 v) { return fm4(v.z, v.y, v.z, v.y); }
+VD_CG_INL F4 fzyzz3(F3 v) { return fm4(v.z, v.y, v.z, v.z); }
+VD_CG_INL F4 fzzxx3(F3 v) { return fm4(v.z, v.z, v.x, v.x); }
+VD_CG_INL F4 fzzxy3(F3 v) { return fm4(v.z, v.z, v.x, v.y); }
+VD_CG_INL F4 fzzxz3(F3 v) { return fm4(v.z, v.z, v.x, v.z); }
+VD_CG_INL F4 fzzyx3(F3 v) { return fm4(v.z, v.z, v.y, v.x); }
+VD_CG_INL F4 fzzyy3(F3 v) { return fm4(v.z, v.z, v.y, v.y); }
+VD_CG_INL F4 fzzyz3(F3 v) { return fm4(v.z, v.z, v.y, v.z); }
+VD_CG_INL F4 fzzzx3(F3 v) { return fm4(v.z, v.z, v.z, v.x); }
+VD_CG_INL F4 fzzzy3(F3 v) { return fm4(v.z, v.z, v.z, v.y); }
+VD_CG_INL F4 fzzzz3(F3 v) { return fm4(v.z, v.z, v.z, v.z); }
+VD_CG_INL F2 fxx4(F4 v) { return fm2(v.x, v.x); }
+VD_CG_INL F2 fxy4(F4 v) { return fm2(v.x, v.y); }
+VD_CG_INL F2 fxz4(F4 v) { return fm2(v.x, v.z); }
+VD_CG_INL F2 fxw4(F4 v) { return fm2(v.x, v.w); }
+VD_CG_INL F2 fyx4(F4 v) { return fm2(v.y, v.x); }
+VD_CG_INL F2 fyy4(F4 v) { return fm2(v.y, v.y); }
+VD_CG_INL F2 fyz4(F4 v) { return fm2(v.y, v.z); }
+VD_CG_INL F2 fyw4(F4 v) { return fm2(v.y, v.w); }
+VD_CG_INL F2 fzx4(F4 v) { return fm2(v.z, v.x); }
+VD_CG_INL F2 fzy4(F4 v) { return fm2(v.z, v.y); }
+VD_CG_INL F2 fzz4(F4 v) { return fm2(v.z, v.z); }
+VD_CG_INL F2 fzw4(F4 v) { return fm2(v.z, v.w); }
+VD_CG_INL F2 fwx4(F4 v) { return fm2(v.w, v.x); }
+VD_CG_INL F2 fwy4(F4 v) { return fm2(v.w, v.y); }
+VD_CG_INL F2 fwz4(F4 v) { return fm2(v.w, v.z); }
+VD_CG_INL F2 fww4(F4 v) { return fm2(v.w, v.w); }
+VD_CG_INL F3 fxxx4(F4 v) { return fm3(v.x, v.x, v.x); }
+VD_CG_INL F3 fxxy4(F4 v) { return fm3(v.x, v.x, v.y); }
+VD_CG_INL F3 fxxz4(F4 v) { return fm3(v.x, v.x, v.z); }
+VD_CG_INL F3 fxxw4(F4 v) { return fm3(v.x, v.x, v.w); }
+VD_CG_INL F3 fxyx4(F4 v) { return fm3(v.x, v.y, v.x); }
+VD_CG_INL F3 fxyy4(F4 v) { return fm3(v.x, v.y, v.y); }
+VD_CG_INL F3 fxyz4(F4 v) { return fm3(v.x, v.y, v.z); }
+VD_CG_INL F3 fxyw4(F4 v) { return fm3(v.x, v.y, v.w); }
+VD_CG_INL F3 fxzx4(F4 v) { return fm3(v.x, v.z, v.x); }
+VD_CG_INL F3 fxzy4(F4 v) { return fm3(v.x, v.z, v.y); }
+VD_CG_INL F3 fxzz4(F4 v) { return fm3(v.x, v.z, v.z); }
+VD_CG_INL F3 fxzw4(F4 v) { return fm3(v.x, v.z, v.w); }
+VD_CG_INL F3 fxwx4(F4 v) { return fm3(v.x, v.w, v.x); }
+VD_CG_INL F3 fxwy4(F4 v) { return fm3(v.x, v.w, v.y); }
+VD_CG_INL F3 fxwz4(F4 v) { return fm3(v.x, v.w, v.z); }
+VD_CG_INL F3 fxww4(F4 v) { return fm3(v.x, v.w, v.w); }
+VD_CG_INL F3 fyxx4(F4 v) { return fm3(v.y, v.x, v.x); }
+VD_CG_INL F3 fyxy4(F4 v) { return fm3(v.y, v.x, v.y); }
+VD_CG_INL F3 fyxz4(F4 v) { return fm3(v.y, v.x, v.z); }
+VD_CG_INL F3 fyxw4(F4 v) { return fm3(v.y, v.x, v.w); }
+VD_CG_INL F3 fyyx4(F4 v) { return fm3(v.y, v.y, v.x); }
+VD_CG_INL F3 fyyy4(F4 v) { return fm3(v.y, v.y, v.y); }
+VD_CG_INL F3 fyyz4(F4 v) { return fm3(v.y, v.y, v.z); }
+VD_CG_INL F3 fyyw4(F4 v) { return fm3(v.y, v.y, v.w); }
+VD_CG_INL F3 fyzx4(F4 v) { return fm3(v.y, v.z, v.x); }
+VD_CG_INL F3 fyzy4(F4 v) { return fm3(v.y, v.z, v.y); }
+VD_CG_INL F3 fyzz4(F4 v) { return fm3(v.y, v.z, v.z); }
+VD_CG_INL F3 fyzw4(F4 v) { return fm3(v.y, v.z, v.w); }
+VD_CG_INL F3 fywx4(F4 v) { return fm3(v.y, v.w, v.x); }
+VD_CG_INL F3 fywy4(F4 v) { return fm3(v.y, v.w, v.y); }
+VD_CG_INL F3 fywz4(F4 v) { return fm3(v.y, v.w, v.z); }
+VD_CG_INL F3 fyww4(F4 v) { return fm3(v.y, v.w, v.w); }
+VD_CG_INL F3 fzxx4(F4 v) { return fm3(v.z, v.x, v.x); }
+VD_CG_INL F3 fzxy4(F4 v) { return fm3(v.z, v.x, v.y); }
+VD_CG_INL F3 fzxz4(F4 v) { return fm3(v.z, v.x, v.z); }
+VD_CG_INL F3 fzxw4(F4 v) { return fm3(v.z, v.x, v.w); }
+VD_CG_INL F3 fzyx4(F4 v) { return fm3(v.z, v.y, v.x); }
+VD_CG_INL F3 fzyy4(F4 v) { return fm3(v.z, v.y, v.y); }
+VD_CG_INL F3 fzyz4(F4 v) { return fm3(v.z, v.y, v.z); }
+VD_CG_INL F3 fzyw4(F4 v) { return fm3(v.z, v.y, v.w); }
+VD_CG_INL F3 fzzx4(F4 v) { return fm3(v.z, v.z, v.x); }
+VD_CG_INL F3 fzzy4(F4 v) { return fm3(v.z, v.z, v.y); }
+VD_CG_INL F3 fzzz4(F4 v) { return fm3(v.z, v.z, v.z); }
+VD_CG_INL F3 fzzw4(F4 v) { return fm3(v.z, v.z, v.w); }
+VD_CG_INL F3 fzwx4(F4 v) { return fm3(v.z, v.w, v.x); }
+VD_CG_INL F3 fzwy4(F4 v) { return fm3(v.z, v.w, v.y); }
+VD_CG_INL F3 fzwz4(F4 v) { return fm3(v.z, v.w, v.z); }
+VD_CG_INL F3 fzww4(F4 v) { return fm3(v.z, v.w, v.w); }
+VD_CG_INL F3 fwxx4(F4 v) { return fm3(v.w, v.x, v.x); }
+VD_CG_INL F3 fwxy4(F4 v) { return fm3(v.w, v.x, v.y); }
+VD_CG_INL F3 fwxz4(F4 v) { return fm3(v.w, v.x, v.z); }
+VD_CG_INL F3 fwxw4(F4 v) { return fm3(v.w, v.x, v.w); }
+VD_CG_INL F3 fwyx4(F4 v) { return fm3(v.w, v.y, v.x); }
+VD_CG_INL F3 fwyy4(F4 v) { return fm3(v.w, v.y, v.y); }
+VD_CG_INL F3 fwyz4(F4 v) { return fm3(v.w, v.y, v.z); }
+VD_CG_INL F3 fwyw4(F4 v) { return fm3(v.w, v.y, v.w); }
+VD_CG_INL F3 fwzx4(F4 v) { return fm3(v.w, v.z, v.x); }
+VD_CG_INL F3 fwzy4(F4 v) { return fm3(v.w, v.z, v.y); }
+VD_CG_INL F3 fwzz4(F4 v) { return fm3(v.w, v.z, v.z); }
+VD_CG_INL F3 fwzw4(F4 v) { return fm3(v.w, v.z, v.w); }
+VD_CG_INL F3 fwwx4(F4 v) { return fm3(v.w, v.w, v.x); }
+VD_CG_INL F3 fwwy4(F4 v) { return fm3(v.w, v.w, v.y); }
+VD_CG_INL F3 fwwz4(F4 v) { return fm3(v.w, v.w, v.z); }
+VD_CG_INL F3 fwww4(F4 v) { return fm3(v.w, v.w, v.w); }
+VD_CG_INL F4 fxxxx4(F4 v) { return fm4(v.x, v.x, v.x, v.x); }
+VD_CG_INL F4 fxxxy4(F4 v) { return fm4(v.x, v.x, v.x, v.y); }
+VD_CG_INL F4 fxxxz4(F4 v) { return fm4(v.x, v.x, v.x, v.z); }
+VD_CG_INL F4 fxxxw4(F4 v) { return fm4(v.x, v.x, v.x, v.w); }
+VD_CG_INL F4 fxxyx4(F4 v) { return fm4(v.x, v.x, v.y, v.x); }
+VD_CG_INL F4 fxxyy4(F4 v) { return fm4(v.x, v.x, v.y, v.y); }
+VD_CG_INL F4 fxxyz4(F4 v) { return fm4(v.x, v.x, v.y, v.z); }
+VD_CG_INL F4 fxxyw4(F4 v) { return fm4(v.x, v.x, v.y, v.w); }
+VD_CG_INL F4 fxxzx4(F4 v) { return fm4(v.x, v.x, v.z, v.x); }
+VD_CG_INL F4 fxxzy4(F4 v) { return fm4(v.x, v.x, v.z, v.y); }
+VD_CG_INL F4 fxxzz4(F4 v) { return fm4(v.x, v.x, v.z, v.z); }
+VD_CG_INL F4 fxxzw4(F4 v) { return fm4(v.x, v.x, v.z, v.w); }
+VD_CG_INL F4 fxxwx4(F4 v) { return fm4(v.x, v.x, v.w, v.x); }
+VD_CG_INL F4 fxxwy4(F4 v) { return fm4(v.x, v.x, v.w, v.y); }
+VD_CG_INL F4 fxxwz4(F4 v) { return fm4(v.x, v.x, v.w, v.z); }
+VD_CG_INL F4 fxxww4(F4 v) { return fm4(v.x, v.x, v.w, v.w); }
+VD_CG_INL F4 fxyxx4(F4 v) { return fm4(v.x, v.y, v.x, v.x); }
+VD_CG_INL F4 fxyxy4(F4 v) { return fm4(v.x, v.y, v.x, v.y); }
+VD_CG_INL F4 fxyxz4(F4 v) { return fm4(v.x, v.y, v.x, v.z); }
+VD_CG_INL F4 fxyxw4(F4 v) { return fm4(v.x, v.y, v.x, v.w); }
+VD_CG_INL F4 fxyyx4(F4 v) { return fm4(v.x, v.y, v.y, v.x); }
+VD_CG_INL F4 fxyyy4(F4 v) { return fm4(v.x, v.y, v.y, v.y); }
+VD_CG_INL F4 fxyyz4(F4 v) { return fm4(v.x, v.y, v.y, v.z); }
+VD_CG_INL F4 fxyyw4(F4 v) { return fm4(v.x, v.y, v.y, v.w); }
+VD_CG_INL F4 fxyzx4(F4 v) { return fm4(v.x, v.y, v.z, v.x); }
+VD_CG_INL F4 fxyzy4(F4 v) { return fm4(v.x, v.y, v.z, v.y); }
+VD_CG_INL F4 fxyzz4(F4 v) { return fm4(v.x, v.y, v.z, v.z); }
+VD_CG_INL F4 fxyzw4(F4 v) { return fm4(v.x, v.y, v.z, v.w); }
+VD_CG_INL F4 fxywx4(F4 v) { return fm4(v.x, v.y, v.w, v.x); }
+VD_CG_INL F4 fxywy4(F4 v) { return fm4(v.x, v.y, v.w, v.y); }
+VD_CG_INL F4 fxywz4(F4 v) { return fm4(v.x, v.y, v.w, v.z); }
+VD_CG_INL F4 fxyww4(F4 v) { return fm4(v.x, v.y, v.w, v.w); }
+VD_CG_INL F4 fxzxx4(F4 v) { return fm4(v.x, v.z, v.x, v.x); }
+VD_CG_INL F4 fxzxy4(F4 v) { return fm4(v.x, v.z, v.x, v.y); }
+VD_CG_INL F4 fxzxz4(F4 v) { return fm4(v.x, v.z, v.x, v.z); }
+VD_CG_INL F4 fxzxw4(F4 v) { return fm4(v.x, v.z, v.x, v.w); }
+VD_CG_INL F4 fxzyx4(F4 v) { return fm4(v.x, v.z, v.y, v.x); }
+VD_CG_INL F4 fxzyy4(F4 v) { return fm4(v.x, v.z, v.y, v.y); }
+VD_CG_INL F4 fxzyz4(F4 v) { return fm4(v.x, v.z, v.y, v.z); }
+VD_CG_INL F4 fxzyw4(F4 v) { return fm4(v.x, v.z, v.y, v.w); }
+VD_CG_INL F4 fxzzx4(F4 v) { return fm4(v.x, v.z, v.z, v.x); }
+VD_CG_INL F4 fxzzy4(F4 v) { return fm4(v.x, v.z, v.z, v.y); }
+VD_CG_INL F4 fxzzz4(F4 v) { return fm4(v.x, v.z, v.z, v.z); }
+VD_CG_INL F4 fxzzw4(F4 v) { return fm4(v.x, v.z, v.z, v.w); }
+VD_CG_INL F4 fxzwx4(F4 v) { return fm4(v.x, v.z, v.w, v.x); }
+VD_CG_INL F4 fxzwy4(F4 v) { return fm4(v.x, v.z, v.w, v.y); }
+VD_CG_INL F4 fxzwz4(F4 v) { return fm4(v.x, v.z, v.w, v.z); }
+VD_CG_INL F4 fxzww4(F4 v) { return fm4(v.x, v.z, v.w, v.w); }
+VD_CG_INL F4 fxwxx4(F4 v) { return fm4(v.x, v.w, v.x, v.x); }
+VD_CG_INL F4 fxwxy4(F4 v) { return fm4(v.x, v.w, v.x, v.y); }
+VD_CG_INL F4 fxwxz4(F4 v) { return fm4(v.x, v.w, v.x, v.z); }
+VD_CG_INL F4 fxwxw4(F4 v) { return fm4(v.x, v.w, v.x, v.w); }
+VD_CG_INL F4 fxwyx4(F4 v) { return fm4(v.x, v.w, v.y, v.x); }
+VD_CG_INL F4 fxwyy4(F4 v) { return fm4(v.x, v.w, v.y, v.y); }
+VD_CG_INL F4 fxwyz4(F4 v) { return fm4(v.x, v.w, v.y, v.z); }
+VD_CG_INL F4 fxwyw4(F4 v) { return fm4(v.x, v.w, v.y, v.w); }
+VD_CG_INL F4 fxwzx4(F4 v) { return fm4(v.x, v.w, v.z, v.x); }
+VD_CG_INL F4 fxwzy4(F4 v) { return fm4(v.x, v.w, v.z, v.y); }
+VD_CG_INL F4 fxwzz4(F4 v) { return fm4(v.x, v.w, v.z, v.z); }
+VD_CG_INL F4 fxwzw4(F4 v) { return fm4(v.x, v.w, v.z, v.w); }
+VD_CG_INL F4 fxwwx4(F4 v) { return fm4(v.x, v.w, v.w, v.x); }
+VD_CG_INL F4 fxwwy4(F4 v) { return fm4(v.x, v.w, v.w, v.y); }
+VD_CG_INL F4 fxwwz4(F4 v) { return fm4(v.x, v.w, v.w, v.z); }
+VD_CG_INL F4 fxwww4(F4 v) { return fm4(v.x, v.w, v.w, v.w); }
+VD_CG_INL F4 fyxxx4(F4 v) { return fm4(v.y, v.x, v.x, v.x); }
+VD_CG_INL F4 fyxxy4(F4 v) { return fm4(v.y, v.x, v.x, v.y); }
+VD_CG_INL F4 fyxxz4(F4 v) { return fm4(v.y, v.x, v.x, v.z); }
+VD_CG_INL F4 fyxxw4(F4 v) { return fm4(v.y, v.x, v.x, v.w); }
+VD_CG_INL F4 fyxyx4(F4 v) { return fm4(v.y, v.x, v.y, v.x); }
+VD_CG_INL F4 fyxyy4(F4 v) { return fm4(v.y, v.x, v.y, v.y); }
+VD_CG_INL F4 fyxyz4(F4 v) { return fm4(v.y, v.x, v.y, v.z); }
+VD_CG_INL F4 fyxyw4(F4 v) { return fm4(v.y, v.x, v.y, v.w); }
+VD_CG_INL F4 fyxzx4(F4 v) { return fm4(v.y, v.x, v.z, v.x); }
+VD_CG_INL F4 fyxzy4(F4 v) { return fm4(v.y, v.x, v.z, v.y); }
+VD_CG_INL F4 fyxzz4(F4 v) { return fm4(v.y, v.x, v.z, v.z); }
+VD_CG_INL F4 fyxzw4(F4 v) { return fm4(v.y, v.x, v.z, v.w); }
+VD_CG_INL F4 fyxwx4(F4 v) { return fm4(v.y, v.x, v.w, v.x); }
+VD_CG_INL F4 fyxwy4(F4 v) { return fm4(v.y, v.x, v.w, v.y); }
+VD_CG_INL F4 fyxwz4(F4 v) { return fm4(v.y, v.x, v.w, v.z); }
+VD_CG_INL F4 fyxww4(F4 v) { return fm4(v.y, v.x, v.w, v.w); }
+VD_CG_INL F4 fyyxx4(F4 v) { return fm4(v.y, v.y, v.x, v.x); }
+VD_CG_INL F4 fyyxy4(F4 v) { return fm4(v.y, v.y, v.x, v.y); }
+VD_CG_INL F4 fyyxz4(F4 v) { return fm4(v.y, v.y, v.x, v.z); }
+VD_CG_INL F4 fyyxw4(F4 v) { return fm4(v.y, v.y, v.x, v.w); }
+VD_CG_INL F4 fyyyx4(F4 v) { return fm4(v.y, v.y, v.y, v.x); }
+VD_CG_INL F4 fyyyy4(F4 v) { return fm4(v.y, v.y, v.y, v.y); }
+VD_CG_INL F4 fyyyz4(F4 v) { return fm4(v.y, v.y, v.y, v.z); }
+VD_CG_INL F4 fyyyw4(F4 v) { return fm4(v.y, v.y, v.y, v.w); }
+VD_CG_INL F4 fyyzx4(F4 v) { return fm4(v.y, v.y, v.z, v.x); }
+VD_CG_INL F4 fyyzy4(F4 v) { return fm4(v.y, v.y, v.z, v.y); }
+VD_CG_INL F4 fyyzz4(F4 v) { return fm4(v.y, v.y, v.z, v.z); }
+VD_CG_INL F4 fyyzw4(F4 v) { return fm4(v.y, v.y, v.z, v.w); }
+VD_CG_INL F4 fyywx4(F4 v) { return fm4(v.y, v.y, v.w, v.x); }
+VD_CG_INL F4 fyywy4(F4 v) { return fm4(v.y, v.y, v.w, v.y); }
+VD_CG_INL F4 fyywz4(F4 v) { return fm4(v.y, v.y, v.w, v.z); }
+VD_CG_INL F4 fyyww4(F4 v) { return fm4(v.y, v.y, v.w, v.w); }
+VD_CG_INL F4 fyzxx4(F4 v) { return fm4(v.y, v.z, v.x, v.x); }
+VD_CG_INL F4 fyzxy4(F4 v) { return fm4(v.y, v.z, v.x, v.y); }
+VD_CG_INL F4 fyzxz4(F4 v) { return fm4(v.y, v.z, v.x, v.z); }
+VD_CG_INL F4 fyzxw4(F4 v) { return fm4(v.y, v.z, v.x, v.w); }
+VD_CG_INL F4 fyzyx4(F4 v) { return fm4(v.y, v.z, v.y, v.x); }
+VD_CG_INL F4 fyzyy4(F4 v) { return fm4(v.y, v.z, v.y, v.y); }
+VD_CG_INL F4 fyzyz4(F4 v) { return fm4(v.y, v.z, v.y, v.z); }
+VD_CG_INL F4 fyzyw4(F4 v) { return fm4(v.y, v.z, v.y, v.w); }
+VD_CG_INL F4 fyzzx4(F4 v) { return fm4(v.y, v.z, v.z, v.x); }
+VD_CG_INL F4 fyzzy4(F4 v) { return fm4(v.y, v.z, v.z, v.y); }
+VD_CG_INL F4 fyzzz4(F4 v) { return fm4(v.y, v.z, v.z, v.z); }
+VD_CG_INL F4 fyzzw4(F4 v) { return fm4(v.y, v.z, v.z, v.w); }
+VD_CG_INL F4 fyzwx4(F4 v) { return fm4(v.y, v.z, v.w, v.x); }
+VD_CG_INL F4 fyzwy4(F4 v) { return fm4(v.y, v.z, v.w, v.y); }
+VD_CG_INL F4 fyzwz4(F4 v) { return fm4(v.y, v.z, v.w, v.z); }
+VD_CG_INL F4 fyzww4(F4 v) { return fm4(v.y, v.z, v.w, v.w); }
+VD_CG_INL F4 fywxx4(F4 v) { return fm4(v.y, v.w, v.x, v.x); }
+VD_CG_INL F4 fywxy4(F4 v) { return fm4(v.y, v.w, v.x, v.y); }
+VD_CG_INL F4 fywxz4(F4 v) { return fm4(v.y, v.w, v.x, v.z); }
+VD_CG_INL F4 fywxw4(F4 v) { return fm4(v.y, v.w, v.x, v.w); }
+VD_CG_INL F4 fywyx4(F4 v) { return fm4(v.y, v.w, v.y, v.x); }
+VD_CG_INL F4 fywyy4(F4 v) { return fm4(v.y, v.w, v.y, v.y); }
+VD_CG_INL F4 fywyz4(F4 v) { return fm4(v.y, v.w, v.y, v.z); }
+VD_CG_INL F4 fywyw4(F4 v) { return fm4(v.y, v.w, v.y, v.w); }
+VD_CG_INL F4 fywzx4(F4 v) { return fm4(v.y, v.w, v.z, v.x); }
+VD_CG_INL F4 fywzy4(F4 v) { return fm4(v.y, v.w, v.z, v.y); }
+VD_CG_INL F4 fywzz4(F4 v) { return fm4(v.y, v.w, v.z, v.z); }
+VD_CG_INL F4 fywzw4(F4 v) { return fm4(v.y, v.w, v.z, v.w); }
+VD_CG_INL F4 fywwx4(F4 v) { return fm4(v.y, v.w, v.w, v.x); }
+VD_CG_INL F4 fywwy4(F4 v) { return fm4(v.y, v.w, v.w, v.y); }
+VD_CG_INL F4 fywwz4(F4 v) { return fm4(v.y, v.w, v.w, v.z); }
+VD_CG_INL F4 fywww4(F4 v) { return fm4(v.y, v.w, v.w, v.w); }
+VD_CG_INL F4 fzxxx4(F4 v) { return fm4(v.z, v.x, v.x, v.x); }
+VD_CG_INL F4 fzxxy4(F4 v) { return fm4(v.z, v.x, v.x, v.y); }
+VD_CG_INL F4 fzxxz4(F4 v) { return fm4(v.z, v.x, v.x, v.z); }
+VD_CG_INL F4 fzxxw4(F4 v) { return fm4(v.z, v.x, v.x, v.w); }
+VD_CG_INL F4 fzxyx4(F4 v) { return fm4(v.z, v.x, v.y, v.x); }
+VD_CG_INL F4 fzxyy4(F4 v) { return fm4(v.z, v.x, v.y, v.y); }
+VD_CG_INL F4 fzxyz4(F4 v) { return fm4(v.z, v.x, v.y, v.z); }
+VD_CG_INL F4 fzxyw4(F4 v) { return fm4(v.z, v.x, v.y, v.w); }
+VD_CG_INL F4 fzxzx4(F4 v) { return fm4(v.z, v.x, v.z, v.x); }
+VD_CG_INL F4 fzxzy4(F4 v) { return fm4(v.z, v.x, v.z, v.y); }
+VD_CG_INL F4 fzxzz4(F4 v) { return fm4(v.z, v.x, v.z, v.z); }
+VD_CG_INL F4 fzxzw4(F4 v) { return fm4(v.z, v.x, v.z, v.w); }
+VD_CG_INL F4 fzxwx4(F4 v) { return fm4(v.z, v.x, v.w, v.x); }
+VD_CG_INL F4 fzxwy4(F4 v) { return fm4(v.z, v.x, v.w, v.y); }
+VD_CG_INL F4 fzxwz4(F4 v) { return fm4(v.z, v.x, v.w, v.z); }
+VD_CG_INL F4 fzxww4(F4 v) { return fm4(v.z, v.x, v.w, v.w); }
+VD_CG_INL F4 fzyxx4(F4 v) { return fm4(v.z, v.y, v.x, v.x); }
+VD_CG_INL F4 fzyxy4(F4 v) { return fm4(v.z, v.y, v.x, v.y); }
+VD_CG_INL F4 fzyxz4(F4 v) { return fm4(v.z, v.y, v.x, v.z); }
+VD_CG_INL F4 fzyxw4(F4 v) { return fm4(v.z, v.y, v.x, v.w); }
+VD_CG_INL F4 fzyyx4(F4 v) { return fm4(v.z, v.y, v.y, v.x); }
+VD_CG_INL F4 fzyyy4(F4 v) { return fm4(v.z, v.y, v.y, v.y); }
+VD_CG_INL F4 fzyyz4(F4 v) { return fm4(v.z, v.y, v.y, v.z); }
+VD_CG_INL F4 fzyyw4(F4 v) { return fm4(v.z, v.y, v.y, v.w); }
+VD_CG_INL F4 fzyzx4(F4 v) { return fm4(v.z, v.y, v.z, v.x); }
+VD_CG_INL F4 fzyzy4(F4 v) { return fm4(v.z, v.y, v.z, v.y); }
+VD_CG_INL F4 fzyzz4(F4 v) { return fm4(v.z, v.y, v.z, v.z); }
+VD_CG_INL F4 fzyzw4(F4 v) { return fm4(v.z, v.y, v.z, v.w); }
+VD_CG_INL F4 fzywx4(F4 v) { return fm4(v.z, v.y, v.w, v.x); }
+VD_CG_INL F4 fzywy4(F4 v) { return fm4(v.z, v.y, v.w, v.y); }
+VD_CG_INL F4 fzywz4(F4 v) { return fm4(v.z, v.y, v.w, v.z); }
+VD_CG_INL F4 fzyww4(F4 v) { return fm4(v.z, v.y, v.w, v.w); }
+VD_CG_INL F4 fzzxx4(F4 v) { return fm4(v.z, v.z, v.x, v.x); }
+VD_CG_INL F4 fzzxy4(F4 v) { return fm4(v.z, v.z, v.x, v.y); }
+VD_CG_INL F4 fzzxz4(F4 v) { return fm4(v.z, v.z, v.x, v.z); }
+VD_CG_INL F4 fzzxw4(F4 v) { return fm4(v.z, v.z, v.x, v.w); }
+VD_CG_INL F4 fzzyx4(F4 v) { return fm4(v.z, v.z, v.y, v.x); }
+VD_CG_INL F4 fzzyy4(F4 v) { return fm4(v.z, v.z, v.y, v.y); }
+VD_CG_INL F4 fzzyz4(F4 v) { return fm4(v.z, v.z, v.y, v.z); }
+VD_CG_INL F4 fzzyw4(F4 v) { return fm4(v.z, v.z, v.y, v.w); }
+VD_CG_INL F4 fzzzx4(F4 v) { return fm4(v.z, v.z, v.z, v.x); }
+VD_CG_INL F4 fzzzy4(F4 v) { return fm4(v.z, v.z, v.z, v.y); }
+VD_CG_INL F4 fzzzz4(F4 v) { return fm4(v.z, v.z, v.z, v.z); }
+VD_CG_INL F4 fzzzw4(F4 v) { return fm4(v.z, v.z, v.z, v.w); }
+VD_CG_INL F4 fzzwx4(F4 v) { return fm4(v.z, v.z, v.w, v.x); }
+VD_CG_INL F4 fzzwy4(F4 v) { return fm4(v.z, v.z, v.w, v.y); }
+VD_CG_INL F4 fzzwz4(F4 v) { return fm4(v.z, v.z, v.w, v.z); }
+VD_CG_INL F4 fzzww4(F4 v) { return fm4(v.z, v.z, v.w, v.w); }
+VD_CG_INL F4 fzwxx4(F4 v) { return fm4(v.z, v.w, v.x, v.x); }
+VD_CG_INL F4 fzwxy4(F4 v) { return fm4(v.z, v.w, v.x, v.y); }
+VD_CG_INL F4 fzwxz4(F4 v) { return fm4(v.z, v.w, v.x, v.z); }
+VD_CG_INL F4 fzwxw4(F4 v) { return fm4(v.z, v.w, v.x, v.w); }
+VD_CG_INL F4 fzwyx4(F4 v) { return fm4(v.z, v.w, v.y, v.x); }
+VD_CG_INL F4 fzwyy4(F4 v) { return fm4(v.z, v.w, v.y, v.y); }
+VD_CG_INL F4 fzwyz4(F4 v) { return fm4(v.z, v.w, v.y, v.z); }
+VD_CG_INL F4 fzwyw4(F4 v) { return fm4(v.z, v.w, v.y, v.w); }
+VD_CG_INL F4 fzwzx4(F4 v) { return fm4(v.z, v.w, v.z, v.x); }
+VD_CG_INL F4 fzwzy4(F4 v) { return fm4(v.z, v.w, v.z, v.y); }
+VD_CG_INL F4 fzwzz4(F4 v) { return fm4(v.z, v.w, v.z, v.z); }
+VD_CG_INL F4 fzwzw4(F4 v) { return fm4(v.z, v.w, v.z, v.w); }
+VD_CG_INL F4 fzwwx4(F4 v) { return fm4(v.z, v.w, v.w, v.x); }
+VD_CG_INL F4 fzwwy4(F4 v) { return fm4(v.z, v.w, v.w, v.y); }
+VD_CG_INL F4 fzwwz4(F4 v) { return fm4(v.z, v.w, v.w, v.z); }
+VD_CG_INL F4 fzwww4(F4 v) { return fm4(v.z, v.w, v.w, v.w); }
+VD_CG_INL F4 fwxxx4(F4 v) { return fm4(v.w, v.x, v.x, v.x); }
+VD_CG_INL F4 fwxxy4(F4 v) { return fm4(v.w, v.x, v.x, v.y); }
+VD_CG_INL F4 fwxxz4(F4 v) { return fm4(v.w, v.x, v.x, v.z); }
+VD_CG_INL F4 fwxxw4(F4 v) { return fm4(v.w, v.x, v.x, v.w); }
+VD_CG_INL F4 fwxyx4(F4 v) { return fm4(v.w, v.x, v.y, v.x); }
+VD_CG_INL F4 fwxyy4(F4 v) { return fm4(v.w, v.x, v.y, v.y); }
+VD_CG_INL F4 fwxyz4(F4 v) { return fm4(v.w, v.x, v.y, v.z); }
+VD_CG_INL F4 fwxyw4(F4 v) { return fm4(v.w, v.x, v.y, v.w); }
+VD_CG_INL F4 fwxzx4(F4 v) { return fm4(v.w, v.x, v.z, v.x); }
+VD_CG_INL F4 fwxzy4(F4 v) { return fm4(v.w, v.x, v.z, v.y); }
+VD_CG_INL F4 fwxzz4(F4 v) { return fm4(v.w, v.x, v.z, v.z); }
+VD_CG_INL F4 fwxzw4(F4 v) { return fm4(v.w, v.x, v.z, v.w); }
+VD_CG_INL F4 fwxwx4(F4 v) { return fm4(v.w, v.x, v.w, v.x); }
+VD_CG_INL F4 fwxwy4(F4 v) { return fm4(v.w, v.x, v.w, v.y); }
+VD_CG_INL F4 fwxwz4(F4 v) { return fm4(v.w, v.x, v.w, v.z); }
+VD_CG_INL F4 fwxww4(F4 v) { return fm4(v.w, v.x, v.w, v.w); }
+VD_CG_INL F4 fwyxx4(F4 v) { return fm4(v.w, v.y, v.x, v.x); }
+VD_CG_INL F4 fwyxy4(F4 v) { return fm4(v.w, v.y, v.x, v.y); }
+VD_CG_INL F4 fwyxz4(F4 v) { return fm4(v.w, v.y, v.x, v.z); }
+VD_CG_INL F4 fwyxw4(F4 v) { return fm4(v.w, v.y, v.x, v.w); }
+VD_CG_INL F4 fwyyx4(F4 v) { return fm4(v.w, v.y, v.y, v.x); }
+VD_CG_INL F4 fwyyy4(F4 v) { return fm4(v.w, v.y, v.y, v.y); }
+VD_CG_INL F4 fwyyz4(F4 v) { return fm4(v.w, v.y, v.y, v.z); }
+VD_CG_INL F4 fwyyw4(F4 v) { return fm4(v.w, v.y, v.y, v.w); }
+VD_CG_INL F4 fwyzx4(F4 v) { return fm4(v.w, v.y, v.z, v.x); }
+VD_CG_INL F4 fwyzy4(F4 v) { return fm4(v.w, v.y, v.z, v.y); }
+VD_CG_INL F4 fwyzz4(F4 v) { return fm4(v.w, v.y, v.z, v.z); }
+VD_CG_INL F4 fwyzw4(F4 v) { return fm4(v.w, v.y, v.z, v.w); }
+VD_CG_INL F4 fwywx4(F4 v) { return fm4(v.w, v.y, v.w, v.x); }
+VD_CG_INL F4 fwywy4(F4 v) { return fm4(v.w, v.y, v.w, v.y); }
+VD_CG_INL F4 fwywz4(F4 v) { return fm4(v.w, v.y, v.w, v.z); }
+VD_CG_INL F4 fwyww4(F4 v) { return fm4(v.w, v.y, v.w, v.w); }
+VD_CG_INL F4 fwzxx4(F4 v) { return fm4(v.w, v.z, v.x, v.x); }
+VD_CG_INL F4 fwzxy4(F4 v) { return fm4(v.w, v.z, v.x, v.y); }
+VD_CG_INL F4 fwzxz4(F4 v) { return fm4(v.w, v.z, v.x, v.z); }
+VD_CG_INL F4 fwzxw4(F4 v) { return fm4(v.w, v.z, v.x, v.w); }
+VD_CG_INL F4 fwzyx4(F4 v) { return fm4(v.w, v.z, v.y, v.x); }
+VD_CG_INL F4 fwzyy4(F4 v) { return fm4(v.w, v.z, v.y, v.y); }
+VD_CG_INL F4 fwzyz4(F4 v) { return fm4(v.w, v.z, v.y, v.z); }
+VD_CG_INL F4 fwzyw4(F4 v) { return fm4(v.w, v.z, v.y, v.w); }
+VD_CG_INL F4 fwzzx4(F4 v) { return fm4(v.w, v.z, v.z, v.x); }
+VD_CG_INL F4 fwzzy4(F4 v) { return fm4(v.w, v.z, v.z, v.y); }
+VD_CG_INL F4 fwzzz4(F4 v) { return fm4(v.w, v.z, v.z, v.z); }
+VD_CG_INL F4 fwzzw4(F4 v) { return fm4(v.w, v.z, v.z, v.w); }
+VD_CG_INL F4 fwzwx4(F4 v) { return fm4(v.w, v.z, v.w, v.x); }
+VD_CG_INL F4 fwzwy4(F4 v) { return fm4(v.w, v.z, v.w, v.y); }
+VD_CG_INL F4 fwzwz4(F4 v) { return fm4(v.w, v.z, v.w, v.z); }
+VD_CG_INL F4 fwzww4(F4 v) { return fm4(v.w, v.z, v.w, v.w); }
+VD_CG_INL F4 fwwxx4(F4 v) { return fm4(v.w, v.w, v.x, v.x); }
+VD_CG_INL F4 fwwxy4(F4 v) { return fm4(v.w, v.w, v.x, v.y); }
+VD_CG_INL F4 fwwxz4(F4 v) { return fm4(v.w, v.w, v.x, v.z); }
+VD_CG_INL F4 fwwxw4(F4 v) { return fm4(v.w, v.w, v.x, v.w); }
+VD_CG_INL F4 fwwyx4(F4 v) { return fm4(v.w, v.w, v.y, v.x); }
+VD_CG_INL F4 fwwyy4(F4 v) { return fm4(v.w, v.w, v.y, v.y); }
+VD_CG_INL F4 fwwyz4(F4 v) { return fm4(v.w, v.w, v.y, v.z); }
+VD_CG_INL F4 fwwyw4(F4 v) { return fm4(v.w, v.w, v.y, v.w); }
+VD_CG_INL F4 fwwzx4(F4 v) { return fm4(v.w, v.w, v.z, v.x); }
+VD_CG_INL F4 fwwzy4(F4 v) { return fm4(v.w, v.w, v.z, v.y); }
+VD_CG_INL F4 fwwzz4(F4 v) { return fm4(v.w, v.w, v.z, v.z); }
+VD_CG_INL F4 fwwzw4(F4 v) { return fm4(v.w, v.w, v.z, v.w); }
+VD_CG_INL F4 fwwwx4(F4 v) { return fm4(v.w, v.w, v.w, v.x); }
+VD_CG_INL F4 fwwwy4(F4 v) { return fm4(v.w, v.w, v.w, v.y); }
+VD_CG_INL F4 fwwwz4(F4 v) { return fm4(v.w, v.w, v.w, v.z); }
+VD_CG_INL F4 fwwww4(F4 v) { return fm4(v.w, v.w, v.w, v.w); }
+VD_CG_INL D2 dxx2(D2 v) { return dm2(v.x, v.x); }
+VD_CG_INL D2 dxy2(D2 v) { return dm2(v.x, v.y); }
+VD_CG_INL D2 dyx2(D2 v) { return dm2(v.y, v.x); }
+VD_CG_INL D2 dyy2(D2 v) { return dm2(v.y, v.y); }
+VD_CG_INL D3 dxxx2(D2 v) { return dm3(v.x, v.x, v.x); }
+VD_CG_INL D3 dxxy2(D2 v) { return dm3(v.x, v.x, v.y); }
+VD_CG_INL D3 dxyx2(D2 v) { return dm3(v.x, v.y, v.x); }
+VD_CG_INL D3 dxyy2(D2 v) { return dm3(v.x, v.y, v.y); }
+VD_CG_INL D3 dyxx2(D2 v) { return dm3(v.y, v.x, v.x); }
+VD_CG_INL D3 dyxy2(D2 v) { return dm3(v.y, v.x, v.y); }
+VD_CG_INL D3 dyyx2(D2 v) { return dm3(v.y, v.y, v.x); }
+VD_CG_INL D3 dyyy2(D2 v) { return dm3(v.y, v.y, v.y); }
+VD_CG_INL D4 dxxxx2(D2 v) { return dm4(v.x, v.x, v.x, v.x); }
+VD_CG_INL D4 dxxxy2(D2 v) { return dm4(v.x, v.x, v.x, v.y); }
+VD_CG_INL D4 dxxyx2(D2 v) { return dm4(v.x, v.x, v.y, v.x); }
+VD_CG_INL D4 dxxyy2(D2 v) { return dm4(v.x, v.x, v.y, v.y); }
+VD_CG_INL D4 dxyxx2(D2 v) { return dm4(v.x, v.y, v.x, v.x); }
+VD_CG_INL D4 dxyxy2(D2 v) { return dm4(v.x, v.y, v.x, v.y); }
+VD_CG_INL D4 dxyyx2(D2 v) { return dm4(v.x, v.y, v.y, v.x); }
+VD_CG_INL D4 dxyyy2(D2 v) { return dm4(v.x, v.y, v.y, v.y); }
+VD_CG_INL D4 dyxxx2(D2 v) { return dm4(v.y, v.x, v.x, v.x); }
+VD_CG_INL D4 dyxxy2(D2 v) { return dm4(v.y, v.x, v.x, v.y); }
+VD_CG_INL D4 dyxyx2(D2 v) { return dm4(v.y, v.x, v.y, v.x); }
+VD_CG_INL D4 dyxyy2(D2 v) { return dm4(v.y, v.x, v.y, v.y); }
+VD_CG_INL D4 dyyxx2(D2 v) { return dm4(v.y, v.y, v.x, v.x); }
+VD_CG_INL D4 dyyxy2(D2 v) { return dm4(v.y, v.y, v.x, v.y); }
+VD_CG_INL D4 dyyyx2(D2 v) { return dm4(v.y, v.y, v.y, v.x); }
+VD_CG_INL D4 dyyyy2(D2 v) { return dm4(v.y, v.y, v.y, v.y); }
+VD_CG_INL D2 dxx3(D3 v) { return dm2(v.x, v.x); }
+VD_CG_INL D2 dxy3(D3 v) { return dm2(v.x, v.y); }
+VD_CG_INL D2 dxz3(D3 v) { return dm2(v.x, v.z); }
+VD_CG_INL D2 dyx3(D3 v) { return dm2(v.y, v.x); }
+VD_CG_INL D2 dyy3(D3 v) { return dm2(v.y, v.y); }
+VD_CG_INL D2 dyz3(D3 v) { return dm2(v.y, v.z); }
+VD_CG_INL D2 dzx3(D3 v) { return dm2(v.z, v.x); }
+VD_CG_INL D2 dzy3(D3 v) { return dm2(v.z, v.y); }
+VD_CG_INL D2 dzz3(D3 v) { return dm2(v.z, v.z); }
+VD_CG_INL D3 dxxx3(D3 v) { return dm3(v.x, v.x, v.x); }
+VD_CG_INL D3 dxxy3(D3 v) { return dm3(v.x, v.x, v.y); }
+VD_CG_INL D3 dxxz3(D3 v) { return dm3(v.x, v.x, v.z); }
+VD_CG_INL D3 dxyx3(D3 v) { return dm3(v.x, v.y, v.x); }
+VD_CG_INL D3 dxyy3(D3 v) { return dm3(v.x, v.y, v.y); }
+VD_CG_INL D3 dxyz3(D3 v) { return dm3(v.x, v.y, v.z); }
+VD_CG_INL D3 dxzx3(D3 v) { return dm3(v.x, v.z, v.x); }
+VD_CG_INL D3 dxzy3(D3 v) { return dm3(v.x, v.z, v.y); }
+VD_CG_INL D3 dxzz3(D3 v) { return dm3(v.x, v.z, v.z); }
+VD_CG_INL D3 dyxx3(D3 v) { return dm3(v.y, v.x, v.x); }
+VD_CG_INL D3 dyxy3(D3 v) { return dm3(v.y, v.x, v.y); }
+VD_CG_INL D3 dyxz3(D3 v) { return dm3(v.y, v.x, v.z); }
+VD_CG_INL D3 dyyx3(D3 v) { return dm3(v.y, v.y, v.x); }
+VD_CG_INL D3 dyyy3(D3 v) { return dm3(v.y, v.y, v.y); }
+VD_CG_INL D3 dyyz3(D3 v) { return dm3(v.y, v.y, v.z); }
+VD_CG_INL D3 dyzx3(D3 v) { return dm3(v.y, v.z, v.x); }
+VD_CG_INL D3 dyzy3(D3 v) { return dm3(v.y, v.z, v.y); }
+VD_CG_INL D3 dyzz3(D3 v) { return dm3(v.y, v.z, v.z); }
+VD_CG_INL D3 dzxx3(D3 v) { return dm3(v.z, v.x, v.x); }
+VD_CG_INL D3 dzxy3(D3 v) { return dm3(v.z, v.x, v.y); }
+VD_CG_INL D3 dzxz3(D3 v) { return dm3(v.z, v.x, v.z); }
+VD_CG_INL D3 dzyx3(D3 v) { return dm3(v.z, v.y, v.x); }
+VD_CG_INL D3 dzyy3(D3 v) { return dm3(v.z, v.y, v.y); }
+VD_CG_INL D3 dzyz3(D3 v) { return dm3(v.z, v.y, v.z); }
+VD_CG_INL D3 dzzx3(D3 v) { return dm3(v.z, v.z, v.x); }
+VD_CG_INL D3 dzzy3(D3 v) { return dm3(v.z, v.z, v.y); }
+VD_CG_INL D3 dzzz3(D3 v) { return dm3(v.z, v.z, v.z); }
+VD_CG_INL D4 dxxxx3(D3 v) { return dm4(v.x, v.x, v.x, v.x); }
+VD_CG_INL D4 dxxxy3(D3 v) { return dm4(v.x, v.x, v.x, v.y); }
+VD_CG_INL D4 dxxxz3(D3 v) { return dm4(v.x, v.x, v.x, v.z); }
+VD_CG_INL D4 dxxyx3(D3 v) { return dm4(v.x, v.x, v.y, v.x); }
+VD_CG_INL D4 dxxyy3(D3 v) { return dm4(v.x, v.x, v.y, v.y); }
+VD_CG_INL D4 dxxyz3(D3 v) { return dm4(v.x, v.x, v.y, v.z); }
+VD_CG_INL D4 dxxzx3(D3 v) { return dm4(v.x, v.x, v.z, v.x); }
+VD_CG_INL D4 dxxzy3(D3 v) { return dm4(v.x, v.x, v.z, v.y); }
+VD_CG_INL D4 dxxzz3(D3 v) { return dm4(v.x, v.x, v.z, v.z); }
+VD_CG_INL D4 dxyxx3(D3 v) { return dm4(v.x, v.y, v.x, v.x); }
+VD_CG_INL D4 dxyxy3(D3 v) { return dm4(v.x, v.y, v.x, v.y); }
+VD_CG_INL D4 dxyxz3(D3 v) { return dm4(v.x, v.y, v.x, v.z); }
+VD_CG_INL D4 dxyyx3(D3 v) { return dm4(v.x, v.y, v.y, v.x); }
+VD_CG_INL D4 dxyyy3(D3 v) { return dm4(v.x, v.y, v.y, v.y); }
+VD_CG_INL D4 dxyyz3(D3 v) { return dm4(v.x, v.y, v.y, v.z); }
+VD_CG_INL D4 dxyzx3(D3 v) { return dm4(v.x, v.y, v.z, v.x); }
+VD_CG_INL D4 dxyzy3(D3 v) { return dm4(v.x, v.y, v.z, v.y); }
+VD_CG_INL D4 dxyzz3(D3 v) { return dm4(v.x, v.y, v.z, v.z); }
+VD_CG_INL D4 dxzxx3(D3 v) { return dm4(v.x, v.z, v.x, v.x); }
+VD_CG_INL D4 dxzxy3(D3 v) { return dm4(v.x, v.z, v.x, v.y); }
+VD_CG_INL D4 dxzxz3(D3 v) { return dm4(v.x, v.z, v.x, v.z); }
+VD_CG_INL D4 dxzyx3(D3 v) { return dm4(v.x, v.z, v.y, v.x); }
+VD_CG_INL D4 dxzyy3(D3 v) { return dm4(v.x, v.z, v.y, v.y); }
+VD_CG_INL D4 dxzyz3(D3 v) { return dm4(v.x, v.z, v.y, v.z); }
+VD_CG_INL D4 dxzzx3(D3 v) { return dm4(v.x, v.z, v.z, v.x); }
+VD_CG_INL D4 dxzzy3(D3 v) { return dm4(v.x, v.z, v.z, v.y); }
+VD_CG_INL D4 dxzzz3(D3 v) { return dm4(v.x, v.z, v.z, v.z); }
+VD_CG_INL D4 dyxxx3(D3 v) { return dm4(v.y, v.x, v.x, v.x); }
+VD_CG_INL D4 dyxxy3(D3 v) { return dm4(v.y, v.x, v.x, v.y); }
+VD_CG_INL D4 dyxxz3(D3 v) { return dm4(v.y, v.x, v.x, v.z); }
+VD_CG_INL D4 dyxyx3(D3 v) { return dm4(v.y, v.x, v.y, v.x); }
+VD_CG_INL D4 dyxyy3(D3 v) { return dm4(v.y, v.x, v.y, v.y); }
+VD_CG_INL D4 dyxyz3(D3 v) { return dm4(v.y, v.x, v.y, v.z); }
+VD_CG_INL D4 dyxzx3(D3 v) { return dm4(v.y, v.x, v.z, v.x); }
+VD_CG_INL D4 dyxzy3(D3 v) { return dm4(v.y, v.x, v.z, v.y); }
+VD_CG_INL D4 dyxzz3(D3 v) { return dm4(v.y, v.x, v.z, v.z); }
+VD_CG_INL D4 dyyxx3(D3 v) { return dm4(v.y, v.y, v.x, v.x); }
+VD_CG_INL D4 dyyxy3(D3 v) { return dm4(v.y, v.y, v.x, v.y); }
+VD_CG_INL D4 dyyxz3(D3 v) { return dm4(v.y, v.y, v.x, v.z); }
+VD_CG_INL D4 dyyyx3(D3 v) { return dm4(v.y, v.y, v.y, v.x); }
+VD_CG_INL D4 dyyyy3(D3 v) { return dm4(v.y, v.y, v.y, v.y); }
+VD_CG_INL D4 dyyyz3(D3 v) { return dm4(v.y, v.y, v.y, v.z); }
+VD_CG_INL D4 dyyzx3(D3 v) { return dm4(v.y, v.y, v.z, v.x); }
+VD_CG_INL D4 dyyzy3(D3 v) { return dm4(v.y, v.y, v.z, v.y); }
+VD_CG_INL D4 dyyzz3(D3 v) { return dm4(v.y, v.y, v.z, v.z); }
+VD_CG_INL D4 dyzxx3(D3 v) { return dm4(v.y, v.z, v.x, v.x); }
+VD_CG_INL D4 dyzxy3(D3 v) { return dm4(v.y, v.z, v.x, v.y); }
+VD_CG_INL D4 dyzxz3(D3 v) { return dm4(v.y, v.z, v.x, v.z); }
+VD_CG_INL D4 dyzyx3(D3 v) { return dm4(v.y, v.z, v.y, v.x); }
+VD_CG_INL D4 dyzyy3(D3 v) { return dm4(v.y, v.z, v.y, v.y); }
+VD_CG_INL D4 dyzyz3(D3 v) { return dm4(v.y, v.z, v.y, v.z); }
+VD_CG_INL D4 dyzzx3(D3 v) { return dm4(v.y, v.z, v.z, v.x); }
+VD_CG_INL D4 dyzzy3(D3 v) { return dm4(v.y, v.z, v.z, v.y); }
+VD_CG_INL D4 dyzzz3(D3 v) { return dm4(v.y, v.z, v.z, v.z); }
+VD_CG_INL D4 dzxxx3(D3 v) { return dm4(v.z, v.x, v.x, v.x); }
+VD_CG_INL D4 dzxxy3(D3 v) { return dm4(v.z, v.x, v.x, v.y); }
+VD_CG_INL D4 dzxxz3(D3 v) { return dm4(v.z, v.x, v.x, v.z); }
+VD_CG_INL D4 dzxyx3(D3 v) { return dm4(v.z, v.x, v.y, v.x); }
+VD_CG_INL D4 dzxyy3(D3 v) { return dm4(v.z, v.x, v.y, v.y); }
+VD_CG_INL D4 dzxyz3(D3 v) { return dm4(v.z, v.x, v.y, v.z); }
+VD_CG_INL D4 dzxzx3(D3 v) { return dm4(v.z, v.x, v.z, v.x); }
+VD_CG_INL D4 dzxzy3(D3 v) { return dm4(v.z, v.x, v.z, v.y); }
+VD_CG_INL D4 dzxzz3(D3 v) { return dm4(v.z, v.x, v.z, v.z); }
+VD_CG_INL D4 dzyxx3(D3 v) { return dm4(v.z, v.y, v.x, v.x); }
+VD_CG_INL D4 dzyxy3(D3 v) { return dm4(v.z, v.y, v.x, v.y); }
+VD_CG_INL D4 dzyxz3(D3 v) { return dm4(v.z, v.y, v.x, v.z); }
+VD_CG_INL D4 dzyyx3(D3 v) { return dm4(v.z, v.y, v.y, v.x); }
+VD_CG_INL D4 dzyyy3(D3 v) { return dm4(v.z, v.y, v.y, v.y); }
+VD_CG_INL D4 dzyyz3(D3 v) { return dm4(v.z, v.y, v.y, v.z); }
+VD_CG_INL D4 dzyzx3(D3 v) { return dm4(v.z, v.y, v.z, v.x); }
+VD_CG_INL D4 dzyzy3(D3 v) { return dm4(v.z, v.y, v.z, v.y); }
+VD_CG_INL D4 dzyzz3(D3 v) { return dm4(v.z, v.y, v.z, v.z); }
+VD_CG_INL D4 dzzxx3(D3 v) { return dm4(v.z, v.z, v.x, v.x); }
+VD_CG_INL D4 dzzxy3(D3 v) { return dm4(v.z, v.z, v.x, v.y); }
+VD_CG_INL D4 dzzxz3(D3 v) { return dm4(v.z, v.z, v.x, v.z); }
+VD_CG_INL D4 dzzyx3(D3 v) { return dm4(v.z, v.z, v.y, v.x); }
+VD_CG_INL D4 dzzyy3(D3 v) { return dm4(v.z, v.z, v.y, v.y); }
+VD_CG_INL D4 dzzyz3(D3 v) { return dm4(v.z, v.z, v.y, v.z); }
+VD_CG_INL D4 dzzzx3(D3 v) { return dm4(v.z, v.z, v.z, v.x); }
+VD_CG_INL D4 dzzzy3(D3 v) { return dm4(v.z, v.z, v.z, v.y); }
+VD_CG_INL D4 dzzzz3(D3 v) { return dm4(v.z, v.z, v.z, v.z); }
+VD_CG_INL D2 dxx4(D4 v) { return dm2(v.x, v.x); }
+VD_CG_INL D2 dxy4(D4 v) { return dm2(v.x, v.y); }
+VD_CG_INL D2 dxz4(D4 v) { return dm2(v.x, v.z); }
+VD_CG_INL D2 dxw4(D4 v) { return dm2(v.x, v.w); }
+VD_CG_INL D2 dyx4(D4 v) { return dm2(v.y, v.x); }
+VD_CG_INL D2 dyy4(D4 v) { return dm2(v.y, v.y); }
+VD_CG_INL D2 dyz4(D4 v) { return dm2(v.y, v.z); }
+VD_CG_INL D2 dyw4(D4 v) { return dm2(v.y, v.w); }
+VD_CG_INL D2 dzx4(D4 v) { return dm2(v.z, v.x); }
+VD_CG_INL D2 dzy4(D4 v) { return dm2(v.z, v.y); }
+VD_CG_INL D2 dzz4(D4 v) { return dm2(v.z, v.z); }
+VD_CG_INL D2 dzw4(D4 v) { return dm2(v.z, v.w); }
+VD_CG_INL D2 dwx4(D4 v) { return dm2(v.w, v.x); }
+VD_CG_INL D2 dwy4(D4 v) { return dm2(v.w, v.y); }
+VD_CG_INL D2 dwz4(D4 v) { return dm2(v.w, v.z); }
+VD_CG_INL D2 dww4(D4 v) { return dm2(v.w, v.w); }
+VD_CG_INL D3 dxxx4(D4 v) { return dm3(v.x, v.x, v.x); }
+VD_CG_INL D3 dxxy4(D4 v) { return dm3(v.x, v.x, v.y); }
+VD_CG_INL D3 dxxz4(D4 v) { return dm3(v.x, v.x, v.z); }
+VD_CG_INL D3 dxxw4(D4 v) { return dm3(v.x, v.x, v.w); }
+VD_CG_INL D3 dxyx4(D4 v) { return dm3(v.x, v.y, v.x); }
+VD_CG_INL D3 dxyy4(D4 v) { return dm3(v.x, v.y, v.y); }
+VD_CG_INL D3 dxyz4(D4 v) { return dm3(v.x, v.y, v.z); }
+VD_CG_INL D3 dxyw4(D4 v) { return dm3(v.x, v.y, v.w); }
+VD_CG_INL D3 dxzx4(D4 v) { return dm3(v.x, v.z, v.x); }
+VD_CG_INL D3 dxzy4(D4 v) { return dm3(v.x, v.z, v.y); }
+VD_CG_INL D3 dxzz4(D4 v) { return dm3(v.x, v.z, v.z); }
+VD_CG_INL D3 dxzw4(D4 v) { return dm3(v.x, v.z, v.w); }
+VD_CG_INL D3 dxwx4(D4 v) { return dm3(v.x, v.w, v.x); }
+VD_CG_INL D3 dxwy4(D4 v) { return dm3(v.x, v.w, v.y); }
+VD_CG_INL D3 dxwz4(D4 v) { return dm3(v.x, v.w, v.z); }
+VD_CG_INL D3 dxww4(D4 v) { return dm3(v.x, v.w, v.w); }
+VD_CG_INL D3 dyxx4(D4 v) { return dm3(v.y, v.x, v.x); }
+VD_CG_INL D3 dyxy4(D4 v) { return dm3(v.y, v.x, v.y); }
+VD_CG_INL D3 dyxz4(D4 v) { return dm3(v.y, v.x, v.z); }
+VD_CG_INL D3 dyxw4(D4 v) { return dm3(v.y, v.x, v.w); }
+VD_CG_INL D3 dyyx4(D4 v) { return dm3(v.y, v.y, v.x); }
+VD_CG_INL D3 dyyy4(D4 v) { return dm3(v.y, v.y, v.y); }
+VD_CG_INL D3 dyyz4(D4 v) { return dm3(v.y, v.y, v.z); }
+VD_CG_INL D3 dyyw4(D4 v) { return dm3(v.y, v.y, v.w); }
+VD_CG_INL D3 dyzx4(D4 v) { return dm3(v.y, v.z, v.x); }
+VD_CG_INL D3 dyzy4(D4 v) { return dm3(v.y, v.z, v.y); }
+VD_CG_INL D3 dyzz4(D4 v) { return dm3(v.y, v.z, v.z); }
+VD_CG_INL D3 dyzw4(D4 v) { return dm3(v.y, v.z, v.w); }
+VD_CG_INL D3 dywx4(D4 v) { return dm3(v.y, v.w, v.x); }
+VD_CG_INL D3 dywy4(D4 v) { return dm3(v.y, v.w, v.y); }
+VD_CG_INL D3 dywz4(D4 v) { return dm3(v.y, v.w, v.z); }
+VD_CG_INL D3 dyww4(D4 v) { return dm3(v.y, v.w, v.w); }
+VD_CG_INL D3 dzxx4(D4 v) { return dm3(v.z, v.x, v.x); }
+VD_CG_INL D3 dzxy4(D4 v) { return dm3(v.z, v.x, v.y); }
+VD_CG_INL D3 dzxz4(D4 v) { return dm3(v.z, v.x, v.z); }
+VD_CG_INL D3 dzxw4(D4 v) { return dm3(v.z, v.x, v.w); }
+VD_CG_INL D3 dzyx4(D4 v) { return dm3(v.z, v.y, v.x); }
+VD_CG_INL D3 dzyy4(D4 v) { return dm3(v.z, v.y, v.y); }
+VD_CG_INL D3 dzyz4(D4 v) { return dm3(v.z, v.y, v.z); }
+VD_CG_INL D3 dzyw4(D4 v) { return dm3(v.z, v.y, v.w); }
+VD_CG_INL D3 dzzx4(D4 v) { return dm3(v.z, v.z, v.x); }
+VD_CG_INL D3 dzzy4(D4 v) { return dm3(v.z, v.z, v.y); }
+VD_CG_INL D3 dzzz4(D4 v) { return dm3(v.z, v.z, v.z); }
+VD_CG_INL D3 dzzw4(D4 v) { return dm3(v.z, v.z, v.w); }
+VD_CG_INL D3 dzwx4(D4 v) { return dm3(v.z, v.w, v.x); }
+VD_CG_INL D3 dzwy4(D4 v) { return dm3(v.z, v.w, v.y); }
+VD_CG_INL D3 dzwz4(D4 v) { return dm3(v.z, v.w, v.z); }
+VD_CG_INL D3 dzww4(D4 v) { return dm3(v.z, v.w, v.w); }
+VD_CG_INL D3 dwxx4(D4 v) { return dm3(v.w, v.x, v.x); }
+VD_CG_INL D3 dwxy4(D4 v) { return dm3(v.w, v.x, v.y); }
+VD_CG_INL D3 dwxz4(D4 v) { return dm3(v.w, v.x, v.z); }
+VD_CG_INL D3 dwxw4(D4 v) { return dm3(v.w, v.x, v.w); }
+VD_CG_INL D3 dwyx4(D4 v) { return dm3(v.w, v.y, v.x); }
+VD_CG_INL D3 dwyy4(D4 v) { return dm3(v.w, v.y, v.y); }
+VD_CG_INL D3 dwyz4(D4 v) { return dm3(v.w, v.y, v.z); }
+VD_CG_INL D3 dwyw4(D4 v) { return dm3(v.w, v.y, v.w); }
+VD_CG_INL D3 dwzx4(D4 v) { return dm3(v.w, v.z, v.x); }
+VD_CG_INL D3 dwzy4(D4 v) { return dm3(v.w, v.z, v.y); }
+VD_CG_INL D3 dwzz4(D4 v) { return dm3(v.w, v.z, v.z); }
+VD_CG_INL D3 dwzw4(D4 v) { return dm3(v.w, v.z, v.w); }
+VD_CG_INL D3 dwwx4(D4 v) { return dm3(v.w, v.w, v.x); }
+VD_CG_INL D3 dwwy4(D4 v) { return dm3(v.w, v.w, v.y); }
+VD_CG_INL D3 dwwz4(D4 v) { return dm3(v.w, v.w, v.z); }
+VD_CG_INL D3 dwww4(D4 v) { return dm3(v.w, v.w, v.w); }
+VD_CG_INL D4 dxxxx4(D4 v) { return dm4(v.x, v.x, v.x, v.x); }
+VD_CG_INL D4 dxxxy4(D4 v) { return dm4(v.x, v.x, v.x, v.y); }
+VD_CG_INL D4 dxxxz4(D4 v) { return dm4(v.x, v.x, v.x, v.z); }
+VD_CG_INL D4 dxxxw4(D4 v) { return dm4(v.x, v.x, v.x, v.w); }
+VD_CG_INL D4 dxxyx4(D4 v) { return dm4(v.x, v.x, v.y, v.x); }
+VD_CG_INL D4 dxxyy4(D4 v) { return dm4(v.x, v.x, v.y, v.y); }
+VD_CG_INL D4 dxxyz4(D4 v) { return dm4(v.x, v.x, v.y, v.z); }
+VD_CG_INL D4 dxxyw4(D4 v) { return dm4(v.x, v.x, v.y, v.w); }
+VD_CG_INL D4 dxxzx4(D4 v) { return dm4(v.x, v.x, v.z, v.x); }
+VD_CG_INL D4 dxxzy4(D4 v) { return dm4(v.x, v.x, v.z, v.y); }
+VD_CG_INL D4 dxxzz4(D4 v) { return dm4(v.x, v.x, v.z, v.z); }
+VD_CG_INL D4 dxxzw4(D4 v) { return dm4(v.x, v.x, v.z, v.w); }
+VD_CG_INL D4 dxxwx4(D4 v) { return dm4(v.x, v.x, v.w, v.x); }
+VD_CG_INL D4 dxxwy4(D4 v) { return dm4(v.x, v.x, v.w, v.y); }
+VD_CG_INL D4 dxxwz4(D4 v) { return dm4(v.x, v.x, v.w, v.z); }
+VD_CG_INL D4 dxxww4(D4 v) { return dm4(v.x, v.x, v.w, v.w); }
+VD_CG_INL D4 dxyxx4(D4 v) { return dm4(v.x, v.y, v.x, v.x); }
+VD_CG_INL D4 dxyxy4(D4 v) { return dm4(v.x, v.y, v.x, v.y); }
+VD_CG_INL D4 dxyxz4(D4 v) { return dm4(v.x, v.y, v.x, v.z); }
+VD_CG_INL D4 dxyxw4(D4 v) { return dm4(v.x, v.y, v.x, v.w); }
+VD_CG_INL D4 dxyyx4(D4 v) { return dm4(v.x, v.y, v.y, v.x); }
+VD_CG_INL D4 dxyyy4(D4 v) { return dm4(v.x, v.y, v.y, v.y); }
+VD_CG_INL D4 dxyyz4(D4 v) { return dm4(v.x, v.y, v.y, v.z); }
+VD_CG_INL D4 dxyyw4(D4 v) { return dm4(v.x, v.y, v.y, v.w); }
+VD_CG_INL D4 dxyzx4(D4 v) { return dm4(v.x, v.y, v.z, v.x); }
+VD_CG_INL D4 dxyzy4(D4 v) { return dm4(v.x, v.y, v.z, v.y); }
+VD_CG_INL D4 dxyzz4(D4 v) { return dm4(v.x, v.y, v.z, v.z); }
+VD_CG_INL D4 dxyzw4(D4 v) { return dm4(v.x, v.y, v.z, v.w); }
+VD_CG_INL D4 dxywx4(D4 v) { return dm4(v.x, v.y, v.w, v.x); }
+VD_CG_INL D4 dxywy4(D4 v) { return dm4(v.x, v.y, v.w, v.y); }
+VD_CG_INL D4 dxywz4(D4 v) { return dm4(v.x, v.y, v.w, v.z); }
+VD_CG_INL D4 dxyww4(D4 v) { return dm4(v.x, v.y, v.w, v.w); }
+VD_CG_INL D4 dxzxx4(D4 v) { return dm4(v.x, v.z, v.x, v.x); }
+VD_CG_INL D4 dxzxy4(D4 v) { return dm4(v.x, v.z, v.x, v.y); }
+VD_CG_INL D4 dxzxz4(D4 v) { return dm4(v.x, v.z, v.x, v.z); }
+VD_CG_INL D4 dxzxw4(D4 v) { return dm4(v.x, v.z, v.x, v.w); }
+VD_CG_INL D4 dxzyx4(D4 v) { return dm4(v.x, v.z, v.y, v.x); }
+VD_CG_INL D4 dxzyy4(D4 v) { return dm4(v.x, v.z, v.y, v.y); }
+VD_CG_INL D4 dxzyz4(D4 v) { return dm4(v.x, v.z, v.y, v.z); }
+VD_CG_INL D4 dxzyw4(D4 v) { return dm4(v.x, v.z, v.y, v.w); }
+VD_CG_INL D4 dxzzx4(D4 v) { return dm4(v.x, v.z, v.z, v.x); }
+VD_CG_INL D4 dxzzy4(D4 v) { return dm4(v.x, v.z, v.z, v.y); }
+VD_CG_INL D4 dxzzz4(D4 v) { return dm4(v.x, v.z, v.z, v.z); }
+VD_CG_INL D4 dxzzw4(D4 v) { return dm4(v.x, v.z, v.z, v.w); }
+VD_CG_INL D4 dxzwx4(D4 v) { return dm4(v.x, v.z, v.w, v.x); }
+VD_CG_INL D4 dxzwy4(D4 v) { return dm4(v.x, v.z, v.w, v.y); }
+VD_CG_INL D4 dxzwz4(D4 v) { return dm4(v.x, v.z, v.w, v.z); }
+VD_CG_INL D4 dxzww4(D4 v) { return dm4(v.x, v.z, v.w, v.w); }
+VD_CG_INL D4 dxwxx4(D4 v) { return dm4(v.x, v.w, v.x, v.x); }
+VD_CG_INL D4 dxwxy4(D4 v) { return dm4(v.x, v.w, v.x, v.y); }
+VD_CG_INL D4 dxwxz4(D4 v) { return dm4(v.x, v.w, v.x, v.z); }
+VD_CG_INL D4 dxwxw4(D4 v) { return dm4(v.x, v.w, v.x, v.w); }
+VD_CG_INL D4 dxwyx4(D4 v) { return dm4(v.x, v.w, v.y, v.x); }
+VD_CG_INL D4 dxwyy4(D4 v) { return dm4(v.x, v.w, v.y, v.y); }
+VD_CG_INL D4 dxwyz4(D4 v) { return dm4(v.x, v.w, v.y, v.z); }
+VD_CG_INL D4 dxwyw4(D4 v) { return dm4(v.x, v.w, v.y, v.w); }
+VD_CG_INL D4 dxwzx4(D4 v) { return dm4(v.x, v.w, v.z, v.x); }
+VD_CG_INL D4 dxwzy4(D4 v) { return dm4(v.x, v.w, v.z, v.y); }
+VD_CG_INL D4 dxwzz4(D4 v) { return dm4(v.x, v.w, v.z, v.z); }
+VD_CG_INL D4 dxwzw4(D4 v) { return dm4(v.x, v.w, v.z, v.w); }
+VD_CG_INL D4 dxwwx4(D4 v) { return dm4(v.x, v.w, v.w, v.x); }
+VD_CG_INL D4 dxwwy4(D4 v) { return dm4(v.x, v.w, v.w, v.y); }
+VD_CG_INL D4 dxwwz4(D4 v) { return dm4(v.x, v.w, v.w, v.z); }
+VD_CG_INL D4 dxwww4(D4 v) { return dm4(v.x, v.w, v.w, v.w); }
+VD_CG_INL D4 dyxxx4(D4 v) { return dm4(v.y, v.x, v.x, v.x); }
+VD_CG_INL D4 dyxxy4(D4 v) { return dm4(v.y, v.x, v.x, v.y); }
+VD_CG_INL D4 dyxxz4(D4 v) { return dm4(v.y, v.x, v.x, v.z); }
+VD_CG_INL D4 dyxxw4(D4 v) { return dm4(v.y, v.x, v.x, v.w); }
+VD_CG_INL D4 dyxyx4(D4 v) { return dm4(v.y, v.x, v.y, v.x); }
+VD_CG_INL D4 dyxyy4(D4 v) { return dm4(v.y, v.x, v.y, v.y); }
+VD_CG_INL D4 dyxyz4(D4 v) { return dm4(v.y, v.x, v.y, v.z); }
+VD_CG_INL D4 dyxyw4(D4 v) { return dm4(v.y, v.x, v.y, v.w); }
+VD_CG_INL D4 dyxzx4(D4 v) { return dm4(v.y, v.x, v.z, v.x); }
+VD_CG_INL D4 dyxzy4(D4 v) { return dm4(v.y, v.x, v.z, v.y); }
+VD_CG_INL D4 dyxzz4(D4 v) { return dm4(v.y, v.x, v.z, v.z); }
+VD_CG_INL D4 dyxzw4(D4 v) { return dm4(v.y, v.x, v.z, v.w); }
+VD_CG_INL D4 dyxwx4(D4 v) { return dm4(v.y, v.x, v.w, v.x); }
+VD_CG_INL D4 dyxwy4(D4 v) { return dm4(v.y, v.x, v.w, v.y); }
+VD_CG_INL D4 dyxwz4(D4 v) { return dm4(v.y, v.x, v.w, v.z); }
+VD_CG_INL D4 dyxww4(D4 v) { return dm4(v.y, v.x, v.w, v.w); }
+VD_CG_INL D4 dyyxx4(D4 v) { return dm4(v.y, v.y, v.x, v.x); }
+VD_CG_INL D4 dyyxy4(D4 v) { return dm4(v.y, v.y, v.x, v.y); }
+VD_CG_INL D4 dyyxz4(D4 v) { return dm4(v.y, v.y, v.x, v.z); }
+VD_CG_INL D4 dyyxw4(D4 v) { return dm4(v.y, v.y, v.x, v.w); }
+VD_CG_INL D4 dyyyx4(D4 v) { return dm4(v.y, v.y, v.y, v.x); }
+VD_CG_INL D4 dyyyy4(D4 v) { return dm4(v.y, v.y, v.y, v.y); }
+VD_CG_INL D4 dyyyz4(D4 v) { return dm4(v.y, v.y, v.y, v.z); }
+VD_CG_INL D4 dyyyw4(D4 v) { return dm4(v.y, v.y, v.y, v.w); }
+VD_CG_INL D4 dyyzx4(D4 v) { return dm4(v.y, v.y, v.z, v.x); }
+VD_CG_INL D4 dyyzy4(D4 v) { return dm4(v.y, v.y, v.z, v.y); }
+VD_CG_INL D4 dyyzz4(D4 v) { return dm4(v.y, v.y, v.z, v.z); }
+VD_CG_INL D4 dyyzw4(D4 v) { return dm4(v.y, v.y, v.z, v.w); }
+VD_CG_INL D4 dyywx4(D4 v) { return dm4(v.y, v.y, v.w, v.x); }
+VD_CG_INL D4 dyywy4(D4 v) { return dm4(v.y, v.y, v.w, v.y); }
+VD_CG_INL D4 dyywz4(D4 v) { return dm4(v.y, v.y, v.w, v.z); }
+VD_CG_INL D4 dyyww4(D4 v) { return dm4(v.y, v.y, v.w, v.w); }
+VD_CG_INL D4 dyzxx4(D4 v) { return dm4(v.y, v.z, v.x, v.x); }
+VD_CG_INL D4 dyzxy4(D4 v) { return dm4(v.y, v.z, v.x, v.y); }
+VD_CG_INL D4 dyzxz4(D4 v) { return dm4(v.y, v.z, v.x, v.z); }
+VD_CG_INL D4 dyzxw4(D4 v) { return dm4(v.y, v.z, v.x, v.w); }
+VD_CG_INL D4 dyzyx4(D4 v) { return dm4(v.y, v.z, v.y, v.x); }
+VD_CG_INL D4 dyzyy4(D4 v) { return dm4(v.y, v.z, v.y, v.y); }
+VD_CG_INL D4 dyzyz4(D4 v) { return dm4(v.y, v.z, v.y, v.z); }
+VD_CG_INL D4 dyzyw4(D4 v) { return dm4(v.y, v.z, v.y, v.w); }
+VD_CG_INL D4 dyzzx4(D4 v) { return dm4(v.y, v.z, v.z, v.x); }
+VD_CG_INL D4 dyzzy4(D4 v) { return dm4(v.y, v.z, v.z, v.y); }
+VD_CG_INL D4 dyzzz4(D4 v) { return dm4(v.y, v.z, v.z, v.z); }
+VD_CG_INL D4 dyzzw4(D4 v) { return dm4(v.y, v.z, v.z, v.w); }
+VD_CG_INL D4 dyzwx4(D4 v) { return dm4(v.y, v.z, v.w, v.x); }
+VD_CG_INL D4 dyzwy4(D4 v) { return dm4(v.y, v.z, v.w, v.y); }
+VD_CG_INL D4 dyzwz4(D4 v) { return dm4(v.y, v.z, v.w, v.z); }
+VD_CG_INL D4 dyzww4(D4 v) { return dm4(v.y, v.z, v.w, v.w); }
+VD_CG_INL D4 dywxx4(D4 v) { return dm4(v.y, v.w, v.x, v.x); }
+VD_CG_INL D4 dywxy4(D4 v) { return dm4(v.y, v.w, v.x, v.y); }
+VD_CG_INL D4 dywxz4(D4 v) { return dm4(v.y, v.w, v.x, v.z); }
+VD_CG_INL D4 dywxw4(D4 v) { return dm4(v.y, v.w, v.x, v.w); }
+VD_CG_INL D4 dywyx4(D4 v) { return dm4(v.y, v.w, v.y, v.x); }
+VD_CG_INL D4 dywyy4(D4 v) { return dm4(v.y, v.w, v.y, v.y); }
+VD_CG_INL D4 dywyz4(D4 v) { return dm4(v.y, v.w, v.y, v.z); }
+VD_CG_INL D4 dywyw4(D4 v) { return dm4(v.y, v.w, v.y, v.w); }
+VD_CG_INL D4 dywzx4(D4 v) { return dm4(v.y, v.w, v.z, v.x); }
+VD_CG_INL D4 dywzy4(D4 v) { return dm4(v.y, v.w, v.z, v.y); }
+VD_CG_INL D4 dywzz4(D4 v) { return dm4(v.y, v.w, v.z, v.z); }
+VD_CG_INL D4 dywzw4(D4 v) { return dm4(v.y, v.w, v.z, v.w); }
+VD_CG_INL D4 dywwx4(D4 v) { return dm4(v.y, v.w, v.w, v.x); }
+VD_CG_INL D4 dywwy4(D4 v) { return dm4(v.y, v.w, v.w, v.y); }
+VD_CG_INL D4 dywwz4(D4 v) { return dm4(v.y, v.w, v.w, v.z); }
+VD_CG_INL D4 dywww4(D4 v) { return dm4(v.y, v.w, v.w, v.w); }
+VD_CG_INL D4 dzxxx4(D4 v) { return dm4(v.z, v.x, v.x, v.x); }
+VD_CG_INL D4 dzxxy4(D4 v) { return dm4(v.z, v.x, v.x, v.y); }
+VD_CG_INL D4 dzxxz4(D4 v) { return dm4(v.z, v.x, v.x, v.z); }
+VD_CG_INL D4 dzxxw4(D4 v) { return dm4(v.z, v.x, v.x, v.w); }
+VD_CG_INL D4 dzxyx4(D4 v) { return dm4(v.z, v.x, v.y, v.x); }
+VD_CG_INL D4 dzxyy4(D4 v) { return dm4(v.z, v.x, v.y, v.y); }
+VD_CG_INL D4 dzxyz4(D4 v) { return dm4(v.z, v.x, v.y, v.z); }
+VD_CG_INL D4 dzxyw4(D4 v) { return dm4(v.z, v.x, v.y, v.w); }
+VD_CG_INL D4 dzxzx4(D4 v) { return dm4(v.z, v.x, v.z, v.x); }
+VD_CG_INL D4 dzxzy4(D4 v) { return dm4(v.z, v.x, v.z, v.y); }
+VD_CG_INL D4 dzxzz4(D4 v) { return dm4(v.z, v.x, v.z, v.z); }
+VD_CG_INL D4 dzxzw4(D4 v) { return dm4(v.z, v.x, v.z, v.w); }
+VD_CG_INL D4 dzxwx4(D4 v) { return dm4(v.z, v.x, v.w, v.x); }
+VD_CG_INL D4 dzxwy4(D4 v) { return dm4(v.z, v.x, v.w, v.y); }
+VD_CG_INL D4 dzxwz4(D4 v) { return dm4(v.z, v.x, v.w, v.z); }
+VD_CG_INL D4 dzxww4(D4 v) { return dm4(v.z, v.x, v.w, v.w); }
+VD_CG_INL D4 dzyxx4(D4 v) { return dm4(v.z, v.y, v.x, v.x); }
+VD_CG_INL D4 dzyxy4(D4 v) { return dm4(v.z, v.y, v.x, v.y); }
+VD_CG_INL D4 dzyxz4(D4 v) { return dm4(v.z, v.y, v.x, v.z); }
+VD_CG_INL D4 dzyxw4(D4 v) { return dm4(v.z, v.y, v.x, v.w); }
+VD_CG_INL D4 dzyyx4(D4 v) { return dm4(v.z, v.y, v.y, v.x); }
+VD_CG_INL D4 dzyyy4(D4 v) { return dm4(v.z, v.y, v.y, v.y); }
+VD_CG_INL D4 dzyyz4(D4 v) { return dm4(v.z, v.y, v.y, v.z); }
+VD_CG_INL D4 dzyyw4(D4 v) { return dm4(v.z, v.y, v.y, v.w); }
+VD_CG_INL D4 dzyzx4(D4 v) { return dm4(v.z, v.y, v.z, v.x); }
+VD_CG_INL D4 dzyzy4(D4 v) { return dm4(v.z, v.y, v.z, v.y); }
+VD_CG_INL D4 dzyzz4(D4 v) { return dm4(v.z, v.y, v.z, v.z); }
+VD_CG_INL D4 dzyzw4(D4 v) { return dm4(v.z, v.y, v.z, v.w); }
+VD_CG_INL D4 dzywx4(D4 v) { return dm4(v.z, v.y, v.w, v.x); }
+VD_CG_INL D4 dzywy4(D4 v) { return dm4(v.z, v.y, v.w, v.y); }
+VD_CG_INL D4 dzywz4(D4 v) { return dm4(v.z, v.y, v.w, v.z); }
+VD_CG_INL D4 dzyww4(D4 v) { return dm4(v.z, v.y, v.w, v.w); }
+VD_CG_INL D4 dzzxx4(D4 v) { return dm4(v.z, v.z, v.x, v.x); }
+VD_CG_INL D4 dzzxy4(D4 v) { return dm4(v.z, v.z, v.x, v.y); }
+VD_CG_INL D4 dzzxz4(D4 v) { return dm4(v.z, v.z, v.x, v.z); }
+VD_CG_INL D4 dzzxw4(D4 v) { return dm4(v.z, v.z, v.x, v.w); }
+VD_CG_INL D4 dzzyx4(D4 v) { return dm4(v.z, v.z, v.y, v.x); }
+VD_CG_INL D4 dzzyy4(D4 v) { return dm4(v.z, v.z, v.y, v.y); }
+VD_CG_INL D4 dzzyz4(D4 v) { return dm4(v.z, v.z, v.y, v.z); }
+VD_CG_INL D4 dzzyw4(D4 v) { return dm4(v.z, v.z, v.y, v.w); }
+VD_CG_INL D4 dzzzx4(D4 v) { return dm4(v.z, v.z, v.z, v.x); }
+VD_CG_INL D4 dzzzy4(D4 v) { return dm4(v.z, v.z, v.z, v.y); }
+VD_CG_INL D4 dzzzz4(D4 v) { return dm4(v.z, v.z, v.z, v.z); }
+VD_CG_INL D4 dzzzw4(D4 v) { return dm4(v.z, v.z, v.z, v.w); }
+VD_CG_INL D4 dzzwx4(D4 v) { return dm4(v.z, v.z, v.w, v.x); }
+VD_CG_INL D4 dzzwy4(D4 v) { return dm4(v.z, v.z, v.w, v.y); }
+VD_CG_INL D4 dzzwz4(D4 v) { return dm4(v.z, v.z, v.w, v.z); }
+VD_CG_INL D4 dzzww4(D4 v) { return dm4(v.z, v.z, v.w, v.w); }
+VD_CG_INL D4 dzwxx4(D4 v) { return dm4(v.z, v.w, v.x, v.x); }
+VD_CG_INL D4 dzwxy4(D4 v) { return dm4(v.z, v.w, v.x, v.y); }
+VD_CG_INL D4 dzwxz4(D4 v) { return dm4(v.z, v.w, v.x, v.z); }
+VD_CG_INL D4 dzwxw4(D4 v) { return dm4(v.z, v.w, v.x, v.w); }
+VD_CG_INL D4 dzwyx4(D4 v) { return dm4(v.z, v.w, v.y, v.x); }
+VD_CG_INL D4 dzwyy4(D4 v) { return dm4(v.z, v.w, v.y, v.y); }
+VD_CG_INL D4 dzwyz4(D4 v) { return dm4(v.z, v.w, v.y, v.z); }
+VD_CG_INL D4 dzwyw4(D4 v) { return dm4(v.z, v.w, v.y, v.w); }
+VD_CG_INL D4 dzwzx4(D4 v) { return dm4(v.z, v.w, v.z, v.x); }
+VD_CG_INL D4 dzwzy4(D4 v) { return dm4(v.z, v.w, v.z, v.y); }
+VD_CG_INL D4 dzwzz4(D4 v) { return dm4(v.z, v.w, v.z, v.z); }
+VD_CG_INL D4 dzwzw4(D4 v) { return dm4(v.z, v.w, v.z, v.w); }
+VD_CG_INL D4 dzwwx4(D4 v) { return dm4(v.z, v.w, v.w, v.x); }
+VD_CG_INL D4 dzwwy4(D4 v) { return dm4(v.z, v.w, v.w, v.y); }
+VD_CG_INL D4 dzwwz4(D4 v) { return dm4(v.z, v.w, v.w, v.z); }
+VD_CG_INL D4 dzwww4(D4 v) { return dm4(v.z, v.w, v.w, v.w); }
+VD_CG_INL D4 dwxxx4(D4 v) { return dm4(v.w, v.x, v.x, v.x); }
+VD_CG_INL D4 dwxxy4(D4 v) { return dm4(v.w, v.x, v.x, v.y); }
+VD_CG_INL D4 dwxxz4(D4 v) { return dm4(v.w, v.x, v.x, v.z); }
+VD_CG_INL D4 dwxxw4(D4 v) { return dm4(v.w, v.x, v.x, v.w); }
+VD_CG_INL D4 dwxyx4(D4 v) { return dm4(v.w, v.x, v.y, v.x); }
+VD_CG_INL D4 dwxyy4(D4 v) { return dm4(v.w, v.x, v.y, v.y); }
+VD_CG_INL D4 dwxyz4(D4 v) { return dm4(v.w, v.x, v.y, v.z); }
+VD_CG_INL D4 dwxyw4(D4 v) { return dm4(v.w, v.x, v.y, v.w); }
+VD_CG_INL D4 dwxzx4(D4 v) { return dm4(v.w, v.x, v.z, v.x); }
+VD_CG_INL D4 dwxzy4(D4 v) { return dm4(v.w, v.x, v.z, v.y); }
+VD_CG_INL D4 dwxzz4(D4 v) { return dm4(v.w, v.x, v.z, v.z); }
+VD_CG_INL D4 dwxzw4(D4 v) { return dm4(v.w, v.x, v.z, v.w); }
+VD_CG_INL D4 dwxwx4(D4 v) { return dm4(v.w, v.x, v.w, v.x); }
+VD_CG_INL D4 dwxwy4(D4 v) { return dm4(v.w, v.x, v.w, v.y); }
+VD_CG_INL D4 dwxwz4(D4 v) { return dm4(v.w, v.x, v.w, v.z); }
+VD_CG_INL D4 dwxww4(D4 v) { return dm4(v.w, v.x, v.w, v.w); }
+VD_CG_INL D4 dwyxx4(D4 v) { return dm4(v.w, v.y, v.x, v.x); }
+VD_CG_INL D4 dwyxy4(D4 v) { return dm4(v.w, v.y, v.x, v.y); }
+VD_CG_INL D4 dwyxz4(D4 v) { return dm4(v.w, v.y, v.x, v.z); }
+VD_CG_INL D4 dwyxw4(D4 v) { return dm4(v.w, v.y, v.x, v.w); }
+VD_CG_INL D4 dwyyx4(D4 v) { return dm4(v.w, v.y, v.y, v.x); }
+VD_CG_INL D4 dwyyy4(D4 v) { return dm4(v.w, v.y, v.y, v.y); }
+VD_CG_INL D4 dwyyz4(D4 v) { return dm4(v.w, v.y, v.y, v.z); }
+VD_CG_INL D4 dwyyw4(D4 v) { return dm4(v.w, v.y, v.y, v.w); }
+VD_CG_INL D4 dwyzx4(D4 v) { return dm4(v.w, v.y, v.z, v.x); }
+VD_CG_INL D4 dwyzy4(D4 v) { return dm4(v.w, v.y, v.z, v.y); }
+VD_CG_INL D4 dwyzz4(D4 v) { return dm4(v.w, v.y, v.z, v.z); }
+VD_CG_INL D4 dwyzw4(D4 v) { return dm4(v.w, v.y, v.z, v.w); }
+VD_CG_INL D4 dwywx4(D4 v) { return dm4(v.w, v.y, v.w, v.x); }
+VD_CG_INL D4 dwywy4(D4 v) { return dm4(v.w, v.y, v.w, v.y); }
+VD_CG_INL D4 dwywz4(D4 v) { return dm4(v.w, v.y, v.w, v.z); }
+VD_CG_INL D4 dwyww4(D4 v) { return dm4(v.w, v.y, v.w, v.w); }
+VD_CG_INL D4 dwzxx4(D4 v) { return dm4(v.w, v.z, v.x, v.x); }
+VD_CG_INL D4 dwzxy4(D4 v) { return dm4(v.w, v.z, v.x, v.y); }
+VD_CG_INL D4 dwzxz4(D4 v) { return dm4(v.w, v.z, v.x, v.z); }
+VD_CG_INL D4 dwzxw4(D4 v) { return dm4(v.w, v.z, v.x, v.w); }
+VD_CG_INL D4 dwzyx4(D4 v) { return dm4(v.w, v.z, v.y, v.x); }
+VD_CG_INL D4 dwzyy4(D4 v) { return dm4(v.w, v.z, v.y, v.y); }
+VD_CG_INL D4 dwzyz4(D4 v) { return dm4(v.w, v.z, v.y, v.z); }
+VD_CG_INL D4 dwzyw4(D4 v) { return dm4(v.w, v.z, v.y, v.w); }
+VD_CG_INL D4 dwzzx4(D4 v) { return dm4(v.w, v.z, v.z, v.x); }
+VD_CG_INL D4 dwzzy4(D4 v) { return dm4(v.w, v.z, v.z, v.y); }
+VD_CG_INL D4 dwzzz4(D4 v) { return dm4(v.w, v.z, v.z, v.z); }
+VD_CG_INL D4 dwzzw4(D4 v) { return dm4(v.w, v.z, v.z, v.w); }
+VD_CG_INL D4 dwzwx4(D4 v) { return dm4(v.w, v.z, v.w, v.x); }
+VD_CG_INL D4 dwzwy4(D4 v) { return dm4(v.w, v.z, v.w, v.y); }
+VD_CG_INL D4 dwzwz4(D4 v) { return dm4(v.w, v.z, v.w, v.z); }
+VD_CG_INL D4 dwzww4(D4 v) { return dm4(v.w, v.z, v.w, v.w); }
+VD_CG_INL D4 dwwxx4(D4 v) { return dm4(v.w, v.w, v.x, v.x); }
+VD_CG_INL D4 dwwxy4(D4 v) { return dm4(v.w, v.w, v.x, v.y); }
+VD_CG_INL D4 dwwxz4(D4 v) { return dm4(v.w, v.w, v.x, v.z); }
+VD_CG_INL D4 dwwxw4(D4 v) { return dm4(v.w, v.w, v.x, v.w); }
+VD_CG_INL D4 dwwyx4(D4 v) { return dm4(v.w, v.w, v.y, v.x); }
+VD_CG_INL D4 dwwyy4(D4 v) { return dm4(v.w, v.w, v.y, v.y); }
+VD_CG_INL D4 dwwyz4(D4 v) { return dm4(v.w, v.w, v.y, v.z); }
+VD_CG_INL D4 dwwyw4(D4 v) { return dm4(v.w, v.w, v.y, v.w); }
+VD_CG_INL D4 dwwzx4(D4 v) { return dm4(v.w, v.w, v.z, v.x); }
+VD_CG_INL D4 dwwzy4(D4 v) { return dm4(v.w, v.w, v.z, v.y); }
+VD_CG_INL D4 dwwzz4(D4 v) { return dm4(v.w, v.w, v.z, v.z); }
+VD_CG_INL D4 dwwzw4(D4 v) { return dm4(v.w, v.w, v.z, v.w); }
+VD_CG_INL D4 dwwwx4(D4 v) { return dm4(v.w, v.w, v.w, v.x); }
+VD_CG_INL D4 dwwwy4(D4 v) { return dm4(v.w, v.w, v.w, v.y); }
+VD_CG_INL D4 dwwwz4(D4 v) { return dm4(v.w, v.w, v.w, v.z); }
+VD_CG_INL D4 dwwww4(D4 v) { return dm4(v.w, v.w, v.w, v.w); }
+VD_CG_INL S2 sxx2(S2 v) { return sm2(v.x, v.x); }
+VD_CG_INL S2 sxy2(S2 v) { return sm2(v.x, v.y); }
+VD_CG_INL S2 syx2(S2 v) { return sm2(v.y, v.x); }
+VD_CG_INL S2 syy2(S2 v) { return sm2(v.y, v.y); }
+VD_CG_INL S3 sxxx2(S2 v) { return sm3(v.x, v.x, v.x); }
+VD_CG_INL S3 sxxy2(S2 v) { return sm3(v.x, v.x, v.y); }
+VD_CG_INL S3 sxyx2(S2 v) { return sm3(v.x, v.y, v.x); }
+VD_CG_INL S3 sxyy2(S2 v) { return sm3(v.x, v.y, v.y); }
+VD_CG_INL S3 syxx2(S2 v) { return sm3(v.y, v.x, v.x); }
+VD_CG_INL S3 syxy2(S2 v) { return sm3(v.y, v.x, v.y); }
+VD_CG_INL S3 syyx2(S2 v) { return sm3(v.y, v.y, v.x); }
+VD_CG_INL S3 syyy2(S2 v) { return sm3(v.y, v.y, v.y); }
+VD_CG_INL S4 sxxxx2(S2 v) { return sm4(v.x, v.x, v.x, v.x); }
+VD_CG_INL S4 sxxxy2(S2 v) { return sm4(v.x, v.x, v.x, v.y); }
+VD_CG_INL S4 sxxyx2(S2 v) { return sm4(v.x, v.x, v.y, v.x); }
+VD_CG_INL S4 sxxyy2(S2 v) { return sm4(v.x, v.x, v.y, v.y); }
+VD_CG_INL S4 sxyxx2(S2 v) { return sm4(v.x, v.y, v.x, v.x); }
+VD_CG_INL S4 sxyxy2(S2 v) { return sm4(v.x, v.y, v.x, v.y); }
+VD_CG_INL S4 sxyyx2(S2 v) { return sm4(v.x, v.y, v.y, v.x); }
+VD_CG_INL S4 sxyyy2(S2 v) { return sm4(v.x, v.y, v.y, v.y); }
+VD_CG_INL S4 syxxx2(S2 v) { return sm4(v.y, v.x, v.x, v.x); }
+VD_CG_INL S4 syxxy2(S2 v) { return sm4(v.y, v.x, v.x, v.y); }
+VD_CG_INL S4 syxyx2(S2 v) { return sm4(v.y, v.x, v.y, v.x); }
+VD_CG_INL S4 syxyy2(S2 v) { return sm4(v.y, v.x, v.y, v.y); }
+VD_CG_INL S4 syyxx2(S2 v) { return sm4(v.y, v.y, v.x, v.x); }
+VD_CG_INL S4 syyxy2(S2 v) { return sm4(v.y, v.y, v.x, v.y); }
+VD_CG_INL S4 syyyx2(S2 v) { return sm4(v.y, v.y, v.y, v.x); }
+VD_CG_INL S4 syyyy2(S2 v) { return sm4(v.y, v.y, v.y, v.y); }
+VD_CG_INL S2 sxx3(S3 v) { return sm2(v.x, v.x); }
+VD_CG_INL S2 sxy3(S3 v) { return sm2(v.x, v.y); }
+VD_CG_INL S2 sxz3(S3 v) { return sm2(v.x, v.z); }
+VD_CG_INL S2 syx3(S3 v) { return sm2(v.y, v.x); }
+VD_CG_INL S2 syy3(S3 v) { return sm2(v.y, v.y); }
+VD_CG_INL S2 syz3(S3 v) { return sm2(v.y, v.z); }
+VD_CG_INL S2 szx3(S3 v) { return sm2(v.z, v.x); }
+VD_CG_INL S2 szy3(S3 v) { return sm2(v.z, v.y); }
+VD_CG_INL S2 szz3(S3 v) { return sm2(v.z, v.z); }
+VD_CG_INL S3 sxxx3(S3 v) { return sm3(v.x, v.x, v.x); }
+VD_CG_INL S3 sxxy3(S3 v) { return sm3(v.x, v.x, v.y); }
+VD_CG_INL S3 sxxz3(S3 v) { return sm3(v.x, v.x, v.z); }
+VD_CG_INL S3 sxyx3(S3 v) { return sm3(v.x, v.y, v.x); }
+VD_CG_INL S3 sxyy3(S3 v) { return sm3(v.x, v.y, v.y); }
+VD_CG_INL S3 sxyz3(S3 v) { return sm3(v.x, v.y, v.z); }
+VD_CG_INL S3 sxzx3(S3 v) { return sm3(v.x, v.z, v.x); }
+VD_CG_INL S3 sxzy3(S3 v) { return sm3(v.x, v.z, v.y); }
+VD_CG_INL S3 sxzz3(S3 v) { return sm3(v.x, v.z, v.z); }
+VD_CG_INL S3 syxx3(S3 v) { return sm3(v.y, v.x, v.x); }
+VD_CG_INL S3 syxy3(S3 v) { return sm3(v.y, v.x, v.y); }
+VD_CG_INL S3 syxz3(S3 v) { return sm3(v.y, v.x, v.z); }
+VD_CG_INL S3 syyx3(S3 v) { return sm3(v.y, v.y, v.x); }
+VD_CG_INL S3 syyy3(S3 v) { return sm3(v.y, v.y, v.y); }
+VD_CG_INL S3 syyz3(S3 v) { return sm3(v.y, v.y, v.z); }
+VD_CG_INL S3 syzx3(S3 v) { return sm3(v.y, v.z, v.x); }
+VD_CG_INL S3 syzy3(S3 v) { return sm3(v.y, v.z, v.y); }
+VD_CG_INL S3 syzz3(S3 v) { return sm3(v.y, v.z, v.z); }
+VD_CG_INL S3 szxx3(S3 v) { return sm3(v.z, v.x, v.x); }
+VD_CG_INL S3 szxy3(S3 v) { return sm3(v.z, v.x, v.y); }
+VD_CG_INL S3 szxz3(S3 v) { return sm3(v.z, v.x, v.z); }
+VD_CG_INL S3 szyx3(S3 v) { return sm3(v.z, v.y, v.x); }
+VD_CG_INL S3 szyy3(S3 v) { return sm3(v.z, v.y, v.y); }
+VD_CG_INL S3 szyz3(S3 v) { return sm3(v.z, v.y, v.z); }
+VD_CG_INL S3 szzx3(S3 v) { return sm3(v.z, v.z, v.x); }
+VD_CG_INL S3 szzy3(S3 v) { return sm3(v.z, v.z, v.y); }
+VD_CG_INL S3 szzz3(S3 v) { return sm3(v.z, v.z, v.z); }
+VD_CG_INL S4 sxxxx3(S3 v) { return sm4(v.x, v.x, v.x, v.x); }
+VD_CG_INL S4 sxxxy3(S3 v) { return sm4(v.x, v.x, v.x, v.y); }
+VD_CG_INL S4 sxxxz3(S3 v) { return sm4(v.x, v.x, v.x, v.z); }
+VD_CG_INL S4 sxxyx3(S3 v) { return sm4(v.x, v.x, v.y, v.x); }
+VD_CG_INL S4 sxxyy3(S3 v) { return sm4(v.x, v.x, v.y, v.y); }
+VD_CG_INL S4 sxxyz3(S3 v) { return sm4(v.x, v.x, v.y, v.z); }
+VD_CG_INL S4 sxxzx3(S3 v) { return sm4(v.x, v.x, v.z, v.x); }
+VD_CG_INL S4 sxxzy3(S3 v) { return sm4(v.x, v.x, v.z, v.y); }
+VD_CG_INL S4 sxxzz3(S3 v) { return sm4(v.x, v.x, v.z, v.z); }
+VD_CG_INL S4 sxyxx3(S3 v) { return sm4(v.x, v.y, v.x, v.x); }
+VD_CG_INL S4 sxyxy3(S3 v) { return sm4(v.x, v.y, v.x, v.y); }
+VD_CG_INL S4 sxyxz3(S3 v) { return sm4(v.x, v.y, v.x, v.z); }
+VD_CG_INL S4 sxyyx3(S3 v) { return sm4(v.x, v.y, v.y, v.x); }
+VD_CG_INL S4 sxyyy3(S3 v) { return sm4(v.x, v.y, v.y, v.y); }
+VD_CG_INL S4 sxyyz3(S3 v) { return sm4(v.x, v.y, v.y, v.z); }
+VD_CG_INL S4 sxyzx3(S3 v) { return sm4(v.x, v.y, v.z, v.x); }
+VD_CG_INL S4 sxyzy3(S3 v) { return sm4(v.x, v.y, v.z, v.y); }
+VD_CG_INL S4 sxyzz3(S3 v) { return sm4(v.x, v.y, v.z, v.z); }
+VD_CG_INL S4 sxzxx3(S3 v) { return sm4(v.x, v.z, v.x, v.x); }
+VD_CG_INL S4 sxzxy3(S3 v) { return sm4(v.x, v.z, v.x, v.y); }
+VD_CG_INL S4 sxzxz3(S3 v) { return sm4(v.x, v.z, v.x, v.z); }
+VD_CG_INL S4 sxzyx3(S3 v) { return sm4(v.x, v.z, v.y, v.x); }
+VD_CG_INL S4 sxzyy3(S3 v) { return sm4(v.x, v.z, v.y, v.y); }
+VD_CG_INL S4 sxzyz3(S3 v) { return sm4(v.x, v.z, v.y, v.z); }
+VD_CG_INL S4 sxzzx3(S3 v) { return sm4(v.x, v.z, v.z, v.x); }
+VD_CG_INL S4 sxzzy3(S3 v) { return sm4(v.x, v.z, v.z, v.y); }
+VD_CG_INL S4 sxzzz3(S3 v) { return sm4(v.x, v.z, v.z, v.z); }
+VD_CG_INL S4 syxxx3(S3 v) { return sm4(v.y, v.x, v.x, v.x); }
+VD_CG_INL S4 syxxy3(S3 v) { return sm4(v.y, v.x, v.x, v.y); }
+VD_CG_INL S4 syxxz3(S3 v) { return sm4(v.y, v.x, v.x, v.z); }
+VD_CG_INL S4 syxyx3(S3 v) { return sm4(v.y, v.x, v.y, v.x); }
+VD_CG_INL S4 syxyy3(S3 v) { return sm4(v.y, v.x, v.y, v.y); }
+VD_CG_INL S4 syxyz3(S3 v) { return sm4(v.y, v.x, v.y, v.z); }
+VD_CG_INL S4 syxzx3(S3 v) { return sm4(v.y, v.x, v.z, v.x); }
+VD_CG_INL S4 syxzy3(S3 v) { return sm4(v.y, v.x, v.z, v.y); }
+VD_CG_INL S4 syxzz3(S3 v) { return sm4(v.y, v.x, v.z, v.z); }
+VD_CG_INL S4 syyxx3(S3 v) { return sm4(v.y, v.y, v.x, v.x); }
+VD_CG_INL S4 syyxy3(S3 v) { return sm4(v.y, v.y, v.x, v.y); }
+VD_CG_INL S4 syyxz3(S3 v) { return sm4(v.y, v.y, v.x, v.z); }
+VD_CG_INL S4 syyyx3(S3 v) { return sm4(v.y, v.y, v.y, v.x); }
+VD_CG_INL S4 syyyy3(S3 v) { return sm4(v.y, v.y, v.y, v.y); }
+VD_CG_INL S4 syyyz3(S3 v) { return sm4(v.y, v.y, v.y, v.z); }
+VD_CG_INL S4 syyzx3(S3 v) { return sm4(v.y, v.y, v.z, v.x); }
+VD_CG_INL S4 syyzy3(S3 v) { return sm4(v.y, v.y, v.z, v.y); }
+VD_CG_INL S4 syyzz3(S3 v) { return sm4(v.y, v.y, v.z, v.z); }
+VD_CG_INL S4 syzxx3(S3 v) { return sm4(v.y, v.z, v.x, v.x); }
+VD_CG_INL S4 syzxy3(S3 v) { return sm4(v.y, v.z, v.x, v.y); }
+VD_CG_INL S4 syzxz3(S3 v) { return sm4(v.y, v.z, v.x, v.z); }
+VD_CG_INL S4 syzyx3(S3 v) { return sm4(v.y, v.z, v.y, v.x); }
+VD_CG_INL S4 syzyy3(S3 v) { return sm4(v.y, v.z, v.y, v.y); }
+VD_CG_INL S4 syzyz3(S3 v) { return sm4(v.y, v.z, v.y, v.z); }
+VD_CG_INL S4 syzzx3(S3 v) { return sm4(v.y, v.z, v.z, v.x); }
+VD_CG_INL S4 syzzy3(S3 v) { return sm4(v.y, v.z, v.z, v.y); }
+VD_CG_INL S4 syzzz3(S3 v) { return sm4(v.y, v.z, v.z, v.z); }
+VD_CG_INL S4 szxxx3(S3 v) { return sm4(v.z, v.x, v.x, v.x); }
+VD_CG_INL S4 szxxy3(S3 v) { return sm4(v.z, v.x, v.x, v.y); }
+VD_CG_INL S4 szxxz3(S3 v) { return sm4(v.z, v.x, v.x, v.z); }
+VD_CG_INL S4 szxyx3(S3 v) { return sm4(v.z, v.x, v.y, v.x); }
+VD_CG_INL S4 szxyy3(S3 v) { return sm4(v.z, v.x, v.y, v.y); }
+VD_CG_INL S4 szxyz3(S3 v) { return sm4(v.z, v.x, v.y, v.z); }
+VD_CG_INL S4 szxzx3(S3 v) { return sm4(v.z, v.x, v.z, v.x); }
+VD_CG_INL S4 szxzy3(S3 v) { return sm4(v.z, v.x, v.z, v.y); }
+VD_CG_INL S4 szxzz3(S3 v) { return sm4(v.z, v.x, v.z, v.z); }
+VD_CG_INL S4 szyxx3(S3 v) { return sm4(v.z, v.y, v.x, v.x); }
+VD_CG_INL S4 szyxy3(S3 v) { return sm4(v.z, v.y, v.x, v.y); }
+VD_CG_INL S4 szyxz3(S3 v) { return sm4(v.z, v.y, v.x, v.z); }
+VD_CG_INL S4 szyyx3(S3 v) { return sm4(v.z, v.y, v.y, v.x); }
+VD_CG_INL S4 szyyy3(S3 v) { return sm4(v.z, v.y, v.y, v.y); }
+VD_CG_INL S4 szyyz3(S3 v) { return sm4(v.z, v.y, v.y, v.z); }
+VD_CG_INL S4 szyzx3(S3 v) { return sm4(v.z, v.y, v.z, v.x); }
+VD_CG_INL S4 szyzy3(S3 v) { return sm4(v.z, v.y, v.z, v.y); }
+VD_CG_INL S4 szyzz3(S3 v) { return sm4(v.z, v.y, v.z, v.z); }
+VD_CG_INL S4 szzxx3(S3 v) { return sm4(v.z, v.z, v.x, v.x); }
+VD_CG_INL S4 szzxy3(S3 v) { return sm4(v.z, v.z, v.x, v.y); }
+VD_CG_INL S4 szzxz3(S3 v) { return sm4(v.z, v.z, v.x, v.z); }
+VD_CG_INL S4 szzyx3(S3 v) { return sm4(v.z, v.z, v.y, v.x); }
+VD_CG_INL S4 szzyy3(S3 v) { return sm4(v.z, v.z, v.y, v.y); }
+VD_CG_INL S4 szzyz3(S3 v) { return sm4(v.z, v.z, v.y, v.z); }
+VD_CG_INL S4 szzzx3(S3 v) { return sm4(v.z, v.z, v.z, v.x); }
+VD_CG_INL S4 szzzy3(S3 v) { return sm4(v.z, v.z, v.z, v.y); }
+VD_CG_INL S4 szzzz3(S3 v) { return sm4(v.z, v.z, v.z, v.z); }
+VD_CG_INL S2 sxx4(S4 v) { return sm2(v.x, v.x); }
+VD_CG_INL S2 sxy4(S4 v) { return sm2(v.x, v.y); }
+VD_CG_INL S2 sxz4(S4 v) { return sm2(v.x, v.z); }
+VD_CG_INL S2 sxw4(S4 v) { return sm2(v.x, v.w); }
+VD_CG_INL S2 syx4(S4 v) { return sm2(v.y, v.x); }
+VD_CG_INL S2 syy4(S4 v) { return sm2(v.y, v.y); }
+VD_CG_INL S2 syz4(S4 v) { return sm2(v.y, v.z); }
+VD_CG_INL S2 syw4(S4 v) { return sm2(v.y, v.w); }
+VD_CG_INL S2 szx4(S4 v) { return sm2(v.z, v.x); }
+VD_CG_INL S2 szy4(S4 v) { return sm2(v.z, v.y); }
+VD_CG_INL S2 szz4(S4 v) { return sm2(v.z, v.z); }
+VD_CG_INL S2 szw4(S4 v) { return sm2(v.z, v.w); }
+VD_CG_INL S2 swx4(S4 v) { return sm2(v.w, v.x); }
+VD_CG_INL S2 swy4(S4 v) { return sm2(v.w, v.y); }
+VD_CG_INL S2 swz4(S4 v) { return sm2(v.w, v.z); }
+VD_CG_INL S2 sww4(S4 v) { return sm2(v.w, v.w); }
+VD_CG_INL S3 sxxx4(S4 v) { return sm3(v.x, v.x, v.x); }
+VD_CG_INL S3 sxxy4(S4 v) { return sm3(v.x, v.x, v.y); }
+VD_CG_INL S3 sxxz4(S4 v) { return sm3(v.x, v.x, v.z); }
+VD_CG_INL S3 sxxw4(S4 v) { return sm3(v.x, v.x, v.w); }
+VD_CG_INL S3 sxyx4(S4 v) { return sm3(v.x, v.y, v.x); }
+VD_CG_INL S3 sxyy4(S4 v) { return sm3(v.x, v.y, v.y); }
+VD_CG_INL S3 sxyz4(S4 v) { return sm3(v.x, v.y, v.z); }
+VD_CG_INL S3 sxyw4(S4 v) { return sm3(v.x, v.y, v.w); }
+VD_CG_INL S3 sxzx4(S4 v) { return sm3(v.x, v.z, v.x); }
+VD_CG_INL S3 sxzy4(S4 v) { return sm3(v.x, v.z, v.y); }
+VD_CG_INL S3 sxzz4(S4 v) { return sm3(v.x, v.z, v.z); }
+VD_CG_INL S3 sxzw4(S4 v) { return sm3(v.x, v.z, v.w); }
+VD_CG_INL S3 sxwx4(S4 v) { return sm3(v.x, v.w, v.x); }
+VD_CG_INL S3 sxwy4(S4 v) { return sm3(v.x, v.w, v.y); }
+VD_CG_INL S3 sxwz4(S4 v) { return sm3(v.x, v.w, v.z); }
+VD_CG_INL S3 sxww4(S4 v) { return sm3(v.x, v.w, v.w); }
+VD_CG_INL S3 syxx4(S4 v) { return sm3(v.y, v.x, v.x); }
+VD_CG_INL S3 syxy4(S4 v) { return sm3(v.y, v.x, v.y); }
+VD_CG_INL S3 syxz4(S4 v) { return sm3(v.y, v.x, v.z); }
+VD_CG_INL S3 syxw4(S4 v) { return sm3(v.y, v.x, v.w); }
+VD_CG_INL S3 syyx4(S4 v) { return sm3(v.y, v.y, v.x); }
+VD_CG_INL S3 syyy4(S4 v) { return sm3(v.y, v.y, v.y); }
+VD_CG_INL S3 syyz4(S4 v) { return sm3(v.y, v.y, v.z); }
+VD_CG_INL S3 syyw4(S4 v) { return sm3(v.y, v.y, v.w); }
+VD_CG_INL S3 syzx4(S4 v) { return sm3(v.y, v.z, v.x); }
+VD_CG_INL S3 syzy4(S4 v) { return sm3(v.y, v.z, v.y); }
+VD_CG_INL S3 syzz4(S4 v) { return sm3(v.y, v.z, v.z); }
+VD_CG_INL S3 syzw4(S4 v) { return sm3(v.y, v.z, v.w); }
+VD_CG_INL S3 sywx4(S4 v) { return sm3(v.y, v.w, v.x); }
+VD_CG_INL S3 sywy4(S4 v) { return sm3(v.y, v.w, v.y); }
+VD_CG_INL S3 sywz4(S4 v) { return sm3(v.y, v.w, v.z); }
+VD_CG_INL S3 syww4(S4 v) { return sm3(v.y, v.w, v.w); }
+VD_CG_INL S3 szxx4(S4 v) { return sm3(v.z, v.x, v.x); }
+VD_CG_INL S3 szxy4(S4 v) { return sm3(v.z, v.x, v.y); }
+VD_CG_INL S3 szxz4(S4 v) { return sm3(v.z, v.x, v.z); }
+VD_CG_INL S3 szxw4(S4 v) { return sm3(v.z, v.x, v.w); }
+VD_CG_INL S3 szyx4(S4 v) { return sm3(v.z, v.y, v.x); }
+VD_CG_INL S3 szyy4(S4 v) { return sm3(v.z, v.y, v.y); }
+VD_CG_INL S3 szyz4(S4 v) { return sm3(v.z, v.y, v.z); }
+VD_CG_INL S3 szyw4(S4 v) { return sm3(v.z, v.y, v.w); }
+VD_CG_INL S3 szzx4(S4 v) { return sm3(v.z, v.z, v.x); }
+VD_CG_INL S3 szzy4(S4 v) { return sm3(v.z, v.z, v.y); }
+VD_CG_INL S3 szzz4(S4 v) { return sm3(v.z, v.z, v.z); }
+VD_CG_INL S3 szzw4(S4 v) { return sm3(v.z, v.z, v.w); }
+VD_CG_INL S3 szwx4(S4 v) { return sm3(v.z, v.w, v.x); }
+VD_CG_INL S3 szwy4(S4 v) { return sm3(v.z, v.w, v.y); }
+VD_CG_INL S3 szwz4(S4 v) { return sm3(v.z, v.w, v.z); }
+VD_CG_INL S3 szww4(S4 v) { return sm3(v.z, v.w, v.w); }
+VD_CG_INL S3 swxx4(S4 v) { return sm3(v.w, v.x, v.x); }
+VD_CG_INL S3 swxy4(S4 v) { return sm3(v.w, v.x, v.y); }
+VD_CG_INL S3 swxz4(S4 v) { return sm3(v.w, v.x, v.z); }
+VD_CG_INL S3 swxw4(S4 v) { return sm3(v.w, v.x, v.w); }
+VD_CG_INL S3 swyx4(S4 v) { return sm3(v.w, v.y, v.x); }
+VD_CG_INL S3 swyy4(S4 v) { return sm3(v.w, v.y, v.y); }
+VD_CG_INL S3 swyz4(S4 v) { return sm3(v.w, v.y, v.z); }
+VD_CG_INL S3 swyw4(S4 v) { return sm3(v.w, v.y, v.w); }
+VD_CG_INL S3 swzx4(S4 v) { return sm3(v.w, v.z, v.x); }
+VD_CG_INL S3 swzy4(S4 v) { return sm3(v.w, v.z, v.y); }
+VD_CG_INL S3 swzz4(S4 v) { return sm3(v.w, v.z, v.z); }
+VD_CG_INL S3 swzw4(S4 v) { return sm3(v.w, v.z, v.w); }
+VD_CG_INL S3 swwx4(S4 v) { return sm3(v.w, v.w, v.x); }
+VD_CG_INL S3 swwy4(S4 v) { return sm3(v.w, v.w, v.y); }
+VD_CG_INL S3 swwz4(S4 v) { return sm3(v.w, v.w, v.z); }
+VD_CG_INL S3 swww4(S4 v) { return sm3(v.w, v.w, v.w); }
+VD_CG_INL S4 sxxxx4(S4 v) { return sm4(v.x, v.x, v.x, v.x); }
+VD_CG_INL S4 sxxxy4(S4 v) { return sm4(v.x, v.x, v.x, v.y); }
+VD_CG_INL S4 sxxxz4(S4 v) { return sm4(v.x, v.x, v.x, v.z); }
+VD_CG_INL S4 sxxxw4(S4 v) { return sm4(v.x, v.x, v.x, v.w); }
+VD_CG_INL S4 sxxyx4(S4 v) { return sm4(v.x, v.x, v.y, v.x); }
+VD_CG_INL S4 sxxyy4(S4 v) { return sm4(v.x, v.x, v.y, v.y); }
+VD_CG_INL S4 sxxyz4(S4 v) { return sm4(v.x, v.x, v.y, v.z); }
+VD_CG_INL S4 sxxyw4(S4 v) { return sm4(v.x, v.x, v.y, v.w); }
+VD_CG_INL S4 sxxzx4(S4 v) { return sm4(v.x, v.x, v.z, v.x); }
+VD_CG_INL S4 sxxzy4(S4 v) { return sm4(v.x, v.x, v.z, v.y); }
+VD_CG_INL S4 sxxzz4(S4 v) { return sm4(v.x, v.x, v.z, v.z); }
+VD_CG_INL S4 sxxzw4(S4 v) { return sm4(v.x, v.x, v.z, v.w); }
+VD_CG_INL S4 sxxwx4(S4 v) { return sm4(v.x, v.x, v.w, v.x); }
+VD_CG_INL S4 sxxwy4(S4 v) { return sm4(v.x, v.x, v.w, v.y); }
+VD_CG_INL S4 sxxwz4(S4 v) { return sm4(v.x, v.x, v.w, v.z); }
+VD_CG_INL S4 sxxww4(S4 v) { return sm4(v.x, v.x, v.w, v.w); }
+VD_CG_INL S4 sxyxx4(S4 v) { return sm4(v.x, v.y, v.x, v.x); }
+VD_CG_INL S4 sxyxy4(S4 v) { return sm4(v.x, v.y, v.x, v.y); }
+VD_CG_INL S4 sxyxz4(S4 v) { return sm4(v.x, v.y, v.x, v.z); }
+VD_CG_INL S4 sxyxw4(S4 v) { return sm4(v.x, v.y, v.x, v.w); }
+VD_CG_INL S4 sxyyx4(S4 v) { return sm4(v.x, v.y, v.y, v.x); }
+VD_CG_INL S4 sxyyy4(S4 v) { return sm4(v.x, v.y, v.y, v.y); }
+VD_CG_INL S4 sxyyz4(S4 v) { return sm4(v.x, v.y, v.y, v.z); }
+VD_CG_INL S4 sxyyw4(S4 v) { return sm4(v.x, v.y, v.y, v.w); }
+VD_CG_INL S4 sxyzx4(S4 v) { return sm4(v.x, v.y, v.z, v.x); }
+VD_CG_INL S4 sxyzy4(S4 v) { return sm4(v.x, v.y, v.z, v.y); }
+VD_CG_INL S4 sxyzz4(S4 v) { return sm4(v.x, v.y, v.z, v.z); }
+VD_CG_INL S4 sxyzw4(S4 v) { return sm4(v.x, v.y, v.z, v.w); }
+VD_CG_INL S4 sxywx4(S4 v) { return sm4(v.x, v.y, v.w, v.x); }
+VD_CG_INL S4 sxywy4(S4 v) { return sm4(v.x, v.y, v.w, v.y); }
+VD_CG_INL S4 sxywz4(S4 v) { return sm4(v.x, v.y, v.w, v.z); }
+VD_CG_INL S4 sxyww4(S4 v) { return sm4(v.x, v.y, v.w, v.w); }
+VD_CG_INL S4 sxzxx4(S4 v) { return sm4(v.x, v.z, v.x, v.x); }
+VD_CG_INL S4 sxzxy4(S4 v) { return sm4(v.x, v.z, v.x, v.y); }
+VD_CG_INL S4 sxzxz4(S4 v) { return sm4(v.x, v.z, v.x, v.z); }
+VD_CG_INL S4 sxzxw4(S4 v) { return sm4(v.x, v.z, v.x, v.w); }
+VD_CG_INL S4 sxzyx4(S4 v) { return sm4(v.x, v.z, v.y, v.x); }
+VD_CG_INL S4 sxzyy4(S4 v) { return sm4(v.x, v.z, v.y, v.y); }
+VD_CG_INL S4 sxzyz4(S4 v) { return sm4(v.x, v.z, v.y, v.z); }
+VD_CG_INL S4 sxzyw4(S4 v) { return sm4(v.x, v.z, v.y, v.w); }
+VD_CG_INL S4 sxzzx4(S4 v) { return sm4(v.x, v.z, v.z, v.x); }
+VD_CG_INL S4 sxzzy4(S4 v) { return sm4(v.x, v.z, v.z, v.y); }
+VD_CG_INL S4 sxzzz4(S4 v) { return sm4(v.x, v.z, v.z, v.z); }
+VD_CG_INL S4 sxzzw4(S4 v) { return sm4(v.x, v.z, v.z, v.w); }
+VD_CG_INL S4 sxzwx4(S4 v) { return sm4(v.x, v.z, v.w, v.x); }
+VD_CG_INL S4 sxzwy4(S4 v) { return sm4(v.x, v.z, v.w, v.y); }
+VD_CG_INL S4 sxzwz4(S4 v) { return sm4(v.x, v.z, v.w, v.z); }
+VD_CG_INL S4 sxzww4(S4 v) { return sm4(v.x, v.z, v.w, v.w); }
+VD_CG_INL S4 sxwxx4(S4 v) { return sm4(v.x, v.w, v.x, v.x); }
+VD_CG_INL S4 sxwxy4(S4 v) { return sm4(v.x, v.w, v.x, v.y); }
+VD_CG_INL S4 sxwxz4(S4 v) { return sm4(v.x, v.w, v.x, v.z); }
+VD_CG_INL S4 sxwxw4(S4 v) { return sm4(v.x, v.w, v.x, v.w); }
+VD_CG_INL S4 sxwyx4(S4 v) { return sm4(v.x, v.w, v.y, v.x); }
+VD_CG_INL S4 sxwyy4(S4 v) { return sm4(v.x, v.w, v.y, v.y); }
+VD_CG_INL S4 sxwyz4(S4 v) { return sm4(v.x, v.w, v.y, v.z); }
+VD_CG_INL S4 sxwyw4(S4 v) { return sm4(v.x, v.w, v.y, v.w); }
+VD_CG_INL S4 sxwzx4(S4 v) { return sm4(v.x, v.w, v.z, v.x); }
+VD_CG_INL S4 sxwzy4(S4 v) { return sm4(v.x, v.w, v.z, v.y); }
+VD_CG_INL S4 sxwzz4(S4 v) { return sm4(v.x, v.w, v.z, v.z); }
+VD_CG_INL S4 sxwzw4(S4 v) { return sm4(v.x, v.w, v.z, v.w); }
+VD_CG_INL S4 sxwwx4(S4 v) { return sm4(v.x, v.w, v.w, v.x); }
+VD_CG_INL S4 sxwwy4(S4 v) { return sm4(v.x, v.w, v.w, v.y); }
+VD_CG_INL S4 sxwwz4(S4 v) { return sm4(v.x, v.w, v.w, v.z); }
+VD_CG_INL S4 sxwww4(S4 v) { return sm4(v.x, v.w, v.w, v.w); }
+VD_CG_INL S4 syxxx4(S4 v) { return sm4(v.y, v.x, v.x, v.x); }
+VD_CG_INL S4 syxxy4(S4 v) { return sm4(v.y, v.x, v.x, v.y); }
+VD_CG_INL S4 syxxz4(S4 v) { return sm4(v.y, v.x, v.x, v.z); }
+VD_CG_INL S4 syxxw4(S4 v) { return sm4(v.y, v.x, v.x, v.w); }
+VD_CG_INL S4 syxyx4(S4 v) { return sm4(v.y, v.x, v.y, v.x); }
+VD_CG_INL S4 syxyy4(S4 v) { return sm4(v.y, v.x, v.y, v.y); }
+VD_CG_INL S4 syxyz4(S4 v) { return sm4(v.y, v.x, v.y, v.z); }
+VD_CG_INL S4 syxyw4(S4 v) { return sm4(v.y, v.x, v.y, v.w); }
+VD_CG_INL S4 syxzx4(S4 v) { return sm4(v.y, v.x, v.z, v.x); }
+VD_CG_INL S4 syxzy4(S4 v) { return sm4(v.y, v.x, v.z, v.y); }
+VD_CG_INL S4 syxzz4(S4 v) { return sm4(v.y, v.x, v.z, v.z); }
+VD_CG_INL S4 syxzw4(S4 v) { return sm4(v.y, v.x, v.z, v.w); }
+VD_CG_INL S4 syxwx4(S4 v) { return sm4(v.y, v.x, v.w, v.x); }
+VD_CG_INL S4 syxwy4(S4 v) { return sm4(v.y, v.x, v.w, v.y); }
+VD_CG_INL S4 syxwz4(S4 v) { return sm4(v.y, v.x, v.w, v.z); }
+VD_CG_INL S4 syxww4(S4 v) { return sm4(v.y, v.x, v.w, v.w); }
+VD_CG_INL S4 syyxx4(S4 v) { return sm4(v.y, v.y, v.x, v.x); }
+VD_CG_INL S4 syyxy4(S4 v) { return sm4(v.y, v.y, v.x, v.y); }
+VD_CG_INL S4 syyxz4(S4 v) { return sm4(v.y, v.y, v.x, v.z); }
+VD_CG_INL S4 syyxw4(S4 v) { return sm4(v.y, v.y, v.x, v.w); }
+VD_CG_INL S4 syyyx4(S4 v) { return sm4(v.y, v.y, v.y, v.x); }
+VD_CG_INL S4 syyyy4(S4 v) { return sm4(v.y, v.y, v.y, v.y); }
+VD_CG_INL S4 syyyz4(S4 v) { return sm4(v.y, v.y, v.y, v.z); }
+VD_CG_INL S4 syyyw4(S4 v) { return sm4(v.y, v.y, v.y, v.w); }
+VD_CG_INL S4 syyzx4(S4 v) { return sm4(v.y, v.y, v.z, v.x); }
+VD_CG_INL S4 syyzy4(S4 v) { return sm4(v.y, v.y, v.z, v.y); }
+VD_CG_INL S4 syyzz4(S4 v) { return sm4(v.y, v.y, v.z, v.z); }
+VD_CG_INL S4 syyzw4(S4 v) { return sm4(v.y, v.y, v.z, v.w); }
+VD_CG_INL S4 syywx4(S4 v) { return sm4(v.y, v.y, v.w, v.x); }
+VD_CG_INL S4 syywy4(S4 v) { return sm4(v.y, v.y, v.w, v.y); }
+VD_CG_INL S4 syywz4(S4 v) { return sm4(v.y, v.y, v.w, v.z); }
+VD_CG_INL S4 syyww4(S4 v) { return sm4(v.y, v.y, v.w, v.w); }
+VD_CG_INL S4 syzxx4(S4 v) { return sm4(v.y, v.z, v.x, v.x); }
+VD_CG_INL S4 syzxy4(S4 v) { return sm4(v.y, v.z, v.x, v.y); }
+VD_CG_INL S4 syzxz4(S4 v) { return sm4(v.y, v.z, v.x, v.z); }
+VD_CG_INL S4 syzxw4(S4 v) { return sm4(v.y, v.z, v.x, v.w); }
+VD_CG_INL S4 syzyx4(S4 v) { return sm4(v.y, v.z, v.y, v.x); }
+VD_CG_INL S4 syzyy4(S4 v) { return sm4(v.y, v.z, v.y, v.y); }
+VD_CG_INL S4 syzyz4(S4 v) { return sm4(v.y, v.z, v.y, v.z); }
+VD_CG_INL S4 syzyw4(S4 v) { return sm4(v.y, v.z, v.y, v.w); }
+VD_CG_INL S4 syzzx4(S4 v) { return sm4(v.y, v.z, v.z, v.x); }
+VD_CG_INL S4 syzzy4(S4 v) { return sm4(v.y, v.z, v.z, v.y); }
+VD_CG_INL S4 syzzz4(S4 v) { return sm4(v.y, v.z, v.z, v.z); }
+VD_CG_INL S4 syzzw4(S4 v) { return sm4(v.y, v.z, v.z, v.w); }
+VD_CG_INL S4 syzwx4(S4 v) { return sm4(v.y, v.z, v.w, v.x); }
+VD_CG_INL S4 syzwy4(S4 v) { return sm4(v.y, v.z, v.w, v.y); }
+VD_CG_INL S4 syzwz4(S4 v) { return sm4(v.y, v.z, v.w, v.z); }
+VD_CG_INL S4 syzww4(S4 v) { return sm4(v.y, v.z, v.w, v.w); }
+VD_CG_INL S4 sywxx4(S4 v) { return sm4(v.y, v.w, v.x, v.x); }
+VD_CG_INL S4 sywxy4(S4 v) { return sm4(v.y, v.w, v.x, v.y); }
+VD_CG_INL S4 sywxz4(S4 v) { return sm4(v.y, v.w, v.x, v.z); }
+VD_CG_INL S4 sywxw4(S4 v) { return sm4(v.y, v.w, v.x, v.w); }
+VD_CG_INL S4 sywyx4(S4 v) { return sm4(v.y, v.w, v.y, v.x); }
+VD_CG_INL S4 sywyy4(S4 v) { return sm4(v.y, v.w, v.y, v.y); }
+VD_CG_INL S4 sywyz4(S4 v) { return sm4(v.y, v.w, v.y, v.z); }
+VD_CG_INL S4 sywyw4(S4 v) { return sm4(v.y, v.w, v.y, v.w); }
+VD_CG_INL S4 sywzx4(S4 v) { return sm4(v.y, v.w, v.z, v.x); }
+VD_CG_INL S4 sywzy4(S4 v) { return sm4(v.y, v.w, v.z, v.y); }
+VD_CG_INL S4 sywzz4(S4 v) { return sm4(v.y, v.w, v.z, v.z); }
+VD_CG_INL S4 sywzw4(S4 v) { return sm4(v.y, v.w, v.z, v.w); }
+VD_CG_INL S4 sywwx4(S4 v) { return sm4(v.y, v.w, v.w, v.x); }
+VD_CG_INL S4 sywwy4(S4 v) { return sm4(v.y, v.w, v.w, v.y); }
+VD_CG_INL S4 sywwz4(S4 v) { return sm4(v.y, v.w, v.w, v.z); }
+VD_CG_INL S4 sywww4(S4 v) { return sm4(v.y, v.w, v.w, v.w); }
+VD_CG_INL S4 szxxx4(S4 v) { return sm4(v.z, v.x, v.x, v.x); }
+VD_CG_INL S4 szxxy4(S4 v) { return sm4(v.z, v.x, v.x, v.y); }
+VD_CG_INL S4 szxxz4(S4 v) { return sm4(v.z, v.x, v.x, v.z); }
+VD_CG_INL S4 szxxw4(S4 v) { return sm4(v.z, v.x, v.x, v.w); }
+VD_CG_INL S4 szxyx4(S4 v) { return sm4(v.z, v.x, v.y, v.x); }
+VD_CG_INL S4 szxyy4(S4 v) { return sm4(v.z, v.x, v.y, v.y); }
+VD_CG_INL S4 szxyz4(S4 v) { return sm4(v.z, v.x, v.y, v.z); }
+VD_CG_INL S4 szxyw4(S4 v) { return sm4(v.z, v.x, v.y, v.w); }
+VD_CG_INL S4 szxzx4(S4 v) { return sm4(v.z, v.x, v.z, v.x); }
+VD_CG_INL S4 szxzy4(S4 v) { return sm4(v.z, v.x, v.z, v.y); }
+VD_CG_INL S4 szxzz4(S4 v) { return sm4(v.z, v.x, v.z, v.z); }
+VD_CG_INL S4 szxzw4(S4 v) { return sm4(v.z, v.x, v.z, v.w); }
+VD_CG_INL S4 szxwx4(S4 v) { return sm4(v.z, v.x, v.w, v.x); }
+VD_CG_INL S4 szxwy4(S4 v) { return sm4(v.z, v.x, v.w, v.y); }
+VD_CG_INL S4 szxwz4(S4 v) { return sm4(v.z, v.x, v.w, v.z); }
+VD_CG_INL S4 szxww4(S4 v) { return sm4(v.z, v.x, v.w, v.w); }
+VD_CG_INL S4 szyxx4(S4 v) { return sm4(v.z, v.y, v.x, v.x); }
+VD_CG_INL S4 szyxy4(S4 v) { return sm4(v.z, v.y, v.x, v.y); }
+VD_CG_INL S4 szyxz4(S4 v) { return sm4(v.z, v.y, v.x, v.z); }
+VD_CG_INL S4 szyxw4(S4 v) { return sm4(v.z, v.y, v.x, v.w); }
+VD_CG_INL S4 szyyx4(S4 v) { return sm4(v.z, v.y, v.y, v.x); }
+VD_CG_INL S4 szyyy4(S4 v) { return sm4(v.z, v.y, v.y, v.y); }
+VD_CG_INL S4 szyyz4(S4 v) { return sm4(v.z, v.y, v.y, v.z); }
+VD_CG_INL S4 szyyw4(S4 v) { return sm4(v.z, v.y, v.y, v.w); }
+VD_CG_INL S4 szyzx4(S4 v) { return sm4(v.z, v.y, v.z, v.x); }
+VD_CG_INL S4 szyzy4(S4 v) { return sm4(v.z, v.y, v.z, v.y); }
+VD_CG_INL S4 szyzz4(S4 v) { return sm4(v.z, v.y, v.z, v.z); }
+VD_CG_INL S4 szyzw4(S4 v) { return sm4(v.z, v.y, v.z, v.w); }
+VD_CG_INL S4 szywx4(S4 v) { return sm4(v.z, v.y, v.w, v.x); }
+VD_CG_INL S4 szywy4(S4 v) { return sm4(v.z, v.y, v.w, v.y); }
+VD_CG_INL S4 szywz4(S4 v) { return sm4(v.z, v.y, v.w, v.z); }
+VD_CG_INL S4 szyww4(S4 v) { return sm4(v.z, v.y, v.w, v.w); }
+VD_CG_INL S4 szzxx4(S4 v) { return sm4(v.z, v.z, v.x, v.x); }
+VD_CG_INL S4 szzxy4(S4 v) { return sm4(v.z, v.z, v.x, v.y); }
+VD_CG_INL S4 szzxz4(S4 v) { return sm4(v.z, v.z, v.x, v.z); }
+VD_CG_INL S4 szzxw4(S4 v) { return sm4(v.z, v.z, v.x, v.w); }
+VD_CG_INL S4 szzyx4(S4 v) { return sm4(v.z, v.z, v.y, v.x); }
+VD_CG_INL S4 szzyy4(S4 v) { return sm4(v.z, v.z, v.y, v.y); }
+VD_CG_INL S4 szzyz4(S4 v) { return sm4(v.z, v.z, v.y, v.z); }
+VD_CG_INL S4 szzyw4(S4 v) { return sm4(v.z, v.z, v.y, v.w); }
+VD_CG_INL S4 szzzx4(S4 v) { return sm4(v.z, v.z, v.z, v.x); }
+VD_CG_INL S4 szzzy4(S4 v) { return sm4(v.z, v.z, v.z, v.y); }
+VD_CG_INL S4 szzzz4(S4 v) { return sm4(v.z, v.z, v.z, v.z); }
+VD_CG_INL S4 szzzw4(S4 v) { return sm4(v.z, v.z, v.z, v.w); }
+VD_CG_INL S4 szzwx4(S4 v) { return sm4(v.z, v.z, v.w, v.x); }
+VD_CG_INL S4 szzwy4(S4 v) { return sm4(v.z, v.z, v.w, v.y); }
+VD_CG_INL S4 szzwz4(S4 v) { return sm4(v.z, v.z, v.w, v.z); }
+VD_CG_INL S4 szzww4(S4 v) { return sm4(v.z, v.z, v.w, v.w); }
+VD_CG_INL S4 szwxx4(S4 v) { return sm4(v.z, v.w, v.x, v.x); }
+VD_CG_INL S4 szwxy4(S4 v) { return sm4(v.z, v.w, v.x, v.y); }
+VD_CG_INL S4 szwxz4(S4 v) { return sm4(v.z, v.w, v.x, v.z); }
+VD_CG_INL S4 szwxw4(S4 v) { return sm4(v.z, v.w, v.x, v.w); }
+VD_CG_INL S4 szwyx4(S4 v) { return sm4(v.z, v.w, v.y, v.x); }
+VD_CG_INL S4 szwyy4(S4 v) { return sm4(v.z, v.w, v.y, v.y); }
+VD_CG_INL S4 szwyz4(S4 v) { return sm4(v.z, v.w, v.y, v.z); }
+VD_CG_INL S4 szwyw4(S4 v) { return sm4(v.z, v.w, v.y, v.w); }
+VD_CG_INL S4 szwzx4(S4 v) { return sm4(v.z, v.w, v.z, v.x); }
+VD_CG_INL S4 szwzy4(S4 v) { return sm4(v.z, v.w, v.z, v.y); }
+VD_CG_INL S4 szwzz4(S4 v) { return sm4(v.z, v.w, v.z, v.z); }
+VD_CG_INL S4 szwzw4(S4 v) { return sm4(v.z, v.w, v.z, v.w); }
+VD_CG_INL S4 szwwx4(S4 v) { return sm4(v.z, v.w, v.w, v.x); }
+VD_CG_INL S4 szwwy4(S4 v) { return sm4(v.z, v.w, v.w, v.y); }
+VD_CG_INL S4 szwwz4(S4 v) { return sm4(v.z, v.w, v.w, v.z); }
+VD_CG_INL S4 szwww4(S4 v) { return sm4(v.z, v.w, v.w, v.w); }
+VD_CG_INL S4 swxxx4(S4 v) { return sm4(v.w, v.x, v.x, v.x); }
+VD_CG_INL S4 swxxy4(S4 v) { return sm4(v.w, v.x, v.x, v.y); }
+VD_CG_INL S4 swxxz4(S4 v) { return sm4(v.w, v.x, v.x, v.z); }
+VD_CG_INL S4 swxxw4(S4 v) { return sm4(v.w, v.x, v.x, v.w); }
+VD_CG_INL S4 swxyx4(S4 v) { return sm4(v.w, v.x, v.y, v.x); }
+VD_CG_INL S4 swxyy4(S4 v) { return sm4(v.w, v.x, v.y, v.y); }
+VD_CG_INL S4 swxyz4(S4 v) { return sm4(v.w, v.x, v.y, v.z); }
+VD_CG_INL S4 swxyw4(S4 v) { return sm4(v.w, v.x, v.y, v.w); }
+VD_CG_INL S4 swxzx4(S4 v) { return sm4(v.w, v.x, v.z, v.x); }
+VD_CG_INL S4 swxzy4(S4 v) { return sm4(v.w, v.x, v.z, v.y); }
+VD_CG_INL S4 swxzz4(S4 v) { return sm4(v.w, v.x, v.z, v.z); }
+VD_CG_INL S4 swxzw4(S4 v) { return sm4(v.w, v.x, v.z, v.w); }
+VD_CG_INL S4 swxwx4(S4 v) { return sm4(v.w, v.x, v.w, v.x); }
+VD_CG_INL S4 swxwy4(S4 v) { return sm4(v.w, v.x, v.w, v.y); }
+VD_CG_INL S4 swxwz4(S4 v) { return sm4(v.w, v.x, v.w, v.z); }
+VD_CG_INL S4 swxww4(S4 v) { return sm4(v.w, v.x, v.w, v.w); }
+VD_CG_INL S4 swyxx4(S4 v) { return sm4(v.w, v.y, v.x, v.x); }
+VD_CG_INL S4 swyxy4(S4 v) { return sm4(v.w, v.y, v.x, v.y); }
+VD_CG_INL S4 swyxz4(S4 v) { return sm4(v.w, v.y, v.x, v.z); }
+VD_CG_INL S4 swyxw4(S4 v) { return sm4(v.w, v.y, v.x, v.w); }
+VD_CG_INL S4 swyyx4(S4 v) { return sm4(v.w, v.y, v.y, v.x); }
+VD_CG_INL S4 swyyy4(S4 v) { return sm4(v.w, v.y, v.y, v.y); }
+VD_CG_INL S4 swyyz4(S4 v) { return sm4(v.w, v.y, v.y, v.z); }
+VD_CG_INL S4 swyyw4(S4 v) { return sm4(v.w, v.y, v.y, v.w); }
+VD_CG_INL S4 swyzx4(S4 v) { return sm4(v.w, v.y, v.z, v.x); }
+VD_CG_INL S4 swyzy4(S4 v) { return sm4(v.w, v.y, v.z, v.y); }
+VD_CG_INL S4 swyzz4(S4 v) { return sm4(v.w, v.y, v.z, v.z); }
+VD_CG_INL S4 swyzw4(S4 v) { return sm4(v.w, v.y, v.z, v.w); }
+VD_CG_INL S4 swywx4(S4 v) { return sm4(v.w, v.y, v.w, v.x); }
+VD_CG_INL S4 swywy4(S4 v) { return sm4(v.w, v.y, v.w, v.y); }
+VD_CG_INL S4 swywz4(S4 v) { return sm4(v.w, v.y, v.w, v.z); }
+VD_CG_INL S4 swyww4(S4 v) { return sm4(v.w, v.y, v.w, v.w); }
+VD_CG_INL S4 swzxx4(S4 v) { return sm4(v.w, v.z, v.x, v.x); }
+VD_CG_INL S4 swzxy4(S4 v) { return sm4(v.w, v.z, v.x, v.y); }
+VD_CG_INL S4 swzxz4(S4 v) { return sm4(v.w, v.z, v.x, v.z); }
+VD_CG_INL S4 swzxw4(S4 v) { return sm4(v.w, v.z, v.x, v.w); }
+VD_CG_INL S4 swzyx4(S4 v) { return sm4(v.w, v.z, v.y, v.x); }
+VD_CG_INL S4 swzyy4(S4 v) { return sm4(v.w, v.z, v.y, v.y); }
+VD_CG_INL S4 swzyz4(S4 v) { return sm4(v.w, v.z, v.y, v.z); }
+VD_CG_INL S4 swzyw4(S4 v) { return sm4(v.w, v.z, v.y, v.w); }
+VD_CG_INL S4 swzzx4(S4 v) { return sm4(v.w, v.z, v.z, v.x); }
+VD_CG_INL S4 swzzy4(S4 v) { return sm4(v.w, v.z, v.z, v.y); }
+VD_CG_INL S4 swzzz4(S4 v) { return sm4(v.w, v.z, v.z, v.z); }
+VD_CG_INL S4 swzzw4(S4 v) { return sm4(v.w, v.z, v.z, v.w); }
+VD_CG_INL S4 swzwx4(S4 v) { return sm4(v.w, v.z, v.w, v.x); }
+VD_CG_INL S4 swzwy4(S4 v) { return sm4(v.w, v.z, v.w, v.y); }
+VD_CG_INL S4 swzwz4(S4 v) { return sm4(v.w, v.z, v.w, v.z); }
+VD_CG_INL S4 swzww4(S4 v) { return sm4(v.w, v.z, v.w, v.w); }
+VD_CG_INL S4 swwxx4(S4 v) { return sm4(v.w, v.w, v.x, v.x); }
+VD_CG_INL S4 swwxy4(S4 v) { return sm4(v.w, v.w, v.x, v.y); }
+VD_CG_INL S4 swwxz4(S4 v) { return sm4(v.w, v.w, v.x, v.z); }
+VD_CG_INL S4 swwxw4(S4 v) { return sm4(v.w, v.w, v.x, v.w); }
+VD_CG_INL S4 swwyx4(S4 v) { return sm4(v.w, v.w, v.y, v.x); }
+VD_CG_INL S4 swwyy4(S4 v) { return sm4(v.w, v.w, v.y, v.y); }
+VD_CG_INL S4 swwyz4(S4 v) { return sm4(v.w, v.w, v.y, v.z); }
+VD_CG_INL S4 swwyw4(S4 v) { return sm4(v.w, v.w, v.y, v.w); }
+VD_CG_INL S4 swwzx4(S4 v) { return sm4(v.w, v.w, v.z, v.x); }
+VD_CG_INL S4 swwzy4(S4 v) { return sm4(v.w, v.w, v.z, v.y); }
+VD_CG_INL S4 swwzz4(S4 v) { return sm4(v.w, v.w, v.z, v.z); }
+VD_CG_INL S4 swwzw4(S4 v) { return sm4(v.w, v.w, v.z, v.w); }
+VD_CG_INL S4 swwwx4(S4 v) { return sm4(v.w, v.w, v.w, v.x); }
+VD_CG_INL S4 swwwy4(S4 v) { return sm4(v.w, v.w, v.w, v.y); }
+VD_CG_INL S4 swwwz4(S4 v) { return sm4(v.w, v.w, v.w, v.z); }
+VD_CG_INL S4 swwww4(S4 v) { return sm4(v.w, v.w, v.w, v.w); }
+
 #endif // !VD_CG_H
 
 #ifdef VD_CG_IMPL
-
-
 #ifndef VD_CG_INCLUDE_INTERNAL_TESTS
 #   define VD_CG_INCLUDE_INTERNAL_TESTS 0
 #endif // !VD_CG_INCLUDE_INTERNAL_TESTS

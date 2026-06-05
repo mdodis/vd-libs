@@ -313,6 +313,11 @@ VD_FW_API int                vd_fw_running(void);
 VD_FW_API void               vd_fw_lock(void);
 
 /**
+ * @brief Swap buffers in OpenGL or pixel buffer APIs
+ */
+VD_FW_API void               vd_fw_swap(void);
+
+/**
  * @brief Swap buffers and release lock to the window buffer after drawing
  */
 VD_FW_API void               vd_fw_unlock(void);
@@ -520,6 +525,18 @@ typedef struct {
  * @return The event buffer
  */
 VD_FW_API VdFwEvent*         vd_fw_poll(int *count);
+
+/**
+ * @brief Wait for events. Call this instead of vd_fw_poll.
+ * @param  count The count of events available
+ * @return       The event buffer
+ */
+VD_FW_API VdFwEvent*         vd_fw_wait(int *count);
+
+/**
+ * @brief Pop out of the next vd_fw_wait call. Call from any thread.
+ */
+VD_FW_API void               vd_fw_queue_wait_exit(void);
 
 /**
  * @brief Get if the user requested to close the window
@@ -8716,6 +8733,7 @@ typedef struct {
     CONDITION_VARIABLE          cond_var;
     VdFw__Win32Frame            next_frame;
     VdFw__Win32Frame            curr_frame;
+    VdFwHANDLE                  sem_skip_wait;
 } VdFw__Win32InternalData;
 
 #define VD_FW_RAW_INPUT_ALIGN(x)        (((x) + sizeof(unsigned __int64) - 1) & ~(sizeof(unsigned __int64) - 1))
@@ -9156,8 +9174,8 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         }
     }
 
-    VD_FW_G.curr_frame.w = VD_FW_G.next_width;
-    VD_FW_G.curr_frame.h = VD_FW_G.next_height;
+    // VD_FW_G.curr_frame.w = VD_FW_G.next_width;
+    // VD_FW_G.curr_frame.h = VD_FW_G.next_height;
     VD_FW_G.curr_frame.flags = 0;
 
     // @todo(mdodis): Use different versions of SetProcessDpiAware if not supported
@@ -9201,17 +9219,9 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     InitializeCriticalSectionAndSpinCount(&VD_FW_G.input_critical_section, 3000);
     InitializeConditionVariable(&VD_FW_G.cond_var);
 
-    VD_FW_G.sem_window_ready = CreateSemaphoreA(
-        NULL,
-        0,
-        1,
-        NULL);
-
-    VD_FW_G.sem_closed = CreateSemaphoreA(
-        NULL,
-        0,
-        1,
-        NULL);
+    VD_FW_G.sem_window_ready = CreateSemaphoreA(NULL, 0, 1, NULL);
+    VD_FW_G.sem_closed = CreateSemaphoreA(NULL, 0, 1, NULL);
+    VD_FW_G.sem_skip_wait = CreateSemaphoreA(NULL, 1, 1, NULL);
 
     VD_FW_G.win_thread = CreateThread(
         NULL,
@@ -9401,6 +9411,18 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
     return VD_FW_G.evtbuf;
 }
 
+VD_FW_API VdFwEvent *vd_fw_wait(int *count)
+{
+    WaitForSingleObject(VD_FW_G.sem_skip_wait, INFINITE);
+
+    return vd_fw_poll(count);
+}
+
+VD_FW_API void vd_fw_queue_wait_exit(void)
+{
+    ReleaseSemaphore(VD_FW_G.sem_skip_wait, 1, NULL);
+}
+
 VD_FW_API void vd_fw_lock(void)
 {
     EnterCriticalSection(&VD_FW_G.critical_section);
@@ -9409,16 +9431,14 @@ VD_FW_API void vd_fw_lock(void)
     LeaveCriticalSection(&VD_FW_G.critical_section);
 }
 
-VD_FW_API void vd_fw_unlock(void)
+VD_FW_API void vd_fw_swap(void)
 {
     if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
         VD_FW_PROFILE_ZONE(vd_fw_win32_swap_buffer_opengl)
         {
             VdFwSwapBuffers(VD_FW_G.hdc);
         }
-    }
-
-    if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_PIXEL_BUFFER) {
+    } else if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_PIXEL_BUFFER) {
         int source_width = VD_FW_G.pixel_info.bmiHeader.biWidth;
         int source_height = -VD_FW_G.pixel_info.bmiHeader.biHeight;
         int dest_width = VD_FW_G.curr_frame.w;
@@ -9434,8 +9454,11 @@ VD_FW_API void vd_fw_unlock(void)
                           VD_FW_DIB_RGB_COLORS, VD_FW_SRCCOPY);
 
         int err = GetLastError();
-
     }
+}
+
+VD_FW_API void vd_fw_unlock(void)
+{
 
     VD_FW_PROFILE_ZONE(vd_fw_win32_dwm_flush)
     {
@@ -9519,6 +9542,7 @@ VD_FW_API void vd_fw_exit(void)
 
     CloseHandle(VD_FW_G.sem_window_ready);
     CloseHandle(VD_FW_G.sem_closed);
+    CloseHandle(VD_FW_G.sem_skip_wait);
     DeleteCriticalSection(&VD_FW_G.critical_section);
 }
 
@@ -10351,6 +10375,7 @@ static DWORD vd_fw__win_thread_proc(LPVOID param)
     VD_FW_G.h = rect.bottom - rect.top;
     VD_FW_G.next_frame.w = VD_FW_G.w;
     VD_FW_G.next_frame.h = VD_FW_G.h;
+    VD_FW_G.next_frame.flags = VD_FW_WIN32_FLAGS_SIZE_CHANGED;
 
 
     // SetWindowPos(VD_FW_G.hwnd, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_SHOWWINDOW);
@@ -10778,6 +10803,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
         case WM_DESTROY: {
             ReleaseSemaphore(VD_FW_G.sem_closed, 1, NULL);
+            vd_fw_queue_wait_exit();
             VdFwPostQuitMessage(0);
             VD_FW_G.t_running = FALSE;
         } break;
@@ -10812,6 +10838,8 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 }
 
                 VD_FW_G.next_frame.flags |= VD_FW_WIN32_FLAGS_WAKE_COND_VAR;
+
+                vd_fw_queue_wait_exit();
 
                 if (!VD_FW_G.winthread_block_while_sizing) {
                     WakeConditionVariable(&VD_FW_G.cond_var);
@@ -11582,6 +11610,8 @@ static int vd_fw__msgbuf_w(VdFwEvent *message)
     VD_FW_G.msgbuf[w] = *message;
     LONG nw = (w + 1) % VD_FW_WIN32_MESSAGE_BUFFER_SIZE;
     InterlockedExchange(&VD_FW_G.msgbuf_w, nw);
+
+    vd_fw_queue_wait_exit();
 
     return 1;
 }
