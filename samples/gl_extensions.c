@@ -57,6 +57,7 @@ int main(int argc, char const *argv[])
         glClearColor(0.5f, 0.3f, 0.2f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
+        vd_fw_swap();
         vd_fw_unlock();
     }
 

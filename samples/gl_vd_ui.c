@@ -95,7 +95,7 @@ int main(int argc, char const *argv[])
 
         float delta_seconds = vd_fw_delta_s();
 
-        vd_fw_compile_or_hotload_program(&program, &program_time, "./glsl/ui_basic.vert", "./glsl/ui_basic.frag");
+        vd_fw_compile_or_hotload_program(&program, &program_time, "./glsl/ui_basic.vert", "./glsl/ui_basic.frag", 0);
 
         vd_fw_lock();
 
@@ -316,6 +316,7 @@ int main(int argc, char const *argv[])
                 pass->instance_count);
         }
         
+        vd_fw_swap();
         vd_fw_unlock();
     }
 

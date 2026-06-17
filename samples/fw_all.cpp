@@ -125,6 +125,7 @@ int main(int argc, char const *argv[])
             will_switch_to_next_backend = 1;
         }
 
+        vd_fw_swap();
         vd_fw_unlock();
 
         if (will_switch_to_next_backend) {

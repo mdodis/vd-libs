@@ -20,6 +20,7 @@ int main(int argc, char const *argv[]) {
         glClearColor(0.2f, 0.2f, 0.2f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT);
 
+        vd_fw_swap();
         vd_fw_unlock();
     }
     return 0;

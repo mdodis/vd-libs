@@ -938,7 +938,7 @@ glEnableVertexAttribArray(0);
 
         para {
             We'll use orthographic projection. vd\_fw.h provides a simple utility function to compute it:
-            <code>vd\_fw\_u\_ortho</code>
+            `vd\_fw\_u\_ortho`
         }
 
         verb ```
@@ -954,8 +954,8 @@ glBindVertexArray(VAO);
 
         para {
             To test that the coordinate transformation is working, we'll map the top left of the rectangle
-            to the mouse. To get the mouse position & buttons, use <code>vd_fw_get_mouse_state</code> or
-            <code>vd_fw_get_mouse_statef</code>:
+            to the mouse. To get the mouse position & buttons, use `vd_fw_get_mouse_state` or
+            `vd_fw_get_mouse_statef`:
         }
 
         verb ```

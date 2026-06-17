@@ -44,6 +44,7 @@ int main(int argc, char const *argv[])
         }
 
         vd_fw_set_pixel_buffer((void*)The_Pixels, WIDTH, HEIGHT);
+        vd_fw_swap();
         vd_fw_unlock();
     }
     return 0;

@@ -528,6 +528,7 @@ int main(int argc, char const *argv[])
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
 
+        vd_fw_swap();
         vd_fw_unlock();
     }
 

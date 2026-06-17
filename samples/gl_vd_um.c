@@ -235,6 +235,7 @@ int main(int argc, char const *argv[])
             glDrawArraysInstanced(GL_TRIANGLES, 0, pass->vertex_count, pass->instance_count);
         }
 
+        vd_fw_swap();
         vd_fw_unlock();
     }
 

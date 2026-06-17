@@ -194,6 +194,7 @@ int main(int argc, char const *argv[])
         cy += ds * 2.f;
         cp += ds * 2.f;
 
+        vd_fw_swap();
         vd_fw_unlock();
     }
     return 0;

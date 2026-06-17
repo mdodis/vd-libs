@@ -116,6 +116,7 @@ int main(int argc, char const *argv[])
         glUseProgram(0);
         glBindVertexArray(0);
 
+        vd_fw_swap();
         vd_fw_unlock();
     }
 

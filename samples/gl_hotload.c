@@ -61,6 +61,7 @@ int main(int argc, char const *argv[])
         glBindVertexArray(vao);
         glDrawArrays(GL_TRIANGLES, 0, 3);
 
+        vd_fw_swap();
         vd_fw_unlock();
     }
 

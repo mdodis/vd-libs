@@ -276,6 +276,7 @@ int main(int argc, char const *argv[])
 
         debug_update();
 
+        vd_fw_swap();
         vd_fw_unlock();
     }
     return 0;

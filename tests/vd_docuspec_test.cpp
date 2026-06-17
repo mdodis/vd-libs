@@ -4,6 +4,49 @@
 #include "vd_docuspec.h"
 #include <stdio.h>
 
+VD_TEST("Basic Syntax - 1") {
+    VdStr s = VD_LIT(R"STR(
+@section("hello") {
+    text {
+        the text
+    }
+}
+    )STR");
+    VdDspcDocument doc;
+    vd_dspc_document_init(&doc, 0);
+    vd_dspc_document_add(&doc, s.s, s.len, 0);
+    VdDspcTree *tree = vd_dspc_document_first_tree(&doc);
+    VdDspcSection *section = vd_dspc_tree_first_section(tree)->first;
+
+    VdDspcError *err = vd_dspc_document_first_error(&doc);
+    while (vd_dspc_error_valid(err)) {
+        char message[128];
+        int message_size = vd_dspc_error_get_message(err, sizeof(message), message);
+
+        fprintf(stderr, "%zu:%zu %.*s\n",
+                        err->line, err->column,
+                        message_size, message);
+
+        err = vd_dspc_error_next(err);
+    }
+
+    VD_TEST_NONZERO("Section", section);
+
+    VD_TEST_EQ("Section id is \"section\"", strncmp(section->section_id.s, "section", section->section_id.l), 0);
+
+    int count = 0;
+    VdDspcTag *tag = vd_dspc_section_first_tag(section);
+    while (tag != 0) {
+        count++;
+        tag = vd_dspc_section_next_tag(section, tag); 
+    }
+
+    VD_TEST_EQ("Exactly one tag", count, 1);
+
+
+    VD_TEST_OK();
+}
+
 VD_TEST("Inline Text Content") {
     VdStr s = VD_LIT("text {normal*bold*_italic__*bolditalic*_#link#} ");
     VdDspcDocument doc;

@@ -627,6 +627,7 @@ int main(int argc, char const *argv[])
                 pass->instance_count);
         }
 
+        vd_fw_swap();
         vd_fw_unlock();
     }
 
