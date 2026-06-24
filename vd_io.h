@@ -23,6 +23,10 @@
  */
 #ifndef VD_IO_H
 #define VD_IO_H
+#define VD_IO_VERSION_MAJOR    0
+#define VD_IO_VERSION_MINOR    0
+#define VD_IO_VERSION_PATCH    2
+#define VD_IO_VERSION          ((VD_IO_VERSION_MAJOR << 16) | (VD_IO_VERSION_MINOR << 8) | (VD_IO_VERSION_PATCH))
 #ifndef VD_IO_API
 #   ifdef VD_IO_STATIC
 #       define VD_IO_API static
@@ -97,6 +101,11 @@ typedef struct VdIo VdIo;
 #define VD_IO_CALLBACK(name) void name(VdIo *io, VdIoEvent *evt, void *usr)
 typedef VD_IO_CALLBACK(VdIoCallback);
 
+typedef struct {
+    VdIoCallback *cb;
+    void         *usr;
+} VdIoCallbackInfo;
+
 typedef enum {
     VD_IO_OP_KIND_CONNECT,
     VD_IO_OP_KIND_ACCEPT,
@@ -135,7 +144,7 @@ typedef union {
 } VdIoOpData;
 
 typedef struct {
-    volatile int     used;
+    volatile long    used;
     VdIoOpKind       kind;
     VdIoOpData       data;
     VdIoCallback     *callback;
@@ -156,8 +165,8 @@ struct VdIo {
         } win;
     } u;
 
-    volatile int cap_ops;
-    volatile int num_ops;
+    volatile long cap_ops;
+    volatile long num_ops;
     VdIoOp *ops;
 };
 
@@ -193,6 +202,7 @@ VD_IO_API VdIoErr vd_io_net_open(VdIoFlags flags, const char *ip, int port, VdIo
 #endif // VD_IO_H
 
 #ifdef VD_IO_IMPL
+#include <intrin.h>
 
 #ifndef VD_IO_MEMCPY
 #   include <string.h>
@@ -361,7 +371,56 @@ VD_IO_DECLARE_HANDLE(VdIoHMONITOR);
 VD_IO_DECLARE_HANDLE(VdIoHGDIOBJ);
 VD_IO_DECLARE_HANDLE(VdIoHBITMAP);
 typedef VdIoHINSTANCE VdIoHMODULE;
+typedef struct VdIo_OVERLAPPED {
+    VdIoULONG_PTR Internal;
+    VdIoULONG_PTR InternalHigh;
+    union {
+        struct {
+          VdIoDWORD Offset;
+          VdIoDWORD OffsetHigh;
+        } s;
+        void* Pointer;
+    } u;
+    VdIoHANDLE    hEvent;
+} VdIoOVERLAPPED, *VdIoLPOVERLAPPED;
+
+extern VdIoHMODULE LoadLibraryA(VdIoLPCSTR path);
+extern void*       GetProcAddress(VdIoHMODULE hModule, VdIoLPCSTR lpProcName);
+extern VdIoHANDLE  CreateIoCompletionPort(VdIoHANDLE    FileHandle,
+                                          VdIoHANDLE    ExistingCompletionPort,
+                                          VdIoULONG_PTR CompletionKey,
+                                          VdIoDWORD     NumberOfConcurrentThreads);
+
+extern VdIoBOOL GetQueuedCompletionStatus(VdIoHANDLE CompletionPort, VdIoLPDWORD lpNumberOfBytesTransferred,
+                                          VdIoPULONG_PTR lpCompletionKey, VdIoLPOVERLAPPED *lpOverlapped,
+                                          VdIoDWORD dwMilliseconds);
+extern VdIoDWORD GetLastError(void);
+extern VdIoBOOL CancelIoEx(VdIoHANDLE hFile, VdIoLPOVERLAPPED lpOverlapped);
+
 #else
+typedef UCHAR VdIoUCHAR;
+typedef CHAR VdIoCHAR;
+typedef UINT_PTR VdIoUINT_PTR;
+typedef USHORT VdIoUSHORT;
+typedef ULONG VdIoULONG;
+typedef WORD VdIoWORD;
+typedef DWORD VdIoDWORD;
+typedef LPINT VdIoLPINT;
+typedef LPDWORD VdIoLPDWORD;
+typedef LPVOID VdIoLPVOID;
+typedef ULONG_PTR VdIoULONG_PTR;
+typedef HMODULE VdIoHMODULE;
+typedef LPCSTR VdIoLPCSTR;
+typedef HANDLE VdIoHANDLE;
+typedef INT VdIoINT;
+typedef PCSTR VdIoPCSTR;
+typedef BOOL VdIoBOOL;
+typedef BYTE VdIoBYTE;
+typedef DWORD_PTR VdIoDWORD_PTR;
+typedef LONG_PTR VdIoLONG_PTR;
+typedef LPOVERLAPPED VdIoLPOVERLAPPED;
+typedef OVERLAPPED VdIoOVERLAPPED;
+typedef PCHAR VdIoPCHAR;
 #endif // !_MINWINDEF_
 typedef VdIoUINT_PTR        VdIoSOCKET;
 
@@ -433,19 +492,6 @@ typedef struct VdIo_GUID {
 } VdIoGUID;
 
 #define VD_IO_DEFINE_GUID(name, l, w1, w2, b1, b2, b3, b4, b5, b6, b7, b8) VdIoGUID name = { l, w1, w2, { b1, b2,  b3,  b4,  b5,  b6,  b7,  b8 } }
-
-typedef struct VdIo_OVERLAPPED {
-    VdIoULONG_PTR Internal;
-    VdIoULONG_PTR InternalHigh;
-    union {
-        struct {
-          VdIoDWORD Offset;
-          VdIoDWORD OffsetHigh;
-        } DUMMYSTRUCTNAME;
-        void* Pointer;
-    } DUMMYUNIONNAME;
-    VdIoHANDLE    hEvent;
-} VdIoOVERLAPPED, *VdIoLPOVERLAPPED;
 
 typedef struct VdIo_WSAOVERLAPPED {
     VdIoDWORD    Internal;
@@ -573,20 +619,6 @@ typedef void (*VdIo__ProcGetAcceptExSockAddrs)(void *lpOutputBuffer, VdIoDWORD d
 
 typedef int (*VdIo__Procsetsockopt)(VdIoSOCKET s,int level,int optname,const char * optval,int optlen);
 static VdIo__Procsetsockopt VdIo__setsockopt;
-
-extern VdIoHMODULE LoadLibraryA(VdIoLPCSTR path);
-extern void*       GetProcAddress(VdIoHMODULE hModule, VdIoLPCSTR lpProcName);
-extern VdIoHANDLE  CreateIoCompletionPort(VdIoHANDLE    FileHandle,
-                                          VdIoHANDLE    ExistingCompletionPort,
-                                          VdIoULONG_PTR CompletionKey,
-                                          VdIoDWORD     NumberOfConcurrentThreads);
-
-extern VdIoBOOL GetQueuedCompletionStatus(VdIoHANDLE CompletionPort, VdIoLPDWORD lpNumberOfBytesTransferred,
-                                          VdIoPULONG_PTR lpCompletionKey, VdIoLPOVERLAPPED *lpOverlapped,
-                                          VdIoDWORD dwMilliseconds);
-extern VdIoDWORD GetLastError(void);
-extern VdIoBOOL CancelIoEx(VdIoHANDLE hFile, VdIoLPOVERLAPPED lpOverlapped);
-
 #define VD_IO__MAKEWORD(a, b) \
     ((VdIoWORD)(((VdIoBYTE)(((VdIoDWORD_PTR)(a)) & 0xff)) | ((VdIoWORD)((VdIoBYTE)(((VdIoDWORD_PTR)(b)) & 0xff))) << 8))
 
@@ -724,6 +756,7 @@ END:
 
 VD_IO_API VdIoErr vd_io_init(VdIo *io, VdIoInitInfo *info)
 {
+    VdIoSOCKET s;
     vd_io__win32_check_init();
 
     VdIoErr err = VD_IO_ERR_OK;
@@ -735,8 +768,8 @@ VD_IO_API VdIoErr vd_io_init(VdIo *io, VdIoInitInfo *info)
         goto END;
     }
 
-    VdIoSOCKET s = VdIo__WSASocketA(VD_IO__AF_INET, VD_IO__SOCK_STREAM, VD_IO__IPPROTO_TCP, NULL, 0,
-                                    VD_IO__WSA_FLAG_OVERLAPPED);
+    s = VdIo__WSASocketA(VD_IO__AF_INET, VD_IO__SOCK_STREAM, VD_IO__IPPROTO_TCP, NULL, 0,
+                         VD_IO__WSA_FLAG_OVERLAPPED);
 
     VdIoDWORD bytes;
 
@@ -875,6 +908,7 @@ VD_IO_API VdIoErr vd_io_wait(VdIo *io)
 
 VD_IO_API VdIoErr vd_io_listen(VdIo *io, const char *ip, int port, VdIoFlags flags, VdIoHn *hn)
 {
+    VdIoSOCKET socket;
     VdIoErr err = VD_IO_ERR_OK;
 
     int socket_type = VD_IO__SOCK_STREAM;
@@ -899,7 +933,7 @@ VD_IO_API VdIoErr vd_io_listen(VdIo *io, const char *ip, int port, VdIoFlags fla
         sockaddr.sin_addr.S_un.S_addr = ip_n;
     }
 
-    VdIoSOCKET socket = VdIo__WSASocketA(VD_IO__AF_INET, socket_type, protocol, 0, 0, VD_IO__WSA_FLAG_OVERLAPPED);
+    socket = VdIo__WSASocketA(VD_IO__AF_INET, socket_type, protocol, 0, 0, VD_IO__WSA_FLAG_OVERLAPPED);
 
     if (socket == VD_IO__INVALID_SOCKET) {
         err = VD_IO_ERR_INTERNAL; // @todo(mdodis): WSAGetLastError
@@ -928,6 +962,11 @@ END:
 VD_IO_API VdIoErr vd_io_connect(VdIo *io, const char *ip, int port, VdIoFlags flags, VdIoHn *hn,
                                 VdIoCallback *cb, void *usr)
 {
+    VdIoOp *op;
+    int socket_type, protocol, rc;
+    VdIoSOCKET socket;
+    VdIo__ProcConnectEx connectex;
+
     VdIoErr err = VD_IO_ERR_OK;
 
     int op_idx = vd_io__make_op(io);
@@ -936,12 +975,12 @@ VD_IO_API VdIoErr vd_io_connect(VdIo *io, const char *ip, int port, VdIoFlags fl
         goto END;
     }
 
-    VdIoOp *op = &io->ops[op_idx];
+    op = &io->ops[op_idx];
 
     VD_IO_MEMSET(op->internal, 0, sizeof(op->internal));
 
-    int socket_type = VD_IO__SOCK_STREAM;
-    int protocol = VD_IO__IPPROTO_TCP;
+    socket_type = VD_IO__SOCK_STREAM;
+    protocol = VD_IO__IPPROTO_TCP;
     if (flags & VD_IO_NET_UDP) {
         socket_type = VD_IO__SOCK_DGRAM;
         protocol = VD_IO__IPPROTO_UDP;
@@ -965,7 +1004,7 @@ VD_IO_API VdIoErr vd_io_connect(VdIo *io, const char *ip, int port, VdIoFlags fl
         remote_sockaddr.sin_addr.S_un.S_addr = ip_n;
     }
 
-    VdIoSOCKET socket = VdIo__WSASocketA(VD_IO__AF_INET, socket_type, protocol, 0, 0, VD_IO__WSA_FLAG_OVERLAPPED);
+    socket = VdIo__WSASocketA(VD_IO__AF_INET, socket_type, protocol, 0, 0, VD_IO__WSA_FLAG_OVERLAPPED);
 
     if (socket == VD_IO__INVALID_SOCKET) {
         err = VD_IO_ERR_INTERNAL; // @todo(mdodis): WSAGetLastError
@@ -979,9 +1018,9 @@ VD_IO_API VdIoErr vd_io_connect(VdIo *io, const char *ip, int port, VdIoFlags fl
 
     CreateIoCompletionPort((VdIoHANDLE)socket, (VdIoHANDLE)io->u.win.iocp, (VdIoULONG_PTR)io, 0);
 
-    VdIo__ProcConnectEx connectex = vd_io__win32_get_connectex(io);
+    connectex = vd_io__win32_get_connectex(io);
 
-    int rc = connectex(socket, (VdIo__SOCKADDR*)&remote_sockaddr, sizeof(remote_sockaddr), 0, 0, 0, (VdIoOVERLAPPED*)op->internal);
+    rc = connectex(socket, (VdIo__SOCKADDR*)&remote_sockaddr, sizeof(remote_sockaddr), 0, 0, 0, (VdIoOVERLAPPED*)op->internal);
     if (!rc) {
         VdIoDWORD wsa_err = VdIo__WSAGetLastError();
         if (wsa_err != VD_IO__WSA_IO_PENDING) {
@@ -1010,6 +1049,12 @@ END:
 
 VD_IO_API VdIoErr vd_io_hn_accept(VdIo *io, VdIoHn hn, VdIoCallback *cb, void *usr)
 {
+    VdIoSOCKET listener, s;
+    VdIoOp *op;
+    int socket_type, protocol;
+    VdIo__ProcAcceptEx acceptex;
+    VdIoBOOL acceptex_ok;
+
     VdIoErr err = VD_IO_ERR_OK;
 
     int op_idx = vd_io__make_op(io);
@@ -1018,18 +1063,18 @@ VD_IO_API VdIoErr vd_io_hn_accept(VdIo *io, VdIoHn hn, VdIoCallback *cb, void *u
         goto END;
     }
 
-    VdIoOp *op = &io->ops[op_idx];
+    op = &io->ops[op_idx];
 
     VD_IO_MEMSET(op->internal, 0, sizeof(op->internal));
 
-    int socket_type = VD_IO__SOCK_STREAM;
-    int protocol = VD_IO__IPPROTO_TCP;
+    socket_type = VD_IO__SOCK_STREAM;
+    protocol = VD_IO__IPPROTO_TCP;
     if (hn.flags & VD_IO_NET_UDP) {
         socket_type = VD_IO__SOCK_DGRAM;
         protocol = VD_IO__IPPROTO_UDP;
     }
 
-    VdIoSOCKET s = VdIo__WSASocketA(VD_IO__AF_INET, socket_type, protocol, NULL, 0, VD_IO__WSA_FLAG_OVERLAPPED);
+    s = VdIo__WSASocketA(VD_IO__AF_INET, socket_type, protocol, NULL, 0, VD_IO__WSA_FLAG_OVERLAPPED);
     if (s == VD_IO__INVALID_SOCKET) {
         VdIoDWORD wsa_err = VdIo__WSAGetLastError();
         err = VD_IO_ERR_INTERNAL; // @todo(mdodis): WSAGetLastError
@@ -1037,8 +1082,8 @@ VD_IO_API VdIoErr vd_io_hn_accept(VdIo *io, VdIoHn hn, VdIoCallback *cb, void *u
         goto END;
     }
 
-    VdIo__ProcAcceptEx acceptex = vd_io__win32_get_acceptex(io);
-    VdIoBOOL acceptex_ok = acceptex((VdIoSOCKET)hn.h, s,
+    acceptex = vd_io__win32_get_acceptex(io);
+    acceptex_ok = acceptex((VdIoSOCKET)hn.h, s,
                                     op->data.accept.buf,
                                     0,
                                     32,
@@ -1055,7 +1100,7 @@ VD_IO_API VdIoErr vd_io_hn_accept(VdIo *io, VdIoHn hn, VdIoCallback *cb, void *u
         }
     }
 
-    VdIoSOCKET listener = (VdIoSOCKET)hn.h;
+    listener = (VdIoSOCKET)hn.h;
     VdIo__setsockopt(s,
         VD_IO__SOL_SOCKET,
         VD_IO__SO_UPDATE_ACCEPT_CONTEXT,
@@ -1074,6 +1119,11 @@ END:
 
 VD_IO_API VdIoErr vd_io_hn_recv(VdIo *io, VdIoHn hn, void *buffer, size_t len, VdIoCallback *cb, void *usr)
 {
+    VdIoOp *op;
+    VdIoSOCKET s;
+    int recv_rc;
+    VdIoDWORD flags;
+
     VdIoErr err = VD_IO_ERR_OK;
 
     int op_idx = vd_io__make_op(io);
@@ -1082,16 +1132,16 @@ VD_IO_API VdIoErr vd_io_hn_recv(VdIo *io, VdIoHn hn, void *buffer, size_t len, V
         goto END;
     }
 
-    VdIoSOCKET s = (VdIoSOCKET)hn.h;
+    s = (VdIoSOCKET)hn.h;
 
-    VdIoOp *op = &io->ops[op_idx];
+    op = &io->ops[op_idx];
     VD_IO_MEMSET(op->internal, 0, sizeof(op->internal));
 
     VdIoWSABUF wsa_buf;
-    wsa_buf.buf = buffer;
+    wsa_buf.buf = (VdIoCHAR*)buffer;
     wsa_buf.len = (VdIoULONG)len;
-    VdIoDWORD flags = 0;
-    int recv_rc = VdIo__WSARecv(s, &wsa_buf, 1, NULL, &flags, (VdIoWSAOVERLAPPED*)op->internal, NULL);
+    flags = 0;
+    recv_rc = VdIo__WSARecv(s, &wsa_buf, 1, NULL, &flags, (VdIoWSAOVERLAPPED*)op->internal, NULL);
 
     if (recv_rc == -1) {
         VdIoDWORD wsa_err = VdIo__WSAGetLastError(); 
@@ -1115,6 +1165,12 @@ END:
 
 VD_IO_API VdIoErr vd_io_hn_send(VdIo *io, VdIoHn hn, void *buffer, size_t len, VdIoCallback *cb, void *usr)
 {
+    VdIoOp *op;
+    VdIoSOCKET s;
+    VdIoWSABUF wsa_buf;
+    VdIoDWORD flags;
+    int send_rc;
+
     VdIoErr err = VD_IO_ERR_OK;
 
     int op_idx = vd_io__make_op(io);
@@ -1123,16 +1179,15 @@ VD_IO_API VdIoErr vd_io_hn_send(VdIo *io, VdIoHn hn, void *buffer, size_t len, V
         goto END;
     }
 
-    VdIoSOCKET s = (VdIoSOCKET)hn.h;
+    s = (VdIoSOCKET)hn.h;
 
-    VdIoOp *op = &io->ops[op_idx];
+    op = &io->ops[op_idx];
     VD_IO_MEMSET(op->internal, 0, sizeof(op->internal));
 
-    VdIoWSABUF wsa_buf;
-    wsa_buf.buf = buffer;
+    wsa_buf.buf = (VdIoCHAR*)buffer;
     wsa_buf.len = (VdIoULONG)len;
-    VdIoDWORD flags = 0;
-    int send_rc = VdIo__WSASend(s, &wsa_buf, 1, NULL, flags, (VdIoWSAOVERLAPPED*)op->internal, NULL);
+    flags = 0;
+    send_rc = VdIo__WSASend(s, &wsa_buf, 1, NULL, flags, (VdIoWSAOVERLAPPED*)op->internal, NULL);
     if (send_rc == -1) {
         VdIoDWORD wsa_err = VdIo__WSAGetLastError();
         if (wsa_err != VD_IO__WSA_IO_PENDING) {
