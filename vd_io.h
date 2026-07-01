@@ -37,6 +37,12 @@
 
 #include <stdint.h>
 
+typedef struct {
+    const char *domain;
+    int        domain_len;
+    int        port;
+} VdIoEndpoint;
+
 typedef enum {
     VD_IO_NET_TCP = 0,
     VD_IO_NET_UDP,
@@ -176,6 +182,8 @@ typedef struct {
     void *op_memory;
 } VdIoInitInfo;
 
+VD_IO_API VdIoEndpoint  vd_io_endpoint(const char *domain, int port);
+
 VD_IO_API VdIoInitInfo  vd_io_init_info_default(void);
 
 VD_IO_API size_t        vd_io_init_info_mem_size(VdIoInitInfo *info);
@@ -217,6 +225,15 @@ VD_IO_API VdIoErr vd_io_net_open(VdIoFlags flags, const char *ip, int port, VdIo
 static int vd_io__count_ops_from_bytes(size_t bytes)
 {
     return (int)(bytes / sizeof(VdIoOp));
+}
+
+VD_IO_API VdIoEndpoint vd_io_endpoint(const char *domain, int port)
+{
+    VdIoEndpoint result;
+    result.domain = domain;
+    result.domain_len = 0;
+    result.port = port;
+    return result;
 }
 
 VD_IO_API VdIoInitInfo vd_io_init_info_default(void)

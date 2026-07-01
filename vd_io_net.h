@@ -20,6 +20,10 @@
  *    misrepresented as being the original software.
  * 3. This notice may not be removed or altered from any source distribution.
  * ---------------------------------------------------------------------------------------------------------------------
+ *
+ * NOTES
+ * - It is imperative that a cryptographically secure rng be used to replace VD_IO_NET_RANDOM.
+ *   By default it just uses rand.
  */
 #ifndef VD_IO_NET_H
 #define VD_IO_NET_H
@@ -50,16 +54,31 @@ typedef enum {
 typedef uint8_t VdIoNet__TlsHandshakeType;
 
 typedef struct {
+    VdIoEndpoint endpoint;
+    size_t       memory_size;
+    void         *memory;
+} VdIoNetTlsClientInfo;
+
+typedef struct {
     VdIo                      *io;
     VdIoNetTlsState           state;
     VdIoHn                    socket;
 
     // Internal
+    uint8_t                   *buf;
+    size_t                    bufsize;
+
+    size_t                    client_hello_size;
+
+    uint8_t                   private_key[32];
+
     VdIoCallbackInfo          on_connect_cb;
     VdIoNet__TlsHandshakeType next_handshake_state;
 } VdIoNetTls;
 
-VD_IO_NET_API VdIoErr    vd_io_net_tls_connect(VdIo *io, const char *ip, int port, VdIoNetTls *tls,
+VD_IO_NET_API size_t     vd_io_net_tls_client_info_mem_size(VdIoNetTlsClientInfo *info);
+
+VD_IO_NET_API VdIoErr    vd_io_net_tls_connect(VdIo *io, VdIoNetTlsClientInfo *info, VdIoNetTls *tls,
                                                VdIoCallback *cb, void *usr);
 
 #endif // !VD_IO_NET_H
@@ -70,9 +89,58 @@ VD_IO_NET_API VdIoErr    vd_io_net_tls_connect(VdIo *io, const char *ip, int por
 #error "vd_io_net.h requires vd_io.h. Please include it before including this"
 #endif // !VD_IO_H
 
+#ifndef VD_IO_NET_ASSERTIONS
+#define VD_IO_NET_ASSERTIONS 0
+#endif // !VD_IO_NET_ASSERTIONS
+
+#if VD_IO_NET_ASSERTIONS
+#   ifndef VD_IO_NET_ASSERT
+#      include <assert.h>
+#      define VD_IO_NET_ASSERT(x) assert(x)
+#   endif // !VD_IO_NET_ASSERT
+#endif // VD_IO_NET_ASSERTIONS
+
+#if defined(_MSC_VER)
+#  define VD_IO_NET__HOST_LITTLE_ENDIAN 1
+#elif __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+#  define VD_IO_NET__HOST_LITTLE_ENDIAN 1
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+#  define VD_IO_NET__HOST_LITTLE_ENDIAN 0
+#else
+#  error "Unknown byte order"
+#endif
+
+static uint16_t vd_io_net__swap16(uint16_t x)
+{
+    return ((uint16_t)((x << 8) | (x >> 8)));
+}
+
+#if VD_IO_NET__HOST_LITTLE_ENDIAN
+#   define VD_IO_NET__BE16_(h0, h1) 0x##h1##h0
+#   define VD_IO_NET__BE16(h0, h1) VD_IO_NET__BE16_(h0, h1)
+#   define VD_IO_NET__SWAP16_BE(x) vd_io_net__swap16(x)
+#else
+#   define VD_IO_NET__BE16_(h0, h1) 0x##h0##h1
+#   define VD_IO_NET__BE16(h0, h1) VD_IO_NET__BE16_(h0, h1)
+#   define VD_IO_NET__SWAP16_BE(x) x
+#endif // VD_IO_NET__HOST_LITTLE_ENDIAN
+
 #ifndef VD_IO_NET_SHA256
 #   define VD_IO_NET_SHA256(bytes, len, out) vd_io_net__sha256(bytes, len, out)
 #endif // !VD_IO_NET_SHA256
+
+/* ----RANDOM-------------------------------------------------------------------------------------------------------- */
+#ifndef VD_IO_NET_RANDOM
+#include <stdlib.h>
+#define VD_IO_NET_RANDOM(ptr, len) vd_io_net__sys_random((uint8_t*)(ptr), (size_t)(len))
+
+static void vd_io_net__sys_random(uint8_t *ptr, size_t len)
+{
+    for (size_t i = 0; i < len; ++i) {
+        ptr[i] = (uint8_t)(rand() % 255);
+    }
+}
+#endif // !VD_IO_NET_RANDOM
 
 /* ----Curve25519---------------------------------------------------------------------------------------------------- */
 typedef struct {
@@ -379,159 +447,131 @@ static void vd_io_net__sha256(const uint8_t *bytes, size_t len, uint8_t out[32])
 
 /* ----TLS----------------------------------------------------------------------------------------------------------- */
 enum VD_IO_NET__TLS_HANDSHAKE_TYPE_ {
-    VD_IO_NET__TLS_HANDSHAKE_TYPE_HELLO_REQUEST_RESERVED = 0,
-    VD_IO_NET__TLS_HANDSHAKE_TYPE_CLIENT_HELLO = 1,
-    VD_IO_NET__TLS_HANDSHAKE_TYPE_SERVER_HELLO = 2,
-    VD_IO_NET__TLS_HANDSHAKE_TYPE_HELLO_VERIFY_REQUEST_RESERVED = 3,
-    VD_IO_NET__TLS_HANDSHAKE_TYPE_NEW_SESSION_TICKET = 4,
-    VD_IO_NET__TLS_HANDSHAKE_TYPE_END_OF_EARLY_DATA = 5,
-    VD_IO_NET__TLS_HANDSHAKE_TYPE_HELLO_RETRY_REQUEST_RESERVED = 6,
-    VD_IO_NET__TLS_HANDSHAKE_TYPE_ENCRYPTED_EXTENSIONS = 8,
-    VD_IO_NET__TLS_HANDSHAKE_TYPE_SERVER_KEY_EXCHANGE_RESERVED = 12,
-    VD_IO_NET__TLS_HANDSHAKE_TYPE_CERTIFICATE_REQUEST = 13,
-    VD_IO_NET__TLS_HANDSHAKE_TYPE_SERVER_HELLO_DONE_RESERVED = 14,
-    VD_IO_NET__TLS_HANDSHAKE_TYPE_CERTIFICATE_VERIFY = 15,
-    VD_IO_NET__TLS_HANDSHAKE_TYPE_CLIENT_KEY_EXCHANGE_RESERVED = 16,
-    VD_IO_NET__TLS_HANDSHAKE_TYPE_FINISHED = 20,
-    VD_IO_NET__TLS_HANDSHAKE_TYPE_CERTIFICATE_URL_RESERVED = 21,
-    VD_IO_NET__TLS_HANDSHAKE_TYPE_CERTIFICATE_STATUS_RESERVED = 22,
-    VD_IO_NET__TLS_HANDSHAKE_TYPE_SUPPLEMENTAL_DATA_RESERVED = 23,
-    VD_IO_NET__TLS_HANDSHAKE_TYPE_KEY_UPDATE = 24,
-    VD_IO_NET__TLS_HANDSHAKE_TYPE_MESSAGE_HASH = 254,
+    VD_IO_NET__TLS_HANDSHAKE_TYPE_HELLO_REQUEST_RESERVED        = 0x0,
+    VD_IO_NET__TLS_HANDSHAKE_TYPE_CLIENT_HELLO                  = 0x1,
+    VD_IO_NET__TLS_HANDSHAKE_TYPE_SERVER_HELLO                  = 0x2,
+    VD_IO_NET__TLS_HANDSHAKE_TYPE_HELLO_VERIFY_REQUEST_RESERVED = 0x3,
+    VD_IO_NET__TLS_HANDSHAKE_TYPE_NEW_SESSION_TICKET            = 0x4,
+    VD_IO_NET__TLS_HANDSHAKE_TYPE_END_OF_EARLY_DATA             = 0x5,
+    VD_IO_NET__TLS_HANDSHAKE_TYPE_HELLO_RETRY_REQUEST_RESERVED  = 0x6,
+    VD_IO_NET__TLS_HANDSHAKE_TYPE_ENCRYPTED_EXTENSIONS          = 0x8,
+    VD_IO_NET__TLS_HANDSHAKE_TYPE_SERVER_KEY_EXCHANGE_RESERVED  = 0xc,
+    VD_IO_NET__TLS_HANDSHAKE_TYPE_CERTIFICATE_REQUEST           = 0xd,
+    VD_IO_NET__TLS_HANDSHAKE_TYPE_SERVER_HELLO_DONE_RESERVED    = 0xe,
+    VD_IO_NET__TLS_HANDSHAKE_TYPE_CERTIFICATE_VERIFY            = 0xf,
+    VD_IO_NET__TLS_HANDSHAKE_TYPE_CLIENT_KEY_EXCHANGE_RESERVED  = 0x10,
+    VD_IO_NET__TLS_HANDSHAKE_TYPE_FINISHED                      = 0x14,
+    VD_IO_NET__TLS_HANDSHAKE_TYPE_CERTIFICATE_URL_RESERVED      = 0x15,
+    VD_IO_NET__TLS_HANDSHAKE_TYPE_CERTIFICATE_STATUS_RESERVED   = 0x16,
+    VD_IO_NET__TLS_HANDSHAKE_TYPE_SUPPLEMENTAL_DATA_RESERVED    = 0x17,
+    VD_IO_NET__TLS_HANDSHAKE_TYPE_KEY_UPDATE                    = 0x18,
+    VD_IO_NET__TLS_HANDSHAKE_TYPE_MESSAGE_HASH                  = 0xfe,
 };
 
+enum VD_IO_NET__TLS_RECORD_TYPE_ {
+    VD_IO_NET__TLS_RECORD_TYPE_HANDSHAKE = 0x16,
+};
+typedef uint8_t VdIoNet__TlsRecordType;
+
 enum VD_IO_NET__TLS_CIPHER_SUITE_ {
-    VD_IO_NET__TLS_CIPHER_SUITE_AES_128_GCM_SHA256 = 0x1301,
-    VD_IO_NET__TLS_CIPHER_SUITE_AES_256_GCM_SHA384 = 0x1302,
-    VD_IO_NET__TLS_CIPHER_SUITE_CHACHA20_POLY1305_SHA256 = 0x1303,
-    VD_IO_NET__TLS_CIPHER_SUITE_AES_128_CCM_SHA256 = 0x1304,
-    VD_IO_NET__TLS_CIPHER_SUITE_AES_128_CCM_8_SHA256 = 0x1305,
+    VD_IO_NET__TLS_CIPHER_SUITE_AES_128_GCM_SHA256       = VD_IO_NET__BE16(13, 01),
+    VD_IO_NET__TLS_CIPHER_SUITE_AES_256_GCM_SHA384       = VD_IO_NET__BE16(13, 02),
+    VD_IO_NET__TLS_CIPHER_SUITE_CHACHA20_POLY1305_SHA256 = VD_IO_NET__BE16(13, 03),
+    VD_IO_NET__TLS_CIPHER_SUITE_AES_128_CCM_SHA256       = VD_IO_NET__BE16(13, 04),
+    VD_IO_NET__TLS_CIPHER_SUITE_AES_128_CCM_8_SHA256     = VD_IO_NET__BE16(13, 05),
 };
 typedef uint16_t VdIoNet__TlsCipherSuite;
 
 enum VD_IO_NET__TLS_EXTENSION_KIND_ {
-    VD_IO_NET__TLS_EXTENSION_KIND_SERVER_NAME = 0,
-    VD_IO_NET__TLS_EXTENSION_KIND_MAX_FRAGMENT_LENGTH = 1,
-    VD_IO_NET__TLS_EXTENSION_KIND_STATUS_REQUEST = 5,
-    VD_IO_NET__TLS_EXTENSION_KIND_SUPPORTED_GROUPS = 10,
-    VD_IO_NET__TLS_EXTENSION_KIND_EC_POINT_FORMATS = 11,
-    VD_IO_NET__TLS_EXTENSION_KIND_SIGNATURE_ALGORITHMS = 13,
-    VD_IO_NET__TLS_EXTENSION_KIND_USE_SRTP = 14,
-    VD_IO_NET__TLS_EXTENSION_KIND_HEARTBEAT = 15,
-    VD_IO_NET__TLS_EXTENSION_KIND_APPLICATION_LAYER_PROTOCOL_NEGOTIATION = 16,
-    VD_IO_NET__TLS_EXTENSION_KIND_SIGNED_CERTIFICATE_TIMESTAMP = 18,
-    VD_IO_NET__TLS_EXTENSION_KIND_CLIENT_CERTIFICATE_TYPE = 19,
-    VD_IO_NET__TLS_EXTENSION_KIND_SERVER_CERTIFICATE_TYPE = 20,
-    VD_IO_NET__TLS_EXTENSION_KIND_PADDING = 21,
-    VD_IO_NET__TLS_EXTENSION_KIND_PRE_SHARED_KEY = 41,
-    VD_IO_NET__TLS_EXTENSION_KIND_EARLY_DATA = 42,
-    VD_IO_NET__TLS_EXTENSION_KIND_SUPPORTED_VERSIONS = 43,
-    VD_IO_NET__TLS_EXTENSION_KIND_COOKIE = 44,
-    VD_IO_NET__TLS_EXTENSION_KIND_PSK_KEY_EXCHANGE_MODES = 45,
-    VD_IO_NET__TLS_EXTENSION_KIND_CERTIFICATE_AUTHORITIES = 47,
-    VD_IO_NET__TLS_EXTENSION_KIND_OID_FILTERS = 48,
-    VD_IO_NET__TLS_EXTENSION_KIND_POST_HANDSHAKE_AUTH = 49,
-    VD_IO_NET__TLS_EXTENSION_KIND_SIGNATURE_ALGORITHMS_CERT = 50,
-    VD_IO_NET__TLS_EXTENSION_KIND_KEY_SHARE = 51,
+    VD_IO_NET__TLS_EXTENSION_KIND_SERVER_NAME                            = VD_IO_NET__BE16(00, 00),
+    VD_IO_NET__TLS_EXTENSION_KIND_MAX_FRAGMENT_LENGTH                    = VD_IO_NET__BE16(00, 01),
+    VD_IO_NET__TLS_EXTENSION_KIND_STATUS_REQUEST                         = VD_IO_NET__BE16(00, 05),
+    VD_IO_NET__TLS_EXTENSION_KIND_SUPPORTED_GROUPS                       = VD_IO_NET__BE16(00, 0a),
+    VD_IO_NET__TLS_EXTENSION_KIND_EC_POINT_FORMATS                       = VD_IO_NET__BE16(00, 0b),
+    VD_IO_NET__TLS_EXTENSION_KIND_SIGNATURE_ALGORITHMS                   = VD_IO_NET__BE16(00, 0d),
+    VD_IO_NET__TLS_EXTENSION_KIND_USE_SRTP                               = VD_IO_NET__BE16(00, 0e),
+    VD_IO_NET__TLS_EXTENSION_KIND_HEARTBEAT                              = VD_IO_NET__BE16(00, 0f),
+    VD_IO_NET__TLS_EXTENSION_KIND_APPLICATION_LAYER_PROTOCOL_NEGOTIATION = VD_IO_NET__BE16(00, 10),
+    VD_IO_NET__TLS_EXTENSION_KIND_SIGNED_CERTIFICATE_TIMESTAMP           = VD_IO_NET__BE16(00, 12),
+    VD_IO_NET__TLS_EXTENSION_KIND_CLIENT_CERTIFICATE_TYPE                = VD_IO_NET__BE16(00, 13),
+    VD_IO_NET__TLS_EXTENSION_KIND_SERVER_CERTIFICATE_TYPE                = VD_IO_NET__BE16(00, 14),
+    VD_IO_NET__TLS_EXTENSION_KIND_PADDING                                = VD_IO_NET__BE16(00, 15),
+    VD_IO_NET__TLS_EXTENSION_KIND_PRE_SHARED_KEY                         = VD_IO_NET__BE16(00, 29),
+    VD_IO_NET__TLS_EXTENSION_KIND_EARLY_DATA                             = VD_IO_NET__BE16(00, 2a),
+    VD_IO_NET__TLS_EXTENSION_KIND_SUPPORTED_VERSIONS                     = VD_IO_NET__BE16(00, 2b),
+    VD_IO_NET__TLS_EXTENSION_KIND_COOKIE                                 = VD_IO_NET__BE16(00, 2c),
+    VD_IO_NET__TLS_EXTENSION_KIND_PSK_KEY_EXCHANGE_MODES                 = VD_IO_NET__BE16(00, 2d),
+    VD_IO_NET__TLS_EXTENSION_KIND_CERTIFICATE_AUTHORITIES                = VD_IO_NET__BE16(00, 2f),
+    VD_IO_NET__TLS_EXTENSION_KIND_OID_FILTERS                            = VD_IO_NET__BE16(00, 30),
+    VD_IO_NET__TLS_EXTENSION_KIND_POST_HANDSHAKE_AUTH                    = VD_IO_NET__BE16(00, 31),
+    VD_IO_NET__TLS_EXTENSION_KIND_SIGNATURE_ALGORITHMS_CERT              = VD_IO_NET__BE16(00, 32),
+    VD_IO_NET__TLS_EXTENSION_KIND_KEY_SHARE                              = VD_IO_NET__BE16(00, 33),
 };
 typedef uint16_t VdIoNet__TlsExtensionKind;
 
 enum VD_IO_NET__TLS_PROTOCOL_VERSION_ {
-    VD_IO_NET__TLS_PROTOCOL_VERSION_SSL_3_0 = 0x0300,
-    VD_IO_NET__TLS_PROTOCOL_VERSION_TLS_1_0 = 0x0301,
-    VD_IO_NET__TLS_PROTOCOL_VERSION_TLS_1_1 = 0x0302,
-    VD_IO_NET__TLS_PROTOCOL_VERSION_TLS_1_2 = 0x0303,
-    VD_IO_NET__TLS_PROTOCOL_VERSION_TLS_1_3 = 0x0304,
+    VD_IO_NET__TLS_PROTOCOL_VERSION_SSL_3_0 = VD_IO_NET__BE16(03, 00),
+    VD_IO_NET__TLS_PROTOCOL_VERSION_TLS_1_0 = VD_IO_NET__BE16(03, 01),
+    VD_IO_NET__TLS_PROTOCOL_VERSION_TLS_1_1 = VD_IO_NET__BE16(03, 02),
+    VD_IO_NET__TLS_PROTOCOL_VERSION_TLS_1_2 = VD_IO_NET__BE16(03, 03),
+    VD_IO_NET__TLS_PROTOCOL_VERSION_TLS_1_3 = VD_IO_NET__BE16(03, 04),
 };
 typedef uint16_t VdIoNet__TlsProtocolVersion;
 
 enum VD_IO_NET__TLS_SIGNATURE_SCHEME_ {
-    VD_IO_NET__TLS_SIGNATURE_SCHEME_RSA_PKCS1_SHA256 = 0x0401,
-    VD_IO_NET__TLS_SIGNATURE_SCHEME_RSA_PKCS1_SHA384 = 0x0501,
-    VD_IO_NET__TLS_SIGNATURE_SCHEME_RSA_PKCS1_SHA512 = 0x0601,
-    VD_IO_NET__TLS_SIGNATURE_SCHEME_ECDSA_SECP256R1_SHA256 = 0x0403,
-    VD_IO_NET__TLS_SIGNATURE_SCHEME_ECDSA_SECP384R1_SHA384 = 0x0503,
-    VD_IO_NET__TLS_SIGNATURE_SCHEME_ECDSA_SECP521R1_SHA512 = 0x0603,
-    VD_IO_NET__TLS_SIGNATURE_SCHEME_RSA_PSS_RSAE_SHA256 = 0x0804,
-    VD_IO_NET__TLS_SIGNATURE_SCHEME_RSA_PSS_RSAE_SHA384 = 0x0805,
-    VD_IO_NET__TLS_SIGNATURE_SCHEME_RSA_PSS_RSAE_SHA512 = 0x0806,
-    VD_IO_NET__TLS_SIGNATURE_SCHEME_ED25519 = 0x0807,
-    VD_IO_NET__TLS_SIGNATURE_SCHEME_ED448 = 0x0808,
-    VD_IO_NET__TLS_SIGNATURE_SCHEME_RSA_PSS_PSS_SHA256 = 0x0809,
-    VD_IO_NET__TLS_SIGNATURE_SCHEME_RSA_PSS_PSS_SHA384 = 0x080a,
-    VD_IO_NET__TLS_SIGNATURE_SCHEME_RSA_PSS_PSS_SHA512 = 0x080b,
-    VD_IO_NET__TLS_SIGNATURE_SCHEME_RSA_PKCS1_SHA1 = 0x0201,
-    VD_IO_NET__TLS_SIGNATURE_SCHEME_ECDSA_SHA1 = 0x0203,
+    VD_IO_NET__TLS_SIGNATURE_SCHEME_RSA_PKCS1_SHA256       = VD_IO_NET__BE16(04, 01),
+    VD_IO_NET__TLS_SIGNATURE_SCHEME_RSA_PKCS1_SHA384       = VD_IO_NET__BE16(05, 01),
+    VD_IO_NET__TLS_SIGNATURE_SCHEME_RSA_PKCS1_SHA512       = VD_IO_NET__BE16(06, 01),
+    VD_IO_NET__TLS_SIGNATURE_SCHEME_ECDSA_SECP256R1_SHA256 = VD_IO_NET__BE16(04, 03),
+    VD_IO_NET__TLS_SIGNATURE_SCHEME_ECDSA_SECP384R1_SHA384 = VD_IO_NET__BE16(05, 03),
+    VD_IO_NET__TLS_SIGNATURE_SCHEME_ECDSA_SECP521R1_SHA512 = VD_IO_NET__BE16(06, 03),
+    VD_IO_NET__TLS_SIGNATURE_SCHEME_RSA_PSS_RSAE_SHA256    = VD_IO_NET__BE16(08, 04),
+    VD_IO_NET__TLS_SIGNATURE_SCHEME_RSA_PSS_RSAE_SHA384    = VD_IO_NET__BE16(08, 05),
+    VD_IO_NET__TLS_SIGNATURE_SCHEME_RSA_PSS_RSAE_SHA512    = VD_IO_NET__BE16(08, 06),
+    VD_IO_NET__TLS_SIGNATURE_SCHEME_ED25519                = VD_IO_NET__BE16(08, 07),
+    VD_IO_NET__TLS_SIGNATURE_SCHEME_ED448                  = VD_IO_NET__BE16(08, 08),
+    VD_IO_NET__TLS_SIGNATURE_SCHEME_RSA_PSS_PSS_SHA256     = VD_IO_NET__BE16(08, 09),
+    VD_IO_NET__TLS_SIGNATURE_SCHEME_RSA_PSS_PSS_SHA384     = VD_IO_NET__BE16(08, 0a),
+    VD_IO_NET__TLS_SIGNATURE_SCHEME_RSA_PSS_PSS_SHA512     = VD_IO_NET__BE16(08, 0b),
+    VD_IO_NET__TLS_SIGNATURE_SCHEME_RSA_PKCS1_SHA1         = VD_IO_NET__BE16(02, 01),
+    VD_IO_NET__TLS_SIGNATURE_SCHEME_ECDSA_SHA1             = VD_IO_NET__BE16(02, 03),
 };
 typedef uint16_t VdIoNet__TlsSignatureScheme;
 
 enum VD_IO_NET__TLS_EC_POINT_FORMAT_ {
-    VD_IO_NET__TLS_EC_POINT_FORMAT_UNCOMPRESSED = 0,
+    VD_IO_NET__TLS_EC_POINT_FORMAT_UNCOMPRESSED              = 0,
     VD_IO_NET__TLS_EC_POINT_FORMAT_ANSIX962_COMPRESSED_PRIME = 1,
     VD_IO_NET__TLS_EC_POINT_FORMAT_ANSIX962_COMPRESSED_CHAR2 = 2,
 };
 typedef uint8_t VdIoNet__TlsEcPointFormat;
 
 enum VD_IO_NET__TLS_NAMED_GROUP_ {
-    VD_IO_NET__TLS_NAMED_GROUP_SECP256R1 = 23,
-    VD_IO_NET__TLS_NAMED_GROUP_SECP384R1 = 24,
-    VD_IO_NET__TLS_NAMED_GROUP_SECP521R1 = 25,
-    VD_IO_NET__TLS_NAMED_GROUP_X25519 = 29,
-    VD_IO_NET__TLS_NAMED_GROUP_X448 = 30,
+    VD_IO_NET__TLS_NAMED_GROUP_SECP256R1 = VD_IO_NET__BE16(00, 17),
+    VD_IO_NET__TLS_NAMED_GROUP_SECP384R1 = VD_IO_NET__BE16(00, 18),
+    VD_IO_NET__TLS_NAMED_GROUP_SECP521R1 = VD_IO_NET__BE16(00, 19),
+    VD_IO_NET__TLS_NAMED_GROUP_X25519    = VD_IO_NET__BE16(00, 1d),
+    VD_IO_NET__TLS_NAMED_GROUP_X448      = VD_IO_NET__BE16(00, 1e),
 };
 typedef uint16_t VdIoNet__TlsNamedGroup;
 
 enum VD_IO_NET__TLS_PSK_KEY_EXCHANGE_MODE_ {
-    VD_IO_NET__TLS_PSK_KEY_EXCHANGE_MODE_PSK_KE = 0,
+    VD_IO_NET__TLS_PSK_KEY_EXCHANGE_MODE_PSK_KE     = 0,
     VD_IO_NET__TLS_PSK_KEY_EXCHANGE_MODE_PSK_DHE_KE = 1,
 };
 typedef uint8_t VdIoNet__TlsPskKeyExchangeMode;
 
 #pragma pack(push, 1)
 typedef struct {
-    VdIoNet__TlsHandshakeType type;
-    uint32_t length : 24;
+    VdIoNet__TlsRecordType                       type;
+    VdIoNet__TlsProtocolVersion                  version;
+    uint16_t                                     len;
+} VdIoNet__TlsRecordHeader;
+
+typedef struct {
+    VdIoNet__TlsHandshakeType                    type;
+    uint16_t                                     len;
 } VdIoNet__TlsHandshakeHeader;
-#pragma pack(pop)
 
-static VD_IO_CALLBACK(vd_io_net_tls__on_connect);
-
-VD_IO_NET_API VdIoNetTls vd_io_net_tls_make(VdIo *io, VdIoHn socket)
-{
-    VdIoNetTls result;
-    result.io = io;
-    result.state = VD_IO_NET_TLS_STATE_PROCESSING;
-    result.socket = socket;
-    return result;
-}
-
-VD_IO_NET_API VdIoErr vd_io_net_tls_connect(VdIo *io, const char *ip, int port, VdIoNetTls *tls,
-                                            VdIoCallback *cb, void *usr)
-{
-    VdIoErr err;
-
-    tls->io = io;
-    tls->state = VD_IO_NET_TLS_STATE_PROCESSING;
-
-    err = VD_IO_ERR_OK;
-
-    tls->on_connect_cb.cb = cb;
-    tls->on_connect_cb.usr = usr;
-    tls->next_handshake_state = VD_IO_NET__TLS_HANDSHAKE_TYPE_CLIENT_HELLO;
-    {
-        VdIoErr connect_err = vd_io_connect(tls->io, ip, port, VD_IO_NET_TCP, &tls->socket,
-                                            vd_io_net_tls__on_connect, (void*)tls);
-        if (connect_err != VD_IO_ERR_OK) {
-            err = connect_err;
-            goto END;
-        }
-    }
-
-END:
-    return err;
-}
-
-#pragma pack(push, 1)
 typedef struct {
     uint8_t                                      size;
     VdIoNet__TlsProtocolVersion                  versions[1];
@@ -569,10 +609,20 @@ typedef struct {
 } VdIoNet__Tls13ClientHelloKeyShare;
 
 typedef struct {
+    VdIoNet__TlsExtensionKind                    kind;
+    uint16_t                                     len;
+} VdIoNet__TlsServerNamePreamble;
+
+typedef struct {
+    uint8_t                                      type;
+    uint16_t                                     name_len;
+} VdIoNet__TlsServerNameEntryPreamble;
+
+typedef struct {
     VdIoNet__TlsProtocolVersion              legacy_version;
     uint8_t                                  random[32];
     uint8_t                                  session_id_len;
-    // @todo(mdodis): uint8_t session_id[session_id_len]
+    uint8_t                                  session_id[32];
     uint16_t                                 cipher_suites_len;
     VdIoNet__TlsCipherSuite                  cipher_suites[2];
     uint8_t                                  legacy_compression_methods_len;
@@ -632,20 +682,22 @@ typedef struct {
    All implementations MUST send and use these extensions when offering
    applicable features:
 
-   -  "supported_versions" is REQUIRED for all ClientHello, ServerHello,
-      and HelloRetryRequest messages.
-
-   -  "signature_algorithms" is REQUIRED for certificate authentication.
-
-   -  "supported_groups" is REQUIRED for ClientHello messages using DHE
-      or ECDHE key exchange.
-
-   -  "key_share" is REQUIRED for DHE or ECDHE key exchange.
 
    -  "pre_shared_key" is REQUIRED for PSK key agreement.
 
    -  "psk_key_exchange_modes" is REQUIRED for PSK key agreement.
 */
+
+static VdIoNet__TlsRecordHeader Vd_Io_Net__Tls_Client_Hello_Record_Header_Proto = {
+    /* type = */ VD_IO_NET__TLS_RECORD_TYPE_HANDSHAKE,
+    /* version = */ VD_IO_NET__TLS_PROTOCOL_VERSION_TLS_1_0,
+    /* len = */ VD_IO_NET__BE16(00, 00),
+};
+
+static VdIoNet__TlsHandshakeHeader Vd_Io_Net__Tls_Client_Hello_Handshake_Header_Proto = {
+    /* type = */ VD_IO_NET__TLS_HANDSHAKE_TYPE_CLIENT_HELLO,
+    /* len = */ VD_IO_NET__BE16(00, 00),
+};
 
 static VdIoNet__Tls13ClientHello Vd_Io_Net__Tls_Client_Hello_Proto = {
     /* legacy_version = */ VD_IO_NET__TLS_PROTOCOL_VERSION_TLS_1_2,
@@ -655,20 +707,26 @@ static VdIoNet__Tls13ClientHello Vd_Io_Net__Tls_Client_Hello_Proto = {
         0, 0, 0, 0, 0, 0, 0, 0, 
         0, 0, 0, 0, 0, 0, 0, 0, 
     },
-    /* session_id_len = */ 0,
-    /* cipher_suites_len = */ 2,
+    /* session_id_len = */ 32,
+    /* session_id = */ {
+        0, 0, 0, 0, 0, 0, 0, 0, 
+        0, 0, 0, 0, 0, 0, 0, 0, 
+        0, 0, 0, 0, 0, 0, 0, 0, 
+        0, 0, 0, 0, 0, 0, 0, 0, 
+    },
+    /* cipher_suites_len = */ VD_IO_NET__BE16(00, 04),
     /* cipher_suites = */ {
         VD_IO_NET__TLS_CIPHER_SUITE_AES_128_GCM_SHA256, 
         VD_IO_NET__TLS_CIPHER_SUITE_AES_256_GCM_SHA384, 
     },
     /* legacy_compression_methods_len = */ 1,
     /* legacy_compression_methods = */ {0},
-    /* extensions_len = */ sizeof(VdIoNet__Tls13ClientHelloExtensions),
+    /* extensions_len = sizeof(VdIoNet__Tls13ClientHelloExtensions) */ VD_IO_NET__BE16(00, 4F),
 };
 
 static VdIoNet__Tls13ClientHelloExtensions Vd_Io_Net__Tls_Client_Hello_Extensions_Proto = {
     /* supported_versions_kind = */ VD_IO_NET__TLS_EXTENSION_KIND_SUPPORTED_VERSIONS,
-    /* supported_versions_len = */ sizeof(VdIoNet__Tls13ClientSupportedVersions),
+    /* supported_versions_len = sizeof(VdIoNet__Tls13ClientSupportedVersions) */ VD_IO_NET__BE16(00, 03),
     /* supported_versions = */ {
         /* size = */ sizeof(VdIoNet__TlsProtocolVersion) * 1,
         /* versions = */ {
@@ -677,9 +735,9 @@ static VdIoNet__Tls13ClientHelloExtensions Vd_Io_Net__Tls_Client_Hello_Extension
     },
 
     /* signature_algorithms_kind = */ VD_IO_NET__TLS_EXTENSION_KIND_SIGNATURE_ALGORITHMS,
-    /* signature_algorithms_len = */ sizeof(VdIoNet__Tls13ClientSignatureSchemeList),
+    /* signature_algorithms_len = sizeof(VdIoNet__Tls13ClientSignatureSchemeList) */ VD_IO_NET__BE16(00, 06),
     /* signature_algorithms = */ {
-        /* size = */ sizeof(VdIoNet__TlsSignatureScheme) * 2,
+        /* size = sizeof(VdIoNet__TlsSignatureScheme) * 2 */ VD_IO_NET__BE16(00, 04),
         /* schemes = */ {
             VD_IO_NET__TLS_SIGNATURE_SCHEME_RSA_PKCS1_SHA256,
             VD_IO_NET__TLS_SIGNATURE_SCHEME_RSA_PSS_RSAE_SHA256,
@@ -687,7 +745,7 @@ static VdIoNet__Tls13ClientHelloExtensions Vd_Io_Net__Tls_Client_Hello_Extension
     },
 
     /* ec_point_formats_kind = */ VD_IO_NET__TLS_EXTENSION_KIND_EC_POINT_FORMATS,
-    /* ec_point_formats_len = */ sizeof(VdIoNet__Tls13ClientHelloEcPointFormats),
+    /* ec_point_formats_len = sizeof(VdIoNet__Tls13ClientHelloEcPointFormats) */ VD_IO_NET__BE16(00, 02),
     /* ec_point_formats = */ {
         /* size = */ sizeof(VdIoNet__TlsEcPointFormat) * 1,
         /* formats = */ {
@@ -696,16 +754,16 @@ static VdIoNet__Tls13ClientHelloExtensions Vd_Io_Net__Tls_Client_Hello_Extension
     },
 
     /* supported_groups_kind = */ VD_IO_NET__TLS_EXTENSION_KIND_SUPPORTED_GROUPS,
-    /* supported_groups_len = */ sizeof(VdIoNet__Tls13ClientHelloSupportedGroups),
+    /* supported_groups_len = sizeof(VdIoNet__Tls13ClientHelloSupportedGroups) */ VD_IO_NET__BE16(00, 04),
     /* supported_groups = */ {
-        /* size = */ sizeof(VdIoNet__TlsNamedGroup) * 1,
+        /* size = sizeof(VdIoNet__TlsNamedGroup) * 1 */ VD_IO_NET__BE16(00, 02),
         /* groups = */ {
             VD_IO_NET__TLS_NAMED_GROUP_X25519,
         },
     },
 
     /* psk_key_exchange_modes_kind = */ VD_IO_NET__TLS_EXTENSION_KIND_PSK_KEY_EXCHANGE_MODES,
-    /* psk_key_exchange_modes_len = */ sizeof(VdIoNet__Tls13ClientHelloPskExchangeModes),
+    /* psk_key_exchange_modes_len = sizeof(VdIoNet__Tls13ClientHelloPskExchangeModes) */ VD_IO_NET__BE16(00, 02),
     /* psk_key_exchange_modes = */ {
         /* size = */ sizeof(VdIoNet__TlsPskKeyExchangeMode) * 1,
         /* modes = */ {
@@ -714,12 +772,12 @@ static VdIoNet__Tls13ClientHelloExtensions Vd_Io_Net__Tls_Client_Hello_Extension
     },
 
     /* key_share_kind = */ VD_IO_NET__TLS_EXTENSION_KIND_KEY_SHARE,
-    /* key_share_len = */ sizeof(VdIoNet__Tls13ClientHelloKeyShare),
+    /* key_share_len = sizeof(VdIoNet__Tls13ClientHelloKeyShare) */ VD_IO_NET__BE16(00, 26),
     /* key_share = */ {
-        /* len = */ sizeof(VdIoNet__Tls13ClientHelloKeyShareEntryX25519),
+        /* len = sizeof(VdIoNet__Tls13ClientHelloKeyShareEntryX25519) */ VD_IO_NET__BE16(00, 24),
         /* entry = */ {
             /* group = */ VD_IO_NET__TLS_NAMED_GROUP_X25519,
-            /* len = */ 32,
+            /* len = */ VD_IO_NET__BE16(00, 20),
             /* pk = */ {
                 0, 0, 0, 0, 0, 0, 0, 0, 
                 0, 0, 0, 0, 0, 0, 0, 0, 
@@ -728,8 +786,161 @@ static VdIoNet__Tls13ClientHelloExtensions Vd_Io_Net__Tls_Client_Hello_Extension
             },
         },
     },
-
 };
+
+static VdIoNet__TlsServerNamePreamble Vd_Io_Net__Tls_Client_Hello_Server_Name_Proto = {
+    /* kind = */ VD_IO_NET__TLS_EXTENSION_KIND_SERVER_NAME,
+    /* len = */ 0, // Filled out later
+};
+
+static VdIoNet__TlsServerNameEntryPreamble Vd_Io_Net__Tls_Client_Hello_Server_Name_Entry_Proto = {
+    /* type = */ 0, // Server name
+    /* name_len = */ 0,
+};
+
+static size_t vd_io_net__strlen(const char *s)
+{
+    size_t result = 0;
+    while (*s++) {
+        result++;
+    }
+    return result;
+}
+
+static void vd_io_net__size_assertions(void)
+{
+    VD_IO_NET_ASSERT(sizeof(VdIoNet__Tls13ClientHelloExtensions) == 0x004F);
+    VD_IO_NET_ASSERT(sizeof(VdIoNet__Tls13ClientSupportedVersions) == 0x0003);
+    VD_IO_NET_ASSERT(sizeof(VdIoNet__Tls13ClientSignatureSchemeList) == 0x0006);
+    VD_IO_NET_ASSERT((sizeof(VdIoNet__TlsSignatureScheme) * 2) == 0x0004);
+    VD_IO_NET_ASSERT(sizeof(VdIoNet__Tls13ClientHelloEcPointFormats) == 0x0002);
+    VD_IO_NET_ASSERT(sizeof(VdIoNet__Tls13ClientHelloSupportedGroups) == 0x0004);
+    VD_IO_NET_ASSERT((sizeof(VdIoNet__TlsNamedGroup) * 1) == 0x0002);
+    VD_IO_NET_ASSERT(sizeof(VdIoNet__Tls13ClientHelloPskExchangeModes) == 0x0002);
+    VD_IO_NET_ASSERT(sizeof(VdIoNet__Tls13ClientHelloKeyShare) == 0x0026);
+    VD_IO_NET_ASSERT(sizeof(VdIoNet__Tls13ClientHelloKeyShareEntryX25519) == 0x0024);
+}
+
+static VD_IO_CALLBACK(vd_io_net_tls__on_connect);
+static VD_IO_CALLBACK(vd_io_net_tls__on_client_hello_sent);
+static VD_IO_CALLBACK(vd_io_net__on_client_hello_recvd);
+
+static size_t vd_io_net__tls_client_hello_size(VdIoNetTlsClientInfo *info)
+{
+    if (info->endpoint.domain_len == 0) {
+        info->endpoint.domain_len = (int)vd_io_net__strlen(info->endpoint.domain);
+    }
+
+    size_t result = 0;
+
+    result += sizeof(VdIoNet__TlsRecordHeader);
+
+    result += sizeof(VdIoNet__TlsHandshakeHeader);
+
+    result += sizeof(VdIoNet__Tls13ClientHello);
+    result += sizeof(VdIoNet__Tls13ClientHelloExtensions);
+
+    result += sizeof(VdIoNet__TlsServerNamePreamble);
+    result += sizeof(VdIoNet__TlsServerNameEntryPreamble);
+    result += info->endpoint.domain_len;
+
+    return result;
+}
+
+VD_IO_NET_API size_t vd_io_net_tls_client_info_mem_size(VdIoNetTlsClientInfo *info)
+{
+    return vd_io_net__tls_client_hello_size(info);
+}
+
+VD_IO_NET_API VdIoErr vd_io_net_tls_connect(VdIo *io, VdIoNetTlsClientInfo *info, VdIoNetTls *tls,
+                                            VdIoCallback *cb, void *usr)
+{
+    vd_io_net__size_assertions();
+
+    VdIoErr err;
+    size_t hello_size, total_size;
+    size_t offset;
+
+    if (info->endpoint.domain_len == 0) {
+        info->endpoint.domain_len = (int)vd_io_net__strlen(info->endpoint.domain);
+    }
+
+    tls->io = io;
+    tls->state = VD_IO_NET_TLS_STATE_PROCESSING;
+
+    err = VD_IO_ERR_OK;
+
+    total_size = vd_io_net_tls_client_info_mem_size(info);
+    hello_size = vd_io_net__tls_client_hello_size(info);
+
+    if (info->memory_size < total_size) {
+        goto END;
+    }
+
+    tls->buf = (uint8_t*)info->memory;
+    tls->bufsize = info->memory_size;
+    tls->client_hello_size = hello_size;
+    tls->on_connect_cb.cb = cb;
+    tls->on_connect_cb.usr = usr;
+    tls->next_handshake_state = VD_IO_NET__TLS_HANDSHAKE_TYPE_CLIENT_HELLO;
+
+    VD_IO_NET_RANDOM(tls->private_key, 32);
+
+    vd_io_net__c25519_scalar_mult()
+
+    offset = 0;
+
+    VdIoNet__TlsRecordHeader *hello_hdr = (VdIoNet__TlsRecordHeader*)VD_IO_MEMCPY(tls->buf + offset,
+                                                                                  &Vd_Io_Net__Tls_Client_Hello_Record_Header_Proto,
+                                                                                  sizeof(Vd_Io_Net__Tls_Client_Hello_Record_Header_Proto));
+    offset += sizeof(Vd_Io_Net__Tls_Client_Hello_Record_Header_Proto);
+    hello_hdr->len = VD_IO_NET__SWAP16_BE((uint16_t)(hello_size - offset));
+
+
+    VdIoNet__TlsHandshakeHeader *hello_hndsk = (VdIoNet__TlsHandshakeHeader*)VD_IO_MEMCPY(tls->buf + offset,
+                                                                                          &Vd_Io_Net__Tls_Client_Hello_Handshake_Header_Proto,
+                                                                                          sizeof(Vd_Io_Net__Tls_Client_Hello_Handshake_Header_Proto));
+    offset += sizeof(Vd_Io_Net__Tls_Client_Hello_Handshake_Header_Proto);
+    hello_hndsk->len = VD_IO_NET__SWAP16_BE((uint16_t)(hello_size - offset));
+
+    VdIoNet__Tls13ClientHello *hello = (VdIoNet__Tls13ClientHello*)VD_IO_MEMCPY(tls->buf + offset, 
+                                                                                &Vd_Io_Net__Tls_Client_Hello_Proto, 
+                                                                                sizeof(Vd_Io_Net__Tls_Client_Hello_Proto));
+    offset += sizeof(Vd_Io_Net__Tls_Client_Hello_Proto);
+    hello->extensions_len = VD_IO_NET__SWAP16_BE((uint16_t)(hello_size - offset));
+
+    VdIoNet__Tls13ClientHelloExtensions *extensions = (VdIoNet__Tls13ClientHelloExtensions*)VD_IO_MEMCPY(tls->buf + offset, 
+                                                                                                         &Vd_Io_Net__Tls_Client_Hello_Extensions_Proto,
+                                                                                                         sizeof(Vd_Io_Net__Tls_Client_Hello_Extensions_Proto));
+    offset += sizeof(Vd_Io_Net__Tls_Client_Hello_Extensions_Proto);
+
+    VdIoNet__TlsServerNamePreamble *server_name_pre = (VdIoNet__TlsServerNamePreamble*)VD_IO_MEMCPY(tls->buf + offset, 
+                                                                                                    &Vd_Io_Net__Tls_Client_Hello_Server_Name_Proto,
+                                                                                                    sizeof(Vd_Io_Net__Tls_Client_Hello_Server_Name_Proto));
+    offset += sizeof(Vd_Io_Net__Tls_Client_Hello_Server_Name_Proto);
+    server_name_pre->len = VD_IO_NET__SWAP16_BE((uint16_t)(hello_size - offset));
+
+    VdIoNet__TlsServerNameEntryPreamble *server_name_entry = (VdIoNet__TlsServerNameEntryPreamble*)VD_IO_MEMCPY(tls->buf + offset, 
+                                                                                                                &Vd_Io_Net__Tls_Client_Hello_Server_Name_Entry_Proto,
+                                                                                                                sizeof(Vd_Io_Net__Tls_Client_Hello_Server_Name_Entry_Proto));
+    offset += sizeof(Vd_Io_Net__Tls_Client_Hello_Server_Name_Entry_Proto);
+    server_name_entry->name_len = VD_IO_NET__SWAP16_BE((uint16_t)(hello_size - offset));
+
+    VD_IO_MEMCPY(tls->buf + offset, info->endpoint.domain, info->endpoint.domain_len);
+
+    {
+        VdIoErr connect_err = vd_io_connect(tls->io, info->endpoint.domain, info->endpoint.port,
+                                            VD_IO_NET_TCP, &tls->socket,
+                                            vd_io_net_tls__on_connect, (void*)tls);
+        if (connect_err != VD_IO_ERR_OK) {
+            err = connect_err;
+            goto END;
+        }
+    }
+
+END:
+    return err;
+}
 
 static VD_IO_CALLBACK(vd_io_net_tls__on_connect)
 {
@@ -740,7 +951,30 @@ static VD_IO_CALLBACK(vd_io_net_tls__on_connect)
         return;
     }
 
+
+    vd_io_hn_send(io, tls->socket, tls->buf, tls->client_hello_size, vd_io_net_tls__on_client_hello_sent, (void*)tls);
 }
 
+static VD_IO_CALLBACK(vd_io_net_tls__on_client_hello_sent)
+{
+    VdIoNetTls *tls = (VdIoNetTls*)usr;
+    if (evt->err != VD_IO_ERR_OK) {
+        printf("Client Hello send failed\n");
+        return;
+    }
+
+    vd_io_hn_recv(io, evt->data.send.receiver, tls->buf, tls->bufsize, vd_io_net__on_client_hello_recvd, (void*)tls);
+}
+
+static VD_IO_CALLBACK(vd_io_net__on_client_hello_recvd)
+{
+    VdIoNetTls *tls = (VdIoNetTls*)usr;
+    if (evt->err != VD_IO_ERR_OK) {
+        printf("Server Hello recv failed\n");
+        return;
+    }
+
+    printf("Server hello: %zd bytes transfered.\n", evt->data.recv.buffer_written);
+}
 
 #endif // VD_IO_NET_IMPL
