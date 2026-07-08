@@ -145,7 +145,8 @@ typedef struct {
 } VdFtFaceKey;
 
 typedef struct {
-    VdFtFace            face;
+    VdFtFace            face;           // @note(mdodis): User shouldn't need to free this for _box api, dwrite's ok, 
+                                        //                but the rest of APIs may not be.
     float               pixel_scale;
     uint32_t            glyph_start;
     uint32_t            glyph_count;
@@ -178,8 +179,6 @@ typedef struct {
     float           *advances;
     VdFtGlyphOffset *offsets;
 } VdFtRunResult;
-
-VD_FT_API VdFtFontId        vd_ft_create_font_from_memory(void *memory, int size);
 
 // COLLECTIONS
 // A collection can contain 1 or more families. You can create collections in 2 ways:
@@ -280,6 +279,15 @@ VD_FT_API void              vd_ft_family_free(VdFtFamily family);
  * @return             (ascent, descent, linegap, ...)
  */
 VD_FT_API VdFtFontMetrics   vd_ft_face_metrics(VdFtFace face, float em);
+
+/**
+ * @brief Convert from unicode codepoints to glyph indices for face
+ * @param  face           The face
+ * @param  num_codepoints Count of codepoints
+ * @param  codepoints     Codepoints
+ * @param  out            Output glyph indices
+ */
+VD_FT_API void              vd_ft_face_indices(VdFtFace face, int num_codepoints, uint32_t *codepoints, uint16_t *out);
 
 /**
  * @brief Render a glyph from a face
@@ -416,9 +424,30 @@ VD_FT_API VdFtRunResult     vd_ft_box_run(void);
 
 #ifdef VD_FT_IMPL
 #include <float.h>
+#include <stdint.h>
+#include <string.h>
+
+#define VD_FT_BACKEND_NULL           0
+#define VD_FT_BACKEND_DIRECT_WRITE   1
+#define VD_FT_BACKEND_CORE_TEXT      2
+#define VD_FT_BACKEND_FREETYPE       3
+
+// Set VD_FT_BACKEND to choose specific backend for loading, rasterizing, and getting metrics from fonts
+// Defaults to system backend.
+// 
+// This really only useful right now for choosing freetype on platforms that already have a text backend. Unless you're
+// not planning on using the vd_ft_box* APIs, this is not a great idea.
+#ifndef VD_FT_BACKEND
+#   ifdef _WIN32
+#       define VD_FT_BACKEND VD_FT_BACKEND_DIRECT_WRITE
+#   elif defined(__APPLE__)
+#       define VD_FT_BACKEND VD_FT_BACKEND_CORE_TEXT
+#   endif // PLATFORMS
+#endif // !VD_FT_BACKEND
 
 #ifndef VD_FT_ABORT
-#   define VD_FT_ABORT(message) do { assert(0 && message); *(char*)0 = *message; } while(0)
+#   include <assert.h>
+#   define VD_FT_ABORT(message) do { assert(0 && message); } while(0)
 #endif // !VD_FT_ABORT
 
 #ifndef VD_FT_ASSERTIONS
@@ -436,6 +465,12 @@ VD_FT_API VdFtRunResult     vd_ft_box_run(void);
 #   define VD_FT_MEMCPY(d, s, n) memcpy(d, s, n)
 #endif // !VD_FT_MEMCPY
 
+#ifndef VD_FT_REALLOC
+#   include <stdlib.h>
+#   define VD_FT_REALLOC(prev_ptr, new_size) realloc(prev_ptr, new_size)
+#   define VD_FT_FREE(ptr) free(ptr)
+#endif // !VD_FT_REALLOC
+
 #define VD_FT__OFFSET_OF(type, element) ((size_t) & (((type*)0)->element))
 #define VD_FT__CONTAINER_OF(ptr, type, member) \
     (type*)(((uint8_t*)ptr) - ((size_t)VD_FT__OFFSET_OF(type, member)))
@@ -445,13 +480,9 @@ enum {
     VD_FT_SOURCE_SYSTEM = 2,
 };
 
-#include <stdint.h>
-#include <string.h>
-
 #define VD_FT__MIN(x, y) ((x) < (y) ? (x) : (y))
-static void*    vd_ft__realloc_mem(void *prev_ptr, size_t size);
 VD_FT_INL int   vd_ft__strlen(const char *s);
-static void     vd_ft__free_mem(void *ptr);
+VD_FT_INL int   vd_ft__compare_string(const char *s, int s_len, const char *t, int t_len);
 static int      vd_ft__mac_roman_to_wide(uint8_t *strdata, uint16_t string_length, wchar_t *wbuf, int wbuf_len);
 static int      vd_ft__latin1_to_wide(uint8_t *strdata, uint16_t string_length, wchar_t *wbuf, int wbuf_len);
 static int      vd_ft__wide_to_utf8(wchar_t *wbuf, int wlen, char *buf, int blen);
@@ -487,6 +518,266 @@ static void vd_ft__swapwstr(wchar_t *s, size_t len)
         s[i] = vd_ft__swapu16(s[i]);
     }
 }
+
+#if VD_FT_BACKEND==VD_FT_BACKEND_FREETYPE
+#include <ft2build.h>
+#include FT_FREETYPE_H
+
+typedef struct {
+    int        initialized;
+    FT_Library library;
+} VdFt__Freetype;
+
+typedef struct {
+    int next_face_in_family;
+    int prev_face_in_family;
+} VdFt__FreetypeFaceInfo;
+
+typedef struct VdFt__FreetypeCollection VdFt__FreetypeCollection;
+typedef struct {
+    int                      family_name_len;
+    char                     *family_name;
+    int                      face_count;
+    int                      first_face;
+    VdFt__FreetypeCollection *collection;
+} VdFt__FreetypeFamilyInfo;
+
+struct VdFt__FreetypeCollection {
+    void                     *ptr;
+    size_t                   len;
+
+    int                      families_cap;
+    int                      families_len;
+    VdFt__FreetypeFamilyInfo *families;
+
+    int                     faces_len; 
+    VdFt__FreetypeFaceInfo *faces;
+};
+
+typedef struct {
+    void    *ptr;
+    size_t  len;
+
+    int     family_name_len;
+    char    *family_name;
+
+    int     faces_len;
+    int     *faces;
+} VdFt__FreetypeFamily;
+
+static int vd_ft__freetype_init(VdFt__Freetype *freetype)
+{
+    if (freetype->initialized) {
+        return 1;
+    }
+
+    FT_Error err = FT_Init_FreeType(&freetype->library);
+    if (err) {
+        return 0;
+    }
+
+    freetype->initialized = 1;
+
+    return 1;
+}
+
+static VdFtCollection vd_ft__freetype_collection_from_memory(VdFt__Freetype *ft, void *memory, uint32_t size)
+{
+    VdFtCollection result = {0};
+
+    FT_Open_Args args;
+    args.flags = FT_OPEN_MEMORY;
+    args.memory_base = (const FT_Byte*)memory;
+    args.memory_size = size;
+    args.pathname = NULL;
+    args.driver = NULL;
+    args.num_params = 0;
+    args.params = 0;
+
+    VdFt__FreetypeCollection *collection = VD_FT_REALLOC(0, sizeof(VdFt__FreetypeCollection));
+    collection->ptr = memory;
+    collection->len = size;
+
+    FT_Face aface;
+    FT_Error err = FT_Open_Face(ft->library, &args, -1, &aface);
+    if (err) {
+        goto END;
+    }
+
+    collection->faces_len = aface->num_faces;
+    collection->faces = VD_FT_REALLOC(0, sizeof(VdFt__FreetypeFaceInfo) * collection->faces_len);
+
+    collection->families = vd_ft__resize_buffer(collection->families, sizeof(*collection->families),
+                                                  1, &collection->families_cap);
+
+    for (FT_Long i = 0; i < aface->num_faces; ++i) {
+
+        VdFt__FreetypeFaceInfo *face_info = &collection->faces[i];
+        face_info->next_face_in_family = (int)i;
+        face_info->prev_face_in_family = (int)i;
+
+        FT_Face face;
+        err = FT_Open_Face(ft->library, &args, i, &face);
+
+        if (err) {
+            goto END;
+        }
+
+        const char *cmp_family_name = (const char*)face->family_name;
+        int cmp_family_name_len = vd_ft__strlen(cmp_family_name);
+
+        int family_index = -1;
+
+        for (int j = 0; j < collection->families_len; ++j) {
+            VdFt__FreetypeFamilyInfo *family = &collection->families[j];
+            if (vd_ft__compare_string(cmp_family_name, cmp_family_name_len, family->family_name, family->family_name_len)) {
+                family_index = j;
+                break;
+            }
+        }
+
+        if (family_index == -1) {
+            collection->families = vd_ft__resize_buffer(collection->families, sizeof(*collection->families),
+                                                          collection->families_cap + 1, &collection->families_cap);
+            VdFt__FreetypeFamilyInfo *family = &collection->families[collection->families_len++];
+            family->collection = collection;
+            family->face_count = 1;
+            family->first_face = (int)i;
+            family->family_name = VD_FT_REALLOC(0, cmp_family_name_len + 1);
+            family->family_name_len = cmp_family_name_len;
+            VD_FT_MEMCPY(family->family_name, cmp_family_name, cmp_family_name_len);
+
+            family->family_name[family->family_name_len] = '\0';
+
+        } else {
+            VdFt__FreetypeFamilyInfo *family = &collection->families[family_index];
+
+            int first = family->first_face;
+            int last  = collection->faces[first].prev_face_in_family;
+
+            face_info->next_face_in_family = first;
+            face_info->prev_face_in_family = last;
+
+            collection->faces[last].next_face_in_family = i;
+            collection->faces[first].prev_face_in_family = i;
+
+            family->face_count++;
+        }
+
+        FT_Done_Face(face);
+    }
+
+    FT_Done_Face(aface);
+
+    result.source = 0;
+    result.hnd = (void*)collection;
+
+END:
+    return result;
+}
+
+static unsigned int vd_ft__freetype_collection_family_count(VdFtCollection collection)
+{
+    VdFt__FreetypeCollection *ft_collection = (VdFt__FreetypeCollection*)collection.hnd;
+    return (unsigned int)ft_collection->families_len;
+}
+
+static VdFtFamily vd_ft__freetype_collection_family_from_index(VdFt__Freetype *ft, VdFtCollection collection, int index)
+{
+    VdFtFamily result = {0};
+    VdFt__FreetypeCollection *ft_collection = (VdFt__FreetypeCollection*)collection.hnd;
+
+    if (0 <= index && index < ft_collection->families_len) {
+        VdFt__FreetypeFamilyInfo *info = &ft_collection->families[index];
+
+        VdFt__FreetypeFamily *family = VD_FT_REALLOC(0, sizeof(VdFt__FreetypeFamily));
+        family->ptr = ft_collection->ptr;
+        family->len = ft_collection->len;
+
+        family->family_name_len = info->family_name_len;
+        family->family_name = VD_FT_REALLOC(0, family->family_name_len + 1);
+        VD_FT_MEMCPY(family->family_name, info->family_name, family->family_name_len);
+        family->family_name[family->family_name_len] = '\0';
+
+        family->faces_len = info->face_count;
+        family->faces = VD_FT_REALLOC(0, sizeof(int) * family->faces_len);
+
+        int faces_processed = 0;
+        int first_face_index = info->first_face;
+        int curr_face_index = first_face_index;
+        do {
+            family->faces[faces_processed++] = curr_face_index;
+            ft_collection->faces[ft_collection->faces[curr_face_index].next_face_in_family];
+            faces_processed++;
+        } while (curr_face_index != first_face_index);
+
+        result = (VdFtFamily)family;
+    }
+
+    return result;
+}
+
+static char *vd_ft__freetype_family_name(VdFtFamily family)
+{
+    VdFt__FreetypeFamily *ft_family = (VdFt__FreetypeFamily*)family;
+    return ft_family->family_name;
+}
+
+static void vd_ft__freetype_collection_free(VdFtCollection collection)
+{
+    VdFt__FreetypeCollection *ft_collection = (VdFt__FreetypeCollection*)collection.hnd;
+
+    for (int i = 0; i < ft_collection->families_len; ++i) {
+        VD_FT_FREE(ft_collection->families[i].family_name_len);
+    }
+
+    VD_FT_FREE(ft_collection->faces);
+    VD_FT_FREE(ft_collection->families);
+    VD_FT_FREE(ft_collection);
+}
+
+static int vd_ft__freetype_family_face_count(VdFtFamily family)
+{
+    VdFt__FreetypeFamily *ft_family = (VdFt__FreetypeFamily*)family;
+    return ft_family->faces_len;
+}
+
+static VdFtFace vd_ft__freetype_family_face_from_index(VdFt__Freetype *ft, VdFtFamily family, int index)
+{
+    VdFtFace result = {0};
+
+    VdFt__FreetypeFamily *ft_family = (VdFt__FreetypeFamily*)family;
+
+    FT_Open_Args args;
+    args.flags = FT_OPEN_MEMORY;
+    args.memory_base = (const FT_Byte*)ft_family->ptr;
+    args.memory_size = (FT_Long)ft_family->len;
+    args.pathname = NULL;
+    args.driver = NULL;
+    args.num_params = 0;
+    args.params = 0;
+
+    FT_Face aface;
+    FT_Error err = FT_Open_Face(ft->library, &args, index, &aface);
+    if (err) {
+        goto END;
+    }
+
+    result = (VdFtFace)aface;
+
+END:
+    return result;
+}
+
+static void vd_ft__freetype_family_free(VdFtFamily family)
+{
+    VdFt__FreetypeFamily *ft_family = (VdFt__FreetypeFamily*)family;
+
+    VD_FT_FREE(ft_family->family_name);
+    VD_FT_FREE(ft_family->faces);
+}
+
+#endif // VD_FT_BACKEND_FREETYPE
 
 typedef struct {
     uint32_t  version;
@@ -576,7 +867,7 @@ static int vd_ft__get_ttf_name_records(uint8_t *data, int size, char **out_name,
         naming_table.offset_start_of_string_storage = vd_ft__swapu16(naming_table.offset_start_of_string_storage);
         naming_table.format_selector                = vd_ft__swapu16(naming_table.format_selector);
 
-        VdFt__TTFNameRecord *name_records = (VdFt__TTFNameRecord*)vd_ft__realloc_mem(NULL, sizeof(VdFt__TTFNameRecord) * naming_table.count_name_records);
+        VdFt__TTFNameRecord *name_records = (VdFt__TTFNameRecord*)VD_FT_REALLOC(NULL, sizeof(VdFt__TTFNameRecord) * naming_table.count_name_records);
         for (uint16_t name_record_index = 0; name_record_index < naming_table.count_name_records; ++name_record_index) {
             VdFt__TTFNameRecord name_record;
             vd_ft__read_ptr(&name_record, sizeof(name_record), data, size, &offset);
@@ -659,18 +950,18 @@ static int vd_ft__get_ttf_name_records(uint8_t *data, int size, char **out_name,
             // Convert to UTF-8
             // @todo(mdodis): don't leak here
             int utf8_len = vd_ft__wide_to_utf8(wbuf, wlen, 0, 0);
-            char *utf8 = (char*)vd_ft__realloc_mem(NULL, utf8_len + 1);
+            char *utf8 = (char*)VD_FT_REALLOC(NULL, utf8_len + 1);
             int utf8_wrt = vd_ft__wide_to_utf8(wbuf, wlen, utf8, utf8_len);
             utf8[utf8_wrt] = 0;
             *out_name = utf8;
             *out_name_size = utf8_wrt;
         }
 
-        vd_ft__free_mem(name_records);
+        VD_FT_FREE(name_records);
         break;
 
 CANDIDATE_FAIL_CONTINUE: 
-        vd_ft__free_mem(name_records);
+        VD_FT_FREE(name_records);
         continue;
     }
 #undef VD_FT__CHECK_1
@@ -766,10 +1057,6 @@ VD_FT_DECLARE_HANDLE(VdFtHBITMAP);
 typedef VdFtHINSTANCE VdFtHMODULE;
 
 extern VdFtHMODULE LoadLibraryA(VdFtLPCSTR path);
-extern void*       HeapAlloc(VdFtHANDLE hHeap, VdFtDWORD dwFlags, VdFtSIZE_T dwBytes);
-extern VdFtHANDLE  GetProcessHeap();
-extern void*       HeapReAlloc(VdFtHANDLE hHeap, VdFtDWORD dwFlags, void *lpMem, VdFtSIZE_T dwBytes);
-extern VdFtBOOL    HeapFree(VdFtHANDLE hHeap, VdFtDWORD dwFlags, void *lpMem);
 extern int         MultiByteToWideChar(VdFtUINT CodePage, VdFtDWORD dwFlags, VdFtLPCSTR lpMultiByteStr, int cbMultiByte, VdFtLPWSTR lpWideCharStr, int cchWideChar);
 extern int         WideCharToMultiByte(VdFtUINT CodePage, VdFtDWORD dwFlags, VdFtLPCWSTR lpWideCharStr, int cchWideChar, VdFtLPSTR lpMultiByteStr, int cbMultiByte, VdFtLPSTR lpDefaultChar, VdFtBOOL *lpUsedDefaultChar);
 extern void*       GetProcAddress(VdFtHMODULE hModule, VdFtLPCSTR lpProcName);
@@ -808,6 +1095,26 @@ typedef FLOAT       VdFtFLOAT;
 typedef VdFtDWORD   VdFtCOLORREF;
 typedef VdFtDWORD*  VdFtLPCOLORREF;
 #endif // !_MINWINDEF_
+
+static int vd_ft__mac_roman_to_wide(uint8_t *strdata, uint16_t string_length, wchar_t *wbuf, int wbuf_len)
+{
+    return MultiByteToWideChar(10000, 0, (VdFtLPCSTR)strdata, string_length, wbuf, wbuf_len);
+}
+
+static int vd_ft__latin1_to_wide(uint8_t *strdata, uint16_t string_length, wchar_t *wbuf, int wbuf_len)
+{
+    return MultiByteToWideChar(28591, 0, (VdFtLPCSTR)strdata, string_length, wbuf, wbuf_len);
+}
+
+static int vd_ft__wide_to_utf8(wchar_t *wbuf, int wlen, char *buf, int blen)
+{
+    return WideCharToMultiByte(65001, 0, wbuf, wlen, buf, blen, NULL, NULL);
+}
+
+static int vd_ft__utf8_to_wide(char *buf, int blen, wchar_t *wbuf, int wlen)
+{
+    return MultiByteToWideChar(65001, 8, buf, blen, wbuf, wlen);
+}
 
 #define VD_FT_DC_BRUSH 18
 #define VD_FT_DC_PEN 19
@@ -2286,60 +2593,6 @@ static VdFtHRESULT                  vd_ft__win32_draw_inline_object(VdFtIDWriteT
                                                                     VdFtIUnknown* clientDrawingEffect);
 
 
-VD_FT_API VdFtFontId vd_ft_create_font_from_memory(void *memory, int size)
-{
-    vd_ft__win32_init();
-
-    char *name;
-    int name_len;
-
-    if (!vd_ft__get_ttf_name_records((uint8_t*)memory, size, &name, &name_len)) {
-        printf("FAILED\n");
-    } else {
-        printf("SUCCESS %.*s\n", name_len, name);
-    }
-
-    // @todo(mdodis): use fixed doubly linked list buffers to keep pointers stable
-    Vd_Ft_G.font_buffer = (VdFt__Win32Font*)vd_ft__resize_buffer(Vd_Ft_G.font_buffer, sizeof(*Vd_Ft_G.font_buffer),
-                                                                 Vd_Ft_G.font_buffer_len + 1, &Vd_Ft_G.font_buffer_cap);
-
-    int font_index = Vd_Ft_G.font_buffer_len++;
-    VdFt__Win32Font *font = &Vd_Ft_G.font_buffer[font_index];
-    font->info.name = name;
-    font->info.name_len = name_len;
-    font->source = VD_FT_SOURCE_MEMORY;
-    font->data.mem.memory = memory;
-    font->data.mem.size = size;
-
-    VdFtIDWriteFontFile *font_ref = 0;
-    VD_FT__WIN32_CHECK_HRESULT(Vd_Ft_G.factory->lpVtbl->CreateCustomFontFileReference(Vd_Ft_G.factory,
-                                                                                      &font, sizeof(VdFt__Win32Font**),
-                                                                                      &Vd_Ft_G.static_font_loader,
-                                                                                      &font_ref));
-
-    VdFtIDWriteFontFace *font_face = 0;
-    VD_FT__WIN32_CHECK_HRESULT(Vd_Ft_G.factory->lpVtbl->CreateFontFace(Vd_Ft_G.factory,
-                                                                       VD_FT_DWRITE_FONT_FACE_TYPE_TRUETYPE,
-                                                                       1, &font_ref,
-                                                                       0, VD_FT_DWRITE_FONT_SIMULATIONS_NONE,
-                                                                       &font_face));
-    font->data.mem.font_ref = font_ref;
-    font->font_face = font_face;
-
-    VdFtDWRITE_FONT_METRICS font_metrics;
-    font_face->lpVtbl->GetMetrics(font_face, &font_metrics);
-
-    font->design_units_per_em = font_metrics.designUnitsPerEm;
-    font->info.ascent  = font_metrics.ascent;
-    font->info.descent = font_metrics.descent;
-    font->info.line_gap = font_metrics.lineGap;
-  
-    VdFtFontId font_id;
-    font_id.index = font_index;
-    font_id.source = VD_FT_SOURCE_MEMORY;
-    return font_id;
-}
-
 VD_FT_API VdFtCollection vd_ft_collection_from_system(void)
 {
     vd_ft__win32_init();
@@ -2459,6 +2712,29 @@ VD_FT_API char *vd_ft_family_name(VdFtFamily family)
     return Vd_Ft_G.family_name_buffer;
 }
 
+VD_FT_API int vd_ft_family_face_count(VdFtFamily family)
+{
+    VdFtIDWriteFontFamily *font_family = (VdFtIDWriteFontFamily*)family;
+
+    uint32_t font_count = font_family->lpVtbl->GetFontCount(font_family);
+
+    return (int)font_count;
+}
+
+VD_FT_API VdFtFace vd_ft_family_face_from_index(VdFtFamily family, int index)
+{
+    VdFtIDWriteFontFamily *font_family = (VdFtIDWriteFontFamily*)family;
+
+    VdFtIDWriteFont *font;
+    VD_FT__WIN32_CHECK_HRESULT(font_family->lpVtbl->GetFont(font_family, index, &font));
+
+    VdFtIDWriteFontFace *face;
+    VD_FT__WIN32_CHECK_HRESULT(font->lpVtbl->CreateFontFace(font, &face));
+
+    font->lpVtbl->Release((VdFtIUnknown*)font);
+    return (VdFtFace)face;
+}
+
 VD_FT_API void vd_ft_family_free(VdFtFamily family)
 {
     VdFtIDWriteFontFamily *font_family = (VdFtIDWriteFontFamily*)family;
@@ -2478,6 +2754,12 @@ VD_FT_API VdFtFontMetrics vd_ft_face_metrics(VdFtFace face, float em)
     result.descent  = metrics.descent * scale;
     result.line_gap = metrics.lineGap * scale;
     return result;
+}
+
+VD_FT_API void vd_ft_face_indices(VdFtFace face, int num_codepoints, uint32_t *codepoints, uint16_t *out)
+{
+    VdFtIDWriteFontFace *font_face = (VdFtIDWriteFontFace*)face;
+    VD_FT__WIN32_CHECK_HRESULT(font_face->lpVtbl->GetGlyphIndices(font_face, codepoints, num_codepoints, out));
 }
 
 VD_FT_API VdFtBitmapRegion vd_ft_face_raster(VdFtFace face, float em, uint16_t glyph_index)
@@ -2611,6 +2893,12 @@ VD_FT_API VdFtFaceKey vd_ft_face_key(VdFtFace face)
     result.int2 = (void*)file_ref_key;
     result.int3 = (void*)loader;
     return result;
+}
+
+VD_FT_API void vd_ft_face_free(VdFtFace face)
+{
+    VdFtIDWriteFontFace *font_face = (VdFtIDWriteFontFace*)face;
+    font_face->lpVtbl->Release((VdFtIUnknown*)font_face);
 }
 
 VD_FT_API void vd_ft_box_begin(void)
@@ -2760,7 +3048,7 @@ VD_FT_API void vd_ft_box_wrap(VdFtWrap wrap)
 {
     VdFtDWRITE_WORD_WRAPPING dwrap;
     switch (wrap) {
-        case VD_FT_WRAP_NONE: {
+        case VD_FT_WRAP_WORD: {
             dwrap = VD_FT_DWRITE_WORD_WRAPPING_WRAP;
         } break;
 
@@ -3229,7 +3517,7 @@ static VdFtHRESULT vd_ft__win32_fcl_create_enumerator_from_key(VdFtIDWriteFontCo
     void *memory = buf.ptr;
     uint32_t memory_size = buf.size;
 
-    VdFt__Win32MemCollection *wc = (VdFt__Win32MemCollection*)vd_ft__realloc_mem(0, sizeof(VdFt__Win32MemCollection));
+    VdFt__Win32MemCollection *wc = (VdFt__Win32MemCollection*)VD_FT_REALLOC(0, sizeof(VdFt__Win32MemCollection));
     wc->memory = memory;
     wc->size = memory_size;
     wc->enumerator.lpVtbl = &Vd_Ft_G.static_font_enumerator_vtbl;
@@ -3415,40 +3703,6 @@ static VdFtHRESULT vd_ft__win32_draw_inline_object(VdFtIDWriteTextRenderer *This
     return 0;
 }
 
-static void *vd_ft__realloc_mem(void *prev_ptr, size_t size)
-{
-    if (prev_ptr == 0) {
-        return HeapAlloc(GetProcessHeap(), 0, size);
-    } else {
-        return HeapReAlloc(GetProcessHeap(), 0, prev_ptr, size);
-    }
-}
-
-static void vd_ft__free_mem(void *memory)
-{
-    HeapFree(GetProcessHeap(), 0, memory);
-}
-
-static int vd_ft__mac_roman_to_wide(uint8_t *strdata, uint16_t string_length, wchar_t *wbuf, int wbuf_len)
-{
-    return MultiByteToWideChar(10000, 0, (VdFtLPCSTR)strdata, string_length, wbuf, wbuf_len);
-}
-
-static int vd_ft__latin1_to_wide(uint8_t *strdata, uint16_t string_length, wchar_t *wbuf, int wbuf_len)
-{
-    return MultiByteToWideChar(28591, 0, (VdFtLPCSTR)strdata, string_length, wbuf, wbuf_len);
-}
-
-static int vd_ft__wide_to_utf8(wchar_t *wbuf, int wlen, char *buf, int blen)
-{
-    return WideCharToMultiByte(65001, 0, wbuf, wlen, buf, blen, NULL, NULL);
-}
-
-static int vd_ft__utf8_to_wide(char *buf, int blen, wchar_t *wbuf, int wlen)
-{
-    return MultiByteToWideChar(65001, 8, buf, blen, wbuf, wlen);
-}
-
 #elif defined(__APPLE__)
 #include <stdlib.h>
 #include <dlfcn.h>
@@ -3612,11 +3866,6 @@ static VdFt__MacosFont *vd_ft__macos_id_to_font(VdFtFontId id)
     return &Vd_Ft_G.font_buffer[id.index];
 }
 
-static void *vd_ft__realloc_mem(void *prev_ptr, size_t size)
-{
-    return realloc(prev_ptr, size);
-}
-
 #endif // _WIN32, defined(__APPLE__)
 
 static void *vd_ft__resize_buffer(void *buffer, size_t element_size, int required_capacity, int *cap)
@@ -3626,7 +3875,7 @@ static void *vd_ft__resize_buffer(void *buffer, size_t element_size, int require
     }
 
     int resize_capacity = required_capacity * 2;
-    buffer = vd_ft__realloc_mem(buffer, element_size * resize_capacity);
+    buffer = VD_FT_REALLOC(buffer, element_size * resize_capacity);
     *cap = resize_capacity;
     return buffer;
 }
@@ -3638,6 +3887,23 @@ VD_FT_INL int vd_ft__strlen(const char *s)
     return r;
 }
 
+VD_FT_INL int vd_ft__compare_string(const char *s, int s_len, const char *t, int t_len)
+{
+    int x;
+
+    if (s_len != t_len) {
+        return 0;
+    }
+
+    for (x = 0; x < t_len; ++x) {
+        if (s[x] != t[x]) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
 static void *vd_ft__resize_buffer_u32(void *buffer, size_t element_size, uint32_t required_capacity, uint32_t *cap)
 {
     if (required_capacity <= *cap) {
@@ -3645,7 +3911,7 @@ static void *vd_ft__resize_buffer_u32(void *buffer, size_t element_size, uint32_
     }
 
     uint32_t resize_capacity = required_capacity * 2;
-    buffer = vd_ft__realloc_mem(buffer, element_size * resize_capacity);
+    buffer = VD_FT_REALLOC(buffer, element_size * resize_capacity);
     *cap = resize_capacity;
     return buffer;
 }

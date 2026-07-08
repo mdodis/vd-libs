@@ -3,6 +3,10 @@
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #endif // defined(__clang__)
 
+#ifdef VD_SAMPLES_FREETYPE
+#   define VD_FT_BACKEND VD_FT_BACKEND_FREETYPE
+#endif
+
 #define VD_USE_CRT 1
 #define VD_FW_NO_CRT 0
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_CONSOLE
@@ -231,8 +235,8 @@ int main(int argc, char const *argv[])
     (void)argc;
     (void)argv;
 
-    memcpy(String_Buf, "Hello, World", 12);
-    String_Buf_Len = 12;
+    memcpy(String_Buf, "Η έννοια του κειμένου έχει περιγραφεί από δύο κυρίως σκοπιές: ως δομή ανώτερης τάξης από την πρόταση, προϊόν της διαδικασίας γραφής , και ως διαδικασία σε εξέλιξη, που ενσωματώνει συμφραστικούς παράγοντες (κυρίως το συνομιλιακό κείμενο). Η πρώτη προσέγγιση αντιμετωπίζει το κείμενο ως στατική γλωσσική οντότητα, της οποίας ο κύκλος ζωής έχει ολοκληρωθεί από τη στιγμή που το κείμενο έφυγε από τα χέρια του συγγραφέα (ή και του ομιλητή στην περίπτωση του μονολόγου), ενώ η δεύτερη το αντιλαμβάνεται ως διαδικασία παραγωγής μέσα σε συμφραζόμενα (καταστασιακά, ποιος γράφει/μιλάει σε ποιον κλπ.· πολιτισμικά, ποιο είναι το θέμα του κειμένου ή ποιο είδος λόγου επιλέχτηκε κλπ.· και γνωσιακά, ποιες είναι οι κοινές αντιλήψεις, αξίες, συμβάσεις κλπ. που μοιράζεται ο συγγραφέας/ομιλητής με τους αναγνώστες/ακροατές του). Οι δύο αυτές προσεγγίσεις είναι", 846);
+    String_Buf_Len = 846;
 
 
     vd_init(0);
@@ -278,7 +282,12 @@ int main(int argc, char const *argv[])
     GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST));
     GL_CHECK(glBindTexture(GL_TEXTURE_2D, 0));
 
-    vd_ui_set_scale(vd_fw_get_scale());
+    {
+        float scale;
+        vd_fw_get_scale(&scale);
+
+        vd_ui_set_scale(scale);
+    }
 
     // Rect
     {
@@ -415,11 +424,11 @@ int main(int argc, char const *argv[])
             vd_fw_quit();
         }
 
-        vd_fw_compile_or_hotload_program(&Rect_Program, &Rect_Program_time, "./glsl/rect2d.vert", "./glsl/rect2d.frag");
+        vd_fw_compile_or_hotload_program(&Rect_Program, &Rect_Program_time, "./glsl/rect2d.vert", "./glsl/rect2d.frag", 0);
 
         float delta_seconds = vd_fw_delta_s();
 
-        vd_fw_compile_or_hotload_program(&program, &program_time, "./glsl/ui_basic.vert", "./glsl/ui_basic.frag");
+        vd_fw_compile_or_hotload_program(&program, &program_time, "./glsl/ui_basic.vert", "./glsl/ui_basic.frag", 0);
 
         if (vd_fw_get_key_pressed(VD_FW_KEY_F2)) {
             show_glyph_cache = !show_glyph_cache;
@@ -569,7 +578,8 @@ int main(int argc, char const *argv[])
         vd_ft_box_font_style_set(style);
         vd_ft_box_push(String_Buf, String_Buf_Len);
         vd_ft_box_end();
-        vd_ft_box_wrap(VD_FT_WRAP_NONE);
+        vd_ft_box_wrap(VD_FT_WRAP_WORD);
+        vd_ft_box_max_width_set(w);
 
         VdFtRunResult run_result = vd_ft_box_run();
         VdFtRun *runs = run_result.runs;
@@ -581,8 +591,8 @@ int main(int argc, char const *argv[])
         GL_CHECK(glUniform2f(glGetUniformLocation(Rect_Program, "u_resolution"), (float)w, (float)h));
         GL_CHECK(glUniform1i(glGetUniformLocation(Rect_Program, "u_tex"), 0));
         rects_begin(cache_atlas);
-        float baseline_x = mx;
-        float baseline_y = my - face_metrics.ascent;
+        float baseline_x = 0;
+        float baseline_y = 0;
         for (int i = 0; i < run_count; ++i) {
             VdFtRun *run = &runs[i];
 
@@ -611,6 +621,9 @@ int main(int argc, char const *argv[])
 
                 baseline_x += run_result.advances[run->advances_start + g];
             }
+
+            baseline_x = 0;
+            baseline_y += face_metrics.line_gap + (face_metrics.ascent - face_metrics.descent);
         }
 
         update_glyph_cache();
