@@ -9,6 +9,7 @@ set COMPILE_PROGRAMS=0
 set PROGRAM_TO_COMPILE=""
 set CSEXT=".c"
 set USECLANG=0
+set FREETYPE=0
 
 :parse_args
 if "%~1"=="" goto after_parse
@@ -43,6 +44,9 @@ if "%~1"=="-m" (
     set SAMPLE_TO_COMPILE=%~2
     shift
     shift
+) else if "%~1"=="-freetype" (
+    set FREETYPE=1
+    shift
 ) else (
     echo Unknown option: %~1
     exit /b 1
@@ -63,7 +67,7 @@ set SRC_DIR=%PRJ_DIR%\samples
 set CL_FLAGS=/utf-8 /std:c11 /I %INC_DIR% /W4 /GS- /nologo /I %EXT_DIR%  /D_CRT_SECURE_NO_WARNINGS /DUNICODE /wd4201
 set CL_DEBUG_FLAGS=/Zi /Od
 set CL_RELEASE_FLAGS=/O2
-set CL_LINK_FLAGS=
+set CL_LINK_FLAGS="/link "
 
 set LV_FLAGS=-std=c99 -I %INC_DIR% -Wall -Werror -I %EXT_DIR% -Wno-unused-function
 set LV_DEBUG_FLAGS=-O0 -g
@@ -73,11 +77,23 @@ set LV_LINK_FLAGS=
 set VK_INCLUDE_PATH=%VULKAN_SDK%\Include
 set EXTRA_LINK_ARGS=""
 
+rem --------------------------------------------------------------------------------------------------------------------
+rem Vulkan  
+rem --------------------------------------------------------------------------------------------------------------------
+
 if not %VULKAN_SDK%=="" (
     set CL_FLAGS=%CL_FLAGS% /I %VK_INCLUDE_PATH%
     set LV_FLAGS=%LV_FLAGS% -I %VK_INCLUDE_PATH%
-    set CL_LINK_FLAGS="/link %VULKAN_SDK%\Lib\vulkan-1.lib"
+    set CL_LINK_FLAGS="%VULKAN_SDK%\Lib\vulkan-1.lib"
     set LV_LINK_FLAGS="%VULKAN_SDK%\Lib\vulkan-1.lib"
+)
+
+rem --------------------------------------------------------------------------------------------------------------------
+rem Freetype
+rem --------------------------------------------------------------------------------------------------------------------
+if %FREETYPE%==1 (
+    set CL_FLAGS=%CL_FLAGS% /I %PRJ_DIR%\ext\freetype\include /D VD_SAMPLES_FREETYPE
+    set CL_LINK_FLAGS=%CL_LINK_FLAGS% %PRJ_DIR%\ext\freetype\win64\freetype.lib
 )
 
 set FF_FLAGS=%CL_FLAGS%
