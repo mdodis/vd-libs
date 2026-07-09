@@ -48,6 +48,7 @@
  * 
  * TODO
  * - Parse table
+ * - glyph metrics are incorrect. Just need to use glyph bounds!
  */
 #ifndef VD_FT_H
 #define VD_FT_H
@@ -117,6 +118,8 @@ typedef struct {
 typedef struct {
     float x;
     float y;
+    float bearing_x;
+    float bearing_y;
 } VdFtExtent;
 
 typedef enum {
@@ -156,6 +159,9 @@ typedef struct {
     uint32_t            text_start;
     uint32_t            text_len;
     int                 next_run_idx;
+
+    float               baseline_origin_x;
+    float               baseline_origin_y;
 
     // @note(mdodis): Internal Use
     uint16_t            script;
@@ -427,23 +433,29 @@ VD_FT_API VdFtRunResult     vd_ft_box_run(void);
 #include <stdint.h>
 #include <string.h>
 
-#define VD_FT_BACKEND_NULL           0
-#define VD_FT_BACKEND_DIRECT_WRITE   1
-#define VD_FT_BACKEND_CORE_TEXT      2
-#define VD_FT_BACKEND_FREETYPE       3
+#define VD_FT_RASTER_BACKEND_NULL           0
+#define VD_FT_RASTER_BACKEND_DIRECT_WRITE   1
+#define VD_FT_RASTER_BACKEND_CORE_TEXT      2
+#define VD_FT_RASTER_BACKEND_FREETYPE       3
 
-// Set VD_FT_BACKEND to choose specific backend for loading, rasterizing, and getting metrics from fonts
+// Set VD_FT_RASTER_BACKEND to choose specific backend for loading, rasterizing, and getting metrics from fonts
 // Defaults to system backend.
 // 
 // This really only useful right now for choosing freetype on platforms that already have a text backend. Unless you're
 // not planning on using the vd_ft_box* APIs, this is not a great idea.
-#ifndef VD_FT_BACKEND
+#ifndef VD_FT_RASTER_BACKEND
 #   ifdef _WIN32
-#       define VD_FT_BACKEND VD_FT_BACKEND_DIRECT_WRITE
+#       define VD_FT_RASTER_BACKEND VD_FT_RASTER_BACKEND_DIRECT_WRITE
 #   elif defined(__APPLE__)
-#       define VD_FT_BACKEND VD_FT_BACKEND_CORE_TEXT
+#       define VD_FT_RASTER_BACKEND VD_FT_RASTER_BACKEND_CORE_TEXT
 #   endif // PLATFORMS
-#endif // !VD_FT_BACKEND
+#endif // !VD_FT_RASTER_BACKEND
+
+#define VD_FT_SHAPE_BACKEND_
+
+#ifndef VD_FT_SHAPE_BACKEND
+#   define VD_FT_SHAPE_BACKEND
+#endif // !VD_FT_SHAPE_BACKEND
 
 #ifndef VD_FT_ABORT
 #   include <assert.h>
@@ -519,7 +531,7 @@ static void vd_ft__swapwstr(wchar_t *s, size_t len)
     }
 }
 
-#if VD_FT_BACKEND==VD_FT_BACKEND_FREETYPE
+#if VD_FT_RASTER_BACKEND==VD_FT_RASTER_BACKEND_FREETYPE
 #include <ft2build.h>
 #include FT_FREETYPE_H
 
@@ -728,7 +740,7 @@ static void vd_ft__freetype_collection_free(VdFtCollection collection)
     VdFt__FreetypeCollection *ft_collection = (VdFt__FreetypeCollection*)collection.hnd;
 
     for (int i = 0; i < ft_collection->families_len; ++i) {
-        VD_FT_FREE(ft_collection->families[i].family_name_len);
+        VD_FT_FREE(ft_collection->families[i].family_name);
     }
 
     VD_FT_FREE(ft_collection->faces);
@@ -777,7 +789,119 @@ static void vd_ft__freetype_family_free(VdFtFamily family)
     VD_FT_FREE(ft_family->faces);
 }
 
-#endif // VD_FT_BACKEND_FREETYPE
+static VdFtFontMetrics vd_ft__freetype_face_metrics(VdFtFace face, float em)
+{
+    VdFtFontMetrics result;
+    FT_Face ft_face = (FT_Face)face;
+
+    float scale = em / (float)ft_face->units_per_EM;
+
+    result.ascent = ft_face->ascender * scale;
+    result.descent = -ft_face->descender * scale;
+
+    float line_gap = (float)ft_face->height - (float)(ft_face->ascender - ft_face->descender);
+    result.line_gap = line_gap * scale;
+
+    return result;    
+}
+
+static void vd_ft__freetype_face_indices(VdFtFace face, int num_codepoints, uint32_t *codepoints, uint16_t *out)
+{
+    FT_Face ft_face = (FT_Face)face;
+
+    for (int i = 0; i < num_codepoints; i++) {
+        out[i] = (uint16_t)FT_Get_Char_Index(ft_face, codepoints[i]);
+    }
+}
+
+static VdFtBitmapRegion vd_ft__freetype_face_raster(VdFtFace face, float em, uint16_t glyph_index)
+{
+    VdFtBitmapRegion result = {0};
+    result.format = VD_FT_BITMAP_FORMAT_A8;
+
+    FT_Face ft_face = (FT_Face)face;
+
+    FT_Set_Pixel_Sizes(ft_face, 0, (FT_UInt)em);
+
+    FT_Error err = FT_Load_Glyph(ft_face, (FT_UInt)glyph_index, FT_LOAD_DEFAULT);
+    if (err) {
+        goto END;
+    }
+
+    FT_GlyphSlot slot = ft_face->glyph;
+
+    err = FT_Render_Glyph(slot, FT_RENDER_MODE_NORMAL);
+    if (err) {
+        goto END;
+    }
+
+    FT_Bitmap *bitmap = &slot->bitmap;
+
+    result.memory = (void*)bitmap->buffer;
+    result.x = 0;
+    result.y = 0;
+    result.w = bitmap->width;
+    result.h = bitmap->rows;
+    result.pitch = bitmap->pitch;
+    result.stride = 1;
+
+END:
+    return result;
+}
+
+static VdFtExtent vd_ft__freetype_face_glyph_bounds(VdFtFace face, float em, uint16_t glyph_index)
+{
+    FT_Face ft_face = (FT_Face)face;
+    VdFtExtent result = {0};
+
+    FT_Set_Pixel_Sizes(ft_face, 0, (FT_UInt)em);
+
+    FT_Error err = FT_Load_Glyph(ft_face, glyph_index, FT_LOAD_DEFAULT);
+    if (err) {
+        goto END;
+    }
+
+    err = FT_Render_Glyph(ft_face->glyph, FT_RENDER_MODE_NORMAL);
+    if (err) {
+        goto END;
+    }
+
+    FT_Bitmap *bitmap = &ft_face->glyph->bitmap;
+
+    result.x = (float)bitmap->width;
+    result.y = (float)bitmap->rows;
+
+END:
+    return result;
+}
+
+static VdFtGlyphMetrics vd_ft__freetype_face_glyph_metrics(VdFtFace face, float em, uint16_t glyph_index)
+{
+    FT_Face ft_face = (FT_Face)face;
+    VdFtGlyphMetrics result = {0};
+
+    FT_Error err = FT_Load_Glyph(ft_face, glyph_index, FT_LOAD_NO_SCALE);
+    if (err) {
+        return result;
+    }
+
+    FT_Glyph_Metrics *metrics = &ft_face->glyph->metrics;
+
+    float scale = em / (float)ft_face->units_per_EM;
+
+    result.advance_w = metrics->horiAdvance * scale;
+    result.bearing_x = metrics->horiBearingX * scale;
+    result.bearing_y = metrics->horiBearingY * scale;
+
+    return result;
+}
+
+static void vd_ft__freetype_face_free(VdFtFace face)
+{
+    FT_Done_Face((FT_Face)face);
+}
+
+#endif // VD_FT_RASTER_BACKEND_FREETYPE
 
 typedef struct {
     uint32_t  version;
@@ -2832,6 +2956,8 @@ VD_FT_API VdFtExtent vd_ft_face_glyph_bounds(VdFtFace face, float em, uint16_t g
     VdFtExtent result;
     result.x = r.right - r.left;
     result.y = r.bottom - r.top;
+    result.bearing_x = r.left;
+    result.bearing_y = r.top;
 
     analysis->lpVtbl->Release((VdFtIUnknown*)analysis);
 
@@ -2945,14 +3071,13 @@ VD_FT_API void vd_ft_box_push(const char *text, int len)
 
     int req = vd_ft__utf8_to_wide((char*)text, len, 0, 0);
     Vd_Ft_G.curr_text_buffer = (wchar_t*)vd_ft__resize_buffer_u32(Vd_Ft_G.curr_text_buffer,
-                                                                  sizeof(wchar_t), Vd_Ft_G.curr_text_len + req + 1,
+                                                                  sizeof(wchar_t), Vd_Ft_G.curr_text_len + req,
                                                                   &Vd_Ft_G.curr_text_cap);
     int wrt = vd_ft__utf8_to_wide((char*)text, len, Vd_Ft_G.curr_text_buffer + Vd_Ft_G.curr_text_len, req);
     VD_FT_ASSERT(req == wrt);
 
     Vd_Ft_G.curr_cluster.start = Vd_Ft_G.curr_text_len;
 
-    Vd_Ft_G.curr_text_buffer[wrt] = 0;
     Vd_Ft_G.curr_text_len += wrt;
 
     Vd_Ft_G.curr_cluster.count = Vd_Ft_G.curr_text_len - Vd_Ft_G.curr_cluster.start;
@@ -2963,12 +3088,9 @@ VD_FT_API void vd_ft_box_push(const char *text, int len)
     Vd_Ft_G.clusters[Vd_Ft_G.clusters_len++] = Vd_Ft_G.curr_cluster;
 }
 
-VD_FT_API void vd_ft_box_end(void)
+static int vd_ft__win32_get_font_family_name(VdFtFamily family, wchar_t *buf, int bufcap)
 {
-    VdFt__Cluster *first_cluster = &Vd_Ft_G.clusters[0];
-
-    VdFtIDWriteFontFamily *font_family = (VdFtIDWriteFontFamily*)first_cluster->family;
-
+    VdFtIDWriteFontFamily *font_family = (VdFtIDWriteFontFamily*)family;
     VdFtIDWriteLocalizedStrings *strings;
     VD_FT__WIN32_CHECK_HRESULT(font_family->lpVtbl->GetFamilyNames(font_family, &strings));
 
@@ -2980,28 +3102,41 @@ VD_FT_API void vd_ft_box_end(void)
     VD_FT__WIN32_CHECK_HRESULT(strings->lpVtbl->FindLocaleName(strings, locale, &string_index, &exists));
     VD_FT__WIN32_CHECK_HRESULT(strings->lpVtbl->GetStringLength(strings, string_index, &length));
 
-    static wchar_t temp[256];
-    VD_FT__WIN32_CHECK_HRESULT(strings->lpVtbl->GetString(strings, string_index, temp, 256));
+    VD_FT__WIN32_CHECK_HRESULT(strings->lpVtbl->GetString(strings, string_index, buf, bufcap));
 
-    temp[length] = 0;
+    buf[length] = 0;
+
+    strings->lpVtbl->Release((VdFtIUnknown*)strings);
+
+    return (int)length;
+}
+
+VD_FT_API void vd_ft_box_end(void)
+{
+    VdFt__Cluster *first_cluster = &Vd_Ft_G.clusters[0];
+
+    static wchar_t family_name[256];
+    vd_ft__win32_get_font_family_name(first_cluster->family, family_name, 256);
+
+    VdFtIDWriteFontFamily *font_family = (VdFtIDWriteFontFamily*)first_cluster->family;
 
     VdFtIDWriteFontCollection *collection;
     VD_FT__WIN32_CHECK_HRESULT(font_family->lpVtbl->GetFontCollection(font_family, &collection));
     collection->lpVtbl->AddRef((VdFtIUnknown*)collection);
 
-    VdFtDWRITE_FONT_STYLE style = 0;
-    switch (first_cluster->style) {
-        case VD_FT_STYLE_NORMAL:  style = VD_FT_DWRITE_FONT_STYLE_NORMAL; break;
-        case VD_FT_STYLE_ITALIC:  style = VD_FT_DWRITE_FONT_STYLE_ITALIC; break;
-        case VD_FT_STYLE_OBLIQUE: style = VD_FT_DWRITE_FONT_STYLE_OBLIQUE; break;
-        default: break;
-    }
+    // VdFtDWRITE_FONT_STYLE style = 0;
+    // switch (first_cluster->style) {
+    //     case VD_FT_STYLE_NORMAL:  style = VD_FT_DWRITE_FONT_STYLE_NORMAL; break;
+    //     case VD_FT_STYLE_ITALIC:  style = VD_FT_DWRITE_FONT_STYLE_ITALIC; break;
+    //     case VD_FT_STYLE_OBLIQUE: style = VD_FT_DWRITE_FONT_STYLE_OBLIQUE; break;
+    //     default: break;
+    // }
 
     VdFtIDWriteTextFormat *text_format;
     VdFtHRESULT hr = Vd_Ft_G.factory->lpVtbl->CreateTextFormat(Vd_Ft_G.factory,
-                                                               temp, collection,
+                                                               family_name, collection,
                                                                VD_FT_DWRITE_FONT_WEIGHT_NORMAL,
-                                                               style,
+                                                               VD_FT_DWRITE_FONT_STYLE_NORMAL,
                                                                VD_FT_DWRITE_FONT_STRETCH_NORMAL,
                                                                first_cluster->size,
                                                                L"en-us",
@@ -3009,7 +3144,6 @@ VD_FT_API void vd_ft_box_end(void)
     VD_FT__WIN32_CHECK_HRESULT(hr);
 
     collection->lpVtbl->Release((VdFtIUnknown*)collection);
-    strings->lpVtbl->Release((VdFtIUnknown*)strings);
 
     VdFtIDWriteTextLayout *text_layout;
     VD_FT__WIN32_CHECK_HRESULT(Vd_Ft_G.factory->lpVtbl->CreateTextLayout(Vd_Ft_G.factory,
@@ -3018,6 +3152,29 @@ VD_FT_API void vd_ft_box_end(void)
                                                                          FLT_MAX, FLT_MAX,
                                                                          &text_layout));
     text_layout->lpVtbl->SetWordWrapping(text_layout, VD_FT_DWRITE_WORD_WRAPPING_NO_WRAP);
+
+    for (int i = 0; i < Vd_Ft_G.clusters_len; ++i) {
+        VdFt__Cluster *cluster = &Vd_Ft_G.clusters[i];
+        VdFtIDWriteFontFamily *cluster_family = (VdFtIDWriteFontFamily*)cluster->family;
+
+        VdFtDWRITE_TEXT_RANGE text_range;
+        text_range.startPosition = cluster->start;
+        text_range.length = cluster->count;
+        VD_FT__WIN32_CHECK_HRESULT(text_layout->lpVtbl->SetFontSize(text_layout, cluster->size, text_range));
+
+        vd_ft__win32_get_font_family_name(cluster->family, family_name, 256);
+        VD_FT__WIN32_CHECK_HRESULT(text_layout->lpVtbl->SetFontFamilyName(text_layout, family_name, text_range));
+
+        VdFtDWRITE_FONT_STYLE style = 0;
+        switch (cluster->style) {
+            case VD_FT_STYLE_NORMAL:  style = VD_FT_DWRITE_FONT_STYLE_NORMAL; break;
+            case VD_FT_STYLE_ITALIC:  style = VD_FT_DWRITE_FONT_STYLE_ITALIC; break;
+            case VD_FT_STYLE_OBLIQUE: style = VD_FT_DWRITE_FONT_STYLE_OBLIQUE; break;
+            default: break;
+        }
+
+        VD_FT__WIN32_CHECK_HRESULT(text_layout->lpVtbl->SetFontStyle(text_layout, style, text_range));
+    }
 
     Vd_Ft_G.curr_text_layout = text_layout;
 }
@@ -3603,8 +3760,6 @@ static VdFtHRESULT vd_ft__win32_draw_glyph_run(VdFtIDWriteTextRenderer *This,
 {
     (void)This;
     (void)clientDrawingContext;
-    (void)baselineOriginX;
-    (void)baselineOriginY;
     (void)measuringMode;
     (void)glyphRunDescription;
     (void)clientDrawingEffect;
@@ -3613,6 +3768,8 @@ static VdFtHRESULT vd_ft__win32_draw_glyph_run(VdFtIDWriteTextRenderer *This,
                                                         &Vd_Ft_G.run_buffer_cap);
 
     VdFtRun *run = &Vd_Ft_G.run_buffer[Vd_Ft_G.run_buffer_len++];
+    run->baseline_origin_x = baselineOriginX;
+    run->baseline_origin_y = baselineOriginY;
 
     uint32_t glyph_start = Vd_Ft_G.glyph_indices_buffer_len;
     uint32_t glyph_count = glyphRun->glyphCount;

@@ -4,7 +4,7 @@
 #endif // defined(__clang__)
 
 #ifdef VD_SAMPLES_FREETYPE
-#   define VD_FT_BACKEND VD_FT_BACKEND_FREETYPE
+#   define VD_FT_RASTER_BACKEND VD_FT_RASTER_BACKEND_FREETYPE
 #endif
 
 #define VD_USE_CRT 1
@@ -128,6 +128,8 @@ Glyph get_or_create_glyph(VdFtFace face, float size, uint16_t index)
     result.w = rect.w;
     result.h = rect.h;
     result.m = vd_ft_face_glyph_metrics(face, size, index);
+    result.m.bearing_x = extent.bearing_x;
+    result.m.bearing_y = extent.bearing_y;
 
     assert(rect.was_packed != 0);
 
@@ -226,18 +228,12 @@ static int utf32_to_utf8(uint32_t codepoint, unsigned char *out)
 
     return 0;
 }
-
-static char String_Buf[1024];
-static int String_Buf_Len;
+#define LITERAL_AND_LENGTH(x) x, (sizeof(x) - 1)
 
 int main(int argc, char const *argv[])
 {
     (void)argc;
     (void)argv;
-
-    memcpy(String_Buf, "Η έννοια του κειμένου έχει περιγραφεί από δύο κυρίως σκοπιές: ως δομή ανώτερης τάξης από την πρόταση, προϊόν της διαδικασίας γραφής , και ως διαδικασία σε εξέλιξη, που ενσωματώνει συμφραστικούς παράγοντες (κυρίως το συνομιλιακό κείμενο). Η πρώτη προσέγγιση αντιμετωπίζει το κείμενο ως στατική γλωσσική οντότητα, της οποίας ο κύκλος ζωής έχει ολοκληρωθεί από τη στιγμή που το κείμενο έφυγε από τα χέρια του συγγραφέα (ή και του ομιλητή στην περίπτωση του μονολόγου), ενώ η δεύτερη το αντιλαμβάνεται ως διαδικασία παραγωγής μέσα σε συμφραζόμενα (καταστασιακά, ποιος γράφει/μιλάει σε ποιον κλπ.· πολιτισμικά, ποιο είναι το θέμα του κειμένου ή ποιο είδος λόγου επιλέχτηκε κλπ.· και γνωσιακά, ποιες είναι οι κοινές αντιλήψεις, αξίες, συμβάσεις κλπ. που μοιράζεται ο συγγραφέας/ομιλητής με τους αναγνώστες/ακροατές του). Οι δύο αυτές προσεγγίσεις είναι", 846);
-    String_Buf_Len = 846;
-
 
     vd_init(0);
 
@@ -442,16 +438,6 @@ int main(int argc, char const *argv[])
             }
         }
 
-        for (unsigned short i = 0; i < vd_fw_get_num_codepoints(); ++i) {
-            uint32_t codepoint = vd_fw_get_codepoint(i);
-
-            String_Buf_Len += utf32_to_utf8(codepoint, (unsigned char*)String_Buf + String_Buf_Len);
-        }
-
-        if (vd_fw_get_key_pressed(VD_FW_KEY_ESCAPE)) {
-            String_Buf_Len = 0;
-        }
-
         vd_fw_lock();
 
         int w, h;
@@ -574,9 +560,21 @@ int main(int argc, char const *argv[])
 
         vd_ft_box_begin();
         vd_ft_box_family_set(family);
+        // vd_ft_box_font_size_set(32.f);
+        // vd_ft_box_font_style_set(style);
+        // vd_ft_box_push(LITERAL_AND_LENGTH("Hello, World!"));
+
         vd_ft_box_font_size_set(32.f);
-        vd_ft_box_font_style_set(style);
-        vd_ft_box_push(String_Buf, String_Buf_Len);
+        vd_ft_box_font_style_set(VD_FT_STYLE_NORMAL);
+        vd_ft_box_push(LITERAL_AND_LENGTH("It's important to note, that now we have a smaller font"));
+
+        vd_ft_box_font_style_set(VD_FT_STYLE_ITALIC);
+        vd_ft_box_push(LITERAL_AND_LENGTH(" but now also italic! Oooooh!"));
+
+        vd_ft_box_font_size_set(16.f);
+        vd_ft_box_font_style_set(VD_FT_STYLE_ITALIC);
+        vd_ft_box_push(LITERAL_AND_LENGTH(" but now also smol! Oooooh!"));
+
         vd_ft_box_end();
         vd_ft_box_wrap(VD_FT_WRAP_WORD);
         vd_ft_box_max_width_set(w);
@@ -595,6 +593,8 @@ int main(int argc, char const *argv[])
         float baseline_y = 0;
         for (int i = 0; i < run_count; ++i) {
             VdFtRun *run = &runs[i];
+            baseline_x = run->baseline_origin_x;
+            baseline_y = run->baseline_origin_y;
 
             for (uint32_t g = 0; g < run->glyph_count; ++g) {
                 uint16_t glyph_index = run_result.indices[run->glyph_start + g];
@@ -622,8 +622,8 @@ int main(int argc, char const *argv[])
                 baseline_x += run_result.advances[run->advances_start + g];
             }
 
-            baseline_x = 0;
-            baseline_y += face_metrics.line_gap + (face_metrics.ascent - face_metrics.descent);
+            // baseline_x = 0;
+            // baseline_y += face_metrics.line_gap + (face_metrics.ascent - face_metrics.descent);
         }
 
         update_glyph_cache();
