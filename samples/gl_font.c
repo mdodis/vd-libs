@@ -3,9 +3,10 @@
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #endif // defined(__clang__)
 
-#ifdef VD_SAMPLES_FREETYPE
-#   define VD_FT_RASTER_BACKEND VD_FT_RASTER_BACKEND_FREETYPE
-#endif
+// #ifdef VD_SAMPLES_FREETYPE
+// #   define VD_FT_RASTER_BACKEND VD_FT_RASTER_BACKEND_FREETYPE
+// #   define VD_FT_SHAPE_BACKEND VD_FT_SHAPE_BACKEND_KB_TEXT_SHAPE
+// #endif
 
 #define VD_USE_CRT 1
 #define VD_FW_NO_CRT 0
@@ -366,7 +367,7 @@ int main(int argc, char const *argv[])
     VdFtCollection sys_collection = vd_ft_collection_from_system();
 
     VdFtFamily family;
-    if (1) {
+    if (0) {
         family = vd_ft_collection_family_from_index(sys_collection, 0);
     } else {
         family = vd_ft_collection_family_from_index(ui_font_collection, 0);
@@ -568,12 +569,12 @@ int main(int argc, char const *argv[])
         vd_ft_box_font_style_set(VD_FT_STYLE_NORMAL);
         vd_ft_box_push(LITERAL_AND_LENGTH("It's important to note, that now we have a smaller font"));
 
-        vd_ft_box_font_style_set(VD_FT_STYLE_ITALIC);
-        vd_ft_box_push(LITERAL_AND_LENGTH(" but now also italic! Oooooh!"));
+        // vd_ft_box_font_style_set(VD_FT_STYLE_ITALIC);
+        // vd_ft_box_push(LITERAL_AND_LENGTH(" but now also italic! Oooooh!"));
 
-        vd_ft_box_font_size_set(16.f);
-        vd_ft_box_font_style_set(VD_FT_STYLE_ITALIC);
-        vd_ft_box_push(LITERAL_AND_LENGTH(" but now also smol! Oooooh!"));
+        // vd_ft_box_font_size_set(16.f);
+        // vd_ft_box_font_style_set(VD_FT_STYLE_ITALIC);
+        // vd_ft_box_push(LITERAL_AND_LENGTH(" but now also smol! Oooooh!"));
 
         vd_ft_box_end();
         vd_ft_box_wrap(VD_FT_WRAP_WORD);
