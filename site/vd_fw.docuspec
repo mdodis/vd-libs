@@ -2297,10 +2297,9 @@ vd_fw_add_gamepad_db_entry(VdFwGamepadDBEntry *entry);
 
         para {
             For debugging, a sample utility program was written to test controller inputs. You can find it
-            <a href="https://github.com/mdodis/vd-libs/blob/main/samples/gl_gamepad.c">here</a>.
+            #here#<https://github.com/mdodis/vd-libs/blob/main/samples/gl_gamepad.c>.
 
-            Additionally, for Windows, an HID dump utility exists
-            <a href="https://github.com/mdodis/vd-libs/blob/main/programs/winhidpi_dump.c">here</a>.
+            Additionally, for Windows, an HID dump utility exists #here#<https://github.com/mdodis/vd-libs/blob/main/programs/winhidpi_dump.c>
         }
     }
 }

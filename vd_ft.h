@@ -136,10 +136,48 @@ typedef enum {
 typedef struct {
     int     source;
     void    *hnd;
+    void    *mem_file;
+    size_t  mem_file_size;
 } VdFtCollection;
 
-typedef void *VdFtFamily;
-typedef void *VdFtFace;
+typedef struct {
+    int     source;
+    void    *handle;
+    void    *mem_file;
+    size_t  mem_file_size;
+} VdFtFamily;
+
+VD_FT_INL VdFtFamily vd_ft_family_null(void)
+{
+    VdFtFamily result;
+    result.handle = 0;
+    return result;
+}
+
+VD_FT_INL int vd_ft_family_ok(VdFtFamily family)
+{
+    return family.handle != 0;
+}
+
+typedef struct {
+    int     source;
+    void    *handle;
+    void    *mem_file;
+    size_t  mem_file_size;
+    int     index;
+} VdFtFace;
+
+VD_FT_INL VdFtFace vd_ft_face_null(void)
+{
+    VdFtFace result;
+    result.handle = 0;
+    return result;
+}
+
+VD_FT_INL int vd_ft_face_ok(VdFtFace face)
+{
+    return face.handle != 0;
+}
 
 typedef struct {
     void *int1;
@@ -454,6 +492,16 @@ VD_FT_API VdFtRunResult     vd_ft_box_run(void);
 #   endif // VD_FT_SHAPE_BACKEND==VD_FT_SHAPE_BACKEND_OS
 #endif // VD_FT_RASTER_BACKEND==VD_FT_RASTER_BACKEND_FREETYPE
 
+#ifdef _WIN32
+#   if VD_FT_SHAPE_BACKEND==VD_FT_SHAPE_BACKEND_OS
+#       define VD_FT__UTF16 1
+#   else
+#       define VD_FT__UTF16 0
+#   endif // VD_FT_SHAPE_BACKEND==VD_FT_SHAPE_BACKEND_OS
+#else
+#   define VD_FT__UTF16 0
+#endif // _WIN32
+
 enum VD_FT_SOURCE__ {
     VD_FT_SOURCE__RASTER_BACKEND,
     VD_FT_SOURCE__SYSTEM_BACKEND,
@@ -478,6 +526,11 @@ enum VD_FT_SOURCE__ {
 #   include <string.h>
 #   define VD_FT_MEMCPY(d, s, n) memcpy(d, s, n)
 #endif // !VD_FT_MEMCPY
+
+#ifndef VD_FT_MEMSET
+#   include <string.h>
+#   define VD_FT_MEMSET(d, v, s) memset(d, v, s)
+#endif // !VD_FT_MEMSET
 
 #ifndef VD_FT_REALLOC
 #   include <stdlib.h>
@@ -533,6 +586,94 @@ static void vd_ft__swapwstr(wchar_t *s, size_t len)
     }
 }
 
+typedef struct {
+    uint32_t    start;
+    uint32_t    count;
+    VdFtFamily  family;
+    VdFtStyle   style;
+    float       size;
+} VdFt__Cluster;
+
+typedef struct {
+#if VD_FT__UTF16==1
+    wchar_t         *curr_text_buffer;
+#else
+    char            *curr_text_buffer;
+#endif // VD_FT__UTF16==1
+    uint32_t        curr_text_len;
+    uint32_t        curr_text_cap;
+
+    VdFt__Cluster   *clusters;
+    int             clusters_len;
+    int             clusters_cap;
+
+    VdFt__Cluster   curr_cluster;
+} VdFt__ClusterBuffer;
+
+static void vd_ft__cluster_buffer_begin(VdFt__ClusterBuffer *buf)
+{
+    buf->curr_text_len = 0;
+    buf->clusters_len = 0;
+    buf->curr_cluster.start = 0;
+    buf->curr_cluster.count = 0;
+    buf->curr_cluster.family = vd_ft_family_null();
+    buf->curr_cluster.style = 0;
+    buf->curr_cluster.size = 0.f;
+}
+
+static void vd_ft__cluster_buffer_family_set(VdFt__ClusterBuffer *buf, VdFtFamily family)
+{
+    buf->curr_cluster.family = family;
+}
+
+static void vd_ft__cluster_buffer_font_size_set(VdFt__ClusterBuffer *buf, float em)
+{
+    buf->curr_cluster.size = em;
+}
+
+static void vd_ft__cluster_buffer_font_style_set(VdFt__ClusterBuffer *buf, VdFtStyle style)
+{
+    buf->curr_cluster.style = style;
+}
+
+static void vd_ft__cluster_buffer_push(VdFt__ClusterBuffer *buf, const char *text, int len)
+{
+    if (len < 0) {
+        len = vd_ft__strlen(text);    
+    }
+
+    if (len == 0) {
+        return;
+    }
+
+    int wrt = len;
+
+#if VD_FT__UTF16==1
+    int req = vd_ft__utf8_to_wide((char*)text, len, 0, 0);
+    buf->curr_text_buffer = (wchar_t*)vd_ft__resize_buffer_u32(buf->curr_text_buffer,
+                                                               sizeof(wchar_t), buf->curr_text_len + req,
+                                                               &buf->curr_text_cap);
+    wrt = vd_ft__utf8_to_wide((char*)text, len, buf->curr_text_buffer + buf->curr_text_len, req);
+    VD_FT_ASSERT(req == wrt);
+#else
+    buf->curr_text_buffer = (char*)vd_ft__resize_buffer_u32(buf->curr_text_buffer,
+                                                            sizeof(char), buf->curr_text_len + len,
+                                                            &buf->curr_text_cap);
+#endif // VD_FT__UTF16==1
+
+    buf->curr_cluster.start = buf->curr_text_len;
+
+    buf->curr_text_len += wrt;
+
+    buf->curr_cluster.count = buf->curr_text_len - buf->curr_cluster.start;
+
+    buf->clusters = (VdFt__Cluster*)vd_ft__resize_buffer(buf->clusters,
+                                                            sizeof(*buf->clusters), buf->clusters_len + 1,
+                                                            &buf->clusters_cap);
+    buf->clusters[buf->clusters_len++] = buf->curr_cluster;
+}
+
+/* ----FREETYPE------------------------------------------------------------------------------------------------------ */
 #if VD_FT_RASTER_BACKEND==VD_FT_RASTER_BACKEND_FREETYPE
 #include <ft2build.h>
 #include FT_FREETYPE_H
@@ -958,9 +1099,44 @@ static void vd_ft__freetype_face_free(VdFtFace face)
 
 #endif // VD_FT_RASTER_BACKEND_FREETYPE
 
+/* ----kb_text_shape.h----------------------------------------------------------------------------------------------- */
 #if VD_FT_SHAPE_BACKEND==VD_FT_SHAPE_BACKEND_KB_TEXT_SHAPE
 #define KB_TEXT_SHAPE_IMPLEMENTATION
+#define KB_TEXT_SHAPE_NO_CRT
+#define KB_TEXT_SHAPE_STATIC
+#define KBTS_ASSERT(Cond) VD_FT_ASSERT(Cond)
+#define KBTS_MEMSET VD_FT_MEMSET
+#define KBTS_MEMCPY VD_FT_MEMCPY
+#define KBTS_MALLOC(Data, Size) VD_FT_REALLOC(0, Size)
+#define KBTS_FREE(Data, Pointer) VD_FT_FREE(Pointer)
 #include "kb_text_shape.h"
+
+typedef struct {
+    kbts_shape_context *context;
+} VdFt__KbTextShape;
+
+static void vd_ft__kb_text_shape_box_begin(VdFt__KbTextShape *shp)
+{
+    kbts_ShapeBegin(shp->context, KBTS_DIRECTION_DONT_KNOW, KBTS_LANGUAGE_DONT_KNOW);
+}
+
+// static void vd_ft__kb_text_shape_push_part(VdFt__KbTextShape *shp, )
+
+static void vd_ft__kb_text_shape_box_family_set(VdFtFamily family)
+{
+
+}
+
+static void vd_ft__kb_text_shape_box_font_size_set(float em);
+static void vd_ft__kb_text_shape_box_font_style_set(VdFtStyle style);
+static void vd_ft__kb_text_shape_box_push(const char *text, int len);
+static void vd_ft__kb_text_shape_box_end(void);
+static VdFtExtent vd_ft__kb_text_shape_box_measure(void);
+static void vd_ft__kb_text_shape_box_max_width_set(float value);
+static void vd_ft__kb_text_shape_box_max_height_set(float value);
+static void vd_ft__kb_text_shape_box_wrap(VdFtWrap wrap);
+static VdFtRunResult vd_ft__kb_text_shape_box_run(void);
+
 
 #endif // VD_FT_SHAPE_BACKEND==VD_FT_SHAPE_BACKEND_KB_TEXT_SHAPE
 
@@ -1153,14 +1329,6 @@ CANDIDATE_FAIL_CONTINUE:
 
     return 1;
 }
-
-typedef struct {
-    uint32_t    start;
-    uint32_t    count;
-    VdFtFamily  family;
-    VdFtStyle   style;
-    float       size;
-} VdFt__Cluster;
 
 #ifdef _WIN32
 
@@ -2025,7 +2193,7 @@ typedef struct {
     VdFtHRESULT (__stdcall *CreateTextFormat)(VdFtIDWriteFactory1 *This, VdFtWCHAR const* fontFamilyName, VdFtIDWriteFontCollection *fontCollection, VdFtDWRITE_FONT_WEIGHT fontWeight, VdFtDWRITE_FONT_STYLE fontStyle, VdFtDWRITE_FONT_STRETCH fontStretch, VdFtFLOAT fontSize, VdFtWCHAR const* localeName, VdFtIDWriteTextFormat ** textFormat);
     VdFtHRESULT (__stdcall *CreateTypography)(VdFtIDWriteFactory1 *This, VdFtIUnknown /* IDWriteTypography */ ** typography);
     VdFtHRESULT (__stdcall *GetGdiInterop)(VdFtIDWriteFactory1 *This, VdFtIDWriteGdiInterop **gdiInterop);
-    VdFtHRESULT (__stdcall *CreateTextLayout)(VdFtIDWriteFactory1 *This, VdFtWCHAR const* string, VdFtUINT32 stringLength, VdFtIUnknown /* IDWriteTextFormat */ * textFormat, VdFtFLOAT maxWidth, VdFtFLOAT maxHeight, VdFtIDWriteTextLayout ** textLayout);
+    VdFtHRESULT (__stdcall *CreateTextLayout)(VdFtIDWriteFactory1 *This, VdFtWCHAR const* string, VdFtUINT32 stringLength, VdFtIDWriteTextFormat *textFormat, VdFtFLOAT maxWidth, VdFtFLOAT maxHeight, VdFtIDWriteTextLayout ** textLayout);
     VdFtHRESULT (__stdcall *CreateGdiCompatibleTextLayout)(VdFtIDWriteFactory1 *This, VdFtWCHAR const* string, VdFtUINT32 stringLength, VdFtIUnknown /* IDWriteTextFormat */ * textFormat, VdFtFLOAT layoutWidth, VdFtFLOAT layoutHeight, VdFtFLOAT pixelsPerDip, VdFtDWRITE_MATRIX const* transform, VdFtBOOL useGdiNatural, VdFtIUnknown /* IDWriteTextLayout */ ** textLayout);
     VdFtHRESULT (__stdcall *CreateEllipsisTrimmingSign)(VdFtIDWriteFactory1 *This, VdFtIUnknown /* IDWriteTextFormat */ * textFormat, VdFtIUnknown /* IDWriteInlineObject */ ** trimmingSign);
     VdFtHRESULT (__stdcall *CreateTextAnalyzer)(VdFtIDWriteFactory1 *This, VdFtIDWriteTextAnalyzer **textAnalyzer);
@@ -2061,7 +2229,7 @@ typedef struct {
     VdFtHRESULT (__stdcall *CreateTextFormat)(VdFtIDWriteFactory *This, VdFtWCHAR const* fontFamilyName, VdFtIDWriteFontCollection *fontCollection, VdFtDWRITE_FONT_WEIGHT fontWeight, VdFtDWRITE_FONT_STYLE fontStyle, VdFtDWRITE_FONT_STRETCH fontStretch, VdFtFLOAT fontSize, VdFtWCHAR const* localeName, VdFtIDWriteTextFormat ** textFormat);
     VdFtHRESULT (__stdcall *CreateTypography)(VdFtIDWriteFactory *This, VdFtIUnknown /* IDWriteTypography */ ** typography);
     VdFtHRESULT (__stdcall *GetGdiInterop)(VdFtIDWriteFactory *This, VdFtIDWriteGdiInterop **gdiInterop);
-    VdFtHRESULT (__stdcall *CreateTextLayout)(VdFtIDWriteFactory *This, VdFtWCHAR const* string, VdFtUINT32 stringLength, VdFtIUnknown /* IDWriteTextFormat */ * textFormat, VdFtFLOAT maxWidth, VdFtFLOAT maxHeight, VdFtIDWriteTextLayout ** textLayout);
+    VdFtHRESULT (__stdcall *CreateTextLayout)(VdFtIDWriteFactory *This, VdFtWCHAR const* string, VdFtUINT32 stringLength, VdFtIDWriteTextFormat *textFormat, VdFtFLOAT maxWidth, VdFtFLOAT maxHeight, VdFtIDWriteTextLayout ** textLayout);
     VdFtHRESULT (__stdcall *CreateGdiCompatibleTextLayout)(VdFtIDWriteFactory *This, VdFtWCHAR const* string, VdFtUINT32 stringLength, VdFtIUnknown /* IDWriteTextFormat */ * textFormat, VdFtFLOAT layoutWidth, VdFtFLOAT layoutHeight, VdFtFLOAT pixelsPerDip, VdFtDWRITE_MATRIX const* transform, VdFtBOOL useGdiNatural, VdFtIUnknown /* IDWriteTextLayout */ ** textLayout);
     VdFtHRESULT (__stdcall *CreateEllipsisTrimmingSign)(VdFtIDWriteFactory *This, VdFtIUnknown /* IDWriteTextFormat */ * textFormat, VdFtIUnknown /* IDWriteInlineObject */ ** trimmingSign);
     VdFtHRESULT (__stdcall *CreateTextAnalyzer)(VdFtIDWriteFactory *This, VdFtIDWriteTextAnalyzer **textAnalyzer);
@@ -2589,14 +2757,45 @@ typedef struct {
 // │▼                                                                                │
 // │IDWriteFontFile                                                                  │
 // └─────────────────────────────────────────────────────────────────────────────────┘
+// 
+// 
+// (https://learn.microsoft.com/en-us/windows/win32/api/dwrite_3/nn-dwrite_3-idwriteinmemoryfontfileloader#requirements)
+// On DWrite 5 and later there is IDWriteFactory5::CreateInMemoryFontFileLoader which theoretically does what we want.
+// unfortunately, that only works for Windows 10 Build 14393 and later 
 
 typedef struct {
     int                                     initialized;
 
-    VdFtIDWriteFactory1                     *factory;
-    VdFtIDWriteFontCollection               *system_font_collection;
     // -----------------------------------------------------------------------------------------------------------------
     // General
+    VdFtIDWriteFactory1                     *factory;
+    VdFtIDWriteFontCollection               *system_font_collection;
+
+    char                                    *family_name_buffer;
+    int                                     family_name_len;
+    int                                     family_name_cap;
+
+    VdFt__ClusterBuffer                     cluster_buffer;
+
+    VdFtRun                                 *run_buffer;
+    int                                     run_buffer_len;
+    int                                     run_buffer_cap;
+
+    uint16_t                                *glyph_indices_buffer;
+    int                                     glyph_indices_buffer_len;
+    int                                     glyph_indices_buffer_cap;
+
+    VdFtDWRITE_GLYPH_OFFSET                 *glyph_offsets_buffer;
+    uint32_t                                glyph_offsets_buffer_len;
+    uint32_t                                glyph_offsets_buffer_cap;
+
+    VdFtGlyphOffset                         *user_glyph_offsets_buffer;
+    uint32_t                                user_glyph_offsets_buffer_len;
+    uint32_t                                user_glyph_offsets_buffer_cap;
+
+    float                                   *glyph_advances_buffer;
+    uint32_t                                glyph_advances_buffer_len;
+    uint32_t                                glyph_advances_buffer_cap;
 
     // -----------------------------------------------------------------------------------------------------------------
     // VD_FT_RASTER_BACKEND_DIRECT_WRITE
@@ -2620,50 +2819,12 @@ typedef struct {
 
     VdFtIDWriteTextRenderer                 static_text_renderer;
     VdFtIDWriteTextRendererVtbl             static_text_renderer_vtbl;
-
-
-    char                                    *family_name_buffer;
-    int                                     family_name_len;
-    int                                     family_name_cap;
-
-    wchar_t                                 *curr_text_buffer;
-    uint32_t                                curr_text_len;
-    uint32_t                                curr_text_cap;
-
-    VdFt__Cluster                           *clusters;
-    int                                     clusters_len;
-    int                                     clusters_cap;
-
-    VdFt__Cluster                           curr_cluster;
-
-    VdFtIDWriteTextLayout                   *curr_text_layout;
-
     VdFtIDWriteGdiInterop                   *gdi_interop;
 
+    // -----------------------------------------------------------------------------------------------------------------
+    // VD_FT_SHAPE_BACKEND_OS
+    VdFtIDWriteTextLayout                   *curr_text_layout;
 
-    VdFt__Win32Font                         *font_buffer;
-    int                                     font_buffer_len;
-    int                                     font_buffer_cap;
-
-    VdFtRun                                 *run_buffer;
-    int                                     run_buffer_len;
-    int                                     run_buffer_cap;
-
-    VdFtUINT16                              *glyph_indices_buffer;
-    VdFtUINT32                              glyph_indices_buffer_len;
-    VdFtUINT32                              glyph_indices_buffer_cap;
-
-    VdFtDWRITE_GLYPH_OFFSET                 *glyph_offsets_buffer;
-    uint32_t                                glyph_offsets_buffer_len;
-    uint32_t                                glyph_offsets_buffer_cap;
-
-    VdFtGlyphOffset                         *user_glyph_offsets_buffer;
-    uint32_t                                user_glyph_offsets_buffer_len;
-    uint32_t                                user_glyph_offsets_buffer_cap;
-
-    float                                   *glyph_advances_buffer;
-    uint32_t                                glyph_advances_buffer_len;
-    uint32_t                                glyph_advances_buffer_cap;
 } Vd_Ft__Win32InternalData;
 
 Vd_Ft__Win32InternalData Vd_Ft_G = {0};
@@ -2770,8 +2931,10 @@ VD_FT_API VdFtCollection vd_ft_collection_from_system(void)
     vd_ft__win32_init();
 
     VdFtCollection result;
-    result.source = 0;
+    result.source = VD_FT_SOURCE_SYSTEM;
     result.hnd = 0;
+    result.mem_file = 0;
+    result.mem_file_size = 0;
     return result;
 }
 
@@ -2791,8 +2954,10 @@ VD_FT_API VdFtCollection vd_ft_collection_from_memory(void *memory, uint32_t siz
                                                                                    &fc));
 
     VdFtCollection result;
-    result.source = 1;
+    result.source = VD_FT_SOURCE_MEMORY;
     result.hnd = (void*)fc;
+    result.mem_file = memory;
+    result.mem_file_size = size;
     return result;
 }
 
@@ -2815,12 +2980,24 @@ VD_FT_API VdFtFamily vd_ft_collection_family_from_index(VdFtCollection collectio
     VdFtIDWriteFontFamily *font_family;
 
     VdFtIDWriteFontCollection *fc = (VdFtIDWriteFontCollection*)collection.hnd;
+    int family_source = VD_FT_SOURCE_MEMORY;
+    void *family_mem_file = 0;
+    size_t family_mem_file_size = 0;
     if (collection.source == 0) {
         fc = Vd_Ft_G.system_font_collection;
+        family_source = VD_FT_SOURCE_SYSTEM;
+    } else {
+        family_mem_file = collection.mem_file;
+        family_mem_file_size = collection.mem_file_size;
     }
 
     fc->lpVtbl->GetFontFamily(fc, index, &font_family);
-    return (VdFtFamily)font_family;
+    VdFtFamily result;
+    result.handle = (void*)font_family;
+    result.source = family_source;
+    result.mem_file = family_mem_file;
+    result.mem_file_size = family_mem_file_size;
+    return result;
 }
 
 VD_FT_API void vd_ft_collection_free(VdFtCollection collection)
@@ -2857,7 +3034,7 @@ VD_FT_API unsigned int vd_ft_family_count(void)
 
 VD_FT_API char *vd_ft_family_name(VdFtFamily family)
 {
-    VdFtIDWriteFontFamily *font_family = (VdFtIDWriteFontFamily*)family;
+    VdFtIDWriteFontFamily *font_family = (VdFtIDWriteFontFamily*)family.handle;
     VdFtIDWriteLocalizedStrings *strings;
     VD_FT__WIN32_CHECK_HRESULT(font_family->lpVtbl->GetFamilyNames(font_family, &strings));
 
@@ -2892,7 +3069,7 @@ VD_FT_API char *vd_ft_family_name(VdFtFamily family)
 
 VD_FT_API int vd_ft_family_face_count(VdFtFamily family)
 {
-    VdFtIDWriteFontFamily *font_family = (VdFtIDWriteFontFamily*)family;
+    VdFtIDWriteFontFamily *font_family = (VdFtIDWriteFontFamily*)family.handle;
 
     uint32_t font_count = font_family->lpVtbl->GetFontCount(font_family);
 
@@ -2901,7 +3078,7 @@ VD_FT_API int vd_ft_family_face_count(VdFtFamily family)
 
 VD_FT_API VdFtFace vd_ft_family_face_from_index(VdFtFamily family, int index)
 {
-    VdFtIDWriteFontFamily *font_family = (VdFtIDWriteFontFamily*)family;
+    VdFtIDWriteFontFamily *font_family = (VdFtIDWriteFontFamily*)family.handle;
 
     VdFtIDWriteFont *font;
     VD_FT__WIN32_CHECK_HRESULT(font_family->lpVtbl->GetFont(font_family, index, &font));
@@ -2910,18 +3087,25 @@ VD_FT_API VdFtFace vd_ft_family_face_from_index(VdFtFamily family, int index)
     VD_FT__WIN32_CHECK_HRESULT(font->lpVtbl->CreateFontFace(font, &face));
 
     font->lpVtbl->Release((VdFtIUnknown*)font);
-    return (VdFtFace)face;
+
+    VdFtFace result;
+    result.source = family.source;
+    result.handle = (void*)face;
+    result.mem_file = family.mem_file;
+    result.mem_file_size = family.mem_file_size;
+    result.index = index;
+    return result;
 }
 
 VD_FT_API void vd_ft_family_free(VdFtFamily family)
 {
-    VdFtIDWriteFontFamily *font_family = (VdFtIDWriteFontFamily*)family;
+    VdFtIDWriteFontFamily *font_family = (VdFtIDWriteFontFamily*)family.handle;
     font_family->lpVtbl->Release((VdFtIUnknown*)font_family);
 }
 
 VD_FT_API VdFtFontMetrics vd_ft_face_metrics(VdFtFace face, float em)
 {
-    VdFtIDWriteFontFace *font_face = (VdFtIDWriteFontFace*)face;
+    VdFtIDWriteFontFace *font_face = (VdFtIDWriteFontFace*)face.handle;
 
     VdFtDWRITE_FONT_METRICS metrics;
     font_face->lpVtbl->GetMetrics(font_face, &metrics);
@@ -2936,14 +3120,14 @@ VD_FT_API VdFtFontMetrics vd_ft_face_metrics(VdFtFace face, float em)
 
 VD_FT_API void vd_ft_face_indices(VdFtFace face, int num_codepoints, uint32_t *codepoints, uint16_t *out)
 {
-    VdFtIDWriteFontFace *font_face = (VdFtIDWriteFontFace*)face;
+    VdFtIDWriteFontFace *font_face = (VdFtIDWriteFontFace*)face.handle;
     VD_FT__WIN32_CHECK_HRESULT(font_face->lpVtbl->GetGlyphIndices(font_face, codepoints, num_codepoints, out));
 }
 
 VD_FT_API VdFtBitmapRegion vd_ft_face_raster(VdFtFace face, float em, uint16_t glyph_index)
 {
     VdFtDWRITE_GLYPH_RUN run = {0};
-    run.fontFace = (VdFtIDWriteFontFace*)face;
+    run.fontFace = (VdFtIDWriteFontFace*)face.handle;
     run.fontEmSize = em;
     run.glyphCount = 1;
     run.glyphIndices = &glyph_index;
@@ -2989,7 +3173,7 @@ VD_FT_API VdFtBitmapRegion vd_ft_face_raster(VdFtFace face, float em, uint16_t g
 
 VD_FT_API VdFtExtent vd_ft_face_glyph_bounds(VdFtFace face, float em, uint16_t glyph_index)
 {
-    VdFtIDWriteFontFace *font_face = (VdFtIDWriteFontFace*)face;
+    VdFtIDWriteFontFace *font_face = (VdFtIDWriteFontFace*)face.handle;
 
     VdFtDWRITE_GLYPH_RUN run = {0};
     run.fontFace = font_face;
@@ -3020,7 +3204,7 @@ VD_FT_API VdFtExtent vd_ft_face_glyph_bounds(VdFtFace face, float em, uint16_t g
 
 VD_FT_API VdFtGlyphMetrics vd_ft_face_glyph_metrics(VdFtFace face, float em, uint16_t glyph_index)
 {
-    VdFtIDWriteFontFace *font_face = (VdFtIDWriteFontFace*)face;
+    VdFtIDWriteFontFace *font_face = (VdFtIDWriteFontFace*)face.handle;
 
     VdFtDWRITE_FONT_METRICS font_metrics;
     font_face->lpVtbl->GetMetrics(font_face, &font_metrics);
@@ -3047,7 +3231,7 @@ VD_FT_API VdFtGlyphMetrics vd_ft_face_glyph_metrics(VdFtFace face, float em, uin
 
 VD_FT_API VdFtFaceKey vd_ft_face_key(VdFtFace face)
 {
-    VdFtIDWriteFontFace *font_face = (VdFtIDWriteFontFace*)face;
+    VdFtIDWriteFontFace *font_face = (VdFtIDWriteFontFace*)face.handle;
 
     VdFtUINT32 num_files = 0;
     VD_FT__WIN32_CHECK_HRESULT(font_face->lpVtbl->GetFiles(font_face, &num_files, NULL));
@@ -3079,7 +3263,7 @@ VD_FT_API VdFtFaceKey vd_ft_face_key(VdFtFace face)
 
 VD_FT_API void vd_ft_face_free(VdFtFace face)
 {
-    VdFtIDWriteFontFace *font_face = (VdFtIDWriteFontFace*)face;
+    VdFtIDWriteFontFace *font_face = (VdFtIDWriteFontFace*)face.handle;
     font_face->lpVtbl->Release((VdFtIUnknown*)font_face);
 }
 
@@ -3089,64 +3273,33 @@ VD_FT_API void vd_ft_box_begin(void)
         Vd_Ft_G.curr_text_layout->lpVtbl->Release((VdFtIUnknown*)Vd_Ft_G.curr_text_layout);
         Vd_Ft_G.curr_text_layout = 0;
     }
-    Vd_Ft_G.curr_text_len = 0;
-    Vd_Ft_G.clusters_len = 0;
-    Vd_Ft_G.curr_cluster.start = 0;
-    Vd_Ft_G.curr_cluster.count = 0;
-    Vd_Ft_G.curr_cluster.family = 0;
-    Vd_Ft_G.curr_cluster.style = 0;
-    Vd_Ft_G.curr_cluster.size = 0.f;
+
+    vd_ft__cluster_buffer_begin(&Vd_Ft_G.cluster_buffer);
 }
 
 VD_FT_API void vd_ft_box_family_set(VdFtFamily family)
 {
-    Vd_Ft_G.curr_cluster.family = family;
+    vd_ft__cluster_buffer_family_set(&Vd_Ft_G.cluster_buffer, family);
 }
 
 VD_FT_API void vd_ft_box_font_size_set(float em)
 {
-    Vd_Ft_G.curr_cluster.size = em;
+    vd_ft__cluster_buffer_font_size_set(&Vd_Ft_G.cluster_buffer, em);
 }
 
 VD_FT_API void vd_ft_box_font_style_set(VdFtStyle style)
 {
-    Vd_Ft_G.curr_cluster.style = style;
+    vd_ft__cluster_buffer_font_style_set(&Vd_Ft_G.cluster_buffer, style);
 }
 
 VD_FT_API void vd_ft_box_push(const char *text, int len)
 {
-    if (len < 0) {
-        len = vd_ft__strlen(text);    
-    }
-
-    if (len == 0) {
-        return;
-    }
-
-    VD_FT_ASSERT(Vd_Ft_G.curr_text_layout == 0);
-
-    int req = vd_ft__utf8_to_wide((char*)text, len, 0, 0);
-    Vd_Ft_G.curr_text_buffer = (wchar_t*)vd_ft__resize_buffer_u32(Vd_Ft_G.curr_text_buffer,
-                                                                  sizeof(wchar_t), Vd_Ft_G.curr_text_len + req,
-                                                                  &Vd_Ft_G.curr_text_cap);
-    int wrt = vd_ft__utf8_to_wide((char*)text, len, Vd_Ft_G.curr_text_buffer + Vd_Ft_G.curr_text_len, req);
-    VD_FT_ASSERT(req == wrt);
-
-    Vd_Ft_G.curr_cluster.start = Vd_Ft_G.curr_text_len;
-
-    Vd_Ft_G.curr_text_len += wrt;
-
-    Vd_Ft_G.curr_cluster.count = Vd_Ft_G.curr_text_len - Vd_Ft_G.curr_cluster.start;
-
-    Vd_Ft_G.clusters = (VdFt__Cluster*)vd_ft__resize_buffer(Vd_Ft_G.clusters,
-                                                            sizeof(*Vd_Ft_G.clusters), Vd_Ft_G.clusters_len + 1,
-                                                            &Vd_Ft_G.clusters_cap);
-    Vd_Ft_G.clusters[Vd_Ft_G.clusters_len++] = Vd_Ft_G.curr_cluster;
+    vd_ft__cluster_buffer_push(&Vd_Ft_G.cluster_buffer, text, len);
 }
 
 static int vd_ft__win32_get_font_family_name(VdFtFamily family, wchar_t *buf, int bufcap)
 {
-    VdFtIDWriteFontFamily *font_family = (VdFtIDWriteFontFamily*)family;
+    VdFtIDWriteFontFamily *font_family = (VdFtIDWriteFontFamily*)family.handle;
     VdFtIDWriteLocalizedStrings *strings;
     VD_FT__WIN32_CHECK_HRESULT(font_family->lpVtbl->GetFamilyNames(font_family, &strings));
 
@@ -3169,12 +3322,12 @@ static int vd_ft__win32_get_font_family_name(VdFtFamily family, wchar_t *buf, in
 
 VD_FT_API void vd_ft_box_end(void)
 {
-    VdFt__Cluster *first_cluster = &Vd_Ft_G.clusters[0];
+    VdFt__Cluster *first_cluster = &Vd_Ft_G.cluster_buffer.clusters[0];
 
     static wchar_t family_name[256];
     vd_ft__win32_get_font_family_name(first_cluster->family, family_name, 256);
 
-    VdFtIDWriteFontFamily *font_family = (VdFtIDWriteFontFamily*)first_cluster->family;
+    VdFtIDWriteFontFamily *font_family = (VdFtIDWriteFontFamily*)first_cluster->family.handle;
 
     VdFtIDWriteFontCollection *collection;
     VD_FT__WIN32_CHECK_HRESULT(font_family->lpVtbl->GetFontCollection(font_family, &collection));
@@ -3203,15 +3356,15 @@ VD_FT_API void vd_ft_box_end(void)
 
     VdFtIDWriteTextLayout *text_layout;
     VD_FT__WIN32_CHECK_HRESULT(Vd_Ft_G.factory->lpVtbl->CreateTextLayout(Vd_Ft_G.factory,
-                                                                         Vd_Ft_G.curr_text_buffer, Vd_Ft_G.curr_text_len,
+                                                                         Vd_Ft_G.cluster_buffer.curr_text_buffer, Vd_Ft_G.cluster_buffer.curr_text_len,
                                                                          text_format,
                                                                          FLT_MAX, FLT_MAX,
                                                                          &text_layout));
     text_layout->lpVtbl->SetWordWrapping(text_layout, VD_FT_DWRITE_WORD_WRAPPING_NO_WRAP);
 
-    for (int i = 0; i < Vd_Ft_G.clusters_len; ++i) {
-        VdFt__Cluster *cluster = &Vd_Ft_G.clusters[i];
-        VdFtIDWriteFontFamily *cluster_family = (VdFtIDWriteFontFamily*)cluster->family;
+    for (int i = 0; i < Vd_Ft_G.cluster_buffer.clusters_len; ++i) {
+        VdFt__Cluster *cluster = &Vd_Ft_G.cluster_buffer.clusters[i];
+        VdFtIDWriteFontFamily *cluster_family = (VdFtIDWriteFontFamily*)cluster->family.handle;
 
         VdFtDWRITE_TEXT_RANGE text_range;
         text_range.startPosition = cluster->start;
@@ -3279,7 +3432,7 @@ VD_FT_API VdFtRunResult vd_ft_box_run(void)
     Vd_Ft_G.glyph_advances_buffer_len = 0;
     Vd_Ft_G.user_glyph_offsets_buffer_len = 0;
 
-    if (Vd_Ft_G.curr_text_len != 0) {
+    if (Vd_Ft_G.cluster_buffer.curr_text_len != 0) {
         VD_FT__WIN32_CHECK_HRESULT(Vd_Ft_G.curr_text_layout->lpVtbl->Draw(Vd_Ft_G.curr_text_layout, 0,
                                                                           &Vd_Ft_G.static_text_renderer,
                                                                           0.f, 0.f));
@@ -3594,10 +3747,10 @@ static VdFtHRESULT vd_ft__win32_draw_glyph_run(VdFtIDWriteTextRenderer *This,
     uint32_t offsets_start = 0;
     uint32_t advances_start = 0;
 
-    Vd_Ft_G.glyph_indices_buffer = (uint16_t*)vd_ft__resize_buffer_u32((void*)Vd_Ft_G.glyph_indices_buffer,
-                                                                       sizeof(*Vd_Ft_G.glyph_indices_buffer),
-                                                                       Vd_Ft_G.glyph_indices_buffer_len + glyph_count,
-                                                                       &Vd_Ft_G.glyph_indices_buffer_cap);
+    Vd_Ft_G.glyph_indices_buffer = (uint16_t*)vd_ft__resize_buffer((void*)Vd_Ft_G.glyph_indices_buffer,
+                                                                   sizeof(*Vd_Ft_G.glyph_indices_buffer),
+                                                                   Vd_Ft_G.glyph_indices_buffer_len + glyph_count,
+                                                                   &Vd_Ft_G.glyph_indices_buffer_cap);
     VD_FT_MEMCPY(Vd_Ft_G.glyph_indices_buffer + Vd_Ft_G.glyph_indices_buffer_len,
                  glyphRun->glyphIndices,
                  sizeof(uint16_t) * glyph_count);
@@ -3636,7 +3789,9 @@ static VdFtHRESULT vd_ft__win32_draw_glyph_run(VdFtIDWriteTextRenderer *This,
     advances_start = Vd_Ft_G.glyph_advances_buffer_len;
     Vd_Ft_G.glyph_advances_buffer_len += glyph_count;
 
-    run->face = (VdFtFace)glyphRun->fontFace;
+    run->face.handle = (void*)glyphRun->fontFace;
+    run->face.source = VD_FT_SOURCE_SYSTEM;
+    run->face.index = (int)glyphRun->fontFace->lpVtbl->GetIndex(glyphRun->fontFace);
     run->pixel_scale = glyphRun->fontEmSize;
     // run->pixel_scale = glyphRun->fontEmSize;
     run->glyph_start = glyph_start;
