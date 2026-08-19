@@ -256,7 +256,8 @@ VD_CG_INL F2          swiden2f         (S2 v)                                  {
 // << Deprecated
 
 /* ----UTILITY------------------------------------------------------------------------------------------------------- */
-VD_CG_INL F1          fwrap_degrees    (F1 d)                                  { return d - F_TAU * ffloor(d / F_TAU); }
+VD_CG_INL F1          fwrap_rad        (F1 d)                                  { return d - F_TAU * ffloor(d / F_TAU); }
+VD_CG_INL F1          fwrap_deg        (F1 d)                                  { if (d >= 360.f) d -= 360.f; if (d < 0.f) d += 360.f; return d; }
 VD_CG_INL F1          fclamp           (F1 i, F1 x, F1 a)                      { if (x < i) return i; if (x > a) return a; return x; }
 VD_CG_INL F1          flerp            (F1 a, F1 b, F1 t)                      { return a + t * (b - a); }
 VD_CG_INL F1          fsmax            (F1 a, F1 b)                            { return a > b ? a : b; }
@@ -380,14 +381,21 @@ VD_CG_INL D4x4        dtranspose4x4    (D4x4 *m)                               {
                                                                                               m->a2, m->b2, m->c2, m->d2,
                                                                                               m->a3, m->b3, m->c3, m->d3); }
 
-VD_CG_INL F4x4        fmul4x4          (F4x4 *a, F4x4 *b)                      { return fm4x4(a->a0*b->a0 + a->a1*b->b0 + a->a2*b->c0 + a->a3*b->d0, a->a0*b->a1 + a->a1*b->b1 + a->a2*b->c1 + a->a3*b->d1, a->a0*b->a2 + a->a1*b->b2 + a->a2*b->c2 + a->a3*b->d2, a->a0*b->a3 + a->a1*b->b3 + a->a2*b->c3 + a->a3*b->d3,
-                                                                                              a->b0*b->a0 + a->b1*b->b0 + a->b2*b->c0 + a->b3*b->d0, a->b0*b->a1 + a->b1*b->b1 + a->b2*b->c1 + a->b3*b->d1, a->b0*b->a2 + a->b1*b->b2 + a->b2*b->c2 + a->b3*b->d2, a->b0*b->a3 + a->b1*b->b3 + a->b2*b->c3 + a->b3*b->d3,
-                                                                                              a->c0*b->a0 + a->c1*b->b0 + a->c2*b->c0 + a->c3*b->d0, a->c0*b->a1 + a->c1*b->b1 + a->c2*b->c1 + a->c3*b->d1, a->c0*b->a2 + a->c1*b->b2 + a->c2*b->c2 + a->c3*b->d2, a->c0*b->a3 + a->c1*b->b3 + a->c2*b->c3 + a->c3*b->d3,
-                                                                                              a->d0*b->a0 + a->d1*b->b0 + a->d2*b->c0 + a->d3*b->d0, a->d0*b->a1 + a->d1*b->b1 + a->d2*b->c1 + a->d3*b->d1, a->d0*b->a2 + a->d1*b->b2 + a->d2*b->c2 + a->d3*b->d2, a->d0*b->a3 + a->d1*b->b3 + a->d2*b->c3 + a->d3*b->d3); }
-VD_CG_INL D4x4        dmul4x4          (D4x4 *a, D4x4 *b)                      { return dm4x4(a->a0*b->a0 + a->a1*b->b0 + a->a2*b->c0 + a->a3*b->d0, a->a0*b->a1 + a->a1*b->b1 + a->a2*b->c1 + a->a3*b->d1, a->a0*b->a2 + a->a1*b->b2 + a->a2*b->c2 + a->a3*b->d2, a->a0*b->a3 + a->a1*b->b3 + a->a2*b->c3 + a->a3*b->d3,
-                                                                                              a->b0*b->a0 + a->b1*b->b0 + a->b2*b->c0 + a->b3*b->d0, a->b0*b->a1 + a->b1*b->b1 + a->b2*b->c1 + a->b3*b->d1, a->b0*b->a2 + a->b1*b->b2 + a->b2*b->c2 + a->b3*b->d2, a->b0*b->a3 + a->b1*b->b3 + a->b2*b->c3 + a->b3*b->d3,
-                                                                                              a->c0*b->a0 + a->c1*b->b0 + a->c2*b->c0 + a->c3*b->d0, a->c0*b->a1 + a->c1*b->b1 + a->c2*b->c1 + a->c3*b->d1, a->c0*b->a2 + a->c1*b->b2 + a->c2*b->c2 + a->c3*b->d2, a->c0*b->a3 + a->c1*b->b3 + a->c2*b->c3 + a->c3*b->d3,
-                                                                                              a->d0*b->a0 + a->d1*b->b0 + a->d2*b->c0 + a->d3*b->d0, a->d0*b->a1 + a->d1*b->b1 + a->d2*b->c1 + a->d3*b->d1, a->d0*b->a2 + a->d1*b->b2 + a->d2*b->c2 + a->d3*b->d2, a->d0*b->a3 + a->d1*b->b3 + a->d2*b->c3 + a->d3*b->d3); }
+// VD_CG_INL F4x4        fmul4x4          (F4x4 *a, F4x4 *b)                      { return fm4x4(a->a0*b->a0 + a->a1*b->b0 + a->a2*b->c0 + a->a3*b->d0, a->a0*b->a1 + a->a1*b->b1 + a->a2*b->c1 + a->a3*b->d1, a->a0*b->a2 + a->a1*b->b2 + a->a2*b->c2 + a->a3*b->d2, a->a0*b->a3 + a->a1*b->b3 + a->a2*b->c3 + a->a3*b->d3,
+//                                                                                               a->b0*b->a0 + a->b1*b->b0 + a->b2*b->c0 + a->b3*b->d0, a->b0*b->a1 + a->b1*b->b1 + a->b2*b->c1 + a->b3*b->d1, a->b0*b->a2 + a->b1*b->b2 + a->b2*b->c2 + a->b3*b->d2, a->b0*b->a3 + a->b1*b->b3 + a->b2*b->c3 + a->b3*b->d3,
+//                                                                                               a->c0*b->a0 + a->c1*b->b0 + a->c2*b->c0 + a->c3*b->d0, a->c0*b->a1 + a->c1*b->b1 + a->c2*b->c1 + a->c3*b->d1, a->c0*b->a2 + a->c1*b->b2 + a->c2*b->c2 + a->c3*b->d2, a->c0*b->a3 + a->c1*b->b3 + a->c2*b->c3 + a->c3*b->d3,
+//                                                                                               a->d0*b->a0 + a->d1*b->b0 + a->d2*b->c0 + a->d3*b->d0, a->d0*b->a1 + a->d1*b->b1 + a->d2*b->c1 + a->d3*b->d1, a->d0*b->a2 + a->d1*b->b2 + a->d2*b->c2 + a->d3*b->d2, a->d0*b->a3 + a->d1*b->b3 + a->d2*b->c3 + a->d3*b->d3); }
+
+VD_CG_INL F4x4        fmul4x4          (F4x4 *a, F4x4 *b)                      { return fm4x4(a->a0*b->a0 + a->b0*b->a1 + a->c0*b->a2 + a->d0*b->a3, a->a1*b->a0 + a->b1*b->a1 + a->c1*b->a2 + a->d1*b->a3, a->a2*b->a0 + a->b2*b->a1 + a->c2*b->a2 + a->d2*b->a3, a->a3*b->a0 + a->b3*b->a1 + a->c3*b->a2 + a->d3*b->a3,
+                                                                                              a->a0*b->b0 + a->b0*b->b1 + a->c0*b->b2 + a->d0*b->b3, a->a1*b->b0 + a->b1*b->b1 + a->c1*b->b2 + a->d1*b->b3, a->a2*b->b0 + a->b2*b->b1 + a->c2*b->b2 + a->d2*b->b3, a->a3*b->b0 + a->b3*b->b1 + a->c3*b->b2 + a->d3*b->b3,
+                                                                                              a->a0*b->c0 + a->b0*b->c1 + a->c0*b->c2 + a->d0*b->c3, a->a1*b->c0 + a->b1*b->c1 + a->c1*b->c2 + a->d1*b->c3, a->a2*b->c0 + a->b2*b->c1 + a->c2*b->c2 + a->d2*b->c3, a->a3*b->c0 + a->b3*b->c1 + a->c3*b->c2 + a->d3*b->c3,
+                                                                                              a->a0*b->d0 + a->b0*b->d1 + a->c0*b->d2 + a->d0*b->d3, a->a1*b->d0 + a->b1*b->d1 + a->c1*b->d2 + a->d1*b->d3, a->a2*b->d0 + a->b2*b->d1 + a->c2*b->d2 + a->d2*b->d3, a->a3*b->d0 + a->b3*b->d1 + a->c3*b->d2 + a->d3*b->d3); }
+
+VD_CG_INL D4x4        dmul4x4          (D4x4 *a, D4x4 *b)                      { return dm4x4(a->a0*b->a0 + a->b0*b->a1 + a->c0*b->a2 + a->d0*b->a3, a->a1*b->a0 + a->b1*b->a1 + a->c1*b->a2 + a->d1*b->a3, a->a2*b->a0 + a->b2*b->a1 + a->c2*b->a2 + a->d2*b->a3, a->a3*b->a0 + a->b3*b->a1 + a->c3*b->a2 + a->d3*b->a3,
+                                                                                              a->a0*b->b0 + a->b0*b->b1 + a->c0*b->b2 + a->d0*b->b3, a->a1*b->b0 + a->b1*b->b1 + a->c1*b->b2 + a->d1*b->b3, a->a2*b->b0 + a->b2*b->b1 + a->c2*b->b2 + a->d2*b->b3, a->a3*b->b0 + a->b3*b->b1 + a->c3*b->b2 + a->d3*b->b3,
+                                                                                              a->a0*b->c0 + a->b0*b->c1 + a->c0*b->c2 + a->d0*b->c3, a->a1*b->c0 + a->b1*b->c1 + a->c1*b->c2 + a->d1*b->c3, a->a2*b->c0 + a->b2*b->c1 + a->c2*b->c2 + a->d2*b->c3, a->a3*b->c0 + a->b3*b->c1 + a->c3*b->c2 + a->d3*b->c3,
+                                                                                              a->a0*b->d0 + a->b0*b->d1 + a->c0*b->d2 + a->d0*b->d3, a->a1*b->d0 + a->b1*b->d1 + a->c1*b->d2 + a->d1*b->d3, a->a2*b->d0 + a->b2*b->d1 + a->c2*b->d2 + a->d2*b->d3, a->a3*b->d0 + a->b3*b->d1 + a->c3*b->d2 + a->d3*b->d3); }
+
 VD_CG_INL F4          fmul4x4_4        (F4x4 *m, F4    v)                      { return fm4(fdot4(fm4(m->a0, m->b0, m->c0, m->d0), v),
                                                                                             fdot4(fm4(m->a1, m->b1, m->c1, m->d1), v),
                                                                                             fdot4(fm4(m->a2, m->b2, m->c2, m->d2), v),
@@ -735,7 +743,7 @@ VD_CG_INL FLine       fray_to_line     (FRay *ray, F1 t)                       {
 
 /* ----COORDINATE SYSTEMS-------------------------------------------------------------------------------------------- */
 /**
- * @brief Build perspective projection matrix for right handed coordinate system, with normalized depth [-1,+1]
+ * @brief Build perspective projection matrix for left handed coordinate system, with normalized depth [-1,+1]
  * @param  fovyrad Vertical FoV in radians
  * @param  aspect  Aspect Ratio
  * @param  pnr     Near Plane
@@ -850,6 +858,10 @@ VD_CG_INL F4x4        frotation_roll4x4  (F1 rad)                              {
                                                                                               -fsin(rad), fcos(rad),  0.f, 0.f,
                                                                                               0.f,        0.f,        1.f, 0.f,
                                                                                               0.f,        0.f,        0.f, 1.f); }
+VD_CG_INL F4x4        fscaling4x4        (F3 v)                                { return fm4x4(v.x, 0.f, 0.f, 0.f,
+                                                                                              0.f, v.y, 0.f, 0.f,
+                                                                                              0.f, 0.f, v.z, 0.f,
+                                                                                              0.f, 0.f, 0.f, 1.f); }
 VD_CG_INL F4x4        frotation_quat4x4  (FQuat quat)
 {
     F1 q0   = quat.w;  F1 q1   = quat.x;  F1 q2   = quat.y;  F1 q3   = quat.z;
@@ -858,15 +870,23 @@ VD_CG_INL F4x4        frotation_quat4x4  (FQuat quat)
     F1 q1q2 = q1 * q2; F1 q1q3 = q1 * q3;
     F1 q2q3 = q2 * q3;
 
-    return fm4x4(2.f * (q0q0 + q1q1) - 1.f, 2.f * (q1q2 - q0q3),       2.f * (q1q3 + q0q2),       0.f,
-                 2.f * (q1q2 + q0q3),       2.f * (q0q0 + q2q2) - 1.f, 2.f * (q1q3 + q0q1),       0.f,
-                 2.f * (q1q3 - q0q2),       2.f * (q2q3 + q0q1),       2.f * (q0q0 + q3q3) - 1.f, 0.f,
-                 0.f,                       0.f,                       0.f,                       1.f);
+    // return fm4x4(2.f * (q0q0 + q1q1) - 1.f, 2.f * (q1q2 - q0q3),       2.f * (q1q3 + q0q2),       0.f,
+    //              2.f * (q1q2 + q0q3),       2.f * (q0q0 + q2q2) - 1.f, 2.f * (q1q3 - q0q1),       0.f,
+    //              2.f * (q1q3 - q0q2),       2.f * (q2q3 + q0q1),       2.f * (q0q0 + q3q3) - 1.f, 0.f,
+    //              0.f,                       0.f,                       0.f,                       1.f);
+
+    return fm4x4(2.f*(q0q0+q1q1)-1.f, 2.f*(q1q2+q0q3),       2.f*(q1q3-q0q2),       0.f,
+                 2.f*(q1q2-q0q3),     2.f*(q0q0+q2q2)-1.f,   2.f*(q2q3+q0q1),       0.f,
+                 2.f*(q1q3+q0q2),     2.f*(q2q3-q0q1),       2.f*(q0q0+q3q3)-1.f,   0.f,
+                 0.f,                 0.f,                    0.f,                   1.f);
 }
 
 VD_CG_INL void          ftranslate4x4       (F4x4 *m, F3 v)                    { F4x4 t = ftranslation4x4(v); F4x4 r = fmul4x4(m, &t); *m = r; }
 VD_CG_INL void          frotatequat4x4      (F4x4 *m, FQuat quat)              { F4x4 mq = frotation_quat4x4(quat); F4x4 r  = fmul4x4(m, &mq); *m = r; }
 VD_CG_INL void          frotate_yaw4x4      (F4x4 *m, F1 rad)                  { F4x4 t = frotation_yaw4x4(rad); F4x4 r = fmul4x4(m, &t); *m = r; }
+VD_CG_INL void          frotate_pitch4x4    (F4x4 *m, F1 rad)                  { F4x4 t = frotation_pitch4x4(rad); F4x4 r = fmul4x4(m, &t); *m = r; }
+VD_CG_INL void          frotate_roll4x4     (F4x4 *m, F1 rad)                  { F4x4 t = frotation_roll4x4(rad); F4x4 r = fmul4x4(m, &t); *m = r; }
+VD_CG_INL void          fscale4x4           (F4x4 *m, F3 v)                    { F4x4 t = fscaling4x4(v); F4x4 r = fmul4x4(m, &t); *m = r; }
 
 /* ----COLLISION DETECTION------------------------------------------------------------------------------------------- */
 VD_CG_INL F3            fclosest_point_tri  (F3 p, F3 t0, F3 t1, F3 t2)

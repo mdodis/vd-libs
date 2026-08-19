@@ -11248,9 +11248,11 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             if (down) {
                 evt.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN;
                 evt.data.mouse_button_down.button = vd_fw__win32_translate_button((VdFwWORD)code);
+                VdFwSetCapture(VD_FW_G.hwnd);
             } else {
                 evt.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP;
                 evt.data.mouse_button_up.button = vd_fw__win32_translate_button((VdFwWORD)code);
+                VdFwReleaseCapture();
             }
             vd_fw__msgbuf_w(&evt);
         } break;
