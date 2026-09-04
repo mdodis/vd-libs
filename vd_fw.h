@@ -11963,67 +11963,7 @@ typedef enum {
 
     VD_FW__MAC_WINDOW_STATE_MINIMIZED = 1 << 0,
     VD_FW__MAC_WINDOW_STATE_ZOOMED = 1 << 1,
-
-    VD_FW__MAC_MESSAGE_INVALID = 0,
-    VD_FW__MAC_MESSAGE_MOUSEMOVE,
-    VD_FW__MAC_MESSAGE_MOUSEBTN,
-    VD_FW__MAC_MESSAGE_SCROLL,
-    VD_FW__MAC_MESSAGE_KEY,
-    VD_FW__MAC_MESSAGE_MINIMIZED,
-    VD_FW__MAC_MESSAGE_ZOOMED,
-    VD_FW__MAC_MESSAGE_CLOSE_REQUEST,
-    VD_FW__MAC_MESSAGE_FULLSCREEN,
-    VD_FW__MAC_MESSAGE_GAMEPAD_CONNECTED,
-    VD_FW__MAC_MESSAGE_GAMEPAD_DISCONNECTED,
-    VD_FW__MAC_MESSAGE_GAMEPAD_INPUT,
 } VdFw__MacMessageType;
-
-typedef struct {
-    VdFw__MacMessageType type;
-    union {
-        struct {
-            VdFwI32 mx, my;
-            float   dx, dy;
-        } mousemove;
-
-        struct {
-            int down;
-            int mask; 
-        } mousebtn;
-
-        struct {
-            float sx, sy;
-        } scroll;
-
-        struct {
-            int down;
-            int key;
-        } key;
-
-        struct {
-            int on;
-        } minimized;
-
-        struct {
-            int on;
-        } zoomed;
-
-        struct {
-            int on;
-        } fullscreen;
-
-        struct {
-            int gamepad_index;
-        } gamepad_connected, gamepad_disconnected;
-
-        struct {
-            int                 gamepad_index;
-            VdFwGamepadMapEntry entry;
-            VdFwI32             value;
-            float               float_value;
-        } gamepad_input;
-    } dat;
-} VdFw__MacMessage;
 
 typedef struct {
     int w, h;
@@ -12082,14 +12022,14 @@ typedef struct {
     VdFwGamepadDBEntry          *gamepad_db_entries;
     int                         winthread_num_gamepads;
     VdFw__MacGamepadInfo        gamepad_infos[VD_FW_GAMEPAD_COUNT_MAX];
-
+    int                         current_modifiers;
 
 /* ----MAIN - RENDER THREAD DATA------------------------------------------------------------------------------------- */
     int                         w, h;
     VdFw__MacFrame              next_frame;
     VdFw__MacFrame              curr_frame;
 
-    VdFw__MacMessage            msgbuf[VD_FW_MAC_MESSAGE_BUFFER_SIZE];
+    VdFwEvent                   msgbuf[VD_FW_MAC_MESSAGE_BUFFER_SIZE];
     volatile VdFwI32            msgbuf_r;
     volatile VdFwI32            msgbuf_w;
     NSRect                      nccaption;
@@ -12098,6 +12038,10 @@ typedef struct {
     NSRect                      ncrects[VD_FW_NCRECTS_MAX];
     NSImage                     *app_image;
     int                         has_initialized;
+    uint16_t                    num_codepoints;
+    uint16_t                    first_codepoint_index;
+    uint32_t                    codepoints[VD_FW_CODEPOINT_BUFFER_COUNT];
+    int                         scale_changed;
 
 /* ----MAIN - RENDER THREAD SYNC------------------------------------------------------------------------------------- */
     pthread_t                   main_thread;
@@ -12112,8 +12056,8 @@ typedef struct {
     int                         main_thread_exited;
 } VdFw__MacOsInternalData;
 
-static int vd_fw__msgbuf_r(VdFw__MacMessage *message);
-static int vd_fw__msgbuf_w(VdFw__MacMessage *message);
+static int vd_fw__mac_msgbuf_r(VdFwEvent *message);
+static int vd_fw__mac_msgbuf_w(VdFwEvent *message);
 
 static VdFw__MacOsInternalData Vd_Fw_Globals;
 
@@ -12466,44 +12410,49 @@ static void vd_fw__mac_check_frame_lock(void)
 - (void)windowDidBecomeKey:(NSNotification *)notification {
     VD_FW_G.focus_changed = 1;
     VD_FW_G.focused = 1;
+
+    VdFwEvent evt;
+    evt.type = VD_FW_EVENT_TYPE_FOCUS_CHANGE;
+    evt.data.focus_change.got_focus = 1;
+    vd_fw__mac_msgbuf_w(&evt);
 }
 
 - (void)windowDidResignKey:(NSNotification *)notification {
     VD_FW_G.focus_changed = 1;
     VD_FW_G.focused = 0;
+
+    VdFwEvent evt;
+    evt.type = VD_FW_EVENT_TYPE_FOCUS_CHANGE;
+    evt.data.focus_change.got_focus = 0;
+    vd_fw__mac_msgbuf_w(&evt);
 }
 
 - (void)windowDidMiniaturize:(NSNotification *)notification
 {
-    VdFw__MacMessage msg;
-    msg.type = VD_FW__MAC_MESSAGE_MINIMIZED;
-    msg.dat.minimized.on = 1;
-    vd_fw__msgbuf_w(&msg); 
+    VdFwEvent evt;
+    evt.type = VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE;
+    evt.data.window_state_change.flag = VD_FW_WINDOW_STATE_MINIMIZED;
+    evt.data.window_state_change.value = 1;
+    vd_fw__mac_msgbuf_w(&evt);
 }
 
 - (void)windowDidDeminiaturize:(NSNotification *)notification
 {
-
-    VdFw__MacMessage msg;
-    msg.type = VD_FW__MAC_MESSAGE_MINIMIZED;
-    msg.dat.minimized.on = 0;
-    vd_fw__msgbuf_w(&msg); 
+    VdFwEvent evt;
+    evt.type = VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE;
+    evt.data.window_state_change.flag = VD_FW_WINDOW_STATE_MINIMIZED;
+    evt.data.window_state_change.value = 0;
+    vd_fw__mac_msgbuf_w(&evt);
 }
 
 - (void) windowDidEnterFullScreen:(NSNotification *) notification
 {
-    VdFw__MacMessage msg;
-    msg.type = VD_FW__MAC_MESSAGE_FULLSCREEN;
-    msg.dat.fullscreen.on = 1;
-    vd_fw__msgbuf_w(&msg); 
+    VD_FW_G.is_fullscreen = 1;
 }
 
 - (void) windowDidExitFullScreen:(NSNotification *) notification
 {
-    VdFw__MacMessage msg;
-    msg.type = VD_FW__MAC_MESSAGE_FULLSCREEN;
-    msg.dat.fullscreen.on = 0;
-    vd_fw__msgbuf_w(&msg); 
+    VD_FW_G.is_fullscreen = 0;
 }
 
 
@@ -12518,16 +12467,16 @@ static void vd_fw__mac_check_frame_lock(void)
 }
 
 - (NSApplicationTerminateReply) applicationShouldTerminate:(NSApplication *) sender {
-    VdFw__MacMessage msg;
-    msg.type = VD_FW__MAC_MESSAGE_CLOSE_REQUEST;
-    vd_fw__msgbuf_w(&msg);
+    VdFwEvent evt;
+    evt.type = VD_FW_EVENT_TYPE_CLOSE_REQUEST;
+    vd_fw__mac_msgbuf_w(&evt);
     return NSTerminateCancel;
 }
 
 - (BOOL)windowShouldClose:(NSWindow *)notification {
-    VdFw__MacMessage msg;
-    msg.type = VD_FW__MAC_MESSAGE_CLOSE_REQUEST;
-    vd_fw__msgbuf_w(&msg);
+    VdFwEvent evt;
+    evt.type = VD_FW_EVENT_TYPE_CLOSE_REQUEST;
+    vd_fw__mac_msgbuf_w(&evt);
     return FALSE;
 }
 
@@ -12543,10 +12492,12 @@ static void vd_fw__mac_check_frame_lock(void)
 
     if (VD_FW_G.is_zoomed != [VD_FW_G.window isZoomed]) {
         VD_FW_G.is_zoomed = [VD_FW_G.window isZoomed];
-        VdFw__MacMessage msg;
-        msg.type = VD_FW__MAC_MESSAGE_ZOOMED;
-        msg.dat.zoomed.on = VD_FW_G.is_zoomed;
-        vd_fw__msgbuf_w(&msg); 
+
+        VdFwEvent evt;
+        evt.type = VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE;
+        evt.data.window_state_change.flag = VD_FW_WINDOW_STATE_MAXIMIZED;
+        evt.data.window_state_change.value = VD_FW_G.is_zoomed;
+        vd_fw__mac_msgbuf_w(&evt);
     }
 
 
@@ -12615,78 +12566,126 @@ static void vd_fw__mac_check_frame_lock(void)
     VD_FW_G.h = (int)rect.size.height * VD_FW_G.scale;
 }
 
-- (void)keyUp:(NSEvent*)evt
+- (void)keyUp:(NSEvent*)event
 {
-    unsigned short keycode = [evt keyCode];
+    unsigned short keycode = [event keyCode];
     VdFwKey key = vd_fw__translate_mac_keycode(keycode);
-    VdFw__MacMessage msg;
-    msg.type = VD_FW__MAC_MESSAGE_KEY;
-    msg.dat.key.down = 0;
-    msg.dat.key.key = key;
-    vd_fw__msgbuf_w(&msg); 
+
+    VdFwEvent evt;
+    evt.type = VD_FW_EVENT_TYPE_KEY_UP;
+    evt.data.key_up.key = key;
+    vd_fw__mac_msgbuf_w(&evt); 
 }
 
-- (void)flagsChanged:(NSEvent*)evt
+- (void)flagsChanged:(NSEvent*)event
 {
-    NSEventModifierFlags flags = [evt modifierFlags];
-    unsigned short keycode = [evt keyCode];
+    NSEventModifierFlags flags = [event modifierFlags];
+    unsigned short keycode = [event keyCode];
 
     unsigned char shift_down = (flags & NSEventModifierFlagShift) ? 1 : 0;
     unsigned char option_down = (flags & NSEventModifierFlagOption) ? 1 : 0;
     unsigned char control_down = (flags & NSEventModifierFlagControl) ? 1 : 0;
 
-    switch (keycode) {
-        case 60:
-        case 56: {
-            VdFw__MacMessage msg;
-            msg.type = VD_FW__MAC_MESSAGE_KEY;
-            msg.dat.key.down = shift_down;
-            msg.dat.key.key = VD_FW_KEY_LSHIFT;
-            vd_fw__msgbuf_w(&msg); 
+    VD_FW_G.current_modifiers = 0;
+    if (shift_down) {
+        VD_FW_G.current_modifiers |= VD_FW_MOD_SHIFT;    
+    }
 
-            msg.type = VD_FW__MAC_MESSAGE_KEY;
-            msg.dat.key.down = shift_down;
-            msg.dat.key.key = VD_FW_KEY_RSHIFT;
-            vd_fw__msgbuf_w(&msg); 
+    if (option_down) {
+        VD_FW_G.current_modifiers |= VD_FW_MOD_ALT;
+    }
+
+    if (control_down) {
+        VD_FW_G.current_modifiers |= VD_FW_MOD_CONTROL;
+    }
+
+    switch (keycode) {
+        case 60: {
+            VdFwEvent evt;
+            evt.type = shift_down 
+                     ? VD_FW_EVENT_TYPE_KEY_DOWN
+                     : VD_FW_EVENT_TYPE_KEY_UP;
+            if (shift_down) {
+                evt.data.key_down.key = VD_FW_KEY_LSHIFT;
+                evt.data.key_down.repeat = 0;
+                evt.data.key_down.modifiers = 0;
+            } else {
+                evt.data.key_up.key = VD_FW_KEY_LSHIFT;
+            }
+            vd_fw__mac_msgbuf_w(&evt);
         } break;
+
+        case 56: {
+            VdFwEvent evt;
+            evt.type = shift_down 
+                     ? VD_FW_EVENT_TYPE_KEY_DOWN
+                     : VD_FW_EVENT_TYPE_KEY_UP;
+            if (shift_down) {
+                evt.data.key_down.key = VD_FW_KEY_RSHIFT;
+                evt.data.key_down.repeat = 0;
+                evt.data.key_down.modifiers = 0;
+            } else {
+                evt.data.key_up.key = VD_FW_KEY_RSHIFT;
+            }
+            vd_fw__mac_msgbuf_w(&evt);
+        } break;
+
         case 59: {
-            VdFw__MacMessage msg;
-            msg.type = VD_FW__MAC_MESSAGE_KEY;
-            msg.dat.key.down = control_down;
-            msg.dat.key.key = VD_FW_KEY_LCONTROL;
-            vd_fw__msgbuf_w(&msg); 
+            VdFwEvent evt;
+            evt.type = shift_down 
+                     ? VD_FW_EVENT_TYPE_KEY_DOWN
+                     : VD_FW_EVENT_TYPE_KEY_UP;
+            if (control_down) {
+                evt.data.key_down.key = VD_FW_KEY_LCONTROL;
+                evt.data.key_down.repeat = 0;
+                evt.data.key_down.modifiers = 0;
+            } else {
+                evt.data.key_up.key = VD_FW_KEY_LCONTROL;
+            }
+            vd_fw__mac_msgbuf_w(&evt);
         } break;
+
         case 61: {
-            VdFw__MacMessage msg;
-            msg.type = VD_FW__MAC_MESSAGE_KEY;
-            msg.dat.key.down = option_down;
-            msg.dat.key.key = VD_FW_KEY_RCONTROL;
-            vd_fw__msgbuf_w(&msg); 
+            VdFwEvent evt;
+            evt.type = shift_down 
+                     ? VD_FW_EVENT_TYPE_KEY_DOWN
+                     : VD_FW_EVENT_TYPE_KEY_UP;
+            if (control_down) {
+                evt.data.key_down.key = VD_FW_KEY_RCONTROL;
+                evt.data.key_down.repeat = 0;
+                evt.data.key_down.modifiers = 0;
+            } else {
+                evt.data.key_up.key = VD_FW_KEY_RCONTROL;
+            }
+            vd_fw__mac_msgbuf_w(&evt);
         } break;
+
         default: break;
     }
 }
 
-- (void)keyDown:(NSEvent*)evt
+- (void)keyDown:(NSEvent*)event
 {
-    unsigned short keycode = [evt keyCode];
+    unsigned short keycode = [event keyCode];
     VdFwKey key = vd_fw__translate_mac_keycode(keycode);
-    VdFw__MacMessage msg;
-    msg.type = VD_FW__MAC_MESSAGE_KEY;
-    msg.dat.key.down = 1;
-    msg.dat.key.key = key;
-    vd_fw__msgbuf_w(&msg); 
+
+    VdFwEvent evt;
+    evt.type = VD_FW_EVENT_TYPE_KEY_DOWN;
+    evt.data.key_down.key = key;
+    evt.data.key_down.modifiers = VD_FW_G.current_modifiers;
+    evt.data.key_down.repeat = 0;
+    vd_fw__mac_msgbuf_w(&evt); 
 }
 
-- (void)mouseDown:(NSEvent *)evt
+- (void)mouseDown:(NSEvent *)event
 {
-    VdFw__MacMessage msg;
-    msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
-    msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN;
-    msg.dat.mousebtn.down = 1;
-    vd_fw__msgbuf_w(&msg); 
 
-    NSPoint view_point = [evt locationInWindow];
+    VdFwEvent evt;
+    evt.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN;
+    evt.data.mouse_button_down.button = VD_FW_MOUSE_BUTTON_LEFT;
+    vd_fw__mac_msgbuf_w(&evt); 
+
+    NSPoint view_point = [event locationInWindow];
     NSPoint p = NSMakePoint(view_point.x, view_point.y);
 
     p.x *= VD_FW_G.scale;
@@ -12721,98 +12720,102 @@ static void vd_fw__mac_check_frame_lock(void)
     }
 }
 
-- (void)rightMouseDown:(NSEvent *)evt
+- (void)rightMouseDown:(NSEvent *)event
 {
-    VdFw__MacMessage msg;
-    msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
-    msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN;
-    msg.dat.mousebtn.down = 1;
-    vd_fw__msgbuf_w(&msg); 
+    VdFwEvent evt;
+    evt.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN;
+    evt.data.mouse_button_down.button = VD_FW_MOUSE_BUTTON_RIGHT;
+    vd_fw__mac_msgbuf_w(&evt); 
 }
 
-- (void)otherMouseDown:(NSEvent *)evt
+- (void)otherMouseDown:(NSEvent *)event
 {
-    VdFw__MacMessage msg;
-    msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
-    msg.dat.mousebtn.down = 1;
+    VdFwEvent evt;
+    evt.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN;
 
     int send_message = 0;
-    switch ([evt buttonNumber]) {
+    switch ([event buttonNumber]) {
         case 2: {
             send_message = 1;
-            msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN;
+            evt.data.mouse_button_down.button = VD_FW_MOUSE_BUTTON_MIDDLE;
         } break;
 
-        case 3:
+        case 3: {
+            send_message = 1;
+            evt.data.mouse_button_down.button = VD_FW_MOUSE_BUTTON_M1;
+        } break;
+
         case 4: {
             send_message = 1;
-            msg.dat.mousebtn.mask = 1 << [evt buttonNumber];
+            evt.data.mouse_button_down.button = VD_FW_MOUSE_BUTTON_M2;
         } break;
     }
 
     if (send_message) {
-        vd_fw__msgbuf_w(&msg); 
+        vd_fw__mac_msgbuf_w(&evt); 
     }
 }
 
 - (void)scrollWheel:(NSEvent *)evt
 {
 
-    VdFw__MacMessage msg;
-    msg.type = VD_FW__MAC_MESSAGE_SCROLL;
+    VdFwEvent fw_event;
+    fw_event.type = VD_FW_EVENT_TYPE_MOUSE_SCROLL;
 
     if ([evt hasPreciseScrollingDeltas]) {
-        msg.dat.scroll.sx = [evt scrollingDeltaX] * 0.05f;
-        msg.dat.scroll.sy = [evt scrollingDeltaY] * 0.05f;
+        fw_event.data.mouse_scroll.dx = [evt scrollingDeltaX] * 0.05f;
+        fw_event.data.mouse_scroll.dy = [evt scrollingDeltaY] * 0.05f;
     } else {
-        msg.dat.scroll.sx = [evt deltaX];
-        msg.dat.scroll.sy = [evt deltaY];
+        fw_event.data.mouse_scroll.dx = [evt deltaX];
+        fw_event.data.mouse_scroll.dy = [evt deltaY];
     }
-    vd_fw__msgbuf_w(&msg); 
+    vd_fw__mac_msgbuf_w(&fw_event); 
+
 }
 
 - (void)mouseUp:(NSEvent *)evt
 {
     VD_FW_G.dragging = FALSE;
-    VdFw__MacMessage msg;
-    msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
-    msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN;
-    msg.dat.mousebtn.down = 0;
-    vd_fw__msgbuf_w(&msg); 
+    VdFwEvent fw_event;
+    fw_event.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP;
+    fw_event.data.mouse_button_up.button = VD_FW_MOUSE_BUTTON_LEFT;
+    vd_fw__mac_msgbuf_w(&fw_event); 
 }
 
 - (void)rightMouseUp:(NSEvent *)evt
 {
-    VdFw__MacMessage msg;
-    msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
-    msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN;
-    msg.dat.mousebtn.down = 0;
-    vd_fw__msgbuf_w(&msg); 
+    VdFwEvent fw_event;
+    fw_event.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP;
+    fw_event.data.mouse_button_up.button = VD_FW_MOUSE_BUTTON_RIGHT;
+    vd_fw__mac_msgbuf_w(&fw_event); 
 }
 
 - (void)otherMouseUp:(NSEvent *)evt
 {
 
-    VdFw__MacMessage msg;
-    msg.type = VD_FW__MAC_MESSAGE_MOUSEBTN;
-    msg.dat.mousebtn.down = 0;
+    VdFwEvent fw_event;
+    fw_event.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP;
 
     int send_message = 0;
     switch ([evt buttonNumber]) {
         case 2: {
             send_message = 1;
-            msg.dat.mousebtn.mask = VD_FW_MOUSE_STATE_MIDDLE_BUTTON_DOWN;
+            fw_event.data.mouse_button_up.button = VD_FW_MOUSE_BUTTON_MIDDLE;
         } break;
 
-        case 3:
+        case 3: {
+            send_message = 1;
+            fw_event.data.mouse_button_up.button = VD_FW_MOUSE_BUTTON_M1;
+        } break;
+
         case 4: {
             send_message = 1;
-            msg.dat.mousebtn.mask = 1 << [evt buttonNumber];
+            fw_event.data.mouse_button_up.button = VD_FW_MOUSE_BUTTON_M2;
         } break;
     }
 
     if (send_message) {
-        vd_fw__msgbuf_w(&msg); 
+        vd_fw__mac_msgbuf_w(&fw_event); 
     }
 }
 
@@ -12845,13 +12848,16 @@ static void vd_fw__mac_check_frame_lock(void)
     //     }
     // }
 
-    VdFw__MacMessage msg;
-    msg.type = VD_FW__MAC_MESSAGE_MOUSEMOVE;
-    msg.dat.mousemove.mx = pixel_point.x;
-    msg.dat.mousemove.my = pixel_point.y;
-    msg.dat.mousemove.dx = delta[0];
-    msg.dat.mousemove.dy = delta[1];
-    vd_fw__msgbuf_w(&msg); 
+    VdFwEvent fw_event;
+    fw_event.type = VD_FW_EVENT_TYPE_MOUSE_MOVE;
+    fw_event.data.mouse_move.x = pixel_point.x;
+    fw_event.data.mouse_move.y = pixel_point.y;
+    vd_fw__mac_msgbuf_w(&fw_event); 
+
+    fw_event.type = VD_FW_EVENT_TYPE_MOUSE_DELTA;
+    fw_event.data.mouse_delta.dx = delta[0];
+    fw_event.data.mouse_delta.dy = delta[1];
+    vd_fw__mac_msgbuf_w(&fw_event); 
 
 }
 
@@ -12865,13 +12871,16 @@ static void vd_fw__mac_check_frame_lock(void)
     float dx = [evt deltaX];
     float dy = [evt deltaY];
 
-    VdFw__MacMessage msg;
-    msg.type = VD_FW__MAC_MESSAGE_MOUSEMOVE;
-    msg.dat.mousemove.mx = scaled_pos.x;
-    msg.dat.mousemove.my = scaled_pos.y;
-    msg.dat.mousemove.dx = dx;
-    msg.dat.mousemove.dy = dy;
-    vd_fw__msgbuf_w(&msg); 
+    VdFwEvent fw_event;
+    fw_event.type = VD_FW_EVENT_TYPE_MOUSE_MOVE;
+    fw_event.data.mouse_move.x = scaled_pos.x;
+    fw_event.data.mouse_move.y = scaled_pos.y;
+    vd_fw__mac_msgbuf_w(&fw_event); 
+
+    fw_event.type = VD_FW_EVENT_TYPE_MOUSE_DELTA;
+    fw_event.data.mouse_delta.dx = dx;
+    fw_event.data.mouse_delta.dy = dy;
+    vd_fw__mac_msgbuf_w(&fw_event); 
 
     NSPoint p = [VD_FW_G.window convertPointToScreen: view_point];
 
@@ -13048,6 +13057,7 @@ VD_FW_API VdFwEvent* vd_fw_poll(int *count)
         *count = 0;
     }
 
+    VD_FW_G.scale_changed = 0;
     VD_FW_G.wheel_moved = 0;
     VD_FW_G.wheel[0] = 0.f;
     VD_FW_G.wheel[1] = 0.f;
@@ -13059,6 +13069,9 @@ VD_FW_API VdFwEvent* vd_fw_poll(int *count)
     VD_FW_G.window_state_changed = 0;
     VD_FW_G.close_request = 0;
 
+    VD_FW_G.num_codepoints = 0;
+    uint32_t num_codepoints = 0;
+
     VD_FW_G.prev_mouse_state = VD_FW_G.mouse_state;
     for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
         VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
@@ -13068,98 +13081,90 @@ VD_FW_API VdFwEvent* vd_fw_poll(int *count)
         VD_FW_G.gamepad_prev_states[i] = VD_FW_G.gamepad_curr_states[i];
     }
 
-    VdFw__MacMessage msg;
-    while (vd_fw__msgbuf_r(&msg)) {
-        switch (msg.type) {
-            case VD_FW__MAC_MESSAGE_MOUSEMOVE: {
-
-                VD_FW_G.mouse_delta[0] += msg.dat.mousemove.dx * 0.2f;
-                VD_FW_G.mouse_delta[1] += msg.dat.mousemove.dy * 0.2f;
-
-                VD_FW_G.mouse[0] = msg.dat.mousemove.mx;
-                VD_FW_G.mouse[1] = msg.dat.mousemove.my;
+    VdFwEvent evt;
+    while (vd_fw__mac_msgbuf_r(&evt)) {
+        switch (evt.type) {
+            case VD_FW_EVENT_TYPE_MOUSE_MOVE: {
+                VD_FW_G.mouse[0] = evt.data.mouse_move.x;
+                VD_FW_G.mouse[1] = evt.data.mouse_move.y;
             } break;
 
-            case VD_FW__MAC_MESSAGE_MOUSEBTN: {
-                int state_mask = msg.dat.mousebtn.mask;
-                if (msg.dat.mousebtn.down) {
-                    VD_FW_G.mouse_state |= state_mask;
-                } else {
-                    VD_FW_G.mouse_state &= ~state_mask;
+            case VD_FW_EVENT_TYPE_MOUSE_DELTA: {
+                VD_FW_G.mouse_delta[0] = VD_FW_G.mouse_delta[0] * 0.8f + evt.data.mouse_delta.dx * 0.2f;
+                VD_FW_G.mouse_delta[1] = VD_FW_G.mouse_delta[1] * 0.8f + evt.data.mouse_delta.dy * 0.2f;
+            } break;
+
+            case VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN: {
+                VD_FW_G.mouse_state |= evt.data.mouse_button_down.button;
+            } break;
+
+            case VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP: {
+                VD_FW_G.mouse_state &= ~evt.data.mouse_button_up.button;
+            } break;
+
+            case VD_FW_EVENT_TYPE_MOUSE_SCROLL: {
+                VD_FW_G.wheel[0] += evt.data.mouse_scroll.dx;
+                VD_FW_G.wheel[1] += evt.data.mouse_scroll.dy;
+            } break;
+
+            case VD_FW_EVENT_TYPE_FOCUS_CHANGE: {
+                VD_FW_G.focus_changed = 1;
+                VD_FW_G.focused = evt.data.focus_change.got_focus;
+
+                if (!VD_FW_G.focused) {
+                    for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
+                        VD_FW_G.curr_key_states[i] = 0;
+                    }
                 }
             } break;
 
-            case VD_FW__MAC_MESSAGE_SCROLL: {
-                VD_FW_G.wheel[0] += msg.dat.scroll.sx;
-                VD_FW_G.wheel[1] += msg.dat.scroll.sy;
+            case VD_FW_EVENT_TYPE_KEY_UP: {
+                VD_FW_G.curr_key_states[evt.data.key_up.key] = 0;
             } break;
 
-            case VD_FW__MAC_MESSAGE_KEY: {
-                VD_FW_G.curr_key_states[msg.dat.key.key] = msg.dat.key.down;
+            case VD_FW_EVENT_TYPE_KEY_DOWN: {
+                VD_FW_G.curr_key_states[evt.data.key_down.key] = 1;
             } break;
 
-            case VD_FW__MAC_MESSAGE_MINIMIZED: {
-                if (msg.dat.minimized.on) {
-                    VD_FW_G.window_state |= VD_FW__MAC_WINDOW_STATE_MINIMIZED;
+            case VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE: {
+                int prev_state = VD_FW_G.window_state;
+                int change_flag = evt.data.window_state_change.flag;
+                if (evt.data.window_state_change.value) {
+                    VD_FW_G.window_state |= change_flag;
                 } else {
-                    VD_FW_G.window_state &= ~VD_FW__MAC_WINDOW_STATE_MINIMIZED;
+                    VD_FW_G.window_state &= ~change_flag;
                 }
-                VD_FW_G.window_state_changed = 1;
-            } break;
 
-            case VD_FW__MAC_MESSAGE_ZOOMED: {
-                if (msg.dat.zoomed.on) {
-                    VD_FW_G.window_state |= VD_FW__MAC_WINDOW_STATE_ZOOMED;
-                } else {
-                    VD_FW_G.window_state &= ~VD_FW__MAC_WINDOW_STATE_ZOOMED;
+                if (prev_state != VD_FW_G.window_state) {
+                    VD_FW_G.window_state_changed |= change_flag;
                 }
-                VD_FW_G.window_state_changed = 1;
+
             } break;
 
-            case VD_FW__MAC_MESSAGE_FULLSCREEN: {
-                VD_FW_G.is_fullscreen = msg.dat.fullscreen.on;
+            case VD_FW_EVENT_TYPE_SCALE_CHANGE: {
+                VD_FW_G.scale = evt.data.scale_change.new_scale;
+                VD_FW_G.scale_changed = 1;
             } break;
 
-            case VD_FW__MAC_MESSAGE_CLOSE_REQUEST: {
+            case VD_FW_EVENT_TYPE_CHARACTER: {
+                VD_FW_G.codepoints[(num_codepoints++) % VD_FW_CODEPOINT_BUFFER_COUNT] = evt.data.character.codepoint;
+            } break;
+
+            case VD_FW_EVENT_TYPE_CLOSE_REQUEST: {
                 VD_FW_G.close_request = 1;
-            } break;
-
-            case VD_FW__MAC_MESSAGE_GAMEPAD_CONNECTED: {
-                VdFw__GamepadState zero_state = {0};
-                VD_FW_G.gamepad_prev_states[msg.dat.gamepad_connected.gamepad_index] = zero_state;
-                VD_FW_G.gamepad_curr_states[msg.dat.gamepad_connected.gamepad_index] = zero_state;
-                VD_FW_G.num_gamepads_present++;
-            } break;
-
-            case VD_FW__MAC_MESSAGE_GAMEPAD_DISCONNECTED: {
-                VD_FW_G.num_gamepads_present--;
-            } break;
-
-            case VD_FW__MAC_MESSAGE_GAMEPAD_INPUT: {
-                VdFw__GamepadState *state = &VD_FW_G.gamepad_curr_states[msg.dat.gamepad_input.gamepad_index];
-                VdFwGamepadMapEntry *entry = &msg.dat.gamepad_input.entry;
-                int value = msg.dat.gamepad_input.value;
-
-                switch ((entry->kind & VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_MASK)) {
-
-                    case VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_BUTTON: {
-                        if (value) {
-                            state->bits |= (1 << entry->target);
-                        } else {
-                            state->bits &= ~(1 << entry->target);
-                        }
-                    } break;
-
-                    case VD_FW_GAMEPAD_MAPPING_SOURCE_KIND_AXIS: {
-                        state->axes[entry->target] = msg.dat.gamepad_input.float_value;
-                    } break;
-
-                    default: break;
-                }
             } break;
 
             default: break;
         }
+    }
+
+    VD_FW_G.num_codepoints = (num_codepoints < VD_FW_CODEPOINT_BUFFER_COUNT) 
+                             ? num_codepoints
+                             : VD_FW_CODEPOINT_BUFFER_COUNT;
+    if (num_codepoints > 0) {
+        VD_FW_G.first_codepoint_index = (num_codepoints - 1) % VD_FW_CODEPOINT_BUFFER_COUNT;
+    } else {
+        VD_FW_G.first_codepoint_index = 0;
     }
 
     uint64_t now = mach_absolute_time();
@@ -13191,11 +13196,13 @@ VD_FW_API void vd_fw_lock(void)
     }
 }
 
+VD_FW_API void vd_fw_swap(void)
+{
+    [VD_FW_G.gl_context flushBuffer];
+}
+
 VD_FW_API void vd_fw_unlock(void)
 {
-
-    [VD_FW_G.gl_context flushBuffer];
-
     if (VD_FW_G.fullscreen_changed_this_frame) {
         for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
             VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
@@ -13759,7 +13766,7 @@ static void vd_fw__mac_runloop(int wait)
     [NSApp run];
 }
 
-static int vd_fw__msgbuf_r(VdFw__MacMessage *message)
+static int vd_fw__mac_msgbuf_r(VdFwEvent *message)
 {
     VdFwI32 r = VD_FW_G.msgbuf_r;
     VdFwI32 w;
@@ -13777,8 +13784,9 @@ static int vd_fw__msgbuf_r(VdFw__MacMessage *message)
     return 1;
 }
 
-static int vd_fw__msgbuf_w(VdFw__MacMessage *message)
+static int vd_fw__mac_msgbuf_w(VdFwEvent *message)
 {
+
     VdFwI32 w = VD_FW_G.msgbuf_w;
     VdFwI32 r;
     __atomic_load(&VD_FW_G.msgbuf_r, &r, __ATOMIC_SEQ_CST);
@@ -16314,9 +16322,18 @@ VD_FW_API int vd_fw_compile_or_hotload_program(unsigned int *program, unsigned l
     const char *files[3];
     files[0] = vertex_file_path;
     files[1] = fragment_file_path;
+#ifndef __APPLE__
     files[2] = compute_file_path;
+#endif // !__APPLE__
 
-    if (vd_fw__any_time_higher(3, files, last_compile)) {
+    int count_files =
+#ifndef __APPLE__
+        3
+#else
+        2
+#endif // !__APPLE__
+        ;
+    if (vd_fw__any_time_higher(count_files, files, last_compile)) {
         needs_recompile = 1;
     }
 
@@ -16329,14 +16346,18 @@ VD_FW_API int vd_fw_compile_or_hotload_program(unsigned int *program, unsigned l
     size_t srv_sz, srf_sz, src_sz;
     char *srv = vd_fw__debug_dump_file_text(vertex_file_path, &srv_sz);
     char *srf = vd_fw__debug_dump_file_text(fragment_file_path, &srf_sz);
+#ifndef __APPLE__
     char *src = vd_fw__debug_dump_file_text(compute_file_path, &src_sz);
+#endif // !__APPLE__
 
     unsigned int vshd = 0;
     if (srv) vshd = vd_fw_compile_shader(GL_VERTEX_SHADER, srv);
     unsigned int fshd = 0;
     if (srf) fshd = vd_fw_compile_shader(GL_FRAGMENT_SHADER, srf);
+#ifndef __APPLE__
     unsigned int cshd = 0;
     if (src) cshd = vd_fw_compile_shader(GL_COMPUTE_SHADER, src);
+#endif // !__APPLE__
 
     unsigned int new_program;
 
@@ -16348,9 +16369,11 @@ VD_FW_API int vd_fw_compile_or_hotload_program(unsigned int *program, unsigned l
         VD_FW_FREE(srf, srf_sz);
     }
 
+#ifndef __APPLE__
     if (src) {
         VD_FW_FREE(src, src_sz);
     }
+#endif // !__APPLE__
 
     new_program = glCreateProgram();
     if (vshd) {
@@ -16361,9 +16384,11 @@ VD_FW_API int vd_fw_compile_or_hotload_program(unsigned int *program, unsigned l
         glAttachShader(new_program, fshd);
     }
 
+#ifndef __APPLE__
     if (cshd) {
         glAttachShader(new_program, cshd);
     }
+#endif // !__APPLE__
 
     if (vd_fw_link_program(new_program)) {
         if (vshd) {
@@ -16374,9 +16399,11 @@ VD_FW_API int vd_fw_compile_or_hotload_program(unsigned int *program, unsigned l
             glDeleteShader(fshd);
         }
 
+#ifndef __APPLE__
         if (cshd) {
             glDeleteShader(cshd);
         }
+#endif // !__APPLE__
 
         if (*program != 0) {
             glDeleteProgram(*program);
