@@ -2763,6 +2763,129 @@ typedef struct {
 // On DWrite 5 and later there is IDWriteFactory5::CreateInMemoryFontFileLoader which theoretically does what we want.
 // unfortunately, that only works for Windows 10 Build 14393 and later 
 
+/* ----DIRECT WRITE RASTER------------------------------------------------------------------------------------------- */
+typedef struct {
+    VdFtIDWriteFactory1                     *factory;
+
+    char                                    *family_name_buffer;
+    int                                     family_name_len;
+    int                                     family_name_cap;
+
+    VdFtDWRITE_GLYPH_OFFSET                 *glyph_offsets_buffer;
+    uint32_t                                glyph_offsets_buffer_len;
+    uint32_t                                glyph_offsets_buffer_cap;
+
+    VdFtHDC                                 dc;
+    VdFtIDWriteBitmapRenderTarget           *bitmap_render_target;
+    VdFtIDWriteRenderingParams              *rendering_params;
+
+    // This is used by DirectWrite to eventually create a IDWriteFontCollection
+    // For us, it has no real use besides it being required by DirectWrite
+    VdFtIDWriteFontCollectionLoader         static_font_collection_loader;
+    VdFtIDWriteFontCollectionLoaderVtbl     static_font_collection_loader_vtbl;
+
+    // This is "created" from the font collection loader, but is called through DWrite.
+    // Supposedly, this should be passed some sort of key and enumerate based on that key.
+    // For us, the key is just a void *to the memory, and the key size is just the actual size of the file
+    VdFtIDWriteFontFileEnumeratorVtbl       static_font_enumerator_vtbl;
+
+    VdFtIDWriteFontFileLoader               static_font_loader;
+    VdFtIDWriteFontFileLoaderVtbl           static_font_loader_vtbl;
+    VdFtIDWriteFontFileStreamVtbl           static_font_stream_vtbl;
+
+    VdFtIDWriteGdiInterop                   *gdi_interop;
+} VdFt__DWriteRaster;
+
+static VdFtHRESULT                  vd_ft__win32_query_interface_none(VdFtIUnknown *This, VdFtREFIID riid,
+                                                                      void **ppvObject);
+static VdFtULONG                    vd_ft__win32_add_ref_none(VdFtIUnknown *This);
+static VdFtULONG                    vd_ft__win32_release_none(VdFtIUnknown *This);
+static VdFtHRESULT                  vd_ft__win32_static_create_stream_from_key(VdFtIDWriteFontFileLoader *This,
+                                                                               void const* fontFileReferenceKey,
+                                                                               VdFtUINT32 fontFileReferenceKeySize,
+                                                                               VdFtIDWriteFontFileStream **fontFileStream);
+static VdFtHRESULT                  vd_ft__win32_read_file_fragment(VdFtIDWriteFontFileStream *This,
+                                                                    void const** fragmentStart,
+                                                                    VdFtUINT64 fileOffset, VdFtUINT64 fragmentSize,
+                                                                    void** fragmentContext);
+static void                         vd_ft__win32_release_file_fragment(VdFtIDWriteFontFileStream *This,
+                                                                       void* fragmentContext);
+static VdFtHRESULT                  vd_ft__win32_get_file_size(VdFtIDWriteFontFileStream *This, VdFtUINT64* fileSize);
+static VdFtHRESULT                  vd_ft__win32_get_last_write_time(VdFtIDWriteFontFileStream *This,
+                                                                     VdFtUINT64* lastWriteTime);
+static VdFtHRESULT                  vd_ft__win32_ffe_move_next(VdFtIDWriteFontFileEnumerator *This,
+                                                               VdFtBOOL* hasCurrentFile);
+static VdFtHRESULT                  vd_ft__win32_ffe_get_current_font_file(VdFtIDWriteFontFileEnumerator *This,
+                                                                           VdFtIDWriteFontFile** fontFile);
+
+static VdFtHRESULT                  vd_ft__win32_fcl_create_enumerator_from_key(VdFtIDWriteFontCollectionLoader *This,
+                                                                                VdFtIDWriteFactory* factory,
+                                                                                void const* collectionKey,
+                                                                                VdFtUINT32 collectionKeySize,
+                                                                                VdFtIDWriteFontFileEnumerator** fontFileEnumerator);
+
+
+
+static void vd_ft__dwrite_raster_init(VdFt__DWriteRaster *dwrite, VdFtIDWriteFactory1 *factory)
+{
+    dwrite->factory = factory;
+}
+
+static VdFtCollection vd_ft__dwrite_raster_collection_from_system(VdFt__DWriteRaster *dwrite)
+{
+    dwrite->static_font_loader_vtbl.QueryInterface       = vd_ft__win32_query_interface_none;
+    dwrite->static_font_loader_vtbl.AddRef               = vd_ft__win32_add_ref_none;
+    dwrite->static_font_loader_vtbl.Release              = vd_ft__win32_release_none;
+    dwrite->static_font_loader_vtbl.CreateStreamFromKey  = vd_ft__win32_static_create_stream_from_key;
+    dwrite->static_font_loader.lpVtbl = &dwrite->static_font_loader_vtbl;
+
+    dwrite->static_font_stream_vtbl.QueryInterface       = vd_ft__win32_query_interface_none;
+    dwrite->static_font_stream_vtbl.AddRef               = vd_ft__win32_add_ref_none;
+    dwrite->static_font_stream_vtbl.Release              = vd_ft__win32_release_none;
+    dwrite->static_font_stream_vtbl.ReadFileFragment     = vd_ft__win32_read_file_fragment;
+    dwrite->static_font_stream_vtbl.ReleaseFileFragment  = vd_ft__win32_release_file_fragment;
+    dwrite->static_font_stream_vtbl.GetFileSize          = vd_ft__win32_get_file_size;
+    dwrite->static_font_stream_vtbl.GetLastWriteTime     = vd_ft__win32_get_last_write_time;
+
+    VD_FT__WIN32_CHECK_HRESULT(dwrite->factory->lpVtbl->RegisterFontFileLoader(dwrite->factory,
+                                                                               (VdFtIDWriteFontFileLoader*)&dwrite->static_font_loader));
+
+    VdFtIDWriteRenderingParams *rendering_params;
+    VD_FT__WIN32_CHECK_HRESULT(dwrite->factory->lpVtbl->CreateRenderingParams(dwrite->factory,
+                                                                              &rendering_params));
+    dwrite->rendering_params = rendering_params;
+    VdFtDWRITE_RENDERING_MODE mode = dwrite->rendering_params->lpVtbl->GetRenderingMode(dwrite->rendering_params);
+
+    VdFtIDWriteGdiInterop *gdi_interop;
+    VD_FT__WIN32_CHECK_HRESULT(dwrite->factory->lpVtbl->GetGdiInterop(dwrite->factory,
+                                                                      &gdi_interop));
+    dwrite->gdi_interop = gdi_interop;
+
+    VdFtIDWriteBitmapRenderTarget *bitmap_render_target;
+    VD_FT__WIN32_CHECK_HRESULT(gdi_interop->lpVtbl->CreateBitmapRenderTarget(gdi_interop, 0,
+                                                                             2048, 2048, &bitmap_render_target));
+    VD_FT__WIN32_CHECK_HRESULT(bitmap_render_target->lpVtbl->SetPixelsPerDip(bitmap_render_target, 1.f));
+    dwrite->bitmap_render_target = bitmap_render_target;
+
+    dwrite->static_font_collection_loader_vtbl.QueryInterface = vd_ft__win32_query_interface_none;
+    dwrite->static_font_collection_loader_vtbl.AddRef = vd_ft__win32_add_ref_none;
+    dwrite->static_font_collection_loader_vtbl.Release = vd_ft__win32_release_none;
+    dwrite->static_font_collection_loader_vtbl.Release = vd_ft__win32_release_none;
+    dwrite->static_font_collection_loader_vtbl.CreateEnumeratorFromKey = vd_ft__win32_fcl_create_enumerator_from_key;
+    dwrite->static_font_collection_loader.lpVtbl = &dwrite->static_font_collection_loader_vtbl;
+
+    VD_FT__WIN32_CHECK_HRESULT(dwrite->factory->lpVtbl->RegisterFontCollectionLoader(dwrite->factory,
+                                                                                     &dwrite->static_font_collection_loader));
+
+    dwrite->static_font_enumerator_vtbl.QueryInterface = vd_ft__win32_query_interface_none;
+    dwrite->static_font_enumerator_vtbl.AddRef = vd_ft__win32_add_ref_none;
+    dwrite->static_font_enumerator_vtbl.Release = vd_ft__win32_release_none;
+    dwrite->static_font_enumerator_vtbl.MoveNext = vd_ft__win32_ffe_move_next;
+    dwrite->static_font_enumerator_vtbl.GetCurrentFontFile = vd_ft__win32_ffe_get_current_font_file;
+}
+
+/* ----DIRECT WRITE SHAPE-------------------------------------------------------------------------------------------- */
+
 typedef struct {
     int                                     initialized;
 
@@ -2770,10 +2893,6 @@ typedef struct {
     // General
     VdFtIDWriteFactory1                     *factory;
     VdFtIDWriteFontCollection               *system_font_collection;
-
-    char                                    *family_name_buffer;
-    int                                     family_name_len;
-    int                                     family_name_cap;
 
     VdFt__ClusterBuffer                     cluster_buffer;
 
@@ -2785,10 +2904,6 @@ typedef struct {
     int                                     glyph_indices_buffer_len;
     int                                     glyph_indices_buffer_cap;
 
-    VdFtDWRITE_GLYPH_OFFSET                 *glyph_offsets_buffer;
-    uint32_t                                glyph_offsets_buffer_len;
-    uint32_t                                glyph_offsets_buffer_cap;
-
     VdFtGlyphOffset                         *user_glyph_offsets_buffer;
     uint32_t                                user_glyph_offsets_buffer_len;
     uint32_t                                user_glyph_offsets_buffer_cap;
@@ -2799,6 +2914,15 @@ typedef struct {
 
     // -----------------------------------------------------------------------------------------------------------------
     // VD_FT_RASTER_BACKEND_DIRECT_WRITE
+
+    char                                    *family_name_buffer;
+    int                                     family_name_len;
+    int                                     family_name_cap;
+
+    VdFtDWRITE_GLYPH_OFFSET                 *glyph_offsets_buffer;
+    uint32_t                                glyph_offsets_buffer_len;
+    uint32_t                                glyph_offsets_buffer_cap;
+
     VdFtHDC                                 dc;
     VdFtIDWriteBitmapRenderTarget           *bitmap_render_target;
     VdFtIDWriteRenderingParams              *rendering_params;
@@ -2830,27 +2954,10 @@ typedef struct {
 Vd_Ft__Win32InternalData Vd_Ft_G = {0};
 
 static void                         vd_ft__win32_init(void);
-static VdFtHRESULT                  vd_ft__win32_query_interface_none(VdFtIUnknown *This, VdFtREFIID riid,
-                                                                      void **ppvObject);
-static VdFtULONG                    vd_ft__win32_add_ref_none(VdFtIUnknown *This);
-static VdFtULONG                    vd_ft__win32_release_none(VdFtIUnknown *This);
 
 static VdFtHRESULT                  vd_ft__win32_static_query_interface(VdFtIUnknown *This, VdFtREFIID riid,
                                                                         void **ppvObject);
-static VdFtHRESULT                  vd_ft__win32_static_create_stream_from_key(VdFtIDWriteFontFileLoader *This,
-                                                                               void const* fontFileReferenceKey,
-                                                                               VdFtUINT32 fontFileReferenceKeySize,
-                                                                               VdFtIDWriteFontFileStream **fontFileStream);
 
-static VdFtHRESULT                  vd_ft__win32_read_file_fragment(VdFtIDWriteFontFileStream *This,
-                                                                    void const** fragmentStart,
-                                                                    VdFtUINT64 fileOffset, VdFtUINT64 fragmentSize,
-                                                                    void** fragmentContext);
-static void                         vd_ft__win32_release_file_fragment(VdFtIDWriteFontFileStream *This,
-                                                                       void* fragmentContext);
-static VdFtHRESULT                  vd_ft__win32_get_file_size(VdFtIDWriteFontFileStream *This, VdFtUINT64* fileSize);
-static VdFtHRESULT                  vd_ft__win32_get_last_write_time(VdFtIDWriteFontFileStream *This,
-                                                                     VdFtUINT64* lastWriteTime);
 static VdFtHRESULT                  vd_ft__win32_get_text_at_position(VdFtIDWriteTextAnalysisSource *This,
                                                                       VdFtUINT32 textPosition,
                                                                       VdFtWCHAR const** textString,
@@ -2880,17 +2987,6 @@ static void                         vd_ft__win32_analysis_split_current_run(uint
 static VdFtRun*                     vd_ft__win32_analysis_get_next_run(VdFtUINT32 *text_length);
 static int                          vd_ft__win32_run_contains_position(VdFtRun *run, uint32_t text_position);
 static VdFtUINT32                   vd_ft__win32_estimate_glyph_count(VdFtUINT32 text_len);
-
-static VdFtHRESULT                  vd_ft__win32_fcl_create_enumerator_from_key(VdFtIDWriteFontCollectionLoader *This,
-                                                                                VdFtIDWriteFactory* factory,
-                                                                                void const* collectionKey,
-                                                                                VdFtUINT32 collectionKeySize,
-                                                                                VdFtIDWriteFontFileEnumerator** fontFileEnumerator);
-
-static VdFtHRESULT                  vd_ft__win32_ffe_move_next(VdFtIDWriteFontFileEnumerator *This,
-                                                               VdFtBOOL* hasCurrentFile);
-static VdFtHRESULT                  vd_ft__win32_ffe_get_current_font_file(VdFtIDWriteFontFileEnumerator *This,
-                                                                           VdFtIDWriteFontFile** fontFile);
 
 static VdFtHRESULT                  vd_ft__win32_is_pixel_snapping_disabled(VdFtIDWriteTextRenderer *This,
                                                                             void* clientDrawingContext,
@@ -3479,6 +3575,7 @@ static void vd_ft__win32_init(void)
 
     VD_FT__WIN32_CHECK_HRESULT(VdFt__DWriteCreateFactory(VD_FT_DWRITE_FACTORY_TYPE_SHARED, &VD_FT_IID_IDWriteFactory1,
                                                          (VdFtIUnknown**)&Vd_Ft_G.factory));
+    VD_FT__WIN32_CHECK_HRESULT(Vd_Ft_G.factory->lpVtbl->GetSystemFontCollection(Vd_Ft_G.factory, &Vd_Ft_G.system_font_collection, 0));
 
     Vd_Ft_G.static_font_loader_vtbl.QueryInterface       = vd_ft__win32_query_interface_none;
     Vd_Ft_G.static_font_loader_vtbl.AddRef               = vd_ft__win32_add_ref_none;
@@ -3513,8 +3610,6 @@ static void vd_ft__win32_init(void)
                                                                              2048, 2048, &bitmap_render_target));
     VD_FT__WIN32_CHECK_HRESULT(bitmap_render_target->lpVtbl->SetPixelsPerDip(bitmap_render_target, 1.f));
     Vd_Ft_G.bitmap_render_target = bitmap_render_target;
-
-    VD_FT__WIN32_CHECK_HRESULT(Vd_Ft_G.factory->lpVtbl->GetSystemFontCollection(Vd_Ft_G.factory, &Vd_Ft_G.system_font_collection, 0));
 
     Vd_Ft_G.static_font_collection_loader_vtbl.QueryInterface = vd_ft__win32_query_interface_none;
     Vd_Ft_G.static_font_collection_loader_vtbl.AddRef = vd_ft__win32_add_ref_none;

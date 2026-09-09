@@ -1046,6 +1046,8 @@ VD_UM_API void vd_um_get_picking_ray(float origin[3], float direction[3])
     for (int i = 0; i < 3; ++i) direction[i] = ctx->mouse_direction[i];
 }
 
+#define VD_UM_DEG2RAD(deg) ((deg) * (3.14159265359f/180.0f))
+
 VD_UM_API float vd_um_get_scale_factor(float position[3])
 {
     VdUmContext *ctx = vd_um_context_get();
@@ -1055,7 +1057,7 @@ VD_UM_API float vd_um_get_scale_factor(float position[3])
             vd_um__sub3(ctx->mouse_origin, position, position_to_origin);
             float distance_from_position = vd_um__sqrt(vd_um__dot3(position_to_origin, position_to_origin));
 
-            return distance_from_position * tanf(fdeg2rad(60.f) * 0.5f);
+            return distance_from_position * tanf(VD_UM_DEG2RAD(60.f) * 0.5f);
         } break;
 
         case VD_UM_VIEWPORT_TYPE_ORTHOGRAPHIC: {

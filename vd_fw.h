@@ -45,23 +45,15 @@
  * ╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
  * 
  * TODO
- * - Gamepads
- *     - Face Heuristics
- *     - Class Heuristics
  * - Remove all weird CRT stuff, custom memcpy impls, allocations with HeapAlloc for example, move everything into
  *   re-definable macros like VD_FW_REALLOC  
- * - Win32: Use DeviceIoControl for XBOX controllers until they're correlated to XINPUT
  * - vd_fw_get_last_mouse_button_pressed
- * - Win32: Allow gamepad input even when window isn't focused?
- *     - Option for that
  * - Win32:
  *     - Filter monitor orientation and other settings in display modes
  *     - Sort the display modes if not sorted already
  * - Win32:
- *     - dpi change
- * - MacOS: Event Queue
+ *     - vd_fw_set_placement changes the size of the window due to DPI awareness. Rescale.
  * - MacOS: vd_fw_get_key_released: Gets if the key was released this frame
- * - raw hat states
  * - OBS Studio breaks ChoosePixelFormat
  * - Make sure we can export functions properly for C++
  * - Expose customizable function pointer if the user needs to do something platform-specific before/after winthread has initialized or before vd_fw_init returns anyways.
@@ -712,6 +704,15 @@ typedef struct {
     } aspect;
 } VdFwDisplayMode;
 
+#pragma pack(push, 1)
+typedef struct {
+    VdFwPlatform platform;
+#ifdef _WIN32
+    uint8_t      data[44];
+#endif // _WIN32
+} VdFwPlacement;
+#pragma pack(pop)
+
 /**
  * @brief Get the total count of monitors. Monitor 0 is the primary monitor of the display
  * @return  The count of all the monitors
@@ -732,6 +733,31 @@ VD_FW_API const char*        vd_fw_get_monitor_name(int index);
  * @return       Sorted display modes
  */
 VD_FW_API VdFwDisplayMode*   vd_fw_get_monitor_display_modes(int index, int *count);
+
+/**
+ * @brief Get the monitor the window is in
+ * @return  The monitor index
+ */
+VD_FW_API int                vd_fw_get_window_monitor(void);
+
+/**
+ * @brief Moves the window to the monitor. Only useful if you're trying to switch monitors
+ * @param  index The index of the monitor to move to
+ */
+VD_FW_API void               vd_fw_move_to_monitor(int index);
+
+/**
+ * @brief Get window placement in workspace. Save it to restore window to original position
+ * @return  The placement. Platform specific
+ */
+VD_FW_API VdFwPlacement      vd_fw_get_placement(void);
+
+/**
+ * @brief Set window placement int workspace
+ * @param  placement The placement
+ * @return           1 if successful. 0 otherwise. When it fails, use vd_fw_get_placement() to update your state
+ */
+VD_FW_API int                vd_fw_set_placement(VdFwPlacement *placement);
 
 /* ----MOUSE--------------------------------------------------------------------------------------------------------- */
 
@@ -9452,8 +9478,6 @@ VD_FW_API void vd_fw_swap(void)
                           VD_FW_G.pixel_buffer,
                           &VD_FW_G.pixel_info,
                           VD_FW_DIB_RGB_COLORS, VD_FW_SRCCOPY);
-
-        int err = GetLastError();
     }
 }
 
@@ -10022,6 +10046,87 @@ VD_FW_API VdFwDisplayMode *vd_fw_get_monitor_display_modes(int index, int *count
     *count = VD_FW_G.monitor_buffer[index].display_modes_len;
 
     return VD_FW_G.monitor_buffer[index].display_modes;
+}
+
+VD_FW_API int vd_fw_get_window_monitor(void)
+{
+    int result = 0;
+    VdFwHMONITOR monitor = VdFwMonitorFromWindow(VD_FW_G.hwnd, MONITOR_DEFAULTTONULL);
+    for (int i = 0; i < VD_FW_G.monitor_buffer_len; ++i) {
+        if (VD_FW_G.monitor_buffer[i].hmonitor == monitor) {
+            result = i;
+            break;
+        }
+    }
+    return result;
+}
+
+VD_FW_API void vd_fw_move_to_monitor(int index)
+{
+    if ((0 <= index) && (index < VD_FW_G.monitor_buffer_len)) {
+        VdFwWINDOWPLACEMENT placement;
+        placement.length = sizeof(placement);
+        VdFwGetWindowPlacement(VD_FW_G.hwnd, &placement);
+
+        int w = placement.rcNormalPosition.right - placement.rcNormalPosition.left;
+        int h = placement.rcNormalPosition.bottom - placement.rcNormalPosition.top;
+
+        VdFwMONITORINFO cur_monitor_info = {0};
+        cur_monitor_info.cbSize = sizeof(cur_monitor_info);
+        VdFwHMONITOR monitor = VdFwMonitorFromWindow(VD_FW_G.hwnd, MONITOR_DEFAULTTONULL);
+        if (VdFwGetMonitorInfo(monitor, &cur_monitor_info)) {
+
+            int xrel_cur = placement.rcNormalPosition.left - cur_monitor_info.rcWork.left;
+            int yrel_cur = placement.rcNormalPosition.top - cur_monitor_info.rcWork.top;
+
+            VdFwMONITORINFO monitor_info = {0};
+            monitor_info.cbSize = sizeof(monitor_info);
+            if (VdFwGetMonitorInfo(VD_FW_G.monitor_buffer[index].hmonitor, &monitor_info)) {
+
+                placement.flags = 0x0004 /* WPF_ASYNCWINDOWPLACEMENT */;
+                // VdFwUINT  showCmd;
+                placement.ptMinPosition.x = monitor_info.rcWork.left;
+                placement.ptMinPosition.y = monitor_info.rcWork.bottom;
+                placement.ptMaxPosition.x = monitor_info.rcWork.left;
+                placement.ptMaxPosition.y = monitor_info.rcWork.top;
+                placement.rcNormalPosition.left = monitor_info.rcWork.left + xrel_cur;
+                placement.rcNormalPosition.top = monitor_info.rcWork.top + yrel_cur;
+                placement.rcNormalPosition.right = placement.rcNormalPosition.left + w;
+                placement.rcNormalPosition.bottom = placement.rcNormalPosition.top + h;
+                VdFwSetWindowPlacement(VD_FW_G.hwnd, &placement);
+            }
+        }
+    }
+}
+
+VD_FW_API VdFwPlacement vd_fw_get_placement(void)
+{
+    VdFwPlacement result;
+    result.platform = VD_FW_PLATFORM_WINDOWS;
+
+    VdFwWINDOWPLACEMENT placement;
+    placement.length = sizeof(placement);
+    VdFwGetWindowPlacement(VD_FW_G.hwnd, &placement);
+
+    VD_FW_MEMCPY(result.data, &placement, sizeof(placement));
+    return result;
+}
+
+VD_FW_API int vd_fw_set_placement(VdFwPlacement *placement)
+{
+    int result = 0;
+    if (placement->platform == vd_fw_get_platform()) {
+
+        VdFwWINDOWPLACEMENT wplacement;
+        VD_FW_MEMCPY(&wplacement, placement->data, sizeof(wplacement));
+        wplacement.length = sizeof(wplacement);
+        wplacement.flags = 0x0004 /* WPF_ASYNCWINDOWPLACEMENT */;
+        wplacement.showCmd = 1;
+
+        VdFwSetWindowPlacement(VD_FW_G.hwnd, &wplacement);
+    }
+
+    return result;
 }
 
 VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
@@ -11360,9 +11465,10 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             VD_FW_WIN32_PROFILE_BEGIN(fw_fullscreen);
             VdFwBOOL should_be_fullscreen = (VdFwBOOL)lparam;
 
-            EnterCriticalSection(&VD_FW_G.critical_section);
+            // EnterCriticalSection(&VD_FW_G.critical_section);
             if (should_be_fullscreen) {
 
+                VD_FW_G.last_window_placement.length = sizeof(VD_FW_G.last_window_placement);
                 VdFwGetWindowPlacement(VD_FW_G.hwnd, &VD_FW_G.last_window_placement);
 
                 VdFwHMONITOR monitor = VdFwMonitorFromWindow(VD_FW_G.hwnd, MONITOR_DEFAULTTOPRIMARY);
@@ -11409,7 +11515,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                              SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
                              SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
             }
-            LeaveCriticalSection(&VD_FW_G.critical_section);
+            // LeaveCriticalSection(&VD_FW_G.critical_section);
 
             VD_FW_WIN32_PROFILE_END(fw_fullscreen);
         } break;
