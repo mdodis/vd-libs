@@ -13057,6 +13057,11 @@ VD_FW_API int vd_fw_get_mouse_clicked(int button)
     return !(VD_FW_G.prev_mouse_state & button) && (VD_FW_G.mouse_state & button);
 }
 
+VD_FW_API int vd_fw_get_mouse_released(int button)
+{
+    return (VD_FW_G.prev_mouse_state & button) && !(VD_FW_G.mouse_state & button);
+}
+
 VD_FW_API void vd_fw_set_mouse_locked(int locked)
 {
     if (VD_FW_G.mouse_is_locked == locked) {
