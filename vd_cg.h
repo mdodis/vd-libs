@@ -528,6 +528,16 @@ VD_CG_INL FQuat       fslerp           (FQuat q0, FQuat q1, F1 t)
 {
     FQuat q;
     F1 cht = q0.w * q1.w + q0.x * q1.x + q0.y * q1.y + q0.z * q1.z;
+
+    if (cht < 0.0f) {
+        cht = -cht;
+
+        q1.w = -q1.w;
+        q1.x = -q1.x;
+        q1.y = -q1.y;
+        q1.z = -q1.z;
+    }
+
     if (fsabs(cht) >= 1.0){
         return q0;
     }
