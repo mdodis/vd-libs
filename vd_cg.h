@@ -260,6 +260,7 @@ VD_CG_INL F1          fwrap_rad        (F1 d)                                  {
 VD_CG_INL F1          fwrap_deg        (F1 d)                                  { if (d >= 360.f) d -= 360.f; if (d < 0.f) d += 360.f; return d; }
 VD_CG_INL F1          fclamp           (F1 i, F1 x, F1 a)                      { if (x < i) return i; if (x > a) return a; return x; }
 VD_CG_INL F1          flerp            (F1 a, F1 b, F1 t)                      { return a + t * (b - a); }
+VD_CG_INL D1          dlerp            (D1 a, D1 b, D1 t)                      { return a + t * (b - a); }
 VD_CG_INL F1          fsmax            (F1 a, F1 b)                            { return a > b ? a : b; }
 VD_CG_INL D1          dsmax            (D1 a, D1 b)                            { return a > b ? a : b; }
 VD_CG_INL S1          ssmax            (S1 a, S1 b)                            { return a > b ? a : b; }
@@ -371,6 +372,12 @@ VD_CG_INL int         feq4             (F4 a, F4 b)                            {
 VD_CG_INL int         deq4             (D4 a, D4 b)                            { return deq(a.x, b.x) && deq(a.y, b.y) && deq(a.z, b.z) && deq(a.w, b.w); }
 VD_CG_INL int         seq4             (S4 a, S4 b)                            { return (a.x == b.x)  && (a.y == b.y)  && (a.z == b.z)  && (a.w == b.w); }
 
+VD_CG_INL F2          flerp2           (F2 a, F2 b, F1 t)                      { return fm2(flerp(a.x, b.x, t), flerp(a.y, b.y, t)); }
+VD_CG_INL D2          dlerp2           (D2 a, D2 b, D1 t)                      { return dm2(dlerp(a.x, b.x, t), dlerp(a.y, b.y, t)); }
+VD_CG_INL F3          flerp3           (F3 a, F3 b, F1 t)                      { return fm3(flerp(a.x, b.x, t), flerp(a.y, b.y, t), flerp(a.z, b.z, t)); }
+VD_CG_INL D3          dlerp3           (D3 a, D3 b, D1 t)                      { return dm3(dlerp(a.x, b.x, t), dlerp(a.y, b.y, t), dlerp(a.z, b.z, t)); }
+VD_CG_INL F4          flerp4           (F4 a, F4 b, F1 t)                      { return fm4(flerp(a.x, b.x, t), flerp(a.y, b.y, t), flerp(a.z, b.z, t), flerp(a.w, b.w, t)); }
+VD_CG_INL D4          dlerp4           (D4 a, D4 b, D1 t)                      { return dm4(dlerp(a.x, b.x, t), dlerp(a.y, b.y, t), dlerp(a.z, b.z, t), dlerp(a.w, b.w, t)); }
 /* ----MATRIX ALGEBRA------------------------------------------------------------------------------------------- */
 VD_CG_INL F4x4        ftranspose4x4    (F4x4 *m)                               { return fm4x4(m->a0, m->b0, m->c0, m->d0,
                                                                                               m->a1, m->b1, m->c1, m->d1,
