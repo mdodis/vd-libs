@@ -516,6 +516,63 @@ VD_CG_INL DQuat       dmulquat         (DQuat q1, DQuat q2)                    {
                                                                                                -q1.x * q2.x - q1.y * q2.y - q1.z * q2.z + q1.w * q2.w);    }
 VD_CG_INL F3          fmulquat_3       (FQuat q, F3 v)                         { return fmulquat(fmulquat(q, fmquat(v, 0.f)), fconquat(q)).xyz; }
 VD_CG_INL D3          dmulquat_3       (DQuat q, D3 v)                         { return dmulquat(dmulquat(q, dmquat(v, 0.0)), dconquat(q)).xyz; }
+
+VD_CG_INL FQuat       fslerp           (FQuat q0, FQuat q1, F1 t)
+{
+    FQuat q;
+    F1 cht = q0.w * q1.w + q0.x * q1.x + q0.y * q1.y + q0.z * q1.z;
+    if (fsabs(cht) >= 1.0){
+        return q0;
+    }
+
+    F1 ht = facos(cht);
+    F1 sht = fsqrt(1.f - cht*cht);
+
+    if (fsabs(sht) < 0.001f) {
+        q.w = (q0.w * 0.5f + q1.w * 0.5f);
+        q.x = (q0.x * 0.5f + q1.x * 0.5f);
+        q.y = (q0.y * 0.5f + q1.y * 0.5f);
+        q.z = (q0.z * 0.5f + q1.z * 0.5f);
+        return q;
+    }
+
+    F1 ra = fsin((1 - t) * ht) / sht;
+    F1 rb = fsin(t * ht) / sht; 
+    q.w = (q0.w * ra + q1.w * rb);
+    q.x = (q0.x * ra + q1.x * rb);
+    q.y = (q0.y * ra + q1.y * rb);
+    q.z = (q0.z * ra + q1.z * rb);
+    return q;
+}
+
+VD_CG_INL DQuat       dslerp           (DQuat q0, DQuat q1, D1 t)
+{
+    DQuat q;
+    D1 cht = q0.w * q1.w + q0.x * q1.x + q0.y * q1.y + q0.z * q1.z;
+    if (dsabs(cht) >= 1.0){
+        return q0;
+    }
+
+    D1 ht = dacos(cht);
+    D1 sht = dsqrt(1.0 - cht*cht);
+
+    if (dsabs(sht) < 0.001) {
+        q.w = (q0.w * 0.5 + q1.w * 0.5);
+        q.x = (q0.x * 0.5 + q1.x * 0.5);
+        q.y = (q0.y * 0.5 + q1.y * 0.5);
+        q.z = (q0.z * 0.5 + q1.z * 0.5);
+        return q;
+    }
+
+    D1 ra = dsin((1 - t) * ht) / sht;
+    D1 rb = dsin(t * ht) / sht; 
+    q.w = (q0.w * ra + q1.w * rb);
+    q.x = (q0.x * ra + q1.x * rb);
+    q.y = (q0.y * ra + q1.y * rb);
+    q.z = (q0.z * ra + q1.z * rb);
+    return q;
+}
+
 VD_CG_INL F4x4        fto4x4quat       (FQuat q)
 {
     F1 qxx = (q.x * q.x);
