@@ -932,6 +932,12 @@ VD_CG_INL F4x4        frotation_roll4x4  (F1 rad)                              {
                                                                                               -fsin(rad), fcos(rad),  0.f, 0.f,
                                                                                               0.f,        0.f,        1.f, 0.f,
                                                                                               0.f,        0.f,        0.f, 1.f); }
+
+VD_CG_INL F4x4        frotation_basis4x4 (F3 x, F3 y, F3 z)                    { return fm4x4(x.x, x.y, x.y, 0,
+                                                                                              y.x, y.y, y.z, 0,
+                                                                                              z.x, z.y, z.z, 0,
+                                                                                              0,   0,   0,   1); }
+
 VD_CG_INL F4x4        fscaling4x4        (F3 v)                                { return fm4x4(v.x, 0.f, 0.f, 0.f,
                                                                                               0.f, v.y, 0.f, 0.f,
                                                                                               0.f, 0.f, v.z, 0.f,

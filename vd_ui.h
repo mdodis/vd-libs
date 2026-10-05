@@ -1426,6 +1426,8 @@ VD_UI_API float            vd_ui_dt(void);
 VD_UI_API void             vd_ui_transform_point(VdUiDiv *div, float point[2], float out_point[2]);
 VD_UI_API void             vd_ui_set_capture(size_t eid);
 VD_UI_API int              vd_ui_is_captured(VdUiDiv *div);
+VD_UI_API int              vd_ui_is_any_captured(void);
+VD_UI_API int              vd_ui_any_active(void);
 VD_UI_API int              vd_ui_any_hovered(void);
 VD_UI_API int              vd_ui_mod_down(VdUiMod mod);
 VD_UI_API int              vd_ui_key_down(VdUiEventKey key);
@@ -5239,6 +5241,10 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
             ctx->active   = div->h;
             reply.pressed |= sig;
             consume       = 1;
+
+            if (div->flags & VD_UI_FLAG_CAPTURES_MOUSE) {
+                vd_ui_set_capture(div->h);
+            }
         }
 
         // Release mouse button down on div
@@ -5254,6 +5260,10 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
             reply.released |= sig;
             reply.clicked  |= sig;
             consume        = 1;
+
+            if ((div->flags & VD_UI_FLAG_CAPTURES_MOUSE) && vd_ui_is_captured(div)) {
+                vd_ui_set_capture(0);
+            }
         }
 
         // Release mouse button outside of div
@@ -6960,6 +6970,18 @@ VD_UI_API int vd_ui_is_captured(VdUiDiv *div)
 {
     VdUiContext *ctx = vd_ui_context_get();
     return div->h == ctx->id_capturing_mouse;
+}
+
+VD_UI_API int vd_ui_is_any_captured(void)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    return ctx->id_capturing_mouse != 0;
+}
+
+VD_UI_API int vd_ui_any_active(void)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    return ctx->active != 0;
 }
 
 VD_UI_API int vd_ui_any_hovered(void)

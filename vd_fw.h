@@ -8729,6 +8729,7 @@ typedef struct {
     int                         scale_changed;
     VdFwBITMAPINFO              pixel_info;
     void                        *pixel_buffer;
+    int                         vsync;
 
 /* ----RENDER THREAD - WINDOW THREAD DATA---------------------------------------------------------------------------- */
     VdFwEvent                   msgbuf[VD_FW_WIN32_MESSAGE_BUFFER_SIZE];
@@ -9488,7 +9489,7 @@ VD_FW_API void vd_fw_unlock(void)
     {
         // @note(mdodis): This needs to happen, otherwise the window animations and taskbar don't get redrawn if the window
         // is maximized to either section of the screen or the whole screen
-        if (!VD_FW_G.draw_decorations) {
+        if (VD_FW_G.vsync) {
             VdFwDwmFlush();
         }
     }
@@ -10024,6 +10025,7 @@ VD_FW_API int vd_fw_set_vsync_on(int on)
 {
     if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
         BOOL result = VD_FW_G.proc_swapInterval(on);
+        VD_FW_G.vsync = on;
         return result == TRUE ? on : 0;
     }
 
@@ -10953,7 +10955,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 }
 
                 VdFwEndPaint(hwnd, &ps);
-                VdFwDwmFlush();
 
             VD_FW_WIN32_PROFILE_END(wm_paint);
         } break;
@@ -11471,31 +11472,37 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 VD_FW_G.last_window_placement.length = sizeof(VD_FW_G.last_window_placement);
                 VdFwGetWindowPlacement(VD_FW_G.hwnd, &VD_FW_G.last_window_placement);
 
-                VdFwHMONITOR monitor = VdFwMonitorFromWindow(VD_FW_G.hwnd, MONITOR_DEFAULTTOPRIMARY);
+                VdFwHMONITOR monitor = VdFwMonitorFromWindow(VD_FW_G.hwnd, MONITOR_DEFAULTTONEAREST);
                 VdFwMONITORINFO monitor_info = {0};
                 monitor_info.cbSize = sizeof(monitor_info);
                 VD_FW__CHECK_NONZERO(VdFwGetMonitorInfo(monitor, &monitor_info));
                 VdFwLONG style;
                 VdFwUINT flags;
 
+                // @note(mdodis): See https://stackoverflow.com/questions/23145217/flickering-when-borderless-window-and-desktop-dimensions-are-the-same
+                int hack_1p = 0;
                 if (VD_FW_G.draw_decorations) {
                     // style = WS_POPUP | WS_VISIBLE;
                     // flags = SWP_FRAMECHANGED | SWP_NOOWNERZORDER;
                     LONG current_style = VdFwGetWindowLongA(VD_FW_G.hwnd, GWL_STYLE);
                     style = current_style & ~WS_OVERLAPPEDWINDOW;
-                    flags = SWP_SHOWWINDOW | SWP_FRAMECHANGED | SWP_NOOWNERZORDER | SWP_NOCOPYBITS;
+                    // style = current_style & ~WS_OVERLAPPED;
+                    // style = current_style | WS_POPUP;
+                    flags = SWP_SHOWWINDOW | SWP_FRAMECHANGED | SWP_NOOWNERZORDER;
+                    hack_1p = 1;
                 } else {
                     // style = WS_POPUP | WS_VISIBLE;
                     LONG current_style = VdFwGetWindowLongA(VD_FW_G.hwnd, GWL_STYLE);
                     style = current_style & ~WS_OVERLAPPEDWINDOW;
-                    flags = SWP_FRAMECHANGED | SWP_NOOWNERZORDER;
+                    // style = current_style & ~WS_OVERLAPPED;
+                    // style = current_style | WS_POPUP;
+                    flags = SWP_SHOWWINDOW | SWP_FRAMECHANGED | SWP_NOOWNERZORDER;
                 }
 
-                // VdFwShowWindow(VD_FW_G.hwnd, SW_HIDE);
                 VdFwSetWindowLong(VD_FW_G.hwnd, GWL_STYLE, style);
                 VdFwSetWindowPos(VD_FW_G.hwnd, VD_FW_HWND_TOP,
                              monitor_info.rcMonitor.left , monitor_info.rcMonitor.top,
-                             monitor_info.rcMonitor.right - monitor_info.rcMonitor.left,
+                             monitor_info.rcMonitor.right - monitor_info.rcMonitor.left + hack_1p,
                              monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top,
                              flags);
                 // VdFwShowWindow(VD_FW_G.hwnd, SW_SHOW);
@@ -11505,7 +11512,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 //     VD_FW__CHECK_HRESULT(VdFwDwmExtendFrameIntoClientArea(VD_FW_G.hwnd, &m));
                 // }
             } else {
-                VdFwSetWindowLong(VD_FW_G.hwnd, GWL_STYLE, VD_FW_G.last_window_style);
+                VdFwSetWindowLongA(VD_FW_G.hwnd, GWL_STYLE, VD_FW_G.last_window_style);
                 VdFwSetWindowPlacement(VD_FW_G.hwnd, &VD_FW_G.last_window_placement);
                 VdFwSetWindowPos(VD_FW_G.hwnd, NULL,
                              0,
