@@ -423,6 +423,9 @@ typedef struct VdUiStyleText {
     /** The symbol to prefix the text with */
     VdUiSymbol      symbol;
 
+    /** Adds a gap between symbol and text */
+    float           symbol_gap;
+
     /** The visibility of the symbol */
     VdUiVisibility  symbol_visibility;
 } VdUiStyleText;
@@ -1369,6 +1372,8 @@ VD_UI_API void             vd_ui_render_end(void);
 /* ----FONTS--------------------------------------------------------------------------------------------------------- */
 VD_UI_API VdUiFontId       vd_ui_font_add_ttf(void *buffer, size_t size);
 VD_UI_API void*            vd_ui_font_default(size_t *size);
+VD_UI_API void             vd_ui_font_default_set(VdUiFontId id, float size);
+VD_UI_API void             vd_ui_font_icon_set(VdUiFontId id, uint32_t checkmark);
 
 /* ----TEXTURES------------------------------------------------------------------------------------------------------ */
 /**
@@ -6685,6 +6690,19 @@ VD_UI_API void *vd_ui_font_default(size_t *size)
     return (void*)Vd_Ui_Public_Sans_Regular;
 }
 
+VD_UI_API void vd_ui_font_default_set(VdUiFontId id, float size)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    ctx->def.font = id;
+    ctx->def.font_size = size;
+}
+
+VD_UI_API void vd_ui_font_icon_set(VdUiFontId id, uint32_t checkmark)
+{
+    VdUiContext *ctx = vd_ui_context_get();
+    ctx->def.checkmark = vd_ui_symbol(id, checkmark);
+}
+
 /* ----INPUT IMPL---------------------------------------------------------------------------------------------------- */
 VD_UI_API void vd_ui_event_push(VdUiEvent *evt)
 {
@@ -7575,6 +7593,7 @@ static void vd_ui__render_div(VdUiContext *ctx, VdUiDiv *curr, float rect[4])
 
             if (vd_ui_symbol_valid(curr->style.text.symbol) && (curr->style.text.symbol_visibility & VD_UI_VISBILITY_DONT_DISPLAY) == 0) {
                 vd_ui__put_symbol(ctx, curr->style.text.symbol, &x, y, curr->style.text.font_size, grad.e);
+                x += curr->style.text.symbol_gap;
             }
 
             if ((curr->style.text.visibility & VD_UI_VISBILITY_DONT_DISPLAY) == 0) {
