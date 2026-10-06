@@ -448,6 +448,15 @@ VD_FT_API void              vd_ft_box_max_height_set(float value);
  */
 VD_FT_API void              vd_ft_box_wrap(VdFtWrap wrap);
 
+typedef struct {
+    int hit;
+    int text_pos;
+    float px, py;
+    float caret[4];
+} VdFtHitResult;
+
+VD_FT_API VdFtHitResult     vd_ft_box_hit(float x, float y);
+
 /**
  * @brief Produce glyph runs from a box
  * @param  count Pointer to count of glyph runs (output)
@@ -589,6 +598,8 @@ static void vd_ft__swapwstr(wchar_t *s, size_t len)
 typedef struct {
     uint32_t    start;
     uint32_t    count;
+    uint32_t    source_start;
+    uint32_t    source_count;
     VdFtFamily  family;
     VdFtStyle   style;
     float       size;
@@ -602,6 +613,7 @@ typedef struct {
 #endif // VD_FT__UTF16==1
     uint32_t        curr_text_len;
     uint32_t        curr_text_cap;
+    uint32_t        source_text_pushed;
 
     VdFt__Cluster   *clusters;
     int             clusters_len;
@@ -614,11 +626,14 @@ static void vd_ft__cluster_buffer_begin(VdFt__ClusterBuffer *buf)
 {
     buf->curr_text_len = 0;
     buf->clusters_len = 0;
+    buf->source_text_pushed = 0;
     buf->curr_cluster.start = 0;
     buf->curr_cluster.count = 0;
     buf->curr_cluster.family = vd_ft_family_null();
     buf->curr_cluster.style = 0;
     buf->curr_cluster.size = 0.f;
+    buf->curr_cluster.source_start = 0;
+    buf->curr_cluster.source_count = 0;
 }
 
 static void vd_ft__cluster_buffer_family_set(VdFt__ClusterBuffer *buf, VdFtFamily family)
@@ -663,9 +678,13 @@ static void vd_ft__cluster_buffer_push(VdFt__ClusterBuffer *buf, const char *tex
 
     buf->curr_cluster.start = buf->curr_text_len;
 
+
     buf->curr_text_len += wrt;
 
     buf->curr_cluster.count = buf->curr_text_len - buf->curr_cluster.start;
+    buf->curr_cluster.source_start = buf->source_text_pushed;
+    buf->curr_cluster.source_count = len;
+    buf->source_text_pushed += len;
 
     buf->clusters = (VdFt__Cluster*)vd_ft__resize_buffer(buf->clusters,
                                                             sizeof(*buf->clusters), buf->clusters_len + 1,
@@ -3519,6 +3538,106 @@ VD_FT_API void vd_ft_box_wrap(VdFtWrap wrap)
         } break;
     }
     VD_FT__WIN32_CHECK_HRESULT(Vd_Ft_G.curr_text_layout->lpVtbl->SetWordWrapping(Vd_Ft_G.curr_text_layout, dwrap));
+}
+
+VD_FT_API VdFtHitResult vd_ft_box_hit(float x, float y)
+{
+    VdFtBOOL trailing;
+    VdFtBOOL inside;
+    VdFtDWRITE_HIT_TEST_METRICS metrics;
+
+    VdFtHitResult result = {0};
+
+    VD_FT__WIN32_CHECK_HRESULT(Vd_Ft_G.curr_text_layout->lpVtbl->HitTestPoint(Vd_Ft_G.curr_text_layout, x, y,
+                                                                              &trailing, &inside, &metrics));
+    result.caret[0] = metrics.left;
+    result.caret[1] = metrics.top;
+    result.caret[2] = metrics.left + metrics.width;
+    result.caret[3] = metrics.top + metrics.height;
+    result.hit = inside;
+
+    if (inside) {
+        uint32_t text_position;
+
+        VD_FT__WIN32_CHECK_HRESULT(Vd_Ft_G.curr_text_layout->lpVtbl->HitTestTextPosition(Vd_Ft_G.curr_text_layout,
+                                                                                         metrics.textPosition,
+                                                                                         trailing, &result.px, &result.py,
+                                                                                         &metrics));
+
+        // Find cluster closest to where we hit
+        VdFt__Cluster *cluster = 0;
+
+        for (int i = 0; i < Vd_Ft_G.cluster_buffer.clusters_len; ++i) {
+            VdFt__Cluster *c = &Vd_Ft_G.cluster_buffer.clusters[i];
+
+            uint32_t begin = c->start;
+            uint32_t end   = c->start + c->count;
+
+            if ((begin <= text_position) && (text_position <= end)) {
+                // Found cluster
+                cluster = c;
+                break;
+            }
+        }
+
+        // We need to determine which byte of source text we hit
+        if (cluster) {
+            uint32_t buff_i = cluster->start;
+            uint32_t buff_p = buff_i;
+            uint32_t u8_i   = cluster->source_start;
+            uint32_t u8_p   = u8_i;
+
+            // @note(mdodis): omg we're gonna waste so much time with this
+            while (buff_i < text_position) {
+                uint16_t *p = (uint16_t*)((uint8_t*)Vd_Ft_G.cluster_buffer.curr_text_buffer + buff_i);
+                uint32_t c = p[0];
+                uint32_t codepoint;
+                uint32_t utf16_bytes;
+
+                if (c >= 0xD800 && c <= 0xDBFF) {
+                    uint32_t next = p[1];
+
+                    if (next >= 0xDC00 && next <= 0xDFFF) {
+                        codepoint =
+                            0x10000 +
+                            ((c - 0xD800) << 10) +
+                            (next - 0xDC00);
+
+                        utf16_bytes = 4;
+                    } else {
+                        // Invalid UTF-16
+                        codepoint = 0xFFFD;
+                        utf16_bytes = 2;
+                    }
+                } else {
+                    codepoint = c;
+                    utf16_bytes = 2;
+                }
+
+                // How many UTF-8 bytes this codepoint occupies
+                uint32_t utf8_bytes;
+
+                if (codepoint <= 0x7F) {
+                    utf8_bytes = 1;
+                } else if (codepoint <= 0x7FF) {
+                    utf8_bytes = 2;
+                } else if (codepoint <= 0xFFFF) {
+                    utf8_bytes = 3;
+                } else {
+                    utf8_bytes = 4;
+                }
+
+                buff_p = buff_i;
+                buff_i += utf16_bytes;
+                u8_p = u8_i;
+                u8_i += utf8_bytes;
+            }
+
+            result.text_pos = (int)u8_i;
+        }
+    }
+
+    return result;
 }
 
 VD_FT_API VdFtRunResult vd_ft_box_run(void)
