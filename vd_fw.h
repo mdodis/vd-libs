@@ -433,6 +433,7 @@ typedef enum {
     VD_FW_EVENT_TYPE_MOUSE_SCROLL,
     VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE,
     VD_FW_EVENT_TYPE_SCALE_CHANGE,
+    VD_FW_EVENT_TYPE_RESIZE,
 } VdFwEventType;
 
 typedef struct {
@@ -491,6 +492,10 @@ typedef struct {
     float new_scale;
 } VdFwEventScaleChangeData;
 
+typedef struct {
+    int w, h;
+} VdFwEventResize;
+
 typedef union {
     VdFwEventCloseRequestData      close_request;
     VdFwEventFocusChangeData       focus_change;
@@ -504,6 +509,7 @@ typedef union {
     VdFwEventMouseScrollData       mouse_scroll;
     VdFwEventWindowStateChangeData window_state_change;
     VdFwEventScaleChangeData       scale_change;
+    VdFwEventResize                resize;
 } VdFwEventData;
 
 typedef struct {
@@ -11153,6 +11159,15 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             // In this case and in this case only, we already know that we're drawing default borders
             VD_FW_G.w = LOWORD(lparam);
             VD_FW_G.h = HIWORD(lparam);
+
+            {
+
+                VdFwEvent evt;
+                evt.type = VD_FW_EVENT_TYPE_RESIZE;
+                evt.data.resize.w = VD_FW_G.w;
+                evt.data.resize.h = VD_FW_G.h;
+                vd_fw__msgbuf_w(&evt);
+            }
 
             switch (wparam) {
                 case SIZE_MINIMIZED: {
