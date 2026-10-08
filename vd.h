@@ -497,6 +497,37 @@ void        vd_vm_release(void *addr, Vdusize len);
 #endif // VD_PLATFORM_KNOWN
 #endif // VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
 
+/* ----THREADS------------------------------------------------------------------------------------------------------- */
+#if VD_PLATFORM_KNOWN
+typedef struct {
+    void *handle;
+    int  id;
+} VdThread;
+
+typedef struct {
+    void *param;
+} VdThreadMakeOptions;
+
+#define VD_THREAD_PROC(name) unsigned long name(void *param)
+typedef VD_THREAD_PROC(VdThreadProc);
+
+VdThread    vd_thread_make(VdThreadProc *proc, VdThreadMakeOptions *options);
+int         vd_thread_join(VdThread thread);
+
+extern long InterlockedCompareExchange(long volatile *, long, long);
+
+
+VD_INLINE int32_t vd_compare_and_swap_i32(volatile int32_t *ptr, int32_t new_value, int32_t old_value)
+{
+    return (int32_t)InterlockedCompareExchange((long volatile *)ptr, (long)new_value, (long)old_value);
+}
+
+VD_INLINE uint32_t vd_compare_and_swap_u32(volatile uint32_t *ptr, uint32_t new_value, uint32_t old_value)
+{
+    return (uint32_t)InterlockedCompareExchange((long volatile *)ptr, *(long*)&new_value, *(long*)&old_value);
+}
+
+#endif // VD_PLATFORM_KNOWN
 /* ----SYSTEM ALLOCATOR---------------------------------------------------------------------------------------------- */
 typedef struct {
     Vduptr  buf;
@@ -2302,6 +2333,28 @@ void vd_vm_release(void *addr, Vdusize len)
 #endif // !VD_VM_CUSTOM
 #endif // VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
 
+/* ----THREADS IMPL-------------------------------------------------------------------------------------------------- */
+#if VD_PLATFORM_WINDOWS
+VdThread vd_thread_make(VdThreadProc *proc, VdThreadMakeOptions *options)
+{
+    void *param = 0;
+    if (options) {
+        param = options->param;
+    }
+    DWORD tid;
+    HANDLE h =  CreateThread(0, 0, proc, param, 0, &tid);
+    VdThread result;
+    result.handle = (void*)h;
+    result.id = tid;
+    return result;
+}
+
+int vd_thread_join(VdThread thread)
+{
+    return WaitForSingleObject((HANDLE)thread.handle, INFINITE);
+}
+
+#endif // VD_PLATFORM_WINDOWS
 /* ----SYSTEM ALLOCATOR IMPL----------------------------------------------------------------------------------------- */
 #define VD_SYSTEM_HEAP_RESERVE_PAGE_COUNT 32000
 

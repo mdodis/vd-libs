@@ -5311,6 +5311,7 @@ VD_UI_API VdUiReply vd_ui_call(VdUiDiv *div)
             && (div->flags & VD_UI_FLAG_KB_CLICKABLE)
             && (vd_ui_div_is_focused(div))
             && (evt.type == VD_UI_EVENT_TYPE_PRESS)
+            && ((evt.key == VD_UI_EVENT_KEY_SPACE) || (evt.key == VD_UI_EVENT_KEY_ENTER))
             && !is_mouse_btn
             )
         {

@@ -9161,6 +9161,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     VD_FW_G.next_pos_y  = CW_USEDEFAULT;
 
     // Load Win32 Libraries
+    VD_FW_PROFILE_ZONE(vd_fw_win32_load)
     {
 #define V(dllpath) { HMODULE m = LoadLibraryA(dllpath);
 #define X(retval, name, params) VdFw##name = (VdFwProc##name)GetProcAddress(m, #name);
@@ -9279,7 +9280,11 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     if (info) {
         poptions = &info->gl; 
     }
-    vd_fw_set_graphics_api(api, poptions);
+
+    VD_FW_PROFILE_ZONE(vd_fw_win32_set_graphics)
+    {
+        vd_fw_set_graphics_api(api, poptions);
+    }
 
     QueryPerformanceCounter(&VD_FW_G.performance_counter);
     VD_FW_G.has_initialized = 1;
@@ -9469,6 +9474,15 @@ VD_FW_API void vd_fw_swap(void)
     if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
         VD_FW_PROFILE_ZONE(vd_fw_win32_swap_buffer_opengl)
         {
+            VdFwBOOL enabled;
+            VD_FW__CHECK_HRESULT(VdFwDwmIsCompositionEnabled(&enabled));
+            if (enabled) {
+                int count = VD_FW_G.vsync;
+                while (count--) {
+                    VdFwDwmFlush();
+                }
+            }
+
             VdFwSwapBuffers(VD_FW_G.hdc);
         }
     } else if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_PIXEL_BUFFER) {
@@ -9495,9 +9509,6 @@ VD_FW_API void vd_fw_unlock(void)
     {
         // @note(mdodis): This needs to happen, otherwise the window animations and taskbar don't get redrawn if the window
         // is maximized to either section of the screen or the whole screen
-        if (VD_FW_G.vsync) {
-            VdFwDwmFlush();
-        }
     }
 
     // if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
