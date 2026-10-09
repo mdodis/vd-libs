@@ -130,6 +130,16 @@ VD_DLG_API void             vd_dlg_set_context(void *pf_context);
 #   define VD_DLG_REALLOC(pprev, nsize) realloc(pprev, nsize)
 #endif // !VD_DLG_REALLOC
 
+#ifndef VD_DLG_MEMCPY
+#   include <string.h>
+#   define VD_DLG_MEMCPY(dst, src, count) memcpy(dst, src, count)
+#endif // !VD_DLG_MEMCPY
+
+#ifndef VD_DLG_MEMSET
+#   include <string.h>
+#   define VD_DLG_MEMSET(dst, val, num) memset(dst, val, num)
+#endif // !VD_DLG_MEMSET
+
 #ifndef VD_DLG_ABORT
 #   define VD_DLG_ABORT(message) do { *(char*)0 = *message; } while(0)
 #endif // !VD_DLG_ABORT
@@ -250,9 +260,9 @@ extern VdDlgHMODULE __stdcall VdDlgLoadLibraryA(VdDlgLPCSTR lpLibFileName);
 #pragma comment(linker, "/alternatename:VdDlgGetProcAddress=GetProcAddress")
 extern void*        __stdcall VdDlgGetProcAddress(VdDlgHMODULE hModule, VdDlgLPCSTR lpProcName);
 #pragma comment(linker, "/alternatename:VdDlgMultiByteToWideChar=MultiByteToWideChar")
-extern int                    VdDlgMultiByteToWideChar(VdDlgUINT CodePage, VdDlgDWORD dwFlags, VdDlgDWORD *lpMultiByteStr, int cbMultiByte, wchar_t *lpWideCharStr, int cchWideChar);
+extern int         __stdcall  VdDlgMultiByteToWideChar(VdDlgUINT CodePage, VdDlgDWORD dwFlags, VdDlgLPCSTR lpMultiByteStr, int cbMultiByte, VdDlgLPWSTR lpWideCharStr, int cchWideChar);
 #pragma comment(linker, "/alternatename:VdDlgWideCharToMultiByte=WideCharToMultiByte")
-extern int                    VdDlgWideCharToMultiByte(VdDlgUINT CodePage, VdDlgDWORD dwFlags, VdDlgLPCWSTR lpWideCharStr, int cchWideChar, VdDlgLPSTR lpMultiByteStr, int cbMultiByte, VdDlgLPSTR lpDefaultChar, VdDlgBOOL *lpUsedDefaultChar);
+extern int         __stdcall  VdDlgWideCharToMultiByte(VdDlgUINT CodePage, VdDlgDWORD dwFlags, VdDlgLPCWSTR lpWideCharStr, int cchWideChar, VdDlgLPSTR lpMultiByteStr, int cbMultiByte, VdDlgLPSTR lpDefaultChar, VdDlgBOOL *lpUsedDefaultChar);
 
 #endif
 
@@ -976,8 +986,12 @@ static void *vd_dlg__win32_resize_buffer(void *buffer, size_t element_size, int 
         return buffer;
     }
 
+    size_t size_before = element_size * (*cap);
+    size_t size_after = element_size * required_capacity;
+
     int resize_capacity = required_capacity;
     buffer = VD_DLG_REALLOC(buffer, element_size * resize_capacity);
+    VD_DLG_MEMSET((uint8_t*)buffer + size_before, 0, size_after - size_before);
     *cap = resize_capacity;
     return buffer;
 }

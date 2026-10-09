@@ -41,8 +41,13 @@ int main(int argc, char const *argv[])
 
     vd_fw_init(& (VdFwInitInfo) {
         .gl = {
-            .version = VD_FW_GL_VERSION_4_5,
-            .debug_on = 1,
+            .configs = (VdFwGlConfig[]) {
+                {
+                    .version = VD_FW_GL_VERSION_3_3,
+                    .debug = 1,
+                },
+                0,
+            },
         },
         .window_options = {
             .borderless = 0,

@@ -1558,6 +1558,7 @@ VD_UI_API void             vd_ui_gl_get_attribute_properties(int attribute, int 
 #ifdef VD_FW_H
 VD_UI_API int              vd_ui_vd_fw_mouse_button_translate(int fw_mouse_button);
 VD_UI_API VdUiEventKey     vd_ui_vd_fw_key_translate(VdFwKey key);
+VD_UI_API void             vd_ui_vd_fw_propage_events(int events_count, VdFwEvent *events);
 #endif // !VD_FW_H
 
 /* ----INLINE IMPL--------------------------------------------------------------------------------------------------- */
@@ -9157,6 +9158,79 @@ VD_UI_API VdUiEventKey vd_ui_vd_fw_key_translate(VdFwKey key)
     }
 
     return result;
+}
+
+VD_UI_API void vd_ui_vd_fw_propage_events(int events_count, VdFwEvent *events)
+{
+    float scale;
+    vd_fw_get_scale(&scale);
+    vd_ui_set_scale(scale);
+
+    int focused;
+    if (vd_fw_get_focused(&focused)) {
+        vd_ui_event_focus(focused);
+    }
+
+    float wx, wy;
+    vd_fw_get_mouse_wheel(&wx, &wy);
+
+    int w = 0;
+    int h = 0;
+    int resized = 0;
+    for (int i = 0; i < events_count; ++i) {
+        VdFwEvent *evt = &events[i];
+        switch (evt->type) {
+            case VD_FW_EVENT_TYPE_MOUSE_MOVE: {
+                vd_ui_event_mouse_location((float)evt->data.mouse_move.x, (float)evt->data.mouse_move.y);
+            } break;
+
+            case VD_FW_EVENT_TYPE_RESIZE: {
+                w = evt->data.resize.w;
+                h = evt->data.resize.h;
+                resized = 1;
+            } break;
+
+            case VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP: {
+                vd_ui_event_mouse_button(vd_ui_vd_fw_mouse_button_translate(evt->data.mouse_button_up.button), 0);
+            } break;
+
+            case VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN: {
+                vd_ui_event_mouse_button(vd_ui_vd_fw_mouse_button_translate(evt->data.mouse_button_down.button), 1);
+            } break;
+
+            case VD_FW_EVENT_TYPE_KEY_UP: {
+                int shift   = (evt->data.key_up.modifiers & VD_FW_MOD_SHIFT)   ? 1 : 0;
+                int control = (evt->data.key_up.modifiers & VD_FW_MOD_CONTROL) ? 1 : 0;
+                int alt     = (evt->data.key_up.modifiers & VD_FW_MOD_ALT)     ? 1 : 0;
+                vd_ui_event_mod(VD_UI_MOD_SHIFT, shift);
+                vd_ui_event_mod(VD_UI_MOD_CONTROL, control);
+                vd_ui_event_mod(VD_UI_MOD_ALT, alt);
+
+                vd_ui_event_key_release(vd_ui_vd_fw_key_translate(evt->data.key_up.key));
+            } break;
+
+            case VD_FW_EVENT_TYPE_KEY_DOWN: {
+                int shift   = (evt->data.key_down.modifiers & VD_FW_MOD_SHIFT)   ? 1 : 0;
+                int control = (evt->data.key_down.modifiers & VD_FW_MOD_CONTROL) ? 1 : 0;
+                int alt     = (evt->data.key_down.modifiers & VD_FW_MOD_ALT)     ? 1 : 0;
+
+                vd_ui_event_mod(VD_UI_MOD_SHIFT, shift);
+                vd_ui_event_mod(VD_UI_MOD_CONTROL, control);
+                vd_ui_event_mod(VD_UI_MOD_ALT, alt);
+                vd_ui_event_key_press(vd_ui_vd_fw_key_translate(evt->data.key_down.key));
+            } break;
+
+            case VD_FW_EVENT_TYPE_CHARACTER: {
+                vd_ui_event_char(evt->data.character.codepoint);
+            } break;
+
+            default: break;
+        }
+    }
+    vd_ui_event_mouse_wheel(wx, wy);
+    if (resized) {
+        vd_ui_event_size((float)w, (float)h);
+    }
 }
 #endif // !VD_FW_H
 

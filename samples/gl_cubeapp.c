@@ -1,7 +1,6 @@
 #include "disable_clang_deprecations.h"
 #define VD_FW_NO_CRT 0
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_WINDOWS
-#define VD_FW_PREFER_INTEGRATED_GPU
 #include "vd_fw.h"
 
 #define VERTEX_SOURCE \
@@ -410,16 +409,6 @@ int main(int argc, char const *argv[])
 
                 camera_yaw   += mouse_delta_x * 0.2f;
                 camera_pitch -= mouse_delta_y * 0.2f;
-            } else if (vd_fw_get_gamepad_count() > 0) {
-                float right_stick_raw[2];
-                float right_stick[2];
-                vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RH, &right_stick_raw[0]);
-                vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_RV, &right_stick_raw[1]);
-
-                map_stick_deadzone(right_stick_raw, DEADZONE_STICK, right_stick);
-
-                camera_yaw   += right_stick[0] * ds * 100.f;
-                camera_pitch -= right_stick[1] * ds * 100.f;
             }
 
             if (camera_pitch < -89.9f) camera_pitch = -89.9f;
@@ -466,19 +455,6 @@ int main(int argc, char const *argv[])
             fwdir = (float)(vd_fw_get_key_down('W') - vd_fw_get_key_down('S'));
             rgdir = (float)(vd_fw_get_key_down('A') - vd_fw_get_key_down('D'));
             updir = (float)(vd_fw_get_key_down('Q') - vd_fw_get_key_down('E'));
-
-            if (vd_fw_get_gamepad_count() > 0) {
-
-                float left_stick_raw[2];
-                float left_stick[2];
-                vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_LV, &left_stick_raw[0]);
-                vd_fw_get_gamepad_axis(0, VD_FW_GAMEPAD_LH, &left_stick_raw[1]);
-
-                map_stick_deadzone(left_stick_raw, DEADZONE_STICK, left_stick);
-
-                fwdir -= left_stick[0];
-                rgdir -= left_stick[1];
-            }
 
             float camera_move_dir[3] = {
                 fwdir * camera_forward[0] + rgdir * camera_right[0] + updir * camera_ref_up[0],

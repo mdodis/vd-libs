@@ -21,14 +21,9 @@ int main(int argc, char const *argv[])
     vd_ui_debug_set_layout_recompute_vis_on(0);
 
     vd_fw_init(& (VdFwInitInfo) {
-        .gl = {
-            .debug_on = 1,
-            .version = VD_FW_GL_VERSION_3_3,
-        },
-
         .window_options = {
             .borderless = 0,
-        },
+        }
     });
     vd_fw_set_vsync_on(0);
 
@@ -36,7 +31,9 @@ int main(int argc, char const *argv[])
 
     vd_fw_set_title("GL Dialogs");
 
-    vd_ui_set_scale(vd_fw_get_scale());
+    float scl;
+    vd_fw_get_scale(&scl);
+    vd_ui_set_scale(scl);
 
     GLuint program = 0;
     unsigned long long program_time = 0;
@@ -75,8 +72,8 @@ int main(int argc, char const *argv[])
     const char *single_open_file_path = NULL;
     const char *single_save_file_path = NULL;
     while (vd_fw_running()) {
-
-        vd_fw_poll(0);
+        int count;
+        VdFwEvent *events = vd_fw_poll(&count);
 
         if (vd_fw_close_requested()) {
             vd_fw_quit();
@@ -84,39 +81,19 @@ int main(int argc, char const *argv[])
 
         float delta_seconds = vd_fw_delta_s();
 
-        vd_fw_compile_or_hotload_program(&program, &program_time, "./glsl/ui_basic.vert", "./glsl/ui_basic.frag");
+        vd_fw_compile_or_hotload_program(&program, &program_time, "./glsl/ui_basic.vert", "./glsl/ui_basic.frag", 0);
 
         vd_fw_lock();
-        int w, h;
-        vd_fw_get_size(&w, &h);
         vd_ui_frame_begin(delta_seconds);
 
-        float mx, my;
-        int mouse_state = vd_fw_get_mouse_statef(&mx, &my);
-        VD_UNUSED(mouse_state);
-
-        float wx, wy;
-        int wheel_moved = vd_fw_get_mouse_wheel(&wx, &wy);
-        (void)wheel_moved;
-
-        int focused;
-        if (vd_fw_get_focused(&focused)) {
-            vd_ui_event_focus(focused);
-        }
-
-        vd_ui_event_size((float)w, (float)h);
-        vd_ui_event_mouse_location(mx, my);
-        vd_ui_event_mouse_button(VD_UI_MOUSE_LEFT,  mouse_state & VD_FW_MOUSE_STATE_LEFT_BUTTON_DOWN);
-        vd_ui_event_mouse_button(VD_UI_MOUSE_RIGHT, mouse_state & VD_FW_MOUSE_STATE_RIGHT_BUTTON_DOWN);
-        vd_ui_event_mouse_wheel(wx, wy);
-
+        vd_ui_vd_fw_propage_events(count, events);
 
         VdUiDiv *app = vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("##app"));
         app->style.size[0].mode = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
         app->style.size[0].value = 1.f;
         app->style.size[1].mode = VD_UI_SIZE_MODE_PERCENT_OF_PARENT;
         app->style.size[1].value = 1.f;
-        app->style.background.normal = vd_ui_gradient1(vd_ui_f4(0.1f, 0.1f, 0.1f, 1.f));
+        app->style.background.coloring = vd_ui_coloring_all4(vd_ui_f4(0.1f, 0.1f, 0.1f, 1.f));
         vd_ui_parent_push(app);
         {
             vd_ui_style_font_size_push(18.f);
@@ -125,7 +102,7 @@ int main(int argc, char const *argv[])
             }
             vd_ui_style_font_size_pop();
 
-            if (vd_ui_buttonf("Message Box (Ok)").clicked) {
+            if (vd_ui_buttonf("Message Box (Ok)##ok").clicked) {
                 vd_dlg_message_box(CSTR_AND_LEN("<Simple Message Title>"),
                                    CSTR_AND_LEN("This is a simple message with a title, and an OK button."),
                                    VD_DLG_MESSAGE_BOX_OPTION_OK | VD_DLG_MESSAGE_BOX_OPTION_INFO);
@@ -312,6 +289,8 @@ int main(int argc, char const *argv[])
         unsigned int num_passes;
         VdUiRenderPass *passes = vd_ui_frame_get_render_passes(&num_passes);
 
+        int w,h;
+        vd_fw_get_size(&w, &h);
         glViewport(0, 0, w, h);
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
@@ -332,7 +311,6 @@ int main(int argc, char const *argv[])
             glBindTexture(GL_TEXTURE_2D, texture_id);
             glUniform2f(glGetUniformLocation(program, vd_ui_gl_get_uniform_name_resolution()), (float)w, (float)h);
             glUniform1i(glGetUniformLocation(program, vd_ui_gl_get_uniform_name_texture()), 0);
-            glUniform2f(glGetUniformLocation(program, vd_ui_gl_get_uniform_name_mouse()), mx, my);
 
             glBindVertexArray(vao);
             glBindBuffer(GL_ARRAY_BUFFER, vbo);
