@@ -2025,7 +2025,7 @@ typedef struct {
 
 typedef struct {
     VdFtDWRITE_FONT_FEATURE_TAG nameTag;
-    UINT32 parameter;
+    VdFtUINT32 parameter;
 } VdFtDWRITE_FONT_FEATURE;
 
 typedef struct {
@@ -2058,15 +2058,15 @@ typedef struct  {
 } VdFtDWRITE_LINE_METRICS;
 
 typedef struct {
-    FLOAT left;
-    FLOAT top;
-    FLOAT width;
-    FLOAT widthIncludingTrailingWhitespace;
-    FLOAT height;
-    FLOAT layoutWidth;
-    FLOAT layoutHeight;
-    UINT32 maxBidiReorderingDepth;
-    UINT32 lineCount;
+    VdFtFLOAT left;
+    VdFtFLOAT top;
+    VdFtFLOAT width;
+    VdFtFLOAT widthIncludingTrailingWhitespace;
+    VdFtFLOAT height;
+    VdFtFLOAT layoutWidth;
+    VdFtFLOAT layoutHeight;
+    VdFtUINT32 maxBidiReorderingDepth;
+    VdFtUINT32 lineCount;
 } VdFtDWRITE_TEXT_METRICS;
 
 typedef struct {
@@ -2088,15 +2088,15 @@ typedef struct {
 } VdFtDWRITE_CLUSTER_METRICS;
 
 typedef struct {
-    UINT32 textPosition;
-    UINT32 length;
-    FLOAT left;
-    FLOAT top;
-    FLOAT width;
-    FLOAT height;
-    UINT32 bidiLevel;
-    BOOL isText;
-    BOOL isTrimmed;
+    VdFtUINT32 textPosition;
+    VdFtUINT32 length;
+    VdFtFLOAT left;
+    VdFtFLOAT top;
+    VdFtFLOAT width;
+    VdFtFLOAT height;
+    VdFtUINT32 bidiLevel;
+    VdFtBOOL isText;
+    VdFtBOOL isTrimmed;
 } VdFtDWRITE_HIT_TEST_METRICS;
 
 typedef struct {
@@ -2369,7 +2369,7 @@ typedef struct {
     VdFtHRESULT                 (__stdcall *GetGlyphIndices)(VdFtIDWriteFontFace *This, VdFtUINT32 const* codePoints, VdFtUINT32 codePointCount, VdFtUINT16* glyphIndices);
     VdFtHRESULT                 (__stdcall *TryGetFontTable)(VdFtIDWriteFontFace *This, VdFtUINT32 openTypeTableTag, const void** tableData, VdFtUINT32* tableSize, void** tableContext, VdFtBOOL* exists);
     void                        (__stdcall *ReleaseFontTable)(VdFtIDWriteFontFace *This, void* tableContext);
-    VdFtHRESULT                 (__stdcall *GetGlyphRunOutline)(VdFtIDWriteFontFace *This, FLOAT emSize, UINT16 const* glyphIndices, FLOAT const* glyphAdvances, VdFtDWRITE_GLYPH_OFFSET const* glyphOffsets, UINT32 glyphCount, BOOL isSideways, BOOL isRightToLeft, VdFtIUnknown /* IDWriteGeometrySink */ * geometrySink);
+    VdFtHRESULT                 (__stdcall *GetGlyphRunOutline)(VdFtIDWriteFontFace *This, VdFtFLOAT emSize, VdFtUINT16 const* glyphIndices, VdFtFLOAT const* glyphAdvances, VdFtDWRITE_GLYPH_OFFSET const* glyphOffsets, VdFtUINT32 glyphCount, VdFtBOOL isSideways, VdFtBOOL isRightToLeft, VdFtIUnknown /* IDWriteGeometrySink */ * geometrySink);
     VdFtHRESULT                 (__stdcall *GetRecommendedRenderingMode)(VdFtIDWriteFontFace *This, VdFtFLOAT emSize, VdFtFLOAT pixelsPerDip, VdFtDWRITE_MEASURING_MODE measuringMode, VdFtIDWriteRenderingParams* renderingParams, VdFtDWRITE_RENDERING_MODE* renderingMode);
     VdFtHRESULT                 (__stdcall *GetGdiCompatibleMetrics)(VdFtIDWriteFontFace *This, VdFtFLOAT emSize, VdFtFLOAT pixelsPerDip, VdFtDWRITE_MATRIX const* transform, VdFtDWRITE_FONT_METRICS* fontFaceMetrics);
     VdFtHRESULT                 (__stdcall *GetGdiCompatibleGlyphMetrics)(VdFtIDWriteFontFace *This, VdFtFLOAT emSize, VdFtFLOAT pixelsPerDip, VdFtDWRITE_MATRIX const* transform, VdFtBOOL useGdiNatural, VdFtUINT16 const* glyphIndices, VdFtUINT32 glyphCount, VdFtDWRITE_GLYPH_METRICS* glyphMetrics, VdFtBOOL isSideways /*= FALSE*/);

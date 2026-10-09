@@ -251,6 +251,8 @@ extern VdDlgHMODULE __stdcall VdDlgLoadLibraryA(VdDlgLPCSTR lpLibFileName);
 extern void*        __stdcall VdDlgGetProcAddress(VdDlgHMODULE hModule, VdDlgLPCSTR lpProcName);
 #pragma comment(linker, "/alternatename:VdDlgMultiByteToWideChar=MultiByteToWideChar")
 extern int                    VdDlgMultiByteToWideChar(VdDlgUINT CodePage, VdDlgDWORD dwFlags, VdDlgDWORD *lpMultiByteStr, int cbMultiByte, wchar_t *lpWideCharStr, int cchWideChar);
+#pragma comment(linker, "/alternatename:VdDlgWideCharToMultiByte=WideCharToMultiByte")
+extern int                    VdDlgWideCharToMultiByte(VdDlgUINT CodePage, VdDlgDWORD dwFlags, VdDlgLPCWSTR lpWideCharStr, int cchWideChar, VdDlgLPSTR lpMultiByteStr, int cbMultiByte, VdDlgLPSTR lpDefaultChar, VdDlgBOOL *lpUsedDefaultChar);
 
 #endif
 
@@ -982,10 +984,10 @@ static void *vd_dlg__win32_resize_buffer(void *buffer, size_t element_size, int 
 
 static int vd_dlg__win32_cv_utf8_to_utf16(const char *ustr, int ustr_len, wchar_t **buffer, int *cap)
 {
-    int wstr_len = MultiByteToWideChar(65001, 8, ustr, ustr_len, NULL, 0);
+    int wstr_len = VdDlgMultiByteToWideChar(65001, 8, ustr, ustr_len, NULL, 0);
     *buffer = vd_dlg__win32_resize_buffer(*buffer, sizeof(wchar_t), wstr_len + 1, cap);
 
-    MultiByteToWideChar(65001, 8, ustr, ustr_len, *buffer, wstr_len);
+    VdDlgMultiByteToWideChar(65001, 8, ustr, ustr_len, *buffer, wstr_len);
     (*buffer)[wstr_len] = 0;
 
     return wstr_len;
@@ -993,10 +995,10 @@ static int vd_dlg__win32_cv_utf8_to_utf16(const char *ustr, int ustr_len, wchar_
 
 static int vd_dlg__win32_cv_utf16_to_utf8(const wchar_t *wstr, int wstr_len, char **buffer, int *cap)
 {
-    int req = WideCharToMultiByte(65001, 0, wstr, wstr_len, 0, 0, NULL, NULL);
+    int req = VdDlgWideCharToMultiByte(65001, 0, wstr, wstr_len, 0, 0, NULL, NULL);
     *buffer = vd_dlg__win32_resize_buffer(*buffer, sizeof(char), req + 1, cap);
 
-    WideCharToMultiByte(65001, 0, wstr, wstr_len, *buffer, req, NULL, NULL);
+    VdDlgWideCharToMultiByte(65001, 0, wstr, wstr_len, *buffer, req, NULL, NULL);
     (*buffer)[req] = 0;
 
     return req;
