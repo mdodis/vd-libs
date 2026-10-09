@@ -7787,7 +7787,6 @@ typedef VdFwLONG VdFwLSTATUS;
 #define VD_FW_SWP_NOSENDCHANGING  0x0400  /* Don't send WM_WINDOWPOSCHANGING */
 #define VD_FW_GWL_STYLE           (-16)
 
-
 #define Vd_Fw_GET_X_LPARAM(lp)  ((int)(short)VD_FW_LOWORD(lp))
 #define Vd_Fw_GET_Y_LPARAM(lp)  ((int)(short)VD_FW_HIWORD(lp))
 #define VD_FW_LOWORD(l)           ((VdFwWORD)(((VdFwDWORD_PTR)(l)) & 0xffff))
@@ -7815,8 +7814,6 @@ typedef VdFwLONG VdFwLSTATUS;
 #define VD_FW_MAKEINTRESOURCE  VD_FW_MAKEINTRESOURCEA
 #define VD_FW_TEXT(x) x
 #endif
-
-
 
 /* ----Win32 Functions----------------------------------------------------------------------------------------------- */
 #define VD_FW__WIN32_FUNCTIONS \
@@ -15764,24 +15761,6 @@ VD_FW_INL const char *vd_fw_get_key_name(VdFwKey k)
     };
 
     return translation_table[k];
-}
-
-VD_FW_INL void vd_fw__u8_to_hex(VdFwU8 n, char *out)
-{
-    static const char numbers[] = "0123456789abcdef";
-    VdFwU8 hi_bits = (n & 0xF0) >> 4;
-    VdFwU8 lo_bits = (n & 0x0F);
-    out[0] = numbers[hi_bits];
-    out[1] = numbers[lo_bits];
-}
-
-VD_FW_INL void vd_fw__u16_to_hex(VdFwU16 n, char *out)
-{
-    VdFwU8 msb = (n & 0xFF00) >> 8;
-    VdFwU8 lsb = (n & 0x00FF);
-
-    vd_fw__u8_to_hex(msb, out + 0);
-    vd_fw__u8_to_hex(lsb, out + 2);
 }
 
 VD_FW_INL int vd_fw__compare_string(const char *s, int s_len, int i,
