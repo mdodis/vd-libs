@@ -232,10 +232,10 @@ enum /*VdFwPlatformEnum*/ {
 typedef VdFwU8 VdFwPlatform;
 
 typedef enum {
-    Vd_Fw_GRAPHICS_API_OPENGL = 0,
-    Vd_Fw_GRAPHICS_API_CUSTOM,
-    Vd_Fw_GRAPHICS_API_PIXEL_BUFFER,
-    Vd_Fw_GRAPHICS_API_INVALID = 100,
+    VD_FW_GRAPHICS_API_OPENGL = 0,
+    VD_FW_GRAPHICS_API_CUSTOM,
+    VD_FW_GRAPHICS_API_PIXEL_BUFFER,
+    VD_FW_GRAPHICS_API_INVALID = 100,
 } VdFwGraphicsApi;
 
 typedef struct {
@@ -552,7 +552,7 @@ VD_FW_API VdFwPlatform       vd_fw_get_platform(void);
 /**
  * @brief Switch the current graphics API (must not be called between vd_fw_lock and vd_fw_unlock)
  * @param  api        The new API to use
- * @param  gl_options If api is Vd_Fw_GRAPHICS_API_OPENGL, the options for OpenGL
+ * @param  gl_options If api is VD_FW_GRAPHICS_API_OPENGL, the options for OpenGL
  * @return  Whether changing API was successful. For OpenGL: No = no config could be selected
  */
 VD_FW_API int                vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_options);
@@ -878,7 +878,7 @@ VD_FW_INL const char*        vd_fw_get_key_name(VdFwKey k);
 /* ----PIXEL BUFFER-------------------------------------------------------------------------------------------------- */
 
 /**
- * @brief Set the pointer to buffer to render to the window (when graphics api is Vd_Fw_GRAPHICS_API_PIXEL_BUFFER)
+ * @brief Set the pointer to buffer to render to the window (when graphics api is VD_FW_GRAPHICS_API_PIXEL_BUFFER)
  * @param  buffer Pointer to the buffer
  * @param  w      Width in pixels
  * @param  h      Height in pixels
@@ -8167,7 +8167,7 @@ typedef VdFwBOOL  (*VdFwProcwglChoosePixelFormatARB)(VdFwHDC hdc, const int* piA
 #if defined(__cplusplus)
 extern "C" {
 #endif
-    __declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
+    __declspec(dllexport) VdFwDWORD NvOptimusEnablement = 0x00000001;
     __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 #if defined(__cplusplus)
 }
@@ -8176,7 +8176,7 @@ extern "C" {
 #if defined(__cplusplus)
 extern "C" {
 #endif
-    __declspec(dllexport) DWORD NvOptimusEnablement = 0x00000000;
+    __declspec(dllexport) VdFwDWORD NvOptimusEnablement = 0x00000000;
     __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 0;
 #if defined(__cplusplus)
 }
@@ -8205,7 +8205,6 @@ enum {
 };
 
 typedef struct {
-    int w, h;
     int flags;
 } VdFw__Win32Frame;
 
@@ -8231,7 +8230,7 @@ typedef struct {
 /* ----WINDOW THREAD ONLY-------------------------------------------------------------------------------------------- */
     VdFwGraphicsApi             graphics_api;           // Currently selected graphics api
     VdFwHWND                    hwnd;                   // Window handle
-    int                         w, h;                   // Current window dimensions
+    int                         w, h, pw, ph;           // Current window dimensions
     VdFwBOOL                    t_paint_ready;          // One time signal that window thread is paint-ready
                                                         // (to respond properly to events sent before we enter the
                                                         // message loop)
@@ -8313,6 +8312,7 @@ typedef struct {
     VdFwBITMAPINFO              pixel_info;
     void                        *pixel_buffer;
     int                         vsync;
+    int                         width,height;
 
 /* ----RENDER THREAD - WINDOW THREAD DATA---------------------------------------------------------------------------- */
     VdFwEvent                   msgbuf[VD_FW_WIN32_MESSAGE_BUFFER_SIZE];
@@ -8710,7 +8710,7 @@ static void *vd_fw__gl_get_proc_address(const char *name)
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
-    Vd_Fw_G.graphics_api = Vd_Fw_GRAPHICS_API_INVALID;
+    Vd_Fw_G.graphics_api = VD_FW_GRAPHICS_API_INVALID;
     Vd_Fw_G.resizable = 1;
     Vd_Fw_G.winthread_resizable = 1;
     Vd_Fw_G.block_while_sizing = 0;
@@ -8816,7 +8816,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     VdFwWaitForSingleObject(Vd_Fw_G.sem_window_ready, 0xFFFFFFFF);
 
 
-    VdFwGraphicsApi api = Vd_Fw_GRAPHICS_API_OPENGL;
+    VdFwGraphicsApi api = VD_FW_GRAPHICS_API_OPENGL;
     if (info) {
         api = info->api;
     }
@@ -8875,6 +8875,10 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
         switch (mm.type) {
             case VD_FW_EVENT_TYPE_CHARACTER: {
                 Vd_Fw_G.codepoints[(num_codepoints++) % VD_FW_CODEPOINT_BUFFER_COUNT] = mm.data.character.codepoint;
+            } break;
+            case VD_FW_EVENT_TYPE_RESIZE: {
+                Vd_Fw_G.width = mm.data.resize.w;
+                Vd_Fw_G.height = mm.data.resize.h;
             } break;
 
             case VD_FW_EVENT_TYPE_CLOSE_REQUEST: {
@@ -9002,7 +9006,7 @@ VD_FW_API void vd_fw_lock(void)
 
 VD_FW_API void vd_fw_swap(void)
 {
-    if (Vd_Fw_G.graphics_api == Vd_Fw_GRAPHICS_API_OPENGL) {
+    if (Vd_Fw_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
         VD_FW_PROFILE_ZONE(vd_fw_win32_swap_buffer_opengl)
         {
             VdFwBOOL enabled;
@@ -9016,11 +9020,11 @@ VD_FW_API void vd_fw_swap(void)
 
             VdFwSwapBuffers(Vd_Fw_G.hdc);
         }
-    } else if (Vd_Fw_G.graphics_api == Vd_Fw_GRAPHICS_API_PIXEL_BUFFER) {
+    } else if (Vd_Fw_G.graphics_api == VD_FW_GRAPHICS_API_PIXEL_BUFFER) {
         int source_width = Vd_Fw_G.pixel_info.bmiHeader.biWidth;
         int source_height = -Vd_Fw_G.pixel_info.bmiHeader.biHeight;
-        int dest_width = Vd_Fw_G.curr_frame.w;
-        int dest_height = Vd_Fw_G.curr_frame.h;
+        int dest_width = Vd_Fw_G.width;
+        int dest_height = Vd_Fw_G.height;
 
         VdFwStretchDIBits(Vd_Fw_G.hdc,
                           0, 0,
@@ -9042,7 +9046,7 @@ VD_FW_API void vd_fw_unlock(void)
         // is maximized to either section of the screen or the whole screen
     }
 
-    // if (Vd_Fw_G.graphics_api == Vd_Fw_GRAPHICS_API_OPENGL) {
+    // if (Vd_Fw_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
     //     if (glFenceSync && glClientWaitSync && glDeleteSync) {
     //         VD_FW_PROFILE_ZONE(vd_fw_win32_fence_sync_opengl)
     //         {
@@ -9131,7 +9135,7 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
 
     VdFwWakeConditionVariable(&Vd_Fw_G.cond_var);
 
-    if (Vd_Fw_G.graphics_api == Vd_Fw_GRAPHICS_API_OPENGL) {
+    if (Vd_Fw_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
         // Destroy OpenGL Context
         VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(NULL, NULL));
         VD_FW__CHECK_TRUE(VdFwwglDeleteContext(Vd_Fw_G.hglrc));
@@ -9140,7 +9144,7 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
         Vd_Fw_G.hdc = 0;
     }
 
-    if (Vd_Fw_G.graphics_api != Vd_Fw_GRAPHICS_API_INVALID) {
+    if (Vd_Fw_G.graphics_api != VD_FW_GRAPHICS_API_INVALID) {
 
         VdFwRECT rect;
         VdFwGetWindowRect(Vd_Fw_G.hwnd, &rect);
@@ -9195,7 +9199,7 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
     }
 
     switch (api) {
-        case Vd_Fw_GRAPHICS_API_OPENGL: {
+        case VD_FW_GRAPHICS_API_OPENGL: {
 
             VD_FW_WIN32_PROFILE_BEGIN(create_temp_context);
             VdFwGlConfig      default_configs[2];
@@ -9402,7 +9406,7 @@ LOOP_END:
 
         } break;
 
-        case Vd_Fw_GRAPHICS_API_PIXEL_BUFFER: {
+        case VD_FW_GRAPHICS_API_PIXEL_BUFFER: {
             Vd_Fw_G.hdc = VdFwGetDC(Vd_Fw_G.hwnd);
         } break;
 
@@ -9423,8 +9427,8 @@ VD_FW_API void vd_fw_set_pixel_buffer(void *buffer, int w, int h)
 
 VD_FW_API int vd_fw_get_size(int *w, int *h)
 {
-    *w = Vd_Fw_G.curr_frame.w;
-    *h = Vd_Fw_G.curr_frame.h;
+    *w = Vd_Fw_G.width;
+    *h = Vd_Fw_G.height;
     return Vd_Fw_G.curr_frame.flags & VD_FW_WIN32_FLAGS_SIZE_CHANGED;
 }
 
@@ -9571,7 +9575,7 @@ VD_FW_API void vd_fw_set_receive_ncmouse(int on)
 
 VD_FW_API int vd_fw_set_vsync_on(int on)
 {
-    if (Vd_Fw_G.graphics_api == Vd_Fw_GRAPHICS_API_OPENGL) {
+    if (Vd_Fw_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
         VdFwBOOL result = Vd_Fw_G.proc_swapInterval(on);
         Vd_Fw_G.vsync = on;
         return result == 1 ? on : 0;
@@ -9947,8 +9951,8 @@ static VdFwDWORD vd_fw__win_thread_proc(void *param)
     VdFwGetClientRect(Vd_Fw_G.hwnd, &rect);
     Vd_Fw_G.w = rect.right - rect.left;
     Vd_Fw_G.h = rect.bottom - rect.top;
-    Vd_Fw_G.next_frame.w = Vd_Fw_G.w;
-    Vd_Fw_G.next_frame.h = Vd_Fw_G.h;
+    Vd_Fw_G.width = Vd_Fw_G.w;
+    Vd_Fw_G.height = Vd_Fw_G.h;
     Vd_Fw_G.next_frame.flags = VD_FW_WIN32_FLAGS_SIZE_CHANGED;
 
 
@@ -10378,9 +10382,9 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     VdFwEnterCriticalSection(&Vd_Fw_G.critical_section);
                 }
 
-                if (Vd_Fw_G.w != Vd_Fw_G.next_frame.w || Vd_Fw_G.h != Vd_Fw_G.next_frame.h) {
-                    Vd_Fw_G.next_frame.w = Vd_Fw_G.w;
-                    Vd_Fw_G.next_frame.h = Vd_Fw_G.h;
+                if (Vd_Fw_G.w != Vd_Fw_G.pw || Vd_Fw_G.h != Vd_Fw_G.ph) {
+                    Vd_Fw_G.pw = Vd_Fw_G.w;
+                    Vd_Fw_G.ph = Vd_Fw_G.h;
                     Vd_Fw_G.next_frame.flags |= VD_FW_WIN32_FLAGS_SIZE_CHANGED;
                 }
 
@@ -10395,7 +10399,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 }
 
                 VdFwEndPaint(hwnd, &ps);
-
             VD_FW_WIN32_PROFILE_END(wm_paint);
         } break;
 
@@ -10482,6 +10485,12 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         case VD_FW_WM_EXITSIZEMOVE: {
             if (Vd_Fw_G.winthread_block_while_sizing) {
                 VdFwLeaveCriticalSection(&Vd_Fw_G.critical_section);
+                VdFwEvent evt;
+                evt.type = VD_FW_EVENT_TYPE_RESIZE;
+                evt.data.resize.w = Vd_Fw_G.w;
+                evt.data.resize.h = Vd_Fw_G.h;
+                vd_fw__msgbuf_w(&evt);
+
             }
 
             if (!Vd_Fw_G.draw_decorations) {
@@ -10595,7 +10604,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             Vd_Fw_G.h = VD_FW_HIWORD(lparam);
 
             {
-
                 VdFwEvent evt;
                 evt.type = VD_FW_EVENT_TYPE_RESIZE;
                 evt.data.resize.w = Vd_Fw_G.w;
@@ -11104,9 +11112,10 @@ static int vd_fw__msgbuf_w(VdFwEvent *message)
 
     __faststorefence();
 
-    if ((w + 1) % VD_FW_WIN32_MESSAGE_BUFFER_SIZE == r) {
-        return 0;
-    }
+    // @note(mdodis): If we're blocking while sizing, we'll allow the buffer to completely overflow
+    // if ((w + 1) % VD_FW_WIN32_MESSAGE_BUFFER_SIZE == r) {
+    //     return 0;
+    // }
 
     Vd_Fw_G.msgbuf[w] = *message;
     VdFwLONG nw = (w + 1) % VD_FW_WIN32_MESSAGE_BUFFER_SIZE;
@@ -13164,7 +13173,7 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
         [Vd_Fw_G.window makeKeyAndOrderFront:nil];
     });
 
-    // VdFwGraphicsApi api = Vd_Fw_GRAPHICS_API_OPENGL;
+    // VdFwGraphicsApi api = VD_FW_GRAPHICS_API_OPENGL;
     // if (info) {
     //     api = info->api;
     // }
@@ -13611,7 +13620,7 @@ void *vd_fw__gl_get_proc_address(const char *name)
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
-    Vd_Fw_G.graphics_api = Vd_Fw_GRAPHICS_API_INVALID;
+    Vd_Fw_G.graphics_api = VD_FW_GRAPHICS_API_INVALID;
     Vd_Fw_G.borderless = 0;
     Vd_Fw_G.window_max[0] = Vd_Fw_G.window_max[1] = 99999;
 
@@ -13670,7 +13679,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 #undef XSYM
 #undef XEND_MODULE
     }
-    VdFwGraphicsApi api = Vd_Fw_GRAPHICS_API_OPENGL;
+    VdFwGraphicsApi api = VD_FW_GRAPHICS_API_OPENGL;
     if (info) {
         api = info->api;
     }
@@ -13821,7 +13830,7 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
     Visual *window_visual;
 
     switch (api) {
-        case Vd_Fw_GRAPHICS_API_OPENGL: {
+        case VD_FW_GRAPHICS_API_OPENGL: {
 
             VdFwGlConfig      default_configs[2];
             VD_FW_MEMSET(default_configs, 0, sizeof(default_configs));
@@ -14013,7 +14022,7 @@ LOOP_END:
 
         } break;
 
-        case Vd_Fw_GRAPHICS_API_CUSTOM: {
+        case VD_FW_GRAPHICS_API_CUSTOM: {
 
             window_depth = 0;
             window_visual = DefaultVisual(Vd_Fw_G.display, Vd_Fw_G.screen);
@@ -14030,7 +14039,7 @@ LOOP_END:
         // This is done because we need a Visual and a compatible colormap from glx first
         vd_fw__x11_recreate_window(window_colormap, window_depth, window_visual);
 
-        if (api == Vd_Fw_GRAPHICS_API_OPENGL) {
+        if (api == VD_FW_GRAPHICS_API_OPENGL) {
             VdFwglXMakeCurrent(Vd_Fw_G.display, Vd_Fw_G.window, Vd_Fw_G.glx_context);
         }
 
@@ -14247,11 +14256,11 @@ VD_FW_API void vd_fw_lock(void)
 VD_FW_API void vd_fw_unlock(void)
 {
     if (Vd_Fw_G.window_open) {
-        if (Vd_Fw_G.graphics_api == Vd_Fw_GRAPHICS_API_OPENGL) {
+        if (Vd_Fw_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
             VdFwglXSwapBuffers(Vd_Fw_G.display, Vd_Fw_G.window);
         }
 
-        if (Vd_Fw_G.graphics_api == Vd_Fw_GRAPHICS_API_OPENGL) {
+        if (Vd_Fw_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
             if (glFenceSync && glClientWaitSync && glDeleteSync) {
                 GLsync fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
                 if (fence) {
@@ -15091,7 +15100,7 @@ static void vd_fw__x11_thread_finish(void)
     pthread_cond_destroy(&Vd_Fw_G.cnd_paint);
     pthread_mutex_destroy(&Vd_Fw_G.mtx_paint);
 
-    if (Vd_Fw_G.graphics_api == Vd_Fw_GRAPHICS_API_OPENGL) {
+    if (Vd_Fw_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
         // Destroy OpenGL Context
         VdFwglXMakeCurrent(Vd_Fw_G.display, 0, NULL);
         VdFwglXDestroyContext(Vd_Fw_G.display, Vd_Fw_G.glx_context);
