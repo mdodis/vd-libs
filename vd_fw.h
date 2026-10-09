@@ -7958,42 +7958,68 @@ VD_FW__WIN32_FUNCTIONS
 #undef V
 #undef VE
 
-extern void        InitializeCriticalSection(VdFwCRITICAL_SECTION *lpCriticalSection);
-extern void        InitializeConditionVariable(VdFwCONDITION_VARIABLE *ConditionVariable);
-extern VdFwHANDLE  CreateSemaphoreA(VdFwSECURITY_ATTRIBUTES *lpSemaphoreAttributes, VdFwLONG lInitialCount, VdFwLONG lMaximumCount, VdFwLPCSTR lpName);
-extern VdFwDWORD   WaitForSingleObject(VdFwHANDLE hHandle, VdFwDWORD dwMilliseconds);
-extern VdFwBOOL    CloseHandle(VdFwHANDLE hObject);
-extern VdFwBOOL    GetFileTime(VdFwHANDLE hFile, VdFwFILETIME *lpCreationTime, VdFwFILETIME *lpLastAccessTime, VdFwFILETIME *lpLastWriteTime);
-extern VdFwLONG    CompareFileTime(const VdFwFILETIME *lpFileTime1, const VdFwFILETIME *lpFileTime2);
-extern void        DeleteCriticalSection(VdFwCRITICAL_SECTION *lpCriticalSection);
-extern VdFwBOOL    ReleaseSemaphore(VdFwHANDLE hSemaphore, VdFwLONG lReleaseCount, VdFwLPLONG lpPreviousCount);
-extern void        WakeConditionVariable(VdFwCONDITION_VARIABLE *ConditionVariable);
-extern VdFwBOOL    SleepConditionVariableCS(VdFwCONDITION_VARIABLE *ConditionVariable, VdFwCRITICAL_SECTION *CriticalSection, VdFwDWORD dwMilliseconds);
-extern void        EnterCriticalSection(VdFwCRITICAL_SECTION *sec);
-extern void        LeaveCriticalSection(VdFwCRITICAL_SECTION *sec);
-extern VdFwHANDLE  CreateThread(VdFwSECURITY_ATTRIBUTES *lpThreadAttributes, size_t dwStackSize, VdFwDWORD(*lpStartAddress)(void*), VdFwLPVOID lpParameter, VdFwDWORD dwCreationFlags, VdFwLPDWORD lpThreadId);
-extern VdFwBOOL    QueryPerformanceFrequency(VdFwLARGE_INTEGER *lpFrequency);
-extern VdFwBOOL    QueryPerformanceCounter(VdFwLARGE_INTEGER *lpFrequency);
-extern VdFwDWORD   GetLastError(void);
-extern VdFwHMODULE LoadLibraryA(VdFwLPCSTR path);
-extern int         MultiByteToWideChar(VdFwUINT CodePage, VdFwDWORD dwFlags, VdFwLPCSTR lpMultiByteStr, int cbMultiByte, VdFwLPWSTR lpWideCharStr, int cchWideChar);
-extern int         WideCharToMultiByte(VdFwUINT CodePage, VdFwDWORD dwFlags, VdFwLPCWSTR lpWideCharStr, int cchWideChar, VdFwLPSTR lpMultiByteStr, int cbMultiByte, VdFwLPSTR lpDefaultChar, VdFwBOOL *lpUsedDefaultChar);
-extern void*       GetProcAddress(VdFwHMODULE hModule, VdFwLPCSTR lpProcName);
-extern VdFwHANDLE  CreateFileA(VdFwLPCSTR lpFileName, VdFwDWORD dwDesiredAccess, VdFwDWORD dwShareMode, VdFwSECURITY_ATTRIBUTES *lpSecurityAttributes, VdFwDWORD dwCreationDisposition, VdFwDWORD dwFlagsAndAttributes, VdFwHANDLE hTemplateFile);
-extern VdFwBOOL    GetFileSizeEx(VdFwHANDLE hFile, VdFwLARGE_INTEGER *lpFileSize);
-extern VdFwBOOL ReadFile(VdFwHANDLE hFile, void *lpBuffer, VdFwDWORD nNumberOfBytesToRead, VdFwLPDWORD lpNumberOfBytesRead, VdFwLPOVERLAPPED lpOverlapped);
-extern int GetLocaleInfoA(VdFwDWORD Locale, VdFwDWORD LCType, VdFwLPSTR lpLCData, int cchData);
-extern VdFwHMODULE GetModuleHandleA(VdFwLPCSTR lpModuleName);
+#pragma comment(linker, "/alternatename:VdFwInitializeCriticalSection=InitializeCriticalSection")
+extern void        VdFwInitializeCriticalSection(VdFwCRITICAL_SECTION *lpCriticalSection);
+#pragma comment(linker, "/alternatename:VdFwInitializeConditionVariable=InitializeConditionVariable")
+extern void        VdFwInitializeConditionVariable(VdFwCONDITION_VARIABLE *ConditionVariable);
+#pragma comment(linker, "/alternatename:VdFwCreateSemaphoreA=CreateSemaphoreA")
+extern VdFwHANDLE  VdFwCreateSemaphoreA(VdFwSECURITY_ATTRIBUTES *lpSemaphoreAttributes, VdFwLONG lInitialCount, VdFwLONG lMaximumCount, VdFwLPCSTR lpName);
+#pragma comment(linker, "/alternatename:VdFwWaitForSingleObject=WaitForSingleObject")
+extern VdFwDWORD   VdFwWaitForSingleObject(VdFwHANDLE hHandle, VdFwDWORD dwMilliseconds);
+#pragma comment(linker, "/alternatename:VdFwCloseHandle=CloseHandle")
+extern VdFwBOOL    VdFwCloseHandle(VdFwHANDLE hObject);
+#pragma comment(linker, "/alternatename:VdFwGetFileTime=GetFileTime")
+extern VdFwBOOL    VdFwGetFileTime(VdFwHANDLE hFile, VdFwFILETIME *lpCreationTime, VdFwFILETIME *lpLastAccessTime, VdFwFILETIME *lpLastWriteTime);
+#pragma comment(linker, "/alternatename:VdFwCompareFileTime=CompareFileTime")
+extern VdFwLONG    VdFwCompareFileTime(const VdFwFILETIME *lpFileTime1, const VdFwFILETIME *lpFileTime2);
+#pragma comment(linker, "/alternatename:VdFwDeleteCriticalSection=DeleteCriticalSection")
+extern void        VdFwDeleteCriticalSection(VdFwCRITICAL_SECTION *lpCriticalSection);
+#pragma comment(linker, "/alternatename:VdFwReleaseSemaphore=ReleaseSemaphore")
+extern VdFwBOOL    VdFwReleaseSemaphore(VdFwHANDLE hSemaphore, VdFwLONG lReleaseCount, VdFwLPLONG lpPreviousCount);
+#pragma comment(linker, "/alternatename:VdFwWakeConditionVariable=WakeConditionVariable")
+extern void        VdFwWakeConditionVariable(VdFwCONDITION_VARIABLE *ConditionVariable);
+#pragma comment(linker, "/alternatename:VdFwSleepConditionVariableCS=SleepConditionVariableCS")
+extern VdFwBOOL    VdFwSleepConditionVariableCS(VdFwCONDITION_VARIABLE *ConditionVariable, VdFwCRITICAL_SECTION *CriticalSection, VdFwDWORD dwMilliseconds);
+#pragma comment(linker, "/alternatename:VdFwEnterCriticalSection=EnterCriticalSection")
+extern void        VdFwEnterCriticalSection(VdFwCRITICAL_SECTION *sec);
+#pragma comment(linker, "/alternatename:VdFwLeaveCriticalSection=LeaveCriticalSection")
+extern void        VdFwLeaveCriticalSection(VdFwCRITICAL_SECTION *sec);
+#pragma comment(linker, "/alternatename:VdFwCreateThread=CreateThread")
+extern VdFwHANDLE  VdFwCreateThread(VdFwSECURITY_ATTRIBUTES *lpThreadAttributes, size_t dwStackSize, VdFwDWORD(*lpStartAddress)(void*), VdFwLPVOID lpParameter, VdFwDWORD dwCreationFlags, VdFwLPDWORD lpThreadId);
+#pragma comment(linker, "/alternatename:VdFwQueryPerformanceFrequency=QueryPerformanceFrequency")
+extern VdFwBOOL    VdFwQueryPerformanceFrequency(VdFwLARGE_INTEGER *lpFrequency);
+#pragma comment(linker, "/alternatename:VdFwQueryPerformanceCounter=QueryPerformanceCounter")
+extern VdFwBOOL    VdFwQueryPerformanceCounter(VdFwLARGE_INTEGER *lpFrequency);
+#pragma comment(linker, "/alternatename:VdFwGetLastError=GetLastError")
+extern VdFwDWORD   VdFwGetLastError(void);
+#pragma comment(linker, "/alternatename:VdFwLoadLibraryA=LoadLibraryA")
+extern VdFwHMODULE VdFwLoadLibraryA(VdFwLPCSTR path);
+#pragma comment(linker, "/alternatename:VdFwMultiByteToWideChar=MultiByteToWideChar")
+extern int         VdFwMultiByteToWideChar(VdFwUINT CodePage, VdFwDWORD dwFlags, VdFwLPCSTR lpMultiByteStr, int cbMultiByte, VdFwLPWSTR lpWideCharStr, int cchWideChar);
+#pragma comment(linker, "/alternatename:VdFwWideCharToMultiByte=WideCharToMultiByte")
+extern int         VdFwWideCharToMultiByte(VdFwUINT CodePage, VdFwDWORD dwFlags, VdFwLPCWSTR lpWideCharStr, int cchWideChar, VdFwLPSTR lpMultiByteStr, int cbMultiByte, VdFwLPSTR lpDefaultChar, VdFwBOOL *lpUsedDefaultChar);
+#pragma comment(linker, "/alternatename:VdFwGetProcAddress=GetProcAddress")
+extern void*       VdFwGetProcAddress(VdFwHMODULE hModule, VdFwLPCSTR lpProcName);
+#pragma comment(linker, "/alternatename:VdFwCreateFileA=CreateFileA")
+extern VdFwHANDLE  VdFwCreateFileA(VdFwLPCSTR lpFileName, VdFwDWORD dwDesiredAccess, VdFwDWORD dwShareMode, VdFwSECURITY_ATTRIBUTES *lpSecurityAttributes, VdFwDWORD dwCreationDisposition, VdFwDWORD dwFlagsAndAttributes, VdFwHANDLE hTemplateFile);
+#pragma comment(linker, "/alternatename:VdFwGetFileSizeEx=GetFileSizeEx")
+extern VdFwBOOL    VdFwGetFileSizeEx(VdFwHANDLE hFile, VdFwLARGE_INTEGER *lpFileSize);
+#pragma comment(linker, "/alternatename:VdFwReadFile=ReadFile")
+extern VdFwBOOL    VdFwReadFile(VdFwHANDLE hFile, void *lpBuffer, VdFwDWORD nNumberOfBytesToRead, VdFwLPDWORD lpNumberOfBytesRead, VdFwLPOVERLAPPED lpOverlapped);
+#pragma comment(linker, "/alternatename:VdFwGetLocaleInfoA=GetLocaleInfoA")
+extern int         VdFwGetLocaleInfoA(VdFwDWORD Locale, VdFwDWORD LCType, VdFwLPSTR lpLCData, int cchData);
+#pragma comment(linker, "/alternatename:VdFwGetModuleHandleA=GetModuleHandleA")
+extern VdFwHMODULE VdFwGetModuleHandleA(VdFwLPCSTR lpModuleName);
 
 
 typedef VdFwHGLRC (*VdFwProcwglCreateContext)(VdFwHDC hDC);
 typedef VdFwBOOL  (*VdFwProcwglMakeCurrent)(VdFwHDC hDC, VdFwHGLRC hGLRC);
 typedef VdFwBOOL  (*VdFwProcwglDeleteContext)(VdFwHGLRC hGLRC);
-typedef VdFwPROC  (*VdFwProcwglGetProcAddress)(VdFwLPCSTR pName);
+typedef VdFwPROC  (*VdFwProcwglVdFwGetProcAddress)(VdFwLPCSTR pName);
 static VdFwProcwglCreateContext     VdFwwglCreateContext;
 static VdFwProcwglMakeCurrent       VdFwwglMakeCurrent;
 static VdFwProcwglDeleteContext     VdFwwglDeleteContext;
-static VdFwProcwglGetProcAddress    VdFwwglGetProcAddress;
+static VdFwProcwglVdFwGetProcAddress    VdFwwglGetProcAddress;
 typedef VdFwBOOL  (*VdFwProcwglSwapIntervalExt)(int interval);
 typedef VdFwHGLRC (*VdFwProcwglCreateContextAttribsARB)(VdFwHDC hDC, VdFwHGLRC hShareContext, const int* attribList);
 typedef VdFwBOOL  (*VdFwProcwglChoosePixelFormatARB)(VdFwHDC hdc, const int* piAttribIList, const float* pfAttribFList, VdFwUINT nMaxFormats, int* piFormats, VdFwUINT* nNumFormats);
@@ -8118,7 +8144,7 @@ typedef struct {
 
 /* ----RENDER THREAD ONLY-------------------------------------------------------------------------------------------- */
     // Internal
-    VdFwHMODULE                 opengl32;               // Handle to OpenGL32.dll, used when wglGetProcAddress fails.
+    VdFwHMODULE                 opengl32;               // Handle to OpenGL32.dll, used when wglVdFwGetProcAddress fails.
     VdFwHANDLE                  win_thread;             // Handle to the window-thread
     VdFwDWORD                   win_thread_id;          // Window-thread ID
     VdFwHDC                     hdc;                    // Device Context
@@ -8498,9 +8524,9 @@ static void         vd_fw__win32_update_monitors(void);
 #if VD_FW_WIN32_PROFILE
 #define VD_FW_JOIN_(a,b) a##b
 #define VD_FW_JOIN(a,b) VD_FW_JOIN_(a,b)
-#define VD_FW_WIN32_PROFILE_BEGIN(name) LARGE_INTEGER name; QueryPerformanceCounter(&name)
+#define VD_FW_WIN32_PROFILE_BEGIN(name) LARGE_INTEGER name; VdFwQueryPerformanceCounter(&name)
 #define VD_FW_WIN32_PROFILE_END(name)   do { \
-        LARGE_INTEGER VD_FW_JOIN(name,end); QueryPerformanceCounter(&VD_FW_JOIN(name,end)); \
+        LARGE_INTEGER VD_FW_JOIN(name,end); VdFwQueryPerformanceCounter(&VD_FW_JOIN(name,end)); \
         LARGE_INTEGER delta; \
         delta.QuadPart = VD_FW_JOIN(name,end).QuadPart - (name).QuadPart; \
         unsigned long long q  =  delta.QuadPart / Vd_Fw_G.frequency.QuadPart; \
@@ -8534,20 +8560,20 @@ static void         vd_fw__win32_update_monitors(void);
 } while (0)
 
 #define VD_FW__CHECK_NONZERO(expr) do {\
-    if ((expr) == 0) { printf("Failed at: %s\nGetLastError: %ld", #expr, GetLastError()); assert(0); } \
+    if ((expr) == 0) { printf("Failed at: %s\nVdFwGetLastError: %ld", #expr, VdFwGetLastError()); assert(0); } \
 } while (0)
 
 #define VD_FW_SANITY_CHECK() do { \
-    VdFwDWORD error = GetLastError(); \
-    if (error != 0) { printf("GetLastError: %ld\n", error); assert(0); } \
+    VdFwDWORD error = VdFwGetLastError(); \
+    if (error != 0) { printf("VdFwGetLastError: %ld\n", error); assert(0); } \
 } while (0)
 
 #define VD_FW__CHECK_NULL(expr) do {\
-    if ((expr) == 0) { printf("Failed at: %s\n GetLastError: %ld", #expr, GetLastError()); assert(0); } \
+    if ((expr) == 0) { printf("Failed at: %s\n VdFwGetLastError: %ld", #expr, VdFwGetLastError()); assert(0); } \
 } while (0)
 
 #define VD_FW__CHECK_TRUE(expr) do {\
-    if ((expr) != 1) { printf("Failed at: %s\n GetLastError: %ld", #expr, GetLastError()); assert(0); } \
+    if ((expr) != 1) { printf("Failed at: %s\n VdFwGetLastError: %ld", #expr, VdFwGetLastError()); assert(0); } \
 } while (0)
 #endif // VD_FW_NO_CRT
 
@@ -8555,7 +8581,7 @@ static void *vd_fw__gl_get_proc_address(const char *name)
 {
     void *result = (void*)VdFwwglGetProcAddress(name);
     if (result == 0) {
-        result = (void*)GetProcAddress(Vd_Fw_G.opengl32, name);
+        result = (void*)VdFwGetProcAddress(Vd_Fw_G.opengl32, name);
     }
     return result;
 }
@@ -8590,8 +8616,8 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     // Load Win32 Libraries
     VD_FW_PROFILE_ZONE(vd_fw_win32_load)
     {
-#define V(dllpath) { VdFwHMODULE m = LoadLibraryA(dllpath);
-#define X(retval, name, params) VdFw##name = (VdFwProc##name)GetProcAddress(m, #name);
+#define V(dllpath) { VdFwHMODULE m = VdFwLoadLibraryA(dllpath);
+#define X(retval, name, params) VdFw##name = (VdFwProc##name)VdFwGetProcAddress(m, #name);
 #define VE()       }
         VD_FW__WIN32_FUNCTIONS
 #undef V
@@ -8603,11 +8629,11 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         }
         // OpenGL32.dll
         {
-            Vd_Fw_G.opengl32 = LoadLibraryA("OpenGL32.dll");
-            VdFwwglCreateContext  =  (VdFwProcwglCreateContext)GetProcAddress(Vd_Fw_G.opengl32, "wglCreateContext");
-            VdFwwglMakeCurrent    =    (VdFwProcwglMakeCurrent)GetProcAddress(Vd_Fw_G.opengl32, "wglMakeCurrent");
-            VdFwwglDeleteContext  =  (VdFwProcwglDeleteContext)GetProcAddress(Vd_Fw_G.opengl32,"wglDeleteContext");
-            VdFwwglGetProcAddress = (VdFwProcwglGetProcAddress)GetProcAddress(Vd_Fw_G.opengl32, "wglGetProcAddress");
+            Vd_Fw_G.opengl32 = VdFwLoadLibraryA("OpenGL32.dll");
+            VdFwwglCreateContext  =  (VdFwProcwglCreateContext)VdFwGetProcAddress(Vd_Fw_G.opengl32, "wglCreateContext");
+            VdFwwglMakeCurrent    =    (VdFwProcwglMakeCurrent)VdFwGetProcAddress(Vd_Fw_G.opengl32, "wglMakeCurrent");
+            VdFwwglDeleteContext  =  (VdFwProcwglDeleteContext)VdFwGetProcAddress(Vd_Fw_G.opengl32,"wglDeleteContext");
+            VdFwwglGetProcAddress = (VdFwProcwglVdFwGetProcAddress)VdFwGetProcAddress(Vd_Fw_G.opengl32, "wglGetProcAddress");
         }
     }
 
@@ -8635,7 +8661,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     }
 
     VdFwtimeBeginPeriod(1);
-    QueryPerformanceFrequency(&Vd_Fw_G.frequency);
+    VdFwQueryPerformanceFrequency(&Vd_Fw_G.frequency);
 
     // Monitors
     vd_fw__win32_update_monitors();
@@ -8651,15 +8677,15 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         Vd_Fw_G.block_while_sizing = info->window_options.block_while_sizing;
     }
 
-    InitializeCriticalSection(&Vd_Fw_G.critical_section);
-    InitializeCriticalSection(&Vd_Fw_G.db_section);
-    InitializeConditionVariable(&Vd_Fw_G.cond_var);
+    VdFwInitializeCriticalSection(&Vd_Fw_G.critical_section);
+    VdFwInitializeCriticalSection(&Vd_Fw_G.db_section);
+    VdFwInitializeConditionVariable(&Vd_Fw_G.cond_var);
 
-    Vd_Fw_G.sem_window_ready = CreateSemaphoreA(NULL, 0, 1, NULL);
-    Vd_Fw_G.sem_closed = CreateSemaphoreA(NULL, 0, 1, NULL);
-    Vd_Fw_G.sem_skip_wait = CreateSemaphoreA(NULL, 1, 1, NULL);
+    Vd_Fw_G.sem_window_ready = VdFwCreateSemaphoreA(NULL, 0, 1, NULL);
+    Vd_Fw_G.sem_closed = VdFwCreateSemaphoreA(NULL, 0, 1, NULL);
+    Vd_Fw_G.sem_skip_wait = VdFwCreateSemaphoreA(NULL, 1, 1, NULL);
 
-    Vd_Fw_G.win_thread = CreateThread(
+    Vd_Fw_G.win_thread = VdFwCreateThread(
         NULL,
         0,
         vd_fw__win_thread_proc,
@@ -8670,7 +8696,7 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 
     vd_fw__update_kb_codepage();
 
-    WaitForSingleObject(Vd_Fw_G.sem_window_ready, 0xFFFFFFFF);
+    VdFwWaitForSingleObject(Vd_Fw_G.sem_window_ready, 0xFFFFFFFF);
 
 
     VdFwGraphicsApi api = Vd_Fw_GRAPHICS_API_OPENGL;
@@ -8688,14 +8714,14 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         vd_fw_set_graphics_api(api, poptions);
     }
 
-    QueryPerformanceCounter(&Vd_Fw_G.performance_counter);
+    VdFwQueryPerformanceCounter(&Vd_Fw_G.performance_counter);
     Vd_Fw_G.has_initialized = 1;
     return 1;
 }
 
 VD_FW_API int vd_fw_running(void)
 {
-    VdFwDWORD result = WaitForSingleObject(Vd_Fw_G.sem_closed, 0);
+    VdFwDWORD result = VdFwWaitForSingleObject(Vd_Fw_G.sem_closed, 0);
     if (result != 258L /*WAIT_TIMEOUT*/) {
         return 0;
     }
@@ -8823,7 +8849,7 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
     }
 
     VdFwLARGE_INTEGER now_performance_counter;
-    QueryPerformanceCounter(&now_performance_counter);
+    VdFwQueryPerformanceCounter(&now_performance_counter);
     VdFwLARGE_INTEGER delta;
     delta.QuadPart = now_performance_counter.QuadPart - Vd_Fw_G.performance_counter.QuadPart;
     unsigned long long q  =  delta.QuadPart / Vd_Fw_G.frequency.QuadPart;
@@ -8839,22 +8865,22 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
 
 VD_FW_API VdFwEvent *vd_fw_wait(int *count)
 {
-    WaitForSingleObject(Vd_Fw_G.sem_skip_wait, 0xFFFFFFFF);
+    VdFwWaitForSingleObject(Vd_Fw_G.sem_skip_wait, 0xFFFFFFFF);
 
     return vd_fw_poll(count);
 }
 
 VD_FW_API void vd_fw_queue_wait_exit(void)
 {
-    ReleaseSemaphore(Vd_Fw_G.sem_skip_wait, 1, NULL);
+    VdFwReleaseSemaphore(Vd_Fw_G.sem_skip_wait, 1, NULL);
 }
 
 VD_FW_API void vd_fw_lock(void)
 {
-    EnterCriticalSection(&Vd_Fw_G.critical_section);
+    VdFwEnterCriticalSection(&Vd_Fw_G.critical_section);
     Vd_Fw_G.curr_frame = Vd_Fw_G.next_frame;
     Vd_Fw_G.next_frame.flags = 0;
-    LeaveCriticalSection(&Vd_Fw_G.critical_section);
+    VdFwLeaveCriticalSection(&Vd_Fw_G.critical_section);
 }
 
 VD_FW_API void vd_fw_swap(void)
@@ -8913,7 +8939,7 @@ VD_FW_API void vd_fw_unlock(void)
     // }
 
     if (Vd_Fw_G.curr_frame.flags & VD_FW_WIN32_FLAGS_WAKE_COND_VAR) {
-        WakeConditionVariable(&Vd_Fw_G.cond_var);
+        VdFwWakeConditionVariable(&Vd_Fw_G.cond_var);
     }
 }
 
@@ -8957,23 +8983,23 @@ VD_FW_API void vd_fw_exit(void)
 {
     vd_fw_quit();
 
-    EnterCriticalSection(&Vd_Fw_G.critical_section);
+    VdFwEnterCriticalSection(&Vd_Fw_G.critical_section);
     Vd_Fw_G.curr_frame = Vd_Fw_G.next_frame;
     Vd_Fw_G.next_frame.flags = 0;
     Vd_Fw_G.t_running = 0;
     Vd_Fw_G.t_paint_ready = 0;
-    LeaveCriticalSection(&Vd_Fw_G.critical_section);
+    VdFwLeaveCriticalSection(&Vd_Fw_G.critical_section);
 
     if (Vd_Fw_G.curr_frame.flags & VD_FW_WIN32_FLAGS_WAKE_COND_VAR) {
-        WakeConditionVariable(&Vd_Fw_G.cond_var);
+        VdFwWakeConditionVariable(&Vd_Fw_G.cond_var);
     }
 
-    WaitForSingleObject(Vd_Fw_G.win_thread, 0xFFFFFFFF);
+    VdFwWaitForSingleObject(Vd_Fw_G.win_thread, 0xFFFFFFFF);
 
-    CloseHandle(Vd_Fw_G.sem_window_ready);
-    CloseHandle(Vd_Fw_G.sem_closed);
-    CloseHandle(Vd_Fw_G.sem_skip_wait);
-    DeleteCriticalSection(&Vd_Fw_G.critical_section);
+    VdFwCloseHandle(Vd_Fw_G.sem_window_ready);
+    VdFwCloseHandle(Vd_Fw_G.sem_closed);
+    VdFwCloseHandle(Vd_Fw_G.sem_skip_wait);
+    VdFwDeleteCriticalSection(&Vd_Fw_G.critical_section);
 }
 
 VD_FW_API VdFwPlatform vd_fw_get_platform(void)
@@ -8986,7 +9012,7 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
     VD_FW_WIN32_PROFILE_BEGIN(vd_fw_set_graphics_api);
     int result = 1;
 
-    WakeConditionVariable(&Vd_Fw_G.cond_var);
+    VdFwWakeConditionVariable(&Vd_Fw_G.cond_var);
 
     if (Vd_Fw_G.graphics_api == Vd_Fw_GRAPHICS_API_OPENGL) {
         // Destroy OpenGL Context
@@ -9014,20 +9040,20 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
                 VD_FW_WIN32_KILL,
                 0, /* WPARAM */
                 0  /* LPARAM */));
-            WaitForSingleObject(Vd_Fw_G.win_thread, 0xFFFFFFFF);
+            VdFwWaitForSingleObject(Vd_Fw_G.win_thread, 0xFFFFFFFF);
         }
 
         // Reset Semaphores
         {
-            CloseHandle(Vd_Fw_G.sem_window_ready);
-            Vd_Fw_G.sem_window_ready = CreateSemaphoreA(
+            VdFwCloseHandle(Vd_Fw_G.sem_window_ready);
+            Vd_Fw_G.sem_window_ready = VdFwCreateSemaphoreA(
                 NULL,
                 0,
                 1,
                 NULL);
 
-            CloseHandle(Vd_Fw_G.sem_closed);
-            Vd_Fw_G.sem_closed = CreateSemaphoreA(
+            VdFwCloseHandle(Vd_Fw_G.sem_closed);
+            Vd_Fw_G.sem_closed = VdFwCreateSemaphoreA(
                 NULL,
                 0,
                 1,
@@ -9039,7 +9065,7 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
         {
             Vd_Fw_G.t_paint_ready = 0;
 
-            Vd_Fw_G.win_thread = CreateThread(
+            Vd_Fw_G.win_thread = VdFwCreateThread(
                 NULL,
                 0,
                 vd_fw__win_thread_proc,
@@ -9047,7 +9073,7 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
                 0,
                 &Vd_Fw_G.win_thread_id);
             // SetThreadDescription(Vd_Fw_G.win_thread, L"Window Thread");
-            WaitForSingleObject(Vd_Fw_G.sem_window_ready, 0xFFFFFFFF);
+            VdFwWaitForSingleObject(Vd_Fw_G.sem_window_ready, 0xFFFFFFFF);
         }
     }
 
@@ -9823,7 +9849,7 @@ static VdFwDWORD vd_fw__win_thread_proc(void *param)
         vd_fw__msgbuf_w(&evt);
     }
 
-    VD_FW__CHECK_TRUE(ReleaseSemaphore(Vd_Fw_G.sem_window_ready, 1, NULL));
+    VD_FW__CHECK_TRUE(VdFwReleaseSemaphore(Vd_Fw_G.sem_window_ready, 1, NULL));
 
     // Register raw input mouse
     VdFwRAWINPUTDEVICE rids[2];
@@ -9861,7 +9887,7 @@ VD_FW_API int vd_fw__any_time_higher(int num_files, const char **files, unsigned
     VdFwFILETIME *against = (VdFwFILETIME*)check_against;
     for (int i = 0; i < num_files; ++i) {
 
-        VdFwHANDLE hfile = CreateFileA(files[i],
+        VdFwHANDLE hfile = VdFwCreateFileA(files[i],
                                    Vd_Fw_GENERIC_READ, VD_FW_FILE_SHARE_READ | VD_FW_FILE_SHARE_WRITE,
                                    0, // lpSecurityAttributes
                                    VD_FW_OPEN_EXISTING,
@@ -9872,19 +9898,19 @@ VD_FW_API int vd_fw__any_time_higher(int num_files, const char **files, unsigned
         }
 
         VdFwFILETIME creation_time, last_access_time, last_write_time;
-        if (!GetFileTime(hfile, &creation_time, &last_access_time, &last_write_time)) {
-            CloseHandle(hfile);
+        if (!VdFwGetFileTime(hfile, &creation_time, &last_access_time, &last_write_time)) {
+            VdFwCloseHandle(hfile);
             continue;
         }
 
-        if (CompareFileTime(&last_write_time, against) > 0) {
+        if (VdFwCompareFileTime(&last_write_time, against) > 0) {
             result = 1;
             *against = last_write_time;
-            CloseHandle(hfile);
+            VdFwCloseHandle(hfile);
             break;
         }
 
-        CloseHandle(hfile);
+        VdFwCloseHandle(hfile);
     }
 
     return result;
@@ -9892,7 +9918,7 @@ VD_FW_API int vd_fw__any_time_higher(int num_files, const char **files, unsigned
 
 VD_FW_API char *vd_fw__debug_dump_file_text(const char *path, size_t *size)
 {
-    VdFwHANDLE hfile = CreateFileA(path,
+    VdFwHANDLE hfile = VdFwCreateFileA(path,
                                Vd_Fw_GENERIC_READ, VD_FW_FILE_SHARE_READ | VD_FW_FILE_SHARE_WRITE,
                                0, // lpSecurityAttributes
                                VD_FW_OPEN_EXISTING,
@@ -9903,14 +9929,14 @@ VD_FW_API char *vd_fw__debug_dump_file_text(const char *path, size_t *size)
     }
 
     VdFwLARGE_INTEGER sz;
-    if (!GetFileSizeEx(hfile, &sz)) {
+    if (!VdFwGetFileSizeEx(hfile, &sz)) {
         return 0;
     }
 
     char *memory = (char*)VD_FW_REALLOC(0, 0, sz.QuadPart + 1);
 
     VdFwDWORD bytes_read;
-    if (!ReadFile(hfile, memory, (VdFwDWORD)sz.QuadPart, &bytes_read, 0)) {
+    if (!VdFwReadFile(hfile, memory, (VdFwDWORD)sz.QuadPart, &bytes_read, 0)) {
         VD_FW_FREE(memory, sz.QuadPart + 1);
         return 0;
     }
@@ -10206,7 +10232,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         } break;
 
         case VD_FW_WM_DESTROY: {
-            ReleaseSemaphore(Vd_Fw_G.sem_closed, 1, NULL);
+            VdFwReleaseSemaphore(Vd_Fw_G.sem_closed, 1, NULL);
             vd_fw_queue_wait_exit();
             VdFwPostQuitMessage(0);
             Vd_Fw_G.t_running = 0;
@@ -10232,7 +10258,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 VdFwPAINTSTRUCT ps;
                 VdFwBeginPaint(hwnd, &ps);
                 if (!Vd_Fw_G.winthread_block_while_sizing) {
-                    EnterCriticalSection(&Vd_Fw_G.critical_section);
+                    VdFwEnterCriticalSection(&Vd_Fw_G.critical_section);
                 }
 
                 if (Vd_Fw_G.w != Vd_Fw_G.next_frame.w || Vd_Fw_G.h != Vd_Fw_G.next_frame.h) {
@@ -10246,9 +10272,9 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 vd_fw_queue_wait_exit();
 
                 if (!Vd_Fw_G.winthread_block_while_sizing) {
-                    WakeConditionVariable(&Vd_Fw_G.cond_var);
-                    SleepConditionVariableCS(&Vd_Fw_G.cond_var, &Vd_Fw_G.critical_section, 0xFFFFFFFF/*INFINITE*/);
-                    LeaveCriticalSection(&Vd_Fw_G.critical_section);
+                    VdFwWakeConditionVariable(&Vd_Fw_G.cond_var);
+                    VdFwSleepConditionVariableCS(&Vd_Fw_G.cond_var, &Vd_Fw_G.critical_section, 0xFFFFFFFF/*INFINITE*/);
+                    VdFwLeaveCriticalSection(&Vd_Fw_G.critical_section);
                 }
 
                 VdFwEndPaint(hwnd, &ps);
@@ -10331,14 +10357,14 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
         case VD_FW_WM_ENTERSIZEMOVE: {
             if (Vd_Fw_G.winthread_block_while_sizing) {
-                EnterCriticalSection(&Vd_Fw_G.critical_section);
+                VdFwEnterCriticalSection(&Vd_Fw_G.critical_section);
             }
 
         } break;
 
         case VD_FW_WM_EXITSIZEMOVE: {
             if (Vd_Fw_G.winthread_block_while_sizing) {
-                LeaveCriticalSection(&Vd_Fw_G.critical_section);
+                VdFwLeaveCriticalSection(&Vd_Fw_G.critical_section);
             }
 
             if (!Vd_Fw_G.draw_decorations) {
@@ -10771,7 +10797,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             VD_FW_WIN32_PROFILE_BEGIN(fw_fullscreen);
             VdFwBOOL should_be_fullscreen = (VdFwBOOL)lparam;
 
-            // EnterCriticalSection(&Vd_Fw_G.critical_section);
+            // VdFwEnterCriticalSection(&Vd_Fw_G.critical_section);
             if (should_be_fullscreen) {
 
                 Vd_Fw_G.last_window_placement.length = sizeof(Vd_Fw_G.last_window_placement);
@@ -10827,7 +10853,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                              VD_FW_SWP_NOMOVE | VD_FW_SWP_NOSIZE | VD_FW_SWP_NOZORDER |
                              VD_FW_SWP_NOOWNERZORDER | VD_FW_SWP_FRAMECHANGED);
             }
-            // LeaveCriticalSection(&Vd_Fw_G.critical_section);
+            // VdFwLeaveCriticalSection(&Vd_Fw_G.critical_section);
 
             VD_FW_WIN32_PROFILE_END(fw_fullscreen);
         } break;
@@ -10979,7 +11005,7 @@ static void vd_fw__update_kb_codepage(void)
     VdFwHKL keyboard_layout = VdFwGetKeyboardLayout(0);
 
     VdFwDWORD keyboard_lcid = VD_FW_MAKELCID(VD_FW_HIWORD(keyboard_layout), 0x0/*SORT_DEFAULT*/);
-    if (GetLocaleInfoA(keyboard_lcid, (0x20000000/*LOCALE_RETURN_NUMBER*/ | 0x00001004/*LOCALE_IDEFAULTANSICODEPAGE*/), (VdFwLPSTR)&Vd_Fw_G.kb_codepage, sizeof(Vd_Fw_G.kb_codepage)) == 0) {
+    if (VdFwGetLocaleInfoA(keyboard_lcid, (0x20000000/*LOCALE_RETURN_NUMBER*/ | 0x00001004/*LOCALE_IDEFAULTANSICODEPAGE*/), (VdFwLPSTR)&Vd_Fw_G.kb_codepage, sizeof(Vd_Fw_G.kb_codepage)) == 0) {
         Vd_Fw_G.kb_codepage = 0/*CP_ACP*/;
     }
 }
@@ -11267,7 +11293,7 @@ VD_FW_API int vd_fw_vk_wsi_surface_create(void *p_instance, void *p_allocation_c
     surface_create_info.sType     = 1000009000 /*VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR*/;
     surface_create_info.pNext     = 0;
     surface_create_info.flags     = 0;
-    surface_create_info.hinstance = (VdFwHINSTANCE)GetModuleHandleA(NULL);
+    surface_create_info.hinstance = (VdFwHINSTANCE)VdFwGetModuleHandleA(NULL);
     surface_create_info.hwnd      = Vd_Fw_G.hwnd;
 
     if (Vd_Fw_G.vk_create_win32_surface_khr_proc == 0) {
@@ -13280,7 +13306,7 @@ typedef struct {
     XSYM(glx, __GlxFbConfig*, glXChooseFBConfig, (Display *display, int screen, const int *attrib_list, int *nelements)) \
     XSYM(glx, XVisualInfo*, glXGetVisualFromFBConfig, (Display *display, __GlxFbConfig config)) \
     XSYM(glx, const char*, glXQueryExtensionsString, (Display *display, int screen)) \
-    XSYM(glx, void*, glXGetProcAddress, (const GLubyte *procName))\
+    XSYM(glx, void*, glXVdFwGetProcAddress, (const GLubyte *procName))\
     XSYM(glx, Bool, glXMakeCurrent, (Display *display, XID drawable, __GlxContext ctx)) \
     XSYM(glx, void, glXDestroyContext, (Display *display, __GlxContext ctx)) \
     XSYM(glx, void, glXSwapBuffers, (Display *display, XID drawable)) \
@@ -13462,7 +13488,7 @@ static void            vd_fw__x11_thread_finish(void);
 
 void *vd_fw__gl_get_proc_address(const char *name)
 {
-    void *result = VdFwglXGetProcAddress((const GLubyte*) name);
+    void *result = VdFwglXVdFwGetProcAddress((const GLubyte*) name);
     return result;
 }
 
@@ -13694,8 +13720,8 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
 
             const char *glx_exts = VdFwglXQueryExtensionsString(Vd_Fw_G.display, Vd_Fw_G.screen);
             VdFwProc__glXCreateContextAttribsARB glXCreateContextAttribsARB = (VdFwProc__glXCreateContextAttribsARB)
-                VdFwglXGetProcAddress((const GLubyte*)"glXCreateContextAttribsARB");
-            Vd_Fw_G.glx_swap_interval_ext = (VdFwProc__glXSwapIntervalEXT)VdFwglXGetProcAddress((const GLubyte*)"glXSwapIntervalEXT");
+                VdFwglXVdFwGetProcAddress((const GLubyte*)"glXCreateContextAttribsARB");
+            Vd_Fw_G.glx_swap_interval_ext = (VdFwProc__glXSwapIntervalEXT)VdFwglXVdFwGetProcAddress((const GLubyte*)"glXSwapIntervalEXT");
 
             int use_old_style_context = 0;
             if (!vd_fw__x11_extension_supported(glx_exts, "GLX_ARB_create_context") || !glXCreateContextAttribsARB) {

@@ -515,7 +515,10 @@ VdThread    vd_thread_make(VdThreadProc *proc, VdThreadMakeOptions *options);
 int         vd_thread_join(VdThread thread);
 
 extern long InterlockedCompareExchange(long volatile *, long, long);
-
+extern long long InterlockedCompareExchange64(long long volatile *, long long, long long);
+extern void* InterlockedCompareExchangePointer(void* volatile *, void*, void*);
+extern long InterlockedIncrement(long volatile *);
+extern long InterlockedAdd(long volatile *, long);
 
 VD_INLINE int32_t vd_compare_and_swap_i32(volatile int32_t *ptr, int32_t new_value, int32_t old_value)
 {
@@ -525,6 +528,26 @@ VD_INLINE int32_t vd_compare_and_swap_i32(volatile int32_t *ptr, int32_t new_val
 VD_INLINE uint32_t vd_compare_and_swap_u32(volatile uint32_t *ptr, uint32_t new_value, uint32_t old_value)
 {
     return (uint32_t)InterlockedCompareExchange((long volatile *)ptr, *(long*)&new_value, *(long*)&old_value);
+}
+
+VD_INLINE int64_t vd_compare_and_swap_i64(volatile int64_t *ptr, int64_t new_value, int64_t expected) {
+    return (int64_t)InterlockedCompareExchange64(ptr, new_value, expected);
+}
+
+VD_INLINE void *vd_compare_and_swap_ptr(void *volatile *ptr, void *new_value, void *expected) {
+    return InterlockedCompareExchangePointer(ptr, new_value, expected);
+}
+
+VD_INLINE int32_t vd_inc_and_fetch_i32(volatile int32_t *addend) {
+    return InterlockedIncrement((volatile long *)addend);
+}
+
+VD_INLINE uint32_t vd_inc_and_fetch_u32(volatile uint32_t *addend) {
+    return InterlockedIncrement((volatile long *)addend);
+}
+
+VD_INLINE int32_t vd_add_and_fetch_i32(volatile int32_t *addend, int32_t value) {
+    return InterlockedAdd((volatile long *)addend, value);
 }
 
 #endif // VD_PLATFORM_KNOWN

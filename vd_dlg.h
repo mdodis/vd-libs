@@ -125,6 +125,11 @@ VD_DLG_API void             vd_dlg_set_context(void *pf_context);
 
 #ifdef VD_DLG_IMPL
 
+#ifndef VD_DLG_REALLOC
+#   include <stdlib.h>
+#   define VD_DLG_REALLOC(pprev, nsize) realloc(pprev, nsize)
+#endif // !VD_DLG_REALLOC
+
 #ifndef VD_DLG_ABORT
 #   define VD_DLG_ABORT(message) do { *(char*)0 = *message; } while(0)
 #endif // !VD_DLG_ABORT
@@ -188,6 +193,10 @@ typedef const VdDlgWCHAR*    VdDlgLPCWSTR, * VdDlgPCWSTR;
 typedef VdDlgWORD            VdDlgATOM;
 typedef VdDlgULONG_PTR       VdDlgDWORD_PTR, * VdDlgPDWORD_PTR;
 typedef short                VdDlgSHORT;
+typedef const VdDlgCHAR*     VdDlgLPCSTR, *VdDlgPCSTR;
+typedef VdDlgCHAR*           VdDlgLPSTR;
+typedef const VdDlgWCHAR*    VdDlgLPCWSTR, * VdDlgPCWSTR;
+typedef VdDlgWCHAR*          VdDlgLPWSTR;
 
 VD_DLG_DECLARE_HANDLE(VdDlgHWND);
 VD_DLG_DECLARE_HANDLE(VdDlgHINSTANCE);
@@ -236,9 +245,12 @@ typedef VdDlgDWORD           VdDlgSICHINTF;
 
 /* ----Kernel32.dll-------------------------------------------------------------------------------------------------- */
 #ifndef _MINWINDEF_
-extern VdDlgHMODULE __stdcall LoadLibraryA(VdDlgLPCSTR lpLibFileName);
-extern void*        __stdcall GetProcAddress(VdDlgHMODULE hModule, VdDlgLPCSTR lpProcName);
-extern int                    MultiByteToWideChar(VdDlgUINT CodePage, VdDlgDWORD dwFlags, VdDlgDWORD *lpMultiByteStr, int cbMultiByte, VdDlgLPWSTR cbMultiByte, VdDlgLPWSTR lpWideCharStr, int cchWideChar);
+#pragma comment(linker, "/alternatename:VdDlgLoadLibraryA=LoadLibraryA")
+extern VdDlgHMODULE __stdcall VdDlgLoadLibraryA(VdDlgLPCSTR lpLibFileName);
+#pragma comment(linker, "/alternatename:VdDlgGetProcAddress=GetProcAddress")
+extern void*        __stdcall VdDlgGetProcAddress(VdDlgHMODULE hModule, VdDlgLPCSTR lpProcName);
+#pragma comment(linker, "/alternatename:VdDlgMultiByteToWideChar=MultiByteToWideChar")
+extern int                    VdDlgMultiByteToWideChar(VdDlgUINT CodePage, VdDlgDWORD dwFlags, VdDlgDWORD *lpMultiByteStr, int cbMultiByte, wchar_t *lpWideCharStr, int cchWideChar);
 
 #endif
 
@@ -707,8 +719,6 @@ VdDlgHRESULT vd_dlg__CFileDialogEventsIImpl_OnOverwrite(VdDlgIFileDialogEvents *
 
 static VdDlg__Globals Vd_Dlg__Globals = {0};
 static void      vd_dlg__win32_initialize(void);
-static void*     vd_dlg__win32_realloc_mem(void *prev_ptr, size_t size);
-static void      vd_dlg__win32_free_mem(void *memory);
 static void*     vd_dlg__win32_resize_buffer(void *buffer, size_t element_size, int required_capacity, int *cap);
 static int       vd_dlg__win32_cv_utf8_to_utf16(const char *ustr, int ustr_len, wchar_t **buffer, int *cap);
 static int       vd_dlg__win32_cv_utf16_to_utf8(const wchar_t *wstr, int wstr_len, char **buffer, int *cap);
@@ -739,9 +749,9 @@ VD_DLG_API int vd_dlg_message_box(int title_len, const char *title, int descript
     }
 
     switch (button_visuals) {
-        case VD_DLG_MESSAGE_BOX_OPTION_INFO:    flags |= MB_ICONINFORMATION; break;
-        case VD_DLG_MESSAGE_BOX_OPTION_WARNING: flags |= MB_ICONWARNING; break;
-        case VD_DLG_MESSAGE_BOX_OPTION_ERROR:   flags |= MB_ICONERROR; break;
+        case VD_DLG_MESSAGE_BOX_OPTION_INFO:    flags |= 0x00000040L/*MB_ICONINFORMATION*/; break;
+        case VD_DLG_MESSAGE_BOX_OPTION_WARNING: flags |= 0x00000030L/*MB_ICONWARNING*/; break;
+        case VD_DLG_MESSAGE_BOX_OPTION_ERROR:   flags |= 0x00000010L/*MB_ICONERROR*/; break;
         default: break;
     }
 
@@ -930,16 +940,16 @@ static void vd_dlg__win32_initialize(void)
 
     // User32.dll
     {
-        VdDlgHMODULE mod = LoadLibraryA("User32.dll");
-        VdDlgMessageBoxW = (VdDlgProcMessageBoxW)GetProcAddress(mod, "MessageBoxW");
+        VdDlgHMODULE mod = VdDlgLoadLibraryA("User32.dll");
+        VdDlgMessageBoxW = (VdDlgProcMessageBoxW)VdDlgGetProcAddress(mod, "MessageBoxW");
     }
 
     // Ole32.dll
     {
-        VdDlgHMODULE mod = LoadLibraryA("Ole32.dll");
-        VdDlgCoInitialize     =     (VdDlgProcCoInitialize)GetProcAddress(mod, "CoInitialize");
-        VdDlgCoCreateInstance = (VdDlgProcCoCreateInstance)GetProcAddress(mod, "CoCreateInstance");
-        VdDlgCoTaskMemFree    =    (VdDlgProcCoTaskMemFree)GetProcAddress(mod, "CoTaskMemFree");
+        VdDlgHMODULE mod = VdDlgLoadLibraryA("Ole32.dll");
+        VdDlgCoInitialize     =     (VdDlgProcCoInitialize)VdDlgGetProcAddress(mod, "CoInitialize");
+        VdDlgCoCreateInstance = (VdDlgProcCoCreateInstance)VdDlgGetProcAddress(mod, "CoCreateInstance");
+        VdDlgCoTaskMemFree    =    (VdDlgProcCoTaskMemFree)VdDlgGetProcAddress(mod, "CoTaskMemFree");
 
     }
 
@@ -958,20 +968,6 @@ static void vd_dlg__win32_initialize(void)
     Vd_Dlg__CFileDialogEvents.lpVtbl = &Vd_Dlg__CFileDialogEventsIImpl;
 }
 
-static void *vd_dlg__win32_realloc_mem(void *prev_ptr, size_t size)
-{
-    if (prev_ptr == 0) {
-        return HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, size);
-    } else {
-        return HeapReAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, prev_ptr, size);
-    }
-}
-
-static void vd_dlg__win32_free_mem(void *memory)
-{
-    HeapFree(GetProcessHeap(), 0, memory);
-}
-
 static void *vd_dlg__win32_resize_buffer(void *buffer, size_t element_size, int required_capacity, int *cap)
 {
     if (required_capacity <= *cap) {
@@ -979,7 +975,7 @@ static void *vd_dlg__win32_resize_buffer(void *buffer, size_t element_size, int 
     }
 
     int resize_capacity = required_capacity;
-    buffer = vd_dlg__win32_realloc_mem(buffer, element_size * resize_capacity);
+    buffer = VD_DLG_REALLOC(buffer, element_size * resize_capacity);
     *cap = resize_capacity;
     return buffer;
 }
