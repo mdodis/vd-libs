@@ -2866,17 +2866,27 @@ enum {
 #define VD_FW_OPENGL_CORE_FUNCTIONS \
 VER_START(1_0) \
 X(void, Accum, (GLenum op, GLfloat value)) \
+X(void, ActiveTexture, (GLenum texture)) \
 X(void, AlphaFunc, (GLenum func, GLfloat ref)) \
 X(void, AlphaFuncx, (GLenum func, GLfixed ref)) \
 X(void, Begin, (GLenum mode)) \
+X(void, BindBuffer, (GLenum target, GLuint buffer)) \
+X(void, BindTexture, (GLenum target, GLuint texture)) \
 X(void, Bitmap, (GLsizei width, GLsizei height, GLfloat xorig, GLfloat yorig, GLfloat xmove, GLfloat ymove, const GLubyte * bitmap)) \
+X(void, BlendFunc, (GLenum sfactor, GLenum dfactor)) \
+X(void, BufferData, (GLenum target, GLsizeiptr size, const void * data, GLenum usage)) \
+X(void, BufferSubData, (GLenum target, GLintptr offset, GLsizeiptr size, const void * data)) \
 X(void, CallList, (GLuint list)) \
 X(void, CallLists, (GLsizei n, GLenum type, const void * lists)) \
+X(void, Clear, (GLbitfield mask)) \
 X(void, ClearAccum, (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha)) \
+X(void, ClearColor, (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha)) \
 X(void, ClearColorx, (GLfixed red, GLfixed green, GLfixed blue, GLfixed alpha)) \
 X(void, ClearDepth, (GLdouble depth)) \
+X(void, ClearDepthf, (GLfloat d)) \
 X(void, ClearDepthx, (GLfixed depth)) \
 X(void, ClearIndex, (GLfloat c)) \
+X(void, ClearStencil, (GLint s)) \
 X(void, ClientActiveTexture, (GLenum texture)) \
 X(void, ClipPlane, (GLenum plane, const GLdouble * equation)) \
 X(void, ClipPlanef, (GLenum p, const GLfloat * eqn)) \
@@ -2914,17 +2924,32 @@ X(void, Color4uiv, (const GLuint * v)) \
 X(void, Color4us, (GLushort red, GLushort green, GLushort blue, GLushort alpha)) \
 X(void, Color4usv, (const GLushort * v)) \
 X(void, Color4x, (GLfixed red, GLfixed green, GLfixed blue, GLfixed alpha)) \
+X(void, ColorMask, (GLboolean red, GLboolean green, GLboolean blue, GLboolean alpha)) \
 X(void, ColorMaterial, (GLenum face, GLenum mode)) \
 X(void, ColorPointer, (GLint size, GLenum type, GLsizei stride, const void * pointer)) \
+X(void, CompressedTexImage2D, (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLint border, GLsizei imageSize, const void * data)) \
+X(void, CompressedTexSubImage2D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLsizei imageSize, const void * data)) \
 X(void, CopyPixels, (GLint x, GLint y, GLsizei width, GLsizei height, GLenum type)) \
+X(void, CopyTexImage2D, (GLenum target, GLint level, GLenum internalformat, GLint x, GLint y, GLsizei width, GLsizei height, GLint border)) \
+X(void, CopyTexSubImage2D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width, GLsizei height)) \
+X(void, CullFace, (GLenum mode)) \
+X(void, DeleteBuffers, (GLsizei n, const GLuint * buffers)) \
 X(void, DeleteLists, (GLuint list, GLsizei range)) \
+X(void, DeleteTextures, (GLsizei n, const GLuint * textures)) \
+X(void, DepthFunc, (GLenum func)) \
+X(void, DepthMask, (GLboolean flag)) \
 X(void, DepthRange, (GLdouble n, GLdouble f)) \
+X(void, DepthRangef, (GLfloat n, GLfloat f)) \
 X(void, DepthRangex, (GLfixed n, GLfixed f)) \
+X(void, Disable, (GLenum cap)) \
 X(void, DisableClientState, (GLenum array)) \
+X(void, DrawArrays, (GLenum mode, GLint first, GLsizei count)) \
 X(void, DrawBuffer, (GLenum buf)) \
+X(void, DrawElements, (GLenum mode, GLsizei count, GLenum type, const void * indices)) \
 X(void, DrawPixels, (GLsizei width, GLsizei height, GLenum format, GLenum type, const void * pixels)) \
 X(void, EdgeFlag, (GLboolean flag)) \
 X(void, EdgeFlagv, (const GLboolean * flag)) \
+X(void, Enable, (GLenum cap)) \
 X(void, EnableClientState, (GLenum array)) \
 X(void, End, ()) \
 X(void, EndList, ()) \
@@ -2941,21 +2966,31 @@ X(void, EvalMesh2, (GLenum mode, GLint i1, GLint i2, GLint j1, GLint j2)) \
 X(void, EvalPoint1, (GLint i)) \
 X(void, EvalPoint2, (GLint i, GLint j)) \
 X(void, FeedbackBuffer, (GLsizei size, GLenum type, GLfloat * buffer)) \
+X(void, Finish, ()) \
+X(void, Flush, ()) \
 X(void, Fogf, (GLenum pname, GLfloat param)) \
 X(void, Fogfv, (GLenum pname, const GLfloat * params)) \
 X(void, Fogi, (GLenum pname, GLint param)) \
 X(void, Fogiv, (GLenum pname, const GLint * params)) \
 X(void, Fogx, (GLenum pname, GLfixed param)) \
 X(void, Fogxv, (GLenum pname, const GLfixed * param)) \
+X(void, FrontFace, (GLenum mode)) \
 X(void, Frustum, (GLdouble left, GLdouble right, GLdouble bottom, GLdouble top, GLdouble zNear, GLdouble zFar)) \
 X(void, Frustumf, (GLfloat l, GLfloat r, GLfloat b, GLfloat t, GLfloat n, GLfloat f)) \
 X(void, Frustumx, (GLfixed l, GLfixed r, GLfixed b, GLfixed t, GLfixed n, GLfixed f)) \
+X(void, GenBuffers, (GLsizei n, GLuint * buffers)) \
 X(GLuint, GenLists, (GLsizei range)) \
+X(void, GenTextures, (GLsizei n, GLuint * textures)) \
+X(void, GetBooleanv, (GLenum pname, GLboolean * data)) \
+X(void, GetBufferParameteriv, (GLenum target, GLenum pname, GLint * params)) \
 X(void, GetClipPlane, (GLenum plane, GLdouble * equation)) \
 X(void, GetClipPlanef, (GLenum plane, GLfloat * equation)) \
 X(void, GetClipPlanex, (GLenum plane, GLfixed * equation)) \
 X(void, GetDoublev, (GLenum pname, GLdouble * data)) \
+X(GLenum, GetError, ()) \
 X(void, GetFixedv, (GLenum pname, GLfixed * params)) \
+X(void, GetFloatv, (GLenum pname, GLfloat * data)) \
+X(void, GetIntegerv, (GLenum pname, GLint * data)) \
 X(void, GetLightfv, (GLenum light, GLenum pname, GLfloat * params)) \
 X(void, GetLightiv, (GLenum light, GLenum pname, GLint * params)) \
 X(void, GetLightxv, (GLenum light, GLenum pname, GLfixed * params)) \
@@ -2968,7 +3003,9 @@ X(void, GetMaterialxv, (GLenum face, GLenum pname, GLfixed * params)) \
 X(void, GetPixelMapfv, (GLenum map, GLfloat * values)) \
 X(void, GetPixelMapuiv, (GLenum map, GLuint * values)) \
 X(void, GetPixelMapusv, (GLenum map, GLushort * values)) \
+X(void, GetPointerv, (GLenum pname, void ** params)) \
 X(void, GetPolygonStipple, (GLubyte * mask)) \
+X(const GLubyte *, GetString, (GLenum name)) \
 X(void, GetTexEnvfv, (GLenum target, GLenum pname, GLfloat * params)) \
 X(void, GetTexEnviv, (GLenum target, GLenum pname, GLint * params)) \
 X(void, GetTexEnvxv, (GLenum target, GLenum pname, GLfixed * params)) \
@@ -2976,7 +3013,12 @@ X(void, GetTexGendv, (GLenum coord, GLenum pname, GLdouble * params)) \
 X(void, GetTexGenfv, (GLenum coord, GLenum pname, GLfloat * params)) \
 X(void, GetTexGeniv, (GLenum coord, GLenum pname, GLint * params)) \
 X(void, GetTexImage, (GLenum target, GLint level, GLenum format, GLenum type, void * pixels)) \
+X(void, GetTexLevelParameterfv, (GLenum target, GLint level, GLenum pname, GLfloat * params)) \
+X(void, GetTexLevelParameteriv, (GLenum target, GLint level, GLenum pname, GLint * params)) \
+X(void, GetTexParameterfv, (GLenum target, GLenum pname, GLfloat * params)) \
+X(void, GetTexParameteriv, (GLenum target, GLenum pname, GLint * params)) \
 X(void, GetTexParameterxv, (GLenum target, GLenum pname, GLfixed * params)) \
+X(void, Hint, (GLenum target, GLenum mode)) \
 X(void, IndexMask, (GLuint mask)) \
 X(void, Indexd, (GLdouble c)) \
 X(void, Indexdv, (const GLdouble * c)) \
@@ -2987,7 +3029,10 @@ X(void, Indexiv, (const GLint * c)) \
 X(void, Indexs, (GLshort c)) \
 X(void, Indexsv, (const GLshort * c)) \
 X(void, InitNames, ()) \
+X(GLboolean, IsBuffer, (GLuint buffer)) \
+X(GLboolean, IsEnabled, (GLenum cap)) \
 X(GLboolean, IsList, (GLuint list)) \
+X(GLboolean, IsTexture, (GLuint texture)) \
 X(void, LightModelf, (GLenum pname, GLfloat param)) \
 X(void, LightModelfv, (GLenum pname, const GLfloat * params)) \
 X(void, LightModeli, (GLenum pname, GLint param)) \
@@ -3001,6 +3046,7 @@ X(void, Lightiv, (GLenum light, GLenum pname, const GLint * params)) \
 X(void, Lightx, (GLenum light, GLenum pname, GLfixed param)) \
 X(void, Lightxv, (GLenum light, GLenum pname, const GLfixed * params)) \
 X(void, LineStipple, (GLint factor, GLushort pattern)) \
+X(void, LineWidth, (GLfloat width)) \
 X(void, LineWidthx, (GLfixed width)) \
 X(void, ListBase, (GLuint base)) \
 X(void, LoadIdentity, ()) \
@@ -3050,6 +3096,7 @@ X(void, PixelMapfv, (GLenum map, GLsizei mapsize, const GLfloat * values)) \
 X(void, PixelMapuiv, (GLenum map, GLsizei mapsize, const GLuint * values)) \
 X(void, PixelMapusv, (GLenum map, GLsizei mapsize, const GLushort * values)) \
 X(void, PixelStoref, (GLenum pname, GLfloat param)) \
+X(void, PixelStorei, (GLenum pname, GLint param)) \
 X(void, PixelTransferf, (GLenum pname, GLfloat param)) \
 X(void, PixelTransferi, (GLenum pname, GLint param)) \
 X(void, PixelZoom, (GLfloat xfactor, GLfloat yfactor)) \
@@ -3060,6 +3107,7 @@ X(void, PointParameterxv, (GLenum pname, const GLfixed * params)) \
 X(void, PointSize, (GLfloat size)) \
 X(void, PointSizex, (GLfixed size)) \
 X(void, PolygonMode, (GLenum face, GLenum mode)) \
+X(void, PolygonOffset, (GLfloat factor, GLfloat units)) \
 X(void, PolygonOffsetx, (GLfixed factor, GLfixed units)) \
 X(void, PolygonStipple, (const GLubyte * mask)) \
 X(void, PopAttrib, ()) \
@@ -3092,6 +3140,8 @@ X(void, RasterPos4i, (GLint x, GLint y, GLint z, GLint w)) \
 X(void, RasterPos4iv, (const GLint * v)) \
 X(void, RasterPos4s, (GLshort x, GLshort y, GLshort z, GLshort w)) \
 X(void, RasterPos4sv, (const GLshort * v)) \
+X(void, ReadBuffer, (GLenum src)) \
+X(void, ReadPixels, (GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, void * pixels)) \
 X(void, Rectd, (GLdouble x1, GLdouble y1, GLdouble x2, GLdouble y2)) \
 X(void, Rectdv, (const GLdouble * v1, const GLdouble * v2)) \
 X(void, Rectf, (GLfloat x1, GLfloat y1, GLfloat x2, GLfloat y2)) \
@@ -3104,12 +3154,17 @@ X(GLint, RenderMode, (GLenum mode)) \
 X(void, Rotated, (GLdouble angle, GLdouble x, GLdouble y, GLdouble z)) \
 X(void, Rotatef, (GLfloat angle, GLfloat x, GLfloat y, GLfloat z)) \
 X(void, Rotatex, (GLfixed angle, GLfixed x, GLfixed y, GLfixed z)) \
+X(void, SampleCoverage, (GLfloat value, GLboolean invert)) \
 X(void, SampleCoveragex, (GLclampx value, GLboolean invert)) \
 X(void, Scaled, (GLdouble x, GLdouble y, GLdouble z)) \
 X(void, Scalef, (GLfloat x, GLfloat y, GLfloat z)) \
 X(void, Scalex, (GLfixed x, GLfixed y, GLfixed z)) \
+X(void, Scissor, (GLint x, GLint y, GLsizei width, GLsizei height)) \
 X(void, SelectBuffer, (GLsizei size, GLuint * buffer)) \
 X(void, ShadeModel, (GLenum mode)) \
+X(void, StencilFunc, (GLenum func, GLint ref, GLuint mask)) \
+X(void, StencilMask, (GLuint mask)) \
+X(void, StencilOp, (GLenum fail, GLenum zfail, GLenum zpass)) \
 X(void, TexCoord1d, (GLdouble s)) \
 X(void, TexCoord1dv, (const GLdouble * v)) \
 X(void, TexCoord1f, (GLfloat s)) \
@@ -3156,8 +3211,14 @@ X(void, TexGenfv, (GLenum coord, GLenum pname, const GLfloat * params)) \
 X(void, TexGeni, (GLenum coord, GLenum pname, GLint param)) \
 X(void, TexGeniv, (GLenum coord, GLenum pname, const GLint * params)) \
 X(void, TexImage1D, (GLenum target, GLint level, GLint internalformat, GLsizei width, GLint border, GLenum format, GLenum type, const void * pixels)) \
+X(void, TexImage2D, (GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void * pixels)) \
+X(void, TexParameterf, (GLenum target, GLenum pname, GLfloat param)) \
+X(void, TexParameterfv, (GLenum target, GLenum pname, const GLfloat * params)) \
+X(void, TexParameteri, (GLenum target, GLenum pname, GLint param)) \
+X(void, TexParameteriv, (GLenum target, GLenum pname, const GLint * params)) \
 X(void, TexParameterx, (GLenum target, GLenum pname, GLfixed param)) \
 X(void, TexParameterxv, (GLenum target, GLenum pname, const GLfixed * params)) \
+X(void, TexSubImage2D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void * pixels)) \
 X(void, Translated, (GLdouble x, GLdouble y, GLdouble z)) \
 X(void, Translatef, (GLfloat x, GLfloat y, GLfloat z)) \
 X(void, Translatex, (GLfixed x, GLfixed y, GLfixed z)) \
@@ -3186,6 +3247,7 @@ X(void, Vertex4iv, (const GLint * v)) \
 X(void, Vertex4s, (GLshort x, GLshort y, GLshort z, GLshort w)) \
 X(void, Vertex4sv, (const GLshort * v)) \
 X(void, VertexPointer, (GLint size, GLenum type, GLsizei stride, const void * pointer)) \
+X(void, Viewport, (GLint x, GLint y, GLsizei width, GLsizei height)) \
 VER_END(1_0) \
 VER_START(1_1) \
 X(GLboolean, AreTexturesResident, (GLsizei n, const GLuint * textures, GLboolean * residences)) \
@@ -3202,9 +3264,17 @@ X(void, PrioritizeTextures, (GLsizei n, const GLuint * textures, const GLfloat *
 X(void, PushClientAttrib, (GLbitfield mask)) \
 X(void, TexSubImage1D, (GLenum target, GLint level, GLint xoffset, GLsizei width, GLenum format, GLenum type, const void * pixels)) \
 VER_END(1_1) \
+VER_START(1_2) \
+X(void, CopyTexSubImage3D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLint x, GLint y, GLsizei width, GLsizei height)) \
+X(void, DrawRangeElements, (GLenum mode, GLuint start, GLuint end, GLsizei count, GLenum type, const void * indices)) \
+X(void, TexImage3D, (GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLenum format, GLenum type, const void * pixels)) \
+X(void, TexSubImage3D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, const void * pixels)) \
+VER_END(1_2) \
 VER_START(1_3) \
 X(void, CompressedTexImage1D, (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLint border, GLsizei imageSize, const void * data)) \
+X(void, CompressedTexImage3D, (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLsizei imageSize, const void * data)) \
 X(void, CompressedTexSubImage1D, (GLenum target, GLint level, GLint xoffset, GLsizei width, GLenum format, GLsizei imageSize, const void * data)) \
+X(void, CompressedTexSubImage3D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLsizei imageSize, const void * data)) \
 X(void, GetCompressedTexImage, (GLenum target, GLint level, void * img)) \
 X(void, LoadTransposeMatrixd, (const GLdouble * m)) \
 X(void, LoadTransposeMatrixf, (const GLfloat * m)) \
@@ -3243,13 +3313,16 @@ X(void, MultiTexCoord4s, (GLenum target, GLshort s, GLshort t, GLshort r, GLshor
 X(void, MultiTexCoord4sv, (GLenum target, const GLshort * v)) \
 VER_END(1_3) \
 VER_START(1_4) \
+X(void, BlendColor, (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha)) \
+X(void, BlendEquation, (GLenum mode)) \
+X(void, BlendFuncSeparate, (GLenum sfactorRGB, GLenum dfactorRGB, GLenum sfactorAlpha, GLenum dfactorAlpha)) \
 X(void, FogCoordPointer, (GLenum type, GLsizei stride, const void * pointer)) \
 X(void, FogCoordd, (GLdouble coord)) \
 X(void, FogCoorddv, (const GLdouble * coord)) \
 X(void, FogCoordf, (GLfloat coord)) \
 X(void, FogCoordfv, (const GLfloat * coord)) \
 X(void, MultiDrawArrays, (GLenum mode, const GLint * first, const GLsizei * count, GLsizei drawcount)) \
-X(void, MultiDrawElements, (GLenum mode, const GLsizei * count, GLenum type, const void *const* indices, GLsizei drawcount)) \
+X(void, MultiDrawElements, (GLenum mode, const GLsizei * count, GLenum type, const void *const * indices, GLsizei drawcount)) \
 X(void, PointParameteri, (GLenum pname, GLint param)) \
 X(void, PointParameteriv, (GLenum pname, const GLint * params)) \
 X(void, SecondaryColor3b, (GLbyte red, GLbyte green, GLbyte blue)) \
@@ -3287,77 +3360,48 @@ X(void, WindowPos3s, (GLshort x, GLshort y, GLshort z)) \
 X(void, WindowPos3sv, (const GLshort * v)) \
 VER_END(1_4) \
 VER_START(1_5) \
+X(void, BeginQuery, (GLenum target, GLuint id)) \
+X(void, DeleteQueries, (GLsizei n, const GLuint * ids)) \
+X(void, EndQuery, (GLenum target)) \
+X(void, GenQueries, (GLsizei n, GLuint * ids)) \
+X(void, GetBufferPointerv, (GLenum target, GLenum pname, void ** params)) \
 X(void, GetBufferSubData, (GLenum target, GLintptr offset, GLsizeiptr size, void * data)) \
 X(void, GetQueryObjectiv, (GLuint id, GLenum pname, GLint * params)) \
+X(void, GetQueryObjectuiv, (GLuint id, GLenum pname, GLuint * params)) \
+X(void, GetQueryiv, (GLenum target, GLenum pname, GLint * params)) \
+X(GLboolean, IsQuery, (GLuint id)) \
 X(void *, MapBuffer, (GLenum target, GLenum access)) \
+X(GLboolean, UnmapBuffer, (GLenum target)) \
 VER_END(1_5) \
 VER_START(2_0) \
-X(void, ActiveTexture, (GLenum texture)) \
 X(void, AttachShader, (GLuint program, GLuint shader)) \
 X(void, BindAttribLocation, (GLuint program, GLuint index, const GLchar * name)) \
-X(void, BindBuffer, (GLenum target, GLuint buffer)) \
 X(void, BindFramebuffer, (GLenum target, GLuint framebuffer)) \
 X(void, BindRenderbuffer, (GLenum target, GLuint renderbuffer)) \
-X(void, BindTexture, (GLenum target, GLuint texture)) \
-X(void, BlendColor, (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha)) \
-X(void, BlendEquation, (GLenum mode)) \
 X(void, BlendEquationSeparate, (GLenum modeRGB, GLenum modeAlpha)) \
-X(void, BlendFunc, (GLenum sfactor, GLenum dfactor)) \
-X(void, BlendFuncSeparate, (GLenum sfactorRGB, GLenum dfactorRGB, GLenum sfactorAlpha, GLenum dfactorAlpha)) \
-X(void, BufferData, (GLenum target, GLsizeiptr size, const void * data, GLenum usage)) \
-X(void, BufferSubData, (GLenum target, GLintptr offset, GLsizeiptr size, const void * data)) \
 X(GLenum, CheckFramebufferStatus, (GLenum target)) \
-X(void, Clear, (GLbitfield mask)) \
-X(void, ClearColor, (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha)) \
-X(void, ClearDepthf, (GLfloat d)) \
-X(void, ClearStencil, (GLint s)) \
-X(void, ColorMask, (GLboolean red, GLboolean green, GLboolean blue, GLboolean alpha)) \
 X(void, CompileShader, (GLuint shader)) \
-X(void, CompressedTexImage2D, (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLint border, GLsizei imageSize, const void * data)) \
-X(void, CompressedTexSubImage2D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLsizei imageSize, const void * data)) \
-X(void, CopyTexImage2D, (GLenum target, GLint level, GLenum internalformat, GLint x, GLint y, GLsizei width, GLsizei height, GLint border)) \
-X(void, CopyTexSubImage2D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width, GLsizei height)) \
 X(GLuint, CreateProgram, ()) \
 X(GLuint, CreateShader, (GLenum type)) \
-X(void, CullFace, (GLenum mode)) \
-X(void, DeleteBuffers, (GLsizei n, const GLuint * buffers)) \
 X(void, DeleteFramebuffers, (GLsizei n, const GLuint * framebuffers)) \
 X(void, DeleteProgram, (GLuint program)) \
 X(void, DeleteRenderbuffers, (GLsizei n, const GLuint * renderbuffers)) \
 X(void, DeleteShader, (GLuint shader)) \
-X(void, DeleteTextures, (GLsizei n, const GLuint * textures)) \
-X(void, DepthFunc, (GLenum func)) \
-X(void, DepthMask, (GLboolean flag)) \
-X(void, DepthRangef, (GLfloat n, GLfloat f)) \
 X(void, DetachShader, (GLuint program, GLuint shader)) \
-X(void, Disable, (GLenum cap)) \
 X(void, DisableVertexAttribArray, (GLuint index)) \
-X(void, DrawArrays, (GLenum mode, GLint first, GLsizei count)) \
-X(void, DrawElements, (GLenum mode, GLsizei count, GLenum type, const void * indices)) \
-X(void, DrawRangeElements, (GLenum mode, GLuint start, GLuint end, GLsizei count, GLenum type, const void * indices)) \
-X(void, Enable, (GLenum cap)) \
+X(void, DrawBuffers, (GLsizei n, const GLenum * bufs)) \
 X(void, EnableVertexAttribArray, (GLuint index)) \
-X(void, Finish, ()) \
-X(void, Flush, ()) \
 X(void, FramebufferRenderbuffer, (GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer)) \
 X(void, FramebufferTexture2D, (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level)) \
-X(void, FrontFace, (GLenum mode)) \
-X(void, GenBuffers, (GLsizei n, GLuint * buffers)) \
 X(void, GenFramebuffers, (GLsizei n, GLuint * framebuffers)) \
 X(void, GenRenderbuffers, (GLsizei n, GLuint * renderbuffers)) \
-X(void, GenTextures, (GLsizei n, GLuint * textures)) \
 X(void, GenerateMipmap, (GLenum target)) \
 X(void, GetActiveAttrib, (GLuint program, GLuint index, GLsizei bufSize, GLsizei * length, GLint * size, GLenum * type, GLchar * name)) \
 X(void, GetActiveUniform, (GLuint program, GLuint index, GLsizei bufSize, GLsizei * length, GLint * size, GLenum * type, GLchar * name)) \
 X(void, GetAttachedShaders, (GLuint program, GLsizei maxCount, GLsizei * count, GLuint * shaders)) \
 X(GLint, GetAttribLocation, (GLuint program, const GLchar * name)) \
-X(void, GetBooleanv, (GLenum pname, GLboolean * data)) \
-X(void, GetBufferParameteriv, (GLenum target, GLenum pname, GLint * params)) \
-X(GLenum, GetError, ()) \
-X(void, GetFloatv, (GLenum pname, GLfloat * data)) \
 X(void, GetFramebufferAttachmentParameteriv, (GLenum target, GLenum attachment, GLenum pname, GLint * params)) \
 X(GLenum, GetGraphicsResetStatus, ()) \
-X(void, GetIntegerv, (GLenum pname, GLint * data)) \
 X(void, GetProgramInfoLog, (GLuint program, GLsizei bufSize, GLsizei * length, GLchar * infoLog)) \
 X(void, GetProgramiv, (GLuint program, GLenum pname, GLint * params)) \
 X(void, GetRenderbufferParameteriv, (GLenum target, GLenum pname, GLint * params)) \
@@ -3365,9 +3409,6 @@ X(void, GetShaderInfoLog, (GLuint shader, GLsizei bufSize, GLsizei * length, GLc
 X(void, GetShaderPrecisionFormat, (GLenum shadertype, GLenum precisiontype, GLint * range, GLint * precision)) \
 X(void, GetShaderSource, (GLuint shader, GLsizei bufSize, GLsizei * length, GLchar * source)) \
 X(void, GetShaderiv, (GLuint shader, GLenum pname, GLint * params)) \
-X(const GLubyte *, GetString, (GLenum name)) \
-X(void, GetTexParameterfv, (GLenum target, GLenum pname, GLfloat * params)) \
-X(void, GetTexParameteriv, (GLenum target, GLenum pname, GLint * params)) \
 X(GLint, GetUniformLocation, (GLuint program, const GLchar * name)) \
 X(void, GetUniformfv, (GLuint program, GLint location, GLfloat * params)) \
 X(void, GetUniformiv, (GLuint program, GLint location, GLint * params)) \
@@ -3377,40 +3418,21 @@ X(void, GetVertexAttribfv, (GLuint index, GLenum pname, GLfloat * params)) \
 X(void, GetVertexAttribiv, (GLuint index, GLenum pname, GLint * params)) \
 X(void, GetnUniformfv, (GLuint program, GLint location, GLsizei bufSize, GLfloat * params)) \
 X(void, GetnUniformiv, (GLuint program, GLint location, GLsizei bufSize, GLint * params)) \
-X(void, Hint, (GLenum target, GLenum mode)) \
-X(GLboolean, IsBuffer, (GLuint buffer)) \
-X(GLboolean, IsEnabled, (GLenum cap)) \
 X(GLboolean, IsFramebuffer, (GLuint framebuffer)) \
 X(GLboolean, IsProgram, (GLuint program)) \
 X(GLboolean, IsRenderbuffer, (GLuint renderbuffer)) \
 X(GLboolean, IsShader, (GLuint shader)) \
-X(GLboolean, IsTexture, (GLuint texture)) \
-X(void, LineWidth, (GLfloat width)) \
 X(void, LinkProgram, (GLuint program)) \
-X(void, PixelStorei, (GLenum pname, GLint param)) \
-X(void, PolygonOffset, (GLfloat factor, GLfloat units)) \
 X(void, ProgramBinary, (GLuint program, GLenum binaryFormat, const void * binary, GLsizei length)) \
-X(void, ReadPixels, (GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, void * pixels)) \
 X(void, ReadnPixels, (GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, GLsizei bufSize, void * data)) \
 X(void, ReleaseShaderCompiler, ()) \
 X(void, RenderbufferStorage, (GLenum target, GLenum internalformat, GLsizei width, GLsizei height)) \
-X(void, SampleCoverage, (GLfloat value, GLboolean invert)) \
-X(void, Scissor, (GLint x, GLint y, GLsizei width, GLsizei height)) \
 X(void, ShaderBinary, (GLsizei count, const GLuint * shaders, GLenum binaryFormat, const void * binary, GLsizei length)) \
-X(void, ShaderSource, (GLuint shader, GLsizei count, const GLchar *const* string, const GLint * length)) \
-X(void, StencilFunc, (GLenum func, GLint ref, GLuint mask)) \
+X(void, ShaderSource, (GLuint shader, GLsizei count, const GLchar *const * string, const GLint * length)) \
 X(void, StencilFuncSeparate, (GLenum face, GLenum func, GLint ref, GLuint mask)) \
-X(void, StencilMask, (GLuint mask)) \
 X(void, StencilMaskSeparate, (GLenum face, GLuint mask)) \
-X(void, StencilOp, (GLenum fail, GLenum zfail, GLenum zpass)) \
 X(void, StencilOpSeparate, (GLenum face, GLenum sfail, GLenum dpfail, GLenum dppass)) \
-X(void, TexImage2D, (GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void * pixels)) \
-X(void, TexParameterf, (GLenum target, GLenum pname, GLfloat param)) \
-X(void, TexParameterfv, (GLenum target, GLenum pname, const GLfloat * params)) \
-X(void, TexParameteri, (GLenum target, GLenum pname, GLint param)) \
-X(void, TexParameteriv, (GLenum target, GLenum pname, const GLint * params)) \
 X(void, TexStorage2D, (GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height)) \
-X(void, TexSubImage2D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void * pixels)) \
 X(void, Uniform1f, (GLint location, GLfloat v0)) \
 X(void, Uniform1fv, (GLint location, GLsizei count, const GLfloat * value)) \
 X(void, Uniform1i, (GLint location, GLint v0)) \
@@ -3469,11 +3491,17 @@ X(void, VertexAttrib4ubv, (GLuint index, const GLubyte * v)) \
 X(void, VertexAttrib4uiv, (GLuint index, const GLuint * v)) \
 X(void, VertexAttrib4usv, (GLuint index, const GLushort * v)) \
 X(void, VertexAttribPointer, (GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void * pointer)) \
-X(void, Viewport, (GLint x, GLint y, GLsizei width, GLsizei height)) \
 VER_END(2_0) \
+VER_START(2_1) \
+X(void, UniformMatrix2x3fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, UniformMatrix2x4fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, UniformMatrix3x2fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, UniformMatrix3x4fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, UniformMatrix4x2fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+X(void, UniformMatrix4x3fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
+VER_END(2_1) \
 VER_START(3_0) \
 X(void, BeginConditionalRender, (GLuint id, GLenum mode)) \
-X(void, BeginQuery, (GLenum target, GLuint id)) \
 X(void, BeginTransformFeedback, (GLenum primitiveMode)) \
 X(void, BindBufferBase, (GLenum target, GLuint index, GLuint buffer)) \
 X(void, BindBufferRange, (GLenum target, GLuint index, GLuint buffer, GLintptr offset, GLsizeiptr size)) \
@@ -3488,56 +3516,52 @@ X(void, ClearBufferfv, (GLenum buffer, GLint drawbuffer, const GLfloat * value))
 X(void, ClearBufferiv, (GLenum buffer, GLint drawbuffer, const GLint * value)) \
 X(void, ClearBufferuiv, (GLenum buffer, GLint drawbuffer, const GLuint * value)) \
 X(GLenum, ClientWaitSync, (GLsync sync, GLbitfield flags, GLuint64 timeout)) \
-X(void, CompressedTexImage3D, (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLsizei imageSize, const void * data)) \
-X(void, CompressedTexSubImage3D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLsizei imageSize, const void * data)) \
+X(void, ColorMaski, (GLuint index, GLboolean r, GLboolean g, GLboolean b, GLboolean a)) \
 X(void, CopyBufferSubData, (GLenum readTarget, GLenum writeTarget, GLintptr readOffset, GLintptr writeOffset, GLsizeiptr size)) \
-X(void, CopyTexSubImage3D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLint x, GLint y, GLsizei width, GLsizei height)) \
-X(void, DeleteQueries, (GLsizei n, const GLuint * ids)) \
 X(void, DeleteSamplers, (GLsizei count, const GLuint * samplers)) \
 X(void, DeleteSync, (GLsync sync)) \
 X(void, DeleteTransformFeedbacks, (GLsizei n, const GLuint * ids)) \
 X(void, DeleteVertexArrays, (GLsizei n, const GLuint * arrays)) \
+X(void, Disablei, (GLenum target, GLuint index)) \
 X(void, DrawArraysInstanced, (GLenum mode, GLint first, GLsizei count, GLsizei instancecount)) \
-X(void, DrawBuffers, (GLsizei n, const GLenum * bufs)) \
 X(void, DrawElementsInstanced, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLsizei instancecount)) \
+X(void, Enablei, (GLenum target, GLuint index)) \
 X(void, EndConditionalRender, ()) \
-X(void, EndQuery, (GLenum target)) \
 X(void, EndTransformFeedback, ()) \
 X(GLsync, FenceSync, (GLenum condition, GLbitfield flags)) \
 X(void, FlushMappedBufferRange, (GLenum target, GLintptr offset, GLsizeiptr length)) \
 X(void, FramebufferTexture1D, (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level)) \
 X(void, FramebufferTexture3D, (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level, GLint zoffset)) \
 X(void, FramebufferTextureLayer, (GLenum target, GLenum attachment, GLuint texture, GLint level, GLint layer)) \
-X(void, GenQueries, (GLsizei n, GLuint * ids)) \
 X(void, GenSamplers, (GLsizei count, GLuint * samplers)) \
 X(void, GenTransformFeedbacks, (GLsizei n, GLuint * ids)) \
 X(void, GenVertexArrays, (GLsizei n, GLuint * arrays)) \
 X(void, GetActiveUniformBlockName, (GLuint program, GLuint uniformBlockIndex, GLsizei bufSize, GLsizei * length, GLchar * uniformBlockName)) \
 X(void, GetActiveUniformBlockiv, (GLuint program, GLuint uniformBlockIndex, GLenum pname, GLint * params)) \
 X(void, GetActiveUniformsiv, (GLuint program, GLsizei uniformCount, const GLuint * uniformIndices, GLenum pname, GLint * params)) \
+X(void, GetBooleani_v, (GLenum target, GLuint index, GLboolean * data)) \
 X(void, GetBufferParameteri64v, (GLenum target, GLenum pname, GLint64 * params)) \
-X(void, GetBufferPointerv, (GLenum target, GLenum pname, void ** params)) \
 X(GLint, GetFragDataLocation, (GLuint program, const GLchar * name)) \
 X(void, GetInteger64i_v, (GLenum target, GLuint index, GLint64 * data)) \
 X(void, GetInteger64v, (GLenum pname, GLint64 * data)) \
 X(void, GetIntegeri_v, (GLenum target, GLuint index, GLint * data)) \
 X(void, GetInternalformativ, (GLenum target, GLenum internalformat, GLenum pname, GLsizei count, GLint * params)) \
 X(void, GetProgramBinary, (GLuint program, GLsizei bufSize, GLsizei * length, GLenum * binaryFormat, void * binary)) \
-X(void, GetQueryObjectuiv, (GLuint id, GLenum pname, GLuint * params)) \
-X(void, GetQueryiv, (GLenum target, GLenum pname, GLint * params)) \
 X(void, GetSamplerParameterfv, (GLuint sampler, GLenum pname, GLfloat * params)) \
 X(void, GetSamplerParameteriv, (GLuint sampler, GLenum pname, GLint * params)) \
 X(const GLubyte *, GetStringi, (GLenum name, GLuint index)) \
 X(void, GetSynciv, (GLsync sync, GLenum pname, GLsizei count, GLsizei * length, GLint * values)) \
+X(void, GetTexParameterIiv, (GLenum target, GLenum pname, GLint * params)) \
+X(void, GetTexParameterIuiv, (GLenum target, GLenum pname, GLuint * params)) \
 X(void, GetTransformFeedbackVarying, (GLuint program, GLuint index, GLsizei bufSize, GLsizei * length, GLsizei * size, GLenum * type, GLchar * name)) \
 X(GLuint, GetUniformBlockIndex, (GLuint program, const GLchar * uniformBlockName)) \
-X(void, GetUniformIndices, (GLuint program, GLsizei uniformCount, const GLchar *const* uniformNames, GLuint * uniformIndices)) \
+X(void, GetUniformIndices, (GLuint program, GLsizei uniformCount, const GLchar *const * uniformNames, GLuint * uniformIndices)) \
 X(void, GetUniformuiv, (GLuint program, GLint location, GLuint * params)) \
 X(void, GetVertexAttribIiv, (GLuint index, GLenum pname, GLint * params)) \
 X(void, GetVertexAttribIuiv, (GLuint index, GLenum pname, GLuint * params)) \
 X(void, InvalidateFramebuffer, (GLenum target, GLsizei numAttachments, const GLenum * attachments)) \
 X(void, InvalidateSubFramebuffer, (GLenum target, GLsizei numAttachments, const GLenum * attachments, GLint x, GLint y, GLsizei width, GLsizei height)) \
-X(GLboolean, IsQuery, (GLuint id)) \
+X(GLboolean, IsEnabledi, (GLenum target, GLuint index)) \
 X(GLboolean, IsSampler, (GLuint sampler)) \
 X(GLboolean, IsSync, (GLsync sync)) \
 X(GLboolean, IsTransformFeedback, (GLuint id)) \
@@ -3545,17 +3569,16 @@ X(GLboolean, IsVertexArray, (GLuint array)) \
 X(void *, MapBufferRange, (GLenum target, GLintptr offset, GLsizeiptr length, GLbitfield access)) \
 X(void, PauseTransformFeedback, ()) \
 X(void, ProgramParameteri, (GLuint program, GLenum pname, GLint value)) \
-X(void, ReadBuffer, (GLenum src)) \
 X(void, RenderbufferStorageMultisample, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height)) \
 X(void, ResumeTransformFeedback, ()) \
 X(void, SamplerParameterf, (GLuint sampler, GLenum pname, GLfloat param)) \
 X(void, SamplerParameterfv, (GLuint sampler, GLenum pname, const GLfloat * param)) \
 X(void, SamplerParameteri, (GLuint sampler, GLenum pname, GLint param)) \
 X(void, SamplerParameteriv, (GLuint sampler, GLenum pname, const GLint * param)) \
-X(void, TexImage3D, (GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLenum format, GLenum type, const void * pixels)) \
+X(void, TexParameterIiv, (GLenum target, GLenum pname, const GLint * params)) \
+X(void, TexParameterIuiv, (GLenum target, GLenum pname, const GLuint * params)) \
 X(void, TexStorage3D, (GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth)) \
-X(void, TexSubImage3D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, const void * pixels)) \
-X(void, TransformFeedbackVaryings, (GLuint program, GLsizei count, const GLchar *const* varyings, GLenum bufferMode)) \
+X(void, TransformFeedbackVaryings, (GLuint program, GLsizei count, const GLchar *const * varyings, GLenum bufferMode)) \
 X(void, Uniform1ui, (GLint location, GLuint v0)) \
 X(void, Uniform1uiv, (GLint location, GLsizei count, const GLuint * value)) \
 X(void, Uniform2ui, (GLint location, GLuint v0, GLuint v1)) \
@@ -3565,13 +3588,6 @@ X(void, Uniform3uiv, (GLint location, GLsizei count, const GLuint * value)) \
 X(void, Uniform4ui, (GLint location, GLuint v0, GLuint v1, GLuint v2, GLuint v3)) \
 X(void, Uniform4uiv, (GLint location, GLsizei count, const GLuint * value)) \
 X(void, UniformBlockBinding, (GLuint program, GLuint uniformBlockIndex, GLuint uniformBlockBinding)) \
-X(void, UniformMatrix2x3fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
-X(void, UniformMatrix2x4fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
-X(void, UniformMatrix3x2fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
-X(void, UniformMatrix3x4fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
-X(void, UniformMatrix4x2fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
-X(void, UniformMatrix4x3fv, (GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
-X(GLboolean, UnmapBuffer, (GLenum target)) \
 X(void, VertexAttribDivisor, (GLuint index, GLuint divisor)) \
 X(void, VertexAttribI1i, (GLuint index, GLint x)) \
 X(void, VertexAttribI1iv, (GLuint index, const GLint * v)) \
@@ -3601,7 +3617,7 @@ X(void, ActiveShaderProgram, (GLuint pipeline, GLuint program)) \
 X(void, BindImageTexture, (GLuint unit, GLuint texture, GLint level, GLboolean layered, GLint layer, GLenum access, GLenum format)) \
 X(void, BindProgramPipeline, (GLuint pipeline)) \
 X(void, BindVertexBuffer, (GLuint bindingindex, GLuint buffer, GLintptr offset, GLsizei stride)) \
-X(GLuint, CreateShaderProgramv, (GLenum type, GLsizei count, const GLchar *const* strings)) \
+X(GLuint, CreateShaderProgramv, (GLenum type, GLsizei count, const GLchar *const * strings)) \
 X(void, DeleteProgramPipelines, (GLsizei n, const GLuint * pipelines)) \
 X(void, DispatchCompute, (GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z)) \
 X(void, DispatchComputeIndirect, (GLintptr indirect)) \
@@ -3610,7 +3626,6 @@ X(void, DrawElementsIndirect, (GLenum mode, GLenum type, const void * indirect))
 X(void, FramebufferParameteri, (GLenum target, GLenum pname, GLint param)) \
 X(void, GenProgramPipelines, (GLsizei n, GLuint * pipelines)) \
 X(void, GetActiveUniformName, (GLuint program, GLuint uniformIndex, GLsizei bufSize, GLsizei * length, GLchar * uniformName)) \
-X(void, GetBooleani_v, (GLenum target, GLuint index, GLboolean * data)) \
 X(void, GetFramebufferParameteriv, (GLenum target, GLenum pname, GLint * params)) \
 X(void, GetMultisamplefv, (GLenum pname, GLuint index, GLfloat * val)) \
 X(void, GetProgramInterfaceiv, (GLuint program, GLenum programInterface, GLenum pname, GLint * params)) \
@@ -3620,8 +3635,6 @@ X(GLuint, GetProgramResourceIndex, (GLuint program, GLenum programInterface, con
 X(GLint, GetProgramResourceLocation, (GLuint program, GLenum programInterface, const GLchar * name)) \
 X(void, GetProgramResourceName, (GLuint program, GLenum programInterface, GLuint index, GLsizei bufSize, GLsizei * length, GLchar * name)) \
 X(void, GetProgramResourceiv, (GLuint program, GLenum programInterface, GLuint index, GLsizei propCount, const GLenum * props, GLsizei count, GLsizei * length, GLint * params)) \
-X(void, GetTexLevelParameterfv, (GLenum target, GLint level, GLenum pname, GLfloat * params)) \
-X(void, GetTexLevelParameteriv, (GLenum target, GLint level, GLenum pname, GLint * params)) \
 X(GLboolean, IsProgramPipeline, (GLuint pipeline)) \
 X(void, MemoryBarrier, (GLbitfield barriers)) \
 X(void, MemoryBarrierByRegion, (GLbitfield barriers)) \
@@ -3660,6 +3673,7 @@ X(void, ProgramUniformMatrix4fv, (GLuint program, GLint location, GLsizei count,
 X(void, ProgramUniformMatrix4x2fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
 X(void, ProgramUniformMatrix4x3fv, (GLuint program, GLint location, GLsizei count, GLboolean transpose, const GLfloat * value)) \
 X(void, SampleMaski, (GLuint maskNumber, GLbitfield mask)) \
+X(void, TexBuffer, (GLenum target, GLenum internalformat, GLuint buffer)) \
 X(void, TexStorage2DMultisample, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLboolean fixedsamplelocations)) \
 X(void, UseProgramStages, (GLuint pipeline, GLbitfield stages, GLuint program)) \
 X(void, ValidateProgramPipeline, (GLuint pipeline)) \
@@ -3674,29 +3688,22 @@ X(void, BlendEquationSeparatei, (GLuint buf, GLenum modeRGB, GLenum modeAlpha)) 
 X(void, BlendEquationi, (GLuint buf, GLenum mode)) \
 X(void, BlendFuncSeparatei, (GLuint buf, GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, GLenum dstAlpha)) \
 X(void, BlendFunci, (GLuint buf, GLenum src, GLenum dst)) \
-X(void, ColorMaski, (GLuint index, GLboolean r, GLboolean g, GLboolean b, GLboolean a)) \
 X(void, CopyImageSubData, (GLuint srcName, GLenum srcTarget, GLint srcLevel, GLint srcX, GLint srcY, GLint srcZ, GLuint dstName, GLenum dstTarget, GLint dstLevel, GLint dstX, GLint dstY, GLint dstZ, GLsizei srcWidth, GLsizei srcHeight, GLsizei srcDepth)) \
 X(void, DebugMessageCallback, (GLDEBUGPROC callback, const void * userParam)) \
 X(void, DebugMessageControl, (GLenum source, GLenum type, GLenum severity, GLsizei count, const GLuint * ids, GLboolean enabled)) \
 X(void, DebugMessageInsert, (GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar * buf)) \
-X(void, Disablei, (GLenum target, GLuint index)) \
 X(void, DrawElementsBaseVertex, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLint basevertex)) \
 X(void, DrawElementsInstancedBaseVertex, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLsizei instancecount, GLint basevertex)) \
 X(void, DrawRangeElementsBaseVertex, (GLenum mode, GLuint start, GLuint end, GLsizei count, GLenum type, const void * indices, GLint basevertex)) \
-X(void, Enablei, (GLenum target, GLuint index)) \
 X(void, FramebufferTexture, (GLenum target, GLenum attachment, GLuint texture, GLint level)) \
 X(GLuint, GetDebugMessageLog, (GLuint count, GLsizei bufSize, GLenum * sources, GLenum * types, GLuint * ids, GLenum * severities, GLsizei * lengths, GLchar * messageLog)) \
 X(void, GetObjectLabel, (GLenum identifier, GLuint name, GLsizei bufSize, GLsizei * length, GLchar * label)) \
 X(void, GetObjectPtrLabel, (const void * ptr, GLsizei bufSize, GLsizei * length, GLchar * label)) \
-X(void, GetPointerv, (GLenum pname, void ** params)) \
 X(void, GetSamplerParameterIiv, (GLuint sampler, GLenum pname, GLint * params)) \
 X(void, GetSamplerParameterIuiv, (GLuint sampler, GLenum pname, GLuint * params)) \
-X(void, GetTexParameterIiv, (GLenum target, GLenum pname, GLint * params)) \
-X(void, GetTexParameterIuiv, (GLenum target, GLenum pname, GLuint * params)) \
 X(void, GetnUniformuiv, (GLuint program, GLint location, GLsizei bufSize, GLuint * params)) \
-X(GLboolean, IsEnabledi, (GLenum target, GLuint index)) \
 X(void, MinSampleShading, (GLfloat value)) \
-X(void, MultiDrawElementsBaseVertex, (GLenum mode, const GLsizei * count, GLenum type, const void *const* indices, GLsizei drawcount, const GLint * basevertex)) \
+X(void, MultiDrawElementsBaseVertex, (GLenum mode, const GLsizei * count, GLenum type, const void *const * indices, GLsizei drawcount, const GLint * basevertex)) \
 X(void, ObjectLabel, (GLenum identifier, GLuint name, GLsizei length, const GLchar * label)) \
 X(void, ObjectPtrLabel, (const void * ptr, GLsizei length, const GLchar * label)) \
 X(void, PatchParameteri, (GLenum pname, GLint value)) \
@@ -3706,12 +3713,9 @@ X(void, ProvokingVertex, (GLenum mode)) \
 X(void, PushDebugGroup, (GLenum source, GLuint id, GLsizei length, const GLchar * message)) \
 X(void, SamplerParameterIiv, (GLuint sampler, GLenum pname, const GLint * param)) \
 X(void, SamplerParameterIuiv, (GLuint sampler, GLenum pname, const GLuint * param)) \
-X(void, TexBuffer, (GLenum target, GLenum internalformat, GLuint buffer)) \
 X(void, TexBufferRange, (GLenum target, GLenum internalformat, GLuint buffer, GLintptr offset, GLsizeiptr size)) \
 X(void, TexImage2DMultisample, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLboolean fixedsamplelocations)) \
 X(void, TexImage3DMultisample, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLboolean fixedsamplelocations)) \
-X(void, TexParameterIiv, (GLenum target, GLenum pname, const GLint * params)) \
-X(void, TexParameterIuiv, (GLenum target, GLenum pname, const GLuint * params)) \
 X(void, TexStorage3DMultisample, (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLboolean fixedsamplelocations)) \
 VER_END(3_2) \
 VER_START(3_3) \
@@ -4174,8 +4178,14 @@ X(void, MapVertexAttrib1fAPPLE, (GLuint index, GLuint size, GLfloat u1, GLfloat 
 X(void, MapVertexAttrib2dAPPLE, (GLuint index, GLuint size, GLdouble u1, GLdouble u2, GLint ustride, GLint uorder, GLdouble v1, GLdouble v2, GLint vstride, GLint vorder, const GLdouble * points)) \
 X(void, MapVertexAttrib2fAPPLE, (GLuint index, GLuint size, GLfloat u1, GLfloat u2, GLint ustride, GLint uorder, GLfloat v1, GLfloat v2, GLint vstride, GLint vorder, const GLfloat * points)) \
 EXT_END() \
+EXT_START("GL_ARB_ES2_compatibility") \
+EXT_END() \
+EXT_START("GL_ARB_ES3_1_compatibility") \
+EXT_END() \
 EXT_START("GL_ARB_ES3_2_compatibility") \
 X(void, PrimitiveBoundingBoxARB, (GLfloat minX, GLfloat minY, GLfloat minZ, GLfloat minW, GLfloat maxX, GLfloat maxY, GLfloat maxZ, GLfloat maxW)) \
+EXT_END() \
+EXT_START("GL_ARB_base_instance") \
 EXT_END() \
 EXT_START("GL_ARB_bindless_texture") \
 X(GLuint64, GetImageHandleARB, (GLuint texture, GLint level, GLboolean layered, GLint layer, GLenum format)) \
@@ -4195,20 +4205,38 @@ X(void, UniformHandleui64vARB, (GLint location, GLsizei count, const GLuint64 * 
 X(void, VertexAttribL1ui64ARB, (GLuint index, GLuint64EXT x)) \
 X(void, VertexAttribL1ui64vARB, (GLuint index, const GLuint64EXT * v)) \
 EXT_END() \
+EXT_START("GL_ARB_blend_func_extended") \
+EXT_END() \
+EXT_START("GL_ARB_buffer_storage") \
+EXT_END() \
 EXT_START("GL_ARB_cl_event") \
 X(GLsync, CreateSyncFromCLeventARB, (struct _cl_context * context, struct _cl_event * event, GLbitfield flags)) \
+EXT_END() \
+EXT_START("GL_ARB_clear_buffer_object") \
+EXT_END() \
+EXT_START("GL_ARB_clear_texture") \
+EXT_END() \
+EXT_START("GL_ARB_clip_control") \
 EXT_END() \
 EXT_START("GL_ARB_color_buffer_float") \
 X(void, ClampColorARB, (GLenum target, GLenum clamp)) \
 EXT_END() \
+EXT_START("GL_ARB_compute_shader") \
+EXT_END() \
 EXT_START("GL_ARB_compute_variable_group_size") \
 X(void, DispatchComputeGroupSizeARB, (GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z, GLuint group_size_x, GLuint group_size_y, GLuint group_size_z)) \
+EXT_END() \
+EXT_START("GL_ARB_copy_buffer") \
+EXT_END() \
+EXT_START("GL_ARB_copy_image") \
 EXT_END() \
 EXT_START("GL_ARB_debug_output") \
 X(void, DebugMessageCallbackARB, (GLDEBUGPROCARB callback, const void * userParam)) \
 X(void, DebugMessageControlARB, (GLenum source, GLenum type, GLenum severity, GLsizei count, const GLuint * ids, GLboolean enabled)) \
 X(void, DebugMessageInsertARB, (GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar * buf)) \
 X(GLuint, GetDebugMessageLogARB, (GLuint count, GLsizei bufSize, GLenum * sources, GLenum * types, GLuint * ids, GLenum * severities, GLsizei * lengths, GLchar * messageLog)) \
+EXT_END() \
+EXT_START("GL_ARB_direct_state_access") \
 EXT_END() \
 EXT_START("GL_ARB_draw_buffers") \
 X(void, DrawBuffersARB, (GLsizei n, const GLenum * bufs)) \
@@ -4218,6 +4246,10 @@ X(void, BlendEquationSeparateiARB, (GLuint buf, GLenum modeRGB, GLenum modeAlpha
 X(void, BlendEquationiARB, (GLuint buf, GLenum mode)) \
 X(void, BlendFuncSeparateiARB, (GLuint buf, GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, GLenum dstAlpha)) \
 X(void, BlendFunciARB, (GLuint buf, GLenum src, GLenum dst)) \
+EXT_END() \
+EXT_START("GL_ARB_draw_elements_base_vertex") \
+EXT_END() \
+EXT_START("GL_ARB_draw_indirect") \
 EXT_END() \
 EXT_START("GL_ARB_draw_instanced") \
 X(void, DrawArraysInstancedARB, (GLenum mode, GLint first, GLsizei count, GLsizei primcount)) \
@@ -4244,14 +4276,24 @@ X(void, ProgramLocalParameter4fARB, (GLenum target, GLuint index, GLfloat x, GLf
 X(void, ProgramLocalParameter4fvARB, (GLenum target, GLuint index, const GLfloat * params)) \
 X(void, ProgramStringARB, (GLenum target, GLenum format, GLsizei len, const void * string)) \
 EXT_END() \
+EXT_START("GL_ARB_framebuffer_no_attachments") \
+EXT_END() \
+EXT_START("GL_ARB_framebuffer_object") \
+EXT_END() \
 EXT_START("GL_ARB_geometry_shader4") \
 X(void, FramebufferTextureARB, (GLenum target, GLenum attachment, GLuint texture, GLint level)) \
 X(void, FramebufferTextureFaceARB, (GLenum target, GLenum attachment, GLuint texture, GLint level, GLenum face)) \
 X(void, FramebufferTextureLayerARB, (GLenum target, GLenum attachment, GLuint texture, GLint level, GLint layer)) \
 X(void, ProgramParameteriARB, (GLuint program, GLenum pname, GLint value)) \
 EXT_END() \
+EXT_START("GL_ARB_get_program_binary") \
+EXT_END() \
+EXT_START("GL_ARB_get_texture_sub_image") \
+EXT_END() \
 EXT_START("GL_ARB_gl_spirv") \
 X(void, SpecializeShaderARB, (GLuint shader, const GLchar * pEntryPoint, GLuint numSpecializationConstants, const GLuint * pConstantIndex, const GLuint * pConstantValue)) \
+EXT_END() \
+EXT_START("GL_ARB_gpu_shader_fp64") \
 EXT_END() \
 EXT_START("GL_ARB_gpu_shader_int64") \
 X(void, GetUniformi64vARB, (GLuint program, GLint location, GLint64 * params)) \
@@ -4332,12 +4374,24 @@ EXT_END() \
 EXT_START("GL_ARB_instanced_arrays") \
 X(void, VertexAttribDivisorARB, (GLuint index, GLuint divisor)) \
 EXT_END() \
+EXT_START("GL_ARB_internalformat_query") \
+EXT_END() \
+EXT_START("GL_ARB_internalformat_query2") \
+EXT_END() \
+EXT_START("GL_ARB_invalidate_subdata") \
+EXT_END() \
+EXT_START("GL_ARB_map_buffer_range") \
+EXT_END() \
 EXT_START("GL_ARB_matrix_palette") \
 X(void, CurrentPaletteMatrixARB, (GLint index)) \
 X(void, MatrixIndexPointerARB, (GLint size, GLenum type, GLsizei stride, const void * pointer)) \
 X(void, MatrixIndexubvARB, (GLint size, const GLubyte * indices)) \
 X(void, MatrixIndexuivARB, (GLint size, const GLuint * indices)) \
 X(void, MatrixIndexusvARB, (GLint size, const GLushort * indices)) \
+EXT_END() \
+EXT_START("GL_ARB_multi_bind") \
+EXT_END() \
+EXT_START("GL_ARB_multi_draw_indirect") \
 EXT_END() \
 EXT_START("GL_ARB_multisample") \
 X(void, SampleCoverageARB, (GLfloat value, GLboolean invert)) \
@@ -4395,6 +4449,12 @@ EXT_START("GL_ARB_point_parameters") \
 X(void, PointParameterfARB, (GLenum pname, GLfloat param)) \
 X(void, PointParameterfvARB, (GLenum pname, const GLfloat * params)) \
 EXT_END() \
+EXT_START("GL_ARB_polygon_offset_clamp") \
+EXT_END() \
+EXT_START("GL_ARB_program_interface_query") \
+EXT_END() \
+EXT_START("GL_ARB_provoking_vertex") \
+EXT_END() \
 EXT_START("GL_ARB_robustness") \
 X(GLenum, GetGraphicsResetStatusARB, ()) \
 X(void, GetnColorTableARB, (GLenum target, GLenum format, GLenum type, GLsizei bufSize, void * table)) \
@@ -4424,6 +4484,14 @@ X(void, NamedFramebufferSampleLocationsfvARB, (GLuint framebuffer, GLuint start,
 EXT_END() \
 EXT_START("GL_ARB_sample_shading") \
 X(void, MinSampleShadingARB, (GLfloat value)) \
+EXT_END() \
+EXT_START("GL_ARB_sampler_objects") \
+EXT_END() \
+EXT_START("GL_ARB_separate_shader_objects") \
+EXT_END() \
+EXT_START("GL_ARB_shader_atomic_counters") \
+EXT_END() \
+EXT_START("GL_ARB_shader_image_load_store") \
 EXT_END() \
 EXT_START("GL_ARB_shader_objects") \
 X(void, AttachObjectARB, (GLhandleARB containerObj, GLhandleARB obj)) \
@@ -4466,8 +4534,12 @@ X(void, UniformMatrix4fvARB, (GLint location, GLsizei count, GLboolean transpose
 X(void, UseProgramObjectARB, (GLhandleARB programObj)) \
 X(void, ValidateProgramARB, (GLhandleARB programObj)) \
 EXT_END() \
+EXT_START("GL_ARB_shader_storage_buffer_object") \
+EXT_END() \
+EXT_START("GL_ARB_shader_subroutine") \
+EXT_END() \
 EXT_START("GL_ARB_shading_language_include") \
-X(void, CompileShaderIncludeARB, (GLuint shader, GLsizei count, const GLchar *const* path, const GLint * length)) \
+X(void, CompileShaderIncludeARB, (GLuint shader, GLsizei count, const GLchar *const * path, const GLint * length)) \
 X(void, DeleteNamedStringARB, (GLint namelen, const GLchar * name)) \
 X(void, GetNamedStringARB, (GLint namelen, const GLchar * name, GLsizei bufSize, GLint * stringlen, GLchar * string)) \
 X(void, GetNamedStringivARB, (GLint namelen, const GLchar * name, GLenum pname, GLint * params)) \
@@ -4482,8 +4554,16 @@ EXT_END() \
 EXT_START("GL_ARB_sparse_texture") \
 X(void, TexPageCommitmentARB, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLboolean commit)) \
 EXT_END() \
+EXT_START("GL_ARB_sync") \
+EXT_END() \
+EXT_START("GL_ARB_tessellation_shader") \
+EXT_END() \
+EXT_START("GL_ARB_texture_barrier") \
+EXT_END() \
 EXT_START("GL_ARB_texture_buffer_object") \
 X(void, TexBufferARB, (GLenum target, GLenum internalformat, GLuint buffer)) \
+EXT_END() \
+EXT_START("GL_ARB_texture_buffer_range") \
 EXT_END() \
 EXT_START("GL_ARB_texture_compression") \
 X(void, CompressedTexImage1DARB, (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLint border, GLsizei imageSize, const void * data)) \
@@ -4494,11 +4574,35 @@ X(void, CompressedTexSubImage2DARB, (GLenum target, GLint level, GLint xoffset, 
 X(void, CompressedTexSubImage3DARB, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLsizei imageSize, const void * data)) \
 X(void, GetCompressedTexImageARB, (GLenum target, GLint level, void * img)) \
 EXT_END() \
+EXT_START("GL_ARB_texture_multisample") \
+EXT_END() \
+EXT_START("GL_ARB_texture_storage") \
+EXT_END() \
+EXT_START("GL_ARB_texture_storage_multisample") \
+EXT_END() \
+EXT_START("GL_ARB_texture_view") \
+EXT_END() \
+EXT_START("GL_ARB_timer_query") \
+EXT_END() \
+EXT_START("GL_ARB_transform_feedback2") \
+EXT_END() \
+EXT_START("GL_ARB_transform_feedback3") \
+EXT_END() \
+EXT_START("GL_ARB_transform_feedback_instanced") \
+EXT_END() \
 EXT_START("GL_ARB_transpose_matrix") \
 X(void, LoadTransposeMatrixdARB, (const GLdouble * m)) \
 X(void, LoadTransposeMatrixfARB, (const GLfloat * m)) \
 X(void, MultTransposeMatrixdARB, (const GLdouble * m)) \
 X(void, MultTransposeMatrixfARB, (const GLfloat * m)) \
+EXT_END() \
+EXT_START("GL_ARB_uniform_buffer_object") \
+EXT_END() \
+EXT_START("GL_ARB_vertex_array_object") \
+EXT_END() \
+EXT_START("GL_ARB_vertex_attrib_64bit") \
+EXT_END() \
+EXT_START("GL_ARB_vertex_attrib_binding") \
 EXT_END() \
 EXT_START("GL_ARB_vertex_blend") \
 X(void, VertexBlendARB, (GLint count)) \
@@ -4574,6 +4678,8 @@ EXT_START("GL_ARB_vertex_shader") \
 X(void, BindAttribLocationARB, (GLhandleARB programObj, GLuint index, const GLcharARB * name)) \
 X(void, GetActiveAttribARB, (GLhandleARB programObj, GLuint index, GLsizei maxLength, GLsizei * length, GLint * size, GLenum * type, GLcharARB * name)) \
 X(GLint, GetAttribLocationARB, (GLhandleARB programObj, const GLcharARB * name)) \
+EXT_END() \
+EXT_START("GL_ARB_vertex_type_2_10_10_10_rev") \
 EXT_END() \
 EXT_START("GL_ARB_viewport_array") \
 X(void, DepthRangeArraydvNV, (GLuint first, GLsizei count, const GLdouble * v)) \
@@ -5117,7 +5223,7 @@ EXT_START("GL_EXT_draw_elements_base_vertex") \
 X(void, DrawElementsBaseVertexEXT, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLint basevertex)) \
 X(void, DrawElementsInstancedBaseVertexEXT, (GLenum mode, GLsizei count, GLenum type, const void * indices, GLsizei instancecount, GLint basevertex)) \
 X(void, DrawRangeElementsBaseVertexEXT, (GLenum mode, GLuint start, GLuint end, GLsizei count, GLenum type, const void * indices, GLint basevertex)) \
-X(void, MultiDrawElementsBaseVertexEXT, (GLenum mode, const GLsizei * count, GLenum type, const void *const* indices, GLsizei drawcount, const GLint * basevertex)) \
+X(void, MultiDrawElementsBaseVertexEXT, (GLenum mode, const GLsizei * count, GLenum type, const void *const * indices, GLsizei drawcount, const GLint * basevertex)) \
 EXT_END() \
 EXT_START("GL_EXT_draw_instanced") \
 X(void, DrawArraysInstancedEXT, (GLenum mode, GLint start, GLsizei count, GLsizei primcount)) \
@@ -5287,7 +5393,7 @@ X(void, MultiDrawMeshTasksIndirectEXT, (GLintptr indirect, GLsizei drawcount, GL
 EXT_END() \
 EXT_START("GL_EXT_multi_draw_arrays") \
 X(void, MultiDrawArraysEXT, (GLenum mode, const GLint * first, const GLsizei * count, GLsizei primcount)) \
-X(void, MultiDrawElementsEXT, (GLenum mode, const GLsizei * count, GLenum type, const void *const* indices, GLsizei primcount)) \
+X(void, MultiDrawElementsEXT, (GLenum mode, const GLsizei * count, GLenum type, const void *const * indices, GLsizei primcount)) \
 EXT_END() \
 EXT_START("GL_EXT_multi_draw_indirect") \
 X(void, MultiDrawArraysIndirectEXT, (GLenum mode, const void * indirect, GLsizei drawcount, GLsizei stride)) \
@@ -5304,6 +5410,8 @@ EXT_START("GL_EXT_multiview_draw_buffers") \
 X(void, DrawBuffersIndexedEXT, (GLint n, const GLenum * location, const GLint * indices)) \
 X(void, GetIntegeri_vEXT, (GLenum target, GLuint index, GLint * data)) \
 X(void, ReadBufferIndexedEXT, (GLenum src, GLint index)) \
+EXT_END() \
+EXT_START("GL_EXT_occlusion_query_boolean") \
 EXT_END() \
 EXT_START("GL_EXT_paletted_texture") \
 X(void, ColorTableEXT, (GLenum target, GLenum internalFormat, GLsizei width, GLenum format, GLenum type, const void * table)) \
@@ -5384,7 +5492,7 @@ X(void, ActiveProgramEXT, (GLuint program)) \
 X(void, ActiveShaderProgramEXT, (GLuint pipeline, GLuint program)) \
 X(void, BindProgramPipelineEXT, (GLuint pipeline)) \
 X(GLuint, CreateShaderProgramEXT, (GLenum type, const GLchar * string)) \
-X(GLuint, CreateShaderProgramvEXT, (GLenum type, GLsizei count, const GLchar *const* strings)) \
+X(GLuint, CreateShaderProgramvEXT, (GLenum type, GLsizei count, const GLchar *const * strings)) \
 X(void, DeleteProgramPipelinesEXT, (GLsizei n, const GLuint * pipelines)) \
 X(void, GenProgramPipelinesEXT, (GLsizei n, GLuint * pipelines)) \
 X(void, GetProgramPipelineInfoLogEXT, (GLuint pipeline, GLsizei bufSize, GLsizei * length, GLchar * infoLog)) \
@@ -5443,6 +5551,8 @@ EXT_START("GL_EXT_texture_buffer") \
 X(void, TexBufferEXT, (GLenum target, GLenum internalformat, GLuint buffer)) \
 X(void, TexBufferRangeEXT, (GLenum target, GLenum internalformat, GLuint buffer, GLintptr offset, GLsizeiptr size)) \
 EXT_END() \
+EXT_START("GL_EXT_texture_buffer_object") \
+EXT_END() \
 EXT_START("GL_EXT_texture_integer") \
 X(void, ClearColorIiEXT, (GLint red, GLint green, GLint blue, GLint alpha)) \
 X(void, ClearColorIuiEXT, (GLuint red, GLuint green, GLuint blue, GLuint alpha)) \
@@ -5470,6 +5580,8 @@ EXT_END() \
 EXT_START("GL_EXT_texture_view") \
 X(void, TextureViewEXT, (GLuint texture, GLenum target, GLuint origtexture, GLenum internalformat, GLuint minlevel, GLuint numlevels, GLuint minlayer, GLuint numlayers)) \
 EXT_END() \
+EXT_START("GL_EXT_timer_query") \
+EXT_END() \
 EXT_START("GL_EXT_transform_feedback") \
 X(void, BeginTransformFeedbackEXT, (GLenum primitiveMode)) \
 X(void, BindBufferBaseEXT, (GLenum target, GLuint index, GLuint buffer)) \
@@ -5477,7 +5589,7 @@ X(void, BindBufferOffsetEXT, (GLenum target, GLuint index, GLuint buffer, GLintp
 X(void, BindBufferRangeEXT, (GLenum target, GLuint index, GLuint buffer, GLintptr offset, GLsizeiptr size)) \
 X(void, EndTransformFeedbackEXT, ()) \
 X(void, GetTransformFeedbackVaryingEXT, (GLuint program, GLuint index, GLsizei bufSize, GLsizei * length, GLsizei * size, GLenum * type, GLchar * name)) \
-X(void, TransformFeedbackVaryingsEXT, (GLuint program, GLsizei count, const GLchar *const* varyings, GLenum bufferMode)) \
+X(void, TransformFeedbackVaryingsEXT, (GLuint program, GLsizei count, const GLchar *const * varyings, GLenum bufferMode)) \
 EXT_END() \
 EXT_START("GL_EXT_vertex_array") \
 X(void, ArrayElementEXT, (GLint i)) \
@@ -5577,7 +5689,7 @@ X(void, ImageTransformParameterivHP, (GLenum target, GLenum pname, const GLint *
 EXT_END() \
 EXT_START("GL_IBM_multimode_draw_arrays") \
 X(void, MultiModeDrawArraysIBM, (const GLenum * mode, const GLint * first, const GLsizei * count, GLsizei primcount, GLint modestride)) \
-X(void, MultiModeDrawElementsIBM, (const GLenum * mode, const GLsizei * count, GLenum type, const void *const* indices, GLsizei primcount, GLint modestride)) \
+X(void, MultiModeDrawElementsIBM, (const GLenum * mode, const GLsizei * count, GLenum type, const void *const * indices, GLsizei primcount, GLint modestride)) \
 EXT_END() \
 EXT_START("GL_IBM_static_data") \
 X(void, FlushStaticDataIBM, (GLenum target)) \
@@ -5673,6 +5785,8 @@ X(void, GetFramebufferParameterivMESA, (GLenum target, GLenum pname, GLint * par
 EXT_END() \
 EXT_START("GL_MESA_resize_buffers") \
 X(void, ResizeBuffersMESA, ()) \
+EXT_END() \
+EXT_START("GL_MESA_sampler_objects") \
 EXT_END() \
 EXT_START("GL_MESA_window_pos") \
 X(void, WindowPos2dMESA, (GLdouble x, GLdouble y)) \
@@ -5909,6 +6023,8 @@ EXT_END() \
 EXT_START("GL_NV_gpu_program5") \
 X(void, GetProgramSubroutineParameteruivNV, (GLenum target, GLuint index, GLuint * param)) \
 X(void, ProgramSubroutineParametersuivNV, (GLenum target, GLsizei count, const GLuint * params)) \
+EXT_END() \
+EXT_START("GL_NV_gpu_shader5") \
 EXT_END() \
 EXT_START("GL_NV_half_float") \
 X(void, Color3hNV, (GLhalfNV red, GLhalfNV green, GLhalfNV blue)) \
@@ -6317,6 +6433,8 @@ X(void, VertexAttribs4fvNV, (GLuint index, GLsizei count, const GLfloat * v)) \
 X(void, VertexAttribs4svNV, (GLuint index, GLsizei count, const GLshort * v)) \
 X(void, VertexAttribs4ubvNV, (GLuint index, GLsizei count, const GLubyte * v)) \
 EXT_END() \
+EXT_START("GL_NV_vertex_program4") \
+EXT_END() \
 EXT_START("GL_NV_video_capture") \
 X(void, BeginVideoCaptureNV, (GLuint video_capture_slot)) \
 X(void, BindVideoCaptureStreamBufferNV, (GLuint video_capture_slot, GLuint stream, GLenum frame_region, GLintptrARB offset)) \
@@ -6351,6 +6469,8 @@ EXT_END() \
 EXT_START("GL_OES_EGL_image") \
 X(void, EGLImageTargetRenderbufferStorageOES, (GLenum target, GLeglImageOES image)) \
 X(void, EGLImageTargetTexture2DOES, (GLenum target, GLeglImageOES image)) \
+EXT_END() \
+EXT_START("GL_OES_EGL_image_external") \
 EXT_END() \
 EXT_START("GL_OES_blend_equation_separate") \
 X(void, BlendEquationSeparateOES, (GLenum modeRGB, GLenum modeAlpha)) \

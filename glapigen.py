@@ -94,46 +94,88 @@ def generate(glxml_path="gl.xml", backslash=False):
         proto = cmd.find("proto")
         if proto is None:
             continue
+
         retval, name = reconstruct_proto(proto)
         if not name:
             continue
+
         params = []
         for i, param in enumerate(cmd.findall("param")):
             ptype, pname = reconstruct_param(param, i)
             params.append((ptype, pname))
+
         commands[name] = (retval, params)
 
-    # Map version → list of commands (but avoid duplicates)
+    def emit_command(name):
+        retval, params = commands[name]
+        param_str = ", ".join(
+            f"{ptype} {pname}" for ptype, pname in params
+        )
+        line = f"X({retval}, {name.removeprefix('gl')}, ({param_str}))"
+        if backslash:
+            line += " \\"
+        print(line)
+
+    # Core versions
     version_cmds = {}
     for feature in root.findall("feature"):
         version = feature.get("number")
         if not version:
             continue
-        for req in feature.findall("require/command"):
-            name = req.get("name")
-            if name in commands:
-                version_cmds.setdefault(version, set()).add(name)
 
-    # Track commands that have already been output
+        for req in feature.findall("require"):
+            for cmd in req.findall("command"):
+                name = cmd.get("name")
+                if name in commands:
+                    version_cmds.setdefault(version, set()).add(name)
+
     seen = set()
 
-    # Output in sorted version order
-    for version in sorted(version_cmds.keys(), key=version_key):
+    for version in sorted(version_cmds, key=version_key):
         vlabel = version.replace(".", "_")
-        print(f"V({vlabel}) \\")
+        print(f"VER_START({vlabel}) \\")
 
         cmds = sorted(version_cmds[version] - seen)
         for name in cmds:
-            retval, params = commands[name]
-            param_str = ", ".join(f"{ptype} {pname}" for ptype, pname in params)
-            line = f"X({retval}, {name}, ({param_str}))"
-            if backslash:
-                line += " \\"
-            print(line)
+            emit_command(name)
 
-        # Mark these as seen so they won’t reappear in later versions
         seen.update(cmds)
-        print(f"VE() \\")
+        print(f"VER_END({vlabel}) \\")
+
+    # Extensions
+    extensions = root.find("extensions")
+    if extensions is None:
+        return
+
+    for extension in sorted(
+        extensions.findall("extension"),
+        key=lambda e: e.get("name", "")
+    ):
+        ext_name = extension.get("name")
+        if not ext_name:
+            continue
+
+        ext_cmds = set()
+
+        for req in extension.findall("require"):
+            for cmd in req.findall("command"):
+                name = cmd.get("name")
+                if name in commands:
+                    ext_cmds.add(name)
+
+        # Skip extensions without commands
+        if not ext_cmds:
+            continue
+
+        print(f"EXT_START(\"{ext_name}\") \\")
+
+        # Skip commands already emitted by core versions
+        # or earlier extensions.
+        for name in sorted(ext_cmds - seen):
+            emit_command(name)
+
+        seen.update(ext_cmds)
+        print("EXT_END() \\")
 
 
 if __name__ == "__main__":
