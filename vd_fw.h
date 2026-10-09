@@ -8075,58 +8075,63 @@ VD_FW__WIN32_FUNCTIONS
 #undef V
 #undef VE
 
+#ifdef __cplusplus
+#define VD_FW_EXPORT_C "C"
+#else
+#define VD_FW_EXPORT_C
+#endif
 #pragma comment(linker, "/alternatename:VdFwInitializeCriticalSection=InitializeCriticalSection")
-extern void        VdFwInitializeCriticalSection(VdFwCRITICAL_SECTION *lpCriticalSection);
+extern VD_FW_EXPORT_C void        VdFwInitializeCriticalSection(VdFwCRITICAL_SECTION *lpCriticalSection);
 #pragma comment(linker, "/alternatename:VdFwInitializeConditionVariable=InitializeConditionVariable")
-extern void        VdFwInitializeConditionVariable(VdFwCONDITION_VARIABLE *ConditionVariable);
+extern VD_FW_EXPORT_C void        VdFwInitializeConditionVariable(VdFwCONDITION_VARIABLE *ConditionVariable);
 #pragma comment(linker, "/alternatename:VdFwCreateSemaphoreA=CreateSemaphoreA")
-extern VdFwHANDLE  VdFwCreateSemaphoreA(VdFwSECURITY_ATTRIBUTES *lpSemaphoreAttributes, VdFwLONG lInitialCount, VdFwLONG lMaximumCount, VdFwLPCSTR lpName);
+extern VD_FW_EXPORT_C VdFwHANDLE  VdFwCreateSemaphoreA(VdFwSECURITY_ATTRIBUTES *lpSemaphoreAttributes, VdFwLONG lInitialCount, VdFwLONG lMaximumCount, VdFwLPCSTR lpName);
 #pragma comment(linker, "/alternatename:VdFwWaitForSingleObject=WaitForSingleObject")
-extern VdFwDWORD   VdFwWaitForSingleObject(VdFwHANDLE hHandle, VdFwDWORD dwMilliseconds);
+extern VD_FW_EXPORT_C VdFwDWORD   VdFwWaitForSingleObject(VdFwHANDLE hHandle, VdFwDWORD dwMilliseconds);
 #pragma comment(linker, "/alternatename:VdFwCloseHandle=CloseHandle")
-extern VdFwBOOL    VdFwCloseHandle(VdFwHANDLE hObject);
+extern VD_FW_EXPORT_C VdFwBOOL    VdFwCloseHandle(VdFwHANDLE hObject);
 #pragma comment(linker, "/alternatename:VdFwGetFileTime=GetFileTime")
-extern VdFwBOOL    VdFwGetFileTime(VdFwHANDLE hFile, VdFwFILETIME *lpCreationTime, VdFwFILETIME *lpLastAccessTime, VdFwFILETIME *lpLastWriteTime);
+extern VD_FW_EXPORT_C VdFwBOOL    VdFwGetFileTime(VdFwHANDLE hFile, VdFwFILETIME *lpCreationTime, VdFwFILETIME *lpLastAccessTime, VdFwFILETIME *lpLastWriteTime);
 #pragma comment(linker, "/alternatename:VdFwCompareFileTime=CompareFileTime")
-extern VdFwLONG    VdFwCompareFileTime(const VdFwFILETIME *lpFileTime1, const VdFwFILETIME *lpFileTime2);
+extern VD_FW_EXPORT_C VdFwLONG    VdFwCompareFileTime(const VdFwFILETIME *lpFileTime1, const VdFwFILETIME *lpFileTime2);
 #pragma comment(linker, "/alternatename:VdFwDeleteCriticalSection=DeleteCriticalSection")
-extern void        VdFwDeleteCriticalSection(VdFwCRITICAL_SECTION *lpCriticalSection);
+extern VD_FW_EXPORT_C void        VdFwDeleteCriticalSection(VdFwCRITICAL_SECTION *lpCriticalSection);
 #pragma comment(linker, "/alternatename:VdFwReleaseSemaphore=ReleaseSemaphore")
-extern VdFwBOOL    VdFwReleaseSemaphore(VdFwHANDLE hSemaphore, VdFwLONG lReleaseCount, VdFwLPLONG lpPreviousCount);
+extern VD_FW_EXPORT_C VdFwBOOL    VdFwReleaseSemaphore(VdFwHANDLE hSemaphore, VdFwLONG lReleaseCount, VdFwLPLONG lpPreviousCount);
 #pragma comment(linker, "/alternatename:VdFwWakeConditionVariable=WakeConditionVariable")
-extern void        VdFwWakeConditionVariable(VdFwCONDITION_VARIABLE *ConditionVariable);
+extern VD_FW_EXPORT_C void        VdFwWakeConditionVariable(VdFwCONDITION_VARIABLE *ConditionVariable);
 #pragma comment(linker, "/alternatename:VdFwSleepConditionVariableCS=SleepConditionVariableCS")
-extern VdFwBOOL    VdFwSleepConditionVariableCS(VdFwCONDITION_VARIABLE *ConditionVariable, VdFwCRITICAL_SECTION *CriticalSection, VdFwDWORD dwMilliseconds);
+extern VD_FW_EXPORT_C VdFwBOOL    VdFwSleepConditionVariableCS(VdFwCONDITION_VARIABLE *ConditionVariable, VdFwCRITICAL_SECTION *CriticalSection, VdFwDWORD dwMilliseconds);
 #pragma comment(linker, "/alternatename:VdFwEnterCriticalSection=EnterCriticalSection")
-extern void        VdFwEnterCriticalSection(VdFwCRITICAL_SECTION *sec);
+extern VD_FW_EXPORT_C void        VdFwEnterCriticalSection(VdFwCRITICAL_SECTION *sec);
 #pragma comment(linker, "/alternatename:VdFwLeaveCriticalSection=LeaveCriticalSection")
-extern void        VdFwLeaveCriticalSection(VdFwCRITICAL_SECTION *sec);
+extern VD_FW_EXPORT_C void        VdFwLeaveCriticalSection(VdFwCRITICAL_SECTION *sec);
 #pragma comment(linker, "/alternatename:VdFwCreateThread=CreateThread")
-extern VdFwHANDLE  VdFwCreateThread(VdFwSECURITY_ATTRIBUTES *lpThreadAttributes, size_t dwStackSize, VdFwDWORD(*lpStartAddress)(void*), VdFwLPVOID lpParameter, VdFwDWORD dwCreationFlags, VdFwLPDWORD lpThreadId);
+extern VD_FW_EXPORT_C VdFwHANDLE  VdFwCreateThread(VdFwSECURITY_ATTRIBUTES *lpThreadAttributes, size_t dwStackSize, VdFwDWORD(*lpStartAddress)(void*), VdFwLPVOID lpParameter, VdFwDWORD dwCreationFlags, VdFwLPDWORD lpThreadId);
 #pragma comment(linker, "/alternatename:VdFwQueryPerformanceFrequency=QueryPerformanceFrequency")
-extern VdFwBOOL    VdFwQueryPerformanceFrequency(VdFwLARGE_INTEGER *lpFrequency);
+extern VD_FW_EXPORT_C VdFwBOOL    VdFwQueryPerformanceFrequency(VdFwLARGE_INTEGER *lpFrequency);
 #pragma comment(linker, "/alternatename:VdFwQueryPerformanceCounter=QueryPerformanceCounter")
-extern VdFwBOOL    VdFwQueryPerformanceCounter(VdFwLARGE_INTEGER *lpFrequency);
+extern VD_FW_EXPORT_C VdFwBOOL    VdFwQueryPerformanceCounter(VdFwLARGE_INTEGER *lpFrequency);
 #pragma comment(linker, "/alternatename:VdFwGetLastError=GetLastError")
-extern VdFwDWORD   VdFwGetLastError(void);
+extern VD_FW_EXPORT_C VdFwDWORD   VdFwGetLastError(void);
 #pragma comment(linker, "/alternatename:VdFwLoadLibraryA=LoadLibraryA")
-extern VdFwHMODULE VdFwLoadLibraryA(VdFwLPCSTR path);
+extern VD_FW_EXPORT_C VdFwHMODULE VdFwLoadLibraryA(VdFwLPCSTR path);
 #pragma comment(linker, "/alternatename:VdFwMultiByteToWideChar=MultiByteToWideChar")
-extern int         VdFwMultiByteToWideChar(VdFwUINT CodePage, VdFwDWORD dwFlags, VdFwLPCSTR lpMultiByteStr, int cbMultiByte, VdFwLPWSTR lpWideCharStr, int cchWideChar);
+extern VD_FW_EXPORT_C int         VdFwMultiByteToWideChar(VdFwUINT CodePage, VdFwDWORD dwFlags, VdFwLPCSTR lpMultiByteStr, int cbMultiByte, VdFwLPWSTR lpWideCharStr, int cchWideChar);
 #pragma comment(linker, "/alternatename:VdFwWideCharToMultiByte=WideCharToMultiByte")
-extern int         VdFwWideCharToMultiByte(VdFwUINT CodePage, VdFwDWORD dwFlags, VdFwLPCWSTR lpWideCharStr, int cchWideChar, VdFwLPSTR lpMultiByteStr, int cbMultiByte, VdFwLPSTR lpDefaultChar, VdFwBOOL *lpUsedDefaultChar);
+extern VD_FW_EXPORT_C int         VdFwWideCharToMultiByte(VdFwUINT CodePage, VdFwDWORD dwFlags, VdFwLPCWSTR lpWideCharStr, int cchWideChar, VdFwLPSTR lpMultiByteStr, int cbMultiByte, VdFwLPSTR lpDefaultChar, VdFwBOOL *lpUsedDefaultChar);
 #pragma comment(linker, "/alternatename:VdFwGetProcAddress=GetProcAddress")
-extern void*       VdFwGetProcAddress(VdFwHMODULE hModule, VdFwLPCSTR lpProcName);
+extern VD_FW_EXPORT_C void*       VdFwGetProcAddress(VdFwHMODULE hModule, VdFwLPCSTR lpProcName);
 #pragma comment(linker, "/alternatename:VdFwCreateFileA=CreateFileA")
-extern VdFwHANDLE  VdFwCreateFileA(VdFwLPCSTR lpFileName, VdFwDWORD dwDesiredAccess, VdFwDWORD dwShareMode, VdFwSECURITY_ATTRIBUTES *lpSecurityAttributes, VdFwDWORD dwCreationDisposition, VdFwDWORD dwFlagsAndAttributes, VdFwHANDLE hTemplateFile);
+extern VD_FW_EXPORT_C VdFwHANDLE  VdFwCreateFileA(VdFwLPCSTR lpFileName, VdFwDWORD dwDesiredAccess, VdFwDWORD dwShareMode, VdFwSECURITY_ATTRIBUTES *lpSecurityAttributes, VdFwDWORD dwCreationDisposition, VdFwDWORD dwFlagsAndAttributes, VdFwHANDLE hTemplateFile);
 #pragma comment(linker, "/alternatename:VdFwGetFileSizeEx=GetFileSizeEx")
-extern VdFwBOOL    VdFwGetFileSizeEx(VdFwHANDLE hFile, VdFwLARGE_INTEGER *lpFileSize);
+extern VD_FW_EXPORT_C VdFwBOOL    VdFwGetFileSizeEx(VdFwHANDLE hFile, VdFwLARGE_INTEGER *lpFileSize);
 #pragma comment(linker, "/alternatename:VdFwReadFile=ReadFile")
-extern VdFwBOOL    VdFwReadFile(VdFwHANDLE hFile, void *lpBuffer, VdFwDWORD nNumberOfBytesToRead, VdFwLPDWORD lpNumberOfBytesRead, VdFwLPOVERLAPPED lpOverlapped);
+extern VD_FW_EXPORT_C VdFwBOOL    VdFwReadFile(VdFwHANDLE hFile, void *lpBuffer, VdFwDWORD nNumberOfBytesToRead, VdFwLPDWORD lpNumberOfBytesRead, VdFwLPOVERLAPPED lpOverlapped);
 #pragma comment(linker, "/alternatename:VdFwGetLocaleInfoA=GetLocaleInfoA")
-extern int         VdFwGetLocaleInfoA(VdFwDWORD Locale, VdFwDWORD LCType, VdFwLPSTR lpLCData, int cchData);
+extern VD_FW_EXPORT_C int         VdFwGetLocaleInfoA(VdFwDWORD Locale, VdFwDWORD LCType, VdFwLPSTR lpLCData, int cchData);
 #pragma comment(linker, "/alternatename:VdFwGetModuleHandleA=GetModuleHandleA")
-extern VdFwHMODULE VdFwGetModuleHandleA(VdFwLPCSTR lpModuleName);
+extern VD_FW_EXPORT_C VdFwHMODULE VdFwGetModuleHandleA(VdFwLPCSTR lpModuleName);
 
 
 typedef VdFwHGLRC (*VdFwProcwglCreateContext)(VdFwHDC hDC);
