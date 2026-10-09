@@ -182,13 +182,13 @@
 #   define VdFwI64  int64_t
 #endif // !VD_FW_CUSTOM_TYPEDEFS
 
-#ifndef VD_FW_GAMEPAD_COUNT_MAX
-#   define VD_FW_GAMEPAD_COUNT_MAX 16
-#endif // !VD_FW_GAMEPAD_COUNT_MAX
+#ifndef Vd_Fw_GAMEPAD_COUNT_MAX
+#   define Vd_Fw_GAMEPAD_COUNT_MAX 16
+#endif // !Vd_Fw_GAMEPAD_COUNT_MAX
 
-#ifndef VD_FW_GAMEPAD_DB_DEFAULT
-#   define VD_FW_GAMEPAD_DB_DEFAULT 1
-#endif // !VD_FW_GAMEPAD_DB_DEFAULT
+#ifndef Vd_Fw_GAMEPAD_DB_DEFAULT
+#   define Vd_Fw_GAMEPAD_DB_DEFAULT 1
+#endif // !Vd_Fw_GAMEPAD_DB_DEFAULT
 
 #ifndef VD_FW_NCRECTS_MAX
 #   define VD_FW_NCRECTS_MAX 16
@@ -232,10 +232,10 @@ enum /*VdFwPlatformEnum*/ {
 typedef VdFwU8 VdFwPlatform;
 
 typedef enum {
-    VD_FW_GRAPHICS_API_OPENGL = 0,
-    VD_FW_GRAPHICS_API_CUSTOM,
-    VD_FW_GRAPHICS_API_PIXEL_BUFFER,
-    VD_FW_GRAPHICS_API_INVALID = 100,
+    Vd_Fw_GRAPHICS_API_OPENGL = 0,
+    Vd_Fw_GRAPHICS_API_CUSTOM,
+    Vd_Fw_GRAPHICS_API_PIXEL_BUFFER,
+    Vd_Fw_GRAPHICS_API_INVALID = 100,
 } VdFwGraphicsApi;
 
 typedef struct {
@@ -552,7 +552,7 @@ VD_FW_API VdFwPlatform       vd_fw_get_platform(void);
 /**
  * @brief Switch the current graphics API (must not be called between vd_fw_lock and vd_fw_unlock)
  * @param  api        The new API to use
- * @param  gl_options If api is VD_FW_GRAPHICS_API_OPENGL, the options for OpenGL
+ * @param  gl_options If api is Vd_Fw_GRAPHICS_API_OPENGL, the options for OpenGL
  * @return  Whether changing API was successful. For OpenGL: No = no config could be selected
  */
 VD_FW_API int                vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_options);
@@ -878,7 +878,7 @@ VD_FW_INL const char*        vd_fw_get_key_name(VdFwKey k);
 /* ----PIXEL BUFFER-------------------------------------------------------------------------------------------------- */
 
 /**
- * @brief Set the pointer to buffer to render to the window (when graphics api is VD_FW_GRAPHICS_API_PIXEL_BUFFER)
+ * @brief Set the pointer to buffer to render to the window (when graphics api is Vd_Fw_GRAPHICS_API_PIXEL_BUFFER)
  * @param  buffer Pointer to the buffer
  * @param  w      Width in pixels
  * @param  h      Height in pixels
@@ -7005,25 +7005,6 @@ typedef struct VdFwtagRECT
 } VdFwRECT, * VdFwPRECT, * VdFwNPRECT, *VdFwLPRECT;
 
 /* ----Winnt.h------------------------------------------------------------------------------------------------------- */
-#define VD_FW_LOWORD(l)           ((VdFwWORD)(((VdFwDWORD_PTR)(l)) & 0xffff))
-#define VD_FW_HIWORD(l)           ((VdFwWORD)((((VdFwDWORD_PTR)(l)) >> 16) & 0xffff))
-#define VD_FW_LOBYTE(w)           ((VdFwBYTE)(((VdFwDWORD_PTR)(w)) & 0xff))
-#define VD_FW_HIBYTE(w)           ((VdFwBYTE)((((VdFwDWORD_PTR)(w)) >> 8) & 0xff))
-
-#define VD_FW_MAKELCID(lgid, srtid)  ((VdFwDWORD)((((VdFwDWORD)((VdFwWORD  )(srtid))) << 16) |  \
-                                         ((VdFwDWORD)((VdFwWORD  )(lgid)))))
-
-#define VD_FW__WIN32_DELETE                           (0x00010000L)
-#define VD_FW__WIN32_READ_CONTROL                     (0x00020000L)
-#define VD_FW__WIN32_WRITE_DAC                        (0x00040000L)
-#define VD_FW__WIN32_WRITE_OWNER                      (0x00080000L)
-#define VD_FW__WIN32_SYNCHRONIZE                      (0x00100000L)
-#define VD_FW__WIN32_STANDARD_RIGHTS_REQUIRED         (0x000F0000L)
-#define VD_FW__WIN32_STANDARD_RIGHTS_READ             (VD_FW__WIN32_READ_CONTROL)
-#define VD_FW__WIN32_STANDARD_RIGHTS_WRITE            (VD_FW__WIN32_READ_CONTROL)
-#define VD_FW__WIN32_STANDARD_RIGHTS_EXECUTE          (VD_FW__WIN32_READ_CONTROL)
-#define VD_FW__WIN32_STANDARD_RIGHTS_ALL              (0x001F0000L)
-#define VD_FW__WIN32_SPECIFIC_RIGHTS_ALL              (0x0000FFFFL)
 
 /* ----User32.dll---------------------------------------------------------------------------------------------------- */
 #ifdef UNICODE
@@ -7059,11 +7040,6 @@ typedef struct VdFwtagRECT
 #define VdFwGetRawInputDeviceInfo   VdFwGetRawInputDeviceInfoA
 #define VdFwWNDCLASSEX              VdFwWNDCLASSEXA
 #endif // !UNICODE
-
-#define VD_FW_GET_X_LPARAM(lp)  ((int)(short)VD_FW_LOWORD(lp))
-#define VD_FW_GET_Y_LPARAM(lp)  ((int)(short)VD_FW_HIWORD(lp))
-
-#define VD_FW_WM_USER 0x0400
 
 typedef VdFwLRESULT(*VdFwWNDPROC)(VdFwHWND, VdFwUINT, VdFwWPARAM, VdFwLPARAM);
 typedef void (*VdFwTIMERPROC)(VdFwHWND, VdFwUINT, VdFwUINT_PTR, VdFwDWORD);
@@ -7123,20 +7099,6 @@ typedef enum VdFwDPI_AWARENESS {
     VD_FW_DPI_AWARENESS_SYSTEM_AWARE = 1,
     VD_FW_DPI_AWARENESS_PER_MONITOR_AWARE = 2
 } VdFwDPI_AWARENESS;
-
-#define VD_FW_DPI_AWARENESS_CONTEXT_UNAWARE               ((VdFwDPI_AWARENESS_CONTEXT)-1)
-#define VD_FW_DPI_AWARENESS_CONTEXT_SYSTEM_AWARE          ((VdFwDPI_AWARENESS_CONTEXT)-2)
-#define VD_FW_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE     ((VdFwDPI_AWARENESS_CONTEXT)-3)
-#define VD_FW_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2  ((VdFwDPI_AWARENESS_CONTEXT)-4)
-#define VD_FW_DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED     ((VdFwDPI_AWARENESS_CONTEXT)-5)
-
-#define VD_FW_WM_NCUAHDRAWCAPTION 0x00AE
-#define VD_FW_WM_NCUAHDRAWFRAME   0x00AF
-
-#define VD_FW_HWND_TOP        ((VdFwHWND)0)
-#define VD_FW_HWND_BOTTOM     ((VdFwHWND)1)
-#define VD_FW_HWND_TOPMOST    ((VdFwHWND)-1)
-#define VD_FW_HWND_NOTOPMOST  ((VdFwHWND)-2)
 
 typedef enum {
     VdFwMDT_EFFECTIVE_DPI = 0,
@@ -7332,40 +7294,6 @@ typedef struct VdFwtagRAWINPUT {
     } data;
 } VdFwRAWINPUT, * VdFwPRAWINPUT, * VdFwLPRAWINPUT;
 
-typedef struct VdFwtagRID_DEVICE_INFO_MOUSE {
-    VdFwDWORD dwId;
-    VdFwDWORD dwNumberOfButtons;
-    VdFwDWORD dwSampleRate;
-    VdFwBOOL  fHasHorizontalWheel;
-} VdFwRID_DEVICE_INFO_MOUSE, * VdFwPRID_DEVICE_INFO_MOUSE;
-
-typedef struct VdFwtagRID_DEVICE_INFO_KEYBOARD {
-    VdFwDWORD dwType;
-    VdFwDWORD dwSubType;
-    VdFwDWORD dwKeyboardMode;
-    VdFwDWORD dwNumberOfFunctionKeys;
-    VdFwDWORD dwNumberOfIndicators;
-    VdFwDWORD dwNumberOfKeysTotal;
-} VdFwRID_DEVICE_INFO_KEYBOARD, * VdFwPRID_DEVICE_INFO_KEYBOARD;
-
-typedef struct VdFwtagRID_DEVICE_INFO_HID {
-    VdFwDWORD dwVendorId;
-    VdFwDWORD dwProductId;
-    VdFwDWORD dwVersionNumber;
-    VdFwUSHORT usUsagePage;
-    VdFwUSHORT usUsage;
-} VdFwRID_DEVICE_INFO_HID, * VdFwPRID_DEVICE_INFO_HID;
-
-typedef struct VdFwtagRID_DEVICE_INFO {
-    VdFwDWORD cbSize;
-    VdFwDWORD dwType;
-    union {
-        VdFwRID_DEVICE_INFO_MOUSE mouse;
-        VdFwRID_DEVICE_INFO_KEYBOARD keyboard;
-        VdFwRID_DEVICE_INFO_HID hid;
-    } v;
-} VdFwRID_DEVICE_INFO, * VdFwPRID_DEVICE_INFO, * VdFwLPRID_DEVICE_INFO;
-
 typedef struct VdFw_AppBarData
 {
     VdFwDWORD cbSize;
@@ -7377,11 +7305,6 @@ typedef struct VdFw_AppBarData
 } VdFwAPPBARDATA, * VdFwPAPPBARDATA;
 
 typedef VdFwBOOL (*VdFwMONITORENUMPROC)(VdFwHMONITOR monitor, VdFwHDC hdc, VdFwLPRECT rect, VdFwLPARAM lpparam);
-
-/* ----Shell32.dll--------------------------------------------------------------------------------------------------- */
-#define VD_FW_ABM_GETAUTOHIDEBAREX    0x0000000b
-#define VD_FW_ABM_SETAUTOHIDEBAREX    0x0000000c
-#define VD_FW_ABM_GETAUTOHIDEBAR      0x00000007
 
 /* ----ntdll.dll----------------------------------------------------------------------------------------------------- */
 typedef struct VdFw_OSVERSIONINFOW {
@@ -7453,11 +7376,6 @@ enum VdFwDWMNCRENDERINGPOLICY {
 
 /* ----Gdi32.dll----------------------------------------------------------------------------------------------------- */
 typedef void* VdFwHGDIOBJ;
-
-#define VD_FW_SRCCOPY             (VdFwDWORD)0x00CC0020 /* dest = source                   */
-#define VD_FW_BLACKNESS           (VdFwDWORD)0x00000042 /* dest = BLACK                    */
-#define VD_FW_DIB_RGB_COLORS      0 /* color table in RGBs */
-
 typedef struct VdFwtagPIXELFORMATDESCRIPTOR
 {
     VdFwWORD  nSize;
@@ -7532,8 +7450,6 @@ typedef struct VdFw_DISPLAY_DEVICEW {
   VdFwWCHAR DeviceKey[128];
 } VdFwDISPLAY_DEVICEW, *VdFwPDISPLAY_DEVICEW, *VdFwLPDISPLAY_DEVICEW;
 
-#define VD_FW__WIN32_EDD_GET_DEVICE_INTERFACE_NAME 0x00000001
-
 typedef struct VdFw_POINTL
 {
     VdFwLONG  x;
@@ -7594,189 +7510,9 @@ typedef struct VdFw_devicemodeW {
 VD_FW_DECLARE_HANDLE(VdFwHGLRC);
 typedef VdFwINT_PTR(* VdFwPROC)();
 
-/* ----Hid.dll------------------------------------------------------------------------------------------------------- */
-typedef VdFwLONG                         VdFwNTSTATUS;
-typedef struct VdFw_HIDP_PREPARSED_DATA* VdFwPHIDP_PREPARSED_DATA;
-typedef VdFwUSHORT                       VdFwUSAGE, * VdFwPUSAGE;
-
-#define VD_FW_FACILITY_HID_ERROR_CODE 0x11
-#define VD_FW_HIDP_ERROR_CODES(SEV, CODE) \
-        ((VdFwNTSTATUS) (((SEV) << 28) | (VD_FW_FACILITY_HID_ERROR_CODE << 16) | (CODE)))
-
-#define VD_FW_HIDP_STATUS_SUCCESS                  (VD_FW_HIDP_ERROR_CODES(0x0,0))
-#define VD_FW_HIDP_STATUS_NULL                     (VD_FW_HIDP_ERROR_CODES(0x8,1))
-
-#define VD_FW_HIDP_STATUS_INVALID_PREPARSED_DATA   (VD_FW_HIDP_ERROR_CODES(0xC,1))
-#define VD_FW_HIDP_STATUS_INVALID_REPORT_TYPE      (VD_FW_HIDP_ERROR_CODES(0xC,2))
-#define VD_FW_HIDP_STATUS_INVALID_REPORT_LENGTH    (VD_FW_HIDP_ERROR_CODES(0xC,3))
-#define VD_FW_HIDP_STATUS_USAGE_NOT_FOUND          (VD_FW_HIDP_ERROR_CODES(0xC,4))
-#define VD_FW_HIDP_STATUS_VALUE_OUT_OF_RANGE       (VD_FW_HIDP_ERROR_CODES(0xC,5))
-#define VD_FW_HIDP_STATUS_BAD_LOG_PHY_VALUES       (VD_FW_HIDP_ERROR_CODES(0xC,6))
-#define VD_FW_HIDP_STATUS_BUFFER_TOO_SMALL         (VD_FW_HIDP_ERROR_CODES(0xC,7))
-#define VD_FW_HIDP_STATUS_INTERNAL_ERROR           (VD_FW_HIDP_ERROR_CODES(0xC,8))
-#define VD_FW_HIDP_STATUS_I8042_TRANS_UNKNOWN      (VD_FW_HIDP_ERROR_CODES(0xC,9))
-#define VD_FW_HIDP_STATUS_INCOMPATIBLE_REPORT_ID   (VD_FW_HIDP_ERROR_CODES(0xC,0xA))
-#define VD_FW_HIDP_STATUS_NOT_VALUE_ARRAY          (VD_FW_HIDP_ERROR_CODES(0xC,0xB))
-#define VD_FW_HIDP_STATUS_IS_VALUE_ARRAY           (VD_FW_HIDP_ERROR_CODES(0xC,0xC))
-#define VD_FW_HIDP_STATUS_DATA_INDEX_NOT_FOUND     (VD_FW_HIDP_ERROR_CODES(0xC,0xD))
-#define VD_FW_HIDP_STATUS_DATA_INDEX_OUT_OF_RANGE  (VD_FW_HIDP_ERROR_CODES(0xC,0xE))
-#define VD_FW_HIDP_STATUS_BUTTON_NOT_PRESSED       (VD_FW_HIDP_ERROR_CODES(0xC,0xF))
-#define VD_FW_HIDP_STATUS_REPORT_DOES_NOT_EXIST    (VD_FW_HIDP_ERROR_CODES(0xC,0x10))
-#define VD_FW_HIDP_STATUS_NOT_IMPLEMENTED          (VD_FW_HIDP_ERROR_CODES(0xC,0x20))
-#define VD_FW_HIDP_STATUS_NOT_BUTTON_ARRAY         (VD_FW_HIDP_ERROR_CODES(0xC,0x21))
-#define VD_FW_RIDI_PREPARSEDDATA                    0x20000005
-#define VD_FW_RIDI_DEVICENAME                       0x20000007
-#define VD_FW_RIDI_DEVICEINFO                       0x2000000b
-
-typedef enum VdFw_HIDP_REPORT_TYPE
-{
-    VdFwHidP_Input,
-    VdFwHidP_Output,
-    VdFwHidP_Feature
-} VdFwHIDP_REPORT_TYPE;
-
-typedef struct VdFw_HIDP_CAPS
-{
-    VdFwUSAGE    Usage;
-    VdFwUSAGE    UsagePage;
-    VdFwUSHORT   InputReportByteLength;
-    VdFwUSHORT   OutputReportByteLength;
-    VdFwUSHORT   FeatureReportByteLength;
-    VdFwUSHORT   Reserved[17];
-    VdFwUSHORT   NumberLinkCollectionNodes;
-    VdFwUSHORT   NumberInputButtonCaps;
-    VdFwUSHORT   NumberInputValueCaps;
-    VdFwUSHORT   NumberInputDataIndices;
-    VdFwUSHORT   NumberOutputButtonCaps;
-    VdFwUSHORT   NumberOutputValueCaps;
-    VdFwUSHORT   NumberOutputDataIndices;
-    VdFwUSHORT   NumberFeatureButtonCaps;
-    VdFwUSHORT   NumberFeatureValueCaps;
-    VdFwUSHORT   NumberFeatureDataIndices;
-} VdFwHIDP_CAPS, * VdFwPHIDP_CAPS;
-
-typedef struct VdFw_HIDP_BUTTON_CAPS
-{
-    VdFwUSAGE    UsagePage;
-    VdFwUCHAR    ReportID;
-    VdFwBOOLEAN  IsAlias;
-    VdFwUSHORT   BitField;
-    VdFwUSHORT   LinkCollection;
-    VdFwUSAGE    LinkUsage;
-    VdFwUSAGE    LinkUsagePage;
-    VdFwBOOLEAN  IsRange;
-    VdFwBOOLEAN  IsStringRange;
-    VdFwBOOLEAN  IsDesignatorRange;
-    VdFwBOOLEAN  IsAbsolute;
-    VdFwUSHORT   ReportCount;
-    VdFwUSHORT   Reserved2;
-    VdFwULONG    Reserved[9];
-    union {
-        struct {
-            VdFwUSAGE    UsageMin, UsageMax;
-            VdFwUSHORT   StringMin, StringMax;
-            VdFwUSHORT   DesignatorMin, DesignatorMax;
-            VdFwUSHORT   DataIndexMin, DataIndexMax;
-        } Range;
-        struct {
-            VdFwUSAGE    Usage, Reserved1;
-            VdFwUSHORT   StringIndex, Reserved2;
-            VdFwUSHORT   DesignatorIndex, Reserved3;
-            VdFwUSHORT   DataIndex, Reserved4;
-        } NotRange;
-    } v;
-} VdFwHIDP_BUTTON_CAPS, * VdFwPHIDP_BUTTON_CAPS;
-
-typedef struct VdFw_HIDP_VALUE_CAPS
-{
-    VdFwUSAGE    UsagePage;
-    VdFwUCHAR    ReportID;
-    VdFwBOOLEAN  IsAlias;
-    VdFwUSHORT   BitField;
-    VdFwUSHORT   LinkCollection;
-    VdFwUSAGE    LinkUsage;
-    VdFwUSAGE    LinkUsagePage;
-    VdFwBOOLEAN  IsRange;
-    VdFwBOOLEAN  IsStringRange;
-    VdFwBOOLEAN  IsDesignatorRange;
-    VdFwBOOLEAN  IsAbsolute;
-    VdFwBOOLEAN  HasNull;
-    VdFwUCHAR    Reserved;
-    VdFwUSHORT   BitSize;
-    VdFwUSHORT   ReportCount;
-    VdFwUSHORT   Reserved2[5];
-    VdFwULONG    UnitsExp;
-    VdFwULONG    Units;
-    VdFwLONG     LogicalMin, LogicalMax;
-    VdFwLONG     PhysicalMin, PhysicalMax;
-
-    union {
-        struct {
-            VdFwUSAGE    UsageMin, UsageMax;
-            VdFwUSHORT   StringMin, StringMax;
-            VdFwUSHORT   DesignatorMin, DesignatorMax;
-            VdFwUSHORT   DataIndexMin, DataIndexMax;
-        } Range;
-
-        struct {
-            VdFwUSAGE    Usage, Reserved1;
-            VdFwUSHORT   StringIndex, Reserved2;
-            VdFwUSHORT   DesignatorIndex, Reserved3;
-            VdFwUSHORT   DataIndex, Reserved4;
-        } NotRange;
-    } v;
-} VdFwHIDP_VALUE_CAPS, * VdFwPHIDP_VALUE_CAPS;
-
-typedef struct VdFw_HIDP_DATA {
-  VdFwUSHORT DataIndex;
-  VdFwUSHORT Reserved;
-  union {
-    VdFwULONG   RawValue;
-    VdFwBOOLEAN On;
-  } dat;
-} VdFwHIDP_DATA, *VdFwPHIDP_DATA;
-
 /* ----winreg.h------------------------------------------------------------------------------------------------------ */
 typedef VdFwDWORD VdFwACCESS_MASK;
 typedef VdFwACCESS_MASK VdFwREGSAM;
-
-#define VD_FW__WIN32_KEY_QUERY_VALUE         (0x0001)
-#define VD_FW__WIN32_KEY_SET_VALUE           (0x0002)
-#define VD_FW__WIN32_KEY_CREATE_SUB_KEY      (0x0004)
-#define VD_FW__WIN32_KEY_ENUMERATE_SUB_KEYS  (0x0008)
-#define VD_FW__WIN32_KEY_NOTIFY              (0x0010)
-#define VD_FW__WIN32_KEY_CREATE_LINK         (0x0020)
-#define VD_FW__WIN32_KEY_WOW64_32KEY         (0x0200)
-#define VD_FW__WIN32_KEY_WOW64_64KEY         (0x0100)
-#define VD_FW__WIN32_KEY_WOW64_RES           (0x0300)
-
-#define VD_FW__WIN32_KEY_READ       ((VD_FW__WIN32_STANDARD_RIGHTS_READ       |\
-                                     VD_FW__WIN32_KEY_QUERY_VALUE             |\
-                                     VD_FW__WIN32_KEY_ENUMERATE_SUB_KEYS      |\
-                                     VD_FW__WIN32_KEY_NOTIFY)                  \
-                                     &                                         \
-                                    (~VD_FW__WIN32_SYNCHRONIZE))
-
-#define VD_FW__WIN32_KEY_WRITE      ((VD_FW__WIN32_STANDARD_RIGHTS_WRITE      |\
-                                     VD_FW__WIN32_KEY_SET_VALUE               |\
-                                     VD_FW__WIN32_KEY_CREATE_SUB_KEY)          \
-                                     &                                         \
-                                    (~VD_FW__WIN32_SYNCHRONIZE))
-
-#define VD_FW__WIN32_KEY_EXECUTE    ((VD_FW__WIN32_KEY_READ)                   \
-                                     &                                         \
-                                    (~VD_FW__WIN32_SYNCHRONIZE))
-
-#define VD_FW__WIN32_KEY_ALL_ACCESS      ((VD_FW__WIN32_STANDARD_RIGHTS_ALL  |\
-                                    VD_FW__WIN32_KEY_QUERY_VALUE             |\
-                                    VD_FW__WIN32_KEY_SET_VALUE               |\
-                                    VD_FW__WIN32_KEY_CREATE_SUB_KEY          |\
-                                    VD_FW__WIN32_KEY_ENUMERATE_SUB_KEYS      |\
-                                    VD_FW__WIN32_KEY_NOTIFY                  |\
-                                    VD_FW__WIN32_KEY_CREATE_LINK)             \
-                                    &                                         \
-                                    (~VD_FW__WIN32_SYNCHRONIZE))
-
 /* ----SetupAPI.dll-------------------------------------------------------------------------------------------------- */
 typedef VdFwLPVOID VdFwHDEVINFO;
 typedef struct VdFw_GUID {
@@ -7785,9 +7521,6 @@ typedef struct VdFw_GUID {
     unsigned short Data3;
     unsigned char  Data4[8];
 } VdFw__Win32GUID;
-
-#define VD_FW__WIN32_DIGCF_DEVICEINTERFACE 0x00000010
-
 typedef struct VdFw_SP_DEVICE_INTERFACE_DATA {
     VdFwDWORD cbSize;
     VdFw__Win32GUID InterfaceClassGuid;
@@ -7807,13 +7540,54 @@ typedef struct VdFw_SP_DEVINFO_DATA {
     VdFwULONG_PTR Reserved;
 } VdFwSP_DEVINFO_DATA, *VdFwPSP_DEVINFO_DATA;
 
+/* ----Advapi32.dll-------------------------------------------------------------------------------------------------- */
+typedef VdFwLONG VdFwLSTATUS;
+#pragma pack(pop)
+
+#define VD_FW_DPI_AWARENESS_CONTEXT_UNAWARE               ((VdFwDPI_AWARENESS_CONTEXT)-1)
+#define VD_FW_DPI_AWARENESS_CONTEXT_SYSTEM_AWARE          ((VdFwDPI_AWARENESS_CONTEXT)-2)
+#define VD_FW_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE     ((VdFwDPI_AWARENESS_CONTEXT)-3)
+#define VD_FW_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2  ((VdFwDPI_AWARENESS_CONTEXT)-4)
+#define VD_FW_DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED     ((VdFwDPI_AWARENESS_CONTEXT)-5)
+#define VD_FW_HWND_TOP        ((VdFwHWND)0)
+#define VD_FW_HWND_BOTTOM     ((VdFwHWND)1)
+#define VD_FW_HWND_TOPMOST    ((VdFwHWND)-1)
+#define VD_FW_HWND_NOTOPMOST  ((VdFwHWND)-2)
+#define VD_FW_SRCCOPY             (VdFwDWORD)0x00CC0020 /* dest = source                   */
+#define VD_FW_IDC_ARROW           VD_FW_MAKEINTRESOURCE(32512)
+#define VD_FW_IDC_IBEAM           VD_FW_MAKEINTRESOURCE(32513)
+#define VD_FW_IDC_WAIT            VD_FW_MAKEINTRESOURCE(32514)
+#define VD_FW_IDC_CROSS           VD_FW_MAKEINTRESOURCE(32515)
+#define VD_FW_IDC_UPARROW         VD_FW_MAKEINTRESOURCE(32516)
+#define VD_FW_IDC_SIZENWSE        VD_FW_MAKEINTRESOURCE(32642)
+#define VD_FW_IDC_SIZENESW        VD_FW_MAKEINTRESOURCE(32643)
+#define VD_FW_IDC_SIZEWE          VD_FW_MAKEINTRESOURCE(32644)
+#define VD_FW_IDC_SIZENS          VD_FW_MAKEINTRESOURCE(32645)
+#define VD_FW_IDC_SIZEALL         VD_FW_MAKEINTRESOURCE(32646)
+#define VD_FW_IDC_NO              VD_FW_MAKEINTRESOURCE(32648) /*not in win3.1 */
+
+#define VD_FW_WM_USER 0x0400
+#define VD_FW_WM_NCUAHDRAWCAPTION 0x00AE
+#define VD_FW_WM_NCUAHDRAWFRAME   0x00AF
+#define VD_FW_ABM_GETAUTOHIDEBAREX    0x0000000b
+#define VD_FW_ABM_SETAUTOHIDEBAREX    0x0000000c
+#define VD_FW_ABM_GETAUTOHIDEBAR      0x00000007
+#define VD_FW_DIB_RGB_COLORS      0 /* color table in RGBs */
+#define VD_FW__WIN32_KEY_QUERY_VALUE         (0x0001)
+#define VD_FW__WIN32_KEY_ENUMERATE_SUB_KEYS  (0x0008)
+#define VD_FW__WIN32_KEY_NOTIFY              (0x0010)
+#define VD_FW__WIN32_READ_CONTROL                     (0x00020000L)
+#define VD_FW__WIN32_SYNCHRONIZE                      (0x00100000L)
+#define VD_FW__WIN32_STANDARD_RIGHTS_READ             (VD_FW__WIN32_READ_CONTROL)
+#define VD_FW__WIN32_KEY_READ  ((VD_FW__WIN32_STANDARD_RIGHTS_READ|VD_FW__WIN32_KEY_QUERY_VALUE|VD_FW__WIN32_KEY_ENUMERATE_SUB_KEYS|VD_FW__WIN32_KEY_NOTIFY)&(~VD_FW__WIN32_SYNCHRONIZE))
+#define VD_FW__WIN32_DIGCF_DEVICEINTERFACE 0x00000010
+#define VD_FW__WIN32_EDD_GET_DEVICE_INTERFACE_NAME 0x00000001
 #define VD_FW__WIN32_DICS_FLAG_GLOBAL         0x00000001
 #define VD_FW__WIN32_DICS_FLAG_CONFIGSPECIFIC 0x00000002
 #define VD_FW__WIN32_DICS_FLAG_CONFIGGENERAL  0x00000004
 #define VD_FW__WIN32_DIREG_DEV       0x00000001
 #define VD_FW__WIN32_DIREG_DRV       0x00000002
 #define VD_FW__WIN32_DIREG_BOTH      0x00000004
-
 #define VD_FW__WIN32_CDS_UPDATEREGISTRY           0x00000001
 #define VD_FW__WIN32_CDS_TEST                     0x00000002
 #define VD_FW__WIN32_CDS_FULLSCREEN               0x00000004
@@ -7824,55 +7598,225 @@ typedef struct VdFw_SP_DEVINFO_DATA {
 #define VD_FW__WIN32_CDS_RESET_EX                 0x20000000
 #define VD_FW__WIN32_CDS_NORESET                  0x10000000
 #define VD_FW__WIN32_DISP_CHANGE_SUCCESSFUL       0
+#define VD_FW_WGL_CONTEXT_DEBUG_BIT_ARB                   0x00000001
+#define VD_FW_WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB      0x00000002
+#define VD_FW_WGL_CONTEXT_MAJOR_VERSION_ARB               0x2091
+#define VD_FW_WGL_CONTEXT_MINOR_VERSION_ARB               0x2092
+#define VD_FW_WGL_CONTEXT_PROFILE_MASK_ARB                0x9126
+#define VD_FW_WGL_CONTEXT_CORE_PROFILE_BIT_ARB            0x00000001
+#define VD_FW_WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB   0x00000002
+#define VD_FW_WGL_SAMPLE_BUFFERS_ARB                      0x2041
+#define VD_FW_WGL_SAMPLES_ARB                             0x2042
+#define VD_FW_WGL_DRAW_TO_WINDOW_ARB                      0x2001
+#define VD_FW_WGL_SUPPORT_OPENGL_ARB                      0x2010
+#define VD_FW_WGL_DOUBLE_BUFFER_ARB                       0x2011
+#define VD_FW_WGL_ACCELERATION_ARB                        0x2003
+#define VD_FW_WGL_FULL_ACCELERATION_ARB                   0x2027
+#define VD_FW_WGL_TYPE_RGBA_ARB                           0x202B
+#define VD_FW_WGL_PIXEL_TYPE_ARB                          0x2013
+#define VD_FW_WGL_COLOR_BITS_ARB                          0x2014
+#define VD_FW_WGL_RED_BITS_ARB                            0x2015
+#define VD_FW_WGL_RED_SHIFT_ARB                           0x2016
+#define VD_FW_WGL_GREEN_BITS_ARB                          0x2017
+#define VD_FW_WGL_GREEN_SHIFT_ARB                         0x2018
+#define VD_FW_WGL_BLUE_BITS_ARB                           0x2019
+#define VD_FW_WGL_BLUE_SHIFT_ARB                          0x201A
+#define VD_FW_WGL_ALPHA_BITS_ARB                          0x201B
+#define VD_FW_WGL_ALPHA_SHIFT_ARB                         0x201C
+#define VD_FW_WGL_ACCUM_BITS_ARB                          0x201D
+#define VD_FW_WGL_ACCUM_RED_BITS_ARB                      0x201E
+#define VD_FW_WGL_ACCUM_GREEN_BITS_ARB                    0x201F
+#define VD_FW_WGL_ACCUM_BLUE_BITS_ARB                     0x2020
+#define VD_FW_WGL_ACCUM_ALPHA_BITS_ARB                    0x2021
+#define VD_FW_WGL_ALPHA_BITS_ARB                          0x201B
+#define VD_FW_WGL_DEPTH_BITS_ARB                          0x2022
+#define VD_FW_WGL_STENCIL_BITS_ARB                        0x2023
+#define VD_FW_WGL_CONTEXT_FLAGS_ARB                       0x2094
+#define VD_FW_WGL_CONTEXT_DEBUG_BIT_ARB                   0x00000001
+#define VD_FW_VK_LBUTTON        0x01
+#define VD_FW_VK_F4             0x73
+#define VD_FW_VK_RBUTTON        0x02
+#define VD_FW_VK_CANCEL         0x03
+#define VD_FW_VK_MBUTTON        0x04    /* NOT contiguous with L & RBUTTON */
+#define VD_FW_VK_XBUTTON1       0x05    /* NOT contiguous with L & RBUTTON */
+#define VD_FW_VK_XBUTTON2       0x06    /* NOT contiguous with L & RBUTTON */
+#define VD_FW_VK_SHIFT          0x10
+#define VD_FW_VK_CONTROL        0x11
+#define VD_FW_VK_MENU           0x12
+#define VD_FW_VK_CAPITAL        0x14
+#define VD_FW_KF_EXTENDED       0x0100
+#define VD_FW_WS_OVERLAPPED       0x00000000L
+#define VD_FW_WS_MINIMIZE         0x20000000L
+#define VD_FW_WS_VISIBLE          0x10000000L
+#define VD_FW_WS_DISABLED         0x08000000L
+#define VD_FW_WS_CAPTION          0x00C00000L     /* WS_BORDER | WS_DLGFRAME  */
+#define VD_FW_WS_SYSMENU          0x00080000L
+#define VD_FW_WS_THICKFRAME       0x00040000L
+#define VD_FW_WS_MINIMIZEBOX      0x00020000L
+#define VD_FW_WS_MAXIMIZEBOX      0x00010000L
+#define VD_FW_SIZE_RESTORED       0
+#define VD_FW_SIZE_MINIMIZED      1
+#define VD_FW_SIZE_MAXIMIZED      2
+#define VD_FW_SIZE_MAXSHOW        3
+#define VD_FW_SIZE_MAXHIDE        4
+#define VD_FW_WS_SIZEBOX          VD_FW_WS_THICKFRAME
+#define VD_FW_WM_INPUT            0x00FF
+#define VD_FW_WM_KEYDOWN                      0x0100
+#define VD_FW_WM_UNICHAR                      0x0109
+#define VD_FW_UNICODE_NOCHAR                  0xFFFF
+#define VD_FW_WM_KEYUP                        0x0101
+#define VD_FW_WM_CHAR                         0x0102
+#define VD_FW_WM_SYSKEYDOWN                   0x0104
+#define VD_FW_WM_SYSKEYUP                     0x0105
+#define VD_FW_WS_OVERLAPPEDWINDOW (VD_FW_WS_OVERLAPPED | VD_FW_WS_CAPTION | VD_FW_WS_SYSMENU | VD_FW_WS_THICKFRAME | VD_FW_WS_MINIMIZEBOX | VD_FW_WS_MAXIMIZEBOX)
+#define SM_CXMINTRACK           34
+#define SM_CYMINTRACK           35
+#define VD_FW_SW_SHOW             5
+#define VD_FW_WM_NOTIFY                       0x004E
+#define VD_FW_WM_INPUTLANGCHANGEREQUEST       0x0050
+#define VD_FW_WM_INPUTLANGCHANGE              0x0051
+#define VD_FW_WM_TCARD                        0x0052
+#define VD_FW_WM_HELP                         0x0053
+#define VD_FW_WM_USERCHANGED                  0x0054
+#define VD_FW_WM_NOTIFYFORMAT                 0x0055
+#define VD_FW_WM_CONTEXTMENU                  0x007B
+#define VD_FW_WM_STYLECHANGING                0x007C
+#define VD_FW_WM_STYLECHANGED                 0x007D
+#define VD_FW_WM_DISPLAYCHANGE                0x007E
+#define VD_FW_WM_GETICON                      0x007F
+#define VD_FW_WM_SETICON                      0x0080
+#define VD_FW_WM_NCCREATE                     0x0081
+#define VD_FW_WM_NCDESTROY                    0x0082
+#define VD_FW_WM_NCCALCSIZE                   0x0083
+#define VD_FW_WM_CREATE                       0x0001
+#define VD_FW_WM_DESTROY                      0x0002
+#define VD_FW_WM_MOVE                         0x0003
+#define VD_FW_WM_SIZE                         0x0005
+#define VD_FW_WM_ACTIVATE                     0x0006
+#define VD_FW_WM_SETFOCUS                     0x0007
+#define VD_FW_WM_KILLFOCUS                    0x0008
+#define VD_FW_WM_ENABLE                       0x000A
+#define VD_FW_WM_SETREDRAW                    0x000B
+#define VD_FW_WM_SETTEXT                      0x000C
+#define VD_FW_WM_THEMECHANGED                 0x031A
+#define VD_FW_WM_GETTEXT                      0x000D
+#define VD_FW_WM_GETTEXTLENGTH                0x000E
+#define VD_FW_WM_PAINT                        0x000F
+#define VD_FW_WM_DWMCOMPOSITIONCHANGED        0x031E
+#define VD_FW_WM_DWMNCRENDERINGCHANGED        0x031F
+#define VD_FW_WM_DWMCOLORIZATIONCOLORCHANGED  0x0320
+#define VD_FW_WM_DWMWINDOWMAXIMIZEDCHANGE     0x0321
+#define VD_FW_WM_CLOSE                        0x0010
+#define VD_FW_WM_QUIT                         0x0012
+#define VD_FW_WM_ERASEBKGND                   0x0014
+#define VD_FW_WM_DPICHANGED                   0x02E0
+#define VD_FW_WM_SYSCOMMAND                   0x0112
+#define VD_FW_WM_ENTERSIZEMOVE                0x0231
+#define VD_FW_WM_EXITSIZEMOVE                 0x0232
+#define VD_FW_WM_SYSCOLORCHANGE               0x0015
+#define VD_FW_WM_SHOWWINDOW                   0x0018
+#define VD_FW_WM_WININICHANGE                 0x001A
+#define VD_FW_WM_SETTINGCHANGE                WM_WININICHANGE
+#define VD_FW_WM_NCHITTEST                    0x0084
+#define VD_FW_WM_NCPAINT                      0x0085
+#define VD_FW_WM_NCACTIVATE                   0x0086
+#define VD_FW_WM_GETDLGCODE                   0x0087
+#define VD_FW_WM_NCMOUSEMOVE                  0x00A0
+#define VD_FW_WM_NCLBUTTONDOWN                0x00A1
+#define VD_FW_WM_NCLBUTTONUP                  0x00A2
+#define VD_FW_WM_NCLBUTTONDBLCLK              0x00A3
+#define VD_FW_WM_NCRBUTTONDOWN                0x00A4
+#define VD_FW_WM_NCRBUTTONUP                  0x00A5
+#define VD_FW_WM_NCRBUTTONDBLCLK              0x00A6
+#define VD_FW_WM_NCMBUTTONDOWN                0x00A7
+#define VD_FW_WM_NCMBUTTONUP                  0x00A8
+#define VD_FW_WM_NCMBUTTONDBLCLK              0x00A9
+#define VD_FW_HTNOWHERE           0
+#define VD_FW_HTCLIENT            1
+#define VD_FW_HTCAPTION           2
+#define VD_FW_HTLEFT              10
+#define VD_FW_HTRIGHT             11
+#define VD_FW_HTTOP               12
+#define VD_FW_HTTOPLEFT           13
+#define VD_FW_HTTOPRIGHT          14
+#define VD_FW_HTBOTTOM            15
+#define VD_FW_HTBOTTOMLEFT        16
+#define VD_FW_HTBOTTOMRIGHT       17
+#define Vd_Fw_GENERIC_READ                     (0x80000000L)
+#define Vd_Fw_GENERIC_WRITE                    (0x40000000L)
+#define Vd_Fw_GENERIC_EXECUTE                  (0x20000000L)
+#define Vd_Fw_GENERIC_ALL                      (0x10000000L)
+#define VD_FW_FILE_SHARE_READ                 0x00000001  
+#define VD_FW_FILE_SHARE_WRITE                0x00000002  
+#define VD_FW_OPEN_EXISTING 3
+#define VD_FW_TRUNCATE_EXISTING 5
+#define VD_FW_FILE_ATTRIBUTE_NORMAL 0x00000080
+#define VD_FW_FILE_ATTRIBUTE_DIRECTORY 0x00000010
+#define VD_FW_INVALID_HANDLE_VALUE ((VdFwHANDLE)(VdFwLONG_PTR)-1)
+#define VD_FW_WM_MOUSEMOVE                    0x0200
+#define VD_FW_WM_LBUTTONDOWN                  0x0201
+#define VD_FW_WM_LBUTTONUP                    0x0202
+#define VD_FW_WM_LBUTTONDBLCLK                0x0203
+#define VD_FW_WM_RBUTTONDOWN                  0x0204
+#define VD_FW_WM_RBUTTONUP                    0x0205
+#define VD_FW_WM_RBUTTONDBLCLK                0x0206
+#define VD_FW_WM_MBUTTONDOWN                  0x0207
+#define VD_FW_WM_MBUTTONUP                    0x0208
+#define VD_FW_WM_MBUTTONDBLCLK                0x0209
+#define VD_FW_WM_MOUSEWHEEL                   0x020A
+#define VD_FW_WM_XBUTTONDOWN                  0x020B
+#define VD_FW_WM_XBUTTONUP                    0x020C
+#define VD_FW_WM_XBUTTONDBLCLK                0x020D
+#define VD_FW_WM_MOUSEHWHEEL                  0x020E
+#define VD_FW_WM_GETMINMAXINFO                0x0024
+#define VD_FW_HIGH_SURROGATE_START  0xd800
+#define VD_FW_HIGH_SURROGATE_END    0xdbff
+#define VD_FW_LOW_SURROGATE_START   0xdc00
+#define VD_FW_LOW_SURROGATE_END     0xdfff
+#define VD_FW_SWP_NONE            0x0000
+#define VD_FW_SWP_NOSIZE          0x0001
+#define VD_FW_SWP_NOMOVE          0x0002
+#define VD_FW_SWP_NOZORDER        0x0004
+#define VD_FW_SWP_NOREDRAW        0x0008
+#define VD_FW_SWP_NOACTIVATE      0x0010
+#define VD_FW_SWP_FRAMECHANGED    0x0020  /* The frame changed: send WM_NCCALCSIZE */
+#define VD_FW_SWP_SHOWWINDOW      0x0040
+#define VD_FW_SWP_HIDEWINDOW      0x0080
+#define VD_FW_SWP_NOCOPYBITS      0x0100
+#define VD_FW_SWP_NOOWNERZORDER   0x0200  /* Don't do owner Z ordering */
+#define VD_FW_SWP_NOSENDCHANGING  0x0400  /* Don't send WM_WINDOWPOSCHANGING */
+#define VD_FW_GWL_STYLE           (-16)
 
-/* ----Advapi32.dll-------------------------------------------------------------------------------------------------- */
-typedef VdFwLONG VdFwLSTATUS;
 
-/* ----XInput.dll---------------------------------------------------------------------------------------------------- */
-#define VD_FW_XINPUT_GAMEPAD_DPAD_UP          0x0001
-#define VD_FW_XINPUT_GAMEPAD_DPAD_DOWN        0x0002
-#define VD_FW_XINPUT_GAMEPAD_DPAD_LEFT        0x0004
-#define VD_FW_XINPUT_GAMEPAD_DPAD_RIGHT       0x0008
-#define VD_FW_XINPUT_GAMEPAD_START            0x0010
-#define VD_FW_XINPUT_GAMEPAD_BACK             0x0020
-#define VD_FW_XINPUT_GAMEPAD_LEFT_THUMB       0x0040
-#define VD_FW_XINPUT_GAMEPAD_RIGHT_THUMB      0x0080
-#define VD_FW_XINPUT_GAMEPAD_LEFT_SHOULDER    0x0100
-#define VD_FW_XINPUT_GAMEPAD_RIGHT_SHOULDER   0x0200
-#define VD_FW_XINPUT_GAMEPAD_A                0x1000
-#define VD_FW_XINPUT_GAMEPAD_B                0x2000
-#define VD_FW_XINPUT_GAMEPAD_X                0x4000
-#define VD_FW_XINPUT_GAMEPAD_Y                0x8000
-#define VD_FW_XINPUT_MAX_GAMEPADS             4
+#define Vd_Fw_GET_X_LPARAM(lp)  ((int)(short)VD_FW_LOWORD(lp))
+#define Vd_Fw_GET_Y_LPARAM(lp)  ((int)(short)VD_FW_HIWORD(lp))
+#define VD_FW_LOWORD(l)           ((VdFwWORD)(((VdFwDWORD_PTR)(l)) & 0xffff))
+#define VD_FW_HIWORD(l)           ((VdFwWORD)((((VdFwDWORD_PTR)(l)) >> 16) & 0xffff))
+#define VD_FW_LOBYTE(w)           ((VdFwBYTE)(((VdFwDWORD_PTR)(w)) & 0xff))
+#define VD_FW_HIBYTE(w)           ((VdFwBYTE)((((VdFwDWORD_PTR)(w)) >> 8) & 0xff))
 
-typedef struct VdFw_XINPUT_GAMEPAD {
-    VdFwWORD  wButtons;
-    VdFwBYTE  bLeftTrigger;
-    VdFwBYTE  bRightTrigger;
-    VdFwSHORT sThumbLX;
-    VdFwSHORT sThumbLY;
-    VdFwSHORT sThumbRX;
-    VdFwSHORT sThumbRY;
-} VdFwXINPUT_GAMEPAD, * VdFwPXINPUT_GAMEPAD;
+#define VD_FW_MAKELCID(lgid, srtid)  ((VdFwDWORD)((((VdFwDWORD)((VdFwWORD  )(srtid))) << 16) |  \
+                                         ((VdFwDWORD)((VdFwWORD  )(lgid)))))
+#define VD_FW_MAKEINTRESOURCEA(i) ((VdFwLPSTR)((VdFwULONG_PTR)((VdFwWORD)(i))))
+#define VD_FW_MAKEINTRESOURCEW(i) ((VdFwLPWSTR)((VdFwULONG_PTR)((VdFwWORD)(i))))
+#define VD_FW_MAKEWORD(a, b)      ((VdFwWORD)(((VdFwBYTE)(((VdFwDWORD_PTR)(a)) & 0xff)) | ((VdFwWORD)((VdFwBYTE)(((VdFwDWORD_PTR)(b)) & 0xff))) << 8))
+#define VD_FW_MAKELONG(a, b)      ((VdFwLONG)(((VdFwWORD)(((VdFwDWORD_PTR)(a)) & 0xffff)) | ((VdFwDWORD)((VdFwWORD)(((VdFwDWORD_PTR)(b)) & 0xffff))) << 16))
+#define VD_FW_LOWORD(l)           ((VdFwWORD)(((VdFwDWORD_PTR)(l)) & 0xffff))
+#define VD_FW_HIWORD(l)           ((VdFwWORD)((((VdFwDWORD_PTR)(l)) >> 16) & 0xffff))
+#define VD_FW_MAKELPARAM(l, h)    ((VdFwLPARAM) VD_FW_MAKELONG(l, h))
+#define VD_FW_IS_HIGH_SURROGATE(wch) (((wch) >= VD_FW_HIGH_SURROGATE_START) && ((wch) <= VD_FW_HIGH_SURROGATE_END))
+#define VD_FW_IS_LOW_SURROGATE(wch)  (((wch) >= VD_FW_LOW_SURROGATE_START) && ((wch) <= VD_FW_LOW_SURROGATE_END))
+#define VD_FW_IS_SURROGATE_PAIR(hs, ls) (VD_FW_IS_HIGH_SURROGATE(hs) && VD_FW_IS_LOW_SURROGATE(ls))
 
-typedef struct VdFw_XINPUT_STATE {
-    VdFwDWORD          dwPacketNumber;
-    VdFwXINPUT_GAMEPAD Gamepad;
-} VdFwXINPUT_STATE, * VdFwPXINPUT_STATE;
+#ifdef UNICODE
+#define VD_FW_MAKEINTRESOURCE  VD_FW_MAKEINTRESOURCEW
+#define VD_FW_TEXT(x) L##x
+#else
+#define VD_FW_MAKEINTRESOURCE  VD_FW_MAKEINTRESOURCEA
+#define VD_FW_TEXT(x) x
+#endif
 
-typedef struct VdFw_XINPUT_VIBRATION {
-    VdFwWORD wLeftMotorSpeed;
-    VdFwWORD wRightMotorSpeed;
-} VdFwXINPUT_VIBRATION, *VdFwPXINPUT_VIBRATION;
 
-#define VD_FW_PROC_XInputGetState(name) VdFwDWORD name(VdFwDWORD dwUserIndex, VdFwXINPUT_STATE* pState)
-typedef VD_FW_PROC_XInputGetState(VdFwProcXInputGetState);
-static VdFwProcXInputGetState *VdFwXInputGetState;
-
-#define VD_FW_PROC_XInputSetState(name) VdFwDWORD name(VdFwDWORD dwUserIndex, VdFwXINPUT_VIBRATION* pVibration)
-typedef VD_FW_PROC_XInputSetState(VdFwProcXInputSetState);
-static VdFwProcXInputSetState *VdFwXInputSetState;
-#pragma pack(pop)
 
 /* ----Win32 Functions----------------------------------------------------------------------------------------------- */
 #define VD_FW__WIN32_FUNCTIONS \
@@ -7983,20 +7927,6 @@ X(int,          StretchDIBits, (VdFwHDC hdc, int xDest, int yDest, int DestWidth
 X(VdFwBOOL,     PatBlt, (VdFwHDC hdc, int x, int y, int w, int h, VdFwDWORD rop)) \
 X(VdFwBOOL,     SwapBuffers, (VdFwHDC unnamedParam1)) \
 VE() \
-V("Hid.dll") \
-X(VdFwNTSTATUS, HidP_GetCaps, (VdFwPHIDP_PREPARSED_DATA PreparsedData, VdFwPHIDP_CAPS Capabilities)) \
-X(VdFwNTSTATUS, HidP_GetButtonCaps, (VdFwHIDP_REPORT_TYPE ReportType, VdFwPHIDP_BUTTON_CAPS ButtonCaps, VdFwPUSHORT ButtonCapsLength, VdFwPHIDP_PREPARSED_DATA PreparsedData)) \
-X(VdFwNTSTATUS, HidP_GetValueCaps, (VdFwHIDP_REPORT_TYPE ReportType, VdFwPHIDP_VALUE_CAPS ValueCaps, VdFwPUSHORT ValueCapsLength, VdFwPHIDP_PREPARSED_DATA PreparsedData)) \
-X(VdFwNTSTATUS, HidP_GetUsages, (VdFwHIDP_REPORT_TYPE ReportType, VdFwUSAGE UsagePage, VdFwUSHORT LinkCollection, VdFwPUSAGE UsageList, VdFwPULONG UsageLength, VdFwPHIDP_PREPARSED_DATA PreparsedData, VdFwPCHAR Report, VdFwULONG ReportLength)) \
-X(VdFwNTSTATUS, HidP_GetData, (VdFwHIDP_REPORT_TYPE ReportType, VdFwPHIDP_DATA DataList, VdFwPULONG DataLength, VdFwPHIDP_PREPARSED_DATA PreparsedData, VdFwPCHAR Report, VdFwULONG ReportLength)) \
-X(VdFwULONG,    HidP_MaxUsageListLength, (VdFwHIDP_REPORT_TYPE ReportType, VdFwUSAGE UsagePage, VdFwPHIDP_PREPARSED_DATA PreparsedData)) \
-X(VdFwULONG,    HidP_MaxDataListLength, (VdFwHIDP_REPORT_TYPE ReportType, VdFwPHIDP_PREPARSED_DATA PreparsedData)) \
-X(VdFwNTSTATUS, HidP_GetUsageValue, (VdFwHIDP_REPORT_TYPE ReportType, VdFwUSAGE UsagePage, VdFwUSHORT LinkCollection, VdFwUSAGE Usage, VdFwPULONG UsageValue, VdFwPHIDP_PREPARSED_DATA PreparsedData, VdFwPCHAR Report, VdFwULONG ReportLength)) \
-X(VdFwBOOLEAN,  HidD_GetManufacturerString, (VdFwHANDLE HidDeviceObject, void *Buffer, VdFwULONG BufferLength)) \
-X(VdFwBOOLEAN,  HidD_GetProductString, (VdFwHANDLE HidDeviceObject, void *Buffer, VdFwULONG BufferLength)) \
-X(VdFwBOOLEAN,  HidD_SetFeature, (VdFwHANDLE HidDeviceObject, void *ReportBuffer, VdFwULONG ReportBufferLength)) \
-X(VdFwBOOLEAN,  HidD_SetOutputReport, (VdFwHANDLE HidDeviceObject, void *ReportBuffer, VdFwULONG ReportBufferLength)) \
-VE() \
 V("SetupAPI.dll") \
 X(VdFwHDEVINFO, SetupDiGetClassDevsW, (VdFw__Win32GUID *ClassGuid, VdFwPCWSTR Enumerator, VdFwHWND hwndParent, VdFwDWORD Flags)) \
 X(VdFwBOOL,     SetupDiEnumDeviceInterfaces, (VdFwHDEVINFO DeviceInfoSet, VdFwPSP_DEVINFO_DATA DeviceInfoData, VdFw__Win32GUID *InterfaceClassGuid, VdFwDWORD MemberIndex, VdFwPSP_DEVICE_INTERFACE_DATA DeviceInterfaceData)) \
@@ -8076,43 +8006,6 @@ typedef VdFwBOOL  (*VdFwProcwglChoosePixelFormatARB)(VdFwHDC hdc, const int* piA
 #else
 #   define VD_FW_WIN32_INVOKE_WNDPROC(hwnd, msg, wparam, lparam) do { } while(0)
 #endif // VD_FW_WIN32_ADDITIONAL_WNDPROC
-
-#define WGL_CONTEXT_DEBUG_BIT_ARB                   0x00000001
-#define WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB      0x00000002
-#define WGL_CONTEXT_MAJOR_VERSION_ARB               0x2091
-#define WGL_CONTEXT_MINOR_VERSION_ARB               0x2092
-#define WGL_CONTEXT_PROFILE_MASK_ARB                0x9126
-#define WGL_CONTEXT_CORE_PROFILE_BIT_ARB            0x00000001
-#define WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB   0x00000002
-#define WGL_SAMPLE_BUFFERS_ARB                      0x2041
-#define WGL_SAMPLES_ARB                             0x2042
-#define WGL_DRAW_TO_WINDOW_ARB                      0x2001
-#define WGL_SUPPORT_OPENGL_ARB                      0x2010
-#define WGL_DOUBLE_BUFFER_ARB                       0x2011
-#define WGL_ACCELERATION_ARB                        0x2003
-#define WGL_FULL_ACCELERATION_ARB                   0x2027
-#define WGL_TYPE_RGBA_ARB                           0x202B
-#define WGL_PIXEL_TYPE_ARB                          0x2013
-#define WGL_COLOR_BITS_ARB                          0x2014
-#define WGL_RED_BITS_ARB                            0x2015
-#define WGL_RED_SHIFT_ARB                           0x2016
-#define WGL_GREEN_BITS_ARB                          0x2017
-#define WGL_GREEN_SHIFT_ARB                         0x2018
-#define WGL_BLUE_BITS_ARB                           0x2019
-#define WGL_BLUE_SHIFT_ARB                          0x201A
-#define WGL_ALPHA_BITS_ARB                          0x201B
-#define WGL_ALPHA_SHIFT_ARB                         0x201C
-#define WGL_ACCUM_BITS_ARB                          0x201D
-#define WGL_ACCUM_RED_BITS_ARB                      0x201E
-#define WGL_ACCUM_GREEN_BITS_ARB                    0x201F
-#define WGL_ACCUM_BLUE_BITS_ARB                     0x2020
-#define WGL_ACCUM_ALPHA_BITS_ARB                    0x2021
-#define WGL_ALPHA_BITS_ARB                          0x201B
-#define WGL_DEPTH_BITS_ARB                          0x2022
-#define WGL_STENCIL_BITS_ARB                        0x2023
-#define WGL_CONTEXT_FLAGS_ARB                       0x2094
-#define WGL_CONTEXT_DEBUG_BIT_ARB                   0x00000001
-
 
 #define VD_FW_DISPLAY_PREFERENCE_DGPU 1
 #define VD_FW_DISPLAY_PREFERENCE_IGPU 2
@@ -8208,7 +8101,6 @@ typedef struct {
     VdFwRAWINPUT                raw_input_buffer[VD_FW_WIN32_RAW_INPUT_BUFFER_COUNT];
     VdFwLONG                    last_window_style;      // Keeps last window style to switch back from fullscreen
     VdFwWINDOWPLACEMENT         last_window_placement;  // Keeps last window placement to switch back from fullscreen
-    int                         xinput;                 // Whether XInput is available
     int                         window_min[2], window_max[2];
     int                         def_window_min[2];
     int                         cap_gamepad_db_entries;
@@ -8307,255 +8199,6 @@ typedef struct {
     VdFw__Win32Frame            curr_frame;
     VdFwHANDLE                  sem_skip_wait;
 } VdFw__Win32InternalData;
-
-#define VD_FW_RAW_INPUT_ALIGN(x)        (((x) + sizeof(unsigned __int64) - 1) & ~(sizeof(unsigned __int64) - 1))
-#define VD_FW_NEXT_RAW_INPUT_BLOCK(ptr) ((PRAWINPUT)VD_FW_RAW_INPUT_ALIGN((ULONG_PTR)((PBYTE)(ptr) + (ptr)->header.dwSize)))
-
-#define VD_FW_VK_LBUTTON        0x01
-#define VD_FW_VK_F4             0x73
-#define VD_FW_VK_RBUTTON        0x02
-#define VD_FW_VK_CANCEL         0x03
-#define VD_FW_VK_MBUTTON        0x04    /* NOT contiguous with L & RBUTTON */
-#define VD_FW_VK_XBUTTON1       0x05    /* NOT contiguous with L & RBUTTON */
-#define VD_FW_VK_XBUTTON2       0x06    /* NOT contiguous with L & RBUTTON */
-#define VD_FW_VK_SHIFT          0x10
-#define VD_FW_VK_CONTROL        0x11
-#define VD_FW_VK_MENU           0x12
-#define VD_FW_VK_PAUSE          0x13
-#define VD_FW_VK_CAPITAL        0x14
-#define VD_FW_KF_EXTENDED       0x0100
-#define VD_FW_WS_OVERLAPPED       0x00000000L
-#define VD_FW_WS_POPUP            0x80000000L
-#define VD_FW_WS_CHILD            0x40000000L
-#define VD_FW_WS_MINIMIZE         0x20000000L
-#define VD_FW_WS_VISIBLE          0x10000000L
-#define VD_FW_WS_DISABLED         0x08000000L
-#define VD_FW_WS_CLIPSIBLINGS     0x04000000L
-#define VD_FW_WS_CLIPCHILDREN     0x02000000L
-#define VD_FW_WS_MAXIMIZE         0x01000000L
-#define VD_FW_WS_CAPTION          0x00C00000L     /* WS_BORDER | WS_DLGFRAME  */
-#define VD_FW_WS_BORDER           0x00800000L
-#define VD_FW_WS_DLGFRAME         0x00400000L
-#define VD_FW_WS_VSCROLL          0x00200000L
-#define VD_FW_WS_HSCROLL          0x00100000L
-#define VD_FW_WS_SYSMENU          0x00080000L
-#define VD_FW_WS_THICKFRAME       0x00040000L
-#define VD_FW_WS_GROUP            0x00020000L
-#define VD_FW_WS_TABSTOP          0x00010000L
-
-#define VD_FW_WS_MINIMIZEBOX      0x00020000L
-#define VD_FW_WS_MAXIMIZEBOX      0x00010000L
-
-#define VD_FW_SIZE_RESTORED       0
-#define VD_FW_SIZE_MINIMIZED      1
-#define VD_FW_SIZE_MAXIMIZED      2
-#define VD_FW_SIZE_MAXSHOW        3
-#define VD_FW_SIZE_MAXHIDE        4
-#define VD_FW_WS_TILED            VD_FW_WS_OVERLAPPED
-#define VD_FW_WS_ICONIC           VD_FW_WS_MINIMIZE
-#define VD_FW_WS_SIZEBOX          VD_FW_WS_THICKFRAME
-#define VD_FW_WS_TILEDWINDOW      VD_FW_WS_OVERLAPPEDWINDOW
-#define VD_FW_WM_INPUT            0x00FF
-#define VD_FW_WM_KEYFIRST                     0x0100
-#define VD_FW_WM_KEYDOWN                      0x0100
-#define VD_FW_WM_UNICHAR                      0x0109
-#define VD_FW_UNICODE_NOCHAR                  0xFFFF
-#define VD_FW_WM_KEYUP                        0x0101
-#define VD_FW_WM_CHAR                         0x0102
-#define VD_FW_WM_DEADCHAR                     0x0103
-#define VD_FW_WM_SYSKEYDOWN                   0x0104
-#define VD_FW_WM_SYSKEYUP                     0x0105
-#define VD_FW_WM_SYSCHAR                      0x0106
-#define VD_FW_WM_SYSDEADCHAR                  0x0107
-
-
-
-/*
- * Common Window Styles
- */
-#define VD_FW_WS_OVERLAPPEDWINDOW (VD_FW_WS_OVERLAPPED     | \
-                             VD_FW_WS_CAPTION        | \
-                             VD_FW_WS_SYSMENU        | \
-                             VD_FW_WS_THICKFRAME     | \
-                             VD_FW_WS_MINIMIZEBOX    | \
-                             VD_FW_WS_MAXIMIZEBOX)
-#define SM_CXMINTRACK           34
-#define SM_CYMINTRACK           35
-// #define SW_HIDE             0
-// #define SW_SHOWNORMAL       1
-// #define SW_NORMAL           1
-// #define SW_SHOWMINIMIZED    2
-// #define SW_SHOWMAXIMIZED    3
-// #define SW_MAXIMIZE         3
-// #define SW_SHOWNOACTIVATE   4
-#define VD_FW_SW_SHOW             5
-// #define SW_MINIMIZE         6
-// #define SW_SHOWMINNOACTIVE  7
-// #define SW_SHOWNA           8
-// #define SW_RESTORE          9
-// #define SW_SHOWDEFAULT      10
-// #define SW_FORCEMINIMIZE    11
-// #define SW_MAX              11
-#define VD_FW_MAKEINTRESOURCEA(i) ((VdFwLPSTR)((VdFwULONG_PTR)((VdFwWORD)(i))))
-#define VD_FW_MAKEINTRESOURCEW(i) ((VdFwLPWSTR)((VdFwULONG_PTR)((VdFwWORD)(i))))
-#ifdef UNICODE
-#define VD_FW_MAKEINTRESOURCE  VD_FW_MAKEINTRESOURCEW
-#else
-#define VD_FW_MAKEINTRESOURCE  VD_FW_MAKEINTRESOURCEA
-#endif // !UNICODE
-
-#define VD_FW_IDC_ARROW           VD_FW_MAKEINTRESOURCE(32512)
-#define VD_FW_IDC_IBEAM           VD_FW_MAKEINTRESOURCE(32513)
-#define VD_FW_IDC_WAIT            VD_FW_MAKEINTRESOURCE(32514)
-#define VD_FW_IDC_CROSS           VD_FW_MAKEINTRESOURCE(32515)
-#define VD_FW_IDC_UPARROW         VD_FW_MAKEINTRESOURCE(32516)
-#define VD_FW_IDC_SIZENWSE        VD_FW_MAKEINTRESOURCE(32642)
-#define VD_FW_IDC_SIZENESW        VD_FW_MAKEINTRESOURCE(32643)
-#define VD_FW_IDC_SIZEWE          VD_FW_MAKEINTRESOURCE(32644)
-#define VD_FW_IDC_SIZENS          VD_FW_MAKEINTRESOURCE(32645)
-#define VD_FW_IDC_SIZEALL         VD_FW_MAKEINTRESOURCE(32646)
-#define VD_FW_IDC_NO              VD_FW_MAKEINTRESOURCE(32648) /*not in win3.1 */
-#define VD_FW_WM_NOTIFY                       0x004E
-#define VD_FW_WM_INPUTLANGCHANGEREQUEST       0x0050
-#define VD_FW_WM_INPUTLANGCHANGE              0x0051
-#define VD_FW_WM_TCARD                        0x0052
-#define VD_FW_WM_HELP                         0x0053
-#define VD_FW_WM_USERCHANGED                  0x0054
-#define VD_FW_WM_NOTIFYFORMAT                 0x0055
-#define VD_FW_WM_CONTEXTMENU                  0x007B
-#define VD_FW_WM_STYLECHANGING                0x007C
-#define VD_FW_WM_STYLECHANGED                 0x007D
-#define VD_FW_WM_DISPLAYCHANGE                0x007E
-#define VD_FW_WM_GETICON                      0x007F
-#define VD_FW_WM_SETICON                      0x0080
-#define VD_FW_WM_NCCREATE                     0x0081
-#define VD_FW_WM_NCDESTROY                    0x0082
-#define VD_FW_WM_NCCALCSIZE                   0x0083
-#define VD_FW_WM_CREATE                       0x0001
-#define VD_FW_WM_DESTROY                      0x0002
-#define VD_FW_WM_MOVE                         0x0003
-#define VD_FW_WM_SIZE                         0x0005
-#define VD_FW_WM_ACTIVATE                     0x0006
-#define VD_FW_WM_SETFOCUS                     0x0007
-#define VD_FW_WM_KILLFOCUS                    0x0008
-#define VD_FW_WM_ENABLE                       0x000A
-#define VD_FW_WM_SETREDRAW                    0x000B
-#define VD_FW_WM_SETTEXT                      0x000C
-#define VD_FW_WM_THEMECHANGED                 0x031A
-#define VD_FW_WM_GETTEXT                      0x000D
-#define VD_FW_WM_GETTEXTLENGTH                0x000E
-#define VD_FW_WM_PAINT                        0x000F
-#define VD_FW_WM_DWMCOMPOSITIONCHANGED        0x031E
-#define VD_FW_WM_DWMNCRENDERINGCHANGED        0x031F
-#define VD_FW_WM_DWMCOLORIZATIONCOLORCHANGED  0x0320
-#define VD_FW_WM_DWMWINDOWMAXIMIZEDCHANGE     0x0321
-#define VD_FW_WM_CLOSE                        0x0010
-#define VD_FW_WM_QUIT                         0x0012
-#define VD_FW_WM_ERASEBKGND                   0x0014
-#define VD_FW_WM_DPICHANGED                   0x02E0
-#define VD_FW_WM_SYSCOMMAND                   0x0112
-#define VD_FW_WM_ENTERSIZEMOVE                0x0231
-#define VD_FW_WM_EXITSIZEMOVE                 0x0232
-#define VD_FW_WM_SYSCOLORCHANGE               0x0015
-#define VD_FW_WM_SHOWWINDOW                   0x0018
-#define VD_FW_WM_WININICHANGE                 0x001A
-#define VD_FW_WM_SETTINGCHANGE                WM_WININICHANGE
-#define VD_FW_WM_NCHITTEST                    0x0084
-#define VD_FW_WM_NCPAINT                      0x0085
-#define VD_FW_WM_NCACTIVATE                   0x0086
-#define VD_FW_WM_GETDLGCODE                   0x0087
-#define VD_FW_WM_NCMOUSEMOVE                  0x00A0
-#define VD_FW_WM_NCLBUTTONDOWN                0x00A1
-#define VD_FW_WM_NCLBUTTONUP                  0x00A2
-#define VD_FW_WM_NCLBUTTONDBLCLK              0x00A3
-#define VD_FW_WM_NCRBUTTONDOWN                0x00A4
-#define VD_FW_WM_NCRBUTTONUP                  0x00A5
-#define VD_FW_WM_NCRBUTTONDBLCLK              0x00A6
-#define VD_FW_WM_NCMBUTTONDOWN                0x00A7
-#define VD_FW_WM_NCMBUTTONUP                  0x00A8
-#define VD_FW_WM_NCMBUTTONDBLCLK              0x00A9
-
-#define VD_FW_HTNOWHERE           0
-#define VD_FW_HTCLIENT            1
-#define VD_FW_HTCAPTION           2
-#define VD_FW_HTLEFT              10
-#define VD_FW_HTRIGHT             11
-#define VD_FW_HTTOP               12
-#define VD_FW_HTTOPLEFT           13
-#define VD_FW_HTTOPRIGHT          14
-#define VD_FW_HTBOTTOM            15
-#define VD_FW_HTBOTTOMLEFT        16
-#define VD_FW_HTBOTTOMRIGHT       17
-
-#define VD_FW_MAKEWORD(a, b)      ((VdFwWORD)(((VdFwBYTE)(((VdFwDWORD_PTR)(a)) & 0xff)) | ((VdFwWORD)((VdFwBYTE)(((VdFwDWORD_PTR)(b)) & 0xff))) << 8))
-#define VD_FW_MAKELONG(a, b)      ((VdFwLONG)(((VdFwWORD)(((VdFwDWORD_PTR)(a)) & 0xffff)) | ((VdFwDWORD)((VdFwWORD)(((VdFwDWORD_PTR)(b)) & 0xffff))) << 16))
-#define VD_FW_LOWORD(l)           ((VdFwWORD)(((VdFwDWORD_PTR)(l)) & 0xffff))
-#define VD_FW_HIWORD(l)           ((VdFwWORD)((((VdFwDWORD_PTR)(l)) >> 16) & 0xffff))
-#define VD_FW_MAKELPARAM(l, h)    ((VdFwLPARAM) VD_FW_MAKELONG(l, h))
-
-#ifdef UNICODE
-#define VD_FW_TEXT(x) L##x
-#else
-#define VD_FW_TEXT(x) x
-#endif
-#define VD_FW_GENERIC_READ                     (0x80000000L)
-#define VD_FW_GENERIC_WRITE                    (0x40000000L)
-#define VD_FW_GENERIC_EXECUTE                  (0x20000000L)
-#define VD_FW_GENERIC_ALL                      (0x10000000L)
-#define VD_FW_FILE_SHARE_READ                 0x00000001  
-#define VD_FW_FILE_SHARE_WRITE                0x00000002  
-#define VD_FW_FILE_SHARE_DELETE               0x00000004  
-#define VD_FW_CREATE_ALWAYS 2
-#define VD_FW_CREATE_NEW 1
-#define VD_FW_OPEN_ALWAYS 4
-#define VD_FW_OPEN_EXISTING 3
-#define VD_FW_TRUNCATE_EXISTING 5
-#define VD_FW_FILE_ATTRIBUTE_NORMAL 0x00000080
-#define VD_FW_FILE_ATTRIBUTE_DIRECTORY 0x00000010
-#define VD_FW_INVALID_HANDLE_VALUE ((VdFwHANDLE)(VdFwLONG_PTR)-1)
-#define VD_FW_WM_MOUSEFIRST                   0x0200
-#define VD_FW_WM_MOUSEMOVE                    0x0200
-#define VD_FW_WM_LBUTTONDOWN                  0x0201
-#define VD_FW_WM_LBUTTONUP                    0x0202
-#define VD_FW_WM_LBUTTONDBLCLK                0x0203
-#define VD_FW_WM_RBUTTONDOWN                  0x0204
-#define VD_FW_WM_RBUTTONUP                    0x0205
-#define VD_FW_WM_RBUTTONDBLCLK                0x0206
-#define VD_FW_WM_MBUTTONDOWN                  0x0207
-#define VD_FW_WM_MBUTTONUP                    0x0208
-#define VD_FW_WM_MBUTTONDBLCLK                0x0209
-#define VD_FW_WM_MOUSEWHEEL                   0x020A
-#define VD_FW_WM_XBUTTONDOWN                  0x020B
-#define VD_FW_WM_XBUTTONUP                    0x020C
-#define VD_FW_WM_XBUTTONDBLCLK                0x020D
-#define VD_FW_WM_MOUSEHWHEEL                  0x020E
-#define VD_FW_WM_GETMINMAXINFO                0x0024
-
-#define VD_FW_HIGH_SURROGATE_START  0xd800
-#define VD_FW_HIGH_SURROGATE_END    0xdbff
-#define VD_FW_LOW_SURROGATE_START   0xdc00
-#define VD_FW_LOW_SURROGATE_END     0xdfff
-#define VD_FW_IS_HIGH_SURROGATE(wch) (((wch) >= VD_FW_HIGH_SURROGATE_START) && ((wch) <= VD_FW_HIGH_SURROGATE_END))
-#define VD_FW_IS_LOW_SURROGATE(wch)  (((wch) >= VD_FW_LOW_SURROGATE_START) && ((wch) <= VD_FW_LOW_SURROGATE_END))
-#define VD_FW_IS_SURROGATE_PAIR(hs, ls) (VD_FW_IS_HIGH_SURROGATE(hs) && VD_FW_IS_LOW_SURROGATE(ls))
-
-#define VD_FW_SWP_NONE            0x0000
-#define VD_FW_SWP_NOSIZE          0x0001
-#define VD_FW_SWP_NOMOVE          0x0002
-#define VD_FW_SWP_NOZORDER        0x0004
-#define VD_FW_SWP_NOREDRAW        0x0008
-#define VD_FW_SWP_NOACTIVATE      0x0010
-#define VD_FW_SWP_FRAMECHANGED    0x0020  /* The frame changed: send WM_NCCALCSIZE */
-#define VD_FW_SWP_SHOWWINDOW      0x0040
-#define VD_FW_SWP_HIDEWINDOW      0x0080
-#define VD_FW_SWP_NOCOPYBITS      0x0100
-#define VD_FW_SWP_NOOWNERZORDER   0x0200  /* Don't do owner Z ordering */
-#define VD_FW_SWP_NOSENDCHANGING  0x0400  /* Don't send WM_WINDOWPOSCHANGING */
-
-#define VD_FW_GWL_STYLE           (-16)
-#define VD_FW_GWL_EXSTYLE         (-20)
-#define VD_FW_GWL_USERDATA        (-21)
-#define VD_FW_GWL_ID              (-12)
 
 int vd_fw__win32_translate_button(VdFwWORD vkcode)
 {
@@ -8834,7 +8477,7 @@ VdFwKey vd_fw___vkcode_to_key(VdFwWORD vkcode)
     return translation_table[vkcode];
 }
 
-static VdFw__Win32InternalData Vd_Fw_Globals = {0};
+static VdFw__Win32InternalData Vd_Fw_G = {0};
 static VdFwLRESULT  vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam, VdFwLPARAM lparam);
 static void         vd_fw__composition_changed(void);
 static void         vd_fw__update_region(void);
@@ -8860,10 +8503,10 @@ static void         vd_fw__win32_update_monitors(void);
         LARGE_INTEGER VD_FW_JOIN(name,end); QueryPerformanceCounter(&VD_FW_JOIN(name,end)); \
         LARGE_INTEGER delta; \
         delta.QuadPart = VD_FW_JOIN(name,end).QuadPart - (name).QuadPart; \
-        unsigned long long q  =  delta.QuadPart / VD_FW_G.frequency.QuadPart; \
-        unsigned long long r  =  delta.QuadPart % VD_FW_G.frequency.QuadPart; \
+        unsigned long long q  =  delta.QuadPart / Vd_Fw_G.frequency.QuadPart; \
+        unsigned long long r  =  delta.QuadPart % Vd_Fw_G.frequency.QuadPart; \
         unsigned long long ns =  q * 1000000000ULL; \
-        ns                    += (r * 1000000000ULL) / VD_FW_G.frequency.QuadPart; \
+        ns                    += (r * 1000000000ULL) / Vd_Fw_G.frequency.QuadPart; \
         double ms              = (double)ns / 1000000.0; \
         printf("%20s took %30zuns %3.3fms\n", #name, ns, ms); \
     } while (0)
@@ -8908,13 +8551,11 @@ static void         vd_fw__win32_update_monitors(void);
 } while (0)
 #endif // VD_FW_NO_CRT
 
-#define VD_FW_G Vd_Fw_Globals
-
 static void *vd_fw__gl_get_proc_address(const char *name)
 {
     void *result = (void*)VdFwwglGetProcAddress(name);
     if (result == 0) {
-        result = (void*)GetProcAddress(VD_FW_G.opengl32, name);
+        result = (void*)GetProcAddress(Vd_Fw_G.opengl32, name);
     }
     return result;
 }
@@ -8926,25 +8567,25 @@ static void *vd_fw__gl_get_proc_address(const char *name)
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
-    VD_FW_G.graphics_api = VD_FW_GRAPHICS_API_INVALID;
-    VD_FW_G.resizable = 1;
-    VD_FW_G.winthread_resizable = 1;
-    VD_FW_G.block_while_sizing = 0;
-    VD_FW_G.winthread_block_while_sizing = 0;
+    Vd_Fw_G.graphics_api = Vd_Fw_GRAPHICS_API_INVALID;
+    Vd_Fw_G.resizable = 1;
+    Vd_Fw_G.winthread_resizable = 1;
+    Vd_Fw_G.block_while_sizing = 0;
+    Vd_Fw_G.winthread_block_while_sizing = 0;
 
-    VD_FW_MEMSET(&VD_FW_G.pixel_info, 0, sizeof(VD_FW_G.pixel_info));
-    VD_FW_G.pixel_info.bmiHeader.biSize = sizeof(VD_FW_G.pixel_info.bmiHeader);
-    VD_FW_G.pixel_info.bmiHeader.biWidth = 0;
-    VD_FW_G.pixel_info.bmiHeader.biHeight = 0;
-    VD_FW_G.pixel_info.bmiHeader.biPlanes = 1;
-    VD_FW_G.pixel_info.bmiHeader.biBitCount = 32;
-    VD_FW_G.pixel_info.bmiHeader.biCompression = 0 /*BI_RGB*/;
+    VD_FW_MEMSET(&Vd_Fw_G.pixel_info, 0, sizeof(Vd_Fw_G.pixel_info));
+    Vd_Fw_G.pixel_info.bmiHeader.biSize = sizeof(Vd_Fw_G.pixel_info.bmiHeader);
+    Vd_Fw_G.pixel_info.bmiHeader.biWidth = 0;
+    Vd_Fw_G.pixel_info.bmiHeader.biHeight = 0;
+    Vd_Fw_G.pixel_info.bmiHeader.biPlanes = 1;
+    Vd_Fw_G.pixel_info.bmiHeader.biBitCount = 32;
+    Vd_Fw_G.pixel_info.bmiHeader.biCompression = 0 /*BI_RGB*/;
 
-    VD_FW_G.next_width = 640;
-    VD_FW_G.next_height = 480;
+    Vd_Fw_G.next_width = 640;
+    Vd_Fw_G.next_height = 480;
 
-    VD_FW_G.next_pos_x  = 0x80000000; // CW_USEDEFAULT
-    VD_FW_G.next_pos_y  = 0x80000000; // CW_USEDEFAULT
+    Vd_Fw_G.next_pos_x  = 0x80000000; // CW_USEDEFAULT
+    Vd_Fw_G.next_pos_y  = 0x80000000; // CW_USEDEFAULT
 
     // Load Win32 Libraries
     VD_FW_PROFILE_ZONE(vd_fw_win32_load)
@@ -8958,45 +8599,21 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 #undef VE
 
         if (VdFwRtlGetVersion) {
-            VdFwRtlGetVersion((VdFwPRTL_OSVERSIONINFOW)&VD_FW_G.os_version);
+            VdFwRtlGetVersion((VdFwPRTL_OSVERSIONINFOW)&Vd_Fw_G.os_version);
         }
         // OpenGL32.dll
         {
-            VD_FW_G.opengl32 = LoadLibraryA("OpenGL32.dll");
-            VdFwwglCreateContext  =  (VdFwProcwglCreateContext)GetProcAddress(VD_FW_G.opengl32, "wglCreateContext");
-            VdFwwglMakeCurrent    =    (VdFwProcwglMakeCurrent)GetProcAddress(VD_FW_G.opengl32, "wglMakeCurrent");
-            VdFwwglDeleteContext  =  (VdFwProcwglDeleteContext)GetProcAddress(VD_FW_G.opengl32,"wglDeleteContext");
-            VdFwwglGetProcAddress = (VdFwProcwglGetProcAddress)GetProcAddress(VD_FW_G.opengl32, "wglGetProcAddress");
-        }
-
-        // XInput.dll
-        {
-            const char* xinput_dll_name[] = {
-                "xinput1_4.dll",   // Windows 8+
-                "xinput1_3.dll",   // DirectX SDK, Windows XP...
-                "xinput9_1_0.dll", // Windows Vista, 7...
-            };
-
-            VdFwHMODULE m;
-            for (int i = 0; i < 3; ++i) {
-                m = LoadLibraryA(xinput_dll_name[i]);
-
-                if (m != NULL) {
-                    break;
-                }
-            }
-
-            VD_FW_G.xinput = m != NULL;
-            if (VD_FW_G.xinput) {
-                VdFwXInputGetState = (VdFwProcXInputGetState*)GetProcAddress(m, "XInputGetState");
-                VdFwXInputSetState = (VdFwProcXInputSetState*)GetProcAddress(m, "XInputSetState");
-            }
+            Vd_Fw_G.opengl32 = LoadLibraryA("OpenGL32.dll");
+            VdFwwglCreateContext  =  (VdFwProcwglCreateContext)GetProcAddress(Vd_Fw_G.opengl32, "wglCreateContext");
+            VdFwwglMakeCurrent    =    (VdFwProcwglMakeCurrent)GetProcAddress(Vd_Fw_G.opengl32, "wglMakeCurrent");
+            VdFwwglDeleteContext  =  (VdFwProcwglDeleteContext)GetProcAddress(Vd_Fw_G.opengl32,"wglDeleteContext");
+            VdFwwglGetProcAddress = (VdFwProcwglGetProcAddress)GetProcAddress(Vd_Fw_G.opengl32, "wglGetProcAddress");
         }
     }
 
-    // VD_FW_G.curr_frame.w = VD_FW_G.next_width;
-    // VD_FW_G.curr_frame.h = VD_FW_G.next_height;
-    VD_FW_G.curr_frame.flags = 0;
+    // Vd_Fw_G.curr_frame.w = Vd_Fw_G.next_width;
+    // Vd_Fw_G.curr_frame.h = Vd_Fw_G.next_height;
+    Vd_Fw_G.curr_frame.flags = 0;
 
     // @todo(mdodis): Use different versions of SetProcessDpiAware if not supported
     // SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
@@ -9005,58 +8622,58 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     if (!info || !info->window_options.borderless) {
         VdFwRECT r;
         r.left = 0;
-        r.right = VD_FW_G.next_width;
+        r.right = Vd_Fw_G.next_width;
         r.top = 0;
-        r.bottom = VD_FW_G.next_height;
+        r.bottom = Vd_Fw_G.next_height;
 
         // @note(mdodis): Documentation says that this function in not DPI aware for a process
         // which is per-monitor aware. I've not seen this to be the case yet
         VD_FW__CHECK_TRUE(VdFwAdjustWindowRect(&r, VD_FW_WS_OVERLAPPEDWINDOW | VD_FW_WS_SIZEBOX, 0));
 
-        VD_FW_G.next_width = r.right - r.left;
-        VD_FW_G.next_height = r.bottom - r.top;
+        Vd_Fw_G.next_width = r.right - r.left;
+        Vd_Fw_G.next_height = r.bottom - r.top;
     }
 
     VdFwtimeBeginPeriod(1);
-    QueryPerformanceFrequency(&VD_FW_G.frequency);
+    QueryPerformanceFrequency(&Vd_Fw_G.frequency);
 
     // Monitors
     vd_fw__win32_update_monitors();
 
-    VD_FW_G.focused = 1;
-    VD_FW_G.def_window_min[0] = VdFwGetSystemMetrics(SM_CXMINTRACK);
-    VD_FW_G.def_window_min[1] = VdFwGetSystemMetrics(SM_CYMINTRACK);
+    Vd_Fw_G.focused = 1;
+    Vd_Fw_G.def_window_min[0] = VdFwGetSystemMetrics(SM_CXMINTRACK);
+    Vd_Fw_G.def_window_min[1] = VdFwGetSystemMetrics(SM_CYMINTRACK);
 
-    VD_FW_G.draw_decorations = 1;
+    Vd_Fw_G.draw_decorations = 1;
     if (info != NULL) {
-        VD_FW_G.draw_decorations = !info->window_options.borderless;
-        VD_FW_G.winthread_block_while_sizing = info->window_options.block_while_sizing;
-        VD_FW_G.block_while_sizing = info->window_options.block_while_sizing;
+        Vd_Fw_G.draw_decorations = !info->window_options.borderless;
+        Vd_Fw_G.winthread_block_while_sizing = info->window_options.block_while_sizing;
+        Vd_Fw_G.block_while_sizing = info->window_options.block_while_sizing;
     }
 
-    InitializeCriticalSection(&VD_FW_G.critical_section);
-    InitializeCriticalSection(&VD_FW_G.db_section);
-    InitializeConditionVariable(&VD_FW_G.cond_var);
+    InitializeCriticalSection(&Vd_Fw_G.critical_section);
+    InitializeCriticalSection(&Vd_Fw_G.db_section);
+    InitializeConditionVariable(&Vd_Fw_G.cond_var);
 
-    VD_FW_G.sem_window_ready = CreateSemaphoreA(NULL, 0, 1, NULL);
-    VD_FW_G.sem_closed = CreateSemaphoreA(NULL, 0, 1, NULL);
-    VD_FW_G.sem_skip_wait = CreateSemaphoreA(NULL, 1, 1, NULL);
+    Vd_Fw_G.sem_window_ready = CreateSemaphoreA(NULL, 0, 1, NULL);
+    Vd_Fw_G.sem_closed = CreateSemaphoreA(NULL, 0, 1, NULL);
+    Vd_Fw_G.sem_skip_wait = CreateSemaphoreA(NULL, 1, 1, NULL);
 
-    VD_FW_G.win_thread = CreateThread(
+    Vd_Fw_G.win_thread = CreateThread(
         NULL,
         0,
         vd_fw__win_thread_proc,
         0,
         0,
-        &VD_FW_G.win_thread_id);
-    // SetThreadDescription(VD_FW_G.win_thread, L"Window Thread");
+        &Vd_Fw_G.win_thread_id);
+    // SetThreadDescription(Vd_Fw_G.win_thread, L"Window Thread");
 
     vd_fw__update_kb_codepage();
 
-    WaitForSingleObject(VD_FW_G.sem_window_ready, 0xFFFFFFFF);
+    WaitForSingleObject(Vd_Fw_G.sem_window_ready, 0xFFFFFFFF);
 
 
-    VdFwGraphicsApi api = VD_FW_GRAPHICS_API_OPENGL;
+    VdFwGraphicsApi api = Vd_Fw_GRAPHICS_API_OPENGL;
     if (info) {
         api = info->api;
     }
@@ -9071,14 +8688,14 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         vd_fw_set_graphics_api(api, poptions);
     }
 
-    QueryPerformanceCounter(&VD_FW_G.performance_counter);
-    VD_FW_G.has_initialized = 1;
+    QueryPerformanceCounter(&Vd_Fw_G.performance_counter);
+    Vd_Fw_G.has_initialized = 1;
     return 1;
 }
 
 VD_FW_API int vd_fw_running(void)
 {
-    VdFwDWORD result = WaitForSingleObject(VD_FW_G.sem_closed, 0);
+    VdFwDWORD result = WaitForSingleObject(Vd_Fw_G.sem_closed, 0);
     if (result != 258L /*WAIT_TIMEOUT*/) {
         return 0;
     }
@@ -9088,187 +8705,187 @@ VD_FW_API int vd_fw_running(void)
 
 VD_FW_API VdFwEvent *vd_fw_poll(int *count)
 {
-    VD_FW_G.scale_changed = 0;
-    VD_FW_G.wheel_moved = 0;
-    VD_FW_G.wheel[0] = 0.f;
-    VD_FW_G.wheel[1] = 0.f;
-    VD_FW_G.focus_changed = 0;
-    VD_FW_G.window_state_changed = 0;
-    VD_FW_G.prev_mouse_state = VD_FW_G.mouse_state;
-    VD_FW_G.close_request = 0;
+    Vd_Fw_G.scale_changed = 0;
+    Vd_Fw_G.wheel_moved = 0;
+    Vd_Fw_G.wheel[0] = 0.f;
+    Vd_Fw_G.wheel[1] = 0.f;
+    Vd_Fw_G.focus_changed = 0;
+    Vd_Fw_G.window_state_changed = 0;
+    Vd_Fw_G.prev_mouse_state = Vd_Fw_G.mouse_state;
+    Vd_Fw_G.close_request = 0;
 
-    VD_FW_G.num_codepoints = 0;
-    VD_FW_G.last_key = VD_FW_KEY_UNKNOWN;
+    Vd_Fw_G.num_codepoints = 0;
+    Vd_Fw_G.last_key = VD_FW_KEY_UNKNOWN;
     VdFwU16 num_codepoints = 0;
-    VD_FW_G.mouse_delta[0] = VD_FW_G.mouse_delta[1] = 0.f;
+    Vd_Fw_G.mouse_delta[0] = Vd_Fw_G.mouse_delta[1] = 0.f;
 
     for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
-        VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
+        Vd_Fw_G.prev_key_states[i] = Vd_Fw_G.curr_key_states[i];
     }
 
-    VD_FW_G.num_evts = 0;
+    Vd_Fw_G.num_evts = 0;
 
     VdFwEvent mm;
-    while (vd_fw__msgbuf_r(&mm) && (VD_FW_G.num_evts < VD_FW_EVENT_COUNT_MAX)) {
-        VD_FW_G.evtbuf[VD_FW_G.num_evts++] = mm;
+    while (vd_fw__msgbuf_r(&mm) && (Vd_Fw_G.num_evts < VD_FW_EVENT_COUNT_MAX)) {
+        Vd_Fw_G.evtbuf[Vd_Fw_G.num_evts++] = mm;
 
         switch (mm.type) {
             case VD_FW_EVENT_TYPE_CHARACTER: {
-                VD_FW_G.codepoints[(num_codepoints++) % VD_FW_CODEPOINT_BUFFER_COUNT] = mm.data.character.codepoint;
+                Vd_Fw_G.codepoints[(num_codepoints++) % VD_FW_CODEPOINT_BUFFER_COUNT] = mm.data.character.codepoint;
             } break;
 
             case VD_FW_EVENT_TYPE_CLOSE_REQUEST: {
-                VD_FW_G.close_request = 1;
+                Vd_Fw_G.close_request = 1;
             } break;
 
             case VD_FW_EVENT_TYPE_MOUSE_MOVE: {
-                VD_FW_G.mouse[0] = mm.data.mouse_move.x;
-                VD_FW_G.mouse[1] = mm.data.mouse_move.y;
+                Vd_Fw_G.mouse[0] = mm.data.mouse_move.x;
+                Vd_Fw_G.mouse[1] = mm.data.mouse_move.y;
             } break;
 
             case VD_FW_EVENT_TYPE_MOUSE_DELTA: {
-                VD_FW_G.mouse_delta[0] = VD_FW_G.mouse_delta[0] * 0.8f + mm.data.mouse_delta.dx * 0.2f;
-                VD_FW_G.mouse_delta[1] = VD_FW_G.mouse_delta[1] * 0.8f + mm.data.mouse_delta.dy * 0.2f;
+                Vd_Fw_G.mouse_delta[0] = Vd_Fw_G.mouse_delta[0] * 0.8f + mm.data.mouse_delta.dx * 0.2f;
+                Vd_Fw_G.mouse_delta[1] = Vd_Fw_G.mouse_delta[1] * 0.8f + mm.data.mouse_delta.dy * 0.2f;
             } break;
 
             case VD_FW_EVENT_TYPE_MOUSE_SCROLL: {
-                VD_FW_G.wheel[0] += mm.data.mouse_scroll.dx;
-                VD_FW_G.wheel[1] += mm.data.mouse_scroll.dy;
+                Vd_Fw_G.wheel[0] += mm.data.mouse_scroll.dx;
+                Vd_Fw_G.wheel[1] += mm.data.mouse_scroll.dy;
             } break;
 
             case VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN: {
-                VD_FW_G.mouse_state |= mm.data.mouse_button_down.button;
+                Vd_Fw_G.mouse_state |= mm.data.mouse_button_down.button;
             } break;
 
             case VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP: {
-                VD_FW_G.mouse_state &= ~mm.data.mouse_button_up.button;
+                Vd_Fw_G.mouse_state &= ~mm.data.mouse_button_up.button;
             } break;
 
             case VD_FW_EVENT_TYPE_FOCUS_CHANGE: {
-                VD_FW_G.focus_changed = 1;
-                VD_FW_G.focused = mm.data.focus_change.got_focus;
+                Vd_Fw_G.focus_changed = 1;
+                Vd_Fw_G.focused = mm.data.focus_change.got_focus;
 
-                if (!VD_FW_G.focused) {
+                if (!Vd_Fw_G.focused) {
                     for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
-                        VD_FW_G.curr_key_states[i] = 0;
+                        Vd_Fw_G.curr_key_states[i] = 0;
                     }
                 }
             } break;
 
             case VD_FW_EVENT_TYPE_KEY_UP: {
-                VD_FW_G.curr_key_states[mm.data.key_up.key] = 0;
+                Vd_Fw_G.curr_key_states[mm.data.key_up.key] = 0;
             } break;
 
             case VD_FW_EVENT_TYPE_KEY_DOWN: {
-                VD_FW_G.curr_key_states[mm.data.key_down.key] = 1;
+                Vd_Fw_G.curr_key_states[mm.data.key_down.key] = 1;
             } break;
 
             case VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE: {
-                int prev_state = VD_FW_G.window_state;
+                int prev_state = Vd_Fw_G.window_state;
                 int change_flag = mm.data.window_state_change.flag;
                 if (mm.data.window_state_change.value) {
-                    VD_FW_G.window_state |= change_flag;
+                    Vd_Fw_G.window_state |= change_flag;
                 } else {
-                    VD_FW_G.window_state &= ~change_flag;
+                    Vd_Fw_G.window_state &= ~change_flag;
                 }
 
-                if (prev_state != VD_FW_G.window_state) {
-                    VD_FW_G.window_state_changed |= change_flag;
+                if (prev_state != Vd_Fw_G.window_state) {
+                    Vd_Fw_G.window_state_changed |= change_flag;
                 }
 
             } break;
 
             case VD_FW_EVENT_TYPE_SCALE_CHANGE: {
-                VD_FW_G.scale = mm.data.scale_change.new_scale;
-                VD_FW_G.scale_changed = 1;
+                Vd_Fw_G.scale = mm.data.scale_change.new_scale;
+                Vd_Fw_G.scale_changed = 1;
             } break;
 
             default: break;
         }
     }
 
-    VD_FW_G.num_codepoints = (num_codepoints < VD_FW_CODEPOINT_BUFFER_COUNT) 
+    Vd_Fw_G.num_codepoints = (num_codepoints < VD_FW_CODEPOINT_BUFFER_COUNT) 
                              ? num_codepoints
                              : VD_FW_CODEPOINT_BUFFER_COUNT;
     if (num_codepoints > 0) {
-        VD_FW_G.first_codepoint_index = (num_codepoints - 1) % VD_FW_CODEPOINT_BUFFER_COUNT;
+        Vd_Fw_G.first_codepoint_index = (num_codepoints - 1) % VD_FW_CODEPOINT_BUFFER_COUNT;
     } else {
-        VD_FW_G.first_codepoint_index = 0;
+        Vd_Fw_G.first_codepoint_index = 0;
     }
 
     if (count) {
-        *count = VD_FW_G.num_evts;
+        *count = Vd_Fw_G.num_evts;
     }
 
 
-    if (VD_FW_G.mouse_is_locked && VD_FW_G.focused) {
-        VdFwSetCursorPos(VD_FW_G.last_mouse_before_lock[0], VD_FW_G.last_mouse_before_lock[1]);
+    if (Vd_Fw_G.mouse_is_locked && Vd_Fw_G.focused) {
+        VdFwSetCursorPos(Vd_Fw_G.last_mouse_before_lock[0], Vd_Fw_G.last_mouse_before_lock[1]);
     }
 
     VdFwLARGE_INTEGER now_performance_counter;
     QueryPerformanceCounter(&now_performance_counter);
     VdFwLARGE_INTEGER delta;
-    delta.QuadPart = now_performance_counter.QuadPart - VD_FW_G.performance_counter.QuadPart;
-    unsigned long long q  =  delta.QuadPart / VD_FW_G.frequency.QuadPart;
-    unsigned long long r  =  delta.QuadPart % VD_FW_G.frequency.QuadPart;
+    delta.QuadPart = now_performance_counter.QuadPart - Vd_Fw_G.performance_counter.QuadPart;
+    unsigned long long q  =  delta.QuadPart / Vd_Fw_G.frequency.QuadPart;
+    unsigned long long r  =  delta.QuadPart % Vd_Fw_G.frequency.QuadPart;
     unsigned long long ns =  q * 1000000000ULL;
-    ns                    += (r * 1000000000ULL) / VD_FW_G.frequency.QuadPart;
-    VD_FW_G.last_ns = ns;
+    ns                    += (r * 1000000000ULL) / Vd_Fw_G.frequency.QuadPart;
+    Vd_Fw_G.last_ns = ns;
 
-    VD_FW_G.performance_counter = now_performance_counter;
+    Vd_Fw_G.performance_counter = now_performance_counter;
 
-    return VD_FW_G.evtbuf;
+    return Vd_Fw_G.evtbuf;
 }
 
 VD_FW_API VdFwEvent *vd_fw_wait(int *count)
 {
-    WaitForSingleObject(VD_FW_G.sem_skip_wait, 0xFFFFFFFF);
+    WaitForSingleObject(Vd_Fw_G.sem_skip_wait, 0xFFFFFFFF);
 
     return vd_fw_poll(count);
 }
 
 VD_FW_API void vd_fw_queue_wait_exit(void)
 {
-    ReleaseSemaphore(VD_FW_G.sem_skip_wait, 1, NULL);
+    ReleaseSemaphore(Vd_Fw_G.sem_skip_wait, 1, NULL);
 }
 
 VD_FW_API void vd_fw_lock(void)
 {
-    EnterCriticalSection(&VD_FW_G.critical_section);
-    VD_FW_G.curr_frame = VD_FW_G.next_frame;
-    VD_FW_G.next_frame.flags = 0;
-    LeaveCriticalSection(&VD_FW_G.critical_section);
+    EnterCriticalSection(&Vd_Fw_G.critical_section);
+    Vd_Fw_G.curr_frame = Vd_Fw_G.next_frame;
+    Vd_Fw_G.next_frame.flags = 0;
+    LeaveCriticalSection(&Vd_Fw_G.critical_section);
 }
 
 VD_FW_API void vd_fw_swap(void)
 {
-    if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
+    if (Vd_Fw_G.graphics_api == Vd_Fw_GRAPHICS_API_OPENGL) {
         VD_FW_PROFILE_ZONE(vd_fw_win32_swap_buffer_opengl)
         {
             VdFwBOOL enabled;
             VD_FW__CHECK_HRESULT(VdFwDwmIsCompositionEnabled(&enabled));
             if (enabled) {
-                int count = VD_FW_G.vsync;
+                int count = Vd_Fw_G.vsync;
                 while (count--) {
                     VdFwDwmFlush();
                 }
             }
 
-            VdFwSwapBuffers(VD_FW_G.hdc);
+            VdFwSwapBuffers(Vd_Fw_G.hdc);
         }
-    } else if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_PIXEL_BUFFER) {
-        int source_width = VD_FW_G.pixel_info.bmiHeader.biWidth;
-        int source_height = -VD_FW_G.pixel_info.bmiHeader.biHeight;
-        int dest_width = VD_FW_G.curr_frame.w;
-        int dest_height = VD_FW_G.curr_frame.h;
+    } else if (Vd_Fw_G.graphics_api == Vd_Fw_GRAPHICS_API_PIXEL_BUFFER) {
+        int source_width = Vd_Fw_G.pixel_info.bmiHeader.biWidth;
+        int source_height = -Vd_Fw_G.pixel_info.bmiHeader.biHeight;
+        int dest_width = Vd_Fw_G.curr_frame.w;
+        int dest_height = Vd_Fw_G.curr_frame.h;
 
-        VdFwStretchDIBits(VD_FW_G.hdc,
+        VdFwStretchDIBits(Vd_Fw_G.hdc,
                           0, 0,
                           dest_width, dest_height,
                           0, 0,
                           source_width, source_height,
-                          VD_FW_G.pixel_buffer,
-                          &VD_FW_G.pixel_info,
+                          Vd_Fw_G.pixel_buffer,
+                          &Vd_Fw_G.pixel_info,
                           VD_FW_DIB_RGB_COLORS, VD_FW_SRCCOPY);
     }
 }
@@ -9282,7 +8899,7 @@ VD_FW_API void vd_fw_unlock(void)
         // is maximized to either section of the screen or the whole screen
     }
 
-    // if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
+    // if (Vd_Fw_G.graphics_api == Vd_Fw_GRAPHICS_API_OPENGL) {
     //     if (glFenceSync && glClientWaitSync && glDeleteSync) {
     //         VD_FW_PROFILE_ZONE(vd_fw_win32_fence_sync_opengl)
     //         {
@@ -9295,28 +8912,28 @@ VD_FW_API void vd_fw_unlock(void)
     //     }
     // }
 
-    if (VD_FW_G.curr_frame.flags & VD_FW_WIN32_FLAGS_WAKE_COND_VAR) {
-        WakeConditionVariable(&VD_FW_G.cond_var);
+    if (Vd_Fw_G.curr_frame.flags & VD_FW_WIN32_FLAGS_WAKE_COND_VAR) {
+        WakeConditionVariable(&Vd_Fw_G.cond_var);
     }
 }
 
 VD_FW_API int vd_fw_get_block_while_sizing(void)
 {
-    return VD_FW_G.block_while_sizing;    
+    return Vd_Fw_G.block_while_sizing;    
 }
 
 VD_FW_API void vd_fw_set_block_while_sizing(int on)
 {
-    if (VD_FW_G.block_while_sizing == on) {
+    if (Vd_Fw_G.block_while_sizing == on) {
         return;
     }
 
-    VD_FW_G.block_while_sizing = on;
+    Vd_Fw_G.block_while_sizing = on;
 
     VdFwLPARAM lparam = on;
 
     VD_FW__CHECK_TRUE(VdFwPostMessage(
-        VD_FW_G.hwnd,
+        Vd_Fw_G.hwnd,
         VD_FW_WIN32_BLOCKMODE,
         0, /* WPARAM */
         lparam));
@@ -9324,13 +8941,13 @@ VD_FW_API void vd_fw_set_block_while_sizing(int on)
 
 VD_FW_API int vd_fw_close_requested(void)
 {
-    return VD_FW_G.close_request;
+    return Vd_Fw_G.close_request;
 }
 
 VD_FW_API void vd_fw_quit(void)
 {
     VdFwPostMessage(
-        VD_FW_G.hwnd,
+        Vd_Fw_G.hwnd,
         VD_FW_WIN32_KILL,
         0, /* WPARAM */
         0  /* LPARAM */);
@@ -9340,23 +8957,23 @@ VD_FW_API void vd_fw_exit(void)
 {
     vd_fw_quit();
 
-    EnterCriticalSection(&VD_FW_G.critical_section);
-    VD_FW_G.curr_frame = VD_FW_G.next_frame;
-    VD_FW_G.next_frame.flags = 0;
-    VD_FW_G.t_running = 0;
-    VD_FW_G.t_paint_ready = 0;
-    LeaveCriticalSection(&VD_FW_G.critical_section);
+    EnterCriticalSection(&Vd_Fw_G.critical_section);
+    Vd_Fw_G.curr_frame = Vd_Fw_G.next_frame;
+    Vd_Fw_G.next_frame.flags = 0;
+    Vd_Fw_G.t_running = 0;
+    Vd_Fw_G.t_paint_ready = 0;
+    LeaveCriticalSection(&Vd_Fw_G.critical_section);
 
-    if (VD_FW_G.curr_frame.flags & VD_FW_WIN32_FLAGS_WAKE_COND_VAR) {
-        WakeConditionVariable(&VD_FW_G.cond_var);
+    if (Vd_Fw_G.curr_frame.flags & VD_FW_WIN32_FLAGS_WAKE_COND_VAR) {
+        WakeConditionVariable(&Vd_Fw_G.cond_var);
     }
 
-    WaitForSingleObject(VD_FW_G.win_thread, 0xFFFFFFFF);
+    WaitForSingleObject(Vd_Fw_G.win_thread, 0xFFFFFFFF);
 
-    CloseHandle(VD_FW_G.sem_window_ready);
-    CloseHandle(VD_FW_G.sem_closed);
-    CloseHandle(VD_FW_G.sem_skip_wait);
-    DeleteCriticalSection(&VD_FW_G.critical_section);
+    CloseHandle(Vd_Fw_G.sem_window_ready);
+    CloseHandle(Vd_Fw_G.sem_closed);
+    CloseHandle(Vd_Fw_G.sem_skip_wait);
+    DeleteCriticalSection(&Vd_Fw_G.critical_section);
 }
 
 VD_FW_API VdFwPlatform vd_fw_get_platform(void)
@@ -9369,48 +8986,48 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
     VD_FW_WIN32_PROFILE_BEGIN(vd_fw_set_graphics_api);
     int result = 1;
 
-    WakeConditionVariable(&VD_FW_G.cond_var);
+    WakeConditionVariable(&Vd_Fw_G.cond_var);
 
-    if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
+    if (Vd_Fw_G.graphics_api == Vd_Fw_GRAPHICS_API_OPENGL) {
         // Destroy OpenGL Context
         VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(NULL, NULL));
-        VD_FW__CHECK_TRUE(VdFwwglDeleteContext(VD_FW_G.hglrc));
-        VD_FW_G.hglrc = 0;
-        VD_FW__CHECK_NONZERO(VdFwReleaseDC(VD_FW_G.hwnd, VD_FW_G.hdc));
-        VD_FW_G.hdc = 0;
+        VD_FW__CHECK_TRUE(VdFwwglDeleteContext(Vd_Fw_G.hglrc));
+        Vd_Fw_G.hglrc = 0;
+        VD_FW__CHECK_NONZERO(VdFwReleaseDC(Vd_Fw_G.hwnd, Vd_Fw_G.hdc));
+        Vd_Fw_G.hdc = 0;
     }
 
-    if (VD_FW_G.graphics_api != VD_FW_GRAPHICS_API_INVALID) {
+    if (Vd_Fw_G.graphics_api != Vd_Fw_GRAPHICS_API_INVALID) {
 
         VdFwRECT rect;
-        VdFwGetWindowRect(VD_FW_G.hwnd, &rect);
+        VdFwGetWindowRect(Vd_Fw_G.hwnd, &rect);
 
-        VD_FW_G.next_width = rect.right - rect.left;
-        VD_FW_G.next_height = rect.bottom - rect.top;
-        VD_FW_G.next_pos_x = rect.left;
-        VD_FW_G.next_pos_y = rect.top;
+        Vd_Fw_G.next_width = rect.right - rect.left;
+        Vd_Fw_G.next_height = rect.bottom - rect.top;
+        Vd_Fw_G.next_pos_x = rect.left;
+        Vd_Fw_G.next_pos_y = rect.top;
 
         // Wait for thread to close
         {
             VD_FW__CHECK_TRUE(VdFwPostMessage(
-                VD_FW_G.hwnd,
+                Vd_Fw_G.hwnd,
                 VD_FW_WIN32_KILL,
                 0, /* WPARAM */
                 0  /* LPARAM */));
-            WaitForSingleObject(VD_FW_G.win_thread, 0xFFFFFFFF);
+            WaitForSingleObject(Vd_Fw_G.win_thread, 0xFFFFFFFF);
         }
 
         // Reset Semaphores
         {
-            CloseHandle(VD_FW_G.sem_window_ready);
-            VD_FW_G.sem_window_ready = CreateSemaphoreA(
+            CloseHandle(Vd_Fw_G.sem_window_ready);
+            Vd_Fw_G.sem_window_ready = CreateSemaphoreA(
                 NULL,
                 0,
                 1,
                 NULL);
 
-            CloseHandle(VD_FW_G.sem_closed);
-            VD_FW_G.sem_closed = CreateSemaphoreA(
+            CloseHandle(Vd_Fw_G.sem_closed);
+            Vd_Fw_G.sem_closed = CreateSemaphoreA(
                 NULL,
                 0,
                 1,
@@ -9420,22 +9037,22 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
 
         // Restart the thread to create the window
         {
-            VD_FW_G.t_paint_ready = 0;
+            Vd_Fw_G.t_paint_ready = 0;
 
-            VD_FW_G.win_thread = CreateThread(
+            Vd_Fw_G.win_thread = CreateThread(
                 NULL,
                 0,
                 vd_fw__win_thread_proc,
                 0,
                 0,
-                &VD_FW_G.win_thread_id);
-            // SetThreadDescription(VD_FW_G.win_thread, L"Window Thread");
-            WaitForSingleObject(VD_FW_G.sem_window_ready, 0xFFFFFFFF);
+                &Vd_Fw_G.win_thread_id);
+            // SetThreadDescription(Vd_Fw_G.win_thread, L"Window Thread");
+            WaitForSingleObject(Vd_Fw_G.sem_window_ready, 0xFFFFFFFF);
         }
     }
 
     switch (api) {
-        case VD_FW_GRAPHICS_API_OPENGL: {
+        case Vd_Fw_GRAPHICS_API_OPENGL: {
 
             VD_FW_WIN32_PROFILE_BEGIN(create_temp_context);
             VdFwGlConfig      default_configs[2];
@@ -9450,7 +9067,7 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
                 gl_options = &default_options;
             }
 
-            VD_FW_G.hdc = VdFwGetDC(VD_FW_G.hwnd);
+            Vd_Fw_G.hdc = VdFwGetDC(Vd_Fw_G.hwnd);
 
             // Temp context flags
             VdFwPIXELFORMATDESCRIPTOR pfd = {
@@ -9474,15 +9091,15 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
               0, 0, 0                           // Layer Masks Ignored
             };
             VD_FW_WIN32_PROFILE_BEGIN(temp_pixel_format);
-            int pf = VdFwChoosePixelFormat(VD_FW_G.hdc, &pfd);
+            int pf = VdFwChoosePixelFormat(Vd_Fw_G.hdc, &pfd);
             VD_FW__CHECK_NONZERO(pf);
-            VD_FW__CHECK_TRUE(VdFwSetPixelFormat(VD_FW_G.hdc, pf, &pfd));
+            VD_FW__CHECK_TRUE(VdFwSetPixelFormat(Vd_Fw_G.hdc, pf, &pfd));
             VD_FW_WIN32_PROFILE_END(temp_pixel_format);
 
             VD_FW_WIN32_PROFILE_BEGIN(make_temp_current);
-            VdFwHGLRC temp_context = VdFwwglCreateContext(VD_FW_G.hdc);
+            VdFwHGLRC temp_context = VdFwwglCreateContext(Vd_Fw_G.hdc);
             VD_FW__CHECK_NULL(temp_context);
-            VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(VD_FW_G.hdc, temp_context));
+            VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(Vd_Fw_G.hdc, temp_context));
             VD_FW_WIN32_PROFILE_END(make_temp_current);
 
             VdFwProcwglCreateContextAttribsARB wglCreateContextAttribsARB =
@@ -9505,58 +9122,58 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
 
                 // Context attributes
                 int attribs[9];
-                attribs[0] = WGL_CONTEXT_MAJOR_VERSION_ARB; attribs[1] = major;
-                attribs[2] = WGL_CONTEXT_MINOR_VERSION_ARB; attribs[3] = minor;
-                attribs[4] = WGL_CONTEXT_PROFILE_MASK_ARB;  attribs[5] = (compat) ? WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB : WGL_CONTEXT_CORE_PROFILE_BIT_ARB;
-                attribs[6] = WGL_CONTEXT_FLAGS_ARB;         attribs[7] = (debug)  ? WGL_CONTEXT_DEBUG_BIT_ARB : 0;
+                attribs[0] = VD_FW_WGL_CONTEXT_MAJOR_VERSION_ARB; attribs[1] = major;
+                attribs[2] = VD_FW_WGL_CONTEXT_MINOR_VERSION_ARB; attribs[3] = minor;
+                attribs[4] = VD_FW_WGL_CONTEXT_PROFILE_MASK_ARB;  attribs[5] = (compat) ? VD_FW_WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB : VD_FW_WGL_CONTEXT_CORE_PROFILE_BIT_ARB;
+                attribs[6] = VD_FW_WGL_CONTEXT_FLAGS_ARB;         attribs[7] = (debug)  ? VD_FW_WGL_CONTEXT_DEBUG_BIT_ARB : 0;
                 attribs[8] = 0;
 
                 int running_attrib = 0;
                 int pixel_attribs[32] = {0};
-                pixel_attribs[running_attrib++] = WGL_PIXEL_TYPE_ARB;
-                pixel_attribs[running_attrib++] = WGL_TYPE_RGBA_ARB;
+                pixel_attribs[running_attrib++] = VD_FW_WGL_PIXEL_TYPE_ARB;
+                pixel_attribs[running_attrib++] = VD_FW_WGL_TYPE_RGBA_ARB;
 
-                pixel_attribs[running_attrib++] = WGL_DRAW_TO_WINDOW_ARB;
+                pixel_attribs[running_attrib++] = VD_FW_WGL_DRAW_TO_WINDOW_ARB;
                 pixel_attribs[running_attrib++] = 1;
 
-                pixel_attribs[running_attrib++] = WGL_SUPPORT_OPENGL_ARB;
+                pixel_attribs[running_attrib++] = VD_FW_WGL_SUPPORT_OPENGL_ARB;
                 pixel_attribs[running_attrib++] = 1;
 
-                pixel_attribs[running_attrib++] = WGL_DOUBLE_BUFFER_ARB;
+                pixel_attribs[running_attrib++] = VD_FW_WGL_DOUBLE_BUFFER_ARB;
                 pixel_attribs[running_attrib++] = 1;
 
-                pixel_attribs[running_attrib++] = WGL_ACCELERATION_ARB;
-                pixel_attribs[running_attrib++] = WGL_FULL_ACCELERATION_ARB;
+                pixel_attribs[running_attrib++] = VD_FW_WGL_ACCELERATION_ARB;
+                pixel_attribs[running_attrib++] = VD_FW_WGL_FULL_ACCELERATION_ARB;
 
                 switch (pixel_format) {
                     case VD_FW_GL_PIXEL_FORMAT_R8G8B8A8: {
-                        pixel_attribs[running_attrib++] = WGL_COLOR_BITS_ARB;
+                        pixel_attribs[running_attrib++] = VD_FW_WGL_COLOR_BITS_ARB;
                         pixel_attribs[running_attrib++] = 24;
 
-                        pixel_attribs[running_attrib++] = WGL_RED_BITS_ARB;
+                        pixel_attribs[running_attrib++] = VD_FW_WGL_RED_BITS_ARB;
                         pixel_attribs[running_attrib++] = 8;
 
-                        pixel_attribs[running_attrib++] = WGL_GREEN_BITS_ARB;
+                        pixel_attribs[running_attrib++] = VD_FW_WGL_GREEN_BITS_ARB;
                         pixel_attribs[running_attrib++] = 8;
 
-                        pixel_attribs[running_attrib++] = WGL_BLUE_BITS_ARB;
+                        pixel_attribs[running_attrib++] = VD_FW_WGL_BLUE_BITS_ARB;
                         pixel_attribs[running_attrib++] = 8;
 
-                        pixel_attribs[running_attrib++] = WGL_ALPHA_BITS_ARB;
+                        pixel_attribs[running_attrib++] = VD_FW_WGL_ALPHA_BITS_ARB;
                         pixel_attribs[running_attrib++] = 8;
                     } break;
 
                     case VD_FW_GL_PIXEL_FORMAT_R8G8B8: {
-                        pixel_attribs[running_attrib++] = WGL_COLOR_BITS_ARB;
+                        pixel_attribs[running_attrib++] = VD_FW_WGL_COLOR_BITS_ARB;
                         pixel_attribs[running_attrib++] = 24;
 
-                        pixel_attribs[running_attrib++] = WGL_RED_BITS_ARB;
+                        pixel_attribs[running_attrib++] = VD_FW_WGL_RED_BITS_ARB;
                         pixel_attribs[running_attrib++] = 8;
 
-                        pixel_attribs[running_attrib++] = WGL_GREEN_BITS_ARB;
+                        pixel_attribs[running_attrib++] = VD_FW_WGL_GREEN_BITS_ARB;
                         pixel_attribs[running_attrib++] = 8;
 
-                        pixel_attribs[running_attrib++] = WGL_BLUE_BITS_ARB;
+                        pixel_attribs[running_attrib++] = VD_FW_WGL_BLUE_BITS_ARB;
                         pixel_attribs[running_attrib++] = 8;
                     } break;
 
@@ -9565,15 +9182,15 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
 
                 switch (depth_format) {
                     case VD_FW_GL_DEPTH_FORMAT_D32: {
-                        pixel_attribs[running_attrib++] = WGL_DEPTH_BITS_ARB;
+                        pixel_attribs[running_attrib++] = VD_FW_WGL_DEPTH_BITS_ARB;
                         pixel_attribs[running_attrib++] = 32;
                     } break;
 
                     case VD_FW_GL_DEPTH_FORMAT_D24S8: {
-                        pixel_attribs[running_attrib++] = WGL_DEPTH_BITS_ARB;
+                        pixel_attribs[running_attrib++] = VD_FW_WGL_DEPTH_BITS_ARB;
                         pixel_attribs[running_attrib++] = 24;
 
-                        pixel_attribs[running_attrib++] = WGL_STENCIL_BITS_ARB;
+                        pixel_attribs[running_attrib++] = VD_FW_WGL_STENCIL_BITS_ARB;
                         pixel_attribs[running_attrib++] = 8;
                     } break;
 
@@ -9583,17 +9200,17 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
                 switch (msaa) {
 
                     case VD_FW_GL_MSAA_ENABLED_2X: {
-                        pixel_attribs[running_attrib++] = WGL_SAMPLES_ARB;
+                        pixel_attribs[running_attrib++] = VD_FW_WGL_SAMPLES_ARB;
                         pixel_attribs[running_attrib++] = 2;
                     } break;
 
                     case VD_FW_GL_MSAA_ENABLED_4X: {
-                        pixel_attribs[running_attrib++] = WGL_SAMPLES_ARB;
+                        pixel_attribs[running_attrib++] = VD_FW_WGL_SAMPLES_ARB;
                         pixel_attribs[running_attrib++] = 4;
                     } break;
 
                     case VD_FW_GL_MSAA_ENABLED_8X: {
-                        pixel_attribs[running_attrib++] = WGL_SAMPLES_ARB;
+                        pixel_attribs[running_attrib++] = VD_FW_WGL_SAMPLES_ARB;
                         pixel_attribs[running_attrib++] = 8;
                     } break;
 
@@ -9603,29 +9220,29 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
                 int wpixel_format;
                 VdFwUINT num_formats;
 
-                if (!wglChoosePixelFormatARB(VD_FW_G.hdc, pixel_attribs, NULL, 1, &wpixel_format, &num_formats)) {
+                if (!wglChoosePixelFormatARB(Vd_Fw_G.hdc, pixel_attribs, NULL, 1, &wpixel_format, &num_formats)) {
                     goto LOOP_END;                   
                 }
 
                 VdFwPIXELFORMATDESCRIPTOR pfdchosen;
-                VD_FW__CHECK_NONZERO(VdFwDescribePixelFormat(VD_FW_G.hdc, wpixel_format, sizeof(pfdchosen), &pfdchosen));
-                VD_FW__CHECK_TRUE(VdFwSetPixelFormat(VD_FW_G.hdc, pf, &pfdchosen));
+                VD_FW__CHECK_NONZERO(VdFwDescribePixelFormat(Vd_Fw_G.hdc, wpixel_format, sizeof(pfdchosen), &pfdchosen));
+                VD_FW__CHECK_TRUE(VdFwSetPixelFormat(Vd_Fw_G.hdc, pf, &pfdchosen));
 
-                VD_FW_G.hglrc = wglCreateContextAttribsARB(VD_FW_G.hdc, 0, attribs);
-                if (VD_FW_G.hglrc == 0) {
+                Vd_Fw_G.hglrc = wglCreateContextAttribsARB(Vd_Fw_G.hdc, 0, attribs);
+                if (Vd_Fw_G.hglrc == 0) {
                     goto LOOP_END;
                 }
 
-                VD_FW__CHECK_NULL(VD_FW_G.hglrc);
-                VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(VD_FW_G.hdc, VD_FW_G.hglrc));
+                VD_FW__CHECK_NULL(Vd_Fw_G.hglrc);
+                VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(Vd_Fw_G.hdc, Vd_Fw_G.hglrc));
 
-                VD_FW_G.proc_swapInterval = (VdFwProcwglSwapIntervalExt)VdFwwglGetProcAddress("wglSwapIntervalEXT");
+                Vd_Fw_G.proc_swapInterval = (VdFwProcwglSwapIntervalExt)VdFwwglGetProcAddress("wglSwapIntervalEXT");
 
                 if (vd_fw__load_opengl(&gl_options->configs[index])) {
                     break;
                 } else {
                     VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(NULL, NULL));
-                    VD_FW__CHECK_TRUE(VdFwwglDeleteContext(VD_FW_G.hglrc));
+                    VD_FW__CHECK_TRUE(VdFwwglDeleteContext(Vd_Fw_G.hglrc));
                 }
 LOOP_END:
                 index++;
@@ -9642,30 +9259,30 @@ LOOP_END:
 
         } break;
 
-        case VD_FW_GRAPHICS_API_PIXEL_BUFFER: {
-            VD_FW_G.hdc = VdFwGetDC(VD_FW_G.hwnd);
+        case Vd_Fw_GRAPHICS_API_PIXEL_BUFFER: {
+            Vd_Fw_G.hdc = VdFwGetDC(Vd_Fw_G.hwnd);
         } break;
 
         default: break;
     }
 
-    VD_FW_G.graphics_api = api;
+    Vd_Fw_G.graphics_api = api;
     VD_FW_WIN32_PROFILE_END(vd_fw_set_graphics_api);
     return result;
 }
 
 VD_FW_API void vd_fw_set_pixel_buffer(void *buffer, int w, int h)
 {
-    VD_FW_G.pixel_info.bmiHeader.biWidth = w;
-    VD_FW_G.pixel_info.bmiHeader.biHeight = -h;
-    VD_FW_G.pixel_buffer = buffer;
+    Vd_Fw_G.pixel_info.bmiHeader.biWidth = w;
+    Vd_Fw_G.pixel_info.bmiHeader.biHeight = -h;
+    Vd_Fw_G.pixel_buffer = buffer;
 }
 
 VD_FW_API int vd_fw_get_size(int *w, int *h)
 {
-    *w = VD_FW_G.curr_frame.w;
-    *h = VD_FW_G.curr_frame.h;
-    return VD_FW_G.curr_frame.flags & VD_FW_WIN32_FLAGS_SIZE_CHANGED;
+    *w = Vd_Fw_G.curr_frame.w;
+    *h = Vd_Fw_G.curr_frame.h;
+    return Vd_Fw_G.curr_frame.flags & VD_FW_WIN32_FLAGS_SIZE_CHANGED;
 }
 
 VD_FW_API void vd_fw_set_size(int w, int h)
@@ -9675,7 +9292,7 @@ VD_FW_API void vd_fw_set_size(int w, int h)
     VdFwLPARAM lparam = VD_FW_MAKELPARAM(ww, wh);
 
     VD_FW__CHECK_TRUE(VdFwPostMessage(
-        VD_FW_G.hwnd,
+        Vd_Fw_G.hwnd,
         VD_FW_WIN32_SIZE,
         0, /* WPARAM */
         lparam));
@@ -9683,21 +9300,21 @@ VD_FW_API void vd_fw_set_size(int w, int h)
 
 VD_FW_API int vd_fw_get_resizable(void)
 {
-    return VD_FW_G.resizable;
+    return Vd_Fw_G.resizable;
 }
 
 VD_FW_API void vd_fw_set_resizable(int on)
 {
-    if (VD_FW_G.resizable == on)
+    if (Vd_Fw_G.resizable == on)
     {
         return;
     }
 
     VdFwLPARAM lparam = on;
 
-    VD_FW_G.resizable = on;
+    Vd_Fw_G.resizable = on;
     VD_FW__CHECK_TRUE(VdFwPostMessage(
-        VD_FW_G.hwnd,
+        Vd_Fw_G.hwnd,
         VD_FW_WIN32_RESIZABLE,
         0, /* WPARAM */
         lparam));
@@ -9710,7 +9327,7 @@ VD_FW_API void vd_fw_set_size_min(int w, int h)
     VdFwLPARAM lparam = VD_FW_MAKELPARAM(ww, wh);
 
     VD_FW__CHECK_TRUE(VdFwPostMessage(
-        VD_FW_G.hwnd,
+        Vd_Fw_G.hwnd,
         VD_FW_WIN32_SIZEMIN,
         0, /* WPARAM */
         lparam));
@@ -9723,7 +9340,7 @@ VD_FW_API void vd_fw_set_size_max(int w, int h)
     VdFwLPARAM lparam = VD_FW_MAKELPARAM(ww, wh);
 
     VD_FW__CHECK_TRUE(VdFwPostMessage(
-        VD_FW_G.hwnd,
+        Vd_Fw_G.hwnd,
         VD_FW_WIN32_SIZEMAX,
         0, /* WPARAM */
         lparam));
@@ -9731,42 +9348,42 @@ VD_FW_API void vd_fw_set_size_max(int w, int h)
 
 VD_FW_API int vd_fw_get_minimized(int *minimized)
 {
-    *minimized = VD_FW_G.window_state & VD_FW_WIN32_WINDOW_STATE_MINIMIZED;
-    return VD_FW_G.window_state_changed & VD_FW_WIN32_WINDOW_STATE_MINIMIZED;
+    *minimized = Vd_Fw_G.window_state & VD_FW_WIN32_WINDOW_STATE_MINIMIZED;
+    return Vd_Fw_G.window_state_changed & VD_FW_WIN32_WINDOW_STATE_MINIMIZED;
 }
 
 VD_FW_API void vd_fw_set_minimized(void)
 {
-    VdFwShowWindow(VD_FW_G.hwnd, 6/*SW_MINIMIZE*/);
+    VdFwShowWindow(Vd_Fw_G.hwnd, 6/*SW_MINIMIZE*/);
 }
 
 VD_FW_API int vd_fw_get_maximized(int *maximized)
 {
-    *maximized = VD_FW_G.window_state & VD_FW_WIN32_WINDOW_STATE_MAXIMIZED;
-    return VD_FW_G.window_state_changed & VD_FW_WIN32_WINDOW_STATE_MAXIMIZED;
+    *maximized = Vd_Fw_G.window_state & VD_FW_WIN32_WINDOW_STATE_MAXIMIZED;
+    return Vd_Fw_G.window_state_changed & VD_FW_WIN32_WINDOW_STATE_MAXIMIZED;
 }
 
 VD_FW_API void vd_fw_set_maximized(void)
 {
-    VdFwShowWindow(VD_FW_G.hwnd, 3/*SW_MAXIMIZE*/);
-    VD_FW_G.window_state |= VD_FW_WIN32_WINDOW_STATE_MAXIMIZED;
+    VdFwShowWindow(Vd_Fw_G.hwnd, 3/*SW_MAXIMIZE*/);
+    Vd_Fw_G.window_state |= VD_FW_WIN32_WINDOW_STATE_MAXIMIZED;
 }
 
 VD_FW_API void vd_fw_normalize(void)
 {
-    VdFwShowWindow(VD_FW_G.hwnd, 1/*SW_NORMAL*/);
+    VdFwShowWindow(Vd_Fw_G.hwnd, 1/*SW_NORMAL*/);
 }
 
 VD_FW_API void vd_fw_set_fullscreen(int on)
 {
-    if (VD_FW_G.is_fullscreen == on) {
+    if (Vd_Fw_G.is_fullscreen == on) {
         return;
     }
 
-    VD_FW_G.is_fullscreen = on;
+    Vd_Fw_G.is_fullscreen = on;
 
     VD_FW__CHECK_TRUE(VdFwPostMessage(
-        VD_FW_G.hwnd,
+        Vd_Fw_G.hwnd,
         VD_FW_WIN32_FULLSCREEN,
         0, /* WPARAM */
         on /* LPARAM */));
@@ -9774,46 +9391,46 @@ VD_FW_API void vd_fw_set_fullscreen(int on)
 
 VD_FW_API int vd_fw_get_fullscreen(void)
 {
-    return VD_FW_G.is_fullscreen;
+    return Vd_Fw_G.is_fullscreen;
 }
 
 VD_FW_API int vd_fw_get_focused(int *focused)
 {
-    *focused = VD_FW_G.focused;
-    return VD_FW_G.focus_changed;
+    *focused = Vd_Fw_G.focused;
+    return Vd_Fw_G.focus_changed;
 }
 
 VD_FW_API void vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4])
 {
-    VD_FW_G.nccaption_set = 1;
-    VD_FW_G.nccaption[0] = caption[0];
-    VD_FW_G.nccaption[1] = caption[1];
-    VD_FW_G.nccaption[2] = caption[2];
-    VD_FW_G.nccaption[3] = caption[3];
+    Vd_Fw_G.nccaption_set = 1;
+    Vd_Fw_G.nccaption[0] = caption[0];
+    Vd_Fw_G.nccaption[1] = caption[1];
+    Vd_Fw_G.nccaption[2] = caption[2];
+    Vd_Fw_G.nccaption[3] = caption[3];
 
-    VD_FW_G.ncrect_count = count;
+    Vd_Fw_G.ncrect_count = count;
     int c = count;
     if (c > VD_FW_NCRECTS_MAX) {
         c = VD_FW_NCRECTS_MAX;
     }
     for (int i = 0; i < c; ++i) {
-        VD_FW_G.ncrects[i][0] = rects[i][0];
-        VD_FW_G.ncrects[i][1] = rects[i][1];
-        VD_FW_G.ncrects[i][2] = rects[i][2];
-        VD_FW_G.ncrects[i][3] = rects[i][3];
+        Vd_Fw_G.ncrects[i][0] = rects[i][0];
+        Vd_Fw_G.ncrects[i][1] = rects[i][1];
+        Vd_Fw_G.ncrects[i][2] = rects[i][2];
+        Vd_Fw_G.ncrects[i][3] = rects[i][3];
     }
 }
 
 VD_FW_API void vd_fw_set_receive_ncmouse(int on)
 {
-    VD_FW_G.receive_ncmouse_on = on;
+    Vd_Fw_G.receive_ncmouse_on = on;
 }
 
 VD_FW_API int vd_fw_set_vsync_on(int on)
 {
-    if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
-        VdFwBOOL result = VD_FW_G.proc_swapInterval(on);
-        VD_FW_G.vsync = on;
+    if (Vd_Fw_G.graphics_api == Vd_Fw_GRAPHICS_API_OPENGL) {
+        VdFwBOOL result = Vd_Fw_G.proc_swapInterval(on);
+        Vd_Fw_G.vsync = on;
         return result == 1 ? on : 0;
     }
 
@@ -9822,28 +9439,28 @@ VD_FW_API int vd_fw_set_vsync_on(int on)
 
 VD_FW_API int vd_fw_get_monitor_count(void)
 {
-    return VD_FW_G.monitor_count;
+    return Vd_Fw_G.monitor_count;
 }
 
 VD_FW_API const char *vd_fw_get_monitor_name(int index)
 {
-    return VD_FW_G.monitor_buffer[index].friendly_name;
+    return Vd_Fw_G.monitor_buffer[index].friendly_name;
 }
 
 VD_FW_API VdFwDisplayMode *vd_fw_get_monitor_display_modes(int index, int *count)
 {
-    vd_fw__win32_update_monitor_display_modes(&VD_FW_G.monitor_buffer[index]);
-    *count = VD_FW_G.monitor_buffer[index].display_modes_len;
+    vd_fw__win32_update_monitor_display_modes(&Vd_Fw_G.monitor_buffer[index]);
+    *count = Vd_Fw_G.monitor_buffer[index].display_modes_len;
 
-    return VD_FW_G.monitor_buffer[index].display_modes;
+    return Vd_Fw_G.monitor_buffer[index].display_modes;
 }
 
 VD_FW_API int vd_fw_get_window_monitor(void)
 {
     int result = 0;
-    VdFwHMONITOR monitor = VdFwMonitorFromWindow(VD_FW_G.hwnd, 0x00000000/*MONITOR_DEFAULTTONULL*/);
-    for (int i = 0; i < VD_FW_G.monitor_buffer_len; ++i) {
-        if (VD_FW_G.monitor_buffer[i].hmonitor == monitor) {
+    VdFwHMONITOR monitor = VdFwMonitorFromWindow(Vd_Fw_G.hwnd, 0x00000000/*MONITOR_DEFAULTTONULL*/);
+    for (int i = 0; i < Vd_Fw_G.monitor_buffer_len; ++i) {
+        if (Vd_Fw_G.monitor_buffer[i].hmonitor == monitor) {
             result = i;
             break;
         }
@@ -9853,17 +9470,17 @@ VD_FW_API int vd_fw_get_window_monitor(void)
 
 VD_FW_API void vd_fw_move_to_monitor(int index)
 {
-    if ((0 <= index) && (index < VD_FW_G.monitor_buffer_len)) {
+    if ((0 <= index) && (index < Vd_Fw_G.monitor_buffer_len)) {
         VdFwWINDOWPLACEMENT placement;
         placement.length = sizeof(placement);
-        VdFwGetWindowPlacement(VD_FW_G.hwnd, &placement);
+        VdFwGetWindowPlacement(Vd_Fw_G.hwnd, &placement);
 
         int w = placement.rcNormalPosition.right - placement.rcNormalPosition.left;
         int h = placement.rcNormalPosition.bottom - placement.rcNormalPosition.top;
 
         VdFwMONITORINFO cur_monitor_info = {0};
         cur_monitor_info.cbSize = sizeof(cur_monitor_info);
-        VdFwHMONITOR monitor = VdFwMonitorFromWindow(VD_FW_G.hwnd, 0x00000000/*MONITOR_DEFAULTTONULL*/);
+        VdFwHMONITOR monitor = VdFwMonitorFromWindow(Vd_Fw_G.hwnd, 0x00000000/*MONITOR_DEFAULTTONULL*/);
         if (VdFwGetMonitorInfo(monitor, &cur_monitor_info)) {
 
             int xrel_cur = placement.rcNormalPosition.left - cur_monitor_info.rcWork.left;
@@ -9871,7 +9488,7 @@ VD_FW_API void vd_fw_move_to_monitor(int index)
 
             VdFwMONITORINFO monitor_info = {0};
             monitor_info.cbSize = sizeof(monitor_info);
-            if (VdFwGetMonitorInfo(VD_FW_G.monitor_buffer[index].hmonitor, &monitor_info)) {
+            if (VdFwGetMonitorInfo(Vd_Fw_G.monitor_buffer[index].hmonitor, &monitor_info)) {
 
                 placement.flags = 0x0004 /* WPF_ASYNCWINDOWPLACEMENT */;
                 // VdFwUINT  showCmd;
@@ -9883,7 +9500,7 @@ VD_FW_API void vd_fw_move_to_monitor(int index)
                 placement.rcNormalPosition.top = monitor_info.rcWork.top + yrel_cur;
                 placement.rcNormalPosition.right = placement.rcNormalPosition.left + w;
                 placement.rcNormalPosition.bottom = placement.rcNormalPosition.top + h;
-                VdFwSetWindowPlacement(VD_FW_G.hwnd, &placement);
+                VdFwSetWindowPlacement(Vd_Fw_G.hwnd, &placement);
             }
         }
     }
@@ -9896,7 +9513,7 @@ VD_FW_API VdFwPlacement vd_fw_get_placement(void)
 
     VdFwWINDOWPLACEMENT placement;
     placement.length = sizeof(placement);
-    VdFwGetWindowPlacement(VD_FW_G.hwnd, &placement);
+    VdFwGetWindowPlacement(Vd_Fw_G.hwnd, &placement);
 
     VD_FW_MEMCPY(result.data, &placement, sizeof(placement));
     return result;
@@ -9913,7 +9530,7 @@ VD_FW_API int vd_fw_set_placement(VdFwPlacement *placement)
         wplacement.flags = 0x0004 /* WPF_ASYNCWINDOWPLACEMENT */;
         wplacement.showCmd = 1;
 
-        VdFwSetWindowPlacement(VD_FW_G.hwnd, &wplacement);
+        VdFwSetWindowPlacement(Vd_Fw_G.hwnd, &wplacement);
     }
 
     return result;
@@ -9921,56 +9538,56 @@ VD_FW_API int vd_fw_set_placement(VdFwPlacement *placement)
 
 VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
 {
-    if (x) *x = VD_FW_G.mouse[0];
-    if (y) *y = VD_FW_G.mouse[1];
+    if (x) *x = Vd_Fw_G.mouse[0];
+    if (y) *y = Vd_Fw_G.mouse[1];
 
-    return VD_FW_G.mouse_state;
+    return Vd_Fw_G.mouse_state;
 }
 
 VD_FW_API int vd_fw_get_mouse_clicked(int button)
 {
-    return !(VD_FW_G.prev_mouse_state & button) && (VD_FW_G.mouse_state & button);
+    return !(Vd_Fw_G.prev_mouse_state & button) && (Vd_Fw_G.mouse_state & button);
 }
 
 VD_FW_API int vd_fw_get_mouse_released(int button)
 {
-    return (VD_FW_G.prev_mouse_state & button) && !(VD_FW_G.mouse_state & button);
+    return (Vd_Fw_G.prev_mouse_state & button) && !(Vd_Fw_G.mouse_state & button);
 }
 
 VD_FW_API int vd_fw_get_key_pressed(int key)
 {
-    return !VD_FW_G.prev_key_states[key] && VD_FW_G.curr_key_states[key];
+    return !Vd_Fw_G.prev_key_states[key] && Vd_Fw_G.curr_key_states[key];
 }
 
 VD_FW_API int vd_fw_get_key_released(int key)
 {
-    return VD_FW_G.prev_key_states[key] && !VD_FW_G.curr_key_states[key];
+    return Vd_Fw_G.prev_key_states[key] && !Vd_Fw_G.curr_key_states[key];
 }
 
 VD_FW_API int vd_fw_get_key_down(int key)
 {
-    return VD_FW_G.curr_key_states[key];
+    return Vd_Fw_G.curr_key_states[key];
 }
 
 VD_FW_API int vd_fw_get_last_key_pressed(void)
 {
-    return VD_FW_G.last_key;
+    return Vd_Fw_G.last_key;
 }
 
 VD_FW_API unsigned short vd_fw_get_num_codepoints(void)
 {
-    return VD_FW_G.num_codepoints;    
+    return Vd_Fw_G.num_codepoints;    
 }
 
 VD_FW_API unsigned int vd_fw_get_codepoint(unsigned short index)
 {
-    return VD_FW_G.codepoints[(VD_FW_G.first_codepoint_index + index) % VD_FW_CODEPOINT_BUFFER_COUNT];
+    return Vd_Fw_G.codepoints[(Vd_Fw_G.first_codepoint_index + index) % VD_FW_CODEPOINT_BUFFER_COUNT];
 }
 
 VD_FW_API void vd_fw_set_mouse_capture(int on)
 {
     if (on) {
-        VdFwSetCapture(VD_FW_G.hwnd);
+        VdFwSetCapture(Vd_Fw_G.hwnd);
     } else {
         VdFwReleaseCapture();
     }
@@ -9978,32 +9595,32 @@ VD_FW_API void vd_fw_set_mouse_capture(int on)
 
 VD_FW_API void vd_fw_get_mouse_delta(float *dx, float *dy)
 {
-    if (dx) *dx = VD_FW_G.mouse_delta[0];
-    if (dy) *dy = VD_FW_G.mouse_delta[1];
+    if (dx) *dx = Vd_Fw_G.mouse_delta[0];
+    if (dy) *dy = Vd_Fw_G.mouse_delta[1];
 }
 
 VD_FW_API void vd_fw_set_mouse_locked(int locked)
 {
-    if (VD_FW_G.mouse_is_locked == locked) {
+    if (Vd_Fw_G.mouse_is_locked == locked) {
         return;
     }
 
-    VD_FW_G.mouse_is_locked = locked;
+    Vd_Fw_G.mouse_is_locked = locked;
     if (locked) {
         VdFwPOINT point;
         VdFwGetCursorPos(&point);
-        VD_FW_G.last_mouse_before_lock[0] = point.x;
-        VD_FW_G.last_mouse_before_lock[1] = point.y;
+        Vd_Fw_G.last_mouse_before_lock[0] = point.x;
+        Vd_Fw_G.last_mouse_before_lock[1] = point.y;
         VD_FW__CHECK_TRUE(VdFwPostMessage(
-            VD_FW_G.hwnd,
+            Vd_Fw_G.hwnd,
             VD_FW_WIN32_SHOW_CURSOR,
             0, /* WPARAM */
             0  /* LPARAM */));
     } else {
-        VdFwSetCursorPos(VD_FW_G.last_mouse_before_lock[0], VD_FW_G.last_mouse_before_lock[1]);
+        VdFwSetCursorPos(Vd_Fw_G.last_mouse_before_lock[0], Vd_Fw_G.last_mouse_before_lock[1]);
 
         VD_FW__CHECK_TRUE(VdFwPostMessage(
-            VD_FW_G.hwnd,
+            Vd_Fw_G.hwnd,
             VD_FW_WIN32_SHOW_CURSOR,
             1, /* WPARAM */
             0  /* LPARAM */));
@@ -10012,20 +9629,20 @@ VD_FW_API void vd_fw_set_mouse_locked(int locked)
 
 VD_FW_API int vd_fw_get_mouse_locked(void)
 {
-    return VD_FW_G.mouse_is_locked;
+    return Vd_Fw_G.mouse_is_locked;
 }
 
 VD_FW_API int vd_fw_get_mouse_wheel(float *dx, float *dy)
 {
-    if (dx) *dx = VD_FW_G.wheel[0];
-    if (dy) *dy = VD_FW_G.wheel[1];
-    return VD_FW_G.wheel_moved;
+    if (dx) *dx = Vd_Fw_G.wheel[0];
+    if (dy) *dy = Vd_Fw_G.wheel[1];
+    return Vd_Fw_G.wheel_moved;
 }
 
 VD_FW_API int vd_fw_get_scale(float *scale)
 {
-    if (scale) *scale = VD_FW_G.scale;
-    return VD_FW_G.scale_changed;
+    if (scale) *scale = Vd_Fw_G.scale;
+    return Vd_Fw_G.scale_changed;
 }
 
 VD_FW_API void vd_fw_set_title(const char *title)
@@ -10039,14 +9656,14 @@ VD_FW_API void vd_fw_set_title(const char *title)
     }
 
     for (int i = 0; i < len; ++i) {
-        VD_FW_G.title[i] = title[i];
+        Vd_Fw_G.title[i] = title[i];
     }
-    VD_FW_G.title_len = len;
+    Vd_Fw_G.title_len = len;
 
-    VD_FW_G.title[len] = 0;
+    Vd_Fw_G.title[len] = 0;
 
     VD_FW__CHECK_TRUE(VdFwPostMessage(
-        VD_FW_G.hwnd,
+        Vd_Fw_G.hwnd,
         VD_FW_WIN32_UPDATE_TITLE,
         0, /* WPARAM */
         0  /* LPARAM */));
@@ -10082,12 +9699,12 @@ VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
     VD_FW__CHECK_NULL(icon);
 
     VD_FW__CHECK_TRUE(VdFwPostMessage(
-        VD_FW_G.hwnd,
+        Vd_Fw_G.hwnd,
         VD_FW_WM_SETICON,
         0/*ICON_SMALL*/, /* WPARAM */
         (VdFwLPARAM)icon));
     VD_FW__CHECK_TRUE(VdFwPostMessage(
-        VD_FW_G.hwnd,
+        Vd_Fw_G.hwnd,
         VD_FW_WM_SETICON,
         1/*ICON_BIG*/, /* WPARAM */
         (VdFwLPARAM)icon));
@@ -10095,18 +9712,18 @@ VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
 
 VD_FW_API void *vd_fw_get_internal_window_handle(void)
 {
-    return &VD_FW_G.hwnd;
+    return &Vd_Fw_G.hwnd;
 }
 
 VD_FW_API unsigned long long vd_fw_delta_ns(void)
 {
-    return VD_FW_G.last_ns;
+    return Vd_Fw_G.last_ns;
 }
 
 static VdFwDWORD vd_fw__win_thread_proc(void *param)
 {
     (void)param;
-    VD_FW_G.t_running = 1;
+    Vd_Fw_G.t_running = 1;
     // VD_FW_SANITY_CHECK();
 
     static int has_registered_class = 0;
@@ -10129,7 +9746,7 @@ static VdFwDWORD vd_fw__win_thread_proc(void *param)
     }
 
     VdFwLONG window_style;
-    if (VD_FW_G.draw_decorations) {
+    if (Vd_Fw_G.draw_decorations) {
         window_style = VD_FW_WS_OVERLAPPEDWINDOW | VD_FW_WS_SIZEBOX;
     } else {
         window_style = VD_FW_WS_OVERLAPPED | VD_FW_WS_SIZEBOX | VD_FW_WS_MAXIMIZEBOX | VD_FW_WS_MINIMIZEBOX;
@@ -10148,34 +9765,34 @@ static VdFwDWORD vd_fw__win_thread_proc(void *param)
     // - WS_OVERLAPPED | WS_SIZEBOX | WS_MAXIMIZEBOX: Works perfectly.
     // 
 
-    VD_FW_G.hwnd = VdFwCreateWindowEx(
+    Vd_Fw_G.hwnd = VdFwCreateWindowEx(
         0,
         VD_FW_TEXT("FWCLASS"),
         VD_FW_TEXT("FW Window"),
         window_style,
-        VD_FW_G.next_pos_x,
-        VD_FW_G.next_pos_y,
-        VD_FW_G.next_width,
-        VD_FW_G.next_height,
+        Vd_Fw_G.next_pos_x,
+        Vd_Fw_G.next_pos_y,
+        Vd_Fw_G.next_width,
+        Vd_Fw_G.next_height,
         0 /* hwndParent */,
         0 /* hMenu */,
         0 /* hInstance */,
         0 /* lpParam */);
 
     // @note(mdodis): This is an old thing from Windows 7 (I think... era). W
-    // SetLayeredWindowAttributes(VD_FW_G.hwnd, RGB(255, 0, 255), 255, LWA_COLORKEY);
+    // SetLayeredWindowAttributes(Vd_Fw_G.hwnd, RGB(255, 0, 255), 255, LWA_COLORKEY);
 
-    if (VD_FW_G.draw_decorations) {
-        if (VD_FW_G.os_version.dwBuildNumber >= 22000) {
+    if (Vd_Fw_G.draw_decorations) {
+        if (Vd_Fw_G.os_version.dwBuildNumber >= 22000) {
             // @note(mdodis): Undocumented mica values: 0x02: 0x04
             VdFwDWORD t = 1;
-            VdFwDwmSetWindowAttribute(VD_FW_G.hwnd, 20, &t, sizeof(t));
+            VdFwDwmSetWindowAttribute(Vd_Fw_G.hwnd, 20, &t, sizeof(t));
             int mica_value = 0x04;
-            VdFwDwmSetWindowAttribute(VD_FW_G.hwnd, 38, &mica_value, sizeof(mica_value));
-        } else if (VD_FW_G.os_version.dwMajorVersion >= 10) {
+            VdFwDwmSetWindowAttribute(Vd_Fw_G.hwnd, 38, &mica_value, sizeof(mica_value));
+        } else if (Vd_Fw_G.os_version.dwMajorVersion >= 10) {
             // @note(mdodis): Dark mode
             VdFwDWORD t = 1;
-            VdFwDwmSetWindowAttribute(VD_FW_G.hwnd, 20, &t, sizeof(t));
+            VdFwDwmSetWindowAttribute(Vd_Fw_G.hwnd, 20, &t, sizeof(t));
         }
     }
     vd_fw__composition_changed();
@@ -10184,47 +9801,47 @@ static VdFwDWORD vd_fw__win_thread_proc(void *param)
     VD_FW_SANITY_CHECK();
 
     VdFwRECT rect;
-    VdFwGetClientRect(VD_FW_G.hwnd, &rect);
-    VD_FW_G.w = rect.right - rect.left;
-    VD_FW_G.h = rect.bottom - rect.top;
-    VD_FW_G.next_frame.w = VD_FW_G.w;
-    VD_FW_G.next_frame.h = VD_FW_G.h;
-    VD_FW_G.next_frame.flags = VD_FW_WIN32_FLAGS_SIZE_CHANGED;
+    VdFwGetClientRect(Vd_Fw_G.hwnd, &rect);
+    Vd_Fw_G.w = rect.right - rect.left;
+    Vd_Fw_G.h = rect.bottom - rect.top;
+    Vd_Fw_G.next_frame.w = Vd_Fw_G.w;
+    Vd_Fw_G.next_frame.h = Vd_Fw_G.h;
+    Vd_Fw_G.next_frame.flags = VD_FW_WIN32_FLAGS_SIZE_CHANGED;
 
 
-    // SetWindowPos(VD_FW_G.hwnd, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_SHOWWINDOW);
-    VdFwShowWindow(VD_FW_G.hwnd, VD_FW_SW_SHOW);
-    VD_FW__CHECK_NONZERO(VdFwUpdateWindow(VD_FW_G.hwnd));
-    VD_FW__CHECK_NONZERO(VdFwSetFocus(VD_FW_G.hwnd));
-    VdFwSetForegroundWindow(VD_FW_G.hwnd);
+    // SetWindowPos(Vd_Fw_G.hwnd, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_SHOWWINDOW);
+    VdFwShowWindow(Vd_Fw_G.hwnd, VD_FW_SW_SHOW);
+    VD_FW__CHECK_NONZERO(VdFwUpdateWindow(Vd_Fw_G.hwnd));
+    VD_FW__CHECK_NONZERO(VdFwSetFocus(Vd_Fw_G.hwnd));
+    VdFwSetForegroundWindow(Vd_Fw_G.hwnd);
 
     {
         VdFwEvent evt;
         evt.type = VD_FW_EVENT_TYPE_SCALE_CHANGE;
-        evt.data.scale_change.new_scale = VdFwGetDpiForWindow(VD_FW_G.hwnd) / 90.f;
-        VD_FW_G.scale = evt.data.scale_change.new_scale;
+        evt.data.scale_change.new_scale = VdFwGetDpiForWindow(Vd_Fw_G.hwnd) / 90.f;
+        Vd_Fw_G.scale = evt.data.scale_change.new_scale;
         vd_fw__msgbuf_w(&evt);
     }
 
-    VD_FW__CHECK_TRUE(ReleaseSemaphore(VD_FW_G.sem_window_ready, 1, NULL));
+    VD_FW__CHECK_TRUE(ReleaseSemaphore(Vd_Fw_G.sem_window_ready, 1, NULL));
 
     // Register raw input mouse
     VdFwRAWINPUTDEVICE rids[2];
     rids[0].usUsagePage = 0x01; // Generic desktop controls
     rids[0].usUsage     = 0x02; // Mouse
     rids[0].dwFlags     = 0x00; // None (NO RIDEV_INPUTSINK)
-    rids[0].hwndTarget  = VD_FW_G.hwnd;
+    rids[0].hwndTarget  = Vd_Fw_G.hwnd;
 
     // rids[1].usUsagePage = 0x01; // Generic desktop controls
     // rids[1].usUsage     = 0x05; // Gamepad
     // rids[1].dwFlags     = RIDEV_DEVNOTIFY | RIDEV_INPUTSINK;
-    // rids[1].hwndTarget  = VD_FW_G.hwnd;
+    // rids[1].hwndTarget  = Vd_Fw_G.hwnd;
     VD_FW__CHECK_TRUE(VdFwRegisterRawInputDevices(rids, 1, sizeof(rids[0])));
 
-    VD_FW_G.last_window_style = window_style;
-    VD_FW_G.t_paint_ready = 1;
+    Vd_Fw_G.last_window_style = window_style;
+    Vd_Fw_G.t_paint_ready = 1;
 
-    while (VD_FW_G.t_running) {
+    while (Vd_Fw_G.t_running) {
         VdFwMSG message;
         // @note(mdodis): https://devblogs.microsoft.com/oldnewthing/20050209-00/?p=36493
         // We don't filter by window since WM_INPUTLANGCHANGE won't fire instantly
@@ -10245,7 +9862,7 @@ VD_FW_API int vd_fw__any_time_higher(int num_files, const char **files, unsigned
     for (int i = 0; i < num_files; ++i) {
 
         VdFwHANDLE hfile = CreateFileA(files[i],
-                                   VD_FW_GENERIC_READ, VD_FW_FILE_SHARE_READ | VD_FW_FILE_SHARE_WRITE,
+                                   Vd_Fw_GENERIC_READ, VD_FW_FILE_SHARE_READ | VD_FW_FILE_SHARE_WRITE,
                                    0, // lpSecurityAttributes
                                    VD_FW_OPEN_EXISTING,
                                    VD_FW_FILE_ATTRIBUTE_NORMAL,
@@ -10276,7 +9893,7 @@ VD_FW_API int vd_fw__any_time_higher(int num_files, const char **files, unsigned
 VD_FW_API char *vd_fw__debug_dump_file_text(const char *path, size_t *size)
 {
     VdFwHANDLE hfile = CreateFileA(path,
-                               VD_FW_GENERIC_READ, VD_FW_FILE_SHARE_READ | VD_FW_FILE_SHARE_WRITE,
+                               Vd_Fw_GENERIC_READ, VD_FW_FILE_SHARE_READ | VD_FW_FILE_SHARE_WRITE,
                                0, // lpSecurityAttributes
                                VD_FW_OPEN_EXISTING,
                                VD_FW_FILE_ATTRIBUTE_NORMAL,
@@ -10308,10 +9925,10 @@ static int vd_fw__hit_test(int x, int y)
     VdFwPOINT mouse;
     mouse.x = x;
     mouse.y = y;
-    VdFwScreenToClient(VD_FW_G.hwnd, &mouse);
+    VdFwScreenToClient(Vd_Fw_G.hwnd, &mouse);
 
     VdFwRECT client;
-    VdFwGetClientRect(VD_FW_G.hwnd, &client);
+    VdFwGetClientRect(Vd_Fw_G.hwnd, &client);
     int width  = client.right - client.left;
     int height = client.bottom - client.top;
 
@@ -10322,7 +9939,7 @@ static int vd_fw__hit_test(int x, int y)
     /* The diagonal size handles are wider than the frame */
     int diagonal_width = frame_size * 2 + VdFwGetSystemMetrics(5/*SM_CXBORDER*/);
 
-    if (!VD_FW_G.draw_decorations && VdFwIsZoomed(VD_FW_G.hwnd)) {
+    if (!Vd_Fw_G.draw_decorations && VdFwIsZoomed(Vd_Fw_G.hwnd)) {
         mouse.y += frame_size;
     }
 
@@ -10330,8 +9947,8 @@ static int vd_fw__hit_test(int x, int y)
         return VD_FW_HTNOWHERE;
     }
 
-    if (!VD_FW_G.is_fullscreen) {
-        if (VD_FW_G.winthread_resizable) {
+    if (!Vd_Fw_G.is_fullscreen) {
+        if (Vd_Fw_G.winthread_resizable) {
             if (mouse.y < frame_size) {
                 if (mouse.x < diagonal_width) {
                     return VD_FW_HTTOPLEFT;
@@ -10365,21 +9982,21 @@ static int vd_fw__hit_test(int x, int y)
             }
         }
 
-        if (!VD_FW_G.nccaption_set) {
+        if (!Vd_Fw_G.nccaption_set) {
             return VD_FW_HTCAPTION;
         }
 
         int inside_caption = 
-            ((mouse.x >= VD_FW_G.nccaption[0]) && (mouse.x <= VD_FW_G.nccaption[2])) &&
-            ((mouse.y >= VD_FW_G.nccaption[1]) && (mouse.y <= VD_FW_G.nccaption[3]));
+            ((mouse.x >= Vd_Fw_G.nccaption[0]) && (mouse.x <= Vd_Fw_G.nccaption[2])) &&
+            ((mouse.y >= Vd_Fw_G.nccaption[1]) && (mouse.y <= Vd_Fw_G.nccaption[3]));
 
         if (inside_caption) {
-            for (int ri = 0; ri < VD_FW_G.ncrect_count; ++ri) {
+            for (int ri = 0; ri < Vd_Fw_G.ncrect_count; ++ri) {
                 int rect[4];
-                rect[0] = VD_FW_G.ncrects[ri][0];
-                rect[1] = VD_FW_G.ncrects[ri][1];
-                rect[2] = VD_FW_G.ncrects[ri][2];
-                rect[3] = VD_FW_G.ncrects[ri][3];
+                rect[0] = Vd_Fw_G.ncrects[ri][0];
+                rect[1] = Vd_Fw_G.ncrects[ri][1];
+                rect[2] = Vd_Fw_G.ncrects[ri][2];
+                rect[3] = Vd_Fw_G.ncrects[ri][3];
 
                 int inside =
                     ((mouse.x >= rect[0]) && (mouse.x <= rect[2])) &&
@@ -10399,16 +10016,16 @@ static int vd_fw__hit_test(int x, int y)
 
 static void vd_fw__composition_changed(void)
 {
-    if (VD_FW_G.draw_decorations) return;
+    if (Vd_Fw_G.draw_decorations) return;
     VD_FW_WIN32_PROFILE_BEGIN(composition_changed);
 
     VdFwBOOL enabled = 0;
     VD_FW__CHECK_HRESULT(VdFwDwmIsCompositionEnabled(&enabled));
-    VD_FW_G.composition_enabled = enabled;
+    Vd_Fw_G.composition_enabled = enabled;
 
     if (enabled) {
         VdFwMARGINS m = {0, 0, 1, 0};
-        VD_FW__CHECK_HRESULT(VdFwDwmExtendFrameIntoClientArea(VD_FW_G.hwnd, &m));
+        VD_FW__CHECK_HRESULT(VdFwDwmExtendFrameIntoClientArea(Vd_Fw_G.hwnd, &m));
 
         // @note(mdodis): If we set this to disabled, then every time we resize the Windows 7 frame gets drawn behind
         // Additionally alpha compositing is done on fragments that haven't received a full alpha.
@@ -10416,11 +10033,11 @@ static void vd_fw__composition_changed(void)
         {
             // VdFwDWORD value = VD_FW_DWMNCRP_USEWINDOWSTYLE;
             VdFwDWORD value = VD_FW_DWMNCRP_ENABLED;
-            VD_FW__CHECK_HRESULT(VdFwDwmSetWindowAttribute(VD_FW_G.hwnd, VD_FW_DWMWA_NCRENDERING_POLICY, &value, sizeof(value)));
+            VD_FW__CHECK_HRESULT(VdFwDwmSetWindowAttribute(Vd_Fw_G.hwnd, VD_FW_DWMWA_NCRENDERING_POLICY, &value, sizeof(value)));
         }
         // {
         //     BOOL value = TRUE;
-        //     VD_FW__CHECK_HRESULT(DwmSetWindowAttribute(VD_FW_G.hwnd, DWMWA_ALLOW_NCPAINT, &value, sizeof(value)));
+        //     VD_FW__CHECK_HRESULT(DwmSetWindowAttribute(Vd_Fw_G.hwnd, DWMWA_ALLOW_NCPAINT, &value, sizeof(value)));
         // }
 
     }
@@ -10431,58 +10048,58 @@ static void vd_fw__composition_changed(void)
 
 static void vd_fw__update_region(void)
 {
-    VdFwRECT old_rgn = VD_FW_G.rgn;
+    VdFwRECT old_rgn = Vd_Fw_G.rgn;
 
-    if (VdFwIsZoomed(VD_FW_G.hwnd)) {
+    if (VdFwIsZoomed(Vd_Fw_G.hwnd)) {
         // @note(mdodis): If the window is maximized when get the client and window rects and set the region subtracted
         // by the overall window's top left coordinates
         VdFwWINDOWINFO window_info = {};
         window_info.cbSize = sizeof(window_info);
-        VdFwGetWindowInfo(VD_FW_G.hwnd, &window_info);
-        VD_FW_G.rgn.left   = window_info.rcClient.left   - window_info.rcWindow.left;
-        VD_FW_G.rgn.top    = window_info.rcClient.top    - window_info.rcWindow.top;
-        VD_FW_G.rgn.right  = window_info.rcClient.right  - window_info.rcWindow.left;
-        VD_FW_G.rgn.bottom = window_info.rcClient.bottom - window_info.rcWindow.top;
-    } else if (!VD_FW_G.composition_enabled) {
+        VdFwGetWindowInfo(Vd_Fw_G.hwnd, &window_info);
+        Vd_Fw_G.rgn.left   = window_info.rcClient.left   - window_info.rcWindow.left;
+        Vd_Fw_G.rgn.top    = window_info.rcClient.top    - window_info.rcWindow.top;
+        Vd_Fw_G.rgn.right  = window_info.rcClient.right  - window_info.rcWindow.left;
+        Vd_Fw_G.rgn.bottom = window_info.rcClient.bottom - window_info.rcWindow.top;
+    } else if (!Vd_Fw_G.composition_enabled) {
         // @note(mdodis): If composition is enabled, set the window's region to something really high so that shadows of
         // the window are still drawn
-        VD_FW_G.rgn.left   = 0;
-        VD_FW_G.rgn.top    = 0;
-        VD_FW_G.rgn.right  = 32767;
-        VD_FW_G.rgn.bottom = 32767;
+        Vd_Fw_G.rgn.left   = 0;
+        Vd_Fw_G.rgn.top    = 0;
+        Vd_Fw_G.rgn.right  = 32767;
+        Vd_Fw_G.rgn.bottom = 32767;
     } else {
         // @note(mdodis): Otherwise, the window's region is left unchanged
-        VD_FW_G.rgn.left   = 0;
-        VD_FW_G.rgn.top    = 0;
-        VD_FW_G.rgn.right  = 0;
-        VD_FW_G.rgn.bottom = 0;
+        Vd_Fw_G.rgn.left   = 0;
+        Vd_Fw_G.rgn.top    = 0;
+        Vd_Fw_G.rgn.right  = 0;
+        Vd_Fw_G.rgn.bottom = 0;
     }
 
-    if (VdFwEqualRect(&VD_FW_G.rgn, &old_rgn)) {
+    if (VdFwEqualRect(&Vd_Fw_G.rgn, &old_rgn)) {
         return;
     }
 
     VdFwRECT zero_rect = {};
-    if (VdFwEqualRect(&VD_FW_G.rgn, &zero_rect)) {
-        VdFwSetWindowRgn(VD_FW_G.hwnd, NULL, 1);
+    if (VdFwEqualRect(&Vd_Fw_G.rgn, &zero_rect)) {
+        VdFwSetWindowRgn(Vd_Fw_G.hwnd, NULL, 1);
     } else {
-        VdFwSetWindowRgn(VD_FW_G.hwnd, VdFwCreateRectRgnIndirect(&VD_FW_G.rgn), 1);
+        VdFwSetWindowRgn(Vd_Fw_G.hwnd, VdFwCreateRectRgnIndirect(&Vd_Fw_G.rgn), 1);
     }
 }
 
 static void vd_fw__theme_changed(void)
 {
-    VD_FW_G.theme_enabled = VdFwIsThemeActive();
+    Vd_Fw_G.theme_enabled = VdFwIsThemeActive();
 }
 
 static VdFwLRESULT vd_fw__nccalcsize(VdFwWPARAM wparam, VdFwLPARAM lparam)
 {
-    int borderless = !VD_FW_G.draw_decorations;
+    int borderless = !Vd_Fw_G.draw_decorations;
     if (wparam && borderless) {
 
         VdFwNCCALCSIZE_PARAMS *params = (VdFwNCCALCSIZE_PARAMS*)lparam;
-        if (VdFwIsZoomed(VD_FW_G.hwnd)) {
-            VdFwHMONITOR monitor = VdFwMonitorFromWindow(VD_FW_G.hwnd, 0x00000000/*MONITOR_DEFAULTTONULL*/);
+        if (VdFwIsZoomed(Vd_Fw_G.hwnd)) {
+            VdFwHMONITOR monitor = VdFwMonitorFromWindow(Vd_Fw_G.hwnd, 0x00000000/*MONITOR_DEFAULTTONULL*/);
             if (!monitor) {
                 return 0;
             }
@@ -10501,7 +10118,7 @@ static VdFwLRESULT vd_fw__nccalcsize(VdFwWPARAM wparam, VdFwLPARAM lparam)
         }
 
     } else {
-        return VdFwDefWindowProc(VD_FW_G.hwnd, VD_FW_WM_NCCALCSIZE, wparam, lparam);
+        return VdFwDefWindowProc(Vd_Fw_G.hwnd, VD_FW_WM_NCCALCSIZE, wparam, lparam);
     }
 }
 
@@ -10531,22 +10148,22 @@ static void vd_fw__window_pos_changed(VdFwWINDOWPOS *pos)
     VD_FW_WIN32_PROFILE_BEGIN(window_pos_changed);
 #endif
 
-    if (VD_FW_G.draw_decorations) {
+    if (Vd_Fw_G.draw_decorations) {
         VdFwRECT client;
-        VdFwGetClientRect(VD_FW_G.hwnd, &client);
-        VD_FW_G.w = client.right - client.left;
-        VD_FW_G.h = client.bottom - client.top;
+        VdFwGetClientRect(Vd_Fw_G.hwnd, &client);
+        Vd_Fw_G.w = client.right - client.left;
+        Vd_Fw_G.h = client.bottom - client.top;
 
     } else {
-        VD_FW_G.w = pos->cx;
-        VD_FW_G.h = pos->cy;
+        Vd_Fw_G.w = pos->cx;
+        Vd_Fw_G.h = pos->cy;
 
         // @note(mdodis): When window is maximized, pos->x and pos->y become -8, -8
         // So, subtract them from the overall width and height 2 times each so that
         // the maximized viewport is fully shown instead of clipped at the top and right
-        if (VdFwIsZoomed(VD_FW_G.hwnd)) {
-            VD_FW_G.w += 2 * pos->x;
-            VD_FW_G.h += 2 * pos->y;
+        if (VdFwIsZoomed(Vd_Fw_G.hwnd)) {
+            Vd_Fw_G.w += 2 * pos->x;
+            Vd_Fw_G.h += 2 * pos->y;
         }
     }
 
@@ -10589,49 +10206,49 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         } break;
 
         case VD_FW_WM_DESTROY: {
-            ReleaseSemaphore(VD_FW_G.sem_closed, 1, NULL);
+            ReleaseSemaphore(Vd_Fw_G.sem_closed, 1, NULL);
             vd_fw_queue_wait_exit();
             VdFwPostQuitMessage(0);
-            VD_FW_G.t_running = 0;
+            Vd_Fw_G.t_running = 0;
         } break;
 
         case VD_FW_WM_DWMCOMPOSITIONCHANGED: {
-            if (VD_FW_G.draw_decorations) {
+            if (Vd_Fw_G.draw_decorations) {
                 result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
 
                 VdFwBOOL enabled = 0;
                 VD_FW__CHECK_HRESULT(VdFwDwmIsCompositionEnabled(&enabled));
-                VD_FW_G.composition_enabled = enabled;
+                Vd_Fw_G.composition_enabled = enabled;
             } else {
                 vd_fw__composition_changed();
             }
         } break;
 
         case VD_FW_WM_PAINT: {
-            if (!VD_FW_G.t_paint_ready) break;
+            if (!Vd_Fw_G.t_paint_ready) break;
 
             VD_FW_WIN32_PROFILE_BEGIN(wm_paint);
 
                 VdFwPAINTSTRUCT ps;
                 VdFwBeginPaint(hwnd, &ps);
-                if (!VD_FW_G.winthread_block_while_sizing) {
-                    EnterCriticalSection(&VD_FW_G.critical_section);
+                if (!Vd_Fw_G.winthread_block_while_sizing) {
+                    EnterCriticalSection(&Vd_Fw_G.critical_section);
                 }
 
-                if (VD_FW_G.w != VD_FW_G.next_frame.w || VD_FW_G.h != VD_FW_G.next_frame.h) {
-                    VD_FW_G.next_frame.w = VD_FW_G.w;
-                    VD_FW_G.next_frame.h = VD_FW_G.h;
-                    VD_FW_G.next_frame.flags |= VD_FW_WIN32_FLAGS_SIZE_CHANGED;
+                if (Vd_Fw_G.w != Vd_Fw_G.next_frame.w || Vd_Fw_G.h != Vd_Fw_G.next_frame.h) {
+                    Vd_Fw_G.next_frame.w = Vd_Fw_G.w;
+                    Vd_Fw_G.next_frame.h = Vd_Fw_G.h;
+                    Vd_Fw_G.next_frame.flags |= VD_FW_WIN32_FLAGS_SIZE_CHANGED;
                 }
 
-                VD_FW_G.next_frame.flags |= VD_FW_WIN32_FLAGS_WAKE_COND_VAR;
+                Vd_Fw_G.next_frame.flags |= VD_FW_WIN32_FLAGS_WAKE_COND_VAR;
 
                 vd_fw_queue_wait_exit();
 
-                if (!VD_FW_G.winthread_block_while_sizing) {
-                    WakeConditionVariable(&VD_FW_G.cond_var);
-                    SleepConditionVariableCS(&VD_FW_G.cond_var, &VD_FW_G.critical_section, 0xFFFFFFFF/*INFINITE*/);
-                    LeaveCriticalSection(&VD_FW_G.critical_section);
+                if (!Vd_Fw_G.winthread_block_while_sizing) {
+                    WakeConditionVariable(&Vd_Fw_G.cond_var);
+                    SleepConditionVariableCS(&Vd_Fw_G.cond_var, &Vd_Fw_G.critical_section, 0xFFFFFFFF/*INFINITE*/);
+                    LeaveCriticalSection(&Vd_Fw_G.critical_section);
                 }
 
                 VdFwEndPaint(hwnd, &ps);
@@ -10640,7 +10257,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         } break;
 
         case VD_FW_WM_NCPAINT: {
-            if (VD_FW_G.draw_decorations) {
+            if (Vd_Fw_G.draw_decorations) {
                 result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
                 break;
             }
@@ -10667,7 +10284,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
                 //     ReleaseDC(hwnd, hdc);
                 // }
-            if (VD_FW_G.composition_enabled) {
+            if (Vd_Fw_G.composition_enabled) {
                 // HDC hdc;
                 // hdc = GetDCEx(hwnd, (HRGN)wparam, DCX_WINDOW|DCX_INTERSECTRGN);
 
@@ -10713,18 +10330,18 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         // relatively simple.
 
         case VD_FW_WM_ENTERSIZEMOVE: {
-            if (VD_FW_G.winthread_block_while_sizing) {
-                EnterCriticalSection(&VD_FW_G.critical_section);
+            if (Vd_Fw_G.winthread_block_while_sizing) {
+                EnterCriticalSection(&Vd_Fw_G.critical_section);
             }
 
         } break;
 
         case VD_FW_WM_EXITSIZEMOVE: {
-            if (VD_FW_G.winthread_block_while_sizing) {
-                LeaveCriticalSection(&VD_FW_G.critical_section);
+            if (Vd_Fw_G.winthread_block_while_sizing) {
+                LeaveCriticalSection(&Vd_Fw_G.critical_section);
             }
 
-            if (!VD_FW_G.draw_decorations) {
+            if (!Vd_Fw_G.draw_decorations) {
                 VdFwEvent evt;
                 evt.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP;
                 evt.data.mouse_button_up.button = vd_fw__win32_translate_button(VD_FW_VK_LBUTTON);
@@ -10735,7 +10352,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         } break;
 
         case VD_FW_WM_SYSCOMMAND: {
-            if (!VD_FW_G.draw_decorations) {
+            if (!Vd_Fw_G.draw_decorations) {
                 if (wparam == 0x0000F012) {
                     VdFwEvent evt;
                     evt.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP;
@@ -10763,7 +10380,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         } break;
 
         case VD_FW_WM_NCACTIVATE: {
-            if (!VD_FW_G.draw_decorations) {
+            if (!Vd_Fw_G.draw_decorations) {
                 // @note(mdodis): DefWindowProc doesn't repaint border if lparam == -1
                 // See: https://blogs.msdn.microsoft.com/wpfsdk/2008/09/08/custom-window-chrome-in-wpf/
                 result = VdFwDefWindowProc(hwnd, msg, wparam, -1);
@@ -10773,7 +10390,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         } break;
 
         case VD_FW_WM_NCCALCSIZE: {
-            if (!VD_FW_G.draw_decorations) {
+            if (!Vd_Fw_G.draw_decorations) {
                 vd_fw__nccalcsize(wparam, lparam);
             } else {
                 result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
@@ -10781,8 +10398,8 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         } break;
 
         case VD_FW_WM_NCHITTEST: {
-            if (!VD_FW_G.draw_decorations) {
-                result = vd_fw__hit_test(VD_FW_GET_X_LPARAM(lparam), VD_FW_GET_Y_LPARAM(lparam));
+            if (!Vd_Fw_G.draw_decorations) {
+                result = vd_fw__hit_test(Vd_Fw_GET_X_LPARAM(lparam), Vd_Fw_GET_Y_LPARAM(lparam));
             } else {
                 result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
             }
@@ -10790,7 +10407,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
         case VD_FW_WM_NCUAHDRAWCAPTION:
         case VD_FW_WM_NCUAHDRAWFRAME: {
-            if (!VD_FW_G.draw_decorations) {
+            if (!Vd_Fw_G.draw_decorations) {
                 result = 0;
             } else {
                 result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
@@ -10799,8 +10416,8 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
         case VD_FW_WM_SETICON:
         case VD_FW_WM_SETTEXT: {
-            if (!VD_FW_G.draw_decorations) {
-                if (!VD_FW_G.composition_enabled && !VD_FW_G.theme_enabled) {
+            if (!Vd_Fw_G.draw_decorations) {
+                if (!Vd_Fw_G.composition_enabled && !Vd_Fw_G.theme_enabled) {
                     result = vd_fw__handle_invisible(hwnd, msg, wparam, lparam);
                 } else {
                     result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
@@ -10811,7 +10428,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         } break;
 
         case VD_FW_WM_THEMECHANGED: {
-            if (!VD_FW_G.draw_decorations) {
+            if (!Vd_Fw_G.draw_decorations) {
                 vd_fw__theme_changed();
             }
 
@@ -10821,7 +10438,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         // @note(mdodis): Theoretically, we _should_ handle WM_WINDOWPOSCHANGED, but we don't really need to since
         // DefWindowProc does it well enough for the window type.
         // case WM_WINDOWPOSCHANGED: {
-        //     if (VD_FW_G.draw_decorations) {
+        //     if (Vd_Fw_G.draw_decorations) {
         //         result = DefWindowProc(hwnd, msg, wparam, lparam);
         //     } else {
         //         vd_fw__window_pos_changed((WINDOWPOS*)lparam);
@@ -10831,15 +10448,15 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         case VD_FW_WM_SIZE: {
             // @note(mdodis): WM_SIZE will only get called if the WM_WINDOWPOSCHANGED isn't handled by our wndproc.
             // In this case and in this case only, we already know that we're drawing default borders
-            VD_FW_G.w = VD_FW_LOWORD(lparam);
-            VD_FW_G.h = VD_FW_HIWORD(lparam);
+            Vd_Fw_G.w = VD_FW_LOWORD(lparam);
+            Vd_Fw_G.h = VD_FW_HIWORD(lparam);
 
             {
 
                 VdFwEvent evt;
                 evt.type = VD_FW_EVENT_TYPE_RESIZE;
-                evt.data.resize.w = VD_FW_G.w;
-                evt.data.resize.h = VD_FW_G.h;
+                evt.data.resize.w = Vd_Fw_G.w;
+                evt.data.resize.h = Vd_Fw_G.h;
                 vd_fw__msgbuf_w(&evt);
             }
 
@@ -10890,7 +10507,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             VdFwUINT num_bytes_copied = VdFwGetRawInputData(
                 (VdFwHRAWINPUT)lparam,
                 0x10000003/*RID_INPUT*/,
-                VD_FW_G.raw_input_buffer,
+                Vd_Fw_G.raw_input_buffer,
                 &data_size,
                 sizeof(VdFwRAWINPUTHEADER));
 
@@ -10898,7 +10515,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 break;
             }
 
-            VdFwRAWINPUT *raw = VD_FW_G.raw_input_buffer;
+            VdFwRAWINPUT *raw = Vd_Fw_G.raw_input_buffer;
             if (raw->header.dwType == 0/*RIM_TYPEMOUSE*/) {
                 VdFwLONG dx = raw->data.mouse.lLastX;
                 VdFwLONG dy = raw->data.mouse.lLastY;
@@ -10987,14 +10604,14 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             VdFwU32 codepoint = 0;
             int send_message = 1;
             if (VD_FW_IS_HIGH_SURROGATE(wparam)) {
-                VD_FW_G.char_surrogate_hi = (VdFwWCHAR)wparam;
+                Vd_Fw_G.char_surrogate_hi = (VdFwWCHAR)wparam;
                 send_message = 0;
-            } else if (VD_FW_IS_SURROGATE_PAIR(VD_FW_G.char_surrogate_hi, wparam)) {
+            } else if (VD_FW_IS_SURROGATE_PAIR(Vd_Fw_G.char_surrogate_hi, wparam)) {
                 VdFwU32 lo = (VdFwU32)wparam;
-                VdFwU32 hi = (VdFwU32)VD_FW_G.char_surrogate_hi;
+                VdFwU32 hi = (VdFwU32)Vd_Fw_G.char_surrogate_hi;
                 codepoint = 0x10000 + (((hi - 0xD800) << 10) | (lo - 0xDC00));
                 send_message = 2;
-                VD_FW_G.char_surrogate_hi = 0;
+                Vd_Fw_G.char_surrogate_hi = 0;
             } else {
                 codepoint = (VdFwU32)wparam;
             }
@@ -11042,7 +10659,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             if (down) {
                 evt.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN;
                 evt.data.mouse_button_down.button = vd_fw__win32_translate_button((VdFwWORD)code);
-                VdFwSetCapture(VD_FW_G.hwnd);
+                VdFwSetCapture(Vd_Fw_G.hwnd);
             } else {
                 evt.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP;
                 evt.data.mouse_button_up.button = vd_fw__win32_translate_button((VdFwWORD)code);
@@ -11058,7 +10675,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         case VD_FW_WM_NCLBUTTONUP:
         case VD_FW_WM_NCLBUTTONDOWN: {
 
-            if (!VD_FW_G.draw_decorations) {
+            if (!Vd_Fw_G.draw_decorations) {
                 int down = 0;
                 VdFwDWORD code = 0;
 
@@ -11097,12 +10714,12 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         } break;
 
         // case WM_NCMOUSEMOVE: {
-        //     if (!VD_FW_G.draw_decorations) {
+        //     if (!Vd_Fw_G.draw_decorations) {
         //         int x = GET_X_LPARAM(lparam);
         //         int y = GET_Y_LPARAM(lparam);
 
         //         POINT p = {x, y};
-        //         ScreenToClient(VD_FW_G.hwnd, &p);
+        //         ScreenToClient(Vd_Fw_G.hwnd, &p);
 
         //         VdFw__Win32Message m;
         //         m.msg = VD_FW_WIN32_MESSAGE_TYPE_MOUSEMOVE;
@@ -11117,11 +10734,11 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         case VD_FW_WM_NCMOUSEMOVE:
         case VD_FW_WM_MOUSEMOVE: {
 
-            int x = VD_FW_GET_X_LPARAM(lparam);
-            int y = VD_FW_GET_Y_LPARAM(lparam);
+            int x = Vd_Fw_GET_X_LPARAM(lparam);
+            int y = Vd_Fw_GET_Y_LPARAM(lparam);
 
             if (msg == VD_FW_WM_NCMOUSEMOVE) {
-                if (!VD_FW_G.receive_ncmouse_on && VD_FW_G.nccaption_set) {
+                if (!Vd_Fw_G.receive_ncmouse_on && Vd_Fw_G.nccaption_set) {
                     break;
                 }
 
@@ -11154,13 +10771,13 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             VD_FW_WIN32_PROFILE_BEGIN(fw_fullscreen);
             VdFwBOOL should_be_fullscreen = (VdFwBOOL)lparam;
 
-            // EnterCriticalSection(&VD_FW_G.critical_section);
+            // EnterCriticalSection(&Vd_Fw_G.critical_section);
             if (should_be_fullscreen) {
 
-                VD_FW_G.last_window_placement.length = sizeof(VD_FW_G.last_window_placement);
-                VdFwGetWindowPlacement(VD_FW_G.hwnd, &VD_FW_G.last_window_placement);
+                Vd_Fw_G.last_window_placement.length = sizeof(Vd_Fw_G.last_window_placement);
+                VdFwGetWindowPlacement(Vd_Fw_G.hwnd, &Vd_Fw_G.last_window_placement);
 
-                VdFwHMONITOR monitor = VdFwMonitorFromWindow(VD_FW_G.hwnd, 0x00000002/*MONITOR_DEFAULTTONEAREST*/);
+                VdFwHMONITOR monitor = VdFwMonitorFromWindow(Vd_Fw_G.hwnd, 0x00000002/*MONITOR_DEFAULTTONEAREST*/);
                 VdFwMONITORINFO monitor_info = {0};
                 monitor_info.cbSize = sizeof(monitor_info);
                 VD_FW__CHECK_NONZERO(VdFwGetMonitorInfo(monitor, &monitor_info));
@@ -11169,10 +10786,10 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
                 // @note(mdodis): See https://stackoverflow.com/questions/23145217/flickering-when-borderless-window-and-desktop-dimensions-are-the-same
                 int hack_1p = 0;
-                if (VD_FW_G.draw_decorations) {
+                if (Vd_Fw_G.draw_decorations) {
                     // style = WS_POPUP | WS_VISIBLE;
                     // flags = SWP_FRAMECHANGED | SWP_NOOWNERZORDER;
-                    VdFwLONG current_style = VdFwGetWindowLongA(VD_FW_G.hwnd, VD_FW_GWL_STYLE);
+                    VdFwLONG current_style = VdFwGetWindowLongA(Vd_Fw_G.hwnd, VD_FW_GWL_STYLE);
                     style = current_style & ~VD_FW_WS_OVERLAPPEDWINDOW;
                     // style = current_style & ~WS_OVERLAPPED;
                     // style = current_style | WS_POPUP;
@@ -11180,29 +10797,29 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                     hack_1p = 1;
                 } else {
                     // style = WS_POPUP | WS_VISIBLE;
-                    VdFwLONG current_style = VdFwGetWindowLongA(VD_FW_G.hwnd, VD_FW_GWL_STYLE);
+                    VdFwLONG current_style = VdFwGetWindowLongA(Vd_Fw_G.hwnd, VD_FW_GWL_STYLE);
                     style = current_style & ~VD_FW_WS_OVERLAPPEDWINDOW;
                     // style = current_style & ~WS_OVERLAPPED;
                     // style = current_style | WS_POPUP;
                     flags = VD_FW_SWP_SHOWWINDOW | VD_FW_SWP_FRAMECHANGED | VD_FW_SWP_NOOWNERZORDER;
                 }
 
-                VdFwSetWindowLong(VD_FW_G.hwnd, VD_FW_GWL_STYLE, style);
-                VdFwSetWindowPos(VD_FW_G.hwnd, VD_FW_HWND_TOP,
+                VdFwSetWindowLong(Vd_Fw_G.hwnd, VD_FW_GWL_STYLE, style);
+                VdFwSetWindowPos(Vd_Fw_G.hwnd, VD_FW_HWND_TOP,
                              monitor_info.rcMonitor.left , monitor_info.rcMonitor.top,
                              monitor_info.rcMonitor.right - monitor_info.rcMonitor.left + hack_1p,
                              monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top,
                              flags);
-                // VdFwShowWindow(VD_FW_G.hwnd, SW_SHOW);
-                // if (VD_FW_G.draw_decorations) {
+                // VdFwShowWindow(Vd_Fw_G.hwnd, SW_SHOW);
+                // if (Vd_Fw_G.draw_decorations) {
 
                 //     VdFwMARGINS m = {-1,-1,-1,-1};
-                //     VD_FW__CHECK_HRESULT(VdFwDwmExtendFrameIntoClientArea(VD_FW_G.hwnd, &m));
+                //     VD_FW__CHECK_HRESULT(VdFwDwmExtendFrameIntoClientArea(Vd_Fw_G.hwnd, &m));
                 // }
             } else {
-                VdFwSetWindowLongA(VD_FW_G.hwnd, VD_FW_GWL_STYLE, VD_FW_G.last_window_style);
-                VdFwSetWindowPlacement(VD_FW_G.hwnd, &VD_FW_G.last_window_placement);
-                VdFwSetWindowPos(VD_FW_G.hwnd, NULL,
+                VdFwSetWindowLongA(Vd_Fw_G.hwnd, VD_FW_GWL_STYLE, Vd_Fw_G.last_window_style);
+                VdFwSetWindowPlacement(Vd_Fw_G.hwnd, &Vd_Fw_G.last_window_placement);
+                VdFwSetWindowPos(Vd_Fw_G.hwnd, NULL,
                              0,
                              0,
                              0,
@@ -11210,7 +10827,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                              VD_FW_SWP_NOMOVE | VD_FW_SWP_NOSIZE | VD_FW_SWP_NOZORDER |
                              VD_FW_SWP_NOOWNERZORDER | VD_FW_SWP_FRAMECHANGED);
             }
-            // LeaveCriticalSection(&VD_FW_G.critical_section);
+            // LeaveCriticalSection(&Vd_Fw_G.critical_section);
 
             VD_FW_WIN32_PROFILE_END(fw_fullscreen);
         } break;
@@ -11220,7 +10837,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             VdFwWORD height = VD_FW_HIWORD(lparam);
 
             VdFwRECT rect;
-            VdFwGetWindowRect(VD_FW_G.hwnd, &rect);
+            VdFwGetWindowRect(Vd_Fw_G.hwnd, &rect);
 
             VdFwRECT newrect;
             newrect.left = rect.left;
@@ -11228,7 +10845,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             newrect.top = rect.top;
             newrect.bottom = rect.top + height;
 
-            VdFwSetWindowPos(VD_FW_G.hwnd, VD_FW_HWND_TOP,
+            VdFwSetWindowPos(Vd_Fw_G.hwnd, VD_FW_HWND_TOP,
                          newrect.left, newrect.top,
                          newrect.right - newrect.left,
                          newrect.bottom - newrect.top,
@@ -11241,20 +10858,20 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             VdFwDWORD width  = VD_FW_LOWORD(lparam);
             VdFwDWORD height = VD_FW_HIWORD(lparam);
             if (msg == VD_FW_WIN32_SIZEMIN) {
-                VD_FW_G.window_min[0] = width;
-                VD_FW_G.window_min[1] = height;
+                Vd_Fw_G.window_min[0] = width;
+                Vd_Fw_G.window_min[1] = height;
             } else {
-                VD_FW_G.window_max[0] = width;
-                VD_FW_G.window_max[1] = height;
+                Vd_Fw_G.window_max[0] = width;
+                Vd_Fw_G.window_max[1] = height;
             }
         } break;
 
         case VD_FW_WIN32_RESIZABLE: {
             int on = (int)lparam;
-            VD_FW_G.winthread_resizable = on;
+            Vd_Fw_G.winthread_resizable = on;
             VdFwLONG style = VdFwGetWindowLongA(hwnd, VD_FW_GWL_STYLE);
             if (on) {
-                if (VD_FW_G.draw_decorations) {
+                if (Vd_Fw_G.draw_decorations) {
                     style |= VD_FW_WS_MAXIMIZEBOX;
                 }
 
@@ -11269,27 +10886,27 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
         case VD_FW_WIN32_BLOCKMODE: {
             int on = (int)lparam;
-            VD_FW_G.winthread_block_while_sizing = on;
+            Vd_Fw_G.winthread_block_while_sizing = on;
         } break;
 
         case VD_FW_WIN32_KILL: {
-            VdFwDestroyWindow(VD_FW_G.hwnd);
+            VdFwDestroyWindow(Vd_Fw_G.hwnd);
         } break;
 
         case VD_FW_WM_GETMINMAXINFO: {
             VdFwMINMAXINFO *min_max_info = (VdFwMINMAXINFO*)lparam;
-            min_max_info->ptMinTrackSize.x = VD_FW_G.window_min[0] <= 0 ? VD_FW_G.def_window_min[0] : VD_FW_G.window_min[0];
-            min_max_info->ptMinTrackSize.y = VD_FW_G.window_min[1] <= 0 ? VD_FW_G.def_window_min[1] : VD_FW_G.window_min[1];
-            min_max_info->ptMaxTrackSize.x = VD_FW_G.window_max[0] <= 0 ? 0x7FFFFFFF : VD_FW_G.window_max[0];
-            min_max_info->ptMaxTrackSize.y = VD_FW_G.window_max[1] <= 0 ? 0x7FFFFFFF : VD_FW_G.window_max[1];
+            min_max_info->ptMinTrackSize.x = Vd_Fw_G.window_min[0] <= 0 ? Vd_Fw_G.def_window_min[0] : Vd_Fw_G.window_min[0];
+            min_max_info->ptMinTrackSize.y = Vd_Fw_G.window_min[1] <= 0 ? Vd_Fw_G.def_window_min[1] : Vd_Fw_G.window_min[1];
+            min_max_info->ptMaxTrackSize.x = Vd_Fw_G.window_max[0] <= 0 ? 0x7FFFFFFF : Vd_Fw_G.window_max[0];
+            min_max_info->ptMaxTrackSize.y = Vd_Fw_G.window_max[1] <= 0 ? 0x7FFFFFFF : Vd_Fw_G.window_max[1];
         } break;
 
         case VD_FW_WIN32_UPDATE_TITLE: {
-            VdFwSetWindowTextA(VD_FW_G.hwnd, VD_FW_G.title);
+            VdFwSetWindowTextA(Vd_Fw_G.hwnd, Vd_Fw_G.title);
         } break;
 
         case VD_FW_WM_MOUSEHWHEEL: {
-            if (!VD_FW_G.t_paint_ready) { result = VdFwDefWindowProc(hwnd, msg, wparam, lparam); break; }
+            if (!Vd_Fw_G.t_paint_ready) { result = VdFwDefWindowProc(hwnd, msg, wparam, lparam); break; }
             int delta = (short)VD_FW_HIWORD(wparam);
             float dx = (float)delta / (float)120/*WHEEL_DELTA*/;
             VdFwEvent evt;
@@ -11300,7 +10917,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         } break;
 
         case VD_FW_WM_MOUSEWHEEL: {
-            if (!VD_FW_G.t_paint_ready) { result = VdFwDefWindowProc(hwnd, msg, wparam, lparam); break; }
+            if (!Vd_Fw_G.t_paint_ready) { result = VdFwDefWindowProc(hwnd, msg, wparam, lparam); break; }
             int delta = (short)VD_FW_HIWORD(wparam);
             float dy = (float)delta / (float)120/*WHEEL_DELTA*/;
 
@@ -11320,8 +10937,8 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
 static int vd_fw__msgbuf_r(VdFwEvent *message)
 {
-    VdFwLONG r = VD_FW_G.msgbuf_r;
-    VdFwLONG w = _InterlockedCompareExchange(&VD_FW_G.msgbuf_w, VD_FW_G.msgbuf_w, VD_FW_G.msgbuf_w);
+    VdFwLONG r = Vd_Fw_G.msgbuf_r;
+    VdFwLONG w = _InterlockedCompareExchange(&Vd_Fw_G.msgbuf_w, Vd_Fw_G.msgbuf_w, Vd_Fw_G.msgbuf_w);
 
     __faststorefence();
 
@@ -11329,18 +10946,18 @@ static int vd_fw__msgbuf_r(VdFwEvent *message)
         return 0;
     }
 
-    *message = VD_FW_G.msgbuf[r];
+    *message = Vd_Fw_G.msgbuf[r];
 
     VdFwLONG nr = (r + 1) % VD_FW_WIN32_MESSAGE_BUFFER_SIZE;
-    _InterlockedExchange(&VD_FW_G.msgbuf_r, nr);
+    _InterlockedExchange(&Vd_Fw_G.msgbuf_r, nr);
 
     return 1;
 }
 
 static int vd_fw__msgbuf_w(VdFwEvent *message)
 {
-    VdFwLONG w = VD_FW_G.msgbuf_w;
-    VdFwLONG r = _InterlockedCompareExchange(&VD_FW_G.msgbuf_r, VD_FW_G.msgbuf_r, VD_FW_G.msgbuf_r);
+    VdFwLONG w = Vd_Fw_G.msgbuf_w;
+    VdFwLONG r = _InterlockedCompareExchange(&Vd_Fw_G.msgbuf_r, Vd_Fw_G.msgbuf_r, Vd_Fw_G.msgbuf_r);
 
     __faststorefence();
 
@@ -11348,9 +10965,9 @@ static int vd_fw__msgbuf_w(VdFwEvent *message)
         return 0;
     }
 
-    VD_FW_G.msgbuf[w] = *message;
+    Vd_Fw_G.msgbuf[w] = *message;
     VdFwLONG nw = (w + 1) % VD_FW_WIN32_MESSAGE_BUFFER_SIZE;
-    _InterlockedExchange(&VD_FW_G.msgbuf_w, nw);
+    _InterlockedExchange(&Vd_Fw_G.msgbuf_w, nw);
 
     vd_fw_queue_wait_exit();
 
@@ -11362,8 +10979,8 @@ static void vd_fw__update_kb_codepage(void)
     VdFwHKL keyboard_layout = VdFwGetKeyboardLayout(0);
 
     VdFwDWORD keyboard_lcid = VD_FW_MAKELCID(VD_FW_HIWORD(keyboard_layout), 0x0/*SORT_DEFAULT*/);
-    if (GetLocaleInfoA(keyboard_lcid, (0x20000000/*LOCALE_RETURN_NUMBER*/ | 0x00001004/*LOCALE_IDEFAULTANSICODEPAGE*/), (VdFwLPSTR)&VD_FW_G.kb_codepage, sizeof(VD_FW_G.kb_codepage)) == 0) {
-        VD_FW_G.kb_codepage = 0/*CP_ACP*/;
+    if (GetLocaleInfoA(keyboard_lcid, (0x20000000/*LOCALE_RETURN_NUMBER*/ | 0x00001004/*LOCALE_IDEFAULTANSICODEPAGE*/), (VdFwLPSTR)&Vd_Fw_G.kb_codepage, sizeof(Vd_Fw_G.kb_codepage)) == 0) {
+        Vd_Fw_G.kb_codepage = 0/*CP_ACP*/;
     }
 }
 
@@ -11489,7 +11106,7 @@ static VdFwBOOL vd_fw__win32_enum_monitor(VdFwHMONITOR monitor, VdFwHDC hdc, VdF
         break;
     }
 
-    mmonitor = &VD_FW_G.monitor_buffer[VD_FW_G.monitor_buffer_len++];
+    mmonitor = &Vd_Fw_G.monitor_buffer[Vd_Fw_G.monitor_buffer_len++];
     VD_FW_MEMCPY(mmonitor->friendly_name, display_name, display_name_len);
     mmonitor->friendly_name[display_name_len] = 0;
     mmonitor->hmonitor = monitor;
@@ -11506,7 +11123,7 @@ static VdFwBOOL vd_fw__win32_enum_monitor_resize_count(VdFwHMONITOR monitor, VdF
     (void)hdc;
     (void)rect;
     (void)lpparam;
-    VD_FW_G.monitor_count++;
+    Vd_Fw_G.monitor_count++;
     return 1;
 }
 
@@ -11593,29 +11210,29 @@ static void vd_fw__win32_update_monitor_display_modes(VdFw__Win32Monitor *monito
 
 static void vd_fw__win32_update_monitors(void)
 {
-    VD_FW_G.monitor_count = 0;
+    Vd_Fw_G.monitor_count = 0;
     VdFwEnumDisplayMonitors(NULL, NULL, vd_fw__win32_enum_monitor_resize_count, (VdFwLPARAM)NULL);
 
-    VD_FW_G.monitor_buffer_len = 0;
-    VD_FW_G.monitor_buffer = (VdFw__Win32Monitor*)vd_fw__resize_buffer(VD_FW_G.monitor_buffer, sizeof(*VD_FW_G.monitor_buffer),
-                                                                       VD_FW_G.monitor_count, &VD_FW_G.monitor_buffer_cap);
+    Vd_Fw_G.monitor_buffer_len = 0;
+    Vd_Fw_G.monitor_buffer = (VdFw__Win32Monitor*)vd_fw__resize_buffer(Vd_Fw_G.monitor_buffer, sizeof(*Vd_Fw_G.monitor_buffer),
+                                                                       Vd_Fw_G.monitor_count, &Vd_Fw_G.monitor_buffer_cap);
 
     VdFwEnumDisplayMonitors(NULL, NULL, vd_fw__win32_enum_monitor, (VdFwLPARAM)NULL);
     VdFwPOINT p = {0, 0};
     VdFwHMONITOR primary_monitor = VdFwMonitorFromPoint(p, 0x00000001/*MONITOR_DEFAULTTOPRIMARY*/);
 
     int primary_monitor_index = -1;
-    for (int i = 0; i < VD_FW_G.monitor_buffer_len; ++i) {
-        if (VD_FW_G.monitor_buffer[i].hmonitor == primary_monitor) {
+    for (int i = 0; i < Vd_Fw_G.monitor_buffer_len; ++i) {
+        if (Vd_Fw_G.monitor_buffer[i].hmonitor == primary_monitor) {
             primary_monitor_index = i;
             break;
         }
     }
 
     if ((primary_monitor_index != -1) && (primary_monitor_index != 0)) {
-        VdFw__Win32Monitor temp = VD_FW_G.monitor_buffer[0];
-        VD_FW_G.monitor_buffer[0] = VD_FW_G.monitor_buffer[primary_monitor_index];
-        VD_FW_G.monitor_buffer[primary_monitor_index] = temp;
+        VdFw__Win32Monitor temp = Vd_Fw_G.monitor_buffer[0];
+        Vd_Fw_G.monitor_buffer[0] = Vd_Fw_G.monitor_buffer[primary_monitor_index];
+        Vd_Fw_G.monitor_buffer[primary_monitor_index] = temp;
     }
 }
 
@@ -11625,7 +11242,7 @@ const char *Vd_Fw_Vk_Instance_Extensions[] = {
 
 VD_FW_API void vd_fw_vk_set_get_instance_proc_addr(VdFwVkGetInstanceProcAddrProc proc)
 {
-    VD_FW_G.vk_get_instance_proc_addr = proc;
+    Vd_Fw_G.vk_get_instance_proc_addr = proc;
 }
 
 VD_FW_API const char **vd_fw_vk_wsi_instance_extensions(int *count)
@@ -11651,15 +11268,15 @@ VD_FW_API int vd_fw_vk_wsi_surface_create(void *p_instance, void *p_allocation_c
     surface_create_info.pNext     = 0;
     surface_create_info.flags     = 0;
     surface_create_info.hinstance = (VdFwHINSTANCE)GetModuleHandleA(NULL);
-    surface_create_info.hwnd      = VD_FW_G.hwnd;
+    surface_create_info.hwnd      = Vd_Fw_G.hwnd;
 
-    if (VD_FW_G.vk_create_win32_surface_khr_proc == 0) {
-        VD_FW_G.vk_create_win32_surface_khr_proc = (VdFw__vkCreateWin32SurfaceKHRProc)
-            VD_FW_G.vk_get_instance_proc_addr(p_instance, "vkCreateWin32SurfaceKHR");
+    if (Vd_Fw_G.vk_create_win32_surface_khr_proc == 0) {
+        Vd_Fw_G.vk_create_win32_surface_khr_proc = (VdFw__vkCreateWin32SurfaceKHRProc)
+            Vd_Fw_G.vk_get_instance_proc_addr(p_instance, "vkCreateWin32SurfaceKHR");
     }
 
-    if (VD_FW_G.vk_create_win32_surface_khr_proc) {
-        return VD_FW_G.vk_create_win32_surface_khr_proc(p_instance, (void*)&surface_create_info, p_allocation_callbacks, p_surface);
+    if (Vd_Fw_G.vk_create_win32_surface_khr_proc) {
+        return Vd_Fw_G.vk_create_win32_surface_khr_proc(p_instance, (void*)&surface_create_info, p_allocation_callbacks, p_surface);
     } else {
         return -13;
     }
@@ -11684,7 +11301,7 @@ VD_FW_API int vd_fw_vk_wsi_surface_create(void *p_instance, void *p_allocation_c
 #include <semaphore.h>
 #include <stdatomic.h>
 
-#define VD_FW_G Vd_Fw_Globals
+#define Vd_Fw_G Vd_Fw_Globals
 
 @interface VdFwWindowDelegate : NSObject<NSApplicationDelegate, NSWindowDelegate>
 @end
@@ -12078,13 +11695,13 @@ static VdFwKey vd_fw__translate_mac_keycode(unsigned short keycode)
 
 static NSPoint vd_fw__mac_mouse_cocoa_to_conventional(NSPoint loc)
 {
-    NSView *cv = [VD_FW_G.window contentView];
+    NSView *cv = [Vd_Fw_G.window contentView];
     NSRect cvf = [cv frame];
     NSPoint loc_top_left_origin = NSMakePoint(loc.x, cvf.size.height - loc.y);
 
     NSPoint result = NSMakePoint(
-        loc_top_left_origin.x * VD_FW_G.scale,
-        loc_top_left_origin.y * VD_FW_G.scale);
+        loc_top_left_origin.x * Vd_Fw_G.scale,
+        loc_top_left_origin.y * Vd_Fw_G.scale);
 
     return result;
 }
@@ -12095,52 +11712,52 @@ static int Update_Context = 0;
 static void vd_fw__mac_check_frame_lock(void)
 {
 
-    pthread_mutex_lock(&VD_FW_G.m_paint);
+    pthread_mutex_lock(&Vd_Fw_G.m_paint);
 
-    if ((VD_FW_G.w != VD_FW_G.next_frame.w) || (VD_FW_G.h != VD_FW_G.next_frame.h)) {
-        VD_FW_G.next_frame.w = VD_FW_G.w;
-        VD_FW_G.next_frame.h = VD_FW_G.h;
-        VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_SIZE_CHANGED;
+    if ((Vd_Fw_G.w != Vd_Fw_G.next_frame.w) || (Vd_Fw_G.h != Vd_Fw_G.next_frame.h)) {
+        Vd_Fw_G.next_frame.w = Vd_Fw_G.w;
+        Vd_Fw_G.next_frame.h = Vd_Fw_G.h;
+        Vd_Fw_G.next_frame.flags |= VD_FW__MAC_FLAGS_SIZE_CHANGED;
 
     }
 
-    VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_WAKE_COND_VAR;
-    [VD_FW_G.gl_context update];
+    Vd_Fw_G.next_frame.flags |= VD_FW__MAC_FLAGS_WAKE_COND_VAR;
+    [Vd_Fw_G.gl_context update];
 
-    pthread_cond_signal(&VD_FW_G.n_paint);
-    pthread_cond_wait(&VD_FW_G.n_paint, &VD_FW_G.m_paint);
-    pthread_mutex_unlock(&VD_FW_G.m_paint);
+    pthread_cond_signal(&Vd_Fw_G.n_paint);
+    pthread_cond_wait(&Vd_Fw_G.n_paint, &Vd_Fw_G.m_paint);
+    pthread_mutex_unlock(&Vd_Fw_G.m_paint);
 
 }
 
 @implementation VdFwWindowDelegate
 - (void)backingChanged:(NSNotification *)note {
-    // pthread_mutex_lock(&VD_FW_G.m_paint);
-    // [VD_FW_G.gl_context update];
-    // pthread_mutex_unlock(&VD_FW_G.m_paint);
+    // pthread_mutex_lock(&Vd_Fw_G.m_paint);
+    // [Vd_Fw_G.gl_context update];
+    // pthread_mutex_unlock(&Vd_Fw_G.m_paint);
 
     NSWindow *win = note.object;
     CGFloat scale = win.backingScaleFactor;
-    VD_FW_G.scale = scale;
+    Vd_Fw_G.scale = scale;
 
-    // if (VD_FW_G.context_update_requested) {
-    //     [VD_FW_G.gl_context update];
-    //     VD_FW_G.context_update_requested = 0;
+    // if (Vd_Fw_G.context_update_requested) {
+    //     [Vd_Fw_G.gl_context update];
+    //     Vd_Fw_G.context_update_requested = 0;
     // }
 
-    // NSRect rect = [[VD_FW_G.window contentView] frame];
-    // VD_FW_G.w = (int)rect.size.width * VD_FW_G.scale;
-    // VD_FW_G.h = (int)rect.size.height * VD_FW_G.scale;
+    // NSRect rect = [[Vd_Fw_G.window contentView] frame];
+    // Vd_Fw_G.w = (int)rect.size.width * Vd_Fw_G.scale;
+    // Vd_Fw_G.h = (int)rect.size.height * Vd_Fw_G.scale;
     // // vd_fw__mac_check_frame_lock();
-    // if (!VD_FW_G.context_update_requested) {
-    //     sem_post(VD_FW_G.s_main_thread_context_needs_update);
-    //     VD_FW_G.context_update_requested = 1;
+    // if (!Vd_Fw_G.context_update_requested) {
+    //     sem_post(Vd_Fw_G.s_main_thread_context_needs_update);
+    //     Vd_Fw_G.context_update_requested = 1;
     // }
 }
 
 - (void)windowDidBecomeKey:(NSNotification *)notification {
-    VD_FW_G.focus_changed = 1;
-    VD_FW_G.focused = 1;
+    Vd_Fw_G.focus_changed = 1;
+    Vd_Fw_G.focused = 1;
 
     VdFwEvent evt;
     evt.type = VD_FW_EVENT_TYPE_FOCUS_CHANGE;
@@ -12149,8 +11766,8 @@ static void vd_fw__mac_check_frame_lock(void)
 }
 
 - (void)windowDidResignKey:(NSNotification *)notification {
-    VD_FW_G.focus_changed = 1;
-    VD_FW_G.focused = 0;
+    Vd_Fw_G.focus_changed = 1;
+    Vd_Fw_G.focused = 0;
 
     VdFwEvent evt;
     evt.type = VD_FW_EVENT_TYPE_FOCUS_CHANGE;
@@ -12178,18 +11795,18 @@ static void vd_fw__mac_check_frame_lock(void)
 
 - (void) windowDidEnterFullScreen:(NSNotification *) notification
 {
-    VD_FW_G.is_fullscreen = 1;
+    Vd_Fw_G.is_fullscreen = 1;
 }
 
 - (void) windowDidExitFullScreen:(NSNotification *) notification
 {
-    VD_FW_G.is_fullscreen = 0;
+    Vd_Fw_G.is_fullscreen = 0;
 }
 
 
 - (void)windowWillClose:(NSNotification*)notification {
-    VD_FW_G.should_close = YES;
-    sem_post(VD_FW_G.s_main_thread_window_closed);
+    Vd_Fw_G.should_close = YES;
+    sem_post(Vd_Fw_G.s_main_thread_window_closed);
     [NSApp stop:nil];
 }
 
@@ -12212,22 +11829,22 @@ static void vd_fw__mac_check_frame_lock(void)
 }
 
 - (void)windowDidResize:(NSNotification *)notification {
-    NSRect rect = [[VD_FW_G.window contentView] frame];
-    VD_FW_G.w = (int)rect.size.width * VD_FW_G.scale;
-    VD_FW_G.h = (int)rect.size.height * VD_FW_G.scale;
+    NSRect rect = [[Vd_Fw_G.window contentView] frame];
+    Vd_Fw_G.w = (int)rect.size.width * Vd_Fw_G.scale;
+    Vd_Fw_G.h = (int)rect.size.height * Vd_Fw_G.scale;
 
-    if (!VD_FW_G.context_update_requested) {
-        sem_post(VD_FW_G.s_main_thread_context_needs_update);
-        VD_FW_G.context_update_requested = 1;
+    if (!Vd_Fw_G.context_update_requested) {
+        sem_post(Vd_Fw_G.s_main_thread_context_needs_update);
+        Vd_Fw_G.context_update_requested = 1;
     }
 
-    if (VD_FW_G.is_zoomed != [VD_FW_G.window isZoomed]) {
-        VD_FW_G.is_zoomed = [VD_FW_G.window isZoomed];
+    if (Vd_Fw_G.is_zoomed != [Vd_Fw_G.window isZoomed]) {
+        Vd_Fw_G.is_zoomed = [Vd_Fw_G.window isZoomed];
 
         VdFwEvent evt;
         evt.type = VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE;
         evt.data.window_state_change.flag = VD_FW_WINDOW_STATE_MAXIMIZED;
-        evt.data.window_state_change.value = VD_FW_G.is_zoomed;
+        evt.data.window_state_change.value = Vd_Fw_G.is_zoomed;
         vd_fw__mac_msgbuf_w(&evt);
     }
 
@@ -12236,7 +11853,7 @@ static void vd_fw__mac_check_frame_lock(void)
 
     // CGLContextObj ctx = CGLGetCurrentContext();
     // CGLLockContext(ctx);
-    // [VD_FW_G.gl_context update];
+    // [Vd_Fw_G.gl_context update];
     // CGLUnlockContext(ctx);
 
     // @note(mdodis): Apple States:
@@ -12246,11 +11863,11 @@ static void vd_fw__mac_check_frame_lock(void)
     // > for each thread’s context serially.
     //
     // So we wait to acquire paint lock here.
-    // pthread_mutex_lock(&VD_FW_G.m_paint);
-    // VD_FW_G.next_frame.flags |= VD_FW__MAC_FLAGS_REACQUIRE_CONTEXT;
-    // [VD_FW_G.gl_context makeCurrentContext];
-    // [VD_FW_G.gl_context update];
-    // pthread_mutex_unlock(&VD_FW_G.m_paint);
+    // pthread_mutex_lock(&Vd_Fw_G.m_paint);
+    // Vd_Fw_G.next_frame.flags |= VD_FW__MAC_FLAGS_REACQUIRE_CONTEXT;
+    // [Vd_Fw_G.gl_context makeCurrentContext];
+    // [Vd_Fw_G.gl_context update];
+    // pthread_mutex_unlock(&Vd_Fw_G.m_paint);
 }
 - (BOOL)acceptsFirstResponder {
     return YES;
@@ -12277,8 +11894,8 @@ static void vd_fw__mac_check_frame_lock(void)
     // } 
 
     // Restore if minimized
-    if ([VD_FW_G.window isMiniaturized]) {
-        [VD_FW_G.window deminiaturize:nil];
+    if ([Vd_Fw_G.window isMiniaturized]) {
+        [Vd_Fw_G.window deminiaturize:nil];
     }
 }
 
@@ -12292,9 +11909,9 @@ static void vd_fw__mac_check_frame_lock(void)
 
 - (void)drawRect:(NSRect)dirtyRect {
 
-    NSRect rect = [[VD_FW_G.window contentView] frame];
-    VD_FW_G.w = (int)rect.size.width * VD_FW_G.scale;
-    VD_FW_G.h = (int)rect.size.height * VD_FW_G.scale;
+    NSRect rect = [[Vd_Fw_G.window contentView] frame];
+    Vd_Fw_G.w = (int)rect.size.width * Vd_Fw_G.scale;
+    Vd_Fw_G.h = (int)rect.size.height * Vd_Fw_G.scale;
 }
 
 - (void)keyUp:(NSEvent*)event
@@ -12317,17 +11934,17 @@ static void vd_fw__mac_check_frame_lock(void)
     unsigned char option_down = (flags & NSEventModifierFlagOption) ? 1 : 0;
     unsigned char control_down = (flags & NSEventModifierFlagControl) ? 1 : 0;
 
-    VD_FW_G.current_modifiers = 0;
+    Vd_Fw_G.current_modifiers = 0;
     if (shift_down) {
-        VD_FW_G.current_modifiers |= VD_FW_MOD_SHIFT;    
+        Vd_Fw_G.current_modifiers |= VD_FW_MOD_SHIFT;    
     }
 
     if (option_down) {
-        VD_FW_G.current_modifiers |= VD_FW_MOD_ALT;
+        Vd_Fw_G.current_modifiers |= VD_FW_MOD_ALT;
     }
 
     if (control_down) {
-        VD_FW_G.current_modifiers |= VD_FW_MOD_CONTROL;
+        Vd_Fw_G.current_modifiers |= VD_FW_MOD_CONTROL;
     }
 
     switch (keycode) {
@@ -12403,7 +12020,7 @@ static void vd_fw__mac_check_frame_lock(void)
     VdFwEvent evt;
     evt.type = VD_FW_EVENT_TYPE_KEY_DOWN;
     evt.data.key_down.key = key;
-    evt.data.key_down.modifiers = VD_FW_G.current_modifiers;
+    evt.data.key_down.modifiers = Vd_Fw_G.current_modifiers;
     evt.data.key_down.repeat = 0;
     vd_fw__mac_msgbuf_w(&evt); 
 }
@@ -12419,20 +12036,20 @@ static void vd_fw__mac_check_frame_lock(void)
     NSPoint view_point = [event locationInWindow];
     NSPoint p = NSMakePoint(view_point.x, view_point.y);
 
-    p.x *= VD_FW_G.scale;
-    p.y *= VD_FW_G.scale;
+    p.x *= Vd_Fw_G.scale;
+    p.y *= Vd_Fw_G.scale;
 
     int hit_drag_area = 0;
-    if (VD_FW_G.draw_decorations) {
+    if (Vd_Fw_G.draw_decorations) {
         return;
     }
 
-    if (!VD_FW_G.nccaption_set) {
+    if (!Vd_Fw_G.nccaption_set) {
         hit_drag_area = 1;
-    } else if (NSPointInRect(p, VD_FW_G.nccaption)) {
+    } else if (NSPointInRect(p, Vd_Fw_G.nccaption)) {
         hit_drag_area = 1;
-        for (int ri = 0; ri < VD_FW_G.ncrect_count; ++ri) {
-            if (NSPointInRect(p, VD_FW_G.ncrects[ri])) {
+        for (int ri = 0; ri < Vd_Fw_G.ncrect_count; ++ri) {
+            if (NSPointInRect(p, Vd_Fw_G.ncrects[ri])) {
                 hit_drag_area = 0;
                 break;
             }
@@ -12440,14 +12057,14 @@ static void vd_fw__mac_check_frame_lock(void)
     }
 
     if (hit_drag_area) {
-        NSPoint loc = [VD_FW_G.window convertPointToScreen:view_point];
-        NSRect window_frame = [VD_FW_G.window frame];
+        NSPoint loc = [Vd_Fw_G.window convertPointToScreen:view_point];
+        NSRect window_frame = [Vd_Fw_G.window frame];
 
         loc.x -= window_frame.origin.x;
         loc.y -= window_frame.origin.y;
-        VD_FW_G.drag_start_location = loc;
-        VD_FW_G.drag_start_pos_window_coords = view_point;
-        VD_FW_G.dragging = TRUE;
+        Vd_Fw_G.drag_start_location = loc;
+        Vd_Fw_G.drag_start_pos_window_coords = view_point;
+        Vd_Fw_G.dragging = TRUE;
     }
 }
 
@@ -12506,7 +12123,7 @@ static void vd_fw__mac_check_frame_lock(void)
 
 - (void)mouseUp:(NSEvent *)evt
 {
-    VD_FW_G.dragging = FALSE;
+    Vd_Fw_G.dragging = FALSE;
     VdFwEvent fw_event;
     fw_event.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP;
     fw_event.data.mouse_button_up.button = VD_FW_MOUSE_BUTTON_LEFT;
@@ -12559,13 +12176,13 @@ static void vd_fw__mac_check_frame_lock(void)
     float delta[2] = {
         [evt deltaX],
         [evt deltaY],
-       // pixel_point.x - VD_FW_G.last_mouse.x,
-       // pixel_point.y - VD_FW_G.last_mouse.y,
+       // pixel_point.x - Vd_Fw_G.last_mouse.x,
+       // pixel_point.y - Vd_Fw_G.last_mouse.y,
     };
 
-    VD_FW_G.last_mouse = pixel_point;
-    // if (VD_FW_G.mouse_is_locked) {
-    //     NSRect cvf = [VD_FW_G.window frame];
+    Vd_Fw_G.last_mouse = pixel_point;
+    // if (Vd_Fw_G.mouse_is_locked) {
+    //     NSRect cvf = [Vd_Fw_G.window frame];
 
     //     NSPoint screen_loc = [NSEvent mouseLocation];
 
@@ -12574,8 +12191,8 @@ static void vd_fw__mac_check_frame_lock(void)
 
     //     if (!NSPointInRect(screen_loc, cvf)) {
     //         CGWarpMouseCursorPosition(CGPointMake(NSMinX(cvf) + w * .5f, NSMinY(cvf) + h * .5f));
-    //         VD_FW_G.last_mouse.x = w * .5f;
-    //         VD_FW_G.last_mouse.y = h * .5f;
+    //         Vd_Fw_G.last_mouse.x = w * .5f;
+    //         Vd_Fw_G.last_mouse.y = h * .5f;
     //     }
     // }
 
@@ -12613,14 +12230,14 @@ static void vd_fw__mac_check_frame_lock(void)
     fw_event.data.mouse_delta.dy = dy;
     vd_fw__mac_msgbuf_w(&fw_event); 
 
-    NSPoint p = [VD_FW_G.window convertPointToScreen: view_point];
+    NSPoint p = [Vd_Fw_G.window convertPointToScreen: view_point];
 
-    if (VD_FW_G.dragging) {
+    if (Vd_Fw_G.dragging) {
 
-        NSPoint new_pos = NSMakePoint(p.x - VD_FW_G.drag_start_location.x,
-                                      p.y - VD_FW_G.drag_start_location.y);
+        NSPoint new_pos = NSMakePoint(p.x - Vd_Fw_G.drag_start_location.x,
+                                      p.y - Vd_Fw_G.drag_start_location.y);
 
-        [VD_FW_G.window setFrameOrigin: new_pos];
+        [Vd_Fw_G.window setFrameOrigin: new_pos];
     }
 }
 
@@ -12650,9 +12267,9 @@ static void vd_fw__mac_runloop(int wait);
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
-    VD_FW_G.c_init_info = *info;
-    sem_post(VD_FW_G.s_main_thread_opened_me);
-    sem_wait(VD_FW_G.s_main_thread_window_ready);
+    Vd_Fw_G.c_init_info = *info;
+    sem_post(Vd_Fw_G.s_main_thread_opened_me);
+    sem_wait(Vd_Fw_G.s_main_thread_window_ready);
     vd_fw__mac_init_gl(info);
 
     return 1;
@@ -12660,40 +12277,40 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 
 VD_FW_API unsigned long long vd_fw_delta_ns(void)
 {
-    return VD_FW_G.delta_ns;
+    return Vd_Fw_G.delta_ns;
 }
 
 VD_FW_API void vd_fw_get_mouse_delta(float *dx, float *dy)
 {
-    if (dx) *dx = VD_FW_G.mouse_delta[0]; 
-    if (dy) *dy = VD_FW_G.mouse_delta[1];
+    if (dx) *dx = Vd_Fw_G.mouse_delta[0]; 
+    if (dy) *dy = Vd_Fw_G.mouse_delta[1];
 }
 
 VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
 {
-    int result = VD_FW_G.mouse_state;
-    if (x) *x = VD_FW_G.mouse[0];
-    if (y) *y = VD_FW_G.mouse[1];
+    int result = Vd_Fw_G.mouse_state;
+    if (x) *x = Vd_Fw_G.mouse[0];
+    if (y) *y = Vd_Fw_G.mouse[1];
     return result;
 }
 
 VD_FW_API int vd_fw_get_mouse_clicked(int button)
 {
-    return !(VD_FW_G.prev_mouse_state & button) && (VD_FW_G.mouse_state & button);
+    return !(Vd_Fw_G.prev_mouse_state & button) && (Vd_Fw_G.mouse_state & button);
 }
 
 VD_FW_API int vd_fw_get_mouse_released(int button)
 {
-    return (VD_FW_G.prev_mouse_state & button) && !(VD_FW_G.mouse_state & button);
+    return (Vd_Fw_G.prev_mouse_state & button) && !(Vd_Fw_G.mouse_state & button);
 }
 
 VD_FW_API void vd_fw_set_mouse_locked(int locked)
 {
-    if (VD_FW_G.mouse_is_locked == locked) {
+    if (Vd_Fw_G.mouse_is_locked == locked) {
         return;
     }
 
-    VD_FW_G.mouse_is_locked = locked;
+    Vd_Fw_G.mouse_is_locked = locked;
 
     if (locked) {
         CGDisplayHideCursor(kCGDirectMainDisplay);
@@ -12707,24 +12324,24 @@ VD_FW_API void vd_fw_set_mouse_locked(int locked)
 
 VD_FW_API int vd_fw_get_mouse_locked(void)
 {
-    return VD_FW_G.mouse_is_locked;
+    return Vd_Fw_G.mouse_is_locked;
 }
 
 VD_FW_API int vd_fw_get_mouse_wheel(float *dx, float *dy)
 {
-    if (dx) *dx = VD_FW_G.wheel[0];
-    if (dy) *dy = VD_FW_G.wheel[1];
-    return VD_FW_G.wheel_moved;
+    if (dx) *dx = Vd_Fw_G.wheel[0];
+    if (dy) *dy = Vd_Fw_G.wheel[1];
+    return Vd_Fw_G.wheel_moved;
 }
 
 VD_FW_API int vd_fw_get_key_pressed(int key)
 {
-    return !VD_FW_G.prev_key_states[key] && VD_FW_G.curr_key_states[key];
+    return !Vd_Fw_G.prev_key_states[key] && Vd_Fw_G.curr_key_states[key];
 }
 
 VD_FW_API int vd_fw_get_key_down(int key)
 {
-    return VD_FW_G.curr_key_states[key];    
+    return Vd_Fw_G.curr_key_states[key];    
 }
 
 
@@ -12734,176 +12351,176 @@ VD_FW_API VdFwEvent* vd_fw_poll(int *count)
         *count = 0;
     }
 
-    VD_FW_G.scale_changed = 0;
-    VD_FW_G.wheel_moved = 0;
-    VD_FW_G.wheel[0] = 0.f;
-    VD_FW_G.wheel[1] = 0.f;
+    Vd_Fw_G.scale_changed = 0;
+    Vd_Fw_G.wheel_moved = 0;
+    Vd_Fw_G.wheel[0] = 0.f;
+    Vd_Fw_G.wheel[1] = 0.f;
 
-    VD_FW_G.mouse_delta[0] = 0.f;
-    VD_FW_G.mouse_delta[1] = 0.f;
+    Vd_Fw_G.mouse_delta[0] = 0.f;
+    Vd_Fw_G.mouse_delta[1] = 0.f;
 
-    VD_FW_G.focus_changed = 0;
-    VD_FW_G.window_state_changed = 0;
-    VD_FW_G.close_request = 0;
+    Vd_Fw_G.focus_changed = 0;
+    Vd_Fw_G.window_state_changed = 0;
+    Vd_Fw_G.close_request = 0;
 
-    VD_FW_G.num_codepoints = 0;
+    Vd_Fw_G.num_codepoints = 0;
     uint32_t num_codepoints = 0;
 
-    VD_FW_G.prev_mouse_state = VD_FW_G.mouse_state;
+    Vd_Fw_G.prev_mouse_state = Vd_Fw_G.mouse_state;
     for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
-        VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
+        Vd_Fw_G.prev_key_states[i] = Vd_Fw_G.curr_key_states[i];
     }
 
-    for (int i = 0; i < VD_FW_GAMEPAD_COUNT_MAX; ++i) {
-        VD_FW_G.gamepad_prev_states[i] = VD_FW_G.gamepad_curr_states[i];
+    for (int i = 0; i < Vd_Fw_GAMEPAD_COUNT_MAX; ++i) {
+        Vd_Fw_G.gamepad_prev_states[i] = Vd_Fw_G.gamepad_curr_states[i];
     }
 
     VdFwEvent evt;
     while (vd_fw__mac_msgbuf_r(&evt)) {
         switch (evt.type) {
             case VD_FW_EVENT_TYPE_MOUSE_MOVE: {
-                VD_FW_G.mouse[0] = evt.data.mouse_move.x;
-                VD_FW_G.mouse[1] = evt.data.mouse_move.y;
+                Vd_Fw_G.mouse[0] = evt.data.mouse_move.x;
+                Vd_Fw_G.mouse[1] = evt.data.mouse_move.y;
             } break;
 
             case VD_FW_EVENT_TYPE_MOUSE_DELTA: {
-                VD_FW_G.mouse_delta[0] = VD_FW_G.mouse_delta[0] * 0.8f + evt.data.mouse_delta.dx * 0.2f;
-                VD_FW_G.mouse_delta[1] = VD_FW_G.mouse_delta[1] * 0.8f + evt.data.mouse_delta.dy * 0.2f;
+                Vd_Fw_G.mouse_delta[0] = Vd_Fw_G.mouse_delta[0] * 0.8f + evt.data.mouse_delta.dx * 0.2f;
+                Vd_Fw_G.mouse_delta[1] = Vd_Fw_G.mouse_delta[1] * 0.8f + evt.data.mouse_delta.dy * 0.2f;
             } break;
 
             case VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN: {
-                VD_FW_G.mouse_state |= evt.data.mouse_button_down.button;
+                Vd_Fw_G.mouse_state |= evt.data.mouse_button_down.button;
             } break;
 
             case VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP: {
-                VD_FW_G.mouse_state &= ~evt.data.mouse_button_up.button;
+                Vd_Fw_G.mouse_state &= ~evt.data.mouse_button_up.button;
             } break;
 
             case VD_FW_EVENT_TYPE_MOUSE_SCROLL: {
-                VD_FW_G.wheel[0] += evt.data.mouse_scroll.dx;
-                VD_FW_G.wheel[1] += evt.data.mouse_scroll.dy;
+                Vd_Fw_G.wheel[0] += evt.data.mouse_scroll.dx;
+                Vd_Fw_G.wheel[1] += evt.data.mouse_scroll.dy;
             } break;
 
             case VD_FW_EVENT_TYPE_FOCUS_CHANGE: {
-                VD_FW_G.focus_changed = 1;
-                VD_FW_G.focused = evt.data.focus_change.got_focus;
+                Vd_Fw_G.focus_changed = 1;
+                Vd_Fw_G.focused = evt.data.focus_change.got_focus;
 
-                if (!VD_FW_G.focused) {
+                if (!Vd_Fw_G.focused) {
                     for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
-                        VD_FW_G.curr_key_states[i] = 0;
+                        Vd_Fw_G.curr_key_states[i] = 0;
                     }
                 }
             } break;
 
             case VD_FW_EVENT_TYPE_KEY_UP: {
-                VD_FW_G.curr_key_states[evt.data.key_up.key] = 0;
+                Vd_Fw_G.curr_key_states[evt.data.key_up.key] = 0;
             } break;
 
             case VD_FW_EVENT_TYPE_KEY_DOWN: {
-                VD_FW_G.curr_key_states[evt.data.key_down.key] = 1;
+                Vd_Fw_G.curr_key_states[evt.data.key_down.key] = 1;
             } break;
 
             case VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE: {
-                int prev_state = VD_FW_G.window_state;
+                int prev_state = Vd_Fw_G.window_state;
                 int change_flag = evt.data.window_state_change.flag;
                 if (evt.data.window_state_change.value) {
-                    VD_FW_G.window_state |= change_flag;
+                    Vd_Fw_G.window_state |= change_flag;
                 } else {
-                    VD_FW_G.window_state &= ~change_flag;
+                    Vd_Fw_G.window_state &= ~change_flag;
                 }
 
-                if (prev_state != VD_FW_G.window_state) {
-                    VD_FW_G.window_state_changed |= change_flag;
+                if (prev_state != Vd_Fw_G.window_state) {
+                    Vd_Fw_G.window_state_changed |= change_flag;
                 }
 
             } break;
 
             case VD_FW_EVENT_TYPE_SCALE_CHANGE: {
-                VD_FW_G.scale = evt.data.scale_change.new_scale;
-                VD_FW_G.scale_changed = 1;
+                Vd_Fw_G.scale = evt.data.scale_change.new_scale;
+                Vd_Fw_G.scale_changed = 1;
             } break;
 
             case VD_FW_EVENT_TYPE_CHARACTER: {
-                VD_FW_G.codepoints[(num_codepoints++) % VD_FW_CODEPOINT_BUFFER_COUNT] = evt.data.character.codepoint;
+                Vd_Fw_G.codepoints[(num_codepoints++) % VD_FW_CODEPOINT_BUFFER_COUNT] = evt.data.character.codepoint;
             } break;
 
             case VD_FW_EVENT_TYPE_CLOSE_REQUEST: {
-                VD_FW_G.close_request = 1;
+                Vd_Fw_G.close_request = 1;
             } break;
 
             default: break;
         }
     }
 
-    VD_FW_G.num_codepoints = (num_codepoints < VD_FW_CODEPOINT_BUFFER_COUNT) 
+    Vd_Fw_G.num_codepoints = (num_codepoints < VD_FW_CODEPOINT_BUFFER_COUNT) 
                              ? num_codepoints
                              : VD_FW_CODEPOINT_BUFFER_COUNT;
     if (num_codepoints > 0) {
-        VD_FW_G.first_codepoint_index = (num_codepoints - 1) % VD_FW_CODEPOINT_BUFFER_COUNT;
+        Vd_Fw_G.first_codepoint_index = (num_codepoints - 1) % VD_FW_CODEPOINT_BUFFER_COUNT;
     } else {
-        VD_FW_G.first_codepoint_index = 0;
+        Vd_Fw_G.first_codepoint_index = 0;
     }
 
     uint64_t now = mach_absolute_time();
-    uint64_t ns = (now - VD_FW_G.last_time) * VD_FW_G.time_base.numer / VD_FW_G.time_base.denom;
-    VD_FW_G.delta_ns = ns;
-    VD_FW_G.last_time = now;
+    uint64_t ns = (now - Vd_Fw_G.last_time) * Vd_Fw_G.time_base.numer / Vd_Fw_G.time_base.denom;
+    Vd_Fw_G.delta_ns = ns;
+    Vd_Fw_G.last_time = now;
 
     return 0;
 }
 
 VD_FW_API int vd_fw_running(void)
 {
-    if (sem_trywait(VD_FW_G.s_main_thread_window_closed) == 0) {
+    if (sem_trywait(Vd_Fw_G.s_main_thread_window_closed) == 0) {
         return 0;
     }
-    return !VD_FW_G.should_close;
+    return !Vd_Fw_G.should_close;
 }
 
 VD_FW_API void vd_fw_lock(void)
 {
     static int _i = 0;
-    pthread_mutex_lock(&VD_FW_G.m_paint);
-    VD_FW_G.curr_frame = VD_FW_G.next_frame;
-    VD_FW_G.next_frame.flags = 0;
-    pthread_mutex_unlock(&VD_FW_G.m_paint);
+    pthread_mutex_lock(&Vd_Fw_G.m_paint);
+    Vd_Fw_G.curr_frame = Vd_Fw_G.next_frame;
+    Vd_Fw_G.next_frame.flags = 0;
+    pthread_mutex_unlock(&Vd_Fw_G.m_paint);
     if (!_i) {
         _i = 1;
-        printf("My next frame %d %d\n", VD_FW_G.curr_frame.w, VD_FW_G.curr_frame.h);
+        printf("My next frame %d %d\n", Vd_Fw_G.curr_frame.w, Vd_Fw_G.curr_frame.h);
     }
 }
 
 VD_FW_API void vd_fw_swap(void)
 {
-    [VD_FW_G.gl_context flushBuffer];
+    [Vd_Fw_G.gl_context flushBuffer];
 }
 
 VD_FW_API void vd_fw_unlock(void)
 {
-    if (VD_FW_G.fullscreen_changed_this_frame) {
+    if (Vd_Fw_G.fullscreen_changed_this_frame) {
         for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
-            VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
-            VD_FW_G.curr_key_states[i] = 0;
+            Vd_Fw_G.prev_key_states[i] = Vd_Fw_G.curr_key_states[i];
+            Vd_Fw_G.curr_key_states[i] = 0;
         }
 
-        VD_FW_G.fullscreen_changed_this_frame = 0;
+        Vd_Fw_G.fullscreen_changed_this_frame = 0;
     }
 
 
-    if (VD_FW_G.curr_frame.flags & VD_FW__MAC_FLAGS_WAKE_COND_VAR) {
-        pthread_cond_signal(&VD_FW_G.n_paint);
+    if (Vd_Fw_G.curr_frame.flags & VD_FW__MAC_FLAGS_WAKE_COND_VAR) {
+        pthread_cond_signal(&Vd_Fw_G.n_paint);
     }
 }
 
 VD_FW_API int vd_fw_close_requested(void)
 {
-    return VD_FW_G.close_request;
+    return Vd_Fw_G.close_request;
 }
 
 VD_FW_API void vd_fw_quit(void)
 {
     dispatch_sync(dispatch_get_main_queue(), ^(void){
-        [VD_FW_G.window close];
+        [Vd_Fw_G.window close];
     });
     return;
 }
@@ -12915,40 +12532,40 @@ VD_FW_API VdFwPlatform vd_fw_get_platform(void)
 
 VD_FW_API int vd_fw_get_focused(int *focused)
 {
-    *focused = VD_FW_G.focused;
-    return VD_FW_G.focus_changed;
+    *focused = Vd_Fw_G.focused;
+    return Vd_Fw_G.focus_changed;
 }
 
 VD_FW_API int vd_fw_get_size(int *w, int *h)
 {
-    *w = VD_FW_G.curr_frame.w;
-    *h = VD_FW_G.curr_frame.h;
-    return VD_FW_G.curr_frame.flags & VD_FW__MAC_FLAGS_SIZE_CHANGED;
+    *w = Vd_Fw_G.curr_frame.w;
+    *h = Vd_Fw_G.curr_frame.h;
+    return Vd_Fw_G.curr_frame.flags & VD_FW__MAC_FLAGS_SIZE_CHANGED;
 }
 
 VD_FW_API void vd_fw_set_size(int w, int h)
 {
     dispatch_async(dispatch_get_main_queue(), ^(void) {
-        NSRect frame = [VD_FW_G.window frame];
+        NSRect frame = [Vd_Fw_G.window frame];
         frame.origin.y -= frame.size.height;
         frame.origin.y += h; 
         frame.size.width = w;
         frame.size.height = h;
-        [VD_FW_G.window setFrame: frame display: YES animate: NO];
+        [Vd_Fw_G.window setFrame: frame display: YES animate: NO];
     });
 }
 
 VD_FW_API int vd_fw_get_minimized(int *minimized)
 {
     if (minimized) {
-        *minimized = VD_FW_G.window_state & VD_FW__MAC_WINDOW_STATE_MINIMIZED;
+        *minimized = Vd_Fw_G.window_state & VD_FW__MAC_WINDOW_STATE_MINIMIZED;
     }
-    return VD_FW_G.window_state_changed;
+    return Vd_Fw_G.window_state_changed;
 }
 
 VD_FW_API void vd_fw_set_minimized(void)
 {
-    NSWindow *window = VD_FW_G.window;
+    NSWindow *window = Vd_Fw_G.window;
     dispatch_async(dispatch_get_main_queue(), ^{
         if (![window isMiniaturized]) {
             [window miniaturize:nil];
@@ -12959,14 +12576,14 @@ VD_FW_API void vd_fw_set_minimized(void)
 VD_FW_API int vd_fw_get_maximized(int *maximized)
 {
     if (maximized) {
-        *maximized = VD_FW_G.window_state & VD_FW__MAC_WINDOW_STATE_ZOOMED;
+        *maximized = Vd_Fw_G.window_state & VD_FW__MAC_WINDOW_STATE_ZOOMED;
     }
-    return VD_FW_G.window_state_changed;
+    return Vd_Fw_G.window_state_changed;
 }
 
 VD_FW_API void vd_fw_set_maximized(void)
 {
-    NSWindow *window = VD_FW_G.window;
+    NSWindow *window = Vd_Fw_G.window;
     dispatch_async(dispatch_get_main_queue(), ^{
         if (![window isZoomed]) {
             [window zoom:nil];
@@ -12976,7 +12593,7 @@ VD_FW_API void vd_fw_set_maximized(void)
 
 VD_FW_API void vd_fw_normalize(void)
 {
-    NSWindow *window = VD_FW_G.window;
+    NSWindow *window = Vd_Fw_G.window;
     dispatch_async(dispatch_get_main_queue(), ^{
         // If the window is minimized, restore it from the Dock.
         if ([window isMiniaturized]) {
@@ -12997,54 +12614,54 @@ VD_FW_API void vd_fw_normalize(void)
 
 VD_FW_API void vd_fw_set_fullscreen(int on)
 {
-    if (VD_FW_G.is_fullscreen == on) {
+    if (Vd_Fw_G.is_fullscreen == on) {
         return;
     }
 
-    VD_FW_G.fullscreen_changed_this_frame = 1;
+    Vd_Fw_G.fullscreen_changed_this_frame = 1;
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        [VD_FW_G.window toggleFullScreen: nil];
+        [Vd_Fw_G.window toggleFullScreen: nil];
     });
 
 }
 
 VD_FW_API int vd_fw_get_fullscreen(void)
 {
-    return VD_FW_G.is_fullscreen;
+    return Vd_Fw_G.is_fullscreen;
 }
 
 VD_FW_API void vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4])
 {
-    NSView *cv = [VD_FW_G.window contentView];
+    NSView *cv = [Vd_Fw_G.window contentView];
     NSRect cvf = [cv frame];
 
-    cvf.size.width  *= VD_FW_G.scale;
-    cvf.size.height *= VD_FW_G.scale;
+    cvf.size.width  *= Vd_Fw_G.scale;
+    cvf.size.height *= Vd_Fw_G.scale;
 
-    VD_FW_G.nccaption_set = 1;
-    VD_FW_G.nccaption.origin.x    = caption[0];
-    VD_FW_G.nccaption.origin.y    = cvf.size.height - (caption[3] - caption[1]);
-    VD_FW_G.nccaption.size.width  = caption[2] - caption[0];
-    VD_FW_G.nccaption.size.height = (caption[3] - caption[1]);
+    Vd_Fw_G.nccaption_set = 1;
+    Vd_Fw_G.nccaption.origin.x    = caption[0];
+    Vd_Fw_G.nccaption.origin.y    = cvf.size.height - (caption[3] - caption[1]);
+    Vd_Fw_G.nccaption.size.width  = caption[2] - caption[0];
+    Vd_Fw_G.nccaption.size.height = (caption[3] - caption[1]);
 
-    VD_FW_G.ncrect_count = count;
+    Vd_Fw_G.ncrect_count = count;
     int c = count;
     if (c > VD_FW_NCRECTS_MAX) {
         c = VD_FW_NCRECTS_MAX;
     }
     for (int i = 0; i < c; ++i) {
 
-        VD_FW_G.ncrects[i].origin.x    = rects[i][0];
-        VD_FW_G.ncrects[i].origin.y    = cvf.size.height - (rects[i][3] - rects[i][1]);
-        VD_FW_G.ncrects[i].size.width  = rects[i][2] - rects[i][0];
-        VD_FW_G.ncrects[i].size.height = (rects[i][3] - rects[i][1]);
+        Vd_Fw_G.ncrects[i].origin.x    = rects[i][0];
+        Vd_Fw_G.ncrects[i].origin.y    = cvf.size.height - (rects[i][3] - rects[i][1]);
+        Vd_Fw_G.ncrects[i].size.width  = rects[i][2] - rects[i][0];
+        Vd_Fw_G.ncrects[i].size.height = (rects[i][3] - rects[i][1]);
     }
 }
 
 VD_FW_API int vd_fw_get_scale(float *scale)
 {
-    *scale = VD_FW_G.scale;
+    *scale = Vd_Fw_G.scale;
     return 1;
 }
 
@@ -13054,7 +12671,7 @@ VD_FW_API void vd_fw_set_title(const char *title)
     NSString *s = [NSString stringWithUTF8String: title];
 
     dispatch_sync(dispatch_get_main_queue(), ^(void){
-        [VD_FW_G.window setTitle: s];
+        [Vd_Fw_G.window setTitle: s];
         [s release];
     });
 }
@@ -13091,8 +12708,8 @@ VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
     NSImage *img = [[NSImage alloc] initWithSize:NSMakeSize(width, height)];
     [img addRepresentation:rep];
     dispatch_async(dispatch_get_main_queue(), ^ {
-        NSImage *prev_img = VD_FW_G.app_image;
-        VD_FW_G.app_image = img;
+        NSImage *prev_img = Vd_Fw_G.app_image;
+        Vd_Fw_G.app_image = img;
         [NSApp setApplicationIconImage:img];
         free(app_image_data);
 
@@ -13104,15 +12721,15 @@ VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
 
 VD_FW_API void *vd_fw_get_internal_window_handle(void)
 {
-    return (void*)VD_FW_G.window;
+    return (void*)Vd_Fw_G.window;
 }
 
 VD_FW_API int vd_fw_set_vsync_on(int on)
 {
     @autoreleasepool {
-        if (VD_FW_G.gl_context) {
+        if (Vd_Fw_G.gl_context) {
             GLint sync = on;
-            [VD_FW_G.gl_context setValues:&sync forParameter:NSOpenGLCPSwapInterval];
+            [Vd_Fw_G.gl_context setValues:&sync forParameter:NSOpenGLCPSwapInterval];
         }
     }
     return 1;
@@ -13190,60 +12807,60 @@ VD_FW_API void vd_fw__notify_gamepaddb_changed(void)
 static void *vd_fw__macos__main(void *arg)
 {
     (void)arg;
-    vd_fw__macos_main(VD_FW_G.argc, VD_FW_G.argv);
-    VD_FW_G.main_thread_exited = 1;
-    sem_post(VD_FW_G.s_main_thread_opened_me);
+    vd_fw__macos_main(Vd_Fw_G.argc, Vd_Fw_G.argv);
+    Vd_Fw_G.main_thread_exited = 1;
+    sem_post(Vd_Fw_G.s_main_thread_opened_me);
     return NULL;
 }
 
 
 int main(int argc, char const *argv[])
 {
-    VD_FW_G.argc = argc;
-    VD_FW_G.argv = argv;
+    Vd_Fw_G.argc = argc;
+    Vd_Fw_G.argv = argv;
 
     sem_unlink("/sm-fw-cmtom");
-    VD_FW_G.s_main_thread_opened_me = sem_open("/sm-fw-cmtom",
+    Vd_Fw_G.s_main_thread_opened_me = sem_open("/sm-fw-cmtom",
                                                O_CREAT,
                                                0644,
                                                0);
     sem_unlink("/sm-fw-cmtwr");
-    VD_FW_G.s_main_thread_window_ready = sem_open("/sm-fw-cmtwr",
+    Vd_Fw_G.s_main_thread_window_ready = sem_open("/sm-fw-cmtwr",
                                                   O_CREAT,
                                                   0644,
                                                   0);
 
     sem_unlink("/sm-fw-cmtwc");
-    VD_FW_G.s_main_thread_window_closed = sem_open("/sm-fw-cmtwc",
+    Vd_Fw_G.s_main_thread_window_closed = sem_open("/sm-fw-cmtwc",
                                                    O_CREAT,
                                                    0644,
                                                    0);
 
     sem_unlink("/sm-fw-cmtcnu");
-    VD_FW_G.s_main_thread_context_needs_update = sem_open("/sm-fw-cmtcnu",
+    Vd_Fw_G.s_main_thread_context_needs_update = sem_open("/sm-fw-cmtcnu",
                                                           O_CREAT,
                                                           0644,
                                                           0);
-    pthread_mutex_init(&VD_FW_G.m_paint, NULL);
-    pthread_mutex_init(&VD_FW_G.m_input, NULL);
-    pthread_cond_init(&VD_FW_G.n_paint, NULL);
-    pthread_create(&VD_FW_G.main_thread, NULL, vd_fw__macos__main, NULL);
+    pthread_mutex_init(&Vd_Fw_G.m_paint, NULL);
+    pthread_mutex_init(&Vd_Fw_G.m_input, NULL);
+    pthread_cond_init(&Vd_Fw_G.n_paint, NULL);
+    pthread_create(&Vd_Fw_G.main_thread, NULL, vd_fw__macos__main, NULL);
 
     while (1) {
 
-        sem_wait(VD_FW_G.s_main_thread_opened_me);
+        sem_wait(Vd_Fw_G.s_main_thread_opened_me);
 
-        if (VD_FW_G.main_thread_exited) {
+        if (Vd_Fw_G.main_thread_exited) {
             break;
         }
 
-        vd_fw__mac_init(&VD_FW_G.c_init_info);
+        vd_fw__mac_init(&Vd_Fw_G.c_init_info);
 
-        sem_post(VD_FW_G.s_main_thread_window_ready);
+        sem_post(Vd_Fw_G.s_main_thread_window_ready);
 
         vd_fw__mac_runloop(1);
 
-        if (VD_FW_G.should_close) {
+        if (Vd_Fw_G.should_close) {
             break;
         }
     }
@@ -13253,9 +12870,9 @@ int main(int argc, char const *argv[])
 
 static void vd_fw__mac_init(VdFwInitInfo *info)
 {
-    VD_FW_G.draw_decorations = 1;
+    Vd_Fw_G.draw_decorations = 1;
     if (info) {
-        VD_FW_G.draw_decorations = !info->window_options.borderless;
+        Vd_Fw_G.draw_decorations = !info->window_options.borderless;
     }
 
     [NSApplication sharedApplication];
@@ -13266,7 +12883,7 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
     // Window
     {
         NSScreen *main_screen = [NSScreen mainScreen];
-        VD_FW_G.scale = [main_screen backingScaleFactor];
+        Vd_Fw_G.scale = [main_screen backingScaleFactor];
 
         NSRect screen_rect = [main_screen frame];
 
@@ -13295,27 +12912,27 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
                                               NSWindowStyleMaskMiniaturizable |
                                               NSWindowStyleMaskTitled |
                                               NSWindowStyleMaskResizable;
-        VD_FW_G.window = [[VdFwWindow alloc] initWithContentRect: frame
+        Vd_Fw_G.window = [[VdFwWindow alloc] initWithContentRect: frame
                                                      styleMask: window_style_mask
                                                        backing: NSBackingStoreBuffered
                                                          defer: NO
                                                         screen: main_screen];
 
-        if (!VD_FW_G.draw_decorations) {
-            VD_FW_G.window.titleVisibility = NSWindowTitleHidden;
-            VD_FW_G.window.titlebarAppearsTransparent = YES;
-            [[VD_FW_G.window standardWindowButton:NSWindowCloseButton] setHidden:YES];
-            [[VD_FW_G.window standardWindowButton:NSWindowMiniaturizeButton] setHidden:YES];
-            [[VD_FW_G.window standardWindowButton:NSWindowZoomButton] setHidden:YES];
-            VD_FW_G.window.styleMask |= NSWindowStyleMaskFullSizeContentView;
-            [VD_FW_G.window setMovable:NO];
-            [VD_FW_G.window setMovableByWindowBackground:NO];
+        if (!Vd_Fw_G.draw_decorations) {
+            Vd_Fw_G.window.titleVisibility = NSWindowTitleHidden;
+            Vd_Fw_G.window.titlebarAppearsTransparent = YES;
+            [[Vd_Fw_G.window standardWindowButton:NSWindowCloseButton] setHidden:YES];
+            [[Vd_Fw_G.window standardWindowButton:NSWindowMiniaturizeButton] setHidden:YES];
+            [[Vd_Fw_G.window standardWindowButton:NSWindowZoomButton] setHidden:YES];
+            Vd_Fw_G.window.styleMask |= NSWindowStyleMaskFullSizeContentView;
+            [Vd_Fw_G.window setMovable:NO];
+            [Vd_Fw_G.window setMovableByWindowBackground:NO];
         }
 
-        [VD_FW_G.window                       setTitle: [NSString stringWithUTF8String: "FW Window"]];
-        [VD_FW_G.window                   setHasShadow: YES];
-        [VD_FW_G.window           makeKeyAndOrderFront: nil];
-        // [VD_FW_G.window setAllowsConcurrentViewDrawing: YES];
+        [Vd_Fw_G.window                       setTitle: [NSString stringWithUTF8String: "FW Window"]];
+        [Vd_Fw_G.window                   setHasShadow: YES];
+        [Vd_Fw_G.window           makeKeyAndOrderFront: nil];
+        // [Vd_Fw_G.window setAllowsConcurrentViewDrawing: YES];
 
 
         NSOpenGLPixelFormatAttribute nsversion = 0;
@@ -13359,52 +12976,52 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
         };
 
         NSOpenGLPixelFormat *pf = [[NSOpenGLPixelFormat alloc] initWithAttributes: attrs];
-        VD_FW_G.gl_context = [[NSOpenGLContext alloc]              initWithFormat: pf
+        Vd_Fw_G.gl_context = [[NSOpenGLContext alloc]              initWithFormat: pf
                                                                      shareContext: nil];
-        NSRect wframe = [[VD_FW_G.window contentView] bounds];
+        NSRect wframe = [[Vd_Fw_G.window contentView] bounds];
         NSView *fw_view = [[VdFwContentView alloc] initWithFrame:wframe];
-        VD_FW_G.content_view = (VdFwContentView*)fw_view;
-        [VD_FW_G.window setContentView: fw_view];
+        Vd_Fw_G.content_view = (VdFwContentView*)fw_view;
+        [Vd_Fw_G.window setContentView: fw_view];
         [fw_view setWantsLayer: YES];
         // [[fw_view layer] setDrawsAsynchronously: YES];
 
-        [VD_FW_G.gl_context setView: fw_view];
-        [VD_FW_G.gl_context update];
+        [Vd_Fw_G.gl_context setView: fw_view];
+        [Vd_Fw_G.gl_context update];
 
 
-        [VD_FW_G.window setDelegate:delegate];
-        [VD_FW_G.window makeFirstResponder: fw_view];
-        [VD_FW_G.window setAcceptsMouseMovedEvents: YES];
+        [Vd_Fw_G.window setDelegate:delegate];
+        [Vd_Fw_G.window makeFirstResponder: fw_view];
+        [Vd_Fw_G.window setAcceptsMouseMovedEvents: YES];
         [NSApp activateIgnoringOtherApps:YES];
         [[NSNotificationCenter defaultCenter] addObserver: delegate
                                               selector: @selector(backingChanged:)
                                               name: NSWindowDidChangeBackingPropertiesNotification
-                                              object: VD_FW_G.window];
+                                              object: Vd_Fw_G.window];
 
     }
-    printf("scale is %f\n", VD_FW_G.scale);
-    VD_FW_G.w = 640 * VD_FW_G.scale;
-    VD_FW_G.h = 480 * VD_FW_G.scale;
+    printf("scale is %f\n", Vd_Fw_G.scale);
+    Vd_Fw_G.w = 640 * Vd_Fw_G.scale;
+    Vd_Fw_G.h = 480 * Vd_Fw_G.scale;
 
-    VD_FW_G.next_frame.w = VD_FW_G.w;
-    VD_FW_G.next_frame.h = VD_FW_G.h;
-    VD_FW_G.next_frame.flags = VD_FW__MAC_FLAGS_SIZE_CHANGED;
-    VD_FW_G.curr_frame.w = VD_FW_G.w;
-    VD_FW_G.curr_frame.h = VD_FW_G.h;
-    VD_FW_G.curr_frame.flags = VD_FW__MAC_FLAGS_SIZE_CHANGED;
+    Vd_Fw_G.next_frame.w = Vd_Fw_G.w;
+    Vd_Fw_G.next_frame.h = Vd_Fw_G.h;
+    Vd_Fw_G.next_frame.flags = VD_FW__MAC_FLAGS_SIZE_CHANGED;
+    Vd_Fw_G.curr_frame.w = Vd_Fw_G.w;
+    Vd_Fw_G.curr_frame.h = Vd_Fw_G.h;
+    Vd_Fw_G.curr_frame.flags = VD_FW__MAC_FLAGS_SIZE_CHANGED;
 
     VdFwGlConfig conf = {0};
     conf.version = version;
     vd_fw__load_opengl(&conf);
 
-    mach_timebase_info(&VD_FW_G.time_base);
-    VD_FW_G.last_time = mach_absolute_time();
+    mach_timebase_info(&Vd_Fw_G.time_base);
+    Vd_Fw_G.last_time = mach_absolute_time();
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        [VD_FW_G.window makeKeyAndOrderFront:nil];
+        [Vd_Fw_G.window makeKeyAndOrderFront:nil];
     });
 
-    // VdFwGraphicsApi api = VD_FW_GRAPHICS_API_OPENGL;
+    // VdFwGraphicsApi api = Vd_Fw_GRAPHICS_API_OPENGL;
     // if (info) {
     //     api = info->api;
     // }
@@ -13434,7 +13051,7 @@ static void vd_fw__mac_init(VdFwInitInfo *info)
 
 static void vd_fw__mac_init_gl(VdFwInitInfo *info)
 {
-    [VD_FW_G.gl_context makeCurrentContext];
+    [Vd_Fw_G.gl_context makeCurrentContext];
 }
 
 
@@ -13445,18 +13062,18 @@ static void vd_fw__mac_runloop(int wait)
 
 static int vd_fw__mac_msgbuf_r(VdFwEvent *message)
 {
-    VdFwI32 r = VD_FW_G.msgbuf_r;
+    VdFwI32 r = Vd_Fw_G.msgbuf_r;
     VdFwI32 w;
-    __atomic_load(&VD_FW_G.msgbuf_w, &w, __ATOMIC_SEQ_CST);
+    __atomic_load(&Vd_Fw_G.msgbuf_w, &w, __ATOMIC_SEQ_CST);
 
     if (r == w) {
         return 0;
     }
 
-    *message = VD_FW_G.msgbuf[r];
+    *message = Vd_Fw_G.msgbuf[r];
 
     VdFwI32 nr = (r + 1) % VD_FW_MAC_MESSAGE_BUFFER_SIZE;
-    __atomic_exchange_n(&VD_FW_G.msgbuf_r, nr, __ATOMIC_SEQ_CST);
+    __atomic_exchange_n(&Vd_Fw_G.msgbuf_r, nr, __ATOMIC_SEQ_CST);
 
     return 1;
 }
@@ -13464,17 +13081,17 @@ static int vd_fw__mac_msgbuf_r(VdFwEvent *message)
 static int vd_fw__mac_msgbuf_w(VdFwEvent *message)
 {
 
-    VdFwI32 w = VD_FW_G.msgbuf_w;
+    VdFwI32 w = Vd_Fw_G.msgbuf_w;
     VdFwI32 r;
-    __atomic_load(&VD_FW_G.msgbuf_r, &r, __ATOMIC_SEQ_CST);
+    __atomic_load(&Vd_Fw_G.msgbuf_r, &r, __ATOMIC_SEQ_CST);
 
     if ((w + 1) % VD_FW_MAC_MESSAGE_BUFFER_SIZE == r) {
         return 0;
     }
 
-    VD_FW_G.msgbuf[w] = *message;
+    Vd_Fw_G.msgbuf[w] = *message;
     VdFwI32 nw = (w + 1) % VD_FW_MAC_MESSAGE_BUFFER_SIZE;
-    __atomic_exchange_n(&VD_FW_G.msgbuf_w, nw, __ATOMIC_SEQ_CST);
+    __atomic_exchange_n(&Vd_Fw_G.msgbuf_w, nw, __ATOMIC_SEQ_CST);
 
     return 1;
 }
@@ -13829,7 +13446,7 @@ typedef struct {
 
 VdFw__LinuxInternalData VdFw__Globals = {0};
 
-#define VD_FW_G VdFw__Globals
+#define Vd_Fw_G VdFw__Globals
 
 static struct timespec vd_fw__linux_timespec_diff(struct timespec a, struct timespec b);
 static int             vd_fw__x11_extension_supported(const char *extList, const char *extension);
@@ -13851,29 +13468,29 @@ void *vd_fw__gl_get_proc_address(const char *name)
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
-    VD_FW_G.graphics_api = VD_FW_GRAPHICS_API_INVALID;
-    VD_FW_G.borderless = 0;
-    VD_FW_G.window_max[0] = VD_FW_G.window_max[1] = 99999;
+    Vd_Fw_G.graphics_api = Vd_Fw_GRAPHICS_API_INVALID;
+    Vd_Fw_G.borderless = 0;
+    Vd_Fw_G.window_max[0] = Vd_Fw_G.window_max[1] = 99999;
 
     if (info) {
-        VD_FW_G.borderless = info->window_options.borderless;
+        Vd_Fw_G.borderless = info->window_options.borderless;
     }
 
     {
-        VD_FW_G.handle_xlib     = dlopen("libX11.so.6", RTLD_NOW | RTLD_GLOBAL);
-        VD_FW_G.has_xlib        = VD_FW_G.handle_xlib != NULL;
+        Vd_Fw_G.handle_xlib     = dlopen("libX11.so.6", RTLD_NOW | RTLD_GLOBAL);
+        Vd_Fw_G.has_xlib        = Vd_Fw_G.handle_xlib != NULL;
 
-        VD_FW_G.handle_xext     = dlopen("libXext.so", RTLD_NOW | RTLD_GLOBAL);
-        VD_FW_G.has_xext        = VD_FW_G.handle_xext != NULL;
+        Vd_Fw_G.handle_xext     = dlopen("libXext.so", RTLD_NOW | RTLD_GLOBAL);
+        Vd_Fw_G.has_xext        = Vd_Fw_G.handle_xext != NULL;
 
-        VD_FW_G.handle_xfixes   = dlopen("libXfixes.so", RTLD_NOW | RTLD_GLOBAL);
-        VD_FW_G.has_xfixes      = VD_FW_G.handle_xfixes != NULL;
+        Vd_Fw_G.handle_xfixes   = dlopen("libXfixes.so", RTLD_NOW | RTLD_GLOBAL);
+        Vd_Fw_G.has_xfixes      = Vd_Fw_G.handle_xfixes != NULL;
 
-        VD_FW_G.handle_xcursor   = dlopen("libXcursor.so", RTLD_NOW | RTLD_GLOBAL);
-        VD_FW_G.has_xcursor      = VD_FW_G.handle_xcursor != NULL;
+        Vd_Fw_G.handle_xcursor   = dlopen("libXcursor.so", RTLD_NOW | RTLD_GLOBAL);
+        Vd_Fw_G.has_xcursor      = Vd_Fw_G.handle_xcursor != NULL;
 
-        VD_FW_G.handle_xrandr   = dlopen("libXrandr.so", RTLD_NOW | RTLD_GLOBAL);
-        VD_FW_G.has_xrandr      = VD_FW_G.handle_xrandr != NULL;
+        Vd_Fw_G.handle_xrandr   = dlopen("libXrandr.so", RTLD_NOW | RTLD_GLOBAL);
+        Vd_Fw_G.has_xrandr      = Vd_Fw_G.handle_xrandr != NULL;
 
         const char *xi_libs[] = {
             "libXi.so.6",
@@ -13882,8 +13499,8 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         for (unsigned i = 0; i < sizeof(xi_libs) / sizeof(xi_libs[0]); ++i) {
             void *dl = dlopen(xi_libs[i], RTLD_NOW | RTLD_GLOBAL);
             if (dl) {
-                VD_FW_G.handle_xi   = dl;
-                VD_FW_G.has_xi      = 1;
+                Vd_Fw_G.handle_xi   = dl;
+                Vd_Fw_G.has_xi      = 1;
             }
         }
 
@@ -13896,56 +13513,56 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         for (unsigned i = 0; i < sizeof(glx_libs) / sizeof(glx_libs[0]); ++i) {
             void *dl = dlopen(glx_libs[i], RTLD_NOW | RTLD_GLOBAL);
             if (dl) {
-                VD_FW_G.handle_glx = dl;
-                VD_FW_G.has_glx = 1;
+                Vd_Fw_G.handle_glx = dl;
+                Vd_Fw_G.has_glx = 1;
                 break;
             }
         }
 
-#define XBEGIN_MODULE(name) if (VD_FW_G.has_##name) {
-#define XSYM(module, retval, name, args) VdFw##name = (VdFw__Proc##name)dlsym(VD_FW_G.handle_##module, #name);
+#define XBEGIN_MODULE(name) if (Vd_Fw_G.has_##name) {
+#define XSYM(module, retval, name, args) VdFw##name = (VdFw__Proc##name)dlsym(Vd_Fw_G.handle_##module, #name);
 #define XEND_MODULE() }
         VD_FW_X11_FUNCTIONS
 #undef XBEGIN_MODULE
 #undef XSYM
 #undef XEND_MODULE
     }
-    VdFwGraphicsApi api = VD_FW_GRAPHICS_API_OPENGL;
+    VdFwGraphicsApi api = Vd_Fw_GRAPHICS_API_OPENGL;
     if (info) {
         api = info->api;
     }
 
     VdFwXInitThreads();
 
-    VD_FW_G.display = VdFwXOpenDisplay(NULL);
-    VD_FW_G.screen = VdFwXDefaultScreen(VD_FW_G.display);
-    VD_FW_G.root_window = VdFwXDefaultRootWindow(VD_FW_G.display);
+    Vd_Fw_G.display = VdFwXOpenDisplay(NULL);
+    Vd_Fw_G.screen = VdFwXDefaultScreen(Vd_Fw_G.display);
+    Vd_Fw_G.root_window = VdFwXDefaultRootWindow(Vd_Fw_G.display);
 
-    if (VD_FW_G.has_xcursor) {
-        VD_FW_G.cursor_left   = VdFwXcursorShapeLoadCursor(VD_FW_G.display, 108);
-        VD_FW_G.cursor_right  = VdFwXcursorShapeLoadCursor(VD_FW_G.display, 108);
-        VD_FW_G.cursor_top    = VdFwXcursorShapeLoadCursor(VD_FW_G.display, 116);
-        VD_FW_G.cursor_bottom = VdFwXcursorShapeLoadCursor(VD_FW_G.display, 116);
-        VD_FW_G.cursor_tl     = VdFwXcursorShapeLoadCursor(VD_FW_G.display, 134);
-        VD_FW_G.cursor_tr     = VdFwXcursorShapeLoadCursor(VD_FW_G.display, 136);
-        VD_FW_G.cursor_bl     = VdFwXcursorShapeLoadCursor(VD_FW_G.display, 12);
-        VD_FW_G.cursor_br     = VdFwXcursorShapeLoadCursor(VD_FW_G.display, 14);
-        VD_FW_G.cursor_arrow  = VdFwXcursorShapeLoadCursor(VD_FW_G.display, 68);
+    if (Vd_Fw_G.has_xcursor) {
+        Vd_Fw_G.cursor_left   = VdFwXcursorShapeLoadCursor(Vd_Fw_G.display, 108);
+        Vd_Fw_G.cursor_right  = VdFwXcursorShapeLoadCursor(Vd_Fw_G.display, 108);
+        Vd_Fw_G.cursor_top    = VdFwXcursorShapeLoadCursor(Vd_Fw_G.display, 116);
+        Vd_Fw_G.cursor_bottom = VdFwXcursorShapeLoadCursor(Vd_Fw_G.display, 116);
+        Vd_Fw_G.cursor_tl     = VdFwXcursorShapeLoadCursor(Vd_Fw_G.display, 134);
+        Vd_Fw_G.cursor_tr     = VdFwXcursorShapeLoadCursor(Vd_Fw_G.display, 136);
+        Vd_Fw_G.cursor_bl     = VdFwXcursorShapeLoadCursor(Vd_Fw_G.display, 12);
+        Vd_Fw_G.cursor_br     = VdFwXcursorShapeLoadCursor(Vd_Fw_G.display, 14);
+        Vd_Fw_G.cursor_arrow  = VdFwXcursorShapeLoadCursor(Vd_Fw_G.display, 68);
     }
 
     // Sync Extension
     {
         int major_opcode, first_event, first_error;
-        if (VdFwXQueryExtension(VD_FW_G.display, (char*)"SYNC", &major_opcode, &first_event, &first_error)) {
+        if (VdFwXQueryExtension(Vd_Fw_G.display, (char*)"SYNC", &major_opcode, &first_event, &first_error)) {
             int version = 0;
             {
                 int major, minor;
-                VdFwXSyncInitialize(VD_FW_G.display, &major, &minor);
+                VdFwXSyncInitialize(Vd_Fw_G.display, &major, &minor);
                 version = major * 1000 + minor;
             }
 
             if (version >= 3000) {
-                VD_FW_G.xlib_supports_xsync = 1;
+                Vd_Fw_G.xlib_supports_xsync = 1;
             }
         }
     }
@@ -13954,32 +13571,32 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     {
 
         int major_opcode, first_event, first_error;
-        if (!VdFwXQueryExtension(VD_FW_G.display, (char*)"XInputExtension", &major_opcode, &first_event, &first_error)) {
-            VD_FW_G.has_xi = 0;
+        if (!VdFwXQueryExtension(Vd_Fw_G.display, (char*)"XInputExtension", &major_opcode, &first_event, &first_error)) {
+            Vd_Fw_G.has_xi = 0;
         }
 
         int major, minor;
         major = 2;
         minor = 4;
-        if (VdFwXIQueryVersion(VD_FW_G.display, &major, &minor) != Success) {
-            VD_FW_G.has_xi = 0;
+        if (VdFwXIQueryVersion(Vd_Fw_G.display, &major, &minor) != Success) {
+            Vd_Fw_G.has_xi = 0;
         }
 
-        VD_FW_G.xi_opcode = major_opcode;
+        Vd_Fw_G.xi_opcode = major_opcode;
     }
 
     // Xrandr Extension
     {
         int event_base_return, error_base_return;
-        if (!VdFwXRRQueryExtension(VD_FW_G.display, &event_base_return, &error_base_return)) {
-            VD_FW_G.has_xrandr = 0;
+        if (!VdFwXRRQueryExtension(Vd_Fw_G.display, &event_base_return, &error_base_return)) {
+            Vd_Fw_G.has_xrandr = 0;
         }
-        VD_FW_G.event_base_xrandr = event_base_return;
+        Vd_Fw_G.event_base_xrandr = event_base_return;
     }
 
     // Character Input
     {
-        XIM input_method = VdFwXOpenIM(VD_FW_G.display, 0, 0, 0);
+        XIM input_method = VdFwXOpenIM(Vd_Fw_G.display, 0, 0, 0);
         if (input_method) {
             XIMStyles *styles = 0;
             if ((VdFwXGetIMValues(input_method, XNQueryInputStyle, &styles, NULL) == 0) && styles) {
@@ -13995,37 +13612,37 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
                 }
 
                 VdFwXFree(styles);
-                VD_FW_G.input_style = best_match_style;
-                VD_FW_G.input_method = input_method;
+                Vd_Fw_G.input_style = best_match_style;
+                Vd_Fw_G.input_method = input_method;
             }
         }
     }
 
-    VD_FW_G.wm_motif = VdFwXInternAtom(VD_FW_G.display, (char*)"_MOTIF_WM_HINTS", 0);
-    VD_FW_G.wm_protocols = VdFwXInternAtom(VD_FW_G.display, (char*)"WM_PROTOCOLS", 0);
-    VD_FW_G.wm_delete_window = VdFwXInternAtom(VD_FW_G.display, (char*)"WM_DELETE_WINDOW", 0);
-    VD_FW_G.wm_state = VdFwXInternAtom(VD_FW_G.display, (char*)"_NET_WM_STATE", 0);
-    VD_FW_G.wm_max_h = VdFwXInternAtom(VD_FW_G.display, (char*)"_NET_WM_STATE_MAXIMIZED_HORZ", 0);
-    VD_FW_G.wm_max_v = VdFwXInternAtom(VD_FW_G.display, (char*)"_NET_WM_STATE_MAXIMIZED_VERT", 0);
-    VD_FW_G.wm_hidden = VdFwXInternAtom(VD_FW_G.display, (char*)"_NET_WM_STATE_HIDDEN", 0);
-    VD_FW_G.wm_fullscreen = VdFwXInternAtom(VD_FW_G.display, (char*)"_NET_WM_STATE_FULLSCREEN", 0);
-    VD_FW_G.wm_icon = VdFwXInternAtom(VD_FW_G.display, (char*)"_NET_WM_ICON", False);
+    Vd_Fw_G.wm_motif = VdFwXInternAtom(Vd_Fw_G.display, (char*)"_MOTIF_WM_HINTS", 0);
+    Vd_Fw_G.wm_protocols = VdFwXInternAtom(Vd_Fw_G.display, (char*)"WM_PROTOCOLS", 0);
+    Vd_Fw_G.wm_delete_window = VdFwXInternAtom(Vd_Fw_G.display, (char*)"WM_DELETE_WINDOW", 0);
+    Vd_Fw_G.wm_state = VdFwXInternAtom(Vd_Fw_G.display, (char*)"_NET_WM_STATE", 0);
+    Vd_Fw_G.wm_max_h = VdFwXInternAtom(Vd_Fw_G.display, (char*)"_NET_WM_STATE_MAXIMIZED_HORZ", 0);
+    Vd_Fw_G.wm_max_v = VdFwXInternAtom(Vd_Fw_G.display, (char*)"_NET_WM_STATE_MAXIMIZED_VERT", 0);
+    Vd_Fw_G.wm_hidden = VdFwXInternAtom(Vd_Fw_G.display, (char*)"_NET_WM_STATE_HIDDEN", 0);
+    Vd_Fw_G.wm_fullscreen = VdFwXInternAtom(Vd_Fw_G.display, (char*)"_NET_WM_STATE_FULLSCREEN", 0);
+    Vd_Fw_G.wm_icon = VdFwXInternAtom(Vd_Fw_G.display, (char*)"_NET_WM_ICON", False);
 
-    if (VD_FW_G.xlib_supports_xsync) {
-        VD_FW_G.wm_sync_request = VdFwXInternAtom(VD_FW_G.display, (char*)"_NET_WM_SYNC_REQUEST", 0);
-        VD_FW_G.wm_sync_request_counter = VdFwXInternAtom(VD_FW_G.display, (char*)"_NET_WM_SYNC_REQUEST_COUNTER", 0);
+    if (Vd_Fw_G.xlib_supports_xsync) {
+        Vd_Fw_G.wm_sync_request = VdFwXInternAtom(Vd_Fw_G.display, (char*)"_NET_WM_SYNC_REQUEST", 0);
+        Vd_Fw_G.wm_sync_request_counter = VdFwXInternAtom(Vd_Fw_G.display, (char*)"_NET_WM_SYNC_REQUEST_COUNTER", 0);
     }
 
-    VD_FW_G.wm_usr_close = VdFwXInternAtom(VD_FW_G.display, (char*)"WM_USR_CLOSE", 0);
-    VD_FW_G.wm_usr_block = VdFwXInternAtom(VD_FW_G.display, (char*)"WM_USR_BLOCK", 0);
-    VD_FW_G.wm_xft_dpi   = VdFwXInternAtom(VD_FW_G.display, (char*)"Xft.dpi", 0);
-    VD_FW_G.wm_dpi_change = VdFwXInternAtom(VD_FW_G.display, (char*)"RESOURCE_MANAGER", 0);
-    VD_FW_G.wm_dpi_change_xsettings = VdFwXInternAtom(VD_FW_G.display, (char*)"_XSETTINGS_S0", 0);
-    VD_FW_G.scale = vd_fw__x11_xft_dpi();
+    Vd_Fw_G.wm_usr_close = VdFwXInternAtom(Vd_Fw_G.display, (char*)"WM_USR_CLOSE", 0);
+    Vd_Fw_G.wm_usr_block = VdFwXInternAtom(Vd_Fw_G.display, (char*)"WM_USR_BLOCK", 0);
+    Vd_Fw_G.wm_xft_dpi   = VdFwXInternAtom(Vd_Fw_G.display, (char*)"Xft.dpi", 0);
+    Vd_Fw_G.wm_dpi_change = VdFwXInternAtom(Vd_Fw_G.display, (char*)"RESOURCE_MANAGER", 0);
+    Vd_Fw_G.wm_dpi_change_xsettings = VdFwXInternAtom(Vd_Fw_G.display, (char*)"_XSETTINGS_S0", 0);
+    Vd_Fw_G.scale = vd_fw__x11_xft_dpi();
 
     int screen_bits = 24;
     XVisualInfo visual_info = {};
-    if (!VdFwXMatchVisualInfo(VD_FW_G.display, VD_FW_G.screen, screen_bits, TrueColor, &visual_info)) {
+    if (!VdFwXMatchVisualInfo(Vd_Fw_G.display, Vd_Fw_G.screen, screen_bits, TrueColor, &visual_info)) {
         return 0;
     }
 
@@ -14038,20 +13655,20 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
         return 0;
     }
 
-    VD_FW_G.has_initialized = 1;
+    Vd_Fw_G.has_initialized = 1;
     return 1;
 }
 
 VD_FW_API unsigned long long vd_fw_delta_ns(void)
 {
-    return VD_FW_G.delta_ns;
+    return Vd_Fw_G.delta_ns;
 }
 
 VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_options)
 {
     int result = 1;
 
-    if (VD_FW_G.has_initialized) {
+    if (Vd_Fw_G.has_initialized) {
         vd_fw__x11_thread_finish();
     }
 
@@ -14061,7 +13678,7 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
     Visual *window_visual;
 
     switch (api) {
-        case VD_FW_GRAPHICS_API_OPENGL: {
+        case Vd_Fw_GRAPHICS_API_OPENGL: {
 
             VdFwGlConfig      default_configs[2];
             VD_FW_MEMSET(default_configs, 0, sizeof(default_configs));
@@ -14075,10 +13692,10 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
                 gl_options = &default_options;
             }
 
-            const char *glx_exts = VdFwglXQueryExtensionsString(VD_FW_G.display, VD_FW_G.screen);
+            const char *glx_exts = VdFwglXQueryExtensionsString(Vd_Fw_G.display, Vd_Fw_G.screen);
             VdFwProc__glXCreateContextAttribsARB glXCreateContextAttribsARB = (VdFwProc__glXCreateContextAttribsARB)
                 VdFwglXGetProcAddress((const GLubyte*)"glXCreateContextAttribsARB");
-            VD_FW_G.glx_swap_interval_ext = (VdFwProc__glXSwapIntervalEXT)VdFwglXGetProcAddress((const GLubyte*)"glXSwapIntervalEXT");
+            Vd_Fw_G.glx_swap_interval_ext = (VdFwProc__glXSwapIntervalEXT)VdFwglXGetProcAddress((const GLubyte*)"glXSwapIntervalEXT");
 
             int use_old_style_context = 0;
             if (!vd_fw__x11_extension_supported(glx_exts, "GLX_ARB_create_context") || !glXCreateContextAttribsARB) {
@@ -14179,7 +13796,7 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
                 }
 
                 int nelements;
-                __GlxFbConfig *fbs = VdFwglXChooseFBConfig(VD_FW_G.display, VD_FW_G.screen, pixel_attribs, &nelements);
+                __GlxFbConfig *fbs = VdFwglXChooseFBConfig(Vd_Fw_G.display, Vd_Fw_G.screen, pixel_attribs, &nelements);
                 __GlxFbConfig fb_cfg;
                 XVisualInfo *vi_info;
                 int context_attribs[9];
@@ -14194,13 +13811,13 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
                 fb_cfg = fbs[0];
                 VdFwXFree(fbs);
 
-                vi_info = VdFwglXGetVisualFromFBConfig(VD_FW_G.display, fb_cfg);
+                vi_info = VdFwglXGetVisualFromFBConfig(Vd_Fw_G.display, fb_cfg);
                 window_visual_info = *vi_info;
                 window_depth = vi_info->depth;
                 window_visual = vi_info->visual;
-                window_colormap = VdFwXCreateColormap(VD_FW_G.display, VD_FW_G.root_window, vi_info->visual, AllocNone);
+                window_colormap = VdFwXCreateColormap(Vd_Fw_G.display, Vd_Fw_G.root_window, vi_info->visual, AllocNone);
 
-                VdFwXSync(VD_FW_G.display, False);
+                VdFwXSync(Vd_Fw_G.display, False);
 
                 if (debug) {
                     ctx_flags |= VD_FW_GLX_CONTEXT_DEBUG_BIT_ARB;
@@ -14226,15 +13843,15 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
 
                 context_attribs[8] = 0;
 
-                VD_FW_G.glx_context = glXCreateContextAttribsARB(VD_FW_G.display, fb_cfg, 0, 1, context_attribs);
-                if (!VD_FW_G.glx_context) {
+                Vd_Fw_G.glx_context = glXCreateContextAttribsARB(Vd_Fw_G.display, fb_cfg, 0, 1, context_attribs);
+                if (!Vd_Fw_G.glx_context) {
                     goto LOOP_END;
                 }
 
                 if (vd_fw__load_opengl(&gl_options->configs[index])) {
                     break;
                 } else {
-                    VdFwglXDestroyContext(VD_FW_G.display, VD_FW_G.glx_context);
+                    VdFwglXDestroyContext(Vd_Fw_G.display, Vd_Fw_G.glx_context);
                     result = 0;
                     goto LOOP_END;
                 }
@@ -14253,32 +13870,32 @@ LOOP_END:
 
         } break;
 
-        case VD_FW_GRAPHICS_API_CUSTOM: {
+        case Vd_Fw_GRAPHICS_API_CUSTOM: {
 
             window_depth = 0;
-            window_visual = DefaultVisual(VD_FW_G.display, VD_FW_G.screen);
-            window_colormap = DefaultColormap(VD_FW_G.display, VD_FW_G.screen);
+            window_visual = DefaultVisual(Vd_Fw_G.display, Vd_Fw_G.screen);
+            window_colormap = DefaultColormap(Vd_Fw_G.display, Vd_Fw_G.screen);
         } break;
 
         default: break;
     }
 
     if (result) {
-        VD_FW_G.graphics_api = api;
+        Vd_Fw_G.graphics_api = api;
 
         // @note(mdodis): We create the window after a graphics api is set
         // This is done because we need a Visual and a compatible colormap from glx first
         vd_fw__x11_recreate_window(window_colormap, window_depth, window_visual);
 
-        if (api == VD_FW_GRAPHICS_API_OPENGL) {
-            VdFwglXMakeCurrent(VD_FW_G.display, VD_FW_G.window, VD_FW_G.glx_context);
+        if (api == Vd_Fw_GRAPHICS_API_OPENGL) {
+            VdFwglXMakeCurrent(Vd_Fw_G.display, Vd_Fw_G.window, Vd_Fw_G.glx_context);
         }
 
-        VdFwXSync(VD_FW_G.display, 0);
+        VdFwXSync(Vd_Fw_G.display, 0);
 
-        pthread_mutex_init(&VD_FW_G.mtx_paint, NULL);
-        pthread_cond_init(&VD_FW_G.cnd_paint, NULL);
-        pthread_create(&VD_FW_G.win_thread, NULL, vd_fw__x11_thread_proc, NULL);
+        pthread_mutex_init(&Vd_Fw_G.mtx_paint, NULL);
+        pthread_cond_init(&Vd_Fw_G.cnd_paint, NULL);
+        pthread_create(&Vd_Fw_G.win_thread, NULL, vd_fw__x11_thread_proc, NULL);
     }
 
     return result;
@@ -14286,212 +13903,212 @@ LOOP_END:
 
 VD_FW_API int vd_fw_running(void)
 {
-    return VD_FW_G.window_open;
+    return Vd_Fw_G.window_open;
 }
 
 VD_FW_API VdFwEvent *vd_fw_poll(int *count)
 {
-    VD_FW_G.scale_changed = 0;
-    VD_FW_G.wheel_moved = 0;
-    VD_FW_G.wheel[0] = 0.f;
-    VD_FW_G.wheel[1] = 0.f;
-    VD_FW_G.focus_changed = 0;
-    VD_FW_G.window_state_changed = 0;
-    VD_FW_G.prev_mouse_state = VD_FW_G.mouse_state;
-    VD_FW_G.close_request = 0;
+    Vd_Fw_G.scale_changed = 0;
+    Vd_Fw_G.wheel_moved = 0;
+    Vd_Fw_G.wheel[0] = 0.f;
+    Vd_Fw_G.wheel[1] = 0.f;
+    Vd_Fw_G.focus_changed = 0;
+    Vd_Fw_G.window_state_changed = 0;
+    Vd_Fw_G.prev_mouse_state = Vd_Fw_G.mouse_state;
+    Vd_Fw_G.close_request = 0;
 
-    VD_FW_G.num_codepoints = 0;
-    VD_FW_G.last_key = VD_FW_KEY_UNKNOWN;
+    Vd_Fw_G.num_codepoints = 0;
+    Vd_Fw_G.last_key = VD_FW_KEY_UNKNOWN;
     VdFwU16 num_codepoints = 0;
-    VD_FW_G.mouse_delta[0] = VD_FW_G.mouse_delta[1] = 0.f;
+    Vd_Fw_G.mouse_delta[0] = Vd_Fw_G.mouse_delta[1] = 0.f;
 
     for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
-        VD_FW_G.prev_key_states[i] = VD_FW_G.curr_key_states[i];
+        Vd_Fw_G.prev_key_states[i] = Vd_Fw_G.curr_key_states[i];
     }
 
-    VD_FW_G.num_evts = 0;
+    Vd_Fw_G.num_evts = 0;
 
     VdFwEvent mm;
-    while (vd_fw__x11_msgbuf_r(&mm) && (VD_FW_G.num_evts < VD_FW_EVENT_COUNT_MAX)) {
-        VD_FW_G.evtbuf[VD_FW_G.num_evts++] = mm;
+    while (vd_fw__x11_msgbuf_r(&mm) && (Vd_Fw_G.num_evts < VD_FW_EVENT_COUNT_MAX)) {
+        Vd_Fw_G.evtbuf[Vd_Fw_G.num_evts++] = mm;
 
         switch (mm.type) {
             case VD_FW_EVENT_TYPE_CHARACTER: {
-                VD_FW_G.codepoints[(num_codepoints++) % VD_FW_CODEPOINT_BUFFER_COUNT] = mm.data.character.codepoint;
+                Vd_Fw_G.codepoints[(num_codepoints++) % VD_FW_CODEPOINT_BUFFER_COUNT] = mm.data.character.codepoint;
             } break;
 
             case VD_FW_EVENT_TYPE_CLOSE_REQUEST: {
-                VD_FW_G.close_request = 1;
+                Vd_Fw_G.close_request = 1;
             } break;
 
             case VD_FW_EVENT_TYPE_MOUSE_MOVE: {
-                VD_FW_G.mouse[0] = mm.data.mouse_move.x;
-                VD_FW_G.mouse[1] = mm.data.mouse_move.y;
+                Vd_Fw_G.mouse[0] = mm.data.mouse_move.x;
+                Vd_Fw_G.mouse[1] = mm.data.mouse_move.y;
             } break;
 
             case VD_FW_EVENT_TYPE_MOUSE_DELTA: {
-                VD_FW_G.mouse_delta[0] = VD_FW_G.mouse_delta[0] * 0.8f + mm.data.mouse_delta.dx * 0.2f;
-                VD_FW_G.mouse_delta[1] = VD_FW_G.mouse_delta[1] * 0.8f + mm.data.mouse_delta.dy * 0.2f;
+                Vd_Fw_G.mouse_delta[0] = Vd_Fw_G.mouse_delta[0] * 0.8f + mm.data.mouse_delta.dx * 0.2f;
+                Vd_Fw_G.mouse_delta[1] = Vd_Fw_G.mouse_delta[1] * 0.8f + mm.data.mouse_delta.dy * 0.2f;
             } break;
 
             case VD_FW_EVENT_TYPE_MOUSE_SCROLL: {
-                VD_FW_G.wheel[0] += mm.data.mouse_scroll.dx;
-                VD_FW_G.wheel[1] += mm.data.mouse_scroll.dy;
+                Vd_Fw_G.wheel[0] += mm.data.mouse_scroll.dx;
+                Vd_Fw_G.wheel[1] += mm.data.mouse_scroll.dy;
             } break;
 
             case VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN: {
-                VD_FW_G.mouse_state |= mm.data.mouse_button_down.button;
+                Vd_Fw_G.mouse_state |= mm.data.mouse_button_down.button;
             } break;
 
             case VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP: {
-                VD_FW_G.mouse_state &= ~mm.data.mouse_button_up.button;
+                Vd_Fw_G.mouse_state &= ~mm.data.mouse_button_up.button;
             } break;
 
             case VD_FW_EVENT_TYPE_FOCUS_CHANGE: {
-                VD_FW_G.focus_changed = 1;
-                VD_FW_G.is_focused = mm.data.focus_change.got_focus;
+                Vd_Fw_G.focus_changed = 1;
+                Vd_Fw_G.is_focused = mm.data.focus_change.got_focus;
             } break;
 
             case VD_FW_EVENT_TYPE_KEY_UP: {
-                VD_FW_G.curr_key_states[mm.data.key_up.key] = 0;
+                Vd_Fw_G.curr_key_states[mm.data.key_up.key] = 0;
             } break;
 
             case VD_FW_EVENT_TYPE_KEY_DOWN: {
-                VD_FW_G.curr_key_states[mm.data.key_down.key] = 1;
+                Vd_Fw_G.curr_key_states[mm.data.key_down.key] = 1;
             } break;
 
             case VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE: {
-                VdFwWindowState prev_state = VD_FW_G.window_state;
+                VdFwWindowState prev_state = Vd_Fw_G.window_state;
                 VdFwWindowState change_flag = (VdFwWindowState)mm.data.window_state_change.flag;
                 if (mm.data.window_state_change.value) {
-                    VD_FW_G.window_state |= change_flag;
+                    Vd_Fw_G.window_state |= change_flag;
                 } else {
-                    VD_FW_G.window_state &= ~change_flag;
+                    Vd_Fw_G.window_state &= ~change_flag;
                 }
 
-                if (prev_state != VD_FW_G.window_state) {
-                    VD_FW_G.window_state_changed |= change_flag;
+                if (prev_state != Vd_Fw_G.window_state) {
+                    Vd_Fw_G.window_state_changed |= change_flag;
                 }
 
             } break;
 
             case VD_FW_EVENT_TYPE_SCALE_CHANGE: {
-                VD_FW_G.scale_changed = 1;
-                VD_FW_G.scale = mm.data.scale_change.new_scale;
+                Vd_Fw_G.scale_changed = 1;
+                Vd_Fw_G.scale = mm.data.scale_change.new_scale;
             } break;
 
             default: break;
         }
     }
 
-    VD_FW_G.num_codepoints = (num_codepoints < VD_FW_CODEPOINT_BUFFER_COUNT) 
+    Vd_Fw_G.num_codepoints = (num_codepoints < VD_FW_CODEPOINT_BUFFER_COUNT) 
                              ? num_codepoints
                              : VD_FW_CODEPOINT_BUFFER_COUNT;
     if (num_codepoints > 0) {
-        VD_FW_G.first_codepoint_index = (num_codepoints - 1) % VD_FW_CODEPOINT_BUFFER_COUNT;
+        Vd_Fw_G.first_codepoint_index = (num_codepoints - 1) % VD_FW_CODEPOINT_BUFFER_COUNT;
     } else {
-        VD_FW_G.first_codepoint_index = 0;
+        Vd_Fw_G.first_codepoint_index = 0;
     }
 
     if (count) {
-        *count = VD_FW_G.num_evts;
+        *count = Vd_Fw_G.num_evts;
     }
 
 
-    if (VD_FW_G.mouse_is_locked) {
-        VdFwXWarpPointer(VD_FW_G.display, None, VD_FW_G.window,
+    if (Vd_Fw_G.mouse_is_locked) {
+        VdFwXWarpPointer(Vd_Fw_G.display, None, Vd_Fw_G.window,
                          0, 0, 0, 0,
-                         VD_FW_G.last_mouse_before_lock[0], VD_FW_G.last_mouse_before_lock[1]);
+                         Vd_Fw_G.last_mouse_before_lock[0], Vd_Fw_G.last_mouse_before_lock[1]);
     }
 
     struct timespec now;
     struct timespec delta_timespec;
     clock_gettime(CLOCK_MONOTONIC, &now);
-    delta_timespec = vd_fw__linux_timespec_diff(now, VD_FW_G.time_last);
-    VD_FW_G.time_last = now;
-    VD_FW_G.delta_ns = delta_timespec.tv_nsec;
+    delta_timespec = vd_fw__linux_timespec_diff(now, Vd_Fw_G.time_last);
+    Vd_Fw_G.time_last = now;
+    Vd_Fw_G.delta_ns = delta_timespec.tv_nsec;
 
-    return VD_FW_G.evtbuf;
+    return Vd_Fw_G.evtbuf;
 }
 
 VD_FW_API int vd_fw_get_key_down(int key)
 {
-    return VD_FW_G.curr_key_states[key];
+    return Vd_Fw_G.curr_key_states[key];
 }
 
 VD_FW_API int vd_fw_get_key_pressed(int key)
 {
-    return !VD_FW_G.prev_key_states[key] && VD_FW_G.curr_key_states[key];
+    return !Vd_Fw_G.prev_key_states[key] && Vd_Fw_G.curr_key_states[key];
 }
 
 VD_FW_API int vd_fw_get_last_key_pressed(void)
 {
-    return VD_FW_G.last_key;
+    return Vd_Fw_G.last_key;
 }
 
 VD_FW_API int vd_fw_get_key_released(int key)
 {
-    return VD_FW_G.prev_key_states[key] && !VD_FW_G.curr_key_states[key];
+    return Vd_Fw_G.prev_key_states[key] && !Vd_Fw_G.curr_key_states[key];
 }
 
 VD_FW_API int vd_fw_close_requested(void)
 {
-    return VD_FW_G.close_request;
+    return Vd_Fw_G.close_request;
 }
 
 VD_FW_API void vd_fw_quit(void)
 {
-    VdFwXLockDisplay(VD_FW_G.display);
+    VdFwXLockDisplay(Vd_Fw_G.display);
     XEvent ev = {0};
     ev.xclient.type = ClientMessage;
-    ev.xclient.display = VD_FW_G.display;
-    ev.xclient.window = VD_FW_G.window;
-    ev.xclient.message_type = VD_FW_G.wm_usr_close;
+    ev.xclient.display = Vd_Fw_G.display;
+    ev.xclient.window = Vd_Fw_G.window;
+    ev.xclient.message_type = Vd_Fw_G.wm_usr_close;
     ev.xclient.format = 32;
-    VdFwXSendEvent(VD_FW_G.display, VD_FW_G.window, False, NoEventMask, &ev);
-    VdFwXUnlockDisplay(VD_FW_G.display);
-    VD_FW_G.window_open = 0;
+    VdFwXSendEvent(Vd_Fw_G.display, Vd_Fw_G.window, False, NoEventMask, &ev);
+    VdFwXUnlockDisplay(Vd_Fw_G.display);
+    Vd_Fw_G.window_open = 0;
 }
 
 VD_FW_API void vd_fw_exit(void)
 {
-    if (VD_FW_G.has_initialized) {
+    if (Vd_Fw_G.has_initialized) {
         vd_fw__x11_thread_finish();
 
-        VD_FW_G.has_initialized = 0;
+        Vd_Fw_G.has_initialized = 0;
     }
 
-    VdFwXCloseDisplay(VD_FW_G.display);
+    VdFwXCloseDisplay(Vd_Fw_G.display);
 
-    if (VD_FW_G.input_method) {
-        VdFwXCloseIM(VD_FW_G.input_method);
+    if (Vd_Fw_G.input_method) {
+        VdFwXCloseIM(Vd_Fw_G.input_method);
     }
 
-    dlclose(VD_FW_G.handle_xlib);
-    dlclose(VD_FW_G.handle_xext);
-    dlclose(VD_FW_G.handle_xfixes);
-    dlclose(VD_FW_G.handle_xcursor);
-    dlclose(VD_FW_G.handle_xrandr);
-    dlclose(VD_FW_G.handle_xi);
-    dlclose(VD_FW_G.handle_glx);
+    dlclose(Vd_Fw_G.handle_xlib);
+    dlclose(Vd_Fw_G.handle_xext);
+    dlclose(Vd_Fw_G.handle_xfixes);
+    dlclose(Vd_Fw_G.handle_xcursor);
+    dlclose(Vd_Fw_G.handle_xrandr);
+    dlclose(Vd_Fw_G.handle_xi);
+    dlclose(Vd_Fw_G.handle_glx);
 }
 
 VD_FW_API void vd_fw_lock(void)
 {
-    pthread_mutex_lock(&VD_FW_G.mtx_paint);
-    VD_FW_G.curr_frame = VD_FW_G.next_frame;
-    VD_FW_G.next_frame.flags = 0;
-    pthread_mutex_unlock(&VD_FW_G.mtx_paint);
+    pthread_mutex_lock(&Vd_Fw_G.mtx_paint);
+    Vd_Fw_G.curr_frame = Vd_Fw_G.next_frame;
+    Vd_Fw_G.next_frame.flags = 0;
+    pthread_mutex_unlock(&Vd_Fw_G.mtx_paint);
 }
 
 VD_FW_API void vd_fw_unlock(void)
 {
-    if (VD_FW_G.window_open) {
-        if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
-            VdFwglXSwapBuffers(VD_FW_G.display, VD_FW_G.window);
+    if (Vd_Fw_G.window_open) {
+        if (Vd_Fw_G.graphics_api == Vd_Fw_GRAPHICS_API_OPENGL) {
+            VdFwglXSwapBuffers(Vd_Fw_G.display, Vd_Fw_G.window);
         }
 
-        if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
+        if (Vd_Fw_G.graphics_api == Vd_Fw_GRAPHICS_API_OPENGL) {
             if (glFenceSync && glClientWaitSync && glDeleteSync) {
                 GLsync fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
                 if (fence) {
@@ -14502,41 +14119,41 @@ VD_FW_API void vd_fw_unlock(void)
         }
     }
 
-    if (VD_FW_G.curr_frame.flags & VD_FW_X11_FLAGS_WAKE_COND_VAR) {
-        pthread_cond_signal(&VD_FW_G.cnd_paint);
+    if (Vd_Fw_G.curr_frame.flags & VD_FW_X11_FLAGS_WAKE_COND_VAR) {
+        pthread_cond_signal(&Vd_Fw_G.cnd_paint);
     }
 }
 
 VD_FW_API int vd_fw_get_block_while_sizing(void)
 {
-    return VD_FW_G.block_while_sizing;
+    return Vd_Fw_G.block_while_sizing;
 }
 
 VD_FW_API void vd_fw_set_block_while_sizing(int on)
 {
-    if (VD_FW_G.block_while_sizing == on) {
+    if (Vd_Fw_G.block_while_sizing == on) {
         return;
     }
 
-    VD_FW_G.block_while_sizing = on;
+    Vd_Fw_G.block_while_sizing = on;
 
     XEvent ev = {0};
     ev.xclient.type = ClientMessage;
-    ev.xclient.display = VD_FW_G.display;
-    ev.xclient.window = VD_FW_G.window;
-    ev.xclient.message_type = VD_FW_G.wm_usr_block;
+    ev.xclient.display = Vd_Fw_G.display;
+    ev.xclient.window = Vd_Fw_G.window;
+    ev.xclient.message_type = Vd_Fw_G.wm_usr_block;
     ev.xclient.format = 32;
     ev.xclient.data.b[0] = on ? 1 : 0;
-    VdFwXSendEvent(VD_FW_G.display, VD_FW_G.window, False, NoEventMask, &ev);
+    VdFwXSendEvent(Vd_Fw_G.display, Vd_Fw_G.window, False, NoEventMask, &ev);
 }
 
 VD_FW_API int vd_fw_set_vsync_on(int on)
 {
-    if (VD_FW_G.glx_swap_interval_ext) {
-        VD_FW_G.glx_swap_interval_ext(VD_FW_G.display, VD_FW_G.window, on);
+    if (Vd_Fw_G.glx_swap_interval_ext) {
+        Vd_Fw_G.glx_swap_interval_ext(Vd_Fw_G.display, Vd_Fw_G.window, on);
 
         unsigned int value;
-        VdFwglXQueryDrawable(VD_FW_G.display, VD_FW_G.window, VD_FW_GLX_SWAP_INTERVAL_EXT, &value);
+        VdFwglXQueryDrawable(Vd_Fw_G.display, Vd_Fw_G.window, VD_FW_GLX_SWAP_INTERVAL_EXT, &value);
         return on == (int)value;
     }
 
@@ -14580,8 +14197,8 @@ VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
         data[2 + i] = ((VdFwU32*)pixels)[i];
     }
 
-    VdFwXChangeProperty(VD_FW_G.display, VD_FW_G.window,
-                        VD_FW_G.wm_icon,
+    VdFwXChangeProperty(Vd_Fw_G.display, Vd_Fw_G.window,
+                        Vd_Fw_G.wm_icon,
                         XA_CARDINAL,
                         32,
                         PropModeReplace,
@@ -14593,93 +14210,93 @@ VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
 
 VD_FW_API int vd_fw_get_size(int *w, int *h)
 {
-    if (w) *w = VD_FW_G.curr_frame.w;
-    if (h) *h = VD_FW_G.curr_frame.h;
-    return VD_FW_G.curr_frame.flags & VD_FW_X11_FLAGS_SIZE_CHANGED;
+    if (w) *w = Vd_Fw_G.curr_frame.w;
+    if (h) *h = Vd_Fw_G.curr_frame.h;
+    return Vd_Fw_G.curr_frame.flags & VD_FW_X11_FLAGS_SIZE_CHANGED;
 }
 
 VD_FW_API void vd_fw_set_size(int w, int h)
 {
-    VdFwXResizeWindow(VD_FW_G.display, VD_FW_G.window, w, h);    
+    VdFwXResizeWindow(Vd_Fw_G.display, Vd_Fw_G.window, w, h);    
 }
 
 VD_FW_API void vd_fw_set_size_min(int w, int h)
 {
     if (w != 0) {
-        VD_FW_G.window_min[0] = w;
+        Vd_Fw_G.window_min[0] = w;
     } else {
-        VD_FW_G.window_min[0] = 0;
+        Vd_Fw_G.window_min[0] = 0;
     }
 
     if (h != 0) {
-        VD_FW_G.window_min[1] = h;
+        Vd_Fw_G.window_min[1] = h;
     } else {
-        VD_FW_G.window_min[1] = 0;
+        Vd_Fw_G.window_min[1] = 0;
     }
 
     XSizeHints hints = {};
     hints.flags |= PMinSize;
-    hints.min_width = VD_FW_G.window_min[0];
-    hints.min_height = VD_FW_G.window_min[1];
+    hints.min_width = Vd_Fw_G.window_min[0];
+    hints.min_height = Vd_Fw_G.window_min[1];
     hints.flags |= PMaxSize;
-    hints.max_width = VD_FW_G.window_max[0];
-    hints.max_height = VD_FW_G.window_max[1];
+    hints.max_width = Vd_Fw_G.window_max[0];
+    hints.max_height = Vd_Fw_G.window_max[1];
 
-    VdFwXSetWMNormalHints(VD_FW_G.display, VD_FW_G.window, &hints);
+    VdFwXSetWMNormalHints(Vd_Fw_G.display, Vd_Fw_G.window, &hints);
 }
 
 VD_FW_API void vd_fw_set_size_max(int w, int h)
 {
     if (w != 0) {
-        VD_FW_G.window_max[0] = w;
+        Vd_Fw_G.window_max[0] = w;
     } else {
-        VD_FW_G.window_max[0] = 999999;
+        Vd_Fw_G.window_max[0] = 999999;
     }
 
     if (h != 0) {
-        VD_FW_G.window_max[1] = h;
+        Vd_Fw_G.window_max[1] = h;
     } else {
-        VD_FW_G.window_max[1] = 999999;
+        Vd_Fw_G.window_max[1] = 999999;
     }
 
     XSizeHints hints = {};
     hints.flags |= PMinSize;
-    hints.min_width = VD_FW_G.window_min[0];
-    hints.min_height = VD_FW_G.window_min[1];
+    hints.min_width = Vd_Fw_G.window_min[0];
+    hints.min_height = Vd_Fw_G.window_min[1];
     hints.flags |= PMaxSize;
-    hints.max_width = VD_FW_G.window_max[0];
-    hints.max_height = VD_FW_G.window_max[1];
+    hints.max_width = Vd_Fw_G.window_max[0];
+    hints.max_height = Vd_Fw_G.window_max[1];
 
-    VdFwXSetWMNormalHints(VD_FW_G.display, VD_FW_G.window, &hints);
+    VdFwXSetWMNormalHints(Vd_Fw_G.display, Vd_Fw_G.window, &hints);
 }
 
 VD_FW_API int vd_fw_get_focused(int *focused)
 {
     if (focused) {
-        *focused = VD_FW_G.is_focused;
+        *focused = Vd_Fw_G.is_focused;
     }
 
-    return VD_FW_G.focus_changed;
+    return Vd_Fw_G.focus_changed;
 }
 
 VD_FW_API void vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4])
 {
-    VD_FW_G.nccaption_set = 1;
-    VD_FW_G.nccaption[0] = caption[0];
-    VD_FW_G.nccaption[1] = caption[1];
-    VD_FW_G.nccaption[2] = caption[2];
-    VD_FW_G.nccaption[3] = caption[3];
+    Vd_Fw_G.nccaption_set = 1;
+    Vd_Fw_G.nccaption[0] = caption[0];
+    Vd_Fw_G.nccaption[1] = caption[1];
+    Vd_Fw_G.nccaption[2] = caption[2];
+    Vd_Fw_G.nccaption[3] = caption[3];
 
-    VD_FW_G.ncrect_count = count;
+    Vd_Fw_G.ncrect_count = count;
     int c = count;
     if (c > VD_FW_NCRECTS_MAX) {
         c = VD_FW_NCRECTS_MAX;
     }
     for (int i = 0; i < c; ++i) {
-        VD_FW_G.ncrects[i][0] = rects[i][0];
-        VD_FW_G.ncrects[i][1] = rects[i][1];
-        VD_FW_G.ncrects[i][2] = rects[i][2];
-        VD_FW_G.ncrects[i][3] = rects[i][3];
+        Vd_Fw_G.ncrects[i][0] = rects[i][0];
+        Vd_Fw_G.ncrects[i][1] = rects[i][1];
+        Vd_Fw_G.ncrects[i][2] = rects[i][2];
+        Vd_Fw_G.ncrects[i][3] = rects[i][3];
     }
 }
 
@@ -14690,38 +14307,38 @@ VD_FW_API void vd_fw_set_receive_ncmouse(int on)
 VD_FW_API int vd_fw_get_minimized(int *minimized)
 {
     if (minimized) {
-        *minimized = VD_FW_G.window_state & VD_FW_WINDOW_STATE_MINIMIZED;
+        *minimized = Vd_Fw_G.window_state & VD_FW_WINDOW_STATE_MINIMIZED;
     }
-    return VD_FW_G.window_state_changed & VD_FW_WINDOW_STATE_MINIMIZED;
+    return Vd_Fw_G.window_state_changed & VD_FW_WINDOW_STATE_MINIMIZED;
 }
 
 VD_FW_API void vd_fw_set_minimized(void)
 {
-    VdFwXIconifyWindow(VD_FW_G.display, VD_FW_G.window, VdFwXDefaultScreen(VD_FW_G.display));
+    VdFwXIconifyWindow(Vd_Fw_G.display, Vd_Fw_G.window, VdFwXDefaultScreen(Vd_Fw_G.display));
 }
 
 VD_FW_API int vd_fw_get_maximized(int *maximized)
 {
     if (maximized) {
-        *maximized = VD_FW_G.window_state & VD_FW_WINDOW_STATE_MAXIMIZED;
+        *maximized = Vd_Fw_G.window_state & VD_FW_WINDOW_STATE_MAXIMIZED;
     }
-    return VD_FW_G.window_state_changed & VD_FW_WINDOW_STATE_MAXIMIZED;
+    return Vd_Fw_G.window_state_changed & VD_FW_WINDOW_STATE_MAXIMIZED;
 }
 
 VD_FW_API void vd_fw_set_maximized(void)
 {
     XEvent e = {0};
     e.xclient.type = ClientMessage;
-    e.xclient.window = VD_FW_G.window;
-    e.xclient.message_type = VD_FW_G.wm_state;
+    e.xclient.window = Vd_Fw_G.window;
+    e.xclient.message_type = Vd_Fw_G.wm_state;
     e.xclient.format = 32;
     e.xclient.data.l[0] = 1;
-    e.xclient.data.l[1] = VD_FW_G.wm_max_h;
-    e.xclient.data.l[2] = VD_FW_G.wm_max_v;
+    e.xclient.data.l[1] = Vd_Fw_G.wm_max_h;
+    e.xclient.data.l[2] = Vd_Fw_G.wm_max_v;
     e.xclient.data.l[3] = 1;
 
-    VdFwXSendEvent(VD_FW_G.display,
-                   VdFwXDefaultRootWindow(VD_FW_G.display),
+    VdFwXSendEvent(Vd_Fw_G.display,
+                   VdFwXDefaultRootWindow(Vd_Fw_G.display),
                    False,
                    SubstructureRedirectMask | SubstructureNotifyMask,
                    &e);
@@ -14731,16 +14348,16 @@ VD_FW_API void vd_fw_normalize(void)
 {
     XEvent e = {0};
     e.xclient.type = ClientMessage;
-    e.xclient.window = VD_FW_G.window;
-    e.xclient.message_type = VD_FW_G.wm_state;
+    e.xclient.window = Vd_Fw_G.window;
+    e.xclient.message_type = Vd_Fw_G.wm_state;
     e.xclient.format = 32;
     e.xclient.data.l[0] = 0;
-    e.xclient.data.l[1] = VD_FW_G.wm_max_h;
-    e.xclient.data.l[2] = VD_FW_G.wm_max_v;
+    e.xclient.data.l[1] = Vd_Fw_G.wm_max_h;
+    e.xclient.data.l[2] = Vd_Fw_G.wm_max_v;
     e.xclient.data.l[3] = 1;
 
-    VdFwXSendEvent(VD_FW_G.display,
-                   VdFwXDefaultRootWindow(VD_FW_G.display),
+    VdFwXSendEvent(Vd_Fw_G.display,
+                   VdFwXDefaultRootWindow(Vd_Fw_G.display),
                    False,
                    SubstructureRedirectMask | SubstructureNotifyMask,
                    &e);
@@ -14748,21 +14365,21 @@ VD_FW_API void vd_fw_normalize(void)
 
 VD_FW_API void vd_fw_set_fullscreen(int on)
 {
-    if (VD_FW_G.is_fullscreen == on) {
+    if (Vd_Fw_G.is_fullscreen == on) {
         return;
     }
 
-    VD_FW_G.is_fullscreen = on;
+    Vd_Fw_G.is_fullscreen = on;
 
     XEvent e;
     memset(&e, 0, sizeof(e));
 
     e.xclient.type = ClientMessage;
-    e.xclient.window = VD_FW_G.window;
-    e.xclient.message_type = VD_FW_G.wm_state;
+    e.xclient.window = Vd_Fw_G.window;
+    e.xclient.message_type = Vd_Fw_G.wm_state;
     e.xclient.format = 32;
 
-    e.xclient.data.l[1] = VD_FW_G.wm_fullscreen;
+    e.xclient.data.l[1] = Vd_Fw_G.wm_fullscreen;
     e.xclient.data.l[2] = 0;
     e.xclient.data.l[3] = 1;
     e.xclient.data.l[4] = 0;
@@ -14773,8 +14390,8 @@ VD_FW_API void vd_fw_set_fullscreen(int on)
         e.xclient.data.l[0] = 0;
     }
 
-    VdFwXSendEvent(VD_FW_G.display,
-                   VdFwXDefaultRootWindow(VD_FW_G.display),
+    VdFwXSendEvent(Vd_Fw_G.display,
+                   VdFwXDefaultRootWindow(Vd_Fw_G.display),
                    False,
                    SubstructureRedirectMask | SubstructureNotifyMask,
                    &e);
@@ -14782,62 +14399,62 @@ VD_FW_API void vd_fw_set_fullscreen(int on)
 
 VD_FW_API int vd_fw_get_fullscreen(void)
 {
-    return VD_FW_G.is_fullscreen;
+    return Vd_Fw_G.is_fullscreen;
 }
 
 VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
 {
-    int result = VD_FW_G.mouse_state;
-    if (x) *x = VD_FW_G.mouse[0];
-    if (y) *y = VD_FW_G.mouse[1];
+    int result = Vd_Fw_G.mouse_state;
+    if (x) *x = Vd_Fw_G.mouse[0];
+    if (y) *y = Vd_Fw_G.mouse[1];
     return result;
 }
 
 VD_FW_API void vd_fw_get_mouse_delta(float *dx, float *dy)
 {
-    if (dx) *dx = VD_FW_G.mouse_delta[0];
-    if (dy) *dy = VD_FW_G.mouse_delta[1];
+    if (dx) *dx = Vd_Fw_G.mouse_delta[0];
+    if (dy) *dy = Vd_Fw_G.mouse_delta[1];
 }
 
 VD_FW_API void vd_fw_set_mouse_locked(int locked)
 {
-    if (locked == VD_FW_G.mouse_is_locked) {
+    if (locked == Vd_Fw_G.mouse_is_locked) {
         return;
     }
 
-    VD_FW_G.mouse_is_locked = locked;
+    Vd_Fw_G.mouse_is_locked = locked;
 
     if (locked) {
-        VdFwXGrabPointer(VD_FW_G.display, VD_FW_G.window, True, PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None, CurrentTime);
-        VD_FW_G.last_mouse_before_lock[0] = VD_FW_G.mouse[0];
-        VD_FW_G.last_mouse_before_lock[1] = VD_FW_G.mouse[1];
-        VdFwXFixesHideCursor(VD_FW_G.display, VD_FW_G.window);
+        VdFwXGrabPointer(Vd_Fw_G.display, Vd_Fw_G.window, True, PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None, CurrentTime);
+        Vd_Fw_G.last_mouse_before_lock[0] = Vd_Fw_G.mouse[0];
+        Vd_Fw_G.last_mouse_before_lock[1] = Vd_Fw_G.mouse[1];
+        VdFwXFixesHideCursor(Vd_Fw_G.display, Vd_Fw_G.window);
     } else {
-        VdFwXUngrabPointer(VD_FW_G.display, CurrentTime);
-        VdFwXFixesShowCursor(VD_FW_G.display, VD_FW_G.window);
+        VdFwXUngrabPointer(Vd_Fw_G.display, CurrentTime);
+        VdFwXFixesShowCursor(Vd_Fw_G.display, Vd_Fw_G.window);
     }
 }
 
 VD_FW_API int vd_fw_get_mouse_locked(void)
 {
-    return VD_FW_G.mouse_is_locked;
+    return Vd_Fw_G.mouse_is_locked;
 }
 
 VD_FW_API int vd_fw_get_mouse_wheel(float *dx, float *dy)
 {
-    if (dx) *dx = VD_FW_G.wheel[0];
-    if (dy) *dy = VD_FW_G.wheel[1];
-    return VD_FW_G.wheel_moved;
+    if (dx) *dx = Vd_Fw_G.wheel[0];
+    if (dy) *dy = Vd_Fw_G.wheel[1];
+    return Vd_Fw_G.wheel_moved;
 }
 
 VD_FW_API int vd_fw_get_mouse_clicked(int button)
 {
-    return !(VD_FW_G.prev_mouse_state & button) && (VD_FW_G.mouse_state & button);
+    return !(Vd_Fw_G.prev_mouse_state & button) && (Vd_Fw_G.mouse_state & button);
 }
 
 VD_FW_API int vd_fw_get_mouse_released(int button)
 {
-    return (VD_FW_G.prev_mouse_state & button) && !(VD_FW_G.mouse_state & button);
+    return (Vd_Fw_G.prev_mouse_state & button) && !(Vd_Fw_G.mouse_state & button);
 }
 
 VD_FW_API int vd_fw__any_time_higher(int num_files, const char **files, unsigned long long *check_against)
@@ -14879,13 +14496,13 @@ VD_FW_API VdFwPlatform vd_fw_get_platform(void)
 
 VD_FW_API int vd_fw_get_scale(float *scale)
 {
-    if (scale) *scale = VD_FW_G.scale;
-    return VD_FW_G.scale_changed;
+    if (scale) *scale = Vd_Fw_G.scale;
+    return Vd_Fw_G.scale_changed;
 }
 
 VD_FW_API void vd_fw_set_title(const char *title)
 {
-    VdFwXStoreName(VD_FW_G.display, VD_FW_G.window, (char*)title);
+    VdFwXStoreName(Vd_Fw_G.display, Vd_Fw_G.window, (char*)title);
 }
 
 VD_FW_API char *vd_fw__debug_dump_file_text(const char *path, size_t *sz)
@@ -15106,56 +14723,56 @@ static int vd_fw__x11_recreate_window(Colormap colormap, int depth, Visual* visu
 
     int width = 640;
     int height = 480;
-    VD_FW_G.window = VdFwXCreateWindow(VD_FW_G.display, VD_FW_G.root_window,
+    Vd_Fw_G.window = VdFwXCreateWindow(Vd_Fw_G.display, Vd_Fw_G.root_window,
                                        0, 0,
                                        width, height, 0,
                                        depth, InputOutput,
                                        visual, attribute_mask, &window_attributes);
 
     XClassHint class_hint = {(char*)"fw_window", (char*)"popup"};
-    VdFwXSetClassHint(VD_FW_G.display, VD_FW_G.window, &class_hint);
+    VdFwXSetClassHint(Vd_Fw_G.display, Vd_Fw_G.window, &class_hint);
 
-    VdFwXSelectInput(VD_FW_G.display, VD_FW_G.root_window, PropertyChangeMask);
+    VdFwXSelectInput(Vd_Fw_G.display, Vd_Fw_G.root_window, PropertyChangeMask);
 
-    // if (VD_FW_G.has_xrandr) {
-    //     VdFwXRRSelectInput(VD_FW_G.display, VD_FW_G.root_window,
+    // if (Vd_Fw_G.has_xrandr) {
+    //     VdFwXRRSelectInput(Vd_Fw_G.display, Vd_Fw_G.root_window,
     //                        RRScreenChangeNotifyMask | RROutputChangeNotifyMask | RRCrtcChangeNotifyMask);
     // }
 
-    if (!VD_FW_G.window) {
+    if (!Vd_Fw_G.window) {
         return 0;
     }
 
-    VdFwXStoreName(VD_FW_G.display, VD_FW_G.window, (char*)"FW Window");
+    VdFwXStoreName(Vd_Fw_G.display, Vd_Fw_G.window, (char*)"FW Window");
 
-    if (VD_FW_G.borderless) {
+    if (Vd_Fw_G.borderless) {
         VdFw__X11MotifWmHints hints = {0};
         hints.flags = 2;
         hints.decorations = 0;
-        VdFwXChangeProperty(VD_FW_G.display, VD_FW_G.window,
-                            VD_FW_G.wm_motif,
-                            VD_FW_G.wm_motif, 32,
+        VdFwXChangeProperty(Vd_Fw_G.display, Vd_Fw_G.window,
+                            Vd_Fw_G.wm_motif,
+                            Vd_Fw_G.wm_motif, 32,
                             PropModeReplace,
                             (unsigned char*) &hints,
                             sizeof(hints) / sizeof(long));
     }
 
-    VD_FW_G.window_open = 1;
+    Vd_Fw_G.window_open = 1;
 
-    if (VD_FW_G.xlib_supports_xsync) {
-        VdFwXSetWMProtocols(VD_FW_G.display, VD_FW_G.window, &VD_FW_G.wm_sync_request, 1);
+    if (Vd_Fw_G.xlib_supports_xsync) {
+        VdFwXSetWMProtocols(Vd_Fw_G.display, Vd_Fw_G.window, &Vd_Fw_G.wm_sync_request, 1);
 
         XSyncValue initial_value;
         VdFwXSyncIntToValue(&initial_value, 0);
-        VD_FW_G.sync_counter = VdFwXSyncCreateCounter(VD_FW_G.display, initial_value);
+        Vd_Fw_G.sync_counter = VdFwXSyncCreateCounter(Vd_Fw_G.display, initial_value);
 
-        VdFwXChangeProperty(VD_FW_G.display, VD_FW_G.window, VD_FW_G.wm_sync_request_counter, XA_CARDINAL, 32, PropModeReplace, (uint8_t*)&VD_FW_G.sync_counter, 1);
+        VdFwXChangeProperty(Vd_Fw_G.display, Vd_Fw_G.window, Vd_Fw_G.wm_sync_request_counter, XA_CARDINAL, 32, PropModeReplace, (uint8_t*)&Vd_Fw_G.sync_counter, 1);
     }
 
-    VdFwXSetWMProtocols(VD_FW_G.display, VD_FW_G.window, &VD_FW_G.wm_delete_window, 1);
+    VdFwXSetWMProtocols(Vd_Fw_G.display, Vd_Fw_G.window, &Vd_Fw_G.wm_delete_window, 1);
 
-    VdFwXMapWindow(VD_FW_G.display, VD_FW_G.window);
-    VdFwXSync(VD_FW_G.display, False);
+    VdFwXMapWindow(Vd_Fw_G.display, Vd_Fw_G.window);
+    VdFwXSync(Vd_Fw_G.display, False);
 
     // XInput2
     {
@@ -15165,15 +14782,15 @@ static int vd_fw__x11_recreate_window(Colormap colormap, int depth, Visual* visu
         em.deviceid = VD_FW_XIAllMasterDevices;
         em.mask_len = sizeof(mask);
         em.mask = mask;
-        VdFwXISelectEvents(VD_FW_G.display, DefaultRootWindow(VD_FW_G.display), &em, 1);
+        VdFwXISelectEvents(Vd_Fw_G.display, DefaultRootWindow(Vd_Fw_G.display), &em, 1);
     }
 
     // Character Input
     {
-        if (VD_FW_G.input_method && VD_FW_G.input_style) {
-            VD_FW_G.input_context = VdFwXCreateIC(VD_FW_G.input_method, XNInputStyle, VD_FW_G.input_style,
-                                                  XNClientWindow, VD_FW_G.window,
-                                                  XNFocusWindow, VD_FW_G.window,
+        if (Vd_Fw_G.input_method && Vd_Fw_G.input_style) {
+            Vd_Fw_G.input_context = VdFwXCreateIC(Vd_Fw_G.input_method, XNInputStyle, Vd_Fw_G.input_style,
+                                                  XNClientWindow, Vd_Fw_G.window,
+                                                  XNFocusWindow, Vd_Fw_G.window,
                                                   NULL);
         }
     }
@@ -15211,35 +14828,35 @@ static int vd_fw__x11_test_orientation(int x, int y, int w, int h)
 
 static int vd_fw__x11_msgbuf_r(VdFwEvent *message)
 {
-    int r = VD_FW_G.msgbuf_r;
+    int r = Vd_Fw_G.msgbuf_r;
     int w;
-    __atomic_load(&VD_FW_G.msgbuf_w, &w, __ATOMIC_SEQ_CST);
+    __atomic_load(&Vd_Fw_G.msgbuf_w, &w, __ATOMIC_SEQ_CST);
 
     if (r == w) {
         return 0;
     }
 
-    *message = VD_FW_G.msgbuf[r];
+    *message = Vd_Fw_G.msgbuf[r];
 
     int nr = (r + 1) % VD_FW_X11_MESSAGE_BUFFER_SIZE;
-    __atomic_exchange_n(&VD_FW_G.msgbuf_r, nr, __ATOMIC_SEQ_CST);
+    __atomic_exchange_n(&Vd_Fw_G.msgbuf_r, nr, __ATOMIC_SEQ_CST);
 
     return 1;
 }
 
 static int vd_fw__x11_msgbuf_w(VdFwEvent *message)
 {
-    int w = VD_FW_G.msgbuf_w;
+    int w = Vd_Fw_G.msgbuf_w;
     int r;
-    __atomic_load(&VD_FW_G.msgbuf_r, &r, __ATOMIC_SEQ_CST);
+    __atomic_load(&Vd_Fw_G.msgbuf_r, &r, __ATOMIC_SEQ_CST);
 
     if ((w + 1) % VD_FW_X11_MESSAGE_BUFFER_SIZE == r) {
         return 0;
     }
 
-    VD_FW_G.msgbuf[w] = *message;
+    Vd_Fw_G.msgbuf[w] = *message;
     int nw = (w + 1) % VD_FW_X11_MESSAGE_BUFFER_SIZE;
-    __atomic_exchange_n(&VD_FW_G.msgbuf_w, nw, __ATOMIC_SEQ_CST);
+    __atomic_exchange_n(&Vd_Fw_G.msgbuf_w, nw, __ATOMIC_SEQ_CST);
 
     return 1;
 }
@@ -15247,7 +14864,7 @@ static int vd_fw__x11_msgbuf_w(VdFwEvent *message)
 static float vd_fw__x11_xft_dpi(void)
 {
 #if 1
-    char *resource_str = VdFwXResourceManagerString(VD_FW_G.display);
+    char *resource_str = VdFwXResourceManagerString(Vd_Fw_G.display);
     XrmDatabase db;
     XrmValue value;
     char *type = NULL;
@@ -15275,14 +14892,14 @@ static float vd_fw__x11_xft_dpi(void)
     unsigned long nitems, bytes_after;
     unsigned char *prop = NULL;
 
-    Atom atom = VD_FW_G.wm_xft_dpi;
+    Atom atom = Vd_Fw_G.wm_xft_dpi;
     if (atom == None) {
         return 1.f;
     }
 
     if (VdFwXGetWindowProperty(
-            VD_FW_G.display,
-            VD_FW_G.root_window,
+            Vd_Fw_G.display,
+            Vd_Fw_G.root_window,
             atom,
             0, 1024,
             False,
@@ -15311,34 +14928,34 @@ static void vd_fw__x11_thread_finish(void)
 {
     XEvent ev = {0};
     ev.xclient.type = ClientMessage;
-    ev.xclient.display = VD_FW_G.display;
-    ev.xclient.window = VD_FW_G.window;
-    ev.xclient.message_type = VD_FW_G.wm_usr_close;
+    ev.xclient.display = Vd_Fw_G.display;
+    ev.xclient.window = Vd_Fw_G.window;
+    ev.xclient.message_type = Vd_Fw_G.wm_usr_close;
     ev.xclient.format = 32;
-    VdFwXLockDisplay(VD_FW_G.display);
-    VdFwXSendEvent(VD_FW_G.display, VD_FW_G.window, False, NoEventMask, &ev);
-    VdFwXUnlockDisplay(VD_FW_G.display);
+    VdFwXLockDisplay(Vd_Fw_G.display);
+    VdFwXSendEvent(Vd_Fw_G.display, Vd_Fw_G.window, False, NoEventMask, &ev);
+    VdFwXUnlockDisplay(Vd_Fw_G.display);
 
-    pthread_mutex_lock(&VD_FW_G.mtx_paint);
-    VD_FW_G.curr_frame = VD_FW_G.next_frame;
-    VD_FW_G.next_frame.flags = 0;
-    VD_FW_G.sync_redraw = 0;
-    VD_FW_G.t_running = 0;
-    pthread_cond_broadcast(&VD_FW_G.cnd_paint);
-    pthread_mutex_unlock(&VD_FW_G.mtx_paint);
+    pthread_mutex_lock(&Vd_Fw_G.mtx_paint);
+    Vd_Fw_G.curr_frame = Vd_Fw_G.next_frame;
+    Vd_Fw_G.next_frame.flags = 0;
+    Vd_Fw_G.sync_redraw = 0;
+    Vd_Fw_G.t_running = 0;
+    pthread_cond_broadcast(&Vd_Fw_G.cnd_paint);
+    pthread_mutex_unlock(&Vd_Fw_G.mtx_paint);
 
-    pthread_join(VD_FW_G.win_thread, NULL);
-    pthread_cond_destroy(&VD_FW_G.cnd_paint);
-    pthread_mutex_destroy(&VD_FW_G.mtx_paint);
+    pthread_join(Vd_Fw_G.win_thread, NULL);
+    pthread_cond_destroy(&Vd_Fw_G.cnd_paint);
+    pthread_mutex_destroy(&Vd_Fw_G.mtx_paint);
 
-    if (VD_FW_G.graphics_api == VD_FW_GRAPHICS_API_OPENGL) {
+    if (Vd_Fw_G.graphics_api == Vd_Fw_GRAPHICS_API_OPENGL) {
         // Destroy OpenGL Context
-        VdFwglXMakeCurrent(VD_FW_G.display, 0, NULL);
-        VdFwglXDestroyContext(VD_FW_G.display, VD_FW_G.glx_context);
+        VdFwglXMakeCurrent(Vd_Fw_G.display, 0, NULL);
+        VdFwglXDestroyContext(Vd_Fw_G.display, Vd_Fw_G.glx_context);
     }
 
-    VdFwXDestroyWindow(VD_FW_G.display, VD_FW_G.window);
-    VdFwXFlush(VD_FW_G.display);
+    VdFwXDestroyWindow(Vd_Fw_G.display, Vd_Fw_G.window);
+    VdFwXFlush(Vd_Fw_G.display);
 }
 
 static void *vd_fw__x11_thread_proc(void *arg)
@@ -15348,7 +14965,7 @@ static void *vd_fw__x11_thread_proc(void *arg)
     int h = 0;
 
     XWindowAttributes attr;
-    VdFwXGetWindowAttributes(VD_FW_G.display, VD_FW_G.window, &attr);
+    VdFwXGetWindowAttributes(Vd_Fw_G.display, Vd_Fw_G.window, &attr);
     w = attr.width;
     h = attr.height;
 
@@ -15357,36 +14974,36 @@ static void *vd_fw__x11_thread_proc(void *arg)
     int resizing = 0;
 
     XEvent evt = {};
-    // while ((VdFwXPending(VD_FW_G.display)) && (VD_FW_G.num_evts < VD_FW_EVENT_COUNT_MAX)) {
-    VD_FW_G.t_running = 1;
-    while (VD_FW_G.t_running) {
-        // if (!VdFwXPending(VD_FW_G.display)) {
+    // while ((VdFwXPending(Vd_Fw_G.display)) && (Vd_Fw_G.num_evts < VD_FW_EVENT_COUNT_MAX)) {
+    Vd_Fw_G.t_running = 1;
+    while (Vd_Fw_G.t_running) {
+        // if (!VdFwXPending(Vd_Fw_G.display)) {
         //     continue;
         // }
 
-        VdFwXNextEvent(VD_FW_G.display, &evt);
+        VdFwXNextEvent(Vd_Fw_G.display, &evt);
 
         switch (evt.type) {
             case DestroyNotify: {
-                // VD_FW_G.window_open = 0;
+                // Vd_Fw_G.window_open = 0;
             } break;
 
             case Expose: {
-                // if (VD_FW_G.xlib_supports_xsync) {
-                //     VD_FW_G.sync_redraw = 1;
+                // if (Vd_Fw_G.xlib_supports_xsync) {
+                //     Vd_Fw_G.sync_redraw = 1;
                 // }
             } break;
 
             case PropertyNotify: {
 
-                if (evt.xproperty.atom == VD_FW_G.wm_state) {
+                if (evt.xproperty.atom == Vd_Fw_G.wm_state) {
 
                     Atom actual_type;
                     int actual_format;
                     unsigned long nitems, bytes_after;
                     Atom *states = NULL; 
-                    if (VdFwXGetWindowProperty(VD_FW_G.display, VD_FW_G.window,
-                                               VD_FW_G.wm_state,
+                    if (VdFwXGetWindowProperty(Vd_Fw_G.display, Vd_Fw_G.window,
+                                               Vd_Fw_G.wm_state,
                                                0, (~0L), False, XA_ATOM,
                                                &actual_type, &actual_format, &nitems, &bytes_after,
                                                (unsigned char**)&states) == Success)
@@ -15396,30 +15013,30 @@ static void *vd_fw__x11_thread_proc(void *arg)
                         int is_max_v  = 0;
 
                         for (unsigned long i = 0; i < nitems; i++) {
-                            if (states[i] == VD_FW_G.wm_hidden) {
+                            if (states[i] == Vd_Fw_G.wm_hidden) {
                                 is_hidden = 1;
                             }
 
-                            if (states[i] == VD_FW_G.wm_max_h) {
+                            if (states[i] == Vd_Fw_G.wm_max_h) {
                                 is_max_h = 1;
                             }
 
-                            if (states[i] == VD_FW_G.wm_max_v) {
+                            if (states[i] == Vd_Fw_G.wm_max_v) {
                                 is_max_v = 1;
                             }
                         }
 
                         int is_maximized = is_max_h && is_max_v;
-                        int was_minimized = VD_FW_G.window_state & VD_FW_WINDOW_STATE_MINIMIZED ? 1 : 0;
-                        int was_maximized = VD_FW_G.window_state & VD_FW_WINDOW_STATE_MAXIMIZED ? 1 : 0;
+                        int was_minimized = Vd_Fw_G.window_state & VD_FW_WINDOW_STATE_MINIMIZED ? 1 : 0;
+                        int was_maximized = Vd_Fw_G.window_state & VD_FW_WINDOW_STATE_MAXIMIZED ? 1 : 0;
 
                         if (was_minimized != is_hidden) {
-                            VD_FW_G.window_state_changed |= VD_FW_WINDOW_STATE_MINIMIZED;
+                            Vd_Fw_G.window_state_changed |= VD_FW_WINDOW_STATE_MINIMIZED;
 
                             if (is_hidden) {
-                                VD_FW_G.window_state |= VD_FW_WINDOW_STATE_MINIMIZED;
+                                Vd_Fw_G.window_state |= VD_FW_WINDOW_STATE_MINIMIZED;
                             } else {
-                                VD_FW_G.window_state &= ~VD_FW_WINDOW_STATE_MINIMIZED;
+                                Vd_Fw_G.window_state &= ~VD_FW_WINDOW_STATE_MINIMIZED;
                             }
 
                             VdFwEvent fw_event;
@@ -15431,9 +15048,9 @@ static void *vd_fw__x11_thread_proc(void *arg)
 
                         if (was_maximized != is_maximized) {
                             if (is_maximized) {
-                                VD_FW_G.window_state |= VD_FW_WINDOW_STATE_MAXIMIZED;
+                                Vd_Fw_G.window_state |= VD_FW_WINDOW_STATE_MAXIMIZED;
                             } else {
-                                VD_FW_G.window_state &= ~VD_FW_WINDOW_STATE_MAXIMIZED;
+                                Vd_Fw_G.window_state &= ~VD_FW_WINDOW_STATE_MAXIMIZED;
                             }
 
                             VdFwEvent fw_event;
@@ -15443,7 +15060,7 @@ static void *vd_fw__x11_thread_proc(void *arg)
                             vd_fw__x11_msgbuf_w(&fw_event);
                         }
                     }
-                } else if ((evt.xproperty.atom == VD_FW_G.wm_dpi_change) || (evt.xproperty.atom == VD_FW_G.wm_dpi_change_xsettings)) {
+                } else if ((evt.xproperty.atom == Vd_Fw_G.wm_dpi_change) || (evt.xproperty.atom == Vd_Fw_G.wm_dpi_change_xsettings)) {
                     VdFwEvent fw_event;
                     fw_event.type = VD_FW_EVENT_TYPE_SCALE_CHANGE;
                     fw_event.data.scale_change.new_scale = vd_fw__x11_xft_dpi();
@@ -15469,22 +15086,22 @@ static void *vd_fw__x11_thread_proc(void *arg)
             case ClientMessage: {
                 XClientMessageEvent *e = &evt.xclient;
 
-                if(e->message_type == VD_FW_G.wm_protocols) {
-                    if (e->data.l[0] == (long)VD_FW_G.wm_delete_window) {
+                if(e->message_type == Vd_Fw_G.wm_protocols) {
+                    if (e->data.l[0] == (long)Vd_Fw_G.wm_delete_window) {
 
                         VdFwEvent fw_event;
                         fw_event.type = VD_FW_EVENT_TYPE_CLOSE_REQUEST;
                         vd_fw__x11_msgbuf_w(&fw_event);
-                    } else if (e->data.l[0] == (long)VD_FW_G.wm_sync_request) {
-                        VD_FW_G.sync_counter_value = 0;
-                        VD_FW_G.sync_counter_value |= e->data.l[2];
-                        VD_FW_G.sync_counter_value |= e->data.l[3] << 32;
-                        VD_FW_G.sync_redraw = 1;
+                    } else if (e->data.l[0] == (long)Vd_Fw_G.wm_sync_request) {
+                        Vd_Fw_G.sync_counter_value = 0;
+                        Vd_Fw_G.sync_counter_value |= e->data.l[2];
+                        Vd_Fw_G.sync_counter_value |= e->data.l[3] << 32;
+                        Vd_Fw_G.sync_redraw = 1;
                     }
-                } else if (e->message_type == VD_FW_G.wm_usr_close) {
-                    VD_FW_G.t_running = 0;
-                } else if (e->message_type == VD_FW_G.wm_usr_block) {
-                    VD_FW_G.winthread_block_while_sizing = e->data.b[0];
+                } else if (e->message_type == Vd_Fw_G.wm_usr_close) {
+                    Vd_Fw_G.t_running = 0;
+                } else if (e->message_type == Vd_Fw_G.wm_usr_block) {
+                    Vd_Fw_G.winthread_block_while_sizing = e->data.b[0];
                 }
 
             } break;
@@ -15513,10 +15130,10 @@ static void *vd_fw__x11_thread_proc(void *arg)
                 vd_fw__x11_msgbuf_w(&fw_event);
 
                 // Character Input
-                if (VD_FW_G.input_method && VD_FW_G.input_style) {
+                if (Vd_Fw_G.input_method && Vd_Fw_G.input_style) {
                     char buf[5] = {0};
                     Status status = 0;
-                    VdFwXutf8LookupString(VD_FW_G.input_context, key_event, buf, 4, 0, &status);
+                    VdFwXutf8LookupString(Vd_Fw_G.input_context, key_event, buf, 4, 0, &status);
 
                     if (status == XLookupChars) {
                         int len = 0;
@@ -15549,13 +15166,13 @@ static void *vd_fw__x11_thread_proc(void *arg)
 
             case MotionNotify: {
                 float delta[2] = {0.f, 0.f};
-                if (!VD_FW_G.has_xi) {
-                    delta[0] = (evt.xmotion.x - VD_FW_G.prev_mouse[0]);
-                    delta[1] = (evt.xmotion.y - VD_FW_G.prev_mouse[1]);
+                if (!Vd_Fw_G.has_xi) {
+                    delta[0] = (evt.xmotion.x - Vd_Fw_G.prev_mouse[0]);
+                    delta[1] = (evt.xmotion.y - Vd_Fw_G.prev_mouse[1]);
                 }
 
-                VD_FW_G.prev_mouse[0] = evt.xmotion.x;
-                VD_FW_G.prev_mouse[1] = evt.xmotion.y;
+                Vd_Fw_G.prev_mouse[0] = evt.xmotion.x;
+                Vd_Fw_G.prev_mouse[1] = evt.xmotion.y;
 
                 {
                     VdFwEvent fw_event;
@@ -15566,7 +15183,7 @@ static void *vd_fw__x11_thread_proc(void *arg)
                     vd_fw__x11_msgbuf_w(&fw_event);
                 }
 
-                if (!VD_FW_G.has_xi) {
+                if (!Vd_Fw_G.has_xi) {
                     VdFwEvent fw_event;
                     VD_FW_MEMSET(&fw_event, 0, sizeof(fw_event));
                     fw_event.type = VD_FW_EVENT_TYPE_MOUSE_DELTA;
@@ -15575,41 +15192,41 @@ static void *vd_fw__x11_thread_proc(void *arg)
                     vd_fw__x11_msgbuf_w(&fw_event);
                 }
 
-                if (VD_FW_G.borderless) {
+                if (Vd_Fw_G.borderless) {
                     int x = evt.xmotion.x;
                     int y = evt.xmotion.y;
 
                     int orientation = vd_fw__x11_test_orientation(x, y, w, h);
-                    XID c = VD_FW_G.cursor_arrow;
+                    XID c = Vd_Fw_G.cursor_arrow;
                     switch (orientation) {
-                        case 0: c = VD_FW_G.cursor_tl; break;
-                        case 1: c = VD_FW_G.cursor_top; break;
-                        case 2: c = VD_FW_G.cursor_tr; break;
-                        case 3: c = VD_FW_G.cursor_right; break;
-                        case 4: c = VD_FW_G.cursor_br; break;
-                        case 5: c = VD_FW_G.cursor_bottom; break;
-                        case 6: c = VD_FW_G.cursor_bl; break;
-                        case 7: c = VD_FW_G.cursor_left; break;
-                        case 8: c = VD_FW_G.cursor_arrow; break;
+                        case 0: c = Vd_Fw_G.cursor_tl; break;
+                        case 1: c = Vd_Fw_G.cursor_top; break;
+                        case 2: c = Vd_Fw_G.cursor_tr; break;
+                        case 3: c = Vd_Fw_G.cursor_right; break;
+                        case 4: c = Vd_Fw_G.cursor_br; break;
+                        case 5: c = Vd_Fw_G.cursor_bottom; break;
+                        case 6: c = Vd_Fw_G.cursor_bl; break;
+                        case 7: c = Vd_Fw_G.cursor_left; break;
+                        case 8: c = Vd_Fw_G.cursor_arrow; break;
                         default: break;
                     }
 
-                    if (c != VD_FW_G.curr_cursor) {
-                        if (c != VD_FW_G.cursor_arrow) {
-                            VdFwXDefineCursor(VD_FW_G.display, VD_FW_G.window, c);
+                    if (c != Vd_Fw_G.curr_cursor) {
+                        if (c != Vd_Fw_G.cursor_arrow) {
+                            VdFwXDefineCursor(Vd_Fw_G.display, Vd_Fw_G.window, c);
                         } else {
-                            VdFwXUndefineCursor(VD_FW_G.display, VD_FW_G.window);
+                            VdFwXUndefineCursor(Vd_Fw_G.display, Vd_Fw_G.window);
                         }
                     }
                 }
             } break;
 
             case GenericEvent: {
-                VdFwXGetEventData(VD_FW_G.display, &evt.xcookie);
-                if (VD_FW_G.has_xi && (evt.xcookie.evtype == VD_FW_XI_RawMotion)) {
+                VdFwXGetEventData(Vd_Fw_G.display, &evt.xcookie);
+                if (Vd_Fw_G.has_xi && (evt.xcookie.evtype == VD_FW_XI_RawMotion)) {
                     VdFw__XIRawEvent *raw = (VdFw__XIRawEvent*)evt.xcookie.data;
                     if (raw->valuators.mask_len == 0) {
-                        VdFwXFreeEventData(VD_FW_G.display, &evt.xcookie);
+                        VdFwXFreeEventData(Vd_Fw_G.display, &evt.xcookie);
                         break;
                     }
 
@@ -15632,7 +15249,7 @@ static void *vd_fw__x11_thread_proc(void *arg)
                     vd_fw__x11_msgbuf_w(&fw_event);
                 }
 
-                VdFwXFreeEventData(VD_FW_G.display, &evt.xcookie);
+                VdFwXFreeEventData(Vd_Fw_G.display, &evt.xcookie);
 
             } break;
 
@@ -15673,7 +15290,7 @@ static void *vd_fw__x11_thread_proc(void *arg)
                     fw_event.data.mouse_button_down.button = btn;
                     vd_fw__x11_msgbuf_w(&fw_event);
 
-                    if (VD_FW_G.borderless) {
+                    if (Vd_Fw_G.borderless) {
                         if (btn == VD_FW_MOUSE_BUTTON_LEFT) {
 
                             int mouse_x = evt.xbutton.x;
@@ -15684,42 +15301,42 @@ static void *vd_fw__x11_thread_proc(void *arg)
                                 int move_resize_place = orientation;
 
                                 // !!! FIXME: we need to regrab this if necessary when the drag is done.
-                                VdFwXUngrabPointer(VD_FW_G.display, 0L);
-                                VdFwXFlush(VD_FW_G.display);
+                                VdFwXUngrabPointer(Vd_Fw_G.display, 0L);
+                                VdFwXFlush(Vd_Fw_G.display);
 
                                 XEvent ev = {0};
                                 ev.xclient.type = ClientMessage;
-                                ev.xclient.window = VD_FW_G.window;
+                                ev.xclient.window = Vd_Fw_G.window;
                                 ev.xclient.message_type = 
-                                        VdFwXInternAtom(VD_FW_G.display, (char*)"_NET_WM_MOVERESIZE", False);
+                                        VdFwXInternAtom(Vd_Fw_G.display, (char*)"_NET_WM_MOVERESIZE", False);
                                 ev.xclient.format = 32;
                                 ev.xclient.data.l[0] = evt.xbutton.x_root;
                                 ev.xclient.data.l[1] = evt.xbutton.y_root;
                                 ev.xclient.data.l[2] = move_resize_place;
                                 ev.xclient.data.l[3] = Button1;
                                 ev.xclient.data.l[4] = 0;
-                                VdFwXSendEvent(VD_FW_G.display, VdFwXDefaultRootWindow(VD_FW_G.display), False, SubstructureRedirectMask | SubstructureNotifyMask, &ev);
+                                VdFwXSendEvent(Vd_Fw_G.display, VdFwXDefaultRootWindow(Vd_Fw_G.display), False, SubstructureRedirectMask | SubstructureNotifyMask, &ev);
 
-                                VdFwXSync(VD_FW_G.display, 0);
+                                VdFwXSync(Vd_Fw_G.display, 0);
                                 break;
                             }
 
                             int inside_caption = 
-                                ((mouse_x >= VD_FW_G.nccaption[0]) && (mouse_x <= VD_FW_G.nccaption[2])) &&
-                                ((mouse_y >= VD_FW_G.nccaption[1]) && (mouse_y <= VD_FW_G.nccaption[3]));
+                                ((mouse_x >= Vd_Fw_G.nccaption[0]) && (mouse_x <= Vd_Fw_G.nccaption[2])) &&
+                                ((mouse_y >= Vd_Fw_G.nccaption[1]) && (mouse_y <= Vd_Fw_G.nccaption[3]));
 
-                            if (!VD_FW_G.nccaption_set) {
+                            if (!Vd_Fw_G.nccaption_set) {
                                 inside_caption = 1;
                             }
 
                             if (inside_caption) {
                                 int hit_ignore_rects = 0;
-                                for (int ri = 0; ri < VD_FW_G.ncrect_count; ++ri) {
+                                for (int ri = 0; ri < Vd_Fw_G.ncrect_count; ++ri) {
                                     int rect[4] = {
-                                        VD_FW_G.ncrects[ri][0],
-                                        VD_FW_G.ncrects[ri][1],
-                                        VD_FW_G.ncrects[ri][2],
-                                        VD_FW_G.ncrects[ri][3],
+                                        Vd_Fw_G.ncrects[ri][0],
+                                        Vd_Fw_G.ncrects[ri][1],
+                                        Vd_Fw_G.ncrects[ri][2],
+                                        Vd_Fw_G.ncrects[ri][3],
                                     };
 
                                     int inside =
@@ -15733,12 +15350,12 @@ static void *vd_fw__x11_thread_proc(void *arg)
                                 }
 
                                 if (!hit_ignore_rects) {
-                                    VD_FW_G.caption_dragging = 1;
+                                    Vd_Fw_G.caption_dragging = 1;
                                     XEvent ev = {0};
                                     ev.xclient.type = ClientMessage;
-                                    ev.xclient.window = VD_FW_G.window;
+                                    ev.xclient.window = Vd_Fw_G.window;
                                     ev.xclient.message_type =
-                                        VdFwXInternAtom(VD_FW_G.display, (char*)"_NET_WM_MOVERESIZE", False);
+                                        VdFwXInternAtom(Vd_Fw_G.display, (char*)"_NET_WM_MOVERESIZE", False);
                                     ev.xclient.format = 32;
                                     ev.xclient.data.l[0] = evt.xmotion.x_root;
                                     ev.xclient.data.l[1] = evt.xmotion.y_root;
@@ -15746,16 +15363,16 @@ static void *vd_fw__x11_thread_proc(void *arg)
                                     ev.xclient.data.l[3] = Button1;
                                     ev.xclient.data.l[4] = 0;
 
-                                    VdFwXUngrabPointer(VD_FW_G.display, 0L);
-                                    VdFwXFlush(VD_FW_G.display);
+                                    VdFwXUngrabPointer(Vd_Fw_G.display, 0L);
+                                    VdFwXFlush(Vd_Fw_G.display);
 
-                                    VdFwXSendEvent(VD_FW_G.display,
-                                       VdFwXDefaultRootWindow(VD_FW_G.display),
+                                    VdFwXSendEvent(Vd_Fw_G.display,
+                                       VdFwXDefaultRootWindow(Vd_Fw_G.display),
                                        False,
                                        SubstructureRedirectMask | SubstructureNotifyMask,
                                        &ev);
 
-                                    VdFwXSync(VD_FW_G.display, 0);
+                                    VdFwXSync(Vd_Fw_G.display, 0);
                                 }
                             }
                         } 
@@ -15772,11 +15389,11 @@ static void *vd_fw__x11_thread_proc(void *arg)
                     fw_event.data.mouse_button_down.button = btn;
                     vd_fw__x11_msgbuf_w(&fw_event);
 
-                    VD_FW_G.mouse_state &= ~btn;
+                    Vd_Fw_G.mouse_state &= ~btn;
 
-                    if (VD_FW_G.borderless) {
+                    if (Vd_Fw_G.borderless) {
                         if (btn == VD_FW_MOUSE_BUTTON_LEFT) {
-                            VD_FW_G.caption_dragging = 0;
+                            Vd_Fw_G.caption_dragging = 0;
                         } 
                     }
                 }
@@ -15784,18 +15401,18 @@ static void *vd_fw__x11_thread_proc(void *arg)
 
             case ConfigureNotify: {
                 XConfigureEvent* e = (XConfigureEvent*)&evt;
-                // VD_FW_G.width = e->width;
-                // VD_FW_G.height = e->height;
-                // VD_FW_G.size_changed = 1;
+                // Vd_Fw_G.width = e->width;
+                // Vd_Fw_G.height = e->height;
+                // Vd_Fw_G.size_changed = 1;
                 if ((w != e->width) || (h != e->height)) {
                     w = e->width;
                     h = e->height;
 
-                    if (VD_FW_G.winthread_block_while_sizing) {
+                    if (Vd_Fw_G.winthread_block_while_sizing) {
                         if (!resizing) {
                             resizing = 1;
                             clock_gettime(CLOCK_MONOTONIC, &resize_start);
-                            pthread_mutex_lock(&VD_FW_G.mtx_paint);
+                            pthread_mutex_lock(&Vd_Fw_G.mtx_paint);
                         } else {
                             clock_gettime(CLOCK_MONOTONIC, &resize_start);
                         }
@@ -15806,11 +15423,11 @@ static void *vd_fw__x11_thread_proc(void *arg)
             default: break;
         }
 
-        if (VD_FW_G.t_running == 0) {
+        if (Vd_Fw_G.t_running == 0) {
             break;
         }
 
-        if (VD_FW_G.winthread_block_while_sizing) {
+        if (Vd_Fw_G.winthread_block_while_sizing) {
 
             struct timespec now;
             clock_gettime(CLOCK_MONOTONIC, &now);
@@ -15820,48 +15437,48 @@ static void *vd_fw__x11_thread_proc(void *arg)
 
             if (resizing && (ms_diff > 500)) {
                 resizing = 0;
-                pthread_mutex_unlock(&VD_FW_G.mtx_paint);
+                pthread_mutex_unlock(&Vd_Fw_G.mtx_paint);
             }
         }
 
 
-        if (!VD_FW_G.winthread_block_while_sizing) {
-            pthread_mutex_lock(&VD_FW_G.mtx_paint);
+        if (!Vd_Fw_G.winthread_block_while_sizing) {
+            pthread_mutex_lock(&Vd_Fw_G.mtx_paint);
         }
 
-        if (!VD_FW_G.t_running) {
-            if (!VD_FW_G.winthread_block_while_sizing) {
-                pthread_mutex_unlock(&VD_FW_G.mtx_paint);
+        if (!Vd_Fw_G.t_running) {
+            if (!Vd_Fw_G.winthread_block_while_sizing) {
+                pthread_mutex_unlock(&Vd_Fw_G.mtx_paint);
             }
             break;
         }
 
-        if (w != VD_FW_G.next_frame.w || h != VD_FW_G.next_frame.h) {
-            VD_FW_G.next_frame.w = w;
-            VD_FW_G.next_frame.h = h;
-            VD_FW_G.next_frame.flags |= VD_FW_X11_FLAGS_SIZE_CHANGED;
+        if (w != Vd_Fw_G.next_frame.w || h != Vd_Fw_G.next_frame.h) {
+            Vd_Fw_G.next_frame.w = w;
+            Vd_Fw_G.next_frame.h = h;
+            Vd_Fw_G.next_frame.flags |= VD_FW_X11_FLAGS_SIZE_CHANGED;
         }
 
-        if (!VD_FW_G.winthread_block_while_sizing && VD_FW_G.sync_redraw) {
-            VD_FW_G.next_frame.flags |= VD_FW_X11_FLAGS_WAKE_COND_VAR;
-            pthread_cond_signal(&VD_FW_G.cnd_paint);
+        if (!Vd_Fw_G.winthread_block_while_sizing && Vd_Fw_G.sync_redraw) {
+            Vd_Fw_G.next_frame.flags |= VD_FW_X11_FLAGS_WAKE_COND_VAR;
+            pthread_cond_signal(&Vd_Fw_G.cnd_paint);
             struct timespec bound_time;
             bound_time.tv_sec = 0;
             bound_time.tv_nsec = 1000 * 100;
-            pthread_cond_timedwait(&VD_FW_G.cnd_paint, &VD_FW_G.mtx_paint, &bound_time);
-            // pthread_cond_wait(&VD_FW_G.cnd_paint, &VD_FW_G.mtx_paint);
+            pthread_cond_timedwait(&Vd_Fw_G.cnd_paint, &Vd_Fw_G.mtx_paint, &bound_time);
+            // pthread_cond_wait(&Vd_Fw_G.cnd_paint, &Vd_Fw_G.mtx_paint);
         }
 
-        if (!VD_FW_G.winthread_block_while_sizing) {
-            pthread_mutex_unlock(&VD_FW_G.mtx_paint);
+        if (!Vd_Fw_G.winthread_block_while_sizing) {
+            pthread_mutex_unlock(&Vd_Fw_G.mtx_paint);
         }
 
-        if (VD_FW_G.sync_redraw) {
+        if (Vd_Fw_G.sync_redraw) {
 
             XSyncValue value;
-            VdFwXSyncIntToValue(&value, VD_FW_G.sync_counter_value);
-            VdFwXSyncSetCounter(VD_FW_G.display, VD_FW_G.sync_counter, value);
-            VD_FW_G.sync_redraw = 0;
+            VdFwXSyncIntToValue(&value, Vd_Fw_G.sync_counter_value);
+            VdFwXSyncSetCounter(Vd_Fw_G.display, Vd_Fw_G.sync_counter, value);
+            Vd_Fw_G.sync_redraw = 0;
         }
     }
     return NULL;
