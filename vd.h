@@ -505,49 +505,97 @@ typedef struct {
 } VdThread;
 
 typedef struct {
-    void *param;
-} VdThreadMakeOptions;
+    void *handle;
+} VdSemaphore;
 
 #define VD_THREAD_PROC(name) unsigned long name(void *param)
 typedef VD_THREAD_PROC(VdThreadProc);
 
-VdThread    vd_thread_make(VdThreadProc *proc, VdThreadMakeOptions *options);
+VdThread    vd_thread_make(VdThreadProc *proc, void *param);
 int         vd_thread_join(VdThread thread);
 
+void        vd_thread_yield(void);
+
+VdSemaphore vd_semaphore_make(int initial_count, int max_count);
+void        vd_semaphore_inc(VdSemaphore semaphore);
+void        vd_semaphore_dec(VdSemaphore semaphore);
+void        vd_semaphore_free(VdSemaphore semaphore);
+
+#if VD_PLATFORM_WINDOWS
 extern long InterlockedCompareExchange(long volatile *, long, long);
 extern long long InterlockedCompareExchange64(long long volatile *, long long, long long);
 extern void* InterlockedCompareExchangePointer(void* volatile *, void*, void*);
-extern long InterlockedIncrement(long volatile *);
+extern long _InterlockedIncrement(long volatile *);
 extern long InterlockedAdd(long volatile *, long);
+extern long _InterlockedExchange(long volatile *, long);
+extern void _ReadBarrier();
+extern void _WriteBarrier();
+#endif // VD_PLATFORM_WINDOWS
+
+VD_INLINE void vd_read_barrier()
+{
+    _ReadBarrier();
+}
+
+VD_INLINE void vd_write_barrier()
+{
+    _WriteBarrier();
+}
 
 VD_INLINE int32_t vd_compare_and_swap_i32(volatile int32_t *ptr, int32_t new_value, int32_t old_value)
 {
+#if VD_PLATFORM_WINDOWS
     return (int32_t)InterlockedCompareExchange((long volatile *)ptr, (long)new_value, (long)old_value);
+#endif // VD_PLATFORM_WINDOWS
 }
 
 VD_INLINE uint32_t vd_compare_and_swap_u32(volatile uint32_t *ptr, uint32_t new_value, uint32_t old_value)
 {
+#if VD_PLATFORM_WINDOWS
     return (uint32_t)InterlockedCompareExchange((long volatile *)ptr, *(long*)&new_value, *(long*)&old_value);
+#endif // VD_PLATFORM_WINDOWS
 }
 
-VD_INLINE int64_t vd_compare_and_swap_i64(volatile int64_t *ptr, int64_t new_value, int64_t expected) {
+VD_INLINE int64_t vd_compare_and_swap_i64(volatile int64_t *ptr, int64_t new_value, int64_t expected)
+{
+#if VD_PLATFORM_WINDOWS
     return (int64_t)InterlockedCompareExchange64(ptr, new_value, expected);
+#endif // VD_PLATFORM_WINDOWS
 }
 
-VD_INLINE void *vd_compare_and_swap_ptr(void *volatile *ptr, void *new_value, void *expected) {
+VD_INLINE void *vd_compare_and_swap_ptr(void *volatile *ptr, void *new_value, void *expected)
+{
+#if VD_PLATFORM_WINDOWS
     return InterlockedCompareExchangePointer(ptr, new_value, expected);
+#endif // VD_PLATFORM_WINDOWS
 }
 
-VD_INLINE int32_t vd_inc_and_fetch_i32(volatile int32_t *addend) {
-    return InterlockedIncrement((volatile long *)addend);
+VD_INLINE int32_t vd_swap_u32(volatile uint32_t *ptr, uint32_t new_value)
+{
+#if VD_PLATFORM_WINDOWS
+    return _InterlockedExchange((volatile long*)ptr, new_value);
+#endif // VD_PLATFORM_WINDOWS
 }
 
-VD_INLINE uint32_t vd_inc_and_fetch_u32(volatile uint32_t *addend) {
-    return InterlockedIncrement((volatile long *)addend);
+VD_INLINE int32_t vd_inc_and_fetch_i32(volatile int32_t *addend)
+{
+#if VD_PLATFORM_WINDOWS
+    return _InterlockedIncrement((volatile long *)addend);
+#endif // VD_PLATFORM_WINDOWS
 }
 
-VD_INLINE int32_t vd_add_and_fetch_i32(volatile int32_t *addend, int32_t value) {
+VD_INLINE uint32_t vd_inc_and_fetch_u32(volatile uint32_t *addend)
+{
+#if VD_PLATFORM_WINDOWS
+    return _InterlockedIncrement((volatile long *)addend);
+#endif // VD_PLATFORM_WINDOWS
+}
+
+VD_INLINE int32_t vd_add_and_fetch_i32(volatile int32_t *addend, int32_t value)
+{
+#if VD_PLATFORM_WINDOWS
     return InterlockedAdd((volatile long *)addend, value);
+#endif // VD_PLATFORM_WINDOWS
 }
 
 #endif // VD_PLATFORM_KNOWN
@@ -2358,12 +2406,8 @@ void vd_vm_release(void *addr, Vdusize len)
 
 /* ----THREADS IMPL-------------------------------------------------------------------------------------------------- */
 #if VD_PLATFORM_WINDOWS
-VdThread vd_thread_make(VdThreadProc *proc, VdThreadMakeOptions *options)
+VdThread vd_thread_make(VdThreadProc *proc, void *param)
 {
-    void *param = 0;
-    if (options) {
-        param = options->param;
-    }
     DWORD tid;
     HANDLE h =  CreateThread(0, 0, proc, param, 0, &tid);
     VdThread result;
@@ -2375,6 +2419,38 @@ VdThread vd_thread_make(VdThreadProc *proc, VdThreadMakeOptions *options)
 int vd_thread_join(VdThread thread)
 {
     return WaitForSingleObject((HANDLE)thread.handle, INFINITE);
+}
+
+void vd_thread_yield(void)
+{
+    SwitchToThread();
+}
+
+VdSemaphore vd_semaphore_make(int initial_count, int max_count)
+{
+    HANDLE h = CreateSemaphoreA(NULL, initial_count, max_count, NULL);
+    VdSemaphore result;
+    result.handle = (void*)h;
+    return result;
+}
+
+void vd_semaphore_inc(VdSemaphore semaphore)
+{
+    ReleaseSemaphore((HANDLE)semaphore.handle, 1, NULL);
+}
+
+void vd_semaphore_dec(VdSemaphore semaphore)
+{
+    DWORD rc = WaitForSingleObjectEx((HANDLE)semaphore.handle, INFINITE, 0);
+    if (rc == WAIT_FAILED) {
+        int err = GetLastError();
+        printf("ADSAASDAS %d", err);
+    }
+}
+
+void vd_semaphore_free(VdSemaphore semaphore)
+{
+    CloseHandle((HANDLE)semaphore.handle);
 }
 
 #endif // VD_PLATFORM_WINDOWS
