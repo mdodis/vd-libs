@@ -8,6 +8,7 @@
 typedef enum {
     GRAPHICS_BACKEND_OPENGL,
     GRAPHICS_BACKEND_DIRECT3D11,
+    GRAPHICS_BACKEND_VULKAN,
 } GraphicsBackend;
 
 typedef struct {
@@ -41,12 +42,14 @@ static VdFwGraphicsApi cv_graphics_backend_to_fw_graphics_api(GraphicsBackend ba
 }
 
 extern GraphicsBackendImpl OpenGL_Impl;
+extern GraphicsBackendImpl Vulkan_Impl;
 #ifdef _WIN32
 extern GraphicsBackendImpl D3D11_Impl;
 #endif
 
 static GraphicsBackendImpl* Graphics_Backends[] = {
     &OpenGL_Impl,
+    &Vulkan_Impl,
 #ifdef _WIN32
     &D3D11_Impl,
 #endif
@@ -73,10 +76,7 @@ static void switch_to_graphics_backend(GraphicsBackendImpl *impl)
     }
 
     Current_Graphics = impl;
-    VdFwOpenGLOptions options;
-    options.version = VD_FW_GL_VERSION_4_5;
-    options.debug_on = 1;
-    vd_fw_set_graphics_api(cv_graphics_backend_to_fw_graphics_api(impl->backend), &options);
+    vd_fw_set_graphics_api(cv_graphics_backend_to_fw_graphics_api(impl->backend), 0);
 
     impl->init(vd_fw_get_internal_window_handle());
 }
@@ -687,6 +687,878 @@ GraphicsBackendImpl D3D11_Impl = {
     d3d11_draw_with_background_color,
 };
 #endif
+
+#include <vulkan/vulkan.h>
+#include <vulkan/vk_enum_string_helper.h>
+
+#define VK_CHECK(expr) do { \
+        VkResult __result__ = (expr); \
+        if (__result__ != VK_SUCCESS) { \
+            printf("Vulkan Assertion Failed: '" #expr "' at %s %d\t%s\n", __FILE__, __LINE__, string_VkResult(__result__));\
+            abort(); \
+        }\
+    } while(0)
+
+typedef struct {
+    VkCommandBuffer                             cmd_buffer;
+    VkSemaphore                                 sem_present_complete;
+    VkFence                                     fnc_render_complete;
+} VkFrameData;
+
+static unsigned char Vk_Vert_Spv[1296] = {
+0x03,0x02,0x23,0x07,0x00,0x03,0x01,0x00,0x0b,0x00,0x08,0x00,0x31,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x11,0x00,0x02,0x00,0x01,0x00,0x00,0x00,0x0b,0x00,0x06,0x00,
+0x01,0x00,0x00,0x00,0x47,0x4c,0x53,0x4c,0x2e,0x73,0x74,0x64,0x2e,0x34,0x35,0x30,0x00,0x00,0x00,0x00,0x0e,0x00,0x03,0x00,0x00,0x00,0x00,0x00,0x01,0x00,0x00,0x00,
+0x0f,0x00,0x08,0x00,0x00,0x00,0x00,0x00,0x04,0x00,0x00,0x00,0x6d,0x61,0x69,0x6e,0x00,0x00,0x00,0x00,0x18,0x00,0x00,0x00,0x1c,0x00,0x00,0x00,0x29,0x00,0x00,0x00,
+0x03,0x00,0x03,0x00,0x02,0x00,0x00,0x00,0xc2,0x01,0x00,0x00,0x05,0x00,0x04,0x00,0x04,0x00,0x00,0x00,0x6d,0x61,0x69,0x6e,0x00,0x00,0x00,0x00,0x05,0x00,0x05,0x00,
+0x0c,0x00,0x00,0x00,0x70,0x6f,0x73,0x69,0x74,0x69,0x6f,0x6e,0x73,0x00,0x00,0x00,0x05,0x00,0x06,0x00,0x16,0x00,0x00,0x00,0x67,0x6c,0x5f,0x50,0x65,0x72,0x56,0x65,
+0x72,0x74,0x65,0x78,0x00,0x00,0x00,0x00,0x06,0x00,0x06,0x00,0x16,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x67,0x6c,0x5f,0x50,0x6f,0x73,0x69,0x74,0x69,0x6f,0x6e,0x00,
+0x06,0x00,0x07,0x00,0x16,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x67,0x6c,0x5f,0x50,0x6f,0x69,0x6e,0x74,0x53,0x69,0x7a,0x65,0x00,0x00,0x00,0x00,0x06,0x00,0x07,0x00,
+0x16,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x67,0x6c,0x5f,0x43,0x6c,0x69,0x70,0x44,0x69,0x73,0x74,0x61,0x6e,0x63,0x65,0x00,0x06,0x00,0x07,0x00,0x16,0x00,0x00,0x00,
+0x03,0x00,0x00,0x00,0x67,0x6c,0x5f,0x43,0x75,0x6c,0x6c,0x44,0x69,0x73,0x74,0x61,0x6e,0x63,0x65,0x00,0x05,0x00,0x03,0x00,0x18,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+0x05,0x00,0x06,0x00,0x1c,0x00,0x00,0x00,0x67,0x6c,0x5f,0x56,0x65,0x72,0x74,0x65,0x78,0x49,0x6e,0x64,0x65,0x78,0x00,0x00,0x05,0x00,0x03,0x00,0x29,0x00,0x00,0x00,
+0x75,0x76,0x00,0x00,0x47,0x00,0x03,0x00,0x16,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x48,0x00,0x05,0x00,0x16,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x0b,0x00,0x00,0x00,
+0x00,0x00,0x00,0x00,0x48,0x00,0x05,0x00,0x16,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x0b,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x48,0x00,0x05,0x00,0x16,0x00,0x00,0x00,
+0x02,0x00,0x00,0x00,0x0b,0x00,0x00,0x00,0x03,0x00,0x00,0x00,0x48,0x00,0x05,0x00,0x16,0x00,0x00,0x00,0x03,0x00,0x00,0x00,0x0b,0x00,0x00,0x00,0x04,0x00,0x00,0x00,
+0x47,0x00,0x04,0x00,0x1c,0x00,0x00,0x00,0x0b,0x00,0x00,0x00,0x2a,0x00,0x00,0x00,0x47,0x00,0x04,0x00,0x29,0x00,0x00,0x00,0x1e,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+0x13,0x00,0x02,0x00,0x02,0x00,0x00,0x00,0x21,0x00,0x03,0x00,0x03,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x16,0x00,0x03,0x00,0x06,0x00,0x00,0x00,0x20,0x00,0x00,0x00,
+0x17,0x00,0x04,0x00,0x07,0x00,0x00,0x00,0x06,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x15,0x00,0x04,0x00,0x08,0x00,0x00,0x00,0x20,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+0x2b,0x00,0x04,0x00,0x08,0x00,0x00,0x00,0x09,0x00,0x00,0x00,0x03,0x00,0x00,0x00,0x1c,0x00,0x04,0x00,0x0a,0x00,0x00,0x00,0x07,0x00,0x00,0x00,0x09,0x00,0x00,0x00,
+0x20,0x00,0x04,0x00,0x0b,0x00,0x00,0x00,0x06,0x00,0x00,0x00,0x0a,0x00,0x00,0x00,0x3b,0x00,0x04,0x00,0x0b,0x00,0x00,0x00,0x0c,0x00,0x00,0x00,0x06,0x00,0x00,0x00,
+0x2b,0x00,0x04,0x00,0x06,0x00,0x00,0x00,0x0d,0x00,0x00,0x00,0x00,0x00,0x80,0xbf,0x2c,0x00,0x05,0x00,0x07,0x00,0x00,0x00,0x0e,0x00,0x00,0x00,0x0d,0x00,0x00,0x00,
+0x0d,0x00,0x00,0x00,0x2b,0x00,0x04,0x00,0x06,0x00,0x00,0x00,0x0f,0x00,0x00,0x00,0x00,0x00,0x40,0x40,0x2c,0x00,0x05,0x00,0x07,0x00,0x00,0x00,0x10,0x00,0x00,0x00,
+0x0f,0x00,0x00,0x00,0x0d,0x00,0x00,0x00,0x2c,0x00,0x05,0x00,0x07,0x00,0x00,0x00,0x11,0x00,0x00,0x00,0x0d,0x00,0x00,0x00,0x0f,0x00,0x00,0x00,0x2c,0x00,0x06,0x00,
+0x0a,0x00,0x00,0x00,0x12,0x00,0x00,0x00,0x0e,0x00,0x00,0x00,0x10,0x00,0x00,0x00,0x11,0x00,0x00,0x00,0x17,0x00,0x04,0x00,0x13,0x00,0x00,0x00,0x06,0x00,0x00,0x00,
+0x04,0x00,0x00,0x00,0x2b,0x00,0x04,0x00,0x08,0x00,0x00,0x00,0x14,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x1c,0x00,0x04,0x00,0x15,0x00,0x00,0x00,0x06,0x00,0x00,0x00,
+0x14,0x00,0x00,0x00,0x1e,0x00,0x06,0x00,0x16,0x00,0x00,0x00,0x13,0x00,0x00,0x00,0x06,0x00,0x00,0x00,0x15,0x00,0x00,0x00,0x15,0x00,0x00,0x00,0x20,0x00,0x04,0x00,
+0x17,0x00,0x00,0x00,0x03,0x00,0x00,0x00,0x16,0x00,0x00,0x00,0x3b,0x00,0x04,0x00,0x17,0x00,0x00,0x00,0x18,0x00,0x00,0x00,0x03,0x00,0x00,0x00,0x15,0x00,0x04,0x00,
+0x19,0x00,0x00,0x00,0x20,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x2b,0x00,0x04,0x00,0x19,0x00,0x00,0x00,0x1a,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x20,0x00,0x04,0x00,
+0x1b,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x19,0x00,0x00,0x00,0x3b,0x00,0x04,0x00,0x1b,0x00,0x00,0x00,0x1c,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x20,0x00,0x04,0x00,
+0x1e,0x00,0x00,0x00,0x06,0x00,0x00,0x00,0x07,0x00,0x00,0x00,0x2b,0x00,0x04,0x00,0x06,0x00,0x00,0x00,0x21,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x2b,0x00,0x04,0x00,
+0x06,0x00,0x00,0x00,0x22,0x00,0x00,0x00,0x00,0x00,0x80,0x3f,0x20,0x00,0x04,0x00,0x26,0x00,0x00,0x00,0x03,0x00,0x00,0x00,0x13,0x00,0x00,0x00,0x20,0x00,0x04,0x00,
+0x28,0x00,0x00,0x00,0x03,0x00,0x00,0x00,0x07,0x00,0x00,0x00,0x3b,0x00,0x04,0x00,0x28,0x00,0x00,0x00,0x29,0x00,0x00,0x00,0x03,0x00,0x00,0x00,0x2b,0x00,0x04,0x00,
+0x06,0x00,0x00,0x00,0x2f,0x00,0x00,0x00,0x00,0x00,0x00,0x3f,0x36,0x00,0x05,0x00,0x02,0x00,0x00,0x00,0x04,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x03,0x00,0x00,0x00,
+0xf8,0x00,0x02,0x00,0x05,0x00,0x00,0x00,0x3e,0x00,0x03,0x00,0x0c,0x00,0x00,0x00,0x12,0x00,0x00,0x00,0x3d,0x00,0x04,0x00,0x19,0x00,0x00,0x00,0x1d,0x00,0x00,0x00,
+0x1c,0x00,0x00,0x00,0x41,0x00,0x05,0x00,0x1e,0x00,0x00,0x00,0x1f,0x00,0x00,0x00,0x0c,0x00,0x00,0x00,0x1d,0x00,0x00,0x00,0x3d,0x00,0x04,0x00,0x07,0x00,0x00,0x00,
+0x20,0x00,0x00,0x00,0x1f,0x00,0x00,0x00,0x51,0x00,0x05,0x00,0x06,0x00,0x00,0x00,0x23,0x00,0x00,0x00,0x20,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x51,0x00,0x05,0x00,
+0x06,0x00,0x00,0x00,0x24,0x00,0x00,0x00,0x20,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x50,0x00,0x07,0x00,0x13,0x00,0x00,0x00,0x25,0x00,0x00,0x00,0x23,0x00,0x00,0x00,
+0x24,0x00,0x00,0x00,0x21,0x00,0x00,0x00,0x22,0x00,0x00,0x00,0x41,0x00,0x05,0x00,0x26,0x00,0x00,0x00,0x27,0x00,0x00,0x00,0x18,0x00,0x00,0x00,0x1a,0x00,0x00,0x00,
+0x3e,0x00,0x03,0x00,0x27,0x00,0x00,0x00,0x25,0x00,0x00,0x00,0x3d,0x00,0x04,0x00,0x19,0x00,0x00,0x00,0x2a,0x00,0x00,0x00,0x1c,0x00,0x00,0x00,0x41,0x00,0x05,0x00,
+0x1e,0x00,0x00,0x00,0x2b,0x00,0x00,0x00,0x0c,0x00,0x00,0x00,0x2a,0x00,0x00,0x00,0x3d,0x00,0x04,0x00,0x07,0x00,0x00,0x00,0x2c,0x00,0x00,0x00,0x2b,0x00,0x00,0x00,
+0x50,0x00,0x05,0x00,0x07,0x00,0x00,0x00,0x2d,0x00,0x00,0x00,0x22,0x00,0x00,0x00,0x22,0x00,0x00,0x00,0x81,0x00,0x05,0x00,0x07,0x00,0x00,0x00,0x2e,0x00,0x00,0x00,
+0x2c,0x00,0x00,0x00,0x2d,0x00,0x00,0x00,0x8e,0x00,0x05,0x00,0x07,0x00,0x00,0x00,0x30,0x00,0x00,0x00,0x2e,0x00,0x00,0x00,0x2f,0x00,0x00,0x00,0x3e,0x00,0x03,0x00,
+0x29,0x00,0x00,0x00,0x30,0x00,0x00,0x00,0xfd,0x00,0x01,0x00,0x38,0x00,0x01,0x00
+};
+
+static unsigned char Vk_Frag_Spv[556] = {
+0x03,0x02,0x23,0x07,0x00,0x03,0x01,0x00,0x0b,0x00,0x08,0x00,0x14,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x11,0x00,0x02,0x00,0x01,0x00,0x00,0x00,0x0b,0x00,0x06,0x00,
+0x01,0x00,0x00,0x00,0x47,0x4c,0x53,0x4c,0x2e,0x73,0x74,0x64,0x2e,0x34,0x35,0x30,0x00,0x00,0x00,0x00,0x0e,0x00,0x03,0x00,0x00,0x00,0x00,0x00,0x01,0x00,0x00,0x00,
+0x0f,0x00,0x07,0x00,0x04,0x00,0x00,0x00,0x04,0x00,0x00,0x00,0x6d,0x61,0x69,0x6e,0x00,0x00,0x00,0x00,0x09,0x00,0x00,0x00,0x11,0x00,0x00,0x00,0x10,0x00,0x03,0x00,
+0x04,0x00,0x00,0x00,0x07,0x00,0x00,0x00,0x03,0x00,0x03,0x00,0x02,0x00,0x00,0x00,0xc2,0x01,0x00,0x00,0x05,0x00,0x04,0x00,0x04,0x00,0x00,0x00,0x6d,0x61,0x69,0x6e,
+0x00,0x00,0x00,0x00,0x05,0x00,0x04,0x00,0x09,0x00,0x00,0x00,0x63,0x6f,0x6c,0x6f,0x72,0x00,0x00,0x00,0x05,0x00,0x06,0x00,0x0d,0x00,0x00,0x00,0x69,0x6d,0x61,0x67,
+0x65,0x54,0x65,0x78,0x74,0x75,0x72,0x65,0x00,0x00,0x00,0x00,0x05,0x00,0x03,0x00,0x11,0x00,0x00,0x00,0x75,0x76,0x00,0x00,0x47,0x00,0x04,0x00,0x09,0x00,0x00,0x00,
+0x1e,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x47,0x00,0x04,0x00,0x0d,0x00,0x00,0x00,0x21,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x47,0x00,0x04,0x00,0x0d,0x00,0x00,0x00,
+0x22,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x47,0x00,0x04,0x00,0x11,0x00,0x00,0x00,0x1e,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x13,0x00,0x02,0x00,0x02,0x00,0x00,0x00,
+0x21,0x00,0x03,0x00,0x03,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x16,0x00,0x03,0x00,0x06,0x00,0x00,0x00,0x20,0x00,0x00,0x00,0x17,0x00,0x04,0x00,0x07,0x00,0x00,0x00,
+0x06,0x00,0x00,0x00,0x04,0x00,0x00,0x00,0x20,0x00,0x04,0x00,0x08,0x00,0x00,0x00,0x03,0x00,0x00,0x00,0x07,0x00,0x00,0x00,0x3b,0x00,0x04,0x00,0x08,0x00,0x00,0x00,
+0x09,0x00,0x00,0x00,0x03,0x00,0x00,0x00,0x19,0x00,0x09,0x00,0x0a,0x00,0x00,0x00,0x06,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+0x00,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x1b,0x00,0x03,0x00,0x0b,0x00,0x00,0x00,0x0a,0x00,0x00,0x00,0x20,0x00,0x04,0x00,0x0c,0x00,0x00,0x00,
+0x00,0x00,0x00,0x00,0x0b,0x00,0x00,0x00,0x3b,0x00,0x04,0x00,0x0c,0x00,0x00,0x00,0x0d,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x17,0x00,0x04,0x00,0x0f,0x00,0x00,0x00,
+0x06,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x20,0x00,0x04,0x00,0x10,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x0f,0x00,0x00,0x00,0x3b,0x00,0x04,0x00,0x10,0x00,0x00,0x00,
+0x11,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x36,0x00,0x05,0x00,0x02,0x00,0x00,0x00,0x04,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x03,0x00,0x00,0x00,0xf8,0x00,0x02,0x00,
+0x05,0x00,0x00,0x00,0x3d,0x00,0x04,0x00,0x0b,0x00,0x00,0x00,0x0e,0x00,0x00,0x00,0x0d,0x00,0x00,0x00,0x3d,0x00,0x04,0x00,0x0f,0x00,0x00,0x00,0x12,0x00,0x00,0x00,
+0x11,0x00,0x00,0x00,0x57,0x00,0x05,0x00,0x07,0x00,0x00,0x00,0x13,0x00,0x00,0x00,0x0e,0x00,0x00,0x00,0x12,0x00,0x00,0x00,0x3e,0x00,0x03,0x00,0x09,0x00,0x00,0x00,
+0x13,0x00,0x00,0x00,0xfd,0x00,0x01,0x00,0x38,0x00,0x01,0x00
+};
+
+static VkInstance                                  Vk_Instance;
+static VkPhysicalDevice                            Vk_Physical_Device;
+static VkDevice                                    Vk_Device;
+static VkCommandPool                               Vk_Cmd_Pool;
+static PFN_vkCreateDebugUtilsMessengerEXT          Vk_Debug_utils_create_messenger;
+static PFN_vkDestroyDebugUtilsMessengerEXT         Vk_Debug_utils_destroy_messenger;
+static VkDebugUtilsMessengerEXT                    Vk_Debug_utils_messenger;
+static VkSurfaceKHR                                Vk_Surface;
+static VkPresentModeKHR                            Vk_Present_Mode;
+static VkSurfaceFormatKHR                          Vk_Surface_Format;
+static uint32_t                                    Vk_Swapchain_Image_Count;
+static uint32_t                                    Vk_Min_Swapchain_Image_Count;
+static VkQueue                                     Vk_Queue;
+static VkSwapchainKHR                              Vk_Swapchain;
+static VkImage                                     Vk_Swapchain_Images[8];
+static VkImageView                                 Vk_Swapchain_Image_Views[8];
+static VkSemaphore                                 Vk_Sems_Render_Complete[8];
+static VkFrameData                                 Vk_Frames[2];
+static int                                         Vk_Num_Frames = 2;
+static VkPipelineLayout                            Vk_Pipeline_Layout;
+static VkShaderModule                              Vk_Vertex_Shader, Vk_Fragment_Shader;
+static VkPipeline                                  Vk_Graphics_Pipeline;
+static VkExtent2D                                  Vk_Window_Size;
+static int                                         Vk_Curr_Frame = 0;
+static VkDescriptorSetLayout                       Vk_Image_Set_Layout;
+
+static VkExtent2D create_swapchain_and_image_views();
+static VkBool32 debug_utils_messenger_callback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
+                                               VkDebugUtilsMessageTypeFlagsEXT message_types,
+                                               const VkDebugUtilsMessengerCallbackDataEXT *callback_data,
+                                               void *usr_data);
+
+static void swapchain_image_barrier(VkCommandBuffer cmd, uint32_t image_index,
+                                    uint32_t src_queue_family, uint32_t dst_queue_family,
+                                    VkImageLayout old_layout, VkImageLayout new_layout,
+                                    VkAccessFlags2 src_access, VkAccessFlags2 dst_access,
+                                    VkPipelineStageFlags2 src_stage, VkPipelineStageFlags2 dst_stage);
+
+
+void vulkan_init(void *internal_window_handle)
+{
+    VkApplicationInfo app_info;
+    app_info.sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    app_info.pNext              = 0;
+    app_info.pApplicationName   = "fw_all";
+    app_info.applicationVersion = VK_MAKE_VERSION(1,0,0);
+    app_info.pEngineName        = "No Engine";
+    app_info.engineVersion      = VK_MAKE_VERSION(1,0,0);
+    app_info.apiVersion         = VK_API_VERSION_1_4;
+
+    VkInstanceCreateFlags instance_create_flags = 0;
+    if (vd_fw_get_platform() == VD_FW_PLATFORM_MACOS) {
+        instance_create_flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+    }
+
+    const char *required_instance_extensions[] = {
+        VK_KHR_SURFACE_EXTENSION_NAME,
+        VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
+        VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
+        VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME,
+        VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME,
+    };
+    int num_required_instance_extensions = sizeof(required_instance_extensions) / sizeof(required_instance_extensions[0]);
+
+    const char *required_instance_layers[] = {
+        "VK_LAYER_KHRONOS_validation",
+    };
+
+    int num_required_instance_layers = sizeof(required_instance_layers) / sizeof(required_instance_layers[0]);
+
+    const char *required_device_extensions[] = {
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+        VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME,
+        // VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME,
+    };
+    int num_required_device_extensions = sizeof(required_device_extensions) / sizeof(required_device_extensions[0]);
+
+    int num_all_instance_extensions = 0;
+    const char *all_instance_extensions[12];
+
+    int num_wsi_instance_extensions;
+    const char **wsi_instance_extensions = vd_fw_vk_wsi_instance_extensions(&num_wsi_instance_extensions);
+
+    // Copy WSI Extensions
+    for (int i = 0; i < num_wsi_instance_extensions; ++i) {
+        all_instance_extensions[num_all_instance_extensions++] = wsi_instance_extensions[i];
+    }
+
+    for (int i = 0; i < num_required_instance_extensions; ++i) {
+        all_instance_extensions[num_all_instance_extensions++] = required_instance_extensions[i];
+    }
+
+    VkInstanceCreateInfo instance_create_info;
+    instance_create_info.sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    instance_create_info.pNext                   = 0;
+    instance_create_info.flags                   = instance_create_flags;
+    instance_create_info.pApplicationInfo        = &app_info;
+    instance_create_info.enabledLayerCount       = num_required_instance_layers;
+    instance_create_info.ppEnabledLayerNames     = required_instance_layers;
+    instance_create_info.enabledExtensionCount   = num_all_instance_extensions;
+    instance_create_info.ppEnabledExtensionNames = all_instance_extensions;
+    VK_CHECK(vkCreateInstance(&instance_create_info, NULL, &Vk_Instance));
+
+
+    Vk_Debug_utils_create_messenger = (PFN_vkCreateDebugUtilsMessengerEXT)
+        vkGetInstanceProcAddr(Vk_Instance, "vkCreateDebugUtilsMessengerEXT");
+
+    Vk_Debug_utils_destroy_messenger = (PFN_vkDestroyDebugUtilsMessengerEXT)
+        vkGetInstanceProcAddr(Vk_Instance, "vkDestroyDebugUtilsMessengerEXT");
+
+    VkDebugUtilsMessengerCreateInfoEXT debug_messenger_create_info;
+    debug_messenger_create_info.sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    debug_messenger_create_info.pNext           = 0;
+    debug_messenger_create_info.flags           = 0;
+    debug_messenger_create_info.messageSeverity = 0
+                                                  | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT
+                                                  | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
+                                                  | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT
+                                                  ;
+    debug_messenger_create_info.messageType     = 0
+                                                  | VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
+                                                  | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
+                                                  | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT
+                                                  // | VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT
+                                                  ;
+    debug_messenger_create_info.pfnUserCallback = debug_utils_messenger_callback;
+    debug_messenger_create_info.pUserData       = 0;
+
+    VK_CHECK(Vk_Debug_utils_create_messenger(Vk_Instance, &debug_messenger_create_info, NULL,
+                                             &Vk_Debug_utils_messenger));
+
+    vd_fw_vk_set_get_instance_proc_addr((VdFwVkGetInstanceProcAddrProc)vkGetInstanceProcAddr);
+    VK_CHECK((VkResult)vd_fw_vk_wsi_surface_create((void*)Vk_Instance, NULL, &Vk_Surface));
+
+    VkPhysicalDevice physical_devices[16];
+    uint32_t num_physical_devices = 16;
+    VK_CHECK(vkEnumeratePhysicalDevices(Vk_Instance, &num_physical_devices, physical_devices));
+
+    uint32_t api_version = VK_MAKE_VERSION(1, 3, 0);
+
+    VkPhysicalDevice physical_device = VK_NULL_HANDLE;
+    for (uint32_t i = 0; i < num_physical_devices; ++i) {
+        VkPhysicalDeviceProperties q_properties;
+        vkGetPhysicalDeviceProperties(physical_devices[i], &q_properties);
+
+        // Ensure the device supports the API version we want to use
+        if (q_properties.apiVersion < api_version) {
+            continue;
+        }
+
+        // Prefer discrete GPUs over everything else
+        if ((q_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) || (q_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU)) {
+            physical_device = physical_devices[i];
+
+            printf("VK: %s\n", q_properties.deviceName);
+            break;
+        }
+    }
+
+    VkSurfaceCapabilitiesKHR surface_caps;
+    VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, Vk_Surface, &surface_caps));
+    uint32_t q_swapchain_image_count = surface_caps.minImageCount + 1;
+    if (q_swapchain_image_count > surface_caps.maxImageCount) {
+        q_swapchain_image_count = surface_caps.maxImageCount;
+    }
+
+    VkSurfaceFormatKHR surface_format = {
+        VK_FORMAT_B8G8R8A8_SRGB,
+        VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+    };
+
+    Vk_Surface_Format = surface_format;
+    Vk_Present_Mode = VK_PRESENT_MODE_FIFO_KHR;
+    Vk_Min_Swapchain_Image_Count = q_swapchain_image_count;
+
+    VkDeviceQueueCreateInfo device_queue_create_infos[1];
+    float                   device_queue_priorities[1] = { 1.f };
+    int                     num_device_queue_create_infos = 1;
+
+    device_queue_create_infos[0].sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    device_queue_create_infos[0].pNext            = 0;
+    device_queue_create_infos[0].flags            = 0;
+    device_queue_create_infos[0].queueFamilyIndex = 0;
+    device_queue_create_infos[0].queueCount       = 1;
+    device_queue_create_infos[0].pQueuePriorities = device_queue_priorities;
+
+    VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR physical_device_swapchain_maintenance1_features;
+    physical_device_swapchain_maintenance1_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR;
+    physical_device_swapchain_maintenance1_features.pNext = 0;
+
+    VkPhysicalDeviceExtendedDynamicStateFeaturesEXT ext_dynamic_state_features;
+    memset(&ext_dynamic_state_features, 0, sizeof(ext_dynamic_state_features));
+    ext_dynamic_state_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT;
+    ext_dynamic_state_features.pNext = &physical_device_swapchain_maintenance1_features;
+
+    VkPhysicalDeviceVulkan13Features physical_device_vk13_features;
+    memset(&physical_device_vk13_features, 0, sizeof(physical_device_vk13_features));
+    physical_device_vk13_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+    physical_device_vk13_features.pNext = &ext_dynamic_state_features;
+
+    VkPhysicalDeviceVulkan12Features physical_device_vk12_features;
+    memset(&physical_device_vk12_features, 0, sizeof(physical_device_vk12_features));
+    physical_device_vk12_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    physical_device_vk12_features.pNext = &physical_device_vk13_features;
+
+    VkPhysicalDeviceVulkan11Features physical_device_vk11_features;
+    memset(&physical_device_vk11_features, 0, sizeof(physical_device_vk11_features));
+    physical_device_vk11_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+    physical_device_vk11_features.pNext = &physical_device_vk12_features;
+
+    VkPhysicalDeviceFeatures2 physical_device_features2;
+    memset(&physical_device_features2, 0, sizeof(physical_device_features2));
+    physical_device_features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    physical_device_features2.pNext = &physical_device_vk11_features;
+
+    physical_device_vk11_features.shaderDrawParameters = VK_TRUE;
+    physical_device_vk13_features.dynamicRendering = VK_TRUE;
+    physical_device_vk13_features.synchronization2 = VK_TRUE;
+    ext_dynamic_state_features.extendedDynamicState = VK_TRUE;
+    physical_device_swapchain_maintenance1_features.swapchainMaintenance1 = VK_TRUE;
+
+    VkDeviceCreateInfo device_create_info;
+    device_create_info.sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    device_create_info.pNext                   = &physical_device_features2;
+    device_create_info.flags                   = 0;
+    device_create_info.queueCreateInfoCount    = num_device_queue_create_infos;
+    device_create_info.pQueueCreateInfos       = device_queue_create_infos;
+    device_create_info.enabledLayerCount       = 0; // Deprecated
+    device_create_info.ppEnabledLayerNames     = 0; // Deprecated
+    device_create_info.enabledExtensionCount   = num_required_device_extensions;
+    device_create_info.ppEnabledExtensionNames = required_device_extensions;
+    device_create_info.pEnabledFeatures        = 0;
+
+    Vk_Physical_Device = physical_device;
+    VK_CHECK(vkCreateDevice(physical_device, &device_create_info, NULL, &Vk_Device));
+
+    vkGetDeviceQueue(Vk_Device, 0, 0, &Vk_Queue);
+
+    create_swapchain_and_image_views();
+
+    VkCommandPoolCreateInfo command_pool_create_info;
+    command_pool_create_info.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    command_pool_create_info.pNext            = 0;
+    command_pool_create_info.flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    command_pool_create_info.queueFamilyIndex = 0;
+    VK_CHECK(vkCreateCommandPool(Vk_Device, &command_pool_create_info, NULL, &Vk_Cmd_Pool));
+
+    for (uint32_t i = 0; i < Vk_Num_Frames; ++i) {
+        VkFrameData *frame = &Vk_Frames[i];
+        VkCommandBufferAllocateInfo cmd_buffer_allocate_info;
+        cmd_buffer_allocate_info.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        cmd_buffer_allocate_info.pNext              = 0;
+        cmd_buffer_allocate_info.commandPool        = Vk_Cmd_Pool;
+        cmd_buffer_allocate_info.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        cmd_buffer_allocate_info.commandBufferCount = 1;
+        VK_CHECK(vkAllocateCommandBuffers(Vk_Device, &cmd_buffer_allocate_info, &frame->cmd_buffer));
+
+        VkSemaphoreCreateInfo semaphore_create_info;
+        semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        semaphore_create_info.pNext = 0;
+        semaphore_create_info.flags = 0;
+        VK_CHECK(vkCreateSemaphore(Vk_Device, &semaphore_create_info, NULL, &frame->sem_present_complete));
+
+        VkFenceCreateInfo fence_create_info;
+        fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fence_create_info.pNext = 0;
+        fence_create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+        VK_CHECK(vkCreateFence(Vk_Device, &fence_create_info, NULL, &frame->fnc_render_complete));
+    }
+
+    VkDescriptorSetLayoutBinding image_binding = {0};
+    image_binding.binding            = 0;
+    image_binding.descriptorType     = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    image_binding.descriptorCount    = 1;
+    image_binding.stageFlags         = VK_SHADER_STAGE_FRAGMENT_BIT;
+    image_binding.pImmutableSamplers = nullptr;
+
+    VkDescriptorSetLayoutCreateInfo descriptor_set_layout_info = {0};
+    descriptor_set_layout_info.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    descriptor_set_layout_info.bindingCount = 1;
+    descriptor_set_layout_info.pBindings    = &image_binding;
+    VK_CHECK(vkCreateDescriptorSetLayout(Vk_Device, &descriptor_set_layout_info, nullptr,
+                                         &Vk_Image_Set_Layout));
+
+    VkPipelineLayoutCreateInfo pipeline_layout_create_info;
+    pipeline_layout_create_info.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipeline_layout_create_info.pNext                  = 0;
+    pipeline_layout_create_info.flags                  = 0;
+    pipeline_layout_create_info.setLayoutCount         = 1;
+    pipeline_layout_create_info.pSetLayouts            = &Vk_Image_Set_Layout;
+    pipeline_layout_create_info.pushConstantRangeCount = 0;
+    pipeline_layout_create_info.pPushConstantRanges    = 0;
+    VK_CHECK(vkCreatePipelineLayout(Vk_Device, &pipeline_layout_create_info, NULL, &Vk_Pipeline_Layout));
+
+    {
+        VkShaderModuleCreateInfo shader_module_create_info;
+        shader_module_create_info.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        shader_module_create_info.pNext    = 0;
+        shader_module_create_info.flags    = 0;
+        shader_module_create_info.codeSize = sizeof(Vk_Vert_Spv);
+        shader_module_create_info.pCode    = (uint32_t*)Vk_Vert_Spv;
+        VK_CHECK(vkCreateShaderModule(Vk_Device, &shader_module_create_info, NULL, &Vk_Vertex_Shader));
+    }
+
+    {
+        VkShaderModuleCreateInfo shader_module_create_info;
+        shader_module_create_info.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        shader_module_create_info.pNext    = 0;
+        shader_module_create_info.flags    = 0;
+        shader_module_create_info.codeSize = sizeof(Vk_Frag_Spv);
+        shader_module_create_info.pCode    = (uint32_t*)Vk_Frag_Spv;
+        VK_CHECK(vkCreateShaderModule(Vk_Device, &shader_module_create_info, NULL, &Vk_Fragment_Shader));
+    }
+
+    VkPipelineShaderStageCreateInfo vert_shader_stage_create_info;
+    vert_shader_stage_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vert_shader_stage_create_info.pNext = 0;
+    vert_shader_stage_create_info.flags = 0;
+    vert_shader_stage_create_info.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vert_shader_stage_create_info.module = Vk_Vertex_Shader;
+    vert_shader_stage_create_info.pName = "main";
+    vert_shader_stage_create_info.pSpecializationInfo = 0;
+
+    VkPipelineShaderStageCreateInfo frag_shader_stage_create_info;
+    frag_shader_stage_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    frag_shader_stage_create_info.pNext = 0;
+    frag_shader_stage_create_info.flags = 0;
+    frag_shader_stage_create_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    frag_shader_stage_create_info.module = Vk_Fragment_Shader;
+    frag_shader_stage_create_info.pName = "main";
+    frag_shader_stage_create_info.pSpecializationInfo = 0;
+
+    VkPipelineShaderStageCreateInfo shader_stages[] = { vert_shader_stage_create_info, frag_shader_stage_create_info };
+
+    VkPipelineVertexInputStateCreateInfo vertex_input_state_create_info;
+    vertex_input_state_create_info.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertex_input_state_create_info.pNext                           = 0;
+    vertex_input_state_create_info.flags                           = 0;
+    vertex_input_state_create_info.vertexBindingDescriptionCount   = 0;
+    vertex_input_state_create_info.pVertexBindingDescriptions      = 0;
+    vertex_input_state_create_info.vertexAttributeDescriptionCount = 0;
+    vertex_input_state_create_info.pVertexAttributeDescriptions    = 0;
+
+    VkPipelineInputAssemblyStateCreateInfo pipeline_input_assembly_state_create_info;
+    pipeline_input_assembly_state_create_info.sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    pipeline_input_assembly_state_create_info.pNext                  = 0;
+    pipeline_input_assembly_state_create_info.flags                  = 0;
+    pipeline_input_assembly_state_create_info.topology               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    pipeline_input_assembly_state_create_info.primitiveRestartEnable = VK_FALSE;
+
+    VkPipelineViewportStateCreateInfo pipeline_viewport_state_create_info;
+    pipeline_viewport_state_create_info.sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    pipeline_viewport_state_create_info.pNext         = 0;
+    pipeline_viewport_state_create_info.flags         = 0;
+    pipeline_viewport_state_create_info.viewportCount = 1;
+    pipeline_viewport_state_create_info.pViewports    = 0;
+    pipeline_viewport_state_create_info.scissorCount  = 1;
+    pipeline_viewport_state_create_info.pScissors     = 0;
+
+    VkPipelineRasterizationStateCreateInfo pipeline_rasterization_state_create_info;
+    pipeline_rasterization_state_create_info.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    pipeline_rasterization_state_create_info.pNext                   = 0;
+    pipeline_rasterization_state_create_info.flags                   = 0;
+    pipeline_rasterization_state_create_info.depthClampEnable        = VK_FALSE;
+    pipeline_rasterization_state_create_info.rasterizerDiscardEnable = VK_FALSE;
+    pipeline_rasterization_state_create_info.polygonMode             = VK_POLYGON_MODE_FILL;
+    pipeline_rasterization_state_create_info.cullMode                = VK_CULL_MODE_BACK_BIT;
+    pipeline_rasterization_state_create_info.frontFace               = VK_FRONT_FACE_CLOCKWISE;
+    pipeline_rasterization_state_create_info.depthBiasEnable         = VK_FALSE;
+    pipeline_rasterization_state_create_info.depthBiasConstantFactor = 0.f;
+    pipeline_rasterization_state_create_info.depthBiasClamp          = 0.f;
+    pipeline_rasterization_state_create_info.depthBiasSlopeFactor    = 1.f;
+    pipeline_rasterization_state_create_info.lineWidth               = 1.f;
+
+    VkPipelineMultisampleStateCreateInfo pipeline_multisample_state_create_info;
+    pipeline_multisample_state_create_info.sType                 = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    pipeline_multisample_state_create_info.pNext                 = 0;
+    pipeline_multisample_state_create_info.flags                 = 0;
+    pipeline_multisample_state_create_info.rasterizationSamples  = VK_SAMPLE_COUNT_1_BIT;
+    pipeline_multisample_state_create_info.sampleShadingEnable   = VK_FALSE;
+    pipeline_multisample_state_create_info.minSampleShading      = 0.f;
+    pipeline_multisample_state_create_info.pSampleMask           = 0;
+    pipeline_multisample_state_create_info.alphaToCoverageEnable = VK_FALSE;
+    pipeline_multisample_state_create_info.alphaToOneEnable      = VK_FALSE;
+
+    VkPipelineColorBlendAttachmentState color_blend_attachment_state;
+    color_blend_attachment_state.blendEnable         = VK_FALSE;
+    color_blend_attachment_state.srcColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+    color_blend_attachment_state.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+    color_blend_attachment_state.colorBlendOp        = VK_BLEND_OP_ADD;
+    color_blend_attachment_state.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    color_blend_attachment_state.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    color_blend_attachment_state.alphaBlendOp        = VK_BLEND_OP_ADD;
+    color_blend_attachment_state.colorWriteMask      = 0
+                                                       | VK_COLOR_COMPONENT_R_BIT
+                                                       | VK_COLOR_COMPONENT_G_BIT 
+                                                       | VK_COLOR_COMPONENT_B_BIT 
+                                                       | VK_COLOR_COMPONENT_A_BIT 
+                                                       ;
+
+    VkPipelineColorBlendStateCreateInfo pipeline_color_blend_state_create_info;
+    pipeline_color_blend_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    pipeline_color_blend_state_create_info.pNext = 0;
+    pipeline_color_blend_state_create_info.flags = 0;
+    pipeline_color_blend_state_create_info.logicOpEnable = VK_FALSE;
+    pipeline_color_blend_state_create_info.logicOp = VK_LOGIC_OP_COPY;
+    pipeline_color_blend_state_create_info.attachmentCount = 1;
+    pipeline_color_blend_state_create_info.pAttachments = &color_blend_attachment_state;
+    pipeline_color_blend_state_create_info.blendConstants[0] = 0.f;
+    pipeline_color_blend_state_create_info.blendConstants[1] = 0.f;
+    pipeline_color_blend_state_create_info.blendConstants[2] = 0.f;
+    pipeline_color_blend_state_create_info.blendConstants[3] = 0.f;
+
+    VkDynamicState dynamic_states[] = {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR,
+    };
+
+    VkPipelineDynamicStateCreateInfo pipeline_dynamic_state_create_info;
+    pipeline_dynamic_state_create_info.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    pipeline_dynamic_state_create_info.pNext             = 0;
+    pipeline_dynamic_state_create_info.flags             = 0;
+    pipeline_dynamic_state_create_info.dynamicStateCount = sizeof(dynamic_states) / sizeof(dynamic_states[0]);
+    pipeline_dynamic_state_create_info.pDynamicStates    = dynamic_states;
+
+    VkPipelineRenderingCreateInfo pipeline_rendering_create_info;
+    pipeline_rendering_create_info.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+    pipeline_rendering_create_info.pNext                   = 0;
+    pipeline_rendering_create_info.viewMask                = 0;
+    pipeline_rendering_create_info.colorAttachmentCount    = 1;
+    pipeline_rendering_create_info.pColorAttachmentFormats = &Vk_Surface_Format.format;
+    pipeline_rendering_create_info.depthAttachmentFormat   = VK_FORMAT_UNDEFINED;
+    pipeline_rendering_create_info.stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
+
+    VkGraphicsPipelineCreateInfo graphics_pipeline_create_info;
+    graphics_pipeline_create_info.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    graphics_pipeline_create_info.pNext               = &pipeline_rendering_create_info;
+    graphics_pipeline_create_info.flags               = 0;
+    graphics_pipeline_create_info.stageCount          = 2;
+    graphics_pipeline_create_info.pStages             = shader_stages;
+    graphics_pipeline_create_info.pVertexInputState   = &vertex_input_state_create_info;
+    graphics_pipeline_create_info.pInputAssemblyState = &pipeline_input_assembly_state_create_info;
+    graphics_pipeline_create_info.pTessellationState  = 0;
+    graphics_pipeline_create_info.pViewportState      = &pipeline_viewport_state_create_info;
+    graphics_pipeline_create_info.pRasterizationState = &pipeline_rasterization_state_create_info;
+    graphics_pipeline_create_info.pMultisampleState   = &pipeline_multisample_state_create_info;
+    graphics_pipeline_create_info.pDepthStencilState  = 0;
+    graphics_pipeline_create_info.pColorBlendState    = &pipeline_color_blend_state_create_info;
+    graphics_pipeline_create_info.pDynamicState       = &pipeline_dynamic_state_create_info;
+    graphics_pipeline_create_info.layout              = Vk_Pipeline_Layout;
+    graphics_pipeline_create_info.renderPass          = VK_NULL_HANDLE;
+    graphics_pipeline_create_info.subpass             = 0;
+    graphics_pipeline_create_info.basePipelineHandle  = VK_NULL_HANDLE;
+    graphics_pipeline_create_info.basePipelineIndex   = 0;
+
+    VK_CHECK(vkCreateGraphicsPipelines(Vk_Device, VK_NULL_HANDLE,
+                                       1, &graphics_pipeline_create_info,
+                                       NULL, &Vk_Graphics_Pipeline));
+}
+
+void vulkan_kill(void)
+{
+
+    VK_CHECK(vkDeviceWaitIdle(Vk_Device));
+
+    for (uint32_t i = 0; i < Vk_Num_Frames; ++i) {
+        VkFrameData *frame = &Vk_Frames[i];
+        vkDestroySemaphore(Vk_Device, frame->sem_present_complete, NULL);
+        vkDestroyFence(Vk_Device, frame->fnc_render_complete, NULL);
+    }
+
+
+    vkDestroyCommandPool(Vk_Device, Vk_Cmd_Pool, NULL);
+    vkDestroyShaderModule(Vk_Device, Vk_Vertex_Shader, NULL);
+    vkDestroyShaderModule(Vk_Device, Vk_Fragment_Shader, NULL);
+    vkDestroyDescriptorSetLayout(Vk_Device, Vk_Image_Set_Layout, NULL);
+    vkDestroyPipeline(Vk_Device, Vk_Graphics_Pipeline, NULL);
+    vkDestroyPipelineLayout(Vk_Device, Vk_Pipeline_Layout, NULL);
+
+    for (uint32_t i = 0; i < Vk_Swapchain_Image_Count; ++i) {
+        vkDestroyImageView(Vk_Device, Vk_Swapchain_Image_Views[i], NULL);
+        vkDestroySemaphore(Vk_Device, Vk_Sems_Render_Complete[i], NULL);
+    }
+
+    vkDestroySwapchainKHR(Vk_Device, Vk_Swapchain, NULL);
+    Vk_Swapchain = VK_NULL_HANDLE;
+
+    vkDestroyDevice(Vk_Device, NULL);
+    vkDestroySurfaceKHR(Vk_Instance, Vk_Surface, NULL);
+    Vk_Debug_utils_destroy_messenger(Vk_Instance, Vk_Debug_utils_messenger, NULL);
+    vkDestroyInstance(Vk_Instance, NULL);
+
+}
+
+void vulkan_resize(int w, int h)
+{
+    Vk_Window_Size = create_swapchain_and_image_views();
+}
+
+void vulkan_draw_with_background_color(float r, float g, float b, float a)
+{
+
+    VkFrameData *frame = &Vk_Frames[Vk_Curr_Frame];
+    VK_CHECK(vkWaitForFences(Vk_Device, 1, &frame->fnc_render_complete, VK_TRUE, UINT64_MAX));
+    vkResetFences(Vk_Device, 1, &frame->fnc_render_complete);
+
+    uint32_t swapchain_image_idx;
+    VkResult acquire_result = vkAcquireNextImageKHR(Vk_Device, Vk_Swapchain,
+                                                    UINT64_MAX, frame->sem_present_complete,
+                                                    VK_NULL_HANDLE, &swapchain_image_idx);
+
+    if (acquire_result != VK_SUCCESS && acquire_result != VK_SUBOPTIMAL_KHR) {
+        VK_CHECK(acquire_result);
+    }
+
+
+    VkSemaphore sem_render_complete = Vk_Sems_Render_Complete[swapchain_image_idx];
+
+    VkCommandBuffer cmd = frame->cmd_buffer;
+    vkResetCommandBuffer(cmd, 0);
+
+    VkCommandBufferBeginInfo cmd_begin_info;
+    cmd_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    cmd_begin_info.pNext = 0;
+    cmd_begin_info.flags = 0;
+    cmd_begin_info.pInheritanceInfo = 0;
+    VK_CHECK(vkBeginCommandBuffer(cmd, &cmd_begin_info));
+
+    {
+        swapchain_image_barrier(cmd, swapchain_image_idx,
+                                0,                                              0,                         
+                                VK_IMAGE_LAYOUT_UNDEFINED,                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                0,                                              VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+
+        static float t = 0.f;
+        t += vd_fw_delta_s();
+
+        VkClearColorValue clear_color_value = {(sinf(t) + 1.f) * 0.5f, 0.1f, 0.7f, 1.f};
+        VkRenderingAttachmentInfo color_attachment_info;
+        color_attachment_info.sType              = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        color_attachment_info.pNext              = 0;
+        color_attachment_info.imageView          = Vk_Swapchain_Image_Views[swapchain_image_idx];
+        color_attachment_info.imageLayout        = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        color_attachment_info.resolveMode        = VK_RESOLVE_MODE_NONE;
+        color_attachment_info.resolveImageView   = VK_NULL_HANDLE;
+        color_attachment_info.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        color_attachment_info.loadOp             = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        color_attachment_info.storeOp            = VK_ATTACHMENT_STORE_OP_STORE;
+        color_attachment_info.clearValue.color   = clear_color_value;
+
+        VkRenderingInfo rendering_info;
+        rendering_info.sType                = VK_STRUCTURE_TYPE_RENDERING_INFO;
+        rendering_info.pNext                = 0;
+        rendering_info.flags                = 0;
+        rendering_info.renderArea.offset    = {0, 0};
+        rendering_info.renderArea.extent    = Vk_Window_Size;
+        rendering_info.layerCount           = 1;
+        rendering_info.viewMask             = 0;
+        rendering_info.colorAttachmentCount = 1;
+        rendering_info.pColorAttachments    = &color_attachment_info;
+        rendering_info.pDepthAttachment     = 0;
+        rendering_info.pStencilAttachment   = 0;
+        vkCmdBeginRendering(cmd, &rendering_info);
+
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, Vk_Graphics_Pipeline);
+
+        VkViewport viewport = {
+            0.f, 0.f,
+            (float)Vk_Window_Size.width, (float)Vk_Window_Size.height,
+            0.f, 1.f
+        };
+        vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+        VkRect2D scissor = {
+            {0, 0},
+            Vk_Window_Size,
+        };
+        vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+        // vkCmdDraw(cmd, 3, 1, 0, 0);
+
+        vkCmdEndRendering(cmd);
+
+        swapchain_image_barrier(cmd, swapchain_image_idx,
+                                0,                                              0,                         
+                                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,       VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,           0,
+                                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,  VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+
+    }
+    VK_CHECK(vkEndCommandBuffer(cmd));
+
+    VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+    VkSubmitInfo submit_info;
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit_info.pNext = 0;
+    submit_info.waitSemaphoreCount = 1;
+    submit_info.pWaitSemaphores = &frame->sem_present_complete;
+    submit_info.pWaitDstStageMask = &wait_stage;
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &cmd;
+    submit_info.signalSemaphoreCount = 1;
+    submit_info.pSignalSemaphores = &sem_render_complete;
+
+    VK_CHECK(vkQueueSubmit(Vk_Queue, 1, &submit_info, frame->fnc_render_complete));
+
+    VkPresentInfoKHR present_info;
+    present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    present_info.pNext = 0;
+    present_info.waitSemaphoreCount = 1;
+    present_info.pWaitSemaphores = &sem_render_complete;
+    present_info.swapchainCount = 1;
+    present_info.pSwapchains = &Vk_Swapchain;
+    present_info.pImageIndices = &swapchain_image_idx;
+    present_info.pResults = 0;
+    VkResult present_result = vkQueuePresentKHR(Vk_Queue, &present_info);
+    if (1
+        && (present_result != VK_ERROR_OUT_OF_DATE_KHR)
+        && (present_result != VK_SUBOPTIMAL_KHR)
+        && (present_result != VK_SUCCESS)
+        )
+    {
+        VK_CHECK(present_result);
+    }
+
+    Vk_Curr_Frame++;
+    if (Vk_Curr_Frame >= Vk_Num_Frames) {
+        Vk_Curr_Frame = 0;
+    }
+}
+
+static GraphicsBackendImpl Vulkan_Impl = {
+    GRAPHICS_BACKEND_VULKAN,
+    vulkan_init,
+    vulkan_kill,
+    vulkan_resize,
+    vulkan_draw_with_background_color,
+};
+
+static VkBool32 debug_utils_messenger_callback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
+                                               VkDebugUtilsMessageTypeFlagsEXT message_types,
+                                               const VkDebugUtilsMessengerCallbackDataEXT *callback_data,
+                                               void *usr_data)
+{
+    (void)message_types;
+    (void)usr_data;
+    if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
+        printf("[Vulkan/Verbose]:  %s\n", callback_data->pMessage);
+    }
+
+    if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
+        printf("[Vulkan/Info   ]:   %s\n", callback_data->pMessage);
+    }
+
+    if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+        printf("[Vulkan/Warning]:   %s\n", callback_data->pMessage);
+    }
+
+    if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
+        printf("[Vulkan/Error  ]:  %s\n", callback_data->pMessage);
+    }
+
+    return VK_TRUE;
+}
+
+static void swapchain_image_barrier(VkCommandBuffer cmd, uint32_t image_index,
+                                    uint32_t src_queue_family, uint32_t dst_queue_family,
+                                    VkImageLayout old_layout, VkImageLayout new_layout,
+                                    VkAccessFlags2 src_access, VkAccessFlags2 dst_access,
+                                    VkPipelineStageFlags2 src_stage, VkPipelineStageFlags2 dst_stage)
+{
+    VkImageMemoryBarrier2 barrier;
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    barrier.pNext = 0;
+    barrier.srcStageMask = src_stage;
+    barrier.srcAccessMask = src_access;
+    barrier.dstStageMask = dst_stage;
+    barrier.dstAccessMask = dst_access;
+    barrier.oldLayout = old_layout;
+    barrier.newLayout = new_layout;
+    barrier.srcQueueFamilyIndex = src_queue_family;
+    barrier.dstQueueFamilyIndex = dst_queue_family;
+    barrier.image = Vk_Swapchain_Images[image_index];
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
+
+    VkDependencyInfo dependency_info = {0};
+    dependency_info.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    dependency_info.imageMemoryBarrierCount = 1;
+    dependency_info.pImageMemoryBarriers = &barrier;
+
+    vkCmdPipelineBarrier2(cmd, &dependency_info);
+}
+
+static VkExtent2D create_swapchain_and_image_views()
+{
+    VK_CHECK(vkDeviceWaitIdle(Vk_Device));
+
+    VkSurfaceCapabilitiesKHR surface_caps;
+    VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(Vk_Physical_Device, Vk_Surface, &surface_caps));
+    VkExtent2D size = surface_caps.maxImageExtent;
+
+    VkSwapchainKHR old_swapchain = Vk_Swapchain;
+    if (Vk_Swapchain) {
+        // Free swapchain data
+
+        for (uint32_t i = 0; i < Vk_Swapchain_Image_Count; ++i) {
+            vkDestroyImageView(Vk_Device, Vk_Swapchain_Image_Views[i], NULL);
+            vkDestroySemaphore(Vk_Device, Vk_Sems_Render_Complete[i], NULL);
+        }
+    }
+
+    uint32_t swapchain_queues[1] = {0};
+    uint32_t num_swapchain_queues = 1;
+    VkSharingMode swapchain_image_sharing_mode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VkSwapchainPresentScalingCreateInfoKHR swapchain_present_scaling_create_info;
+    swapchain_present_scaling_create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_SCALING_CREATE_INFO_KHR;
+    swapchain_present_scaling_create_info.pNext = 0;
+    swapchain_present_scaling_create_info.scalingBehavior = VK_PRESENT_SCALING_STRETCH_BIT_KHR;
+    // swapchain_present_scaling_create_info.scalingBehavior = VK_PRESENT_SCALING_ONE_TO_ONE_BIT_KHR;
+    swapchain_present_scaling_create_info.presentGravityX = VK_PRESENT_GRAVITY_MIN_BIT_KHR;
+    swapchain_present_scaling_create_info.presentGravityY = VK_PRESENT_GRAVITY_MIN_BIT_KHR;
+
+    VkSwapchainCreateInfoKHR swapchain_create_info;
+    swapchain_create_info.sType                 = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    swapchain_create_info.pNext                 = &swapchain_present_scaling_create_info;
+    swapchain_create_info.flags                 = 0;
+    swapchain_create_info.surface               = Vk_Surface;
+    swapchain_create_info.minImageCount         = Vk_Min_Swapchain_Image_Count;
+    swapchain_create_info.imageFormat           = Vk_Surface_Format.format;
+    swapchain_create_info.imageColorSpace       = Vk_Surface_Format.colorSpace;
+    swapchain_create_info.imageExtent           = size;
+    swapchain_create_info.imageArrayLayers      = 1;
+    swapchain_create_info.imageUsage            = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    swapchain_create_info.imageSharingMode      = VK_SHARING_MODE_EXCLUSIVE;
+    swapchain_create_info.queueFamilyIndexCount = num_swapchain_queues;
+    swapchain_create_info.pQueueFamilyIndices   = swapchain_queues;
+    swapchain_create_info.preTransform          = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+    swapchain_create_info.compositeAlpha        = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    swapchain_create_info.presentMode           = Vk_Present_Mode;
+    swapchain_create_info.clipped               = VK_TRUE;
+    swapchain_create_info.oldSwapchain          = old_swapchain;
+
+    VK_CHECK(vkCreateSwapchainKHR(Vk_Device, &swapchain_create_info, NULL, &Vk_Swapchain));
+
+    VK_CHECK(vkGetSwapchainImagesKHR(Vk_Device, Vk_Swapchain, &Vk_Swapchain_Image_Count, 0));
+    if (Vk_Swapchain_Image_Count > 8) {
+        Vk_Swapchain_Image_Count = 8;
+    }
+    VK_CHECK(vkGetSwapchainImagesKHR(Vk_Device, Vk_Swapchain, &Vk_Swapchain_Image_Count, Vk_Swapchain_Images));
+
+    for (uint32_t i = 0; i < Vk_Swapchain_Image_Count; ++i) {
+        VkImageViewCreateInfo image_view_create_info;
+        image_view_create_info.sType                           = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        image_view_create_info.pNext                           = 0;
+        image_view_create_info.flags                           = 0;
+        image_view_create_info.image                           = Vk_Swapchain_Images[i]; 
+        image_view_create_info.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
+        image_view_create_info.format                          = Vk_Surface_Format.format;
+        image_view_create_info.components.r                    = VK_COMPONENT_SWIZZLE_IDENTITY;
+        image_view_create_info.components.g                    = VK_COMPONENT_SWIZZLE_IDENTITY;
+        image_view_create_info.components.b                    = VK_COMPONENT_SWIZZLE_IDENTITY;
+        image_view_create_info.components.a                    = VK_COMPONENT_SWIZZLE_IDENTITY;
+        image_view_create_info.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+        image_view_create_info.subresourceRange.baseMipLevel   = 0;
+        image_view_create_info.subresourceRange.levelCount     = 1;
+        image_view_create_info.subresourceRange.baseArrayLayer = 0;
+        image_view_create_info.subresourceRange.layerCount     = 1;
+        VK_CHECK(vkCreateImageView(Vk_Device, &image_view_create_info, NULL, &Vk_Swapchain_Image_Views[i]));
+
+        VkSemaphoreCreateInfo semaphore_create_info;
+        semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        semaphore_create_info.pNext = 0;
+        semaphore_create_info.flags = 0;
+        VK_CHECK(vkCreateSemaphore(Vk_Device, &semaphore_create_info, NULL, &Vk_Sems_Render_Complete[i]));
+    }
+
+    if (old_swapchain != VK_NULL_HANDLE) {
+        vkDestroySwapchainKHR(Vk_Device, old_swapchain, NULL);
+    }
+
+    return size;
+}
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"

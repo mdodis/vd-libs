@@ -67,7 +67,7 @@ set SRC_DIR=%PRJ_DIR%\samples
 set CL_FLAGS=/utf-8 /std:c11 /I %INC_DIR% /W4 /GS- /nologo /I %EXT_DIR%  /D_CRT_SECURE_NO_WARNINGS /DUNICODE /wd4201
 set CL_DEBUG_FLAGS=/Zi /Od
 set CL_RELEASE_FLAGS=/O2
-set CL_LINK_FLAGS="/link "
+set CL_LINK_FLAGS="/link Kernel32.lib"
 
 set LV_FLAGS=-std=c99 -I %INC_DIR% -Wall -Werror -I %EXT_DIR% -Wno-unused-function
 set LV_DEBUG_FLAGS=-O0 -g

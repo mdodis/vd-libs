@@ -8132,6 +8132,9 @@ extern VD_FW_EXPORT_C VdFwBOOL    VdFwReadFile(VdFwHANDLE hFile, void *lpBuffer,
 extern VD_FW_EXPORT_C int         VdFwGetLocaleInfoA(VdFwDWORD Locale, VdFwDWORD LCType, VdFwLPSTR lpLCData, int cchData);
 #pragma comment(linker, "/alternatename:VdFwGetModuleHandleA=GetModuleHandleA")
 extern VD_FW_EXPORT_C VdFwHMODULE VdFwGetModuleHandleA(VdFwLPCSTR lpModuleName);
+extern VD_FW_EXPORT_C long _InterlockedCompareExchange(long volatile *, long, long);
+extern VD_FW_EXPORT_C long _InterlockedExchange(long volatile *, long);
+extern VD_FW_EXPORT_C void __faststorefence();
 
 
 typedef VdFwHGLRC (*VdFwProcwglCreateContext)(VdFwHDC hDC);
@@ -9960,6 +9963,14 @@ static VdFwDWORD vd_fw__win_thread_proc(void *param)
     Vd_Fw_G.height = Vd_Fw_G.h;
     Vd_Fw_G.next_frame.flags = VD_FW_WIN32_FLAGS_SIZE_CHANGED;
 
+
+    {
+        VdFwEvent evt;
+        evt.type = VD_FW_EVENT_TYPE_RESIZE;
+        evt.data.resize.w = Vd_Fw_G.w;
+        evt.data.resize.h = Vd_Fw_G.h;
+        vd_fw__msgbuf_w(&evt);
+    }
 
     // SetWindowPos(Vd_Fw_G.hwnd, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_SHOWWINDOW);
     VdFwShowWindow(Vd_Fw_G.hwnd, VD_FW_SW_SHOW);

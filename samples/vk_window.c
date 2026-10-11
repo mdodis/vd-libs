@@ -50,8 +50,9 @@ typedef struct {
     uint32_t                                    num_swapchain_images;
     uint32_t                                    min_swapchain_image_count;
     VkPresentModeKHR                            present_mode;
-    VkImage                                     *swapchain_images;
-    VkImageView                                 *swapchain_image_views;
+    VkImage                                     swapchain_images[8];
+    VkImageView                                 swapchain_image_views[8];
+    VkSemaphore                                 sems_render_complete[8];
 
     VkDevice                                    device;
 
@@ -66,7 +67,6 @@ typedef struct {
     uint32_t                                    num_frames;
     uint32_t                                    curr_frame;
     VkFrameData                                 *frames;
-    VkSemaphore                                 *sems_render_complete;
 
     VkShaderModule                              shader_module;
     VkPipelineLayout                            pipeline_layout;
@@ -821,7 +821,6 @@ int main(int argc, char const *argv[])
         vd_fw_lock();
         int new_w, new_h;
         if (vd_fw_get_size(&new_w, &new_h)) {
-            printf("Resize\n");
             window_size.width = (uint32_t)new_w;
             window_size.height = (uint32_t)new_h;
             // Size changed. Recreate swapchain & image views
@@ -1066,11 +1065,6 @@ static VkExtent2D create_swapchain_and_image_views()
             vkDestroyImageView(VK.device, VK.swapchain_image_views[i], NULL);
             vkDestroySemaphore(VK.device, VK.sems_render_complete[i], NULL);
         }
-
-        free(VK.swapchain_images);
-        free(VK.swapchain_image_views);
-        free(VK.sems_render_complete);
-
     }
 
     uint32_t swapchain_queues[2] = {VK.present_queue_family, VK.graphics_queue_family};
@@ -1116,11 +1110,11 @@ static VkExtent2D create_swapchain_and_image_views()
     VK_CHECK(vkCreateSwapchainKHR(VK.device, &swapchain_create_info, NULL, &VK.swapchain));
 
     VK_CHECK(vkGetSwapchainImagesKHR(VK.device, VK.swapchain, &VK.num_swapchain_images, 0));
-    VK.swapchain_images = ALLOC_ARRAY(VkImage, VK.num_swapchain_images);
+    if (VK.num_swapchain_images > 8) {
+        VK.num_swapchain_images = 8;
+    }
     VK_CHECK(vkGetSwapchainImagesKHR(VK.device, VK.swapchain, &VK.num_swapchain_images, VK.swapchain_images));
 
-    VK.swapchain_image_views = ALLOC_ARRAY(VkImageView, VK.num_swapchain_images);
-    VK.sems_render_complete = ALLOC_ARRAY(VkSemaphore, VK.num_swapchain_images);
     for (uint32_t i = 0; i < VK.num_swapchain_images; ++i) {
         VkImageViewCreateInfo image_view_create_info;
         image_view_create_info.sType                           = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
