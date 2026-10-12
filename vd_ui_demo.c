@@ -603,6 +603,117 @@ int vd_ui_demo(void)
                 }
                 vd_ui__demo_section_end();
 
+                vd_ui__demo_section_begin("Drawing - Backgrounds");
+                {
+                    vd_ui_labelf("Circle with Radius");
+                    static float rounding_left = 0.f;
+                    static float rounding_top = 0.f;
+                    static float rounding_right = 0.f;
+                    static float rounding_bottom = 0.f;
+
+                    VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
+                    {
+                        vd_ui_sliderf_float(&rounding_left, 0.f, 100.f, VD_UI_AXISH, "left");
+                        vd_ui_sliderf_float(&rounding_top, 0.f, 100.f, VD_UI_AXISH, "top");
+                        vd_ui_sliderf_float(&rounding_right, 0.f, 100.f, VD_UI_AXISH, "right");
+                        vd_ui_sliderf_float(&rounding_bottom, 0.f, 100.f, VD_UI_AXISH, "bottom");
+                    }
+
+                    VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISH, 1)
+                    VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 0)
+                    VD_UI_WITH_STYLE_CHILD_GAP(8)
+                    {
+                        vd_ui_parent_new(0
+                                         | VD_UI_FLAG_FLEX_HORIZONTAL
+                                         , VD_UI_LIT("##circles"));
+                    }
+                    {
+                        VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(1,0,0,1))
+                        VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(64, 64, 0, 0)
+                        VD_UI_WITH_STYLE_ROUNDING(VD_UI_FLAG_BACKGROUND, rounding_left, rounding_top, rounding_right, rounding_bottom)
+                        VD_UI_WITH_STYLE_EDGE_SOFTNESS_ALL(0.f)
+                        {
+                            vd_ui_div_newf(VD_UI_FLAG_BACKGROUND, "##circle-radius-0");
+                        }
+
+                        VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(1,0,0,1))
+                        VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(64, 64, 0, 0)
+                        VD_UI_WITH_STYLE_ROUNDING(VD_UI_FLAG_BACKGROUND, rounding_left, rounding_top, rounding_right, rounding_bottom)
+                        VD_UI_WITH_STYLE_EDGE_SOFTNESS_ALL(0.5f)
+                        {
+                            vd_ui_div_newf(VD_UI_FLAG_BACKGROUND, "##circle-radius-1");
+                        }
+
+                        VD_UI_WITH_STYLE_BACKGROUND_COLOR(vd_ui_f4(1,0,0,1))
+                        VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(64, 64, 0, 0)
+                        VD_UI_WITH_STYLE_ROUNDING(VD_UI_FLAG_BACKGROUND, rounding_left, rounding_top, rounding_right, rounding_bottom)
+                        VD_UI_WITH_STYLE_EDGE_SOFTNESS_ALL(1.f)
+                        {
+                            vd_ui_div_newf(VD_UI_FLAG_BACKGROUND, "##circle-radius-2");
+                        }
+                    }
+                    vd_ui_parent_pop();
+
+                }
+                vd_ui__demo_section_end();
+
+                vd_ui__demo_section_begin("Drawing - Borders");
+                {
+                    vd_ui_labelf("Circle with Radius");
+                    static float rounding_left = 0.f;
+                    static float rounding_top = 0.f;
+                    static float rounding_right = 0.f;
+                    static float rounding_bottom = 0.f;
+
+                    VD_UI_WITH_STYLE_SIZE_PERCENT_OF_PARENT(VD_UI_AXISH, 1, 1)
+                    {
+                        vd_ui_sliderf_float(&rounding_left, 0.f, 100.f, VD_UI_AXISH, "left");
+                        vd_ui_sliderf_float(&rounding_top, 0.f, 100.f, VD_UI_AXISH, "top");
+                        vd_ui_sliderf_float(&rounding_right, 0.f, 100.f, VD_UI_AXISH, "right");
+                        vd_ui_sliderf_float(&rounding_bottom, 0.f, 100.f, VD_UI_AXISH, "bottom");
+                    }
+
+                    VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISH, 1)
+                    VD_UI_WITH_STYLE_SIZE_CONTAIN_CHILDREN(VD_UI_AXISV, 0)
+                    VD_UI_WITH_STYLE_CHILD_GAP(8)
+                    {
+                        vd_ui_parent_new(0
+                                         | VD_UI_FLAG_FLEX_HORIZONTAL
+                                         , VD_UI_LIT("##circles"));
+                    }
+                    {
+                        VD_UI_WITH_STYLE_BORDER_COLOR(vd_ui_f4(1,0,0,1))
+                        VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(64, 64, 0, 0)
+                        VD_UI_WITH_STYLE_ROUNDING(VD_UI_FLAG_BORDER, rounding_left, rounding_top, rounding_right, rounding_bottom)
+                        VD_UI_WITH_STYLE_EDGE_SOFTNESS_ALL(0.f)
+                        VD_UI_WITH_STYLE_BORDER_SIZE(VD_UI_FLAG_BORDER, 2.f)
+                        {
+                            vd_ui_div_newf(VD_UI_FLAG_BORDER, "##circle-radius-0");
+                        }
+
+                        VD_UI_WITH_STYLE_BORDER_COLOR(vd_ui_f4(1,0,0,1))
+                        VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(64, 64, 0, 0)
+                        VD_UI_WITH_STYLE_ROUNDING(VD_UI_FLAG_BORDER, rounding_left, rounding_top, rounding_right, rounding_bottom)
+                        VD_UI_WITH_STYLE_EDGE_SOFTNESS_ALL(0.5f)
+                        VD_UI_WITH_STYLE_BORDER_SIZE(VD_UI_FLAG_BORDER, 2.f)
+                        {
+                            vd_ui_div_newf(VD_UI_FLAG_BORDER, "##circle-radius-1");
+                        }
+
+                        VD_UI_WITH_STYLE_BORDER_COLOR(vd_ui_f4(1,0,0,1))
+                        VD_UI_WITH_STYLE_SIZE_ABSOLUTE_WH(64, 64, 0, 0)
+                        VD_UI_WITH_STYLE_ROUNDING(VD_UI_FLAG_BORDER, rounding_left, rounding_top, rounding_right, rounding_bottom)
+                        VD_UI_WITH_STYLE_EDGE_SOFTNESS_ALL(1.f)
+                        VD_UI_WITH_STYLE_BORDER_SIZE(VD_UI_FLAG_BORDER, 2.f)
+                        {
+                            vd_ui_div_newf(VD_UI_FLAG_BORDER, "##circle-radius-2");
+                        }
+                    }
+                    vd_ui_parent_pop();
+
+                }
+                vd_ui__demo_section_end();
+
                 vd_ui__demo_section_begin("Combos");
                 {
                     const char *options[] = {

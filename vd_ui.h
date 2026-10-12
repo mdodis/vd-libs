@@ -5878,7 +5878,7 @@ VD_UI_API VdUiF4 vd_ui_style_rounding_get(VdUiFlags mask)
         }
     }
 
-    if (mask & VD_UI_FLAG_BACKGROUND) {
+    if (mask & VD_UI_FLAG_BORDER) {
         if (ctx->rounding_bd_stack_count) {
             return ctx->rounding_bd_stack[ctx->rounding_bd_stack_count - 1];
         } else {
@@ -9007,6 +9007,7 @@ int vd_ui__arena_free(VdUi__Arena *a, void *memory, size_t size)
 "    vec4 mask_color = vec4(f_color.rgb, f_color.a * sample.r);                                                    \n" \
 "    vec4 color = mix(normal_color, mask_color, f_amix);                                                           \n" \
 "                                                                                                                  \n" \
+"    color.xyz = pow(color.xyz, vec3(1.0/2.2));                                                                    \n" \
 "    FragColor = color * sdf * border_factor;                                                                      \n" \
 "}                                                                                                                 \n" \
 
