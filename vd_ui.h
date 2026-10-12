@@ -1261,7 +1261,7 @@ typedef struct {
 
 typedef struct {
     /* Texture to bind */
-    VdUiTextureId *selected_texture;
+    VdUiTextureId selected_texture;
     /* Index of first vertex in vertex buffer */
     unsigned int  first_instance;
     /* How many vertices to draw */
@@ -1289,7 +1289,7 @@ typedef struct {
             VdUiTextureFormat format;        // in:  format of the texture
             void              *buffer;       // in:  texture buffer
             size_t            size;          // in:  texture buffer size
-            VdUiTextureId     *write_id;     // out: write the uploaded texture id
+            VdUiTextureId    *write_id;      // out: write the uploaded texture id
         } new_texture;
 
         struct {
@@ -1358,7 +1358,7 @@ VD_UI_API void             vd_ui_push_rectgrad(float rect[4], float color[16],
                                                float border_thickness);
 
 VD_UI_API void             vd_ui_push_texslice(float rect[4], float uv[4], float color[16],
-                                               VdUiTextureId *texture,
+                                               VdUiTextureId texture,
                                                float corner_radius[4], float edge_softness, float border_thickness);
 
 VD_UI_API float            vd_ui_get_font_height(VdUiFontId font, float pixel_height);
@@ -2274,17 +2274,17 @@ static void vd_ui__get_clip(VdUiContext *ctx, float *out_clip);
 static int  vd_ui__is_clipped(VdUiContext *ctx, VdUiDiv *div);
 
 static void vd_ui__push_rect(VdUiContext *ctx, float rect[4], float color[4]);
-static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId *texture, float p0[2], float p1[2],
-                                                                         float u0[2], float u1[2],
-                                                                         float color[4],
-                                                                         VdUiVertexFlags flags);
-static void vd_ui__push_vertexgrad(VdUiContext *ctx, VdUiTextureId *texture, float p0[2], float p1[2],
-                                                                             float u0[2], float u1[2],
-                                                                             float color[16],
-                                                                             VdUiVertexFlags flags,
-                                                                             float corner_radius[4],
-                                                                             float edge_softness,
-                                                                             float border_thickness);
+static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId texture, float p0[2], float p1[2],
+                                                                        float u0[2], float u1[2],
+                                                                        float color[4],
+                                                                        VdUiVertexFlags flags);
+static void vd_ui__push_vertexgrad(VdUiContext *ctx, VdUiTextureId texture, float p0[2], float p1[2],
+                                                                            float u0[2], float u1[2],
+                                                                            float color[16],
+                                                                            VdUiVertexFlags flags,
+                                                                            float corner_radius[4],
+                                                                            float edge_softness,
+                                                                            float border_thickness);
 static void vd_ui__get_transformed_rect(VdUiContext *ctx, VdUiDiv *div, float rect[4]);
 static void vd_ui__push_pass(VdUiContext *ctx);
 static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y, float size, float color[16]);
@@ -2552,7 +2552,7 @@ struct VdUiContext {
     unsigned char           activation_mouse_button_stack[VD_UI_ACTIVATION_MOUSE_BUTTON_STACK_COUNT];
 
     // Stored to differentiate between passes
-    VdUiTextureId          *current_texture_id;
+    VdUiTextureId          current_texture_id;
 
     struct {
         VdUiFontId         font;
@@ -2749,7 +2749,7 @@ VD_UI_API void vd_ui_frame_end(void)
     ctx->vbuf_count = 0;
     ctx->num_passes = 0;
     ctx->num_updates        = 0;
-    ctx->current_texture_id = 0;
+    VD_UI_TEXTURE_ID_MAKE_NULL(ctx->current_texture_id);
     ctx->root.rect[0]      = 0.f;
     ctx->root.rect[1]      = 0.f;
     ctx->root.rect[2]      = ctx->window[0];
@@ -3276,7 +3276,7 @@ VD_UI_API void vd_ui_push_rectgrad(float rect[4], float color[16],
                                    float border_thickness)
 {
     VdUiContext *ctx = vd_ui_context_get();
-    vd_ui__push_vertexgrad(ctx, &ctx->texture,
+    vd_ui__push_vertexgrad(ctx, ctx->texture,
                            (float[]){rect[0], rect[1]}, (float[]){rect[2], rect[3]},
                            (float[]){1.f / (float)(ctx->atlas[0]) , 1.f / (float)(ctx->atlas[1])},
                            (float[]){3.f / (float)(ctx->atlas[0]) , 3.f / (float)(ctx->atlas[1])},
@@ -3286,7 +3286,7 @@ VD_UI_API void vd_ui_push_rectgrad(float rect[4], float color[16],
 }
 
 VD_UI_API void vd_ui_push_texslice(float rect[4], float uv[4], float color[16],
-                                   VdUiTextureId *texture,
+                                   VdUiTextureId texture,
                                    float corner_radius[4], float edge_softness, float border_thickness)
 {
     VdUiContext *ctx = vd_ui_context_get();
@@ -3321,7 +3321,7 @@ VD_UI_API void vd_ui_push_glyph(VdUiFontId font, float rect[4], float uv[4], flo
     float u0[2] = {uv[VD_UI_LEFT],  uv[VD_UI_TOP]};
     float u1[2] = {uv[VD_UI_RIGHT], uv[VD_UI_BOTTOM]};
 
-    vd_ui__push_vertex(ctx, &ctx->texture,
+    vd_ui__push_vertex(ctx, ctx->texture,
         p0, p1,
         u0, u1,
         color,
@@ -7137,16 +7137,16 @@ static void vd_ui__update_all_fonts(VdUiContext *ctx)
     ctx->state = VD_UI__TEXTURE_STATE_IN_GPU;
 }
 
-static void vd_ui__push_vertexgrad(VdUiContext *ctx, VdUiTextureId *texture, float p0[2], float p1[2],
-                                                                             float u0[2], float u1[2],
-                                                                             float color[16],
-                                                                             VdUiVertexFlags flags,
-                                                                             float corner_radius[4],
-                                                                             float edge_softness,
-                                                                             float border_thickness)
+static void vd_ui__push_vertexgrad(VdUiContext *ctx, VdUiTextureId texture, float p0[2], float p1[2],
+                                                                            float u0[2], float u1[2],
+                                                                            float color[16],
+                                                                            VdUiVertexFlags flags,
+                                                                            float corner_radius[4],
+                                                                            float edge_softness,
+                                                                            float border_thickness)
 {
 
-    if (VD_UI_TEXTURE_ID_IS_NULL(*texture))
+    if (VD_UI_TEXTURE_ID_IS_NULL(texture))
     {
         return;
     }
@@ -7167,7 +7167,7 @@ static void vd_ui__push_vertexgrad(VdUiContext *ctx, VdUiTextureId *texture, flo
         clip_same = 0;
     }
 
-    if ((ctx->current_texture_id != texture) || (!clip_same))
+    if ((!VD_UI_TEXTURE_ID_COMPARE(ctx->current_texture_id, texture)) || (!clip_same))
     {
         ctx->current_texture_id = texture;
         vd_ui__push_pass(ctx);
@@ -7239,10 +7239,10 @@ static void vd_ui__push_pass(VdUiContext *ctx)
     pass->instance_count   = 0;
 }
 
-static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId *texture, float p0[2], float p1[2],
-                                                                         float u0[2], float u1[2],
-                                                                         float color[4],
-                                                                         VdUiVertexFlags flags)
+static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId texture, float p0[2], float p1[2],
+                                                                        float u0[2], float u1[2],
+                                                                        float color[4],
+                                                                        VdUiVertexFlags flags)
 {
     float colors[16] = {
         color[0], color[1], color[2], color[3],
@@ -7256,7 +7256,7 @@ static void vd_ui__push_vertex(VdUiContext *ctx, VdUiTextureId *texture, float p
 
 static void vd_ui__push_rect(VdUiContext *ctx, float rect[4], float color[4])
 {
-    vd_ui__push_vertex(ctx, &ctx->texture,
+    vd_ui__push_vertex(ctx, ctx->texture,
         (float[]){rect[0], rect[1]}, (float[]){rect[2], rect[3]},
         (float[]){1.f / (float)(ctx->atlas[0]) , 1.f / (float)(ctx->atlas[1])}, (float[]){3.f / (float)(ctx->atlas[0]) , 3.f / (float)(ctx->atlas[1])},
         color,
@@ -7287,7 +7287,7 @@ static void vd_ui__put_line(VdUiContext *ctx, VdUiStr s, float x, float y, float
             &u1[0], &u1[1]);
 
         float zero_corner_radius[4] = {0,0,0,0};
-        vd_ui__push_vertexgrad(ctx, &ctx->texture,
+        vd_ui__push_vertexgrad(ctx, ctx->texture,
             p0, p1,
             u0, u1,
             color,
@@ -7319,7 +7319,7 @@ static void vd_ui__put_symbol(VdUiContext *ctx, VdUiSymbol symbol, float *x, flo
         &u1[0], &u1[1]);
 
     float zero_corner_radius[4] = {0, 0, 0, 0};
-    vd_ui__push_vertexgrad(ctx, &ctx->texture,
+    vd_ui__push_vertexgrad(ctx, ctx->texture,
         p0, p1,
         u0, u1,
         color,
