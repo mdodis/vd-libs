@@ -9007,7 +9007,6 @@ int vd_ui__arena_free(VdUi__Arena *a, void *memory, size_t size)
 "    vec4 mask_color = vec4(f_color.rgb, f_color.a * sample.r);                                                    \n" \
 "    vec4 color = mix(normal_color, mask_color, f_amix);                                                           \n" \
 "                                                                                                                  \n" \
-"    color.xyz = pow(color.xyz, vec3(1.0/2.2));                                                                    \n" \
 "    FragColor = color * sdf * border_factor;                                                                      \n" \
 "}                                                                                                                 \n" \
 
