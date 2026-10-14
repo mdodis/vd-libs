@@ -286,7 +286,7 @@ int main(int argc, char const *argv[])
         // Loop through render passes
         for (unsigned int i = 0; i < num_passes; ++i) {
             VdUiRenderPass *pass = &passes[i];
-            GLuint texture_id = (GLuint)pass->selected_texture->id;
+            GLuint texture_id = (GLuint)pass->selected_texture.id;
             GLint clip_width   = (GLint)pass->clip[2] - (GLint)pass->clip[0];
             GLint clip_height  = (GLint)pass->clip[3] - (GLint)pass->clip[1];
             GLint clip_x       = (GLint)pass->clip[0];

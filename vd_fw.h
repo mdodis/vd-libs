@@ -144,14 +144,6 @@
 #   define VD_FW_FREE(pprev, psize) free(pprev)
 #endif // !VD_FW_FREE
 
-#ifndef VD_FW_LOG
-#   define VD_FW_LOG(fmt, ...)
-#endif // !VD_FW_LOG
-
-#ifndef VD_FW_PROFILE_ZONE
-#   define VD_FW_PROFILE_ZONE(name)
-#endif // !VD_FW_PROFILE_ZONE
-
 #define VD_FW_ENDIANNESS_LE 1
 #define VD_FW_ENDIANNESS_BE 0
 #ifndef VD_FW_ENDIANNESS
@@ -7039,6 +7031,14 @@ VD_FW_OPENGL_CORE_FUNCTIONS
 #endif
 
 #ifdef VD_FW_IMPL
+#ifndef VD_FW_LOG
+#   define VD_FW_LOG(fmt, ...)
+#endif // !VD_FW_LOG
+
+#ifndef VD_FW_PROFILE_ZONE
+#   define VD_FW_PROFILE_ZONE(name)
+#endif // !VD_FW_PROFILE_ZONE
+
 static int vd_fw__load_opengl(VdFwGlConfig *config);
 static int vd_fw__lookup_gl_extension(const char *q, VdFwGlConfig *config);
 
@@ -7930,9 +7930,11 @@ typedef VdFwLONG VdFwLSTATUS;
 #ifdef UNICODE
 #define VD_FW_MAKEINTRESOURCE  VD_FW_MAKEINTRESOURCEW
 #define VD_FW_TEXT(x) L##x
+#define VdFwLoadIcon(a, b) VdFwLoadIconW(a, b)
 #else
 #define VD_FW_MAKEINTRESOURCE  VD_FW_MAKEINTRESOURCEA
 #define VD_FW_TEXT(x) x
+#define VdFwLoadIcon(a, b) VdFwLoadIconA(a, b)
 #endif
 
 /* ----Win32 Functions----------------------------------------------------------------------------------------------- */
@@ -7958,6 +7960,7 @@ X(VdFwBOOL,     SetWindowPos, (VdFwHWND hWnd, VdFwHWND hWndInsertAfter, int X, i
 X(VdFwBOOL,     GetWindowPlacement, (VdFwHWND hWnd, VdFwWINDOWPLACEMENT* lpwndpl)) \
 X(VdFwBOOL,     SetWindowPlacement, (VdFwHWND hWnd, const VdFwWINDOWPLACEMENT* lpwndpl)) \
 X(VdFwBOOL,     IsZoomed, (VdFwHWND hWnd)) \
+X(VdFwBOOL,     IsIconic, (VdFwHWND hWnd)) \
 X(VdFwUINT,     MapVirtualKeyA, (VdFwUINT uCode, VdFwUINT uMapType)) \
 X(VdFwUINT,     MapVirtualKeyW, (VdFwUINT uCode, VdFwUINT uMapType)) \
 X(VdFwHWND,     SetCapture, (VdFwHWND hWnd)) \
@@ -7987,6 +7990,8 @@ X(VdFwLONG_PTR, GetWindowLongPtrW, (VdFwHWND hWnd, int nIndex)) \
 X(VdFwLONG_PTR, SetWindowLongPtrA, (VdFwHWND hWnd, int nIndex, VdFwLONG_PTR dwNewLong)) \
 X(VdFwLONG_PTR, SetWindowLongPtrW, (VdFwHWND hWnd, int nIndex, VdFwLONG_PTR dwNewLong)) \
 X(VdFwHCURSOR,  LoadCursorA, (VdFwHINSTANCE hInstance, VdFwLPCSTR lpCursorName)) \
+X(VdFwHICON,    LoadIconA, (VdFwHINSTANCE hInstance, VdFwLPCSTR lpIconName)) \
+X(VdFwHICON,    LoadIconW, (VdFwHINSTANCE hInstance, VdFwLPCWSTR lpIconName)) \
 X(VdFwHCURSOR,  LoadCursorW, (VdFwHINSTANCE hInstance, VdFwLPCWSTR lpCursorName)) \
 X(VdFwHICON,    CreateIconIndirect, (VdFwPICONINFO piconinfo)) \
 X(VdFwHMONITOR, MonitorFromWindow, (VdFwHWND hwnd, VdFwDWORD dwFlags)) \
@@ -8212,6 +8217,12 @@ enum {
     VD_FW_WIN32_WINDOW_STATE_MAXIMIZED = 1 << 1,
 };
 
+#ifndef VD_FW_WIN32_ICON_RESOURCE_INT
+#   define VD_FW__WIN32_ICON_SET 0
+#else
+#   define VD_FW__WIN32_ICON_SET 1
+#endif // !VD_FW_WIN32_ICON_RESOURCE_INT
+
 typedef struct {
     int flags;
 } VdFw__Win32Frame;
@@ -8321,6 +8332,7 @@ typedef struct {
     void                        *pixel_buffer;
     int                         vsync;
     int                         width,height;
+    int                         size_changed;
 
 /* ----RENDER THREAD - WINDOW THREAD DATA---------------------------------------------------------------------------- */
     VdFwEvent                   msgbuf[VD_FW_WIN32_MESSAGE_BUFFER_SIZE];
@@ -8875,6 +8887,7 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
     }
 
     Vd_Fw_G.num_evts = 0;
+    Vd_Fw_G.size_changed = 0;
 
     VdFwEvent mm;
     while (vd_fw__msgbuf_r(&mm) && (Vd_Fw_G.num_evts < VD_FW_EVENT_COUNT_MAX)) {
@@ -8884,9 +8897,11 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
             case VD_FW_EVENT_TYPE_CHARACTER: {
                 Vd_Fw_G.codepoints[(num_codepoints++) % VD_FW_CODEPOINT_BUFFER_COUNT] = mm.data.character.codepoint;
             } break;
+
             case VD_FW_EVENT_TYPE_RESIZE: {
                 Vd_Fw_G.width = mm.data.resize.w;
                 Vd_Fw_G.height = mm.data.resize.h;
+                Vd_Fw_G.size_changed = 1;
             } break;
 
             case VD_FW_EVENT_TYPE_CLOSE_REQUEST: {
@@ -9437,7 +9452,7 @@ VD_FW_API int vd_fw_get_size(int *w, int *h)
 {
     *w = Vd_Fw_G.width;
     *h = Vd_Fw_G.height;
-    return Vd_Fw_G.curr_frame.flags & VD_FW_WIN32_FLAGS_SIZE_CHANGED;
+    return Vd_Fw_G.size_changed || Vd_Fw_G.curr_frame.flags & VD_FW_WIN32_FLAGS_SIZE_CHANGED;
 }
 
 VD_FW_API void vd_fw_set_size(int w, int h)
@@ -9893,6 +9908,10 @@ static VdFwDWORD vd_fw__win_thread_proc(void *param)
         wcx.lpszClassName  = VD_FW_TEXT("FWCLASS");
         wcx.hbrBackground  = (VdFwHBRUSH)VdFwGetStockObject(4/*BLACK_BRUSH*/);
         wcx.hCursor        = VdFwLoadCursor(NULL, VD_FW_IDC_ARROW);
+#if VD_FW__WIN32_ICON_SET
+        wcx.hIcon          = VdFwLoadIcon((VdFwHINSTANCE)VdFwGetModuleHandleA(NULL), VD_FW_MAKEINTRESOURCEA(VD_FW_WIN32_ICON_RESOURCE_INT));
+        wcx.hIconSm        = wcx.hIcon;
+#endif // VD_FW__WIN32_ICON_SET
         if (!VdFwRegisterClassEx(&wcx)) {
             return 0;
         }
@@ -9962,15 +9981,6 @@ static VdFwDWORD vd_fw__win_thread_proc(void *param)
     Vd_Fw_G.width = Vd_Fw_G.w;
     Vd_Fw_G.height = Vd_Fw_G.h;
     Vd_Fw_G.next_frame.flags = VD_FW_WIN32_FLAGS_SIZE_CHANGED;
-
-
-    {
-        VdFwEvent evt;
-        evt.type = VD_FW_EVENT_TYPE_RESIZE;
-        evt.data.resize.w = Vd_Fw_G.w;
-        evt.data.resize.h = Vd_Fw_G.h;
-        vd_fw__msgbuf_w(&evt);
-    }
 
     // SetWindowPos(Vd_Fw_G.hwnd, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_SHOWWINDOW);
     VdFwShowWindow(Vd_Fw_G.hwnd, VD_FW_SW_SHOW);
@@ -10067,6 +10077,7 @@ VD_FW_API char *vd_fw__debug_dump_file_text(const char *path, size_t *size)
 
     VdFwLARGE_INTEGER sz;
     if (!VdFwGetFileSizeEx(hfile, &sz)) {
+        VdFwCloseHandle(hfile);
         return 0;
     }
 
@@ -10075,9 +10086,11 @@ VD_FW_API char *vd_fw__debug_dump_file_text(const char *path, size_t *size)
     VdFwDWORD bytes_read;
     if (!VdFwReadFile(hfile, memory, (VdFwDWORD)sz.QuadPart, &bytes_read, 0)) {
         VD_FW_FREE(memory, sz.QuadPart + 1);
+        VdFwCloseHandle(hfile);
         return 0;
     }
 
+    VdFwCloseHandle(hfile);
     memory[sz.QuadPart] = 0;
     *size = sz.QuadPart + 1;
     return memory;
@@ -10619,7 +10632,7 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             Vd_Fw_G.w = VD_FW_LOWORD(lparam);
             Vd_Fw_G.h = VD_FW_HIWORD(lparam);
 
-            {
+            if (!VdFwIsIconic(hwnd)) {
                 VdFwEvent evt;
                 evt.type = VD_FW_EVENT_TYPE_RESIZE;
                 evt.data.resize.w = Vd_Fw_G.w;
@@ -11003,20 +11016,26 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             VdFwWORD width  = VD_FW_LOWORD(lparam);
             VdFwWORD height = VD_FW_HIWORD(lparam);
 
-            VdFwRECT rect;
-            VdFwGetWindowRect(Vd_Fw_G.hwnd, &rect);
 
-            VdFwRECT newrect;
-            newrect.left = rect.left;
-            newrect.right = rect.left + width;
-            newrect.top = rect.top;
-            newrect.bottom = rect.top + height;
+            VdFwRECT rect = {0};
+            rect.right = width;
+            rect.bottom = height;
+
+            if (Vd_Fw_G.draw_decorations) {
+                VdFwAdjustWindowRect(&rect, VD_FW_WS_OVERLAPPEDWINDOW | VD_FW_WS_SIZEBOX, 0);
+            }
 
             VdFwSetWindowPos(Vd_Fw_G.hwnd, VD_FW_HWND_TOP,
-                         newrect.left, newrect.top,
-                         newrect.right - newrect.left,
-                         newrect.bottom - newrect.top,
-                         VD_FW_SWP_NOZORDER | VD_FW_SWP_NOOWNERZORDER | VD_FW_SWP_FRAMECHANGED);
+                         rect.left, rect.top,
+                         rect.right - rect.left,
+                         rect.bottom - rect.top,
+                         VD_FW_SWP_NOZORDER | VD_FW_SWP_NOMOVE | VD_FW_SWP_NOOWNERZORDER | VD_FW_SWP_FRAMECHANGED);
+
+            VdFwEvent evt;
+            evt.type = VD_FW_EVENT_TYPE_RESIZE;
+            evt.data.resize.w = width;
+            evt.data.resize.h = height;
+            vd_fw__msgbuf_w(&evt);
 
         } break;
 

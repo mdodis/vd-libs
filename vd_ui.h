@@ -239,9 +239,9 @@ VD_UI_INL float            vd_ui_fremap(float value, float low1, float high1, fl
 /* ----UI------------------------------------------------------------------------------------------------------------ */
 enum {
     // Per div flags
-    VD_UI_FLAG_TEXT             = 1 <<  0,
-    VD_UI_FLAG_BACKGROUND       = 1 <<  1,
-    VD_UI_FLAG_BORDER           = 1 <<  2,
+    VD_UI_FLAG_BACKGROUND       = 1 <<  0,
+    VD_UI_FLAG_BORDER           = 1 <<  1,
+    VD_UI_FLAG_TEXT             = 1 <<  2,
     VD_UI_FLAG_SYMBOL           = 1 <<  3,
     VD_UI_FLAG_CLICKABLE        = 1 <<  4,
     VD_UI_FLAG_CLIP_CONTENT     = 1 <<  5,
@@ -256,6 +256,8 @@ enum {
     VD_UI_FLAG_KB_CLICKABLE     = 1 << 13,
     VD_UI_FLAG_VIEW_SCROLL_LOCKX= 1 << 14,
     VD_UI_FLAG_VIEW_SCROLL_LOCKY= 1 << 15,
+
+    VD_UI_FLAG_DRAW_PROC_LAST   = 1 << 4,
 
     // Mouse Enumerations
     VD_UI_MOUSE_LEFT        = 0,
@@ -628,6 +630,7 @@ struct VdUiDiv {
 
     // ----------------------------------------------------------------------------------------------------------Drawing
     VdUiDrawProc    *draw_proc;
+    VdUiFlags       draw_proc_order;
     // Custom user data passed to draw_proc
     void            *draw_proc_data;
     // Set this to 1 to push a new render pass for cases where this div needs to appear on top of its siblings
@@ -1346,6 +1349,7 @@ VD_UI_API void             vd_ui_render_begin(void);
  * @param  usr  User data passed to the callback
  */
 VD_UI_API void             vd_ui_set_draw_proc(VdUiDiv *div, VdUiDrawProc *proc, void *usr);
+VD_UI_API void             vd_ui_set_draw_proc_order(VdUiDiv *div, VdUiFlags flags);
 
 /**
  * Push a gradient-colored rectangle to athe vertex buffer
@@ -3267,7 +3271,13 @@ VD_UI_API void vd_ui_render_end(void)
 VD_UI_API void vd_ui_set_draw_proc(VdUiDiv *div, VdUiDrawProc *proc, void *usr)
 {
     div->draw_proc = proc;
+    div->draw_proc_order = VD_UI_FLAG_DRAW_PROC_LAST;
     div->draw_proc_data = usr;
+}
+
+VD_UI_API void vd_ui_set_draw_proc_order(VdUiDiv *div, VdUiFlags flags)
+{
+    div->draw_proc_order = flags;
 }
 
 VD_UI_API void vd_ui_push_rectgrad(float rect[4], float color[16],
@@ -7524,14 +7534,32 @@ static void vd_ui__render_div(VdUiContext *ctx, VdUiDiv *curr, float rect[4])
             vd_ui__push_pass(ctx);
         }
 
+        if (curr->draw_proc_order >= VD_UI_FLAG_BACKGROUND) {
+            if (curr->draw_proc != 0) {
+                curr->draw_proc(curr, rect, curr->draw_proc_data);
+            }
+        }
+
         if (curr->flags & VD_UI_FLAG_BACKGROUND) {
             VdUiGradient grad = vd_ui_coloring_interpolate(curr->style.background.coloring, curr->hot_t, curr->active_t);
             vd_ui_push_rectgrad(rect, grad.e, curr->style.background.corner_radius.e, curr->style.background.edge_softness, 0.f);
         }
 
+        if (curr->draw_proc_order >= VD_UI_FLAG_BORDER) {
+            if (curr->draw_proc != 0) {
+                curr->draw_proc(curr, rect, curr->draw_proc_data);
+            }
+        }
+
         if (curr->flags & VD_UI_FLAG_BORDER) {
             VdUiGradient grad = vd_ui_coloring_interpolate(curr->style.border.coloring, curr->hot_t, curr->active_t);
             vd_ui_push_rectgrad(rect, grad.e, curr->style.border.corner_radius.e, curr->style.border.edge_softness, curr->style.border.border_thickness);
+        }
+
+        if (curr->draw_proc_order >= VD_UI_FLAG_TEXT) {
+            if (curr->draw_proc != 0) {
+                curr->draw_proc(curr, rect, curr->draw_proc_data);
+            }
         }
 
         if (curr->flags & VD_UI_FLAG_TEXT) {
@@ -7604,8 +7632,10 @@ static void vd_ui__render_div(VdUiContext *ctx, VdUiDiv *curr, float rect[4])
 
         }
 
-        if (curr->draw_proc != 0) {
-            curr->draw_proc(curr, rect, curr->draw_proc_data);
+        if (curr->draw_proc_order >= VD_UI_FLAG_DRAW_PROC_LAST) {
+            if (curr->draw_proc != 0) {
+                curr->draw_proc(curr, rect, curr->draw_proc_data);
+            }
         }
 
         if (ctx->debug.layout_recompute_vis_on) {
