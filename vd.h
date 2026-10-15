@@ -476,22 +476,14 @@ void        vd_semaphore_free(VdSemaphore semaphore);
 extern "C" {
 #endif // VD_CPP
 
-#pragma comment(linker, "/alternatename:vd_InterlockedCompareExchange=_InterlockedCompareExchange")
-extern long vd_InterlockedCompareExchange(long volatile *, long, long);
-#pragma comment(linker, "/alternatename:vd_InterlockedCompareExchange64=_InterlockedCompareExchange64")
-extern long long vd_InterlockedCompareExchange64(long long volatile *, long long, long long);
-#pragma comment(linker, "/alternatename:vd_InterlockedCompareExchangePointer=_InterlockedCompareExchangePointer")
-extern void* vd_InterlockedCompareExchangePointer(void* volatile *, void*, void*);
-#pragma comment(linker, "/alternatename:vd_InterlockedIncrement=_InterlockedIncrement")
-extern long vd_InterlockedIncrement(long volatile *);
-#pragma comment(linker, "/alternatename:vd_InterlockedAdd=_InterlockedAdd")
-extern long vd_InterlockedAdd(long volatile *, long);
-#pragma comment(linker, "/alternatename:vd_InterlockedExchange=_InterlockedExchange")
-extern long vd_InterlockedExchange(long volatile *, long);
-#pragma comment(linker, "/alternatename:vd_ReadBarrier=_ReadBarrier")
-extern void vd_ReadBarrier();
-#pragma comment(linker, "/alternatename:vd_WriteBarrier=_WriteBarrier")
-extern void vd_WriteBarrier();
+extern long _InterlockedCompareExchange(long volatile *, long, long);
+extern long long _InterlockedCompareExchange64(long long volatile *, long long, long long);
+extern void* _InterlockedCompareExchangePointer(void* volatile *, void*, void*);
+extern long _InterlockedIncrement(long volatile *);
+extern long _InterlockedAdd(long volatile *, long);
+extern long _InterlockedExchange(long volatile *, long);
+extern void _ReadBarrier();
+extern void _WriteBarrier();
 
 #if VD_CPP
 }
@@ -500,67 +492,67 @@ extern void vd_WriteBarrier();
 
 VD_INLINE void vd_read_barrier()
 {
-    vd_ReadBarrier();
+    _ReadBarrier();
 }
 
 VD_INLINE void vd_write_barrier()
 {
-    vd_WriteBarrier();
+    _WriteBarrier();
 }
 
 VD_INLINE int32_t vd_compare_and_swap_i32(volatile int32_t *ptr, int32_t new_value, int32_t old_value)
 {
 #if VD_PLATFORM_WINDOWS
-    return (int32_t)vd_InterlockedCompareExchange((long volatile *)ptr, (long)new_value, (long)old_value);
+    return (int32_t)_InterlockedCompareExchange((long volatile *)ptr, (long)new_value, (long)old_value);
 #endif // VD_PLATFORM_WINDOWS
 }
 
 VD_INLINE uint32_t vd_compare_and_swap_u32(volatile uint32_t *ptr, uint32_t new_value, uint32_t old_value)
 {
 #if VD_PLATFORM_WINDOWS
-    return (uint32_t)vd_InterlockedCompareExchange((long volatile *)ptr, *(long*)&new_value, *(long*)&old_value);
+    return (uint32_t)_InterlockedCompareExchange((long volatile *)ptr, *(long*)&new_value, *(long*)&old_value);
 #endif // VD_PLATFORM_WINDOWS
 }
 
 VD_INLINE int64_t vd_compare_and_swap_i64(volatile int64_t *ptr, int64_t new_value, int64_t expected)
 {
 #if VD_PLATFORM_WINDOWS
-    return (int64_t)vd_InterlockedCompareExchange64(ptr, new_value, expected);
+    return (int64_t)_InterlockedCompareExchange64(ptr, new_value, expected);
 #endif // VD_PLATFORM_WINDOWS
 }
 
 VD_INLINE void *vd_compare_and_swap_ptr(void *volatile *ptr, void *new_value, void *expected)
 {
 #if VD_PLATFORM_WINDOWS
-    return vd_InterlockedCompareExchangePointer(ptr, new_value, expected);
+    return _InterlockedCompareExchangePointer(ptr, new_value, expected);
 #endif // VD_PLATFORM_WINDOWS
 }
 
 VD_INLINE int32_t vd_swap_u32(volatile uint32_t *ptr, uint32_t new_value)
 {
 #if VD_PLATFORM_WINDOWS
-    return vd_InterlockedExchange((volatile long*)ptr, new_value);
+    return _InterlockedExchange((volatile long*)ptr, new_value);
 #endif // VD_PLATFORM_WINDOWS
 }
 
 VD_INLINE int32_t vd_inc_and_fetch_i32(volatile int32_t *addend)
 {
 #if VD_PLATFORM_WINDOWS
-    return vd_InterlockedIncrement((volatile long *)addend);
+    return _InterlockedIncrement((volatile long *)addend);
 #endif // VD_PLATFORM_WINDOWS
 }
 
 VD_INLINE uint32_t vd_inc_and_fetch_u32(volatile uint32_t *addend)
 {
 #if VD_PLATFORM_WINDOWS
-    return vd_InterlockedIncrement((volatile long *)addend);
+    return _InterlockedIncrement((volatile long *)addend);
 #endif // VD_PLATFORM_WINDOWS
 }
 
 VD_INLINE int32_t vd_add_and_fetch_i32(volatile int32_t *addend, int32_t value)
 {
 #if VD_PLATFORM_WINDOWS
-    return vd_InterlockedAdd((volatile long *)addend, value);
+    return _InterlockedAdd((volatile long *)addend, value);
 #endif // VD_PLATFORM_WINDOWS
 }
 
