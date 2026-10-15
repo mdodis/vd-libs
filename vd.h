@@ -58,10 +58,10 @@ VD_API void vd_init(VdInitInfo *info);
  */
 #define VD_UNUSED(x) (void)(x)
 
-#define VD_OFFSET_OF(type, element) ((Vdusize) & (((type*)0)->element))
+#define VD_OFFSET_OF(type, element) ((size_t) & (((type*)0)->element))
 
 #define VD_CONTAINER_OF(ptr, type, member) \
-    (type*)(((Vdu8ptr)ptr) - ((Vdusize)VD_OFFSET_OF(type, member)))
+    (type*)(((uint8_t*)ptr) - ((size_t)VD_OFFSET_OF(type, member)))
 
 /* ----HOST COMPILER------------------------------------------------------------------------------------------------- */
 #if defined(__GNUC__) || defined(__clang__)
@@ -139,58 +139,8 @@ VD_API void vd_init(VdInitInfo *info);
 #endif // !VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
 
 /* ----TYPES--------------------------------------------------------------------------------------------------------- */
-typedef uint8_t       Vdu8;
-typedef uint8_t*      Vdu8ptr;
-typedef uint16_t      Vdu16;
-typedef uint16_t*     Vdu16ptr;
-typedef uint32_t      Vdu32;
-typedef uint32_t*     Vdu32ptr;
-typedef uint64_t      Vdu64;
-typedef uint64_t*     Vdu64ptr;
-typedef int8_t        Vdi8;
-typedef int8_t*       Vdi8ptr;
-typedef int16_t       Vdi16;
-typedef int16_t*      Vdi16ptr;
-typedef int32_t       Vdi32;
-typedef int32_t*      Vdi32ptr;
-typedef int64_t       Vdi64;
-typedef int64_t*      Vdi64ptr;
-typedef unsigned char Vduchar;
-typedef uintptr_t     Vduptr;
-typedef size_t        Vdusize;
-typedef char*         Vdcstr;
-typedef float         Vdf32;
-typedef double        Vdf64;
-typedef int32_t       Vdb32;
-
 #define VD_FALSE 0
 #define VD_TRUE  1
-
-#if VD_MACRO_ABBREVIATIONS
-#define u8     Vdu8
-#define u8ptr  Vdu8ptr
-#define u16    Vdu16
-#define u16ptr Vdu16ptr
-#define u32    Vdu32
-#define u32ptr Vdu32ptr
-#define u64    Vdu64
-#define u64ptr Vdu64ptr
-#define i8     Vdi8
-#define i8ptr  Vdi8ptr
-#define i16    Vdi16
-#define i16ptr Vdi16ptr
-#define i32    Vdi32
-#define i32ptr Vdi32ptr
-#define i64    Vdi64
-#define i64ptr Vdi64ptr
-#define uchar  Vduchar
-#define uptr   Vduptr
-#define usize  Vdusize
-#define cstr   Vdcstr
-#define f32    Vdf32
-#define f64    Vdf64
-#define b32    Vdb32
-#endif // VD_MACRO_ABBREVIATIONS
 
 /* ----BUILD CONFIGURATION------------------------------------------------------------------------------------------- */
 #ifndef VD_BUILD_DEBUG
@@ -263,7 +213,7 @@ static VD_INLINE void *vd_memset(void *dest, int value, size_t num)
 
 static VD_INLINE void *vd_memcpy(void *dest, const void *src, size_t num)
 {
-    for (size_t i = 0; i < num; ++i) ((Vdu8ptr)dest)[i] = ((Vdu8ptr)src)[i];
+    for (size_t i = 0; i < num; ++i) ((uint8_t*)dest)[i] = ((uint8_t*)src)[i];
     return dest;
 }
 
@@ -271,8 +221,8 @@ static VD_INLINE int vd_memcmp(const void *lhs, const void *rhs, size_t num)
 {
     size_t i = 0;
     while (i < num) {
-        Vdu8 lhs_c = ((Vdu8ptr)lhs)[i];
-        Vdu8 rhs_c = ((Vdu8ptr)rhs)[i];
+        uint8_t lhs_c = ((uint8_t*)lhs)[i];
+        uint8_t rhs_c = ((uint8_t*)rhs)[i];
         if (lhs_c < rhs_c) {
             return -1;
         } else if (lhs_c > rhs_c) {
@@ -286,8 +236,8 @@ static VD_INLINE int vd_memcmp(const void *lhs, const void *rhs, size_t num)
 }
 
 static VD_INLINE void *vd_memmove(void *dest, void *src, size_t num) {
-    Vdu8ptr d = (Vdu8ptr)dest;
-    Vdu8ptr s = (Vdu8ptr)src;
+    uint8_t* d = (uint8_t*)dest;
+    uint8_t* s = (uint8_t*)src;
 
     if (d < s) {
         for (size_t i = 0; i < num; ++i) {
@@ -314,26 +264,26 @@ static VD_INLINE void *vd_memmove(void *dest, void *src, size_t num) {
 #define VD_IMPOSSIBLE() VD_ASSERT(VD_FALSE)
 #define VD_TODO()       VD_ASSERT(VD_FALSE)
 /* ----SIZES--------------------------------------------------------------------------------------------------------- */
-#define VD_KILOBYTES(x) (((Vdusize)(x)) * 1024)
+#define VD_KILOBYTES(x) (((size_t)(x)) * 1024)
 #define VD_MEGABYTES(x) (VD_KILOBYTES(x) * 1024)
 #define VD_GIGABYTES(x) (VD_MEGABYTES(x) * 1024)
 
 #define VD_ARRAY_COUNT(s) (sizeof(s) / sizeof(*s))
 
-VD_INLINE Vdb32  vd_is_power_of_two(Vdusize x);
-VD_INLINE Vduptr vd_align_forward(Vduptr ptr, Vdusize align);
+VD_INLINE int  vd_is_power_of_two(size_t x);
+VD_INLINE uintptr_t vd_align_forward(uintptr_t ptr, size_t align);
 
-VD_INLINE Vdb32 vd_is_power_of_two(Vdusize x) {
+VD_INLINE int vd_is_power_of_two(size_t x) {
     return (x & (x - 1)) == 0;
 }
 
-VD_INLINE Vduptr vd_align_forward(Vduptr ptr, Vdusize align) {
+VD_INLINE uintptr_t vd_align_forward(uintptr_t ptr, size_t align) {
     VD_ASSERT(vd_is_power_of_two(align));
 
-    Vduptr p, a, modulo;
+    uintptr_t p, a, modulo;
 
     p = ptr;
-    a = (Vduptr)align;
+    a = (uintptr_t)align;
     modulo = p & (a - 1);
 
     if (modulo != 0) {
@@ -353,19 +303,19 @@ VD_INLINE Vduptr vd_align_forward(Vduptr ptr, Vdusize align) {
 #endif
 
 /* ----UTILITY------------------------------------------------------------------------------------------------------- */
-static VD_INLINE Vdi32 vd_ipow32(Vdi32 base, Vdu8 exp);
-static VD_INLINE Vdi64 vd_ipow64(Vdi64 base, Vdu8 exp);
+static VD_INLINE int32_t vd_ipow32(int32_t base, uint8_t exp);
+static VD_INLINE int64_t vd_ipow64(int64_t base, uint8_t exp);
 
-static VD_INLINE Vdi32 vd_ipow32(Vdi32 base, Vdu8 exp)
+static VD_INLINE int32_t vd_ipow32(int32_t base, uint8_t exp)
 {
-    static const Vdu8 highest_bit_set[] = {
+    static const uint8_t highest_bit_set[] = {
         0,1,2,2,3,3,3,3,4,4,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
         255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
         255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
         255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
     };
 
-    Vdi32 result = 1;
+    int32_t result = 1;
     switch (highest_bit_set[exp]) {
         case 255:
             if (base == 1) return 1;
@@ -394,16 +344,16 @@ static VD_INLINE Vdi32 vd_ipow32(Vdi32 base, Vdu8 exp)
     }
 }
 
-static VD_INLINE Vdi64 vd_ipow64(Vdi64 base, Vdu8 exp)
+static VD_INLINE int64_t vd_ipow64(int64_t base, uint8_t exp)
 {
-    static const Vdu8 highest_bit_set[] = {
+    static const uint8_t highest_bit_set[] = {
         0,1,2,2,3,3,3,3,4,4,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
         255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
         255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
         255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
     };
 
-    Vdi64 result = 1;
+    int64_t result = 1;
 
     switch (highest_bit_set[exp]) {
         case 255:
@@ -449,9 +399,9 @@ static VD_INLINE Vdi64 vd_ipow64(Vdi64 base, Vdu8 exp)
 
 typedef struct __VD_HiTime {
 #if VD_PLATFORM_WINDOWS
-    Vdu64 performance_counter;
+    uint64_t performance_counter;
 #elif VD_PLATFORM_MACOS
-    Vdu64 time;
+    uint64_t time;
 #elif VD_PLATFORM_LINUX
     struct timespec time;
 #endif // VD_PLATFORM_WINDOWS, else
@@ -459,10 +409,10 @@ typedef struct __VD_HiTime {
 
 VdHiTime vd_hitime_get(void);
 VdHiTime vd_hitime_sub(VdHiTime a, VdHiTime b);
-Vdu64      vd_hitime_ns(VdHiTime time_spec);
-Vdf64      vd_hitime_fms64(VdHiTime time_spec);
-Vdu64      vd_hitime_ms(VdHiTime time_spec);
-static VD_INLINE Vdf32 vd_hitime_s(VdHiTime time_spec) { return (Vdf32)(vd_hitime_ms(time_spec)) / 1000.f; }
+uint64_t      vd_hitime_ns(VdHiTime time_spec);
+double      vd_hitime_fms64(VdHiTime time_spec);
+uint64_t      vd_hitime_ms(VdHiTime time_spec);
+static VD_INLINE float vd_hitime_s(VdHiTime time_spec) { return (float)(vd_hitime_ms(time_spec)) / 1000.f; }
 
 #if VD_MACRO_ABBREVIATIONS
 #define HiTime                    VdHiTime
@@ -481,11 +431,11 @@ static VD_INLINE Vdf32 vd_hitime_s(VdHiTime time_spec) { return (Vdf32)(vd_hitim
 #endif // !VD_VM_CUSTOM
 
 #if VD_PLATFORM_KNOWN
-Vdusize     vd_vm_get_page_size(void);
-void*       vd_vm_reserve(Vdusize len);
-void*       vd_vm_commit(void *addr, Vdusize len);
-void*       vd_vm_decommit(void *addr, Vdusize len);
-void        vd_vm_release(void *addr, Vdusize len);
+size_t     vd_vm_get_page_size(void);
+void*       vd_vm_reserve(size_t len);
+void*       vd_vm_commit(void *addr, size_t len);
+void*       vd_vm_decommit(void *addr, size_t len);
+void        vd_vm_release(void *addr, size_t len);
 
 #if VD_MACRO_ABBREVIATIONS
 #define vm_get_page_size()     vd_vm_get_page_size()
@@ -508,7 +458,7 @@ typedef struct {
     void *handle;
 } VdSemaphore;
 
-#define VD_THREAD_PROC(name) unsigned long name(void *param)
+#define VD_THREAD_PROC(name) uint32_t name(void *param)
 typedef VD_THREAD_PROC(VdThreadProc);
 
 VdThread    vd_thread_make(VdThreadProc *proc, void *param);
@@ -601,23 +551,23 @@ VD_INLINE int32_t vd_add_and_fetch_i32(volatile int32_t *addend, int32_t value)
 #endif // VD_PLATFORM_KNOWN
 /* ----SYSTEM ALLOCATOR---------------------------------------------------------------------------------------------- */
 typedef struct {
-    Vduptr  buf;
-    Vdusize offset;
-    Vdusize page_size;
-    Vdusize reserved;
-    Vdusize committed;
+    uintptr_t  buf;
+    size_t offset;
+    size_t page_size;
+    size_t reserved;
+    size_t committed;
 } VdSystemHeap;
 
 VD_API VdSystemHeap* vd_system_heap_global(void);
-VD_API void          vd_system_heap_set_reserve_page_count(VdSystemHeap *h, Vdusize page_count);
-VD_API void*         vd_system_heap_alloc(VdSystemHeap *h, Vdusize size, Vdusize align);
+VD_API void          vd_system_heap_set_reserve_page_count(VdSystemHeap *h, size_t page_count);
+VD_API void*         vd_system_heap_alloc(VdSystemHeap *h, size_t size, size_t align);
 VD_API void          vd_system_heap_empty(VdSystemHeap *h);
 
 #ifndef VD_ALLOC_OVERRIDE
 #define VD_ALLOC_OVERRIDE 0
 #endif // VD_ALLOC_OVERRIDE
 
-static VD_INLINE void *vd_realloc(void *ptr, Vdusize old_size, Vdusize new_size)
+static VD_INLINE void *vd_realloc(void *ptr, size_t old_size, size_t new_size)
 {
     VdSystemHeap *h = vd_system_heap_global();
     void *result = vd_system_heap_alloc(h, new_size, 2 * sizeof(void*));
@@ -629,7 +579,7 @@ static VD_INLINE void *vd_realloc(void *ptr, Vdusize old_size, Vdusize new_size)
     return result;
 }
 
-static VD_INLINE void *vd_free(void *ptr, Vdusize old_size)
+static VD_INLINE void *vd_free(void *ptr, size_t old_size)
 {
     VD_UNUSED(ptr);
     VD_UNUSED(old_size);
@@ -668,31 +618,31 @@ enum {
     VD_ARENA_FLAGS_USE_MALLOC = 1 << 7,
 };
 
-typedef Vdu8 VdArenaFlags;
+typedef uint8_t VdArenaFlags;
 
 typedef struct VdArena {
-    Vdu8         *buf;
-    Vdusize      buf_len;
-    Vdusize      prev_offset;
-    Vdusize      curr_offset;
+    uint8_t         *buf;
+    size_t      buf_len;
+    size_t      prev_offset;
+    size_t      curr_offset;
     VdArenaFlags flags;
-    Vdu8         reserved[7];
+    uint8_t         reserved[7];
 } VdArena;
 
 typedef struct __VD_ArenaSave {
     /** The saved arena. */
     VdArena   *arena;
     /** The previous offset in the arena. */
-    Vdusize    prev_offset;
+    size_t    prev_offset;
     /** The current offset in the arena. */
-    Vdusize    curr_offset;
+    size_t    curr_offset;
 } VdArenaSave;
 
 void                        vd_arena_init(VdArena *a, void *buf, size_t len);
 void*                       vd_arena_alloc_align(VdArena *a, size_t size, size_t align);
 void*                       vd_arena_resize_align(VdArena *a, void *old_memory, size_t old_size, size_t new_size, size_t align);
 void                        vd_arena_clear(VdArena *a);
-Vdb32                       vd_arena_free(VdArena *a, void *memory, size_t size);
+int                       vd_arena_free(VdArena *a, void *memory, size_t size);
 VD_INLINE VdArenaSave       vd_arena_save(VdArena *a)                                                       { VdArenaSave result = { a, a->prev_offset, a->curr_offset }; return result; }
 VD_INLINE void              vd_arena_restore(VdArenaSave save)                                              { save.arena->prev_offset = save.prev_offset; save.arena->curr_offset = save.curr_offset; }
 VD_INLINE void*             vd_arena_alloc(VdArena *a, size_t size)                                         { return vd_arena_alloc_align(a, size, VD_ARENA_DEFAULT_ALIGNMENT);}
@@ -720,12 +670,12 @@ VD_INLINE VdArena           vd_arena_from_malloc(size_t size)                   
 #endif // VD_MACRO_ABBREVIATIONS
 
 /* ----SIMPLE ARRAYS------------------------------------------------------------------------------------------------- */
-VD_INLINE void *vd__array_concat(VdArena *a, void *a1, Vdusize na1, void *a2, Vdusize na2, Vdusize isize)
+VD_INLINE void *vd__array_concat(VdArena *a, void *a1, size_t na1, void *a2, size_t na2, size_t isize)
 {
-    Vdusize alloc_size = isize * (na1 + na2);
+    size_t alloc_size = isize * (na1 + na2);
     void *result = vd_arena_alloc(a, alloc_size);
     VD_MEMCPY(result, a1, isize * na1);
-    VD_MEMCPY((Vdu8*)result + (isize * na1), a2, isize * na2);
+    VD_MEMCPY((uint8_t*)result + (isize * na1), a2, isize * na2);
     return result;
 }
 
@@ -745,7 +695,7 @@ typedef struct __VD_DList {
 
 VD_INLINE void            vd_dlist_init(VdDList *list);
 VD_INLINE void            vd_dlist_append(VdDList *list, VdDListNode *node);
-VD_INLINE Vdusize         vd_dlist_count(VdDList *list);
+VD_INLINE size_t         vd_dlist_count(VdDList *list);
 VD_INLINE void            vd_dlist_rm(VdDList *list, VdDListNode *node);
 VD_INLINE VdDListNode*    vd_dlist_rm_first(VdDList *list);
 VD_INLINE VdDListNode*    vd_dlist_rm_last(VdDList *list);
@@ -754,14 +704,14 @@ VD_INLINE void            vd_dlist_node_unlink(VdDListNode *node);
 
 VD_INLINE void           vd_dlist_append(VdDList *list, VdDListNode *node)            { vd_dlist_node_link(node, list->sentinel.prev, &list->sentinel); }
 VD_INLINE void           vd_dlist_node_init(VdDListNode *node)                          { node->next = node; node->prev = node; }
-VD_INLINE Vdb32          vd_dlist_node_is_empty(VdDListNode *node)                      { return (node->next == node) && (node->prev == node); }
-VD_INLINE Vdb32          vd_dlist_is_empty(VdDList *list)                               { return vd_dlist_node_is_empty(&list->sentinel); }
+VD_INLINE int          vd_dlist_node_is_empty(VdDListNode *node)                      { return (node->next == node) && (node->prev == node); }
+VD_INLINE int          vd_dlist_is_empty(VdDList *list)                               { return vd_dlist_node_is_empty(&list->sentinel); }
 VD_INLINE VdDListNode*   vd_dlist_first(VdDList *list)                                  { return vd_dlist_is_empty(list) ? 0 : list->sentinel.next; }
 VD_INLINE VdDListNode*   vd_dlist_last(VdDList *list)                                   { return vd_dlist_is_empty(list) ? 0 : list->sentinel.prev; }
 VD_INLINE void           vd_dlist_node_append(VdDListNode *node, VdDListNode *target) { vd_dlist_node_link(node, target, target->next); }
 
 #define VD_DLIST_FOR_EACH(listp, nodename)                       for (VdDListNode *nodename = &(listp)->sentinel; (nodename = nodename->next) != &(listp)->sentinel;)
-#define VD_DLIST_FOR_EACH_WITH_INDEX(listp, nodename, indexname) Vdusize indexname = 0; for (VdDListNode *nodename = &(listp)->sentinel; (nodename = nodename->next) != &(listp)->sentinel; indexname++)
+#define VD_DLIST_FOR_EACH_WITH_INDEX(listp, nodename, indexname) size_t indexname = 0; for (VdDListNode *nodename = &(listp)->sentinel; (nodename = nodename->next) != &(listp)->sentinel; indexname++)
 
 VD_INLINE void vd_dlist_init(VdDList *list)
 {
@@ -807,9 +757,9 @@ VD_INLINE void vd_dlist_node_unlink(VdDListNode *node)
     vd_dlist_node_init(node);
 }
 
-VD_INLINE Vdusize vd_dlist_count(VdDList *list)
+VD_INLINE size_t vd_dlist_count(VdDList *list)
 {
-    Vdusize count = 0;
+    size_t count = 0;
     VD_DLIST_FOR_EACH(list, n) {
         count++;
     }
@@ -838,11 +788,11 @@ VD_INLINE Vdusize vd_dlist_count(VdDList *list)
 
 /* ----FIXED ARRAY--------------------------------------------------------------------------------------------------- */
 typedef struct __VD_FixedArrayHeader {
-    Vdu32 len;
-    Vdu32 cap;
+    uint32_t len;
+    uint32_t cap;
 } VdFixedArrayHeader;
 
-#define VD_FIXEDARRAY_HEADER(a)                         ((VdFixedArrayHeader*)(((Vdu8*)a) - sizeof(VdFixedArrayHeader)))
+#define VD_FIXEDARRAY_HEADER(a)                         ((VdFixedArrayHeader*)(((uint8_t*)a) - sizeof(VdFixedArrayHeader)))
 
 /**
  * @brief   A fixed size array with no dynamic reallocation whatsoever
@@ -869,9 +819,9 @@ typedef struct __VD_FixedArrayHeader {
 #define VD_FIXEDARRAY_CLEAR(a)                          (VD_FIXEDARRAY_HEADER(a)->len = 0)
 #define VD_FIXEDARRAY_POP(a)                            ((a)[--VD_FIXEDARRAY_HEADER(a)->len])
 
-VD_INLINE void* vd__fixed_array_allocate(VdArena *arena, Vdu32 capacity, Vdusize isize, Vdb32 mark)
+VD_INLINE void* vd__fixed_array_allocate(VdArena *arena, uint32_t capacity, size_t isize, int mark)
 {
-    Vdusize alloc_size = sizeof(VdFixedArrayHeader) + capacity * isize;
+    size_t alloc_size = sizeof(VdFixedArrayHeader) + capacity * isize;
     void *result = VD_MEMSET(vd_arena_alloc(arena, alloc_size), 0, alloc_size);
     VdFixedArrayHeader *hdr = (VdFixedArrayHeader*)result;
 
@@ -880,7 +830,7 @@ VD_INLINE void* vd__fixed_array_allocate(VdArena *arena, Vdu32 capacity, Vdusize
         hdr->len = capacity;
     }
 
-    return (void*) ((Vdu8*)result + sizeof(VdFixedArrayHeader));
+    return (void*) ((uint8_t*)result + sizeof(VdFixedArrayHeader));
 }
 
 
@@ -898,12 +848,12 @@ VD_INLINE void* vd__fixed_array_allocate(VdArena *arena, Vdu32 capacity, Vdusize
 
 /* ----DYNAMIC ARRAY------------------------------------------------------------------------------------------------- */
 typedef struct {
-    Vdu32     len;
-    Vdu32     cap;
+    uint32_t     len;
+    uint32_t     cap;
     VdArena   *arena;
 } VdDynArrayHeader;
 
-#define VD_DYNARRAY_HEADER(a)                      ((VdDynArrayHeader*)(((Vdu8*)a) - sizeof(VdDynArrayHeader)))
+#define VD_DYNARRAY_HEADER(a)                      ((VdDynArrayHeader*)(((uint8_t*)a) - sizeof(VdDynArrayHeader)))
 #define VD_DYNARRAY_INIT(a, arena)                 ((a) = vd__dynarray_grow(a, sizeof(*(a)), 1, 0, arena))
 #define VD_DYNARRAY_INIT_WITH_CAP(a, arena, cap)   ((a) = vd__dynarray_grow(a, sizeof(*(a)), cap, cap, arena))
 #define VD_DYNARRAY_ADD(a, v)                      (VD_DYNARRAY_CHECKGROW(a, 1), (a)[VD_DYNARRAY_HEADER(a)->len++] = (v))
@@ -914,7 +864,7 @@ typedef struct {
 #define VD_DYNARRAY_LAST(a)                        ((a)[VD_DYNARRAY_HEADER(a)->len - 1])
 #define VD_DYNARRAY_LEN(a)                         ((a) ? VD_DYNARRAY_HEADER(a)->len : 0)
 #define VD_DYNARRAY_CAP(a)                         ((a) ? VD_DYNARRAY_HEADER(a)->cap : 0)
-#define VD_DYNARRAY_DEL(a, i)                      do { Vdu32 _i_ = (i); if (_i_ == (VD_DYNARRAY_LEN(a) - 1)) { (VD_DYNARRAY_HEADER(a)->len--); } else {  (a)[_i_] = VD_DYNARRAY_LAST(a); (VD_DYNARRAY_HEADER(a)->len--); } } while (0)
+#define VD_DYNARRAY_DEL(a, i)                      do { uint32_t _i_ = (i); if (_i_ == (VD_DYNARRAY_LEN(a) - 1)) { (VD_DYNARRAY_HEADER(a)->len--); } else {  (a)[_i_] = VD_DYNARRAY_LAST(a); (VD_DYNARRAY_HEADER(a)->len--); } } while (0)
 #define VD_DYNARRAY_ARENAP(a)                      ((a) ? VD_DYNARRAY_HEADER(a)->arena : 0)
 #define VD_DYNARRAY_GROW(a, b, c)                  ((a) = vd__dynarray_grow((a), sizeof(*(a)), (b), (c), VD_DYNARRAY_ARENAP(a)))
 #define VD_DYNARRAY_PTR_CHECKED(a, i)              ((i < VD_DYNARRAY_LEN(a)) ? &(a)[i] : 0)
@@ -926,12 +876,12 @@ typedef struct {
 
 #define VD_DYNARRAY
 
-VD_INLINE void *vd__dynarray_grow(void *a, Vdusize tsize, Vdu32 addlen, Vdu32 mincap, VdArena *arena)
+VD_INLINE void *vd__dynarray_grow(void *a, size_t tsize, uint32_t addlen, uint32_t mincap, VdArena *arena)
 {
-    Vdusize min_len = VD_DYNARRAY_LEN(a) + addlen;
+    size_t min_len = VD_DYNARRAY_LEN(a) + addlen;
 
     if (min_len > mincap) {
-        mincap = (Vdu32)min_len;
+        mincap = (uint32_t)min_len;
     }
 
     if (mincap <= VD_DYNARRAY_CAP(a)) {
@@ -949,7 +899,7 @@ VD_INLINE void *vd__dynarray_grow(void *a, Vdusize tsize, Vdu32 addlen, Vdu32 mi
         VD_DYNARRAY_CAP(a) == 0 ? 0 : tsize * VD_DYNARRAY_CAP(a) + sizeof(VdDynArrayHeader),
         tsize * mincap + sizeof(VdDynArrayHeader));
 
-    b = (Vdu8*)b + sizeof(VdDynArrayHeader);
+    b = (uint8_t*)b + sizeof(VdDynArrayHeader);
 
     if (a == 0) {
         VD_DYNARRAY_HEADER(b)->len = 0;
@@ -979,36 +929,36 @@ VD_INLINE void *vd__dynarray_grow(void *a, Vdusize tsize, Vdu32 addlen, Vdu32 mi
 /* ----STR----------------------------------------------------------------------------------------------------------- */
 typedef struct __VD_Str {
     char        *s;
-    Vdusize   len;
+    size_t   len;
 } VdStr;
 
 #define VD_STR_MAX (~(0ull))
 
-VD_INLINE Vdb32      vd_cstr_cmp(Vdcstr _a, Vdcstr _b);
-VD_INLINE Vdusize    vd_cstr_len(Vdcstr a);
-VD_INLINE Vdcstr     vd_cstr_dup(VdArena *arena, Vdcstr s);
-VD_INLINE Vdcstr     vd_cstr_cncat(VdArena *arena, Vdcstr a, Vdcstr b);
-VD_INLINE Vdcstr     vd_cstr_ncncat(VdArena *arena, Vdusize *num_strings, Vdcstr *strings);
-VD_INLINE Vdcstr     vd_cstr_from_str(VdArena *arena, VdStr s);
+VD_INLINE int      vd_cstr_cmp(char* _a, char* _b);
+VD_INLINE size_t    vd_cstr_len(char* a);
+VD_INLINE char*     vd_cstr_dup(VdArena *arena, char* s);
+VD_INLINE char*     vd_cstr_cncat(VdArena *arena, char* a, char* b);
+VD_INLINE char*     vd_cstr_ncncat(VdArena *arena, size_t *num_strings, char* *strings);
+VD_INLINE char*     vd_cstr_from_str(VdArena *arena, VdStr s);
 
 VD_INLINE VdStr      vd_str_null(void)                                                  { VdStr result = {0, 0}; return result; }
-VD_INLINE VdStr      vd_str_from_cstr(Vdcstr s)                                         { VdStr result = { s, vd_cstr_len(s) }; return result; }
+VD_INLINE VdStr      vd_str_from_cstr(char* s)                                         { VdStr result = { s, vd_cstr_len(s) }; return result; }
 VD_INLINE VdStr      vd_str_dup(VdArena *a, VdStr s);
-VD_INLINE VdStr      vd_str_dup_from_cstr(VdArena *a, Vdcstr s);
-VD_INLINE Vdusize    vd_str_first_of(VdStr s, VdStr q, Vdu64 start);
-VD_INLINE Vdusize    vd_str_last_of(VdStr s, VdStr q, Vdu64 start);
-VD_INLINE Vdb32      vd_str_split(VdStr s, Vdusize at, VdStr *left, VdStr *right);
-VD_INLINE Vdb32      vd_str_splitse(VdStr s, Vdusize start, Vdusize end, VdStr *left, VdStr *right);
-VD_INLINE VdStr      vd_str_chop_left(VdStr s, Vdusize at)                              { VdStr left, right; return vd_str_split(s, at, &left, &right) ? right : vd_str_null(); }
-VD_INLINE VdStr      vd_str_chop_right(VdStr s, Vdusize at)                             { VdStr left, right; return vd_str_split(s, at, &left, &right) ? left : vd_str_null(); }
-VD_INLINE Vdb32      vd_str_eq(VdStr a, VdStr b);
-VD_INLINE VdStr      vd_str_join(VdArena *arena, VdStr a, VdStr b, Vdb32 null_sep);
-VD_INLINE Vdb32      vd_str_ends_with_char(VdStr a, char c)                             { return a.len > 0 ? a.s[a.len - 1] == c : VD_FALSE; }
+VD_INLINE VdStr      vd_str_dup_from_cstr(VdArena *a, char* s);
+VD_INLINE size_t    vd_str_first_of(VdStr s, VdStr q, uint64_t start);
+VD_INLINE size_t    vd_str_last_of(VdStr s, VdStr q, uint64_t start);
+VD_INLINE int      vd_str_split(VdStr s, size_t at, VdStr *left, VdStr *right);
+VD_INLINE int      vd_str_splitse(VdStr s, size_t start, size_t end, VdStr *left, VdStr *right);
+VD_INLINE VdStr      vd_str_chop_left(VdStr s, size_t at)                              { VdStr left, right; return vd_str_split(s, at, &left, &right) ? right : vd_str_null(); }
+VD_INLINE VdStr      vd_str_chop_right(VdStr s, size_t at)                             { VdStr left, right; return vd_str_split(s, at, &left, &right) ? left : vd_str_null(); }
+VD_INLINE int      vd_str_eq(VdStr a, VdStr b);
+VD_INLINE VdStr      vd_str_join(VdArena *arena, VdStr a, VdStr b, int null_sep);
+VD_INLINE int      vd_str_ends_with_char(VdStr a, char c)                             { return a.len > 0 ? a.s[a.len - 1] == c : VD_FALSE; }
 
-VD_INLINE Vdb32 vd_cstr_cmp(Vdcstr _a, Vdcstr _b)
+VD_INLINE int vd_cstr_cmp(char* _a, char* _b)
 {
-    Vdcstr a = _a;
-    Vdcstr b = _b;
+    char* a = _a;
+    char* b = _b;
 
     while (*a == *b) {
         if (*a == 0) return VD_TRUE;
@@ -1020,9 +970,9 @@ VD_INLINE Vdb32 vd_cstr_cmp(Vdcstr _a, Vdcstr _b)
     return VD_FALSE;
 }
 
-VD_INLINE Vdusize vd_cstr_len(Vdcstr a)
+VD_INLINE size_t vd_cstr_len(char* a)
 {
-    Vdusize result = 0;
+    size_t result = 0;
     while (*a++) result++;
     return result;
 }
@@ -1035,16 +985,16 @@ VD_INLINE VdStr vd_str_dup(VdArena *a, VdStr s) {
     return result;
 }
 
-VD_INLINE VdStr vd_str_dup_from_cstr(VdArena *a, Vdcstr s) {
+VD_INLINE VdStr vd_str_dup_from_cstr(VdArena *a, char* s) {
     return vd_str_dup(a, vd_str_from_cstr(s));
 }
 
-VD_INLINE Vdusize vd_str_first_of(VdStr s, VdStr q, Vdu64 start) {
+VD_INLINE size_t vd_str_first_of(VdStr s, VdStr q, uint64_t start) {
     if (s.len == 0) return 0;
     if (q.len == 0) return 0;
 
-    Vdusize qindex = 0;
-    Vdusize i;
+    size_t qindex = 0;
+    size_t i;
     for (i = start; i < s.len; ++i) {
         if (s.s[i] == q.s[qindex]) {
             qindex++;
@@ -1060,14 +1010,14 @@ VD_INLINE Vdusize vd_str_first_of(VdStr s, VdStr q, Vdu64 start) {
     return s.len;
 }
 
-VD_INLINE Vdusize vd_str_last_of(VdStr s, VdStr q, Vdu64 start)
+VD_INLINE size_t vd_str_last_of(VdStr s, VdStr q, uint64_t start)
 {
     if (s.len == 0) return s.len;
 
     start = s.len < start ? s.len : start;
 
-    Vdusize sindex = q.len;
-    Vdusize i      = start;
+    size_t sindex = q.len;
+    size_t i      = start;
 
     while (i != 0) {
         i--;
@@ -1085,7 +1035,7 @@ VD_INLINE Vdusize vd_str_last_of(VdStr s, VdStr q, Vdu64 start)
     return s.len;
 }
 
-VD_INLINE Vdb32 vd_str_split(VdStr s, Vdusize at, VdStr *left, VdStr *right)
+VD_INLINE int vd_str_split(VdStr s, size_t at, VdStr *left, VdStr *right)
 {
     if ((s.len < at) || (at >= s.len)) {
         return VD_FALSE;
@@ -1099,7 +1049,7 @@ VD_INLINE Vdb32 vd_str_split(VdStr s, Vdusize at, VdStr *left, VdStr *right)
     return VD_TRUE;
 }
 
-VD_INLINE Vdb32 vd_str_splitse(VdStr s, Vdusize start, Vdusize end, VdStr *left, VdStr *right)
+VD_INLINE int vd_str_splitse(VdStr s, size_t start, size_t end, VdStr *left, VdStr *right)
 {
     if (start > end || end > s.len) {
         return VD_FALSE;
@@ -1113,22 +1063,22 @@ VD_INLINE Vdb32 vd_str_splitse(VdStr s, Vdusize start, Vdusize end, VdStr *left,
     return VD_TRUE;
 }
 
-VD_INLINE Vdb32 vd_str_eq(VdStr a, VdStr b)
+VD_INLINE int vd_str_eq(VdStr a, VdStr b)
 {
     if (a.len != b.len) return VD_FALSE;
 
-    for (Vdusize i = 0; i < a.len; ++i) {
+    for (size_t i = 0; i < a.len; ++i) {
         if (a.s[i] != b.s[i]) return VD_FALSE;        
     }
 
     return VD_TRUE;
 }
 
-VD_INLINE Vdcstr vd_cstr_cncat(VdArena *arena, Vdcstr a, Vdcstr b) {
-    Vdusize la = vd_cstr_len(a);
-    Vdusize lb = vd_cstr_len(b);
+VD_INLINE char* vd_cstr_cncat(VdArena *arena, char* a, char* b) {
+    size_t la = vd_cstr_len(a);
+    size_t lb = vd_cstr_len(b);
 
-    Vdcstr result = (Vdcstr)vd_arena_alloc(arena, la + lb + 1);
+    char* result = (char*)vd_arena_alloc(arena, la + lb + 1);
 
     VD_MEMCPY(result, a, la);
     VD_MEMCPY(result + la, b, lb);
@@ -1136,17 +1086,17 @@ VD_INLINE Vdcstr vd_cstr_cncat(VdArena *arena, Vdcstr a, Vdcstr b) {
     return result;
 }
 
-VD_INLINE Vdcstr vd_cstr_dup(VdArena *arena, Vdcstr s) {
-    Vdusize ls = vd_cstr_len(s);
-    Vdcstr result = (Vdcstr)vd_arena_alloc(arena, ls + 1);
+VD_INLINE char* vd_cstr_dup(VdArena *arena, char* s) {
+    size_t ls = vd_cstr_len(s);
+    char* result = (char*)vd_arena_alloc(arena, ls + 1);
     VD_MEMCPY(result, s, ls);
     result[ls] = 0;
     return result;
 }
 
-VD_INLINE VdStr vd_str_join(VdArena *arena, VdStr a, VdStr b, Vdb32 null_sep)
+VD_INLINE VdStr vd_str_join(VdArena *arena, VdStr a, VdStr b, int null_sep)
 {
-    Vdusize final_size = a.len + b.len + (null_sep ? 1 : 0);
+    size_t final_size = a.len + b.len + (null_sep ? 1 : 0);
     char *result = (char*)vd_arena_alloc(arena, final_size);
 
     VD_MEMCPY(result, a.s, a.len);
@@ -1159,7 +1109,7 @@ VD_INLINE VdStr vd_str_join(VdArena *arena, VdStr a, VdStr b, Vdb32 null_sep)
     return _r;
 }
 
-VD_INLINE Vdcstr vd_cstr_from_str(VdArena *arena, VdStr s)
+VD_INLINE char* vd_cstr_from_str(VdArena *arena, VdStr s)
 {
     char *result = (char*)vd_arena_alloc(arena, s.len + 1);
     VD_MEMCPY(result, s.s, s.len);
@@ -1204,12 +1154,12 @@ VD_INLINE Vdcstr vd_cstr_from_str(VdArena *arena, VdStr s)
 #endif
 
 /* ----UTF8---------------------------------------------------------------------------------------------------------- */
-static VD_INLINE Vdu8 vd_utf8_codepoint_len(Vdu32 codepoint);
+static VD_INLINE uint8_t vd_utf8_codepoint_len(uint32_t codepoint);
 
-static VD_INLINE Vdu8 vd_utf8_codepoint_len(Vdu32 codepoint)
+static VD_INLINE uint8_t vd_utf8_codepoint_len(uint32_t codepoint)
 {
-    Vdcstr s = (Vdcstr)&codepoint;    
-    Vdu8 b = s[0];
+    char* s = (char*)&codepoint;    
+    uint8_t b = s[0];
 
     if ((b & 0x80) == 0x00) return 1;
     if ((b & 0xE0) == 0xC0) return 2;
@@ -1284,11 +1234,11 @@ VD_INLINE VdStr vd_str_builder_compose(VdStrBuilder *builder, VdArena *opt_arena
     VdDListNode *last_node = vd_dlist_last(&builder->list);
 
     char *mem_result = 0;
-    Vdusize mem_size = 0;
+    size_t mem_size = 0;
     VD_DLIST_FOR_EACH(&builder->list, it) {
         Vd__StrBuilderNode *node = VD_CONTAINER_OF(it, Vd__StrBuilderNode, node);
 
-        Vdusize req_size = 0;
+        size_t req_size = 0;
         switch (node->type) {
             case VD__STR_BUILDER_NODE_TYPE_STRING: {
                 req_size = node->dat.string.len * sizeof(char);
@@ -1297,7 +1247,7 @@ VD_INLINE VdStr vd_str_builder_compose(VdStrBuilder *builder, VdArena *opt_arena
             default: VD_IMPOSSIBLE();
         }
 
-        Vdusize request_size = mem_size + req_size;
+        size_t request_size = mem_size + req_size;
         if (allocate_space_for_null && (it == last_node)) {
             request_size += 1;
         }
@@ -1306,7 +1256,7 @@ VD_INLINE VdStr vd_str_builder_compose(VdStrBuilder *builder, VdArena *opt_arena
 
         switch (node->type) {
             case VD__STR_BUILDER_NODE_TYPE_STRING: {
-                for (Vdusize i = 0; i < node->dat.string.len; ++i) {
+                for (size_t i = 0; i < node->dat.string.len; ++i) {
                     mem_result[mem_size + i] = node->dat.string.s[i];
                 }
             } break;
@@ -1333,28 +1283,28 @@ VD_INLINE VdStr vd_str_builder_compose(VdStrBuilder *builder, VdArena *opt_arena
 #define str_builder_null_terminate vd_str_builder_null_terminate
 #endif 
 /* ----PARSING------------------------------------------------------------------------------------------------------- */
-VD_INLINE Vdb32      vd_is_ascii_digit(int c);
-VD_INLINE Vdb32      vd_is_letter(int c);
-VD_INLINE Vdb32      vd_is_cdecl_start(int c);
-VD_INLINE Vdb32      vd_is_cdecl_continue(int c);
-Vdb32                vd_parse_u64(VdStr s, Vdu64 *r);
+VD_INLINE int      vd_is_ascii_digit(int c);
+VD_INLINE int      vd_is_letter(int c);
+VD_INLINE int      vd_is_cdecl_start(int c);
+VD_INLINE int      vd_is_cdecl_continue(int c);
+int                vd_parse_u64(VdStr s, uint64_t *r);
 
-VD_INLINE Vdb32 vd_is_ascii_digit(int c)
+VD_INLINE int vd_is_ascii_digit(int c)
 {
     return (c >= '0') && (c <= '9');
 }
 
-VD_INLINE Vdb32 vd_is_letter(int c)
+VD_INLINE int vd_is_letter(int c)
 {
     return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
 }
 
-VD_INLINE Vdb32 vd_is_uppercase(int c)
+VD_INLINE int vd_is_uppercase(int c)
 {
     return (c >= 'A' && c <= 'Z');
 }
 
-VD_INLINE Vdb32 vd_is_lowercase(int c)
+VD_INLINE int vd_is_lowercase(int c)
 {
     return (c >= 'A' && c <= 'Z');
 }
@@ -1369,12 +1319,12 @@ VD_INLINE int vd_lowercase_to_uppercase(int c)
     return c - 'a' + 'A';
 }
 
-VD_INLINE Vdb32 vd_is_cdecl_start(int c)
+VD_INLINE int vd_is_cdecl_start(int c)
 {
     return vd_is_letter(c) || c == '_';
 }
 
-VD_INLINE Vdb32 vd_is_cdecl_continue(int c)
+VD_INLINE int vd_is_cdecl_continue(int c)
 {
     return vd_is_cdecl_start(c) || vd_is_ascii_digit(c);
 }
@@ -1403,11 +1353,11 @@ typedef struct __VD_Arg {
 VdArg vd_arg_new(int argc, char **argv);
 void  vd_arg_skip_program_name(VdArg *arg);
 void  vd_arg_skip(VdArg *arg);
-Vdb32 vd_arg_at_end(VdArg *arg);
-Vdb32 vd_arg_get_name(VdArg *arg, VdStr *name);
-Vdb32 vd_arg_get_uint(VdArg *arg, Vdu64 *i);
-Vdb32 vd_arg_get_str(VdArg *arg, VdStr *str);
-Vdb32 vd_arg_expect_char(VdArg *arg, char c);
+int vd_arg_at_end(VdArg *arg);
+int vd_arg_get_name(VdArg *arg, VdStr *name);
+int vd_arg_get_uint(VdArg *arg, uint64_t *i);
+int vd_arg_get_str(VdArg *arg, VdStr *str);
+int vd_arg_expect_char(VdArg *arg, char c);
 
 #if VD_MACRO_ABBREVIATIONS
 #define Arg                        VdArg
@@ -1429,22 +1379,22 @@ Vdb32 vd_arg_expect_char(VdArg *arg, char c);
 #if !VD_HASH64_CUSTOM
 #define VD_HASH64_DEFAULT_SEED (0x9747b28c)
 
-VD_INLINE Vdu64 vd_hash64(const void *data, Vdu64 len, Vdu32 seed);
-VD_INLINE Vdu64 vd_dhash64(const void *data, Vdu64 len);
-VD_INLINE Vdu64 vd_dhash64_str(VdStr s);
+VD_INLINE uint64_t vd_hash64(const void *data, uint64_t len, uint32_t seed);
+VD_INLINE uint64_t vd_dhash64(const void *data, uint64_t len);
+VD_INLINE uint64_t vd_dhash64_str(VdStr s);
 
-VD_INLINE Vdu64 vd_hash64(const void *data, Vdu64 len, Vdu32 seed)
+VD_INLINE uint64_t vd_hash64(const void *data, uint64_t len, uint32_t seed)
 {
-    const Vdu32 m = 0x5bd1e995;
-    const Vdu32 r = 24;
+    const uint32_t m = 0x5bd1e995;
+    const uint32_t r = 24;
 
-    Vdu64 h = seed ^ len;
+    uint64_t h = seed ^ len;
 
-    const Vdu8 *bytes = (const Vdu8*)data;
+    const uint8_t *bytes = (const uint8_t*)data;
 
     while (len >= 4)
     {
-        Vdu32 k = *(Vdu32*)bytes;
+        uint32_t k = *(uint32_t*)bytes;
 
         k *= m;
         k ^= k >> r;
@@ -1471,10 +1421,10 @@ VD_INLINE Vdu64 vd_hash64(const void *data, Vdu64 len, Vdu32 seed)
     return h;
 }
 
-VD_INLINE Vdu64 vd_dhash64(const void *data, Vdu64 len) { return vd_hash64(data, len, VD_HASH64_DEFAULT_SEED); }
+VD_INLINE uint64_t vd_dhash64(const void *data, uint64_t len) { return vd_hash64(data, len, VD_HASH64_DEFAULT_SEED); }
 #endif // !VD_HASH64_CUSTOM
 
-VD_INLINE Vdu64 vd_dhash64_str(VdStr s) { return vd_dhash64(s.s, s.len); }
+VD_INLINE uint64_t vd_dhash64_str(VdStr s) { return vd_dhash64(s.s, s.len); }
 
 #if VD_MACRO_ABBREVIATIONS
 #define hash64(data, len, seed) vd_hash64(data, len, seed)
@@ -1484,10 +1434,10 @@ VD_INLINE Vdu64 vd_dhash64_str(VdStr s) { return vd_dhash64(s.s, s.len); }
 
 /* ----STRMAP-------------------------------------------------------------------------------------------------------- */
 typedef struct {
-    Vdu32   cap;
-    Vdu32   cap_total;
-    Vdu32   taken;
-    Vdu32   tsize;
+    uint32_t   cap;
+    uint32_t   cap_total;
+    uint32_t   taken;
+    uint32_t   tsize;
     VdArena *arena;
 } Vd__StrmapHeader;
 
@@ -1512,9 +1462,9 @@ struct Vd__StrmapBinPrefix {
     Vd__StrmapBinPrefix *next;                                   //  8 bytes
     Vd__StrmapBinPrefix *insq;                                   //  8 bytes
     char                *key_rest;                               //  8 bytes
-    Vdu32               key_len;                                 //  4 bytes
-    Vdu32               key_rest_cap;                            //  4 bytes
-    Vdu8                used;                                    //  1 byte
+    uint32_t               key_len;                                 //  4 bytes
+    uint32_t               key_rest_cap;                            //  4 bytes
+    uint8_t                used;                                    //  1 byte
     char                key_prefix[VD_STRMAP_KEY_PREFIX_LEN];    // 31 bytes (default)
 };                                                               // = 64 bytes
 
@@ -1526,7 +1476,7 @@ typedef struct __VD_StrmapInitOptions {
     float address_scale;
 
     /** The estimated key length in bytes. If this is higher than VD_STRMAP_KEY_PREFIX_LEN, then more space will be allocated up front for key storage. */
-    Vdu32 average_key_len;
+    uint32_t average_key_len;
 } VdStrmapInitOptions;
 
 /*
@@ -1537,7 +1487,7 @@ typedef struct __VD_StrmapInitOptions {
  */
 #define VD_STRMAP
 #define VD_STRMAP_DEFAULT_CAP              1024
-#define VD_STRMAP_HEADER(m)                ((Vd__StrmapHeader*)(((Vdu8*)(m)) - sizeof(Vd__StrmapHeader)))
+#define VD_STRMAP_HEADER(m)                ((Vd__StrmapHeader*)(((uint8_t*)(m)) - sizeof(Vd__StrmapHeader)))
 #define VD_STRMAP_INIT(m, arena, cap, o)   ((m) = (vd__strmap_init((arena), sizeof(*m), (cap), (o))))
 #define VD_STRMAP_INIT_DEFAULT(m, arena)   VD_STRMAP_INIT((m), (arena), VD_STRMAP_DEFAULT_CAP, 0)
 #define VD_STRMAP_SET(m, k, v)             vd__strmap_set((m), (k), (void*)(v), VD__STRMAP_SET_MODE_NEW_ONLY)
@@ -1550,30 +1500,30 @@ typedef struct __VD_StrmapInitOptions {
 #define VD_STRMAP_TOTAL_CAP(m)             ((m) == 0 ? 0 : VD_STRMAP_HEADER(m)->cap_total)
 #define VD_STRMAP_ARENAP(m)                ((m) == 0 ? 0 : VD_STRMAP_HEADER(m)->arena)
 #define VD_STRMAP_ENTRY_SIZE(m)            (VD_STRMAP_HEADER(m)->tsize + sizeof(Vd__StrmapBinPrefix))
-#define VD_STRMAP_GET_BIN(m, i)            ((Vd__StrmapBinPrefix*) (((Vdu8*)m) + (VD_STRMAP_ENTRY_SIZE(m) * (i))))
-#define VD_STRMAP_GET_ENTRY(m, i)          ((void*)((Vdu8*)VD_STRMAP_GET_BIN(m, i) + sizeof(Vd__StrmapBinPrefix)))
+#define VD_STRMAP_GET_BIN(m, i)            ((Vd__StrmapBinPrefix*) (((uint8_t*)m) + (VD_STRMAP_ENTRY_SIZE(m) * (i))))
+#define VD_STRMAP_GET_ENTRY(m, i)          ((void*)((uint8_t*)VD_STRMAP_GET_BIN(m, i) + sizeof(Vd__StrmapBinPrefix)))
 #define VD_STRMAP_GET_KEY_PREFIX(m, i)     VD_STRMAP_GET_BIN(m, i)->key_prefix
 #define VD_STRMAP_GET_KEY_LEN(m, i)        VD_STRMAP_GET_BIN(m, i)->key_len
 #define VD_STRMAP_GET_BIN_USED(m, i)       VD_STRMAP_GET_BIN(m, i)->used
 #define VD_STRMAP_GET_BIN_NEXT(m, i)       VD_STRMAP_GET_BIN(m, i)->next
 #define VD_STRMAP_GET_BIN_INDEX(m, b)      (size_t)(((uintptr_t)b - (uintptr_t)m) / (uintptr_t)(VD_STRMAP_ENTRY_SIZE(m)))
-#define VD_STRMAP_GET_BIN_VPTR(m, i)       ((void*)(((Vdu8*)VD_STRMAP_GET_BIN(m, i)) + sizeof(Vd__StrmapBinPrefix)))
-#define VD_STRMAP_BIN_MOVE_TO_VPTR(b)      ((void*)(((Vdu8*)(b)) + sizeof(Vd__StrmapBinPrefix)))
+#define VD_STRMAP_GET_BIN_VPTR(m, i)       ((void*)(((uint8_t*)VD_STRMAP_GET_BIN(m, i)) + sizeof(Vd__StrmapBinPrefix)))
+#define VD_STRMAP_BIN_MOVE_TO_VPTR(b)      ((void*)(((uint8_t*)(b)) + sizeof(Vd__StrmapBinPrefix)))
     
-void*                 vd__strmap_init(VdArena *arena, Vdu32 tsize, Vdu32 cap, VdStrmapInitOptions *options);
+void*                 vd__strmap_init(VdArena *arena, uint32_t tsize, uint32_t cap, VdStrmapInitOptions *options);
 Vd__StrmapBinPrefix*  vd__strmap_get_bin(void *map, VdStr key, Vd__StrmapGetBinFlags op);
-VD_INLINE Vdb32       vd__strmap_get(void *map, VdStr key, void *value);
+VD_INLINE int       vd__strmap_get(void *map, VdStr key, void *value);
 VD_INLINE void*       vd__strmap_get_ptr(void *map, VdStr key);
-VD_INLINE Vdb32       vd__strmap_set(void *map, VdStr key, void *value, Vd__StrmapSetMode mode);
+VD_INLINE int       vd__strmap_set(void *map, VdStr key, void *value, Vd__StrmapSetMode mode);
 
-VD_INLINE Vdb32 vd__strmap_get(void *map, VdStr key, void *value)
+VD_INLINE int vd__strmap_get(void *map, VdStr key, void *value)
 {
     // Look for bin 
     Vd__StrmapBinPrefix *bin = vd__strmap_get_bin(map, key, VD__STRMAP_GET_BIN_FLAGS_GET_EXISTING);
     if (bin == 0) return VD_FALSE;
 
     // If found the copy over the data
-    Vdu8 *bin_data = ((Vdu8*)bin) + sizeof(Vd__StrmapBinPrefix);
+    uint8_t *bin_data = ((uint8_t*)bin) + sizeof(Vd__StrmapBinPrefix);
     VD_MEMCPY(value, bin_data, VD_STRMAP_HEADER(map)->tsize);
     return VD_TRUE;
 }
@@ -1585,24 +1535,24 @@ VD_INLINE void *vd__strmap_get_ptr(void *map, VdStr key)
     if (bin == 0) return 0;
 
     // If found the copy over the data
-    Vdu8 *bin_data = ((Vdu8*)bin) + sizeof(Vd__StrmapBinPrefix);
+    uint8_t *bin_data = ((uint8_t*)bin) + sizeof(Vd__StrmapBinPrefix);
     return (void*)bin_data;
 }
 
-VD_INLINE Vdb32 vd__strmap_set(void *map, VdStr key, void *value, Vd__StrmapSetMode mode)
+VD_INLINE int vd__strmap_set(void *map, VdStr key, void *value, Vd__StrmapSetMode mode)
 {
     if (mode == VD__STRMAP_SET_MODE_NEW_ONLY) {
         Vd__StrmapBinPrefix *bin = vd__strmap_get_bin(map, key, VD__STRMAP_GET_BIN_FLAGS_CREATE);
         if (bin == 0) return VD_FALSE;
 
-        Vdu8 *bin_data = ((Vdu8*)bin) + sizeof(Vd__StrmapBinPrefix);
+        uint8_t *bin_data = ((uint8_t*)bin) + sizeof(Vd__StrmapBinPrefix);
         VD_MEMCPY(bin_data, value, VD_STRMAP_HEADER(map)->tsize);
         return VD_TRUE;
     } else {
         Vd__StrmapBinPrefix *bin = vd__strmap_get_bin(map, key, (Vd__StrmapGetBinFlags)(VD__STRMAP_GET_BIN_FLAGS_CREATE | VD__STRMAP_GET_BIN_FLAGS_GET_EXISTING));
         if (bin == 0) return VD_FALSE;
 
-        Vdu8 *bin_data = ((Vdu8*)bin) + sizeof(Vd__StrmapBinPrefix);
+        uint8_t *bin_data = ((uint8_t*)bin) + sizeof(Vd__StrmapBinPrefix);
         VD_MEMCPY(bin_data, value, VD_STRMAP_HEADER(map)->tsize);
         return VD_TRUE;
     }
@@ -1621,11 +1571,11 @@ VD_INLINE Vdb32 vd__strmap_set(void *map, VdStr key, void *value, Vd__StrmapSetM
 
 /* ----KVMAP--------------------------------------------------------------------------------------------------------- */
 typedef struct {
-    Vdu32   cap;
-    Vdu32   cap_total;
-    Vdu32   taken;
-    Vdu32   ksize;
-    Vdu32   vsize;
+    uint32_t   cap;
+    uint32_t   cap_total;
+    uint32_t   taken;
+    uint32_t   ksize;
+    uint32_t   vsize;
 } Vd__KVMapHeader;
 
 typedef struct Vd__KVMapBinPrefix Vd__KVMapBinPrefix;
@@ -1633,7 +1583,7 @@ typedef struct Vd__KVMapBinPrefix Vd__KVMapBinPrefix;
 struct Vd__KVMapBinPrefix {
     Vd__KVMapBinPrefix *next;
     Vd__KVMapBinPrefix *insq;
-    Vdusize            used;
+    size_t            used;
 };
 
 typedef enum {
@@ -1665,7 +1615,7 @@ typedef struct __VD_KVMapInitOptions {
 
 #define VD_KVMAP
 #define VD_KVMAP_DEFAULT_CAP              1024
-#define VD_KVMAP_HEADER(m)                ((Vd__KVMapHeader*)(((Vdu8*)(m)) - sizeof(Vd__KVMapHeader)))
+#define VD_KVMAP_HEADER(m)                ((Vd__KVMapHeader*)(((uint8_t*)(m)) - sizeof(Vd__KVMapHeader)))
 #define VD_KVMAP_INIT(m, arena, cap, o)   ((m) = (vd__kvmap_init((arena), sizeof(m->k), sizeof(m->v), (cap), (o))))
 #define VD_KVMAP_INIT_DEFAULT(m, arena)   VD_KVMAP_INIT((m), (arena), VD_KVMAP_DEFAULT_CAP, NULL)
 #define VD_KVMAP_SET(m, k, v)             vd__kvmap_set((m), (k), (void*)(v), VD__KVMAP_SET_MODE_NEW_ONLY)
@@ -1678,48 +1628,48 @@ typedef struct __VD_KVMapInitOptions {
 #define VD_KVMAP_KSIZE(m)                 (VD_KVMAP_HEADER(m)->ksize)
 #define VD_KVMAP_VSIZE(m)                 (VD_KVMAP_HEADER(m)->vsize)
 #define VD_KVMAP_ENTRY_SIZE(m)            (VD_KVMAP_KSIZE(m) + VD_KVMAP_VSIZE(m) + sizeof(Vd__KVMapBinPrefix))
-#define VD_KVMAP_GET_BIN(m, i)            ((Vd__KVMapBinPrefix*) (((Vdu8*)m) + (VD_KVMAP_ENTRY_SIZE(m) * (i))))
-#define VD_KVMAP_GET_KEY(m, i)            ((void*)((Vdu8*)VD_KVMAP_GET_BIN(m, i) + sizeof(Vd__KVMapBinPrefix)))
-#define VD_KVMAP_GET_VAL(m, i)            ((void*)((Vdu8*)VD_KVMAP_GET_BIN(m, i) + sizeof(Vd__KVMapBinPrefix + VD_KVMAP_KSIZE(m))))
+#define VD_KVMAP_GET_BIN(m, i)            ((Vd__KVMapBinPrefix*) (((uint8_t*)m) + (VD_KVMAP_ENTRY_SIZE(m) * (i))))
+#define VD_KVMAP_GET_KEY(m, i)            ((void*)((uint8_t*)VD_KVMAP_GET_BIN(m, i) + sizeof(Vd__KVMapBinPrefix)))
+#define VD_KVMAP_GET_VAL(m, i)            ((void*)((uint8_t*)VD_KVMAP_GET_BIN(m, i) + sizeof(Vd__KVMapBinPrefix + VD_KVMAP_KSIZE(m))))
 #define VD_KVMAP_GET_BIN_USED(m, i)       VD_KVMAP_GET_BIN(m, i)->used
 #define VD_KVMAP_GET_BIN_NEXT(m, i)       VD_KVMAP_GET_BIN(m, i)->next
 #define VD_KVMAP_GET_BIN_INDEX(m, b)      (size_t)(((uintptr_t)b - (uintptr_t)m) / (uintptr_t)(VD_KVMAP_ENTRY_SIZE(m)))
-#define VD_KVMAP_GET_BIN_KPTR(m, i)       ((void*)(((Vdu8*)VD_KVMAP_GET_BIN(m, i)) + sizeof(Vd__KVMapBinPrefix)))
-#define VD_KVMAP_GET_BIN_VPTR(m, i)       ((void*)(((Vdu8*)VD_KVMAP_GET_BIN(m, i)) + sizeof(Vd__KVMapBinPrefix) + VD_KVMAP_KSIZE(m)))
-#define VD_KVMAP_BIN_MOVE_TO_KPTR(b)      ((void*)(((Vdu8*)(b)) + sizeof(Vd__KVMapBinPrefix)))
-#define VD_KVMAP_BIN_MOVE_TO_VPTR(m, b)   ((void*)(((Vdu8*)(b)) + sizeof(Vd__KVMapBinPrefix) + VD_KVMAP_KSIZE(map)))
+#define VD_KVMAP_GET_BIN_KPTR(m, i)       ((void*)(((uint8_t*)VD_KVMAP_GET_BIN(m, i)) + sizeof(Vd__KVMapBinPrefix)))
+#define VD_KVMAP_GET_BIN_VPTR(m, i)       ((void*)(((uint8_t*)VD_KVMAP_GET_BIN(m, i)) + sizeof(Vd__KVMapBinPrefix) + VD_KVMAP_KSIZE(m)))
+#define VD_KVMAP_BIN_MOVE_TO_KPTR(b)      ((void*)(((uint8_t*)(b)) + sizeof(Vd__KVMapBinPrefix)))
+#define VD_KVMAP_BIN_MOVE_TO_VPTR(m, b)   ((void*)(((uint8_t*)(b)) + sizeof(Vd__KVMapBinPrefix) + VD_KVMAP_KSIZE(map)))
 
-void*                 vd__kvmap_init(VdArena *arena, Vdu32 ksize, Vdu32 vsize, Vdu32 cap, VdKVMapInitOptions *options);
+void*                 vd__kvmap_init(VdArena *arena, uint32_t ksize, uint32_t vsize, uint32_t cap, VdKVMapInitOptions *options);
 Vd__KVMapBinPrefix*   vd__kvmap_get_bin(void *map, void *key, Vd__KVMapGetBinFlags op);
-VD_INLINE Vdb32       vd__kvmap_get(void *map, void *key, void *value);
-VD_INLINE Vdb32       vd__kvmap_set(void *map, void *key, void *value, Vd__KVMapSetMode mode);
+VD_INLINE int       vd__kvmap_get(void *map, void *key, void *value);
+VD_INLINE int       vd__kvmap_set(void *map, void *key, void *value, Vd__KVMapSetMode mode);
 
-VD_INLINE Vdb32 vd__kvmap_get(void *map, void *key, void *value)
+VD_INLINE int vd__kvmap_get(void *map, void *key, void *value)
 {
     // Look for bin 
     Vd__KVMapBinPrefix *bin = vd__kvmap_get_bin(map, key, VD__KVMAP_GET_BIN_FLAGS_GET_EXISTING);
     if (bin == 0) return VD_FALSE;
 
     // If found the copy over the data
-    Vdu8 *bin_data = (Vdu8*)VD_KVMAP_BIN_MOVE_TO_VPTR(map, bin);
+    uint8_t *bin_data = (uint8_t*)VD_KVMAP_BIN_MOVE_TO_VPTR(map, bin);
     VD_MEMCPY(value, bin_data, VD_KVMAP_HEADER(map)->vsize);
     return VD_TRUE;
 }
 
-VD_INLINE Vdb32 vd__kvmap_set(void *map, void *key, void *value, Vd__KVMapSetMode mode)
+VD_INLINE int vd__kvmap_set(void *map, void *key, void *value, Vd__KVMapSetMode mode)
 {
     if (mode == VD__KVMAP_SET_MODE_NEW_ONLY) {
         Vd__KVMapBinPrefix *bin = vd__kvmap_get_bin(map, key, VD__KVMAP_GET_BIN_FLAGS_CREATE);
         if (bin == 0) return VD_FALSE;
 
-        Vdu8ptr bin_data = (Vdu8ptr)VD_KVMAP_BIN_MOVE_TO_VPTR(map, bin);
+        uint8_t* bin_data = (uint8_t*)VD_KVMAP_BIN_MOVE_TO_VPTR(map, bin);
         VD_MEMCPY(bin_data, value, VD_KVMAP_VSIZE(map));
         return VD_TRUE;
     } else {
         Vd__KVMapBinPrefix *bin = (Vd__KVMapBinPrefix*)vd__kvmap_get_bin(map, key, (Vd__KVMapGetBinFlags)(VD__KVMAP_GET_BIN_FLAGS_CREATE | VD__KVMAP_GET_BIN_FLAGS_GET_EXISTING));
         if (bin == 0) return VD_FALSE;
 
-        Vdu8ptr bin_data = (Vdu8ptr)VD_KVMAP_BIN_MOVE_TO_VPTR(map, bin);
+        uint8_t* bin_data = (uint8_t*)VD_KVMAP_BIN_MOVE_TO_VPTR(map, bin);
         VD_MEMCPY(bin_data, value, VD_KVMAP_HEADER(map)->vsize);
         return VD_TRUE;
     }
@@ -1740,7 +1690,7 @@ VD_INLINE Vdb32 vd__kvmap_set(void *map, void *key, void *value, Vd__KVMapSetMod
 enum {
     VD_FILE_FLAG_DIRECTORY = 1 << 0,
 };
-typedef Vdu32 VdFileFlags;
+typedef uint32_t VdFileFlags;
 
 typedef struct VdDirectory {
     void             *handle;
@@ -1764,29 +1714,29 @@ VD_API void vd_directory_walk_recursively(const char *path, void (*visit)(VdFile
 #endif // VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
 
 #include <stdio.h>
-VD_INLINE Vdu8*  vd_dump_file_to_bytes(VdArena *arena, Vdcstr file_path, Vdusize *len);
-VD_INLINE Vdcstr vd_dump_file_to_cstr(VdArena *arena, Vdcstr file_path, Vdusize *len);
+VD_INLINE uint8_t*  vd_dump_file_to_bytes(VdArena *arena, char* file_path, size_t *len);
+VD_INLINE char* vd_dump_file_to_cstr(VdArena *arena, char* file_path, size_t *len);
 
-VD_INLINE Vdu8*  vd_dump_file_to_bytes(VdArena *arena, Vdcstr file_path, Vdusize *len)
+VD_INLINE uint8_t*  vd_dump_file_to_bytes(VdArena *arena, char* file_path, size_t *len)
 {
     FILE *f = fopen(file_path, "rb");
     fseek(f, 0, SEEK_END);
-    Vdusize size = ftell(f);
+    size_t size = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    Vdu8 *result = (Vdu8*)vd_arena_alloc(arena, size);
+    uint8_t *result = (uint8_t*)vd_arena_alloc(arena, size);
     fread(result, size, 1, f);
     *len = size;
     return result;
 }
 
-VD_INLINE Vdcstr vd_dump_file_to_cstr(VdArena *arena, Vdcstr file_path, Vdusize *len)
+VD_INLINE char* vd_dump_file_to_cstr(VdArena *arena, char* file_path, size_t *len)
 {
     FILE *f = fopen(file_path, "rb");
     if (f == 0) return 0;
     
     fseek(f, 0, SEEK_END);
-    Vdusize size = ftell(f);
+    size_t size = ftell(f);
     fseek(f, 0, SEEK_SET);
 
     char *result = (char*)vd_arena_alloc(arena, size + 1);
@@ -1829,7 +1779,7 @@ VD_API void      vd_library_free(VdLibrary library);
 
 typedef struct __VD_Scratch {
     VdArena   arenas[VD_SCRATCH_PAGE_COUNT];
-    Vdusize   curr_arena;
+    size_t   curr_arena;
 } VdScratch;
 
 void     vd_scratch_init(VdScratch *scratch);
@@ -1844,7 +1794,7 @@ void     vd_scratch_return_arena(VdScratch *scratch, VdArena *arena);
 #endif // VD_MACRO_ABBREVIATIONS
 
 /* ----LOG----------------------------------------------------------------------------------------------------------- */
-#define VD_PROC_LOG(name) void name(int verbosity, Vdcstr string)
+#define VD_PROC_LOG(name) void name(int verbosity, char* string)
 typedef VD_PROC_LOG(VdProcLog);
 
 #define VD_LOG_VERBOSITY_ERROR      (-10)
@@ -1989,14 +1939,14 @@ typedef struct __VD_TestEntry {
 #endif  // VD_HOST_COMPILER_MSVC, VD_HOST_COMPILER_CLANG
 
 extern VdTestEntry *Vd__Test_Entries;
-extern Vdusize     Vd__Cap_Test_Entries;
-extern Vdu32       Vd__Len_Test_Entries;
+extern size_t     Vd__Cap_Test_Entries;
+extern uint32_t       Vd__Len_Test_Entries;
 
 static VD_INLINE void vd__test_register(const char *name, VdProcTest *proc)
 {
     if ((Vd__Len_Test_Entries + 1) > Vd__Cap_Test_Entries) {
-        Vdusize old_cap = Vd__Cap_Test_Entries;
-        Vdusize new_cap;
+        size_t old_cap = Vd__Cap_Test_Entries;
+        size_t new_cap;
         if (old_cap == 0) {
             new_cap = 64;
         } else {
@@ -2028,7 +1978,7 @@ extern VdTestContext *Vd__Global_Test_Context;
 #define VD_TEST_LOG(fmt, ...) VD_TEST_LOG_IMPL(fmt, ## __VA_ARGS__)
 
 extern void vd_test_set_context(VdTestContext *context);
-extern void vd_test_get_tests(VdTestEntry **out_entries, Vdu32 *out_num_entries);
+extern void vd_test_get_tests(VdTestEntry **out_entries, uint32_t *out_num_entries);
 extern void vd_test_main(void);
 
 #ifndef VD_TEST_ERR_CODE
@@ -2087,22 +2037,22 @@ VD_API void vd_init(VdInitInfo *info) {
         thread_context_ptr = info->thread_context_ptr;
     }
 
-    Vdusize total_required_size = (VD_SCRATCH_PAGE_SIZE * VD_SCRATCH_PAGE_COUNT) +
+    size_t total_required_size = (VD_SCRATCH_PAGE_SIZE * VD_SCRATCH_PAGE_COUNT) +
                                   sizeof(VdScratch) +
                                   sizeof(VD_THREAD_CONTEXT_TYPE);
 
-    Vduptr allocation = (Vduptr)VD_MALLOC(total_required_size);
+    uintptr_t allocation = (uintptr_t)VD_MALLOC(total_required_size);
     VD_MEMSET((void*)allocation, 0, total_required_size);
 
     void *thread_context = (void*)allocation;
     *thread_context_ptr = thread_context;
-    VdScratch *scratch = (VdScratch*)((Vduptr)(thread_context) + VD_THREAD_CONTEXT_SCRATCH_OFF());
-    VdProcLog **proc_log = (VdProcLog**)((Vduptr)(thread_context) + VD_THREAD_CONTEXT_LOG_OFF());
+    VdScratch *scratch = (VdScratch*)((uintptr_t)(thread_context) + VD_THREAD_CONTEXT_SCRATCH_OFF());
+    VdProcLog **proc_log = (VdProcLog**)((uintptr_t)(thread_context) + VD_THREAD_CONTEXT_LOG_OFF());
     *proc_log = vd__default_log;
 
     allocation += sizeof(VD_THREAD_CONTEXT_TYPE);
 
-    for (Vdusize i = 0; i < VD_SCRATCH_PAGE_COUNT; ++i)
+    for (size_t i = 0; i < VD_SCRATCH_PAGE_COUNT; ++i)
     {
         void *a = (void*)allocation;
         vd_arena_init(&scratch->arenas[i], a, VD_SCRATCH_PAGE_SIZE);
@@ -2128,27 +2078,26 @@ static VD_PROC_LOG(vd__default_log)
 
 /* ----TIMING IMPL--------------------------------------------------------------------------------------------------- */
 #if VD_PLATFORM_WINDOWS
-#include <windows.h>
 
-#ifndef _PROFILEAPI_H_
 #if VD_CPP
 extern "C" {
 #endif // VD_CPP
 
-extern int QueryPerformanceCounter(Vdi64 *perf_count);
-extern int QueryPerformanceFrequency(Vdi64 *perf_freq);
+#pragma comment(linker, "/alternatename:VdQueryPerformanceCounter=QueryPerformanceCounter")
+extern int VdQueryPerformanceCounter(int64_t *perf_count);
+#pragma comment(linker, "/alternatename:VdQueryPerformanceFrequency=QueryPerformanceFrequency")
+extern int VdQueryPerformanceFrequency(int64_t *perf_freq);
 
 #if VD_CPP
 }
 #endif // VD_CPP
-#endif // !_PROFILEAPI_H_
 
-static Vdi64 Vd__Windows_Performance_Frequency = 0;
+static int64_t Vd__Windows_Performance_Frequency = 0;
 
 VdHiTime vd_hitime_get(void)
 {
-    Vdu64 counter;
-    QueryPerformanceCounter((LARGE_INTEGER*)&counter);
+    uint64_t counter;
+    VdQueryPerformanceCounter((int64_t*)&counter);
 
     VdHiTime result = { counter };
     return result;
@@ -2160,44 +2109,44 @@ VdHiTime vd_hitime_sub(VdHiTime a, VdHiTime b)
     return result;
 }
 
-Vdu64 vd_hitime_ns(VdHiTime time_spec)
+uint64_t vd_hitime_ns(VdHiTime time_spec)
 {
     // @todo(mdodis): Windows_Performance_Frequency on startup
     if (Vd__Windows_Performance_Frequency == 0) {
-        QueryPerformanceFrequency((LARGE_INTEGER*)&Vd__Windows_Performance_Frequency);
+        VdQueryPerformanceFrequency((int64_t*)&Vd__Windows_Performance_Frequency);
     }
 
-    Vdu64 q  =  time_spec.performance_counter / Vd__Windows_Performance_Frequency;
-    Vdu64 r  =  time_spec.performance_counter % Vd__Windows_Performance_Frequency;
-    Vdu64 ns =  q * 1000000000ULL;
+    uint64_t q  =  time_spec.performance_counter / Vd__Windows_Performance_Frequency;
+    uint64_t r  =  time_spec.performance_counter % Vd__Windows_Performance_Frequency;
+    uint64_t ns =  q * 1000000000ULL;
     ns         += (r * 1000000000ULL) / Vd__Windows_Performance_Frequency;
     return ns;
 }
 
-Vdf64 vd_hitime_fms64(VdHiTime time_spec)
+double vd_hitime_fms64(VdHiTime time_spec)
 {
-    return ((Vdf64)vd_hitime_ns(time_spec) / 1000000.0);
+    return ((double)vd_hitime_ns(time_spec) / 1000000.0);
 }
 
-Vdu64 vd_hitime_ms(VdHiTime time_spec)
+uint64_t vd_hitime_ms(VdHiTime time_spec)
 {
     // @todo(mdodis): Windows_Performance_Frequency on startup
     if (Vd__Windows_Performance_Frequency == 0) {
-        QueryPerformanceFrequency((LARGE_INTEGER*)&Vd__Windows_Performance_Frequency);
+        VdQueryPerformanceFrequency((int64_t*)&Vd__Windows_Performance_Frequency);
     }
 
-    return (Vdu64)(((time_spec.performance_counter) * 1000) / Vd__Windows_Performance_Frequency);
+    return (uint64_t)(((time_spec.performance_counter) * 1000) / Vd__Windows_Performance_Frequency);
 }
 
 #elif VD_PLATFORM_MACOS
 #include <mach/mach_time.h>
 
-static Vdb32                     Vd_Mach_Time_Base_Initialized = VD_FALSE;
+static int                     Vd_Mach_Time_Base_Initialized = VD_FALSE;
 static mach_timebase_info_data_t Vd_Mach_Time_Base;
 
 VdHiTime vd_hitime_get(void)
 {
-    Vdu64 result = mach_absolute_time();
+    uint64_t result = mach_absolute_time();
     return (VdHiTime) {result};
 }
 
@@ -2207,25 +2156,25 @@ VdHiTime vd_hitime_sub(VdHiTime a, VdHiTime b)
     return result;
 }
 
-Vdu64 vd_hitime_ns(VdHiTime time_spec)
+uint64_t vd_hitime_ns(VdHiTime time_spec)
 {
     if (!Vd_Mach_Time_Base_Initialized) {
         Vd_Mach_Time_Base_Initialized = VD_TRUE;
         mach_timebase_info(&Vd_Mach_Time_Base);
     }
 
-    Vdu64 ns = time_spec.time * Vd_Mach_Time_Base.numer / Vd_Mach_Time_Base.denom;
+    uint64_t ns = time_spec.time * Vd_Mach_Time_Base.numer / Vd_Mach_Time_Base.denom;
     return ns;
 }
 
-Vdf64 vd_hitime_fms64(VdHiTime time_spec)
+double vd_hitime_fms64(VdHiTime time_spec)
 {
-    return ((Vdf64)vd_hitime_ns(time_spec) / 1000000.0);
+    return ((double)vd_hitime_ns(time_spec) / 1000000.0);
 }
 
-Vdu64 vd_hitime_ms(VdHiTime time_spec)
+uint64_t vd_hitime_ms(VdHiTime time_spec)
 {
-    return (Vdu64)vd_hitime_fms64(time_spec);
+    return (uint64_t)vd_hitime_fms64(time_spec);
 }
 
 #elif VD_PLATFORM_LINUX
@@ -2242,8 +2191,8 @@ VdHiTime vd_hitime_get(void)
 VdHiTime vd_hitime_sub(VdHiTime a, VdHiTime b)
 {
     VdHiTime result;
-    Vdi64 nsec_diff = a.time.tv_nsec - b.time.tv_nsec;
-    Vdi64 sec_diff  = a.time.tv_sec  - b.time.tv_sec;
+    int64_t nsec_diff = a.time.tv_nsec - b.time.tv_nsec;
+    int64_t sec_diff  = a.time.tv_sec  - b.time.tv_sec;
     if (nsec_diff < 0) {
         result.time.tv_sec = sec_diff - 1;
         result.time.tv_nsec = 1000000000 + nsec_diff;
@@ -2255,19 +2204,19 @@ VdHiTime vd_hitime_sub(VdHiTime a, VdHiTime b)
     return result;
 }
 
-Vdu64 vd_hitime_ns(VdHiTime time_spec)
+uint64_t vd_hitime_ns(VdHiTime time_spec)
 {
-    return (Vdu64)time_spec.time.tv_nsec;
+    return (uint64_t)time_spec.time.tv_nsec;
 }
 
-Vdf64 vd_hitime_fms64(VdHiTime time_spec)
+double vd_hitime_fms64(VdHiTime time_spec)
 {
-    return ((Vdf64)vd_hitime_ns(time_spec) / 1000000.0);
+    return ((double)vd_hitime_ns(time_spec) / 1000000.0);
 }
 
-Vdu64 vd_hitime_ms(VdHiTime time_spec)
+uint64_t vd_hitime_ms(VdHiTime time_spec)
 {
-    return (Vdu64)vd_hitime_fms64(time_spec);
+    return (uint64_t)vd_hitime_fms64(time_spec);
 }
 #else
 #error "HiTime not supported on this platform!"
@@ -2282,12 +2231,12 @@ Vdu64 vd_hitime_ms(VdHiTime time_spec)
 #include <errno.h>
 #include <unistd.h>
 
-Vdusize vd_vm_get_page_size(void)
+size_t vd_vm_get_page_size(void)
 {
     return _SC_PAGE_SIZE;
 }
 
-void *vd_vm_reserve(Vdusize len)
+void *vd_vm_reserve(size_t len)
 {
     void *result = mmap(0, len, PROT_NONE, MAP_ANON | MAP_PRIVATE, -1, 0);
     if (result == MAP_FAILED) {
@@ -2297,7 +2246,7 @@ void *vd_vm_reserve(Vdusize len)
     return result;
 }
 
-void *vd_vm_commit(void *addr, Vdusize len)
+void *vd_vm_commit(void *addr, size_t len)
 {
     void *result = mmap(addr, len, PROT_READ | PROT_WRITE, MAP_FIXED | MAP_PRIVATE | MAP_ANON, -1, 0);
     if (result == MAP_FAILED) {
@@ -2307,7 +2256,7 @@ void *vd_vm_commit(void *addr, Vdusize len)
     return result;
 }
 
-void *vd_vm_decommit(void *addr, Vdusize len)
+void *vd_vm_decommit(void *addr, size_t len)
 {
     void *result = mmap(addr, len, PROT_NONE, MAP_FIXED | MAP_PRIVATE | MAP_ANON, -1, 0);
     if (result == MAP_FAILED) {
@@ -2317,7 +2266,7 @@ void *vd_vm_decommit(void *addr, Vdusize len)
     return result;
 }
 
-void vd_vm_release(void *addr, Vdusize len)
+void vd_vm_release(void *addr, size_t len)
 {
     munmap(addr, len);
 }
@@ -2327,12 +2276,12 @@ void vd_vm_release(void *addr, Vdusize len)
 #include <errno.h>
 #include <unistd.h>
 
-Vdusize vd_vm_get_page_size(void)
+size_t vd_vm_get_page_size(void)
 {
     return _SC_PAGE_SIZE;
 }
 
-void *vd_vm_reserve(Vdusize len)
+void *vd_vm_reserve(size_t len)
 {
     void *result = mmap(0, len, PROT_NONE, MAP_ANON | MAP_PRIVATE, -1, 0);
     if (result == MAP_FAILED) {
@@ -2342,7 +2291,7 @@ void *vd_vm_reserve(Vdusize len)
     return result;
 }
 
-void *vd_vm_commit(void *addr, Vdusize len)
+void *vd_vm_commit(void *addr, size_t len)
 {
     void *result = mmap(addr, len, PROT_READ | PROT_WRITE, MAP_FIXED | MAP_PRIVATE | MAP_ANON, -1, 0);
     if (result == MAP_FAILED) {
@@ -2352,7 +2301,7 @@ void *vd_vm_commit(void *addr, Vdusize len)
     return result;
 }
 
-void *vd_vm_decommit(void *addr, Vdusize len)
+void *vd_vm_decommit(void *addr, size_t len)
 {
     void *result = mmap(addr, len, PROT_NONE, MAP_FIXED | MAP_PRIVATE | MAP_ANON, -1, 0);
     if (result == MAP_FAILED) {
@@ -2362,41 +2311,92 @@ void *vd_vm_decommit(void *addr, Vdusize len)
     return result;
 }
 
-void vd_vm_release(void *addr, Vdusize len)
+void vd_vm_release(void *addr, size_t len)
 {
     munmap(addr, len);
 }
 
 #elif VD_PLATFORM_WINDOWS
-#include <windows.h>
+#pragma pack(push, 1)
+typedef struct Vd_SYSTEM_INFO {
+  union {
+    uint32_t dwOemId;
+    struct {
+      uint16_t wProcessorArchitecture;
+      uint16_t wReserved;
+    } DUMMYSTRUCTNAME;
+  } DUMMYUNIONNAME;
+  uint32_t     dwPageSize;
+  void         *lpMinimumApplicationAddress;
+  void         *lpMaximumApplicationAddress;
+  uint32_t     *dwActiveProcessorMask;
+  uint32_t     dwNumberOfProcessors;
+  uint32_t     dwProcessorType;
+  uint32_t     dwAllocationGranularity;
+  uint16_t     wProcessorLevel;
+  uint16_t     wProcessorRevision;
+} VdSYSTEM_INFO;
+#pragma pack(pop)
 
-Vdusize vd_vm_get_page_size(void)
+#if VD_CPP
+extern "C" {
+#endif // VD_CPP
+
+#pragma comment(linker, "/alternatename:VdGetSystemInfo=GetSystemInfo")
+extern void VdGetSystemInfo(VdSYSTEM_INFO *lpSystemInfo);
+#pragma comment(linker, "/alternatename:VdVirtualAlloc=VirtualAlloc")
+extern void * VdVirtualAlloc(void *lpAddress, size_t dwSize, uint32_t flAllocationType, uint32_t flProtect);
+#pragma comment(linker, "/alternatename:VdVirtualFree=VirtualFree")
+extern int VdVirtualFree(void *lpAddress, size_t dwSize, uint32_t dwFreeType);
+
+#if VD_CPP
+}
+#endif // VD_CPP
+
+enum {
+    VD__WIN32_MEM_COMMIT = 0x00001000,
+    VD__WIN32_MEM_RESERVE = 0x00002000,
+    VD__WIN32_MEM_DECOMMIT = 0x00004000,
+    VD__WIN32_PAGE_NOACCESS = 0x01,
+    VD__WIN32_PAGE_READONLY = 0x02,
+    VD__WIN32_PAGE_READWRITE = 0x04,
+    VD__WIN32_PAGE_WRITECOPY = 0x08,
+    VD__WIN32_PAGE_EXECUTE = 0x10,
+    VD__WIN32_PAGE_EXECUTE_READ = 0x20,
+    VD__WIN32_PAGE_EXECUTE_READWRITE = 0x40,
+    VD__WIN32_PAGE_EXECUTE_WRITECOPY = 0x80,
+    VD__WIN32_PAGE_GUARD = 0x100,
+    VD__WIN32_MEM_RELEASE = 0x00008000,
+    VD__WIN32_MEM_FREE = 0x00010000,
+};
+
+size_t vd_vm_get_page_size(void)
 {
-    SYSTEM_INFO system_info;
-    GetSystemInfo(&system_info);
+    VdSYSTEM_INFO system_info;
+    VdGetSystemInfo(&system_info);
     return system_info.dwPageSize;
 }
 
-void *vd_vm_reserve(Vdusize len)
+void *vd_vm_reserve(size_t len)
 {
-    return VirtualAlloc(0, len, MEM_RESERVE, PAGE_READWRITE);
+    return VdVirtualAlloc(0, len, VD__WIN32_MEM_RESERVE, VD__WIN32_PAGE_READWRITE);
 }
 
-void *vd_vm_commit(void *addr, Vdusize len)
+void *vd_vm_commit(void *addr, size_t len)
 {
-    return VirtualAlloc(addr, len, MEM_COMMIT, PAGE_READWRITE);
+    return VdVirtualAlloc(addr, len, VD__WIN32_MEM_COMMIT, VD__WIN32_PAGE_READWRITE);
 }
 
-void *vd_vm_decommit(void *addr, Vdusize len)
+void *vd_vm_decommit(void *addr, size_t len)
 {
-    return VirtualFree(addr, len, MEM_DECOMMIT) ? 0 : addr;
+    return VdVirtualFree(addr, len, VD__WIN32_MEM_DECOMMIT) ? 0 : addr;
 }
 
-void vd_vm_release(void *addr, Vdusize len)
+void vd_vm_release(void *addr, size_t len)
 {
     VD_UNUSED(len);
 
-    VirtualFree(addr, 0, MEM_RELEASE);
+    VdVirtualFree(addr, 0, VD__WIN32_MEM_RELEASE);
 }
 #endif // VD_PLATFORM_MACOS, VD_PLATFORM_WINDOWS
 
@@ -2405,51 +2405,75 @@ void vd_vm_release(void *addr, Vdusize len)
 
 /* ----THREADS IMPL-------------------------------------------------------------------------------------------------- */
 #if VD_PLATFORM_WINDOWS
+
+#if VD_CPP
+extern "C" {
+#endif // VD_CPP
+
+#pragma comment(linker, "/alternatename:VdCreateThread=CreateThread")
+extern void *VdCreateThread(void *lpThreadAttributes, size_t dwStackSize, uint32_t(*lpStartAddress)(void*), void *lpParameter, uint32_t dwCreationFlags, uint32_t *lpThreadId);
+#pragma comment(linker, "/alternatename:VdWaitForSingleObject=WaitForSingleObject")
+extern uint32_t VdWaitForSingleObject(void *hHandle, uint32_t dwMilliseconds);
+#pragma comment(linker, "/alternatename:VdSwitchToThread=SwitchToThread")
+extern int VdSwitchToThread();
+#pragma comment(linker, "/alternatename:VdCreateSemaphoreA=CreateSemaphoreA")
+extern void *VdCreateSemaphoreA(void *lpSemaphoreAttributes, int lInitialCount, int lMaximumCount, const char *lpName);
+#pragma comment(linker, "/alternatename:VdReleaseSemaphore=ReleaseSemaphore")
+extern int VdReleaseSemaphore(void *hSemaphore, int lReleaseCount, int lpPreviousCount);
+#pragma comment(linker, "/alternatename:VdCloseHandle=CloseHandle")
+extern int VdCloseHandle(void *hObject);
+
+#if VD_CPP
+}
+#endif // VD_CPP
+
+#define VD__WIN32_INFINITE    0xFFFFFFFFu
+#define VD__WIN32_WAIT_FAILED 0xFFFFFFFFu
+
 VdThread vd_thread_make(VdThreadProc *proc, void *param)
 {
-    DWORD tid;
-    HANDLE h =  CreateThread(0, 0, proc, param, 0, &tid);
+    uint32_t tid;
+    void *h = VdCreateThread(0, 0, proc, param, 0, &tid);
     VdThread result;
-    result.handle = (void*)h;
+    result.handle = h;
     result.id = tid;
     return result;
 }
 
 int vd_thread_join(VdThread thread)
 {
-    return WaitForSingleObject((HANDLE)thread.handle, INFINITE);
+    // @todo(mdodis): wait time, result
+    return (int)VdWaitForSingleObject((void*)thread.handle, VD__WIN32_INFINITE);
 }
 
 void vd_thread_yield(void)
 {
-    SwitchToThread();
+    VdSwitchToThread();
 }
 
 VdSemaphore vd_semaphore_make(int initial_count, int max_count)
 {
-    HANDLE h = CreateSemaphoreA(NULL, initial_count, max_count, NULL);
+    void *h = VdCreateSemaphoreA(NULL, initial_count, max_count, NULL);
     VdSemaphore result;
-    result.handle = (void*)h;
+    result.handle = h;
     return result;
 }
 
 void vd_semaphore_inc(VdSemaphore semaphore)
 {
-    ReleaseSemaphore((HANDLE)semaphore.handle, 1, NULL);
+    VdReleaseSemaphore(semaphore.handle, 1, 0);
 }
 
 void vd_semaphore_dec(VdSemaphore semaphore)
 {
-    DWORD rc = WaitForSingleObjectEx((HANDLE)semaphore.handle, INFINITE, 0);
-    if (rc == WAIT_FAILED) {
-        int err = GetLastError();
-        printf("ADSAASDAS %d", err);
-    }
+    // @todo(mdodis): timeout, result
+    uint32_t rc = VdWaitForSingleObject(semaphore.handle, VD__WIN32_INFINITE);
+    (void)rc;
 }
 
 void vd_semaphore_free(VdSemaphore semaphore)
 {
-    CloseHandle((HANDLE)semaphore.handle);
+    VdCloseHandle(semaphore.handle);
 }
 
 #endif // VD_PLATFORM_WINDOWS
@@ -2463,7 +2487,7 @@ VD_API VdSystemHeap *vd_system_heap_global(void)
     return &Vd_System_Heap_Global;
 }
 
-VD_API void vd_system_heap_set_reserve_page_count(VdSystemHeap *h, Vdusize page_count)
+VD_API void vd_system_heap_set_reserve_page_count(VdSystemHeap *h, size_t page_count)
 {
     VD_ASSERT(h->buf != 0 && "Heap has already been allocated!");
     if (h->page_size == 0) {
@@ -2473,7 +2497,7 @@ VD_API void vd_system_heap_set_reserve_page_count(VdSystemHeap *h, Vdusize page_
     h->reserved = h->page_size * page_count;
 }
 
-VD_API void *vd_system_heap_alloc(VdSystemHeap *h, Vdusize size, Vdusize align)
+VD_API void *vd_system_heap_alloc(VdSystemHeap *h, size_t size, size_t align)
 {
     if (h->buf == 0) {
         if (h->page_size == 0) {
@@ -2484,7 +2508,7 @@ VD_API void *vd_system_heap_alloc(VdSystemHeap *h, Vdusize size, Vdusize align)
             h->reserved = h->page_size * VD_SYSTEM_HEAP_RESERVE_PAGE_COUNT;
         }
 
-        h->buf = (Vduptr)vd_vm_reserve(h->reserved);
+        h->buf = (uintptr_t)vd_vm_reserve(h->reserved);
     }
 
     // PAGE  0 |---------|
@@ -2504,13 +2528,13 @@ VD_API void *vd_system_heap_alloc(VdSystemHeap *h, Vdusize size, Vdusize align)
     //         |         |
     // PAGE  3 |---------| -> h->buf + h->reserved
 
-    Vduptr now      = (Vduptr)h->buf + (Vduptr)h->committed;
-    Vduptr end      = (Vduptr)h->buf + (Vduptr)h->reserved;
+    uintptr_t now      = (uintptr_t)h->buf + (uintptr_t)h->committed;
+    uintptr_t end      = (uintptr_t)h->buf + (uintptr_t)h->reserved;
 
-    Vduptr curr_ptr    = (Vduptr)h->buf + (Vduptr)h->offset;
-    Vduptr desired     = vd_align_forward(curr_ptr, align);
-    Vduptr desired_end = desired + size;
-    Vduptr offset   = desired - (Vduptr)h->buf;
+    uintptr_t curr_ptr    = (uintptr_t)h->buf + (uintptr_t)h->offset;
+    uintptr_t desired     = vd_align_forward(curr_ptr, align);
+    uintptr_t desired_end = desired + size;
+    uintptr_t offset   = desired - (uintptr_t)h->buf;
 
     if (desired_end > end) {
         VD_DEBUG_BREAK();
@@ -2524,7 +2548,7 @@ VD_API void *vd_system_heap_alloc(VdSystemHeap *h, Vdusize size, Vdusize align)
         return (void*)desired;
     } else {
         // Need to allocate n pages
-        Vdusize num_pages = (desired_end - now) / h->page_size;
+        size_t num_pages = (desired_end - now) / h->page_size;
         num_pages += ((desired_end - now) % h->page_size) != 0 ? 1 : 0;
 
         VD_ASSERT(h->committed % h->page_size == 0);
@@ -2547,7 +2571,7 @@ VD_API void vd_system_heap_empty(VdSystemHeap *h)
 /* ----ARENA IMPL---------------------------------------------------------------------------------------------------- */
 void vd_arena_init(VdArena *a, void *buf, size_t len)
 {
-    a->buf = (Vdu8*)buf;
+    a->buf = (uint8_t*)buf;
     a->buf_len = len;
     a->curr_offset = 0;
     a->prev_offset = 0;
@@ -2558,7 +2582,7 @@ void *vd_arena_alloc_align(VdArena *a, size_t size, size_t align)
 {
     uintptr_t curr_ptr = (uintptr_t)a->buf + (uintptr_t)a->curr_offset;
     uintptr_t offset = vd_align_forward(curr_ptr, align);
-    offset -= (Vduptr)a->buf;
+    offset -= (uintptr_t)a->buf;
 
     if (offset + size <= a->buf_len) {
         void *ptr = 0;
@@ -2582,7 +2606,7 @@ void *vd_arena_resize_align(VdArena *a, void *old_memory, size_t old_size, size_
 {
     VD_ASSERT(vd_is_power_of_two(align));
 
-    Vdu8* old_mem = (Vdu8*)old_memory;
+    uint8_t* old_mem = (uint8_t*)old_memory;
 
     if (old_mem == 0 || old_size == 0) {
         return vd_arena_alloc_align(a, new_size, align);
@@ -2596,7 +2620,7 @@ void *vd_arena_resize_align(VdArena *a, void *old_memory, size_t old_size, size_
             return old_memory;
         } else {
             void *new_memory = vd_arena_alloc_align(a, new_size, align);
-            Vdusize copy_size = old_size < new_size ? old_size : new_size;
+            size_t copy_size = old_size < new_size ? old_size : new_size;
 
             VD_MEMMOVE(new_memory, old_memory, copy_size);
             return new_memory;
@@ -2614,12 +2638,12 @@ void vd_arena_clear(VdArena *a)
     a->prev_offset = 0;
 }
 
-Vdb32 vd_arena_free(VdArena *a, void *memory, size_t size)
+int vd_arena_free(VdArena *a, void *memory, size_t size)
 {
     VD_UNUSED(size);
 
-    Vduptr last_ptr = (Vduptr) (a->buf + a->prev_offset);
-    Vduptr mptr     = (Vduptr)memory;
+    uintptr_t last_ptr = (uintptr_t) (a->buf + a->prev_offset);
+    uintptr_t mptr     = (uintptr_t)memory;
 
     if (mptr == last_ptr) {
         a->curr_offset = a->prev_offset;
@@ -2633,7 +2657,7 @@ Vdb32 vd_arena_free(VdArena *a, void *memory, size_t size)
 /* ----SCRATCH IMPL-------------------------------------------------------------------------------------------------- */
 void vd_scratch_init(VdScratch *scratch)
 {
-    for (Vdusize i = 0; i < VD_SCRATCH_PAGE_COUNT; ++i)
+    for (size_t i = 0; i < VD_SCRATCH_PAGE_COUNT; ++i)
     {
         void *a = (void*)VD_MALLOC(VD_SCRATCH_PAGE_SIZE);
         VD_MEMSET(a, 0, VD_SCRATCH_PAGE_SIZE);
@@ -2662,10 +2686,10 @@ void vd_scratch_return_arena(VdScratch *scratch, VdArena *arena)
 VD_THREAD_CONTEXT_TYPE * VD_THREAD_CONTEXT_VARNAME;
 
 /* ----PARSING IMPL-------------------------------------------------------------------------------------------------- */
-Vdb32 vd_parse_u64(VdStr s, Vdu64 *r)
+int vd_parse_u64(VdStr s, uint64_t *r)
 {
-    Vdu64 result = 0;
-    Vdusize i = 0;
+    uint64_t result = 0;
+    size_t i = 0;
     while (i < s.len && vd_is_ascii_digit(s.s[i])) {
         result = result * 10 + (s.s[i] - '0');
         i++;
@@ -2681,7 +2705,7 @@ Vdb32 vd_parse_u64(VdStr s, Vdu64 *r)
 }
 
 /* ----ARG IMPL------------------------------------------------------------------------------------------------------ */
-Vdb32 vd__arg_advance(VdArg *arg) {
+int vd__arg_advance(VdArg *arg) {
     if ((arg->argi + 1) == arg->argc) {
         return VD_FALSE;
     } else {
@@ -2712,7 +2736,7 @@ void vd_arg_skip_program_name(VdArg *arg)
    arg->ci = 0;
 }
 
-Vdb32 vd_arg_at_end(VdArg *arg)
+int vd_arg_at_end(VdArg *arg)
 {
     return (arg->argi == arg->argc) ||
            (arg->argi == (arg->argc - 1) &&
@@ -2725,7 +2749,7 @@ void vd_arg_skip(VdArg *arg)
     arg->ci = 0;    
 }
 
-Vdb32 vd_arg_get_name(VdArg *arg, VdStr *name)
+int vd_arg_get_name(VdArg *arg, VdStr *name)
 {
     VD_ARG_CHECK_NEXT(arg);
 
@@ -2753,7 +2777,7 @@ Vdb32 vd_arg_get_name(VdArg *arg, VdStr *name)
     return VD_TRUE;
 }
 
-Vdb32 vd_arg_get_uint(VdArg *arg, Vdu64 *i) {
+int vd_arg_get_uint(VdArg *arg, uint64_t *i) {
     VD_UNUSED(i);
     VD_TODO();
 
@@ -2762,7 +2786,7 @@ Vdb32 vd_arg_get_uint(VdArg *arg, Vdu64 *i) {
     return VD_FALSE;
 }
 
-Vdb32 vd_arg_get_str(VdArg *arg, VdStr *str) {
+int vd_arg_get_str(VdArg *arg, VdStr *str) {
     VD_ARG_CHECK_NEXT(arg);
 
     VdStr result;
@@ -2778,15 +2802,15 @@ Vdb32 vd_arg_get_str(VdArg *arg, VdStr *str) {
     return VD_TRUE;
 }
 
-Vdb32 vd_arg_expect_char(VdArg *arg, char c);
+int vd_arg_expect_char(VdArg *arg, char c);
 
 #undef VD_ARG_CHECK_NEXT
 
 /* ----STRMAP IMPL--------------------------------------------------------------------------------------------------- */
-static Vdb32 vd__strmap_check_key(VdStr check, Vd__StrmapBinPrefix *against) {
-    Vdu32 prefix_len       = sizeof(against->key_prefix);    
-    Vdu32 first_check_len  = prefix_len < (Vdu32)check.len ? prefix_len : (Vdu32)check.len;
-    Vdu32 second_check_len = (Vdu32)check.len - prefix_len;
+static int vd__strmap_check_key(VdStr check, Vd__StrmapBinPrefix *against) {
+    uint32_t prefix_len       = sizeof(against->key_prefix);    
+    uint32_t first_check_len  = prefix_len < (uint32_t)check.len ? prefix_len : (uint32_t)check.len;
+    uint32_t second_check_len = (uint32_t)check.len - prefix_len;
 
     if (against->key_len != check.len) {
         return VD_FALSE;
@@ -2801,14 +2825,14 @@ static Vdb32 vd__strmap_check_key(VdStr check, Vd__StrmapBinPrefix *against) {
         : (VD_MEMCMP(against->key_rest, check.s + prefix_len, second_check_len) == 0);
 }
 
-static void vd__strmap_emplace_key(void *map, Vd__StrmapBinPrefix *dst, char *src_key_prefix, char *src_key_rest, Vdu32 src_key_len)
+static void vd__strmap_emplace_key(void *map, Vd__StrmapBinPrefix *dst, char *src_key_prefix, char *src_key_rest, uint32_t src_key_len)
 {
-    Vdu32 prefix_len     = sizeof(dst->key_prefix);
-    Vdu32 first_copy_len = src_key_len > prefix_len ? prefix_len : src_key_len;
+    uint32_t prefix_len     = sizeof(dst->key_prefix);
+    uint32_t first_copy_len = src_key_len > prefix_len ? prefix_len : src_key_len;
 
     VD_MEMCPY(dst->key_prefix, src_key_prefix, first_copy_len);
 
-    Vdu32 new_len = src_key_len;
+    uint32_t new_len = src_key_len;
 
     if (src_key_len > prefix_len) {
         src_key_len -= prefix_len;
@@ -2834,29 +2858,29 @@ static void vd__strmap_copy_key(void *map, VdStr key, Vd__StrmapBinPrefix *bin)
 {
     char *key_prefix_part = key.s;
     char *key_rest_part = key.len > sizeof(bin->key_prefix) ? key.s + sizeof(bin->key_prefix) : 0;
-    vd__strmap_emplace_key(map, bin, key_prefix_part, key_rest_part, (Vdu32)key.len);
+    vd__strmap_emplace_key(map, bin, key_prefix_part, key_rest_part, (uint32_t)key.len);
 }
 
-void* vd__strmap_init(VdArena *arena, Vdu32 tsize, Vdu32 cap, VdStrmapInitOptions *options)
+void* vd__strmap_init(VdArena *arena, uint32_t tsize, uint32_t cap, VdStrmapInitOptions *options)
 {
     Vd__StrmapHeader *map;
-    const Vdu32 bin_size = sizeof(Vd__StrmapBinPrefix) + tsize;
+    const uint32_t bin_size = sizeof(Vd__StrmapBinPrefix) + tsize;
 
     map = (Vd__StrmapHeader*)vd_arena_alloc(arena, sizeof(Vd__StrmapHeader) + bin_size * cap);
 
-    Vd__StrmapBinPrefix *bins = (Vd__StrmapBinPrefix*)(((Vdu8ptr)map) + sizeof(Vd__StrmapHeader));
+    Vd__StrmapBinPrefix *bins = (Vd__StrmapBinPrefix*)(((uint8_t*)map) + sizeof(Vd__StrmapHeader));
 
     float address_scale = 0.863f;
     if (options != 0) address_scale = options->address_scale;
 
     map->cap_total    = cap;
-    map->cap          = (Vdu32) (((Vdf32)cap) * address_scale);
+    map->cap          = (uint32_t) (((float)cap) * address_scale);
     map->taken        = 0;
     map->tsize        = tsize;
     map->arena        = arena;
 
     if ((options != 0) && (options->average_key_len > sizeof(((Vd__StrmapBinPrefix*)0)->key_prefix))) {
-        for (Vdu32 i = 0; i < map->cap_total; ++i) {
+        for (uint32_t i = 0; i < map->cap_total; ++i) {
             bins[i].key_rest = (char*)vd_arena_alloc(arena, options->average_key_len);
             VD_ASSERT(bins[i].key_rest);
 
@@ -2864,7 +2888,7 @@ void* vd__strmap_init(VdArena *arena, Vdu32 tsize, Vdu32 cap, VdStrmapInitOption
         }
     }
 
-    return (void*)((Vdu8*)map + sizeof(Vd__StrmapHeader));
+    return (void*)((uint8_t*)map + sizeof(Vd__StrmapHeader));
 }
 
 // @todo(mdodis): Speed this up if VD_ENABLE_SCRATCH_USE_IN_LIBRARY is enabled
@@ -2893,15 +2917,15 @@ static void vd__strmap_reinsert_chain(void *map, Vd__StrmapBinPrefix *start)
         q->insq = 0;
 
         // Compose the key for q into a VdStr
-        Vdu64 key_hash;
+        uint64_t key_hash;
         {
-            Vdusize key_len = q->key_len;
+            size_t key_len = q->key_len;
             VdArenaSave save = vd_arena_save(VD_STRMAP_ARENAP(map));
 
             char *key = (char*)vd_arena_alloc(VD_STRMAP_ARENAP(map), key_len);
 
-            Vdusize first_copy_size  = key_len <= sizeof(q->key_prefix) ? key_len : sizeof(q->key_prefix);
-            Vdusize second_copy_size = key_len <= sizeof(q->key_prefix) ? 0 : key_len - sizeof(q->key_prefix);
+            size_t first_copy_size  = key_len <= sizeof(q->key_prefix) ? key_len : sizeof(q->key_prefix);
+            size_t second_copy_size = key_len <= sizeof(q->key_prefix) ? 0 : key_len - sizeof(q->key_prefix);
 
             VD_MEMCPY(key + 0, q->key_prefix, first_copy_size);
 
@@ -2914,7 +2938,7 @@ static void vd__strmap_reinsert_chain(void *map, Vd__StrmapBinPrefix *start)
             vd_arena_restore(save);
         }
 
-        Vdusize bin_index = key_hash % VD_STRMAP_HEADER(map)->cap;
+        size_t bin_index = key_hash % VD_STRMAP_HEADER(map)->cap;
 
         Vd__StrmapBinPrefix *existing_bin = VD_STRMAP_GET_BIN(map, bin_index);
 
@@ -2940,7 +2964,7 @@ static void vd__strmap_reinsert_chain(void *map, Vd__StrmapBinPrefix *start)
                     chain_head = chain_head->next;
                 }
 
-                Vdu32 cursor = VD_STRMAP_HEADER(map)->cap_total;
+                uint32_t cursor = VD_STRMAP_HEADER(map)->cap_total;
                 while ((cursor > 0) && (VD_STRMAP_GET_BIN(map, cursor - 1)->used)) {
                     cursor--;
                 }
@@ -2979,8 +3003,8 @@ static void vd__strmap_reinsert_chain(void *map, Vd__StrmapBinPrefix *start)
 Vd__StrmapBinPrefix* vd__strmap_get_bin(void *map, VdStr key, Vd__StrmapGetBinFlags op)
 {
     // Get hash
-    Vdu64 hash = vd_dhash64_str(key);
-    Vdu64 bin_index = hash % VD_STRMAP_HEADER(map)->cap;
+    uint64_t hash = vd_dhash64_str(key);
+    uint64_t bin_index = hash % VD_STRMAP_HEADER(map)->cap;
 
     // Find existing bin if any
     Vd__StrmapBinPrefix *existing_bin = VD_STRMAP_GET_BIN(map, bin_index);
@@ -2998,7 +3022,7 @@ Vd__StrmapBinPrefix* vd__strmap_get_bin(void *map, VdStr key, Vd__StrmapGetBinFl
     //        we actually find a place to allocate the bin), we'll want to link the collided bin chain
     //        to the newly allocated bin
     if (existing_bin->used || !(op & VD__STRMAP_GET_BIN_FLAGS_CREATE)) {
-        Vdb32 found = VD_FALSE;
+        int found = VD_FALSE;
 
         // Make sure that the hash didn't put us in a bin where the key is equal to the query key
         if (vd__strmap_check_key(key, existing_bin)) {
@@ -3058,7 +3082,7 @@ Vd__StrmapBinPrefix* vd__strmap_get_bin(void *map, VdStr key, Vd__StrmapGetBinFl
     // due to a previous collision
 
     // Otherwise search starting from the cellar for an unused bin
-    Vdu32 cursor = VD_STRMAP_HEADER(map)->cap_total;
+    uint32_t cursor = VD_STRMAP_HEADER(map)->cap_total;
     while ((cursor > 0) && (VD_STRMAP_GET_BIN(map, cursor - 1)->used)) {
         cursor--;
     }
@@ -3088,15 +3112,15 @@ Vd__StrmapBinPrefix* vd__strmap_get_bin(void *map, VdStr key, Vd__StrmapGetBinFl
 }
 
 /* ----KVMAP IMPL---------------------------------------------------------------------------------------------------- */
-static Vdb32 vd__kvmap_check_key(Vdusize ksize, void *check, Vd__KVMapBinPrefix *against)
+static int vd__kvmap_check_key(size_t ksize, void *check, Vd__KVMapBinPrefix *against)
 {
-    void *key_against = (void *)(((Vdu8ptr)against) + sizeof(Vd__KVMapBinPrefix));
+    void *key_against = (void *)(((uint8_t*)against) + sizeof(Vd__KVMapBinPrefix));
     return VD_MEMCMP(check, key_against, ksize) == 0;
 }
 
 static void vd__kvmap_copy_key(void *map, void *key, Vd__KVMapBinPrefix *bin)
 {
-    void *dst = (void *)(((Vdu8ptr)bin) + sizeof(Vd__KVMapBinPrefix));
+    void *dst = (void *)(((uint8_t*)bin) + sizeof(Vd__KVMapBinPrefix));
     VD_MEMCPY(dst, key, VD_KVMAP_KSIZE(map));
 }
 
@@ -3126,13 +3150,13 @@ static void vd__kvmap_reinsert_chain(void *map, Vd__KVMapBinPrefix *start)
         q->insq = 0;
 
         // Compose the key for q into a VdStr
-        Vdu64 key_hash;
+        uint64_t key_hash;
         {
-            void *k = (void *)(((Vdu8ptr)q) + sizeof(Vd__KVMapBinPrefix));
+            void *k = (void *)(((uint8_t*)q) + sizeof(Vd__KVMapBinPrefix));
             key_hash = vd_dhash64(k, VD_KVMAP_KSIZE(map));
         }
 
-        Vdusize bin_index = key_hash % VD_KVMAP_HEADER(map)->cap;
+        size_t bin_index = key_hash % VD_KVMAP_HEADER(map)->cap;
 
         Vd__KVMapBinPrefix *existing_bin = VD_KVMAP_GET_BIN(map, bin_index);
 
@@ -3159,7 +3183,7 @@ static void vd__kvmap_reinsert_chain(void *map, Vd__KVMapBinPrefix *start)
                     chain_head = chain_head->next;
                 }
 
-                Vdu32 cursor = VD_KVMAP_HEADER(map)->cap_total;
+                uint32_t cursor = VD_KVMAP_HEADER(map)->cap_total;
                 while ((cursor > 0) && (VD_KVMAP_GET_BIN(map, cursor - 1)->used)) {
                     cursor--;
                 }
@@ -3194,29 +3218,29 @@ static void vd__kvmap_reinsert_chain(void *map, Vd__KVMapBinPrefix *start)
         q = nextq;
     }
 }
-void *vd__kvmap_init(VdArena *arena, Vdu32 ksize, Vdu32 vsize, Vdu32 cap, VdKVMapInitOptions *options)
+void *vd__kvmap_init(VdArena *arena, uint32_t ksize, uint32_t vsize, uint32_t cap, VdKVMapInitOptions *options)
 {
     Vd__KVMapHeader *map;
-    const Vdu32 bin_size = sizeof(Vd__KVMapBinPrefix) + ksize + vsize;    
+    const uint32_t bin_size = sizeof(Vd__KVMapBinPrefix) + ksize + vsize;    
 
     map = (Vd__KVMapHeader*)vd_arena_alloc(arena, sizeof(Vd__KVMapHeader) + bin_size * cap);
     float address_scale = 0.863f;
     if (options != 0) address_scale = options->address_scale;
 
     map->cap_total    = cap;
-    map->cap          = (Vdu32) (((Vdf32)cap) * address_scale);
+    map->cap          = (uint32_t) (((float)cap) * address_scale);
     map->taken        = 0;
     map->ksize        = ksize;
     map->vsize        = vsize;
 
-    return (void*)(((Vdu8*)map) + sizeof(Vd__KVMapHeader));
+    return (void*)(((uint8_t*)map) + sizeof(Vd__KVMapHeader));
 }
 
 Vd__KVMapBinPrefix *vd__kvmap_get_bin(void *map, void *key, Vd__KVMapGetBinFlags op)
 {
     // Get hash
-    Vdu64 hash = vd_dhash64(key, VD_KVMAP_KSIZE(map));
-    Vdu64 bin_index = hash % VD_KVMAP_HEADER(map)->cap;
+    uint64_t hash = vd_dhash64(key, VD_KVMAP_KSIZE(map));
+    uint64_t bin_index = hash % VD_KVMAP_HEADER(map)->cap;
 
     // Find existing bin if any
     Vd__KVMapBinPrefix *existing_bin = VD_KVMAP_GET_BIN(map, bin_index);
@@ -3234,7 +3258,7 @@ Vd__KVMapBinPrefix *vd__kvmap_get_bin(void *map, void *key, Vd__KVMapGetBinFlags
     //        we actually find a place to allocate the bin), we'll want to link the collided bin chain
     //        to the newly allocated bin
     if (existing_bin->used || !(op & VD__KVMAP_GET_BIN_FLAGS_CREATE)) {
-        Vdb32 found = VD_FALSE;
+        int found = VD_FALSE;
 
         // Make sure that the hash didn't put us in a bin where the key is equal to the query key
         if (vd__kvmap_check_key(VD_KVMAP_KSIZE(map), key, existing_bin)) {
@@ -3290,7 +3314,7 @@ Vd__KVMapBinPrefix *vd__kvmap_get_bin(void *map, void *key, Vd__KVMapGetBinFlags
     // due to a previous collision
 
     // Otherwise search starting from the cellar for an unused bin
-    Vdu32 cursor = VD_KVMAP_HEADER(map)->cap_total;
+    uint32_t cursor = VD_KVMAP_HEADER(map)->cap_total;
     while ((cursor > 0) && (VD_KVMAP_GET_BIN(map, cursor - 1)->used)) {
         cursor--;
     }
@@ -3322,7 +3346,49 @@ Vd__KVMapBinPrefix *vd__kvmap_get_bin(void *map, void *key, Vd__KVMapGetBinFlags
 /* ----FILESYSTEM IMPL----------------------------------------------------------------------------------------------- */
 #if VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
 #if VD_PLATFORM_WINDOWS
-#include <windows.h>
+
+#pragma pack(push, 1)
+typedef struct Vd_FILETIME {
+    uint32_t dwLowDateTime;
+    uint32_t dwHighDateTime;
+} VdFILETIME;
+
+typedef struct {
+  uint32_t   dwFileAttributes;
+  VdFILETIME ftCreationTime;
+  VdFILETIME ftLastAccessTime;
+  VdFILETIME ftLastWriteTime;
+  uint32_t   nFileSizeHigh;
+  uint32_t   nFileSizeLow;
+  uint32_t   dwReserved0;
+  uint32_t   dwReserved1;
+  wchar_t    cFileName[260];
+  wchar_t    cAlternateFileName[14];
+  uint32_t   dwFileType; // Obsolete. Do not use.
+  uint32_t   dwCreatorType; // Obsolete. Do not use
+  uint16_t   wFinderFlags; // Obsolete. Do not use
+} VdWIN32_FIND_DATAW;
+#pragma pack(pop)
+
+#if VD_CPP
+extern "C" {
+#endif // VD_CPP
+
+#pragma comment(linker, "/alternatename:VdMultiByteToWideChar=MultiByteToWideChar")
+extern int VdMultiByteToWideChar(uint32_t CodePage, uint32_t dwFlags, const char *lpMultiByteStr, int cbMultiByte, wchar_t *lpWideCharStr, int cchWideChar);
+#pragma comment(linker, "/alternatename:VdWideCharToMultiByte=WideCharToMultiByte")
+extern int VdWideCharToMultiByte(uint32_t CodePage, uint32_t dwFlags, const wchar_t *lpWideCharStr, int cchWideChar, char *lpMultiByteStr, int cbMultiByte, char *lpDefaultChar, int *lpUsedDefaultChar);
+#pragma comment(linker, "/alternatename:VdFindFirstFileW=FindFirstFileW")
+extern void *VdFindFirstFileW(const wchar_t *lpFileName, VdWIN32_FIND_DATAW *lpFindFileData);
+#pragma comment(linker, "/alternatename:VdFindNextFileW=FindNextFileW")
+extern int VdFindNextFileW(void *hFindFile, VdWIN32_FIND_DATAW *lpFindFileData);
+#pragma comment(linker, "/alternatename:VdFindClose=FindClose")
+extern int VdFindClose(void *hFindFile);
+
+#if VD_CPP
+}
+#endif // VD_CPP
+
 static wchar_t Cached_Directory_Entry[1024];
 static char    Filename_Cache[256];
 
@@ -3337,14 +3403,14 @@ VD_API int vd_directory_open(VdDirectory *directory, const char *path)
 VD_API int vd_directory_get_file(VdDirectory *directory, VdFile *file)
 {
 query_file:
-    WIN32_FIND_DATAW dataw;
-    Vdb32 was_found = VD_FALSE;
+    VdWIN32_FIND_DATAW dataw;
+    int was_found = VD_FALSE;
 
     if (directory->windows_is_on_first_file) {
-        Vdu32 lenw = MultiByteToWideChar(
-            CP_UTF8,
-            MB_ERR_INVALID_CHARS,
-            (const char*)directory->filename.s, (Vdu32)directory->filename.len,
+        uint32_t lenw = MultiByteToWideChar(
+            65001,
+            0x00000008,
+            (const char*)directory->filename.s, (uint32_t)directory->filename.len,
             Cached_Directory_Entry,
             VD_ARRAY_COUNT(Cached_Directory_Entry));
 
@@ -3355,21 +3421,21 @@ query_file:
         Cached_Directory_Entry[lenw++] = L'*';
         Cached_Directory_Entry[lenw]   = 0;
 
-        directory->handle = FindFirstFileW(Cached_Directory_Entry, &dataw);
+        directory->handle = VdFindFirstFileW(Cached_Directory_Entry, &dataw);
 
-        was_found = directory->handle != INVALID_HANDLE_VALUE;
+        was_found = directory->handle != (void*)-1;
         directory->windows_is_on_first_file = VD_FALSE;
     } else {
-        was_found = FindNextFileW(directory->handle, &dataw);
+        was_found = VdFindNextFileW(directory->handle, &dataw);
     }
 
     if (!was_found) {
         return VD_FALSE;
     }
 
-    int num_bytes = WideCharToMultiByte(
-        CP_UTF8,
-        WC_ERR_INVALID_CHARS,
+    int num_bytes = VdWideCharToMultiByte(
+        65001,
+        0x00000080,
         dataw.cFileName, -1,
         Filename_Cache,
         sizeof(Filename_Cache),
@@ -3383,7 +3449,7 @@ query_file:
     }
 
     file->flags = 0;
-    if (dataw.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+    if (dataw.dwFileAttributes & 0x00000010) {
         file->flags |= VD_FILE_FLAG_DIRECTORY;
     }
 
@@ -3392,7 +3458,7 @@ query_file:
 
 VD_API int vd_directory_close(VdDirectory *directory)
 {
-    FindClose((HANDLE)directory->handle);    
+    VdFindClose(directory->handle);    
     return 1;
 }
 
@@ -3527,25 +3593,41 @@ VD_API void vd_directory_walk_recursively(const char *path, void (*visit)(VdFile
 
 /* ----DYNAMIC LIBRARIES IMPL---------------------------------------------------------------------------------------- */
 #if VD_INCLUDE_PLATFORM_SPECIFIC_FUNCTIONALITY
+
+#if VD_CPP
+extern "C" {
+#endif // VD_CPP
+
+#pragma comment(linker, "/alternatename:VdLoadLibraryA=LoadLibraryA")
+extern void *VdLoadLibraryA(const char *path);
+#pragma comment(linker, "/alternatename:VdGetProcAddress=GetProcAddress")
+extern void *VdGetProcAddress(void *hModule, const char *lpProcName);
+#pragma comment(linker, "/alternatename:VdFreeLibrary=FreeLibrary")
+extern int VdFreeLibrary(void *hLibModule);
+
+#if VD_CPP
+}
+#endif // VD_CPP
+
 #if VD_PLATFORM_WINDOWS
 VD_API VdLibrary vd_library_from_path(const char *path)
 {
-    HMODULE h = LoadLibraryA(path);
+    void *h = VdLoadLibraryA(path);
     VdLibrary result;
-    result.handle = (void*)h;
+    result.handle = h;
     return result;
 }
 
 VD_API void *vd_library_address(VdLibrary library, const char *name)
 {
-    HMODULE h = (HMODULE)library.handle;
-    return (void*)GetProcAddress(h, name);
+    void *h = library.handle;
+    return VdGetProcAddress(h, name);
 }
 
 VD_API void vd_library_free(VdLibrary library)
 {
-    HMODULE h = (HMODULE)library.handle;
-    FreeLibrary(h);
+    void *h = library.handle;
+    VdFreeLibrary(h);
 }
 #else
 #error "No Shared Library implementation for this platform!"
@@ -3578,8 +3660,8 @@ VdArena *Test_Arena;
 
 VdTestContext *Vd__Global_Test_Context = 0;
 VdTestEntry   *Vd__Test_Entries;
-Vdusize        Vd__Cap_Test_Entries;
-Vdu32          Vd__Len_Test_Entries;
+size_t        Vd__Cap_Test_Entries;
+uint32_t          Vd__Len_Test_Entries;
 #endif // VD_HOST_COMPILER_UNKNOWN
 
 void vd_test_set_context(VdTestContext *context)
@@ -3587,7 +3669,7 @@ void vd_test_set_context(VdTestContext *context)
     Vd__Global_Test_Context = context;
 }
 
-void vd_test_get_tests(VdTestEntry **out_entries, Vdu32 *out_num_entries)
+void vd_test_get_tests(VdTestEntry **out_entries, uint32_t *out_num_entries)
 {
     *out_entries = Vd__Test_Entries;
     *out_num_entries = Vd__Len_Test_Entries;
@@ -3620,7 +3702,7 @@ void vd_test_main(void)
 
     int passed = 0, total = 0;
 #if !VD_HOST_COMPILER_UNKNOWN 
-    for (Vdusize i = 0; i < Vd__Len_Test_Entries; ++i) {
+    for (size_t i = 0; i < Vd__Len_Test_Entries; ++i) {
         if (vd__run_test(&Vd__Test_Entries[i])) {
             passed++;
         }
@@ -3677,7 +3759,7 @@ VD_TEST("DList/Basic") {
             Vd__TestListStruct *s = VD_CONTAINER_OF(n, Vd__TestListStruct, node);
             VD_TEST_EQ("Iterating all nodes in order and getting struct value is correct", s->value, (int)i);
         }
-        VD_TEST_EQ("After iterating all nodes, the index should be equal to the last node's index + 1", i, (Vdusize)(num_nodes));
+        VD_TEST_EQ("After iterating all nodes, the index should be equal to the last node's index + 1", i, (size_t)(num_nodes));
     }
 
     int i = 0;
@@ -3795,7 +3877,7 @@ typedef struct {
 #define VD__TEST_MAP_CHECK_ENTRIES_(map, entryarray) do { if (!Vd__strmap_check_entries(map, (entryarray), VD_ARRAY_COUNT(entryarray), __FILE__, __LINE__)) { VD_TEST_ERR("Map value check failed."); } }while(0)
 #define VD__TEST_MAP_CHECK_ENTRIES(map, ...) VD__TEST_MAP_CHECK_ENTRIES_(map, (((Vd__TestCheckMapEntry []){ __VA_ARGS__ })))
 
-static Vdb32 Vd__strmap_check_entries(int *map, Vd__TestCheckMapEntry *entries, int num_entries, const char *f, int l)
+static int Vd__strmap_check_entries(int *map, Vd__TestCheckMapEntry *entries, int num_entries, const char *f, int l)
 {
     for (int i = 0; i < num_entries; ++i) {
         int v;
