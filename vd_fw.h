@@ -7031,6 +7031,11 @@ VD_FW_OPENGL_CORE_FUNCTIONS
 #endif
 
 #ifdef VD_FW_IMPL
+
+#ifndef VD_FW_CHECKS
+#   define VD_FW_CHECKS 0
+#endif // !VD_FW_CHECKS
+
 #ifndef VD_FW_LOG
 #   define VD_FW_LOG(fmt, ...)
 #endif // !VD_FW_LOG
@@ -8361,6 +8366,7 @@ typedef struct {
     VdFw__Win32Frame            next_frame;
     VdFw__Win32Frame            curr_frame;
     VdFwHANDLE                  sem_skip_wait;
+    volatile int                window_ready;
 } VdFw__Win32InternalData;
 
 int vd_fw__win32_translate_button(VdFwWORD vkcode)
@@ -8658,34 +8664,7 @@ static VdFwBOOL     vd_fw__win32_enum_monitor_resize_count(VdFwHMONITOR monitor,
 static void         vd_fw__win32_update_monitor_display_modes(VdFw__Win32Monitor *monitor);
 static void         vd_fw__win32_update_monitors(void);
 
-#if VD_FW_WIN32_PROFILE
-#define VD_FW_JOIN_(a,b) a##b
-#define VD_FW_JOIN(a,b) VD_FW_JOIN_(a,b)
-#define VD_FW_WIN32_PROFILE_BEGIN(name) LARGE_INTEGER name; VdFwQueryPerformanceCounter(&name)
-#define VD_FW_WIN32_PROFILE_END(name)   do { \
-        LARGE_INTEGER VD_FW_JOIN(name,end); VdFwQueryPerformanceCounter(&VD_FW_JOIN(name,end)); \
-        LARGE_INTEGER delta; \
-        delta.QuadPart = VD_FW_JOIN(name,end).QuadPart - (name).QuadPart; \
-        unsigned long long q  =  delta.QuadPart / Vd_Fw_G.frequency.QuadPart; \
-        unsigned long long r  =  delta.QuadPart % Vd_Fw_G.frequency.QuadPart; \
-        unsigned long long ns =  q * 1000000000ULL; \
-        ns                    += (r * 1000000000ULL) / Vd_Fw_G.frequency.QuadPart; \
-        double ms              = (double)ns / 1000000.0; \
-        printf("%20s took %30zuns %3.3fms\n", #name, ns, ms); \
-    } while (0)
-#else
-#define VD_FW_WIN32_PROFILE_BEGIN(name)
-#define VD_FW_WIN32_PROFILE_END(name)
-#endif // VD_FW_WIN32_PROFILE
-
-#if VD_FW_NO_CRT
-#define VD_FW__CHECK_HRESULT(expr) expr
-#define VD_FW__CHECK_INT(expr) expr
-#define VD_FW__CHECK_NONZERO(expr) expr
-#define VD_FW_SANITY_CHECK()
-#define VD_FW__CHECK_NULL(expr) expr
-#define VD_FW__CHECK_TRUE(expr) expr
-#else
+#if VD_FW_CHECKS
 #include <stdio.h>
 #include <assert.h>
 #define VD_FW__CHECK_HRESULT(expr) do {\
@@ -8712,7 +8691,14 @@ static void         vd_fw__win32_update_monitors(void);
 #define VD_FW__CHECK_TRUE(expr) do {\
     if ((expr) != 1) { printf("Failed at: %s\n VdFwGetLastError: %ld", #expr, VdFwGetLastError()); assert(0); } \
 } while (0)
-#endif // VD_FW_NO_CRT
+#else
+#define VD_FW__CHECK_HRESULT(expr) expr
+#define VD_FW__CHECK_INT(expr) expr
+#define VD_FW__CHECK_NONZERO(expr) expr
+#define VD_FW_SANITY_CHECK()
+#define VD_FW__CHECK_NULL(expr) expr
+#define VD_FW__CHECK_TRUE(expr) expr
+#endif // VD_FW_CHECKS
 
 static void *vd_fw__gl_get_proc_address(const char *name)
 {
@@ -8722,11 +8708,6 @@ static void *vd_fw__gl_get_proc_address(const char *name)
     }
     return result;
 }
-
-#if !VD_FW_NO_CRT
-#include <io.h>
-#include <fcntl.h>
-#endif // !VD_FW_NO_CRT
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
@@ -8833,7 +8814,11 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 
     vd_fw__update_kb_codepage();
 
-    VdFwWaitForSingleObject(Vd_Fw_G.sem_window_ready, 0xFFFFFFFF);
+    VD_FW_PROFILE_ZONE(vd_fw_win32_wait_window)
+    {
+        // while (!Vd_Fw_G.window_ready);
+        VdFwWaitForSingleObject(Vd_Fw_G.sem_window_ready, 0xFFFFFFFF);
+    }
 
 
     VdFwGraphicsApi api = VD_FW_GRAPHICS_API_OPENGL;
@@ -8845,6 +8830,8 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
     if (info) {
         poptions = &info->gl; 
     }
+
+    Vd_Fw_G.hdc = VdFwGetDC(Vd_Fw_G.hwnd);
 
     VD_FW_PROFILE_ZONE(vd_fw_win32_set_graphics)
     {
@@ -9153,7 +9140,6 @@ VD_FW_API VdFwPlatform vd_fw_get_platform(void)
 
 VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_options)
 {
-    VD_FW_WIN32_PROFILE_BEGIN(vd_fw_set_graphics_api);
     int result = 1;
 
     VdFwWakeConditionVariable(&Vd_Fw_G.cond_var);
@@ -9224,220 +9210,219 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
     switch (api) {
         case VD_FW_GRAPHICS_API_OPENGL: {
 
-            VD_FW_WIN32_PROFILE_BEGIN(create_temp_context);
+            VdFwHGLRC temp_context = 0;
+            VdFwProcwglCreateContextAttribsARB wglCreateContextAttribsARB;
+            VdFwProcwglChoosePixelFormatARB wglChoosePixelFormatARB;
             VdFwGlConfig      default_configs[2];
             VD_FW_MEMSET(default_configs, 0, sizeof(default_configs));
-
             default_configs[0].version = VD_FW_GL_VERSION_3_3;
+            int pf = 0;
+            int selected_config = -1;
 
             VdFwOpenGLOptions default_options = {0};
             default_options.configs = default_configs;
 
-            if (!gl_options || (gl_options->configs == 0) || (gl_options->configs[0].version == VD_FW_GL_VERSION_BASIC)) {
-                gl_options = &default_options;
+            VD_FW_PROFILE_ZONE(vd_fw_gl_temp_context_create)
+            {
+                if (!gl_options || (gl_options->configs == 0) || (gl_options->configs[0].version == VD_FW_GL_VERSION_BASIC)) {
+                    gl_options = &default_options;
+                }
+
+                // Temp context flags
+                VdFwPIXELFORMATDESCRIPTOR pfd = {
+                  sizeof(VdFwPIXELFORMATDESCRIPTOR),
+                  1,                                // Version Number
+                  0x00000004 /*PFD_DRAW_TO_WINDOW*/ |
+                  0x00000020 /*PFD_SUPPORT_OPENGL*/ |              // Format Must Support OpenGL
+                  0x00000001 /*PFD_DOUBLEBUFFER*/,                 // Must Support Double Buffering
+                  0 /*PFD_TYPE_RGBA*/,                    // Request An RGBA Format
+                  32,                               // Select Our Color Depth
+                  0, 0, 0, 0, 0, 0,                 // Color Bits Ignored
+                  0,                                // An Alpha Buffer
+                  0,                                // Shift Bit Ignored
+                  0,                                // No Accumulation Buffer
+                  0, 0, 0, 0,                       // Accumulation Bits Ignored
+                  24,                               // 16Bit Z-Buffer (Depth Buffer)
+                  8,                                // Some Stencil Buffer
+                  0,                                // No Auxiliary Buffer
+                  0 /*PFD_MAIN_PLANE*/,                   // Main Drawing Layer
+                  0,                                // Reserved
+                  0, 0, 0                           // Layer Masks Ignored
+                };
+                pf = VdFwChoosePixelFormat(Vd_Fw_G.hdc, &pfd);
+                VD_FW__CHECK_NONZERO(pf);
+                VD_FW__CHECK_TRUE(VdFwSetPixelFormat(Vd_Fw_G.hdc, pf, &pfd));
+
+                temp_context = VdFwwglCreateContext(Vd_Fw_G.hdc);
+                VD_FW__CHECK_NULL(temp_context);
+                VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(Vd_Fw_G.hdc, temp_context));
             }
 
-            Vd_Fw_G.hdc = VdFwGetDC(Vd_Fw_G.hwnd);
-
-            // Temp context flags
-            VdFwPIXELFORMATDESCRIPTOR pfd = {
-              sizeof(VdFwPIXELFORMATDESCRIPTOR),
-              1,                                // Version Number
-              0x00000004 /*PFD_DRAW_TO_WINDOW*/ |
-              0x00000020 /*PFD_SUPPORT_OPENGL*/ |              // Format Must Support OpenGL
-              0x00000001 /*PFD_DOUBLEBUFFER*/,                 // Must Support Double Buffering
-              0 /*PFD_TYPE_RGBA*/,                    // Request An RGBA Format
-              32,                               // Select Our Color Depth
-              0, 0, 0, 0, 0, 0,                 // Color Bits Ignored
-              0,                                // An Alpha Buffer
-              0,                                // Shift Bit Ignored
-              0,                                // No Accumulation Buffer
-              0, 0, 0, 0,                       // Accumulation Bits Ignored
-              24,                               // 16Bit Z-Buffer (Depth Buffer)
-              8,                                // Some Stencil Buffer
-              0,                                // No Auxiliary Buffer
-              0 /*PFD_MAIN_PLANE*/,                   // Main Drawing Layer
-              0,                                // Reserved
-              0, 0, 0                           // Layer Masks Ignored
-            };
-            VD_FW_WIN32_PROFILE_BEGIN(temp_pixel_format);
-            int pf = VdFwChoosePixelFormat(Vd_Fw_G.hdc, &pfd);
-            VD_FW__CHECK_NONZERO(pf);
-            VD_FW__CHECK_TRUE(VdFwSetPixelFormat(Vd_Fw_G.hdc, pf, &pfd));
-            VD_FW_WIN32_PROFILE_END(temp_pixel_format);
-
-            VD_FW_WIN32_PROFILE_BEGIN(make_temp_current);
-            VdFwHGLRC temp_context = VdFwwglCreateContext(Vd_Fw_G.hdc);
-            VD_FW__CHECK_NULL(temp_context);
-            VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(Vd_Fw_G.hdc, temp_context));
-            VD_FW_WIN32_PROFILE_END(make_temp_current);
-
-            VdFwProcwglCreateContextAttribsARB wglCreateContextAttribsARB =
+            wglCreateContextAttribsARB =
                 (VdFwProcwglCreateContextAttribsARB) VdFwwglGetProcAddress("wglCreateContextAttribsARB");
 
-            VdFwProcwglChoosePixelFormatARB wglChoosePixelFormatARB =
+            wglChoosePixelFormatARB =
                 (VdFwProcwglChoosePixelFormatARB)VdFwwglGetProcAddress("wglChoosePixelFormatARB");
-            VD_FW_WIN32_PROFILE_END(create_temp_context);
 
-            VD_FW_WIN32_PROFILE_BEGIN(attempt_configs);
-            int index = 0;
-            while (gl_options->configs && gl_options->configs[index].version != 0) {
-                int minor        = gl_options->configs[index].version % 10;
-                int major        = gl_options->configs[index].version / 10;
-                int debug        = gl_options->configs[index].debug;
-                int compat       = gl_options->configs[index].compat;
-                int pixel_format = gl_options->configs[index].pixel_format;
-                int depth_format = gl_options->configs[index].depth_format;
-                int msaa         = gl_options->configs[index].msaa;
+            VD_FW_PROFILE_ZONE(vd_fw_gl_choose_user_config)
+            {
+                int index = 0;
+                while ((selected_config == -1) && (gl_options->configs && gl_options->configs[index].version != 0)) {
+                    int minor        = gl_options->configs[index].version % 10;
+                    int major        = gl_options->configs[index].version / 10;
+                    int debug        = gl_options->configs[index].debug;
+                    int compat       = gl_options->configs[index].compat;
+                    int pixel_format = gl_options->configs[index].pixel_format;
+                    int depth_format = gl_options->configs[index].depth_format;
+                    int msaa         = gl_options->configs[index].msaa;
 
-                // Context attributes
-                int attribs[9];
-                attribs[0] = VD_FW_WGL_CONTEXT_MAJOR_VERSION_ARB; attribs[1] = major;
-                attribs[2] = VD_FW_WGL_CONTEXT_MINOR_VERSION_ARB; attribs[3] = minor;
-                attribs[4] = VD_FW_WGL_CONTEXT_PROFILE_MASK_ARB;  attribs[5] = (compat) ? VD_FW_WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB : VD_FW_WGL_CONTEXT_CORE_PROFILE_BIT_ARB;
-                attribs[6] = VD_FW_WGL_CONTEXT_FLAGS_ARB;         attribs[7] = (debug)  ? VD_FW_WGL_CONTEXT_DEBUG_BIT_ARB : 0;
-                attribs[8] = 0;
+                    // Context attributes
+                    int attribs[9];
+                    attribs[0] = VD_FW_WGL_CONTEXT_MAJOR_VERSION_ARB; attribs[1] = major;
+                    attribs[2] = VD_FW_WGL_CONTEXT_MINOR_VERSION_ARB; attribs[3] = minor;
+                    attribs[4] = VD_FW_WGL_CONTEXT_PROFILE_MASK_ARB;
+                    attribs[5] = (compat) ? VD_FW_WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB
+                                          : VD_FW_WGL_CONTEXT_CORE_PROFILE_BIT_ARB;
+                    attribs[6] = VD_FW_WGL_CONTEXT_FLAGS_ARB;
+                    attribs[7] = (debug) ? VD_FW_WGL_CONTEXT_DEBUG_BIT_ARB : 0;
+                    attribs[8] = 0;
 
-                int running_attrib = 0;
-                int pixel_attribs[32] = {0};
-                pixel_attribs[running_attrib++] = VD_FW_WGL_PIXEL_TYPE_ARB;
-                pixel_attribs[running_attrib++] = VD_FW_WGL_TYPE_RGBA_ARB;
+                    int running_attrib = 0;
+                    int pixel_attribs[32] = {0};
+                    pixel_attribs[running_attrib++] = VD_FW_WGL_PIXEL_TYPE_ARB;
+                    pixel_attribs[running_attrib++] = VD_FW_WGL_TYPE_RGBA_ARB;
 
-                pixel_attribs[running_attrib++] = VD_FW_WGL_DRAW_TO_WINDOW_ARB;
-                pixel_attribs[running_attrib++] = 1;
+                    pixel_attribs[running_attrib++] = VD_FW_WGL_DRAW_TO_WINDOW_ARB;
+                    pixel_attribs[running_attrib++] = 1;
 
-                pixel_attribs[running_attrib++] = VD_FW_WGL_SUPPORT_OPENGL_ARB;
-                pixel_attribs[running_attrib++] = 1;
+                    pixel_attribs[running_attrib++] = VD_FW_WGL_SUPPORT_OPENGL_ARB;
+                    pixel_attribs[running_attrib++] = 1;
 
-                pixel_attribs[running_attrib++] = VD_FW_WGL_DOUBLE_BUFFER_ARB;
-                pixel_attribs[running_attrib++] = 1;
+                    pixel_attribs[running_attrib++] = VD_FW_WGL_DOUBLE_BUFFER_ARB;
+                    pixel_attribs[running_attrib++] = 1;
 
-                pixel_attribs[running_attrib++] = VD_FW_WGL_ACCELERATION_ARB;
-                pixel_attribs[running_attrib++] = VD_FW_WGL_FULL_ACCELERATION_ARB;
+                    pixel_attribs[running_attrib++] = VD_FW_WGL_ACCELERATION_ARB;
+                    pixel_attribs[running_attrib++] = VD_FW_WGL_FULL_ACCELERATION_ARB;
 
-                switch (pixel_format) {
-                    case VD_FW_GL_PIXEL_FORMAT_R8G8B8A8: {
-                        pixel_attribs[running_attrib++] = VD_FW_WGL_COLOR_BITS_ARB;
-                        pixel_attribs[running_attrib++] = 24;
+                    switch (pixel_format) {
+                        case VD_FW_GL_PIXEL_FORMAT_R8G8B8A8: {
+                            pixel_attribs[running_attrib++] = VD_FW_WGL_COLOR_BITS_ARB;
+                            pixel_attribs[running_attrib++] = 24;
 
-                        pixel_attribs[running_attrib++] = VD_FW_WGL_RED_BITS_ARB;
-                        pixel_attribs[running_attrib++] = 8;
+                            pixel_attribs[running_attrib++] = VD_FW_WGL_RED_BITS_ARB;
+                            pixel_attribs[running_attrib++] = 8;
 
-                        pixel_attribs[running_attrib++] = VD_FW_WGL_GREEN_BITS_ARB;
-                        pixel_attribs[running_attrib++] = 8;
+                            pixel_attribs[running_attrib++] = VD_FW_WGL_GREEN_BITS_ARB;
+                            pixel_attribs[running_attrib++] = 8;
 
-                        pixel_attribs[running_attrib++] = VD_FW_WGL_BLUE_BITS_ARB;
-                        pixel_attribs[running_attrib++] = 8;
+                            pixel_attribs[running_attrib++] = VD_FW_WGL_BLUE_BITS_ARB;
+                            pixel_attribs[running_attrib++] = 8;
 
-                        pixel_attribs[running_attrib++] = VD_FW_WGL_ALPHA_BITS_ARB;
-                        pixel_attribs[running_attrib++] = 8;
-                    } break;
+                            pixel_attribs[running_attrib++] = VD_FW_WGL_ALPHA_BITS_ARB;
+                            pixel_attribs[running_attrib++] = 8;
+                        } break;
 
-                    case VD_FW_GL_PIXEL_FORMAT_R8G8B8: {
-                        pixel_attribs[running_attrib++] = VD_FW_WGL_COLOR_BITS_ARB;
-                        pixel_attribs[running_attrib++] = 24;
+                        case VD_FW_GL_PIXEL_FORMAT_R8G8B8: {
+                            pixel_attribs[running_attrib++] = VD_FW_WGL_COLOR_BITS_ARB;
+                            pixel_attribs[running_attrib++] = 24;
 
-                        pixel_attribs[running_attrib++] = VD_FW_WGL_RED_BITS_ARB;
-                        pixel_attribs[running_attrib++] = 8;
+                            pixel_attribs[running_attrib++] = VD_FW_WGL_RED_BITS_ARB;
+                            pixel_attribs[running_attrib++] = 8;
 
-                        pixel_attribs[running_attrib++] = VD_FW_WGL_GREEN_BITS_ARB;
-                        pixel_attribs[running_attrib++] = 8;
+                            pixel_attribs[running_attrib++] = VD_FW_WGL_GREEN_BITS_ARB;
+                            pixel_attribs[running_attrib++] = 8;
 
-                        pixel_attribs[running_attrib++] = VD_FW_WGL_BLUE_BITS_ARB;
-                        pixel_attribs[running_attrib++] = 8;
-                    } break;
+                            pixel_attribs[running_attrib++] = VD_FW_WGL_BLUE_BITS_ARB;
+                            pixel_attribs[running_attrib++] = 8;
+                        } break;
 
-                    default: break;
-                }
+                        default: break;
+                    }
 
-                switch (depth_format) {
-                    case VD_FW_GL_DEPTH_FORMAT_D32: {
-                        pixel_attribs[running_attrib++] = VD_FW_WGL_DEPTH_BITS_ARB;
-                        pixel_attribs[running_attrib++] = 32;
-                    } break;
+                    switch (depth_format) {
+                        case VD_FW_GL_DEPTH_FORMAT_D32: {
+                            pixel_attribs[running_attrib++] = VD_FW_WGL_DEPTH_BITS_ARB;
+                            pixel_attribs[running_attrib++] = 32;
+                        } break;
 
-                    case VD_FW_GL_DEPTH_FORMAT_D24S8: {
-                        pixel_attribs[running_attrib++] = VD_FW_WGL_DEPTH_BITS_ARB;
-                        pixel_attribs[running_attrib++] = 24;
+                        case VD_FW_GL_DEPTH_FORMAT_D24S8: {
+                            pixel_attribs[running_attrib++] = VD_FW_WGL_DEPTH_BITS_ARB;
+                            pixel_attribs[running_attrib++] = 24;
 
-                        pixel_attribs[running_attrib++] = VD_FW_WGL_STENCIL_BITS_ARB;
-                        pixel_attribs[running_attrib++] = 8;
-                    } break;
+                            pixel_attribs[running_attrib++] = VD_FW_WGL_STENCIL_BITS_ARB;
+                            pixel_attribs[running_attrib++] = 8;
+                        } break;
 
-                    default: break;
-                }
+                        default: break;
+                    }
 
-                switch (msaa) {
+                    switch (msaa) {
 
-                    case VD_FW_GL_MSAA_ENABLED_2X: {
-                        pixel_attribs[running_attrib++] = VD_FW_WGL_SAMPLES_ARB;
-                        pixel_attribs[running_attrib++] = 2;
-                    } break;
+                        case VD_FW_GL_MSAA_ENABLED_2X: {
+                            pixel_attribs[running_attrib++] = VD_FW_WGL_SAMPLES_ARB;
+                            pixel_attribs[running_attrib++] = 2;
+                        } break;
 
-                    case VD_FW_GL_MSAA_ENABLED_4X: {
-                        pixel_attribs[running_attrib++] = VD_FW_WGL_SAMPLES_ARB;
-                        pixel_attribs[running_attrib++] = 4;
-                    } break;
+                        case VD_FW_GL_MSAA_ENABLED_4X: {
+                            pixel_attribs[running_attrib++] = VD_FW_WGL_SAMPLES_ARB;
+                            pixel_attribs[running_attrib++] = 4;
+                        } break;
 
-                    case VD_FW_GL_MSAA_ENABLED_8X: {
-                        pixel_attribs[running_attrib++] = VD_FW_WGL_SAMPLES_ARB;
-                        pixel_attribs[running_attrib++] = 8;
-                    } break;
+                        case VD_FW_GL_MSAA_ENABLED_8X: {
+                            pixel_attribs[running_attrib++] = VD_FW_WGL_SAMPLES_ARB;
+                            pixel_attribs[running_attrib++] = 8;
+                        } break;
 
-                    default: break;
-                }
+                        default: break;
+                    }
 
-                int wpixel_format;
-                VdFwUINT num_formats;
+                    int wpixel_format;
+                    VdFwUINT num_formats;
 
-                if (!wglChoosePixelFormatARB(Vd_Fw_G.hdc, pixel_attribs, NULL, 1, &wpixel_format, &num_formats)) {
-                    goto LOOP_END;                   
-                }
+                    if (!wglChoosePixelFormatARB(Vd_Fw_G.hdc, pixel_attribs, NULL, 1, &wpixel_format, &num_formats)) {
+                        goto LOOP_END;                   
+                    }
 
-                VdFwPIXELFORMATDESCRIPTOR pfdchosen;
-                VD_FW__CHECK_NONZERO(VdFwDescribePixelFormat(Vd_Fw_G.hdc, wpixel_format, sizeof(pfdchosen), &pfdchosen));
-                VD_FW__CHECK_TRUE(VdFwSetPixelFormat(Vd_Fw_G.hdc, pf, &pfdchosen));
+                    VdFwPIXELFORMATDESCRIPTOR pfdchosen;
+                    VD_FW__CHECK_NONZERO(VdFwDescribePixelFormat(Vd_Fw_G.hdc, wpixel_format, sizeof(pfdchosen), &pfdchosen));
+                    VD_FW__CHECK_TRUE(VdFwSetPixelFormat(Vd_Fw_G.hdc, pf, &pfdchosen));
 
-                Vd_Fw_G.hglrc = wglCreateContextAttribsARB(Vd_Fw_G.hdc, 0, attribs);
-                if (Vd_Fw_G.hglrc == 0) {
-                    goto LOOP_END;
-                }
+                    Vd_Fw_G.hglrc = wglCreateContextAttribsARB(Vd_Fw_G.hdc, 0, attribs);
+                    if (Vd_Fw_G.hglrc == 0) {
+                        goto LOOP_END;
+                    }
 
-                VD_FW__CHECK_NULL(Vd_Fw_G.hglrc);
-                VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(Vd_Fw_G.hdc, Vd_Fw_G.hglrc));
+                    VD_FW__CHECK_NULL(Vd_Fw_G.hglrc);
+                    VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(Vd_Fw_G.hdc, Vd_Fw_G.hglrc));
 
-                Vd_Fw_G.proc_swapInterval = (VdFwProcwglSwapIntervalExt)VdFwwglGetProcAddress("wglSwapIntervalEXT");
+                    Vd_Fw_G.proc_swapInterval = (VdFwProcwglSwapIntervalExt)VdFwwglGetProcAddress("wglSwapIntervalEXT");
 
-                if (vd_fw__load_opengl(&gl_options->configs[index])) {
-                    break;
-                } else {
-                    VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(NULL, NULL));
-                    VD_FW__CHECK_TRUE(VdFwwglDeleteContext(Vd_Fw_G.hglrc));
-                }
+                    if (vd_fw__load_opengl(&gl_options->configs[index])) {
+                        selected_config = index;
+                    } else {
+                        VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(NULL, NULL));
+                        VD_FW__CHECK_TRUE(VdFwwglDeleteContext(Vd_Fw_G.hglrc));
+                    }
 LOOP_END:
-                index++;
-            }
-            VD_FW_WIN32_PROFILE_END(attempt_configs);
+                    index++;
+                }
 
-            if (!gl_options->configs[index].version) {
+            }
+
+            if (selected_config == -1) {
                 result = 0;
                 break;
             }
 
             VD_FW__CHECK_TRUE(VdFwwglDeleteContext(temp_context));
-            gl_options->selected_config = index;
+            gl_options->selected_config = selected_config;
 
-        } break;
-
-        case VD_FW_GRAPHICS_API_PIXEL_BUFFER: {
-            Vd_Fw_G.hdc = VdFwGetDC(Vd_Fw_G.hwnd);
         } break;
 
         default: break;
     }
 
     Vd_Fw_G.graphics_api = api;
-    VD_FW_WIN32_PROFILE_END(vd_fw_set_graphics_api);
     return result;
 }
 
@@ -9996,6 +9981,7 @@ static VdFwDWORD vd_fw__win_thread_proc(void *param)
         vd_fw__msgbuf_w(&evt);
     }
 
+    // _InterlockedExchange(&Vd_Fw_G.window_ready, 1);
     VD_FW__CHECK_TRUE(VdFwReleaseSemaphore(Vd_Fw_G.sem_window_ready, 1, NULL));
 
     // Register raw input mouse
@@ -10193,7 +10179,6 @@ static int vd_fw__hit_test(int x, int y)
 static void vd_fw__composition_changed(void)
 {
     if (Vd_Fw_G.draw_decorations) return;
-    VD_FW_WIN32_PROFILE_BEGIN(composition_changed);
 
     VdFwBOOL enabled = 0;
     VD_FW__CHECK_HRESULT(VdFwDwmIsCompositionEnabled(&enabled));
@@ -10219,7 +10204,6 @@ static void vd_fw__composition_changed(void)
     }
 
     vd_fw__update_region();
-    VD_FW_WIN32_PROFILE_END(composition_changed);
 }
 
 static void vd_fw__update_region(void)
@@ -10320,10 +10304,6 @@ static VdFwBOOL vd_fw__has_autohide_taskbar(VdFwUINT edge, VdFwRECT monitor)
 
 static void vd_fw__window_pos_changed(VdFwWINDOWPOS *pos)
 {
-#if 0
-    VD_FW_WIN32_PROFILE_BEGIN(window_pos_changed);
-#endif
-
     if (Vd_Fw_G.draw_decorations) {
         VdFwRECT client;
         VdFwGetClientRect(Vd_Fw_G.hwnd, &client);
@@ -10346,25 +10326,16 @@ static void vd_fw__window_pos_changed(VdFwWINDOWPOS *pos)
     if (pos->flags & VD_FW_SWP_FRAMECHANGED) {
         vd_fw__update_region();
     }
-
-#if 0
-    VD_FW_WIN32_PROFILE_END(window_pos_changed);
-#endif
 }
 
 static VdFwLRESULT vd_fw__handle_invisible(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam, VdFwLPARAM lparam)
 {
     // @note(mdodis): Prevent windows from drawing the default (Windows 7) titlebar and frames by toggling it temporarily
-    VD_FW_WIN32_PROFILE_BEGIN(handle_invisible);
-
     VdFwLONG_PTR old_style = VdFwGetWindowLongPtr(hwnd, VD_FW_GWL_STYLE);
 
     VdFwSetWindowLongPtr(hwnd, VD_FW_GWL_STYLE, old_style & ~VD_FW_WS_VISIBLE);    
     VdFwLRESULT result = VdFwDefWindowProc(hwnd, msg, wparam, lparam);
     VdFwSetWindowLongPtr(hwnd, VD_FW_GWL_STYLE, old_style);
-
-    VD_FW_WIN32_PROFILE_END(handle_invisible);
-
     return result;
 }
 
@@ -10403,8 +10374,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         case VD_FW_WM_PAINT: {
             if (!Vd_Fw_G.t_paint_ready) break;
 
-            VD_FW_WIN32_PROFILE_BEGIN(wm_paint);
-
                 VdFwPAINTSTRUCT ps;
                 VdFwBeginPaint(hwnd, &ps);
                 if (!Vd_Fw_G.winthread_block_while_sizing) {
@@ -10428,7 +10397,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
                 }
 
                 VdFwEndPaint(hwnd, &ps);
-            VD_FW_WIN32_PROFILE_END(wm_paint);
         } break;
 
         case VD_FW_WM_NCPAINT: {
@@ -10446,7 +10414,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             // 
             // Anyhow... setting DWM Rendering Policy to enabled and redrawing on WM_PAINT produces the best possible
             // _visual_ result the way we do it right now.
-            VD_FW_WIN32_PROFILE_BEGIN(wm_ncpaint);
                 // HDC hdc = GetWindowDC(hwnd);
 
                 // if (hdc) {
@@ -10484,7 +10451,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
 
                 // EndPaint(hwnd, &ps);
             }
-            VD_FW_WIN32_PROFILE_END(wm_ncpaint);
         } break;
 
 
@@ -10948,7 +10914,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
         } break;
 
         case VD_FW_WIN32_FULLSCREEN: {
-            VD_FW_WIN32_PROFILE_BEGIN(fw_fullscreen);
             VdFwBOOL should_be_fullscreen = (VdFwBOOL)lparam;
 
             // VdFwEnterCriticalSection(&Vd_Fw_G.critical_section);
@@ -11009,7 +10974,6 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             }
             // VdFwLeaveCriticalSection(&Vd_Fw_G.critical_section);
 
-            VD_FW_WIN32_PROFILE_END(fw_fullscreen);
         } break;
 
         case VD_FW_WIN32_SIZE: {

@@ -522,11 +522,11 @@ void        vd_semaphore_dec(VdSemaphore semaphore);
 void        vd_semaphore_free(VdSemaphore semaphore);
 
 #if VD_PLATFORM_WINDOWS
-extern long InterlockedCompareExchange(long volatile *, long, long);
-extern long long InterlockedCompareExchange64(long long volatile *, long long, long long);
-extern void* InterlockedCompareExchangePointer(void* volatile *, void*, void*);
+extern long _InterlockedCompareExchange(long volatile *, long, long);
+extern long long _InterlockedCompareExchange64(long long volatile *, long long, long long);
+extern void* _InterlockedCompareExchangePointer(void* volatile *, void*, void*);
 extern long _InterlockedIncrement(long volatile *);
-extern long InterlockedAdd(long volatile *, long);
+extern long _InterlockedAdd(long volatile *, long);
 extern long _InterlockedExchange(long volatile *, long);
 extern void _ReadBarrier();
 extern void _WriteBarrier();
@@ -545,28 +545,28 @@ VD_INLINE void vd_write_barrier()
 VD_INLINE int32_t vd_compare_and_swap_i32(volatile int32_t *ptr, int32_t new_value, int32_t old_value)
 {
 #if VD_PLATFORM_WINDOWS
-    return (int32_t)InterlockedCompareExchange((long volatile *)ptr, (long)new_value, (long)old_value);
+    return (int32_t)_InterlockedCompareExchange((long volatile *)ptr, (long)new_value, (long)old_value);
 #endif // VD_PLATFORM_WINDOWS
 }
 
 VD_INLINE uint32_t vd_compare_and_swap_u32(volatile uint32_t *ptr, uint32_t new_value, uint32_t old_value)
 {
 #if VD_PLATFORM_WINDOWS
-    return (uint32_t)InterlockedCompareExchange((long volatile *)ptr, *(long*)&new_value, *(long*)&old_value);
+    return (uint32_t)_InterlockedCompareExchange((long volatile *)ptr, *(long*)&new_value, *(long*)&old_value);
 #endif // VD_PLATFORM_WINDOWS
 }
 
 VD_INLINE int64_t vd_compare_and_swap_i64(volatile int64_t *ptr, int64_t new_value, int64_t expected)
 {
 #if VD_PLATFORM_WINDOWS
-    return (int64_t)InterlockedCompareExchange64(ptr, new_value, expected);
+    return (int64_t)_InterlockedCompareExchange64(ptr, new_value, expected);
 #endif // VD_PLATFORM_WINDOWS
 }
 
 VD_INLINE void *vd_compare_and_swap_ptr(void *volatile *ptr, void *new_value, void *expected)
 {
 #if VD_PLATFORM_WINDOWS
-    return InterlockedCompareExchangePointer(ptr, new_value, expected);
+    return _InterlockedCompareExchangePointer(ptr, new_value, expected);
 #endif // VD_PLATFORM_WINDOWS
 }
 
@@ -594,7 +594,7 @@ VD_INLINE uint32_t vd_inc_and_fetch_u32(volatile uint32_t *addend)
 VD_INLINE int32_t vd_add_and_fetch_i32(volatile int32_t *addend, int32_t value)
 {
 #if VD_PLATFORM_WINDOWS
-    return InterlockedAdd((volatile long *)addend, value);
+    return _InterlockedAdd((volatile long *)addend, value);
 #endif // VD_PLATFORM_WINDOWS
 }
 
@@ -2372,7 +2372,6 @@ void vd_vm_release(void *addr, Vdusize len)
 
 Vdusize vd_vm_get_page_size(void)
 {
-    // @todo(mdodis): GetSystemInfo
     SYSTEM_INFO system_info;
     GetSystemInfo(&system_info);
     return system_info.dwPageSize;
@@ -2528,11 +2527,14 @@ VD_API void *vd_system_heap_alloc(VdSystemHeap *h, Vdusize size, Vdusize align)
         Vdusize num_pages = (desired_end - now) / h->page_size;
         num_pages += ((desired_end - now) % h->page_size) != 0 ? 1 : 0;
 
-        h->committed += num_pages * h->page_size;
         VD_ASSERT(h->committed % h->page_size == 0);
-        VD_ASSERT(vd_vm_commit((void*)(now), num_pages * h->page_size) != 0);
+        void *cmt = vd_vm_commit((void*)(now), num_pages * h->page_size);
+        VD_ASSERT(cmt != 0);
+        if (cmt) {
+            h->committed += num_pages * h->page_size;
+            h->offset = offset + size;
+        }
 
-        h->offset = offset + size;
         return (void*)desired;
     }
 }
