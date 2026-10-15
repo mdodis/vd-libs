@@ -9211,8 +9211,8 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
         case VD_FW_GRAPHICS_API_OPENGL: {
 
             VdFwHGLRC temp_context = 0;
-            VdFwProcwglCreateContextAttribsARB wglCreateContextAttribsARB;
-            VdFwProcwglChoosePixelFormatARB wglChoosePixelFormatARB;
+            static VdFwProcwglCreateContextAttribsARB wglCreateContextAttribsARB = 0;
+            static VdFwProcwglChoosePixelFormatARB wglChoosePixelFormatARB = 0;
             VdFwGlConfig      default_configs[2];
             VD_FW_MEMSET(default_configs, 0, sizeof(default_configs));
             default_configs[0].version = VD_FW_GL_VERSION_3_3;
@@ -9258,11 +9258,15 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
                 VD_FW__CHECK_TRUE(VdFwwglMakeCurrent(Vd_Fw_G.hdc, temp_context));
             }
 
-            wglCreateContextAttribsARB =
-                (VdFwProcwglCreateContextAttribsARB) VdFwwglGetProcAddress("wglCreateContextAttribsARB");
+            if (!wglCreateContextAttribsARB) {
+                wglCreateContextAttribsARB =
+                    (VdFwProcwglCreateContextAttribsARB) VdFwwglGetProcAddress("wglCreateContextAttribsARB");
+            }
 
-            wglChoosePixelFormatARB =
-                (VdFwProcwglChoosePixelFormatARB)VdFwwglGetProcAddress("wglChoosePixelFormatARB");
+            if (!wglChoosePixelFormatARB) {
+                wglChoosePixelFormatARB =
+                    (VdFwProcwglChoosePixelFormatARB)VdFwwglGetProcAddress("wglChoosePixelFormatARB");
+            }
 
             VD_FW_PROFILE_ZONE(vd_fw_gl_choose_user_config)
             {

@@ -98,6 +98,8 @@ VD_IO_NET_API VdIoErr    vd_io_net_tls_connect(VdIo *io, VdIoNetTlsClientInfo *i
 #      include <assert.h>
 #      define VD_IO_NET_ASSERT(x) assert(x)
 #   endif // !VD_IO_NET_ASSERT
+#else
+#   define VD_IO_NET_ASSERT(x) (x)
 #endif // VD_IO_NET_ASSERTIONS
 
 #if defined(_MSC_VER)
@@ -886,7 +888,7 @@ VD_IO_NET_API VdIoErr vd_io_net_tls_connect(VdIo *io, VdIoNetTlsClientInfo *info
 
     VD_IO_NET_RANDOM(tls->private_key, 32);
 
-    vd_io_net__c25519_scalar_mult()
+    // vd_io_net__c25519_scalar_mult()
 
     offset = 0;
 

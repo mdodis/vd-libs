@@ -48,8 +48,8 @@ struct VdInixEntry {
     VdInixEntry     *next;
 
     union {
-        Vdu64 enumeration;
-        Vdu64 integer; 
+        uint64_t enumeration;
+        uint64_t integer; 
         VdStr raw_string;
     } val;
 };
@@ -61,19 +61,19 @@ struct VdInixSection {
 };
 
 typedef struct __VD_Inix_Result {
-    Vdu32         line;
-    Vdu32         column; 
+    uint32_t         line;
+    uint32_t         column; 
     VdInixSection *global_section;
 } VdInixResult;
 
 typedef struct __VD_Inix_Mapping {
     VdStr key;
-    Vdu64 value;
+    uint64_t value;
 } VdInixMapping;
 
 typedef struct __VD_Inix_InixParseInfo {
     VdStr         contents;
-    Vdusize       num_mappings;
+    size_t       num_mappings;
     VdInixMapping *mappings;
 } VdInixParseInfo;
 
@@ -109,7 +109,7 @@ typedef enum {
     VD__INIX_LEX_TOKEN_END           = -1,
 } Vd__InixLexTokenType;
 
-Vdcstr vd__inix_lex_token_type_str(Vd__InixLexTokenType t) {
+const char *vd__inix_lex_token_type_str(Vd__InixLexTokenType t) {
     switch (t) {
         case VD__INIX_LEX_TOKEN_INVALID:       return "INIX_LEX_TOKEN_INVALID"; break;
         case VD__INIX_LEX_TOKEN_BEGIN_SECTION: return "INIX_LEX_TOKEN_BEGIN_SECTION"; break;
@@ -125,8 +125,8 @@ Vdcstr vd__inix_lex_token_type_str(Vd__InixLexTokenType t) {
 }
 
 typedef struct {
-    Vdu64 cursor;
-    Vdu64 cursor_from;
+    uint64_t cursor;
+    uint64_t cursor_from;
     int line;
     int column;
 } Vd__InixLexState;
@@ -140,25 +140,25 @@ typedef struct {
 typedef struct {
     VdStr           contents;
     Vd__InixLexState lex;
-    Vdi32           token_count;
+    int32_t           token_count;
     Vd__InixLexToken next_token;
-    Vdb32           debug_log_tokens;
+    int           debug_log_tokens;
 
     VdArena         *arena;
     VdInixSection   *global_section;
     VdInixSection   *curr_section;
     VdInixEntry     *curr_entry;
 
-    Vdusize         num_mappings;
+    size_t         num_mappings;
     VdInixMapping   *mappings;
 
 } Vd__InixContext;
 
-Vdb32 vd__inix_at_end(Vd__InixContext *c) {
+int vd__inix_at_end(Vd__InixContext *c) {
     return c->lex.cursor >= c->contents.len;
 }
     
-Vdb32 vd__inix_advance(Vd__InixContext *c) {
+int vd__inix_advance(Vd__InixContext *c) {
     if (vd__inix_at_end(c)) {
         return VD_FALSE;
     }
@@ -194,9 +194,9 @@ void vd__inix_load_state(Vd__InixContext *c, Vd__InixLexState l) {
     c->lex.column = l.column;
 }
 
-Vdb32 vd__inix_char_n(Vd__InixContext *c, VdStr s) {
+int vd__inix_char_n(Vd__InixContext *c, VdStr s) {
     Vd__InixLexState state = vd__inix_save_state(c);
-    Vdu64 i = 0;
+    uint64_t i = 0;
     int h = vd__inix_char(c);
 
     while ((i < s.len) && (s.s[i] == h)) {
@@ -215,8 +215,8 @@ Vdb32 vd__inix_char_n(Vd__InixContext *c, VdStr s) {
     }
 }
 
-void vd__inix_advance_n(Vd__InixContext *c, Vdusize n) {
-    for (Vdu64 i = 0; i < n; ++i) {
+void vd__inix_advance_n(Vd__InixContext *c, size_t n) {
+    for (uint64_t i = 0; i < n; ++i) {
         vd__inix_advance(c);
     }
 }
@@ -244,7 +244,7 @@ void vd__inix_advance_token(Vd__InixContext *c, Vd__InixLexToken token) {
     vd__inix_advance_n(c, (token.lexstate.cursor - token.lexstate.cursor_from));
 }
 
-Vdb32 vd__inix_try_parse_integer(Vd__InixContext *context, Vdu64 *cursor_begin)
+int vd__inix_try_parse_integer(Vd__InixContext *context, uint64_t *cursor_begin)
 {
     Vd__InixLexState lexstate = vd__inix_save_state(context);
 
@@ -267,7 +267,7 @@ Vdb32 vd__inix_try_parse_integer(Vd__InixContext *context, Vdu64 *cursor_begin)
     }
 }
 
-Vdb32 vd__inix_try_parse_simple_string(Vd__InixContext *context, Vdu64 *cursor_begin, Vdu64 *cursor_end)
+int vd__inix_try_parse_simple_string(Vd__InixContext *context, uint64_t *cursor_begin, uint64_t *cursor_end)
 {
     *cursor_begin = context->lex.cursor;
     if (!vd__inix_char_n(context, VD_LIT("\""))) {
@@ -286,7 +286,7 @@ Vdb32 vd__inix_try_parse_simple_string(Vd__InixContext *context, Vdu64 *cursor_b
     return VD_TRUE;
 }
 
-Vdb32 vd__inix_try_parse_raw_string(Vd__InixContext *context, Vdu64 *cursor_begin, Vdu64 *cursor_end)
+int vd__inix_try_parse_raw_string(Vd__InixContext *context, uint64_t *cursor_begin, uint64_t *cursor_end)
 {
     *cursor_begin = context->lex.cursor;
     if (!vd__inix_char_n(context, VD_LIT("@>"))) {
@@ -303,7 +303,7 @@ Vdb32 vd__inix_try_parse_raw_string(Vd__InixContext *context, Vdu64 *cursor_begi
     return VD_TRUE;
 }
 
-Vdb32 vd__inix_try_parse_cdecl(Vd__InixContext *context, Vdu64 *cursor_begin)
+int vd__inix_try_parse_cdecl(Vd__InixContext *context, uint64_t *cursor_begin)
 {
     int c = vd__inix_char(context);
     *cursor_begin = context->lex.cursor;
@@ -344,7 +344,7 @@ Vd__InixLexToken vd__inix_peek_token(Vd__InixContext *context) {
         case '=':  result.type = VD__INIX_LEX_TOKEN_ASSIGNMENT;    break;
         case '\n': result.type = VD__INIX_LEX_TOKEN_END_STATEMENT; break;
         case '\"': {
-            Vdu64 cursor_begin, cursor_end;
+            uint64_t cursor_begin, cursor_end;
             if (vd__inix_try_parse_simple_string(context, &cursor_begin, &cursor_end)) {
                 result.type = VD__INIX_LEX_TOKEN_STRING;
                 result.lexstate = context->lex;
@@ -356,7 +356,7 @@ Vd__InixLexToken vd__inix_peek_token(Vd__InixContext *context) {
             }
         } break;
         case '@': {
-            Vdu64 cursor_begin, cursor_end;
+            uint64_t cursor_begin, cursor_end;
             if (vd__inix_try_parse_raw_string(context, &cursor_begin, &cursor_end)) {
                 result.type = VD__INIX_LEX_TOKEN_RAW_STRING;
                 result.lexstate = context->lex;
@@ -368,7 +368,7 @@ Vd__InixLexToken vd__inix_peek_token(Vd__InixContext *context) {
             }
         } break;
         default: {
-            Vdu64 cursor_begin;
+            uint64_t cursor_begin;
             if (vd__inix_try_parse_integer(context, &cursor_begin)) {
                 result.type = VD__INIX_LEX_TOKEN_INTEGER;
                 result.lexstate.cursor = context->lex.cursor;
@@ -421,7 +421,7 @@ void vd__inix_consume_token(Vd__InixContext *context, Vd__InixLexToken token) {
 }
 
 
-Vdb32 vd__inix_expect_type(Vd__InixContext *context, Vd__InixLexTokenType type, Vd__InixLexToken *tok)
+int vd__inix_expect_type(Vd__InixContext *context, Vd__InixLexTokenType type, Vd__InixLexToken *tok)
 {
     Vd__InixLexToken token = vd__inix_peek_token(context);
     if (token.type != type) {
@@ -458,7 +458,7 @@ VdInixEntry *vd__inix_push_entry(Vd__InixContext *context, VdInixEntryType type)
     return result;
 }
 
-Vdb32 vd__inix_parse_section(Vd__InixContext *context)
+int vd__inix_parse_section(Vd__InixContext *context)
 {
     Vd__InixLexToken first = vd__inix_peek_token(context);    
     if (first.type == VD__INIX_LEX_TOKEN_BEGIN_SECTION) {
@@ -499,9 +499,9 @@ Vdb32 vd__inix_parse_section(Vd__InixContext *context)
     return VD_FALSE;
 }
 
-static Vdb32 vd__inix_get_enumeration(Vd__InixContext *context, VdStr name, Vdu64 *out_enumeration)
+static int vd__inix_get_enumeration(Vd__InixContext *context, VdStr name, uint64_t *out_enumeration)
 {
-    for (Vdusize i = 0; i < context->num_mappings; ++i) {
+    for (size_t i = 0; i < context->num_mappings; ++i) {
         if (vd_str_eq(name, context->mappings[i].key)) {
             *out_enumeration = context->mappings[i].value;
             return VD_TRUE;
@@ -511,7 +511,7 @@ static Vdb32 vd__inix_get_enumeration(Vd__InixContext *context, VdStr name, Vdu6
     return VD_FALSE;
 }
 
-Vdb32 vd__inix_parse_expression(Vd__InixContext *context)
+int vd__inix_parse_expression(Vd__InixContext *context)
 {
     Vd__InixLexToken first = vd__inix_peek_token(context);    
     if (first.type == VD__INIX_LEX_TOKEN_ENUMERATION) {
@@ -588,7 +588,7 @@ Vdb32 vd__inix_parse_expression(Vd__InixContext *context)
                 val.lexstate.cursor - val.lexstate.cursor_from,
             };
 
-            Vdu64 number;
+            uint64_t number;
             if (!vd_parse_u64(val_string, &number)) {
                 VD_ERRF("%d:%d: Failed to parse integer: %s",
                     val.lexstate.line, val.lexstate.column,
@@ -613,7 +613,7 @@ Vdb32 vd__inix_parse_expression(Vd__InixContext *context)
     return VD_FALSE;
 }
 
-Vdb32 vd__inix_parse_statement(Vd__InixContext *context)
+int vd__inix_parse_statement(Vd__InixContext *context)
 {
     Vd__InixLexToken first = vd__inix_peek_token(context);    
 
