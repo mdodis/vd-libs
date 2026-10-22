@@ -1,3 +1,4 @@
+#define VD_FW_CHECKS 1
 #define VD_FW_NO_CRT 0
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_CONSOLE
 #include "vd_fw.h"
@@ -194,16 +195,18 @@ static GLuint Vao_Opengl;
 "    FragColor = color;                                                                                            \n" \
 "}                                                                                                                 \n" \
 
+#include <assert.h>
+#define GL_CHECK(expr) do { (expr); int _e_ = glGetError(); if (_e_ != 0) { printf("Check at " __FILE__ ":%d failed with 0x%x\n", __LINE__, _e_); assert(0); }} while(0)
 static GLuint opengl_load_texture(ImageData *image_data)
 {
     GLuint texture;
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, image_data->w, image_data->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data->data);
+    GL_CHECK(glGenTextures(1, &texture));
+    GL_CHECK(glBindTexture(GL_TEXTURE_2D, texture));
+    GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE));
+    GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE));
+    GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
+    GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
+    GL_CHECK(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, image_data->w, image_data->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data->data));
     return texture;
 }
 
@@ -231,77 +234,73 @@ void opengl_init(void *internal_window_handle)
     };
 
     unsigned int VBO, VAO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(rect_vertices), rect_vertices, GL_STATIC_DRAW);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(sizeof(float) * 2));
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
+    GL_CHECK(glGenVertexArrays(1, &VAO));
+    GL_CHECK(glGenBuffers(1, &VBO));
+    GL_CHECK(glBindVertexArray(VAO));
+    GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, VBO));
+    GL_CHECK(glBufferData(GL_ARRAY_BUFFER, sizeof(rect_vertices), rect_vertices, GL_STATIC_DRAW));
+    GL_CHECK(glEnableVertexAttribArray(0));
+    GL_CHECK(glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0));
+    GL_CHECK(glEnableVertexAttribArray(1));
+    GL_CHECK(glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(sizeof(float) * 2)));
+    GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, 0));
+    GL_CHECK(glBindVertexArray(0));
 
-    glEnable(GL_BLEND);
+    GL_CHECK(glEnable(GL_BLEND));
     Vbo_Opengl = VBO;
     Vao_Opengl = VAO;
 
     int w, h;
     vd_fw_get_size(&w, &h);
-    glViewport(0, 0, w, h);
+    GL_CHECK(glViewport(0, 0, w, h));
 }
 
 void opengl_kill(void)
 {
-    glUseProgram(0);
-    glBindVertexArray(0);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glDeleteProgram(Shader_Opengl);
-    glDeleteTextures(1, &Tex_Opengl);
-    glDeleteVertexArrays(1, &Vao_Opengl);
-    glDeleteBuffers(1, &Vbo_Opengl);
+    GL_CHECK(glUseProgram(0));
+    GL_CHECK(glBindVertexArray(0));
+    GL_CHECK(glBindTexture(GL_TEXTURE_2D, 0));
+    GL_CHECK(glDeleteProgram(Shader_Opengl));
+    GL_CHECK(glDeleteTextures(1, &Tex_Opengl));
+    GL_CHECK(glDeleteVertexArrays(1, &Vao_Opengl));
+    GL_CHECK(glDeleteBuffers(1, &Vbo_Opengl));
 }
 
 void opengl_resize(int w, int h)
 {
+    GL_CHECK(glUseProgram(Shader_Opengl));
     float projection[16];
     vd_fw_u_ortho(0.f, (float)w, (float)h, 0.f, -1.f, 1.f, projection);
-    glUniformMatrix4fv(glGetUniformLocation(Shader_Opengl, "projection"), 1, GL_FALSE, projection);
-    glViewport(0, 0, w, h);
+    GL_CHECK(glUniformMatrix4fv(glGetUniformLocation(Shader_Opengl, "projection"), 1, GL_FALSE, projection));
+    GL_CHECK(glViewport(0, 0, w, h));
 }
 
 void opengl_draw_with_background_color(float r, float g, float b, float a)
 {
-    int _e_ = glGetError();
-    if (_e_ != 0) {
-        printf("GL Error at " __FILE__ ":%d failed with 0x%x\n", __LINE__, _e_);
-    }
-
     int w, h;
     vd_fw_get_size(&w, &h);
-    glViewport(0, 0, w, h);
-    glClearColor(r,g,b,a);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    GL_CHECK(glViewport(0, 0, w, h));
+    GL_CHECK(glClearColor(r,g,b,a));
+    GL_CHECK(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
 
-    glUseProgram(Shader_Opengl);
-    glBindVertexArray(Vao_Opengl);
+    GL_CHECK(glUseProgram(Shader_Opengl));
+    GL_CHECK(glBindVertexArray(Vao_Opengl));
 
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    GL_CHECK(glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
 
     float projection[16];
     vd_fw_u_ortho(0.f, (float)w, (float)h, 0.f, -1.f, 1.f, projection);
-    glUniformMatrix4fv(glGetUniformLocation(Shader_Opengl, "projection"), 1, GL_FALSE, projection);
+    GL_CHECK(glUniformMatrix4fv(glGetUniformLocation(Shader_Opengl, "projection"), 1, GL_FALSE, projection));
 
     float size = w < h ? (float)w : (float)h;
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, Tex_Opengl);
-    glUniform4f(glGetUniformLocation(Shader_Opengl, "rect_color"), 1.f,1.f,1.f,1.f);
-    glUniform2f(glGetUniformLocation(Shader_Opengl, "rect_size"), size, size);
-    glUniform2f(glGetUniformLocation(Shader_Opengl, "rect_off"), ((float)w) * 0.5f - size * 0.5f, ((float)h) * 0.5f - size * 0.5f);
-    glUniform1i(glGetUniformLocation(Shader_Opengl, "rect_texture"), 0);
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    GL_CHECK(glActiveTexture(GL_TEXTURE0));
+    GL_CHECK(glBindTexture(GL_TEXTURE_2D, Tex_Opengl));
+    GL_CHECK(glUniform4f(glGetUniformLocation(Shader_Opengl, "rect_color"), 1.f,1.f,1.f,1.f));
+    GL_CHECK(glUniform2f(glGetUniformLocation(Shader_Opengl, "rect_size"), size, size));
+    GL_CHECK(glUniform2f(glGetUniformLocation(Shader_Opengl, "rect_off"), ((float)w) * 0.5f - size * 0.5f, ((float)h) * 0.5f - size * 0.5f));
+    GL_CHECK(glUniform1i(glGetUniformLocation(Shader_Opengl, "rect_texture"), 0));
+    GL_CHECK(glDrawArrays(GL_TRIANGLE_STRIP, 0, 4));
 }
 
 GraphicsBackendImpl OpenGL_Impl = {
@@ -1710,17 +1709,17 @@ static VkExtent2D create_swapchain_and_image_views()
     uint32_t num_swapchain_queues = 1;
     VkSharingMode swapchain_image_sharing_mode = VK_SHARING_MODE_EXCLUSIVE;
 
-    VkSwapchainPresentScalingCreateInfoKHR swapchain_present_scaling_create_info;
+    VkSwapchainPresentScalingCreateInfoKHR swapchain_present_scaling_create_info = {0};
     swapchain_present_scaling_create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_SCALING_CREATE_INFO_KHR;
     swapchain_present_scaling_create_info.pNext = 0;
-    swapchain_present_scaling_create_info.scalingBehavior = VK_PRESENT_SCALING_STRETCH_BIT_KHR;
-    // swapchain_present_scaling_create_info.scalingBehavior = VK_PRESENT_SCALING_ONE_TO_ONE_BIT_KHR;
+    // swapchain_present_scaling_create_info.scalingBehavior = VK_PRESENT_SCALING_STRETCH_BIT_KHR;
+    swapchain_present_scaling_create_info.scalingBehavior = VK_PRESENT_SCALING_ONE_TO_ONE_BIT_KHR;
     swapchain_present_scaling_create_info.presentGravityX = VK_PRESENT_GRAVITY_MIN_BIT_KHR;
     swapchain_present_scaling_create_info.presentGravityY = VK_PRESENT_GRAVITY_MIN_BIT_KHR;
 
-    VkSwapchainCreateInfoKHR swapchain_create_info;
+    VkSwapchainCreateInfoKHR swapchain_create_info = {0};
     swapchain_create_info.sType                 = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    swapchain_create_info.pNext                 = &swapchain_present_scaling_create_info;
+    // swapchain_create_info.pNext                 = &swapchain_present_scaling_create_info;
     swapchain_create_info.flags                 = 0;
     swapchain_create_info.surface               = Vk_Surface;
     swapchain_create_info.minImageCount         = Vk_Min_Swapchain_Image_Count;

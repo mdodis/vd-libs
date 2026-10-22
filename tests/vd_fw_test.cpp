@@ -5,12 +5,6 @@
 #include "vd_fw.h"
 #include <stdio.h>
 
-#ifdef _WIN32
-#include <windows.h>
-#pragma comment(lib, "User32.lib")
-#else
-#include <unistd.h>
-#endif
 
 #define ENABLE_SLOW_TESTS 0
 #ifndef ENABLE_SLOW_TESTS
@@ -311,8 +305,8 @@ int main(int argc, char const *argv[])
 #ifdef _WIN32
 static void get_fw_window_rect(int *left, int *top, int *right, int *bottom)
 {
-    RECT r;
-    GetWindowRect((HWND)VD_FW_G.hwnd, &r);
+    VdFwRECT r;
+    VdFwGetWindowRect(Vd_Fw_G.hwnd, &r);
 
     *left = r.left;
     *top = r.top;
@@ -323,16 +317,5 @@ static void get_fw_window_rect(int *left, int *top, int *right, int *bottom)
 static void move_cursor(int x, int y)
 {
     SetCursorPos(x, y);
-}
-
-static void sleep_ms(int s)
-{
-    Sleep(s * 1000);
-}
-#else
-
-static void sleep_ms(int s)
-{
-    usleep(s);
 }
 #endif

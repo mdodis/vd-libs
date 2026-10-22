@@ -9204,6 +9204,8 @@ VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_
                 &Vd_Fw_G.win_thread_id);
             // SetThreadDescription(Vd_Fw_G.win_thread, L"Window Thread");
             VdFwWaitForSingleObject(Vd_Fw_G.sem_window_ready, 0xFFFFFFFF);
+
+            Vd_Fw_G.hdc = VdFwGetDC(Vd_Fw_G.hwnd);
         }
     }
 
