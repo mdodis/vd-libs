@@ -2109,7 +2109,7 @@ static VdUiColoring  Vd_Ui__Coloring_Tx_Default;
 #endif // !VD_UI_FOCUS_MODE_STACK_MAX
 
 #ifndef VD_UI_VBUF_COUNT_MAX
-#   define VD_UI_VBUF_COUNT_MAX                 8192
+#   define VD_UI_VBUF_COUNT_MAX                 16384
 #endif // !VD_UI_VBUF_COUNT_MAX
 
 #ifndef VD_UI_RP_COUNT_MAX
@@ -2420,6 +2420,7 @@ struct VdUiContext {
     unsigned int            divs_cap;
     unsigned int            divs_cap_total;
     VdUiDiv                 *div_last;
+    unsigned int            div_count_this_frame;
 
     VdUiDiv                 *null_divs;                                            // Growable buffer for null divs. Currently
     unsigned int            null_divs_len;                                         // used for spacer divs
@@ -2632,6 +2633,8 @@ VD_UI_API void vd_ui_frame_begin(float delta_seconds)
     ctx->null_divs_len        = 0;
     ctx->mouse_over_any_visible_div = ctx->new_mouse_over_any_visible_div;
     ctx->new_mouse_over_any_visible_div = 0;
+
+    ctx->div_count_this_frame = 0;
 
     for (int i = 0; i < VD_UI_EVENT_KEY_MAX; ++i) {
         ctx->key_states[i] = ctx->key_states[i] << 1;
@@ -3427,7 +3430,12 @@ VD_UI_API VdUiReply vd_ui_checkbox(int *b, VdUiStr str)
     div->style.size[1].mode = VD_UI_SIZE_MODE_CONTAIN_CHILDREN;
     vd_ui_parent_push(div);
 
-    VdUiDiv *ckbx = vd_ui_div_newf(VD_UI_FLAG_TEXT | VD_UI_FLAG_BACKGROUND | VD_UI_FLAG_CLICKABLE, "##ckbx");
+    VdUiDiv *ckbx = vd_ui_div_newf(0
+                                   | VD_UI_FLAG_TEXT
+                                   | VD_UI_FLAG_BACKGROUND
+                                   | VD_UI_FLAG_CLICKABLE
+                                   | VD_UI_FLAG_KB_CLICKABLE
+                                   , "##ckbx");
     ckbx->style.size[0].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
     ckbx->style.size[0].value = ctx->def.font_size * vd_ui_get_scale();
     ckbx->style.size[1].mode  = VD_UI_SIZE_MODE_ABSOLUTE;
@@ -5193,6 +5201,7 @@ VD_UI_API VdUiDiv *vd_ui_div_new(VdUiFlags flags, VdUiStr str)
     result->draw_proc                            = 0;
     result->draw_proc_data                       = 0;
 
+    ctx->div_count_this_frame++;
     return result;
 }
 
@@ -7161,6 +7170,11 @@ static void vd_ui__push_vertexgrad(VdUiContext *ctx, VdUiTextureId texture, floa
         return;
     }
 
+    // VD_UI_ASSERT(ctx->vbuf_count < VD_UI_VBUF_COUNT_MAX);
+    if (ctx->vbuf_count == VD_UI_VBUF_COUNT_MAX) {
+        return;
+    }
+
     float current_clip[4];
     vd_ui__get_clip(ctx, current_clip);
 
@@ -7183,7 +7197,6 @@ static void vd_ui__push_vertexgrad(VdUiContext *ctx, VdUiTextureId texture, floa
         vd_ui__push_pass(ctx);
     }
 
-    VD_UI_ASSERT(ctx->vbuf_count < VD_UI_VBUF_COUNT_MAX);
 
     // Ok so clearly there is an issue when submitting separate passes
     VdUiVertex *v = &ctx->vbuf[ctx->vbuf_count++];
@@ -8651,6 +8664,8 @@ static void vd_ui__do_inspector(VdUiContext *ctx)
 
                         VD_UI_WITH_STYLE_BACKGROUND_COLOR(curr_tab_index == 1 ? on_color : normal_color)
                         if (vd_ui_buttonf("Popups##popups-tab").clicked) { curr_tab_index = 1; }
+
+                        if (vd_ui_buttonf("Close##close-inspector").clicked) { vd_ui_debug_set_inspector_on(0); }
                     }
                 }
                 vd_ui_parent_pop();
