@@ -264,9 +264,9 @@ static VD_INLINE void *vd_memmove(void *dest, void *src, size_t num) {
 #define VD_IMPOSSIBLE() VD_ASSERT(VD_FALSE)
 #define VD_TODO()       VD_ASSERT(VD_FALSE)
 /* ----SIZES--------------------------------------------------------------------------------------------------------- */
-#define VD_KILOBYTES(x) (((size_t)(x)) * 1024)
-#define VD_MEGABYTES(x) (VD_KILOBYTES(x) * 1024)
-#define VD_GIGABYTES(x) (VD_MEGABYTES(x) * 1024)
+#define KILOBYTES(x) (((size_t)(x)) * 1024)
+#define MEGABYTES(x) (KILOBYTES(x) * 1024)
+#define GIGABYTES(x) (MEGABYTES(x) * 1024)
 
 #define VD_ARRAY_COUNT(s) (sizeof(s) / sizeof(*s))
 
@@ -295,9 +295,9 @@ VD_INLINE uintptr_t vd_align_forward(uintptr_t ptr, size_t align) {
 
 #if VD_MACRO_ABBREVIATIONS
 #define ARRAY_COUNT(a)            VD_ARRAY_COUNT(a)
-#define KILOBYTES(x)              VD_KILOBYTES(x)
-#define MEGABYTES(x)              VD_MEGABYTES(x)
-#define GIGABYTES(x)              VD_GIGABYTES(x)
+#define KILOBYTES(x)              KILOBYTES(x)
+#define MEGABYTES(x)              MEGABYTES(x)
+#define GIGABYTES(x)              GIGABYTES(x)
 #define is_power_of_two(x)        vd_is_power_of_two(x)
 #define align_forward(ptr, align) vd_align_forward(ptr, align)
 #endif
@@ -461,15 +461,18 @@ typedef struct {
 #define VD_THREAD_PROC(name) uint32_t name(void *param)
 typedef VD_THREAD_PROC(VdThreadProc);
 
-VdThread    vd_thread_make(VdThreadProc *proc, void *param);
-int         vd_thread_join(VdThread thread);
-void        vd_thread_sleep(uint32_t ms);
-void        vd_thread_yield(void);
+VD_API uint32_t     vd_tls_alloc(void);
+VD_API void         vd_tls_set(uint32_t id, void *p);
+VD_API void*        vd_tls_get(uint32_t id);
 
-VdSemaphore vd_semaphore_make(int initial_count, int max_count);
-void        vd_semaphore_inc(VdSemaphore semaphore);
-void        vd_semaphore_dec(VdSemaphore semaphore);
-void        vd_semaphore_free(VdSemaphore semaphore);
+VD_API VdThread     vd_thread_make(VdThreadProc *proc, void *param);
+VD_API int          vd_thread_join(VdThread thread);
+VD_API void         vd_thread_sleep(uint32_t ms);
+VD_API void         vd_thread_yield(void);
+VD_API VdSemaphore  vd_semaphore_make(int initial_count, int max_count);
+VD_API void         vd_semaphore_inc(VdSemaphore semaphore);
+VD_API void         vd_semaphore_dec(VdSemaphore semaphore);
+VD_API void         vd_semaphore_free(VdSemaphore semaphore);
 
 #if VD_PLATFORM_WINDOWS
 #if VD_CPP
@@ -570,6 +573,29 @@ VD_API VdSystemHeap* vd_system_heap_global(void);
 VD_API void          vd_system_heap_set_reserve_page_count(VdSystemHeap *h, size_t page_count);
 VD_API void*         vd_system_heap_alloc(VdSystemHeap *h, size_t size, size_t align);
 VD_API void          vd_system_heap_empty(VdSystemHeap *h);
+
+typedef struct HeapArenaEntry HeapArenaEntry;
+struct HeapArenaEntry {
+    HeapArenaEntry  *next;
+    VdSystemHeap    heap;
+};
+
+typedef struct {
+    HeapArenaEntry *first;
+    HeapArenaEntry *last;
+    size_t         page_count;
+} HeapArena;
+
+typedef struct {
+    HeapArenaEntry *last;
+    size_t         offset;
+} HeapArenaSave;
+
+VD_API HeapArena heap_arena_make(size_t reserve_size);
+VD_API void *heap_arena_alloc(HeapArena *arena, size_t size);
+
+VD_API HeapArenaSave heap_arena_save(HeapArena *arena);
+VD_API void          heap_arena_restore(HeapArena *arena, HeapArenaSave save);
 
 #ifndef VD_ALLOC_OVERRIDE
 #define VD_ALLOC_OVERRIDE 0
@@ -1782,7 +1808,7 @@ VD_API void      vd_library_free(VdLibrary library);
 #endif // VD_SCRATCH_PAGE_COUNT
 
 #ifndef VD_SCRATCH_PAGE_SIZE
-#define VD_SCRATCH_PAGE_SIZE VD_KILOBYTES(64)
+#define VD_SCRATCH_PAGE_SIZE KILOBYTES(64)
 #endif // VD_SCRATCH_PAGE_SIZE 
 
 typedef struct __VD_Scratch {
@@ -1850,6 +1876,22 @@ VD_INLINE VdStr vd_log_verbosity_to_str(int verbosity)
 #ifndef VD_CUSTOM_THREAD_CONTEXT
 #undef  VD_LOG_BUFFER_SIZE
 #define VD_LOG_BUFFER_SIZE               1024
+typedef struct {
+    HeapArena heap;
+    void      *usr;
+} ThreadCtx;
+
+VD_API void vd_ctx_setup_main_thread(size_t max_alloc_size);
+VD_API void vd_ctx_alloc_for_thread(size_t max_alloc_size);
+VD_API void thread_ctx_init(void);
+VD_API ThreadCtx *thread_ctx_get(void);
+
+#define SCOPE_I_ID2(id, line) id##line
+#define SCOPE_I_ID(line) SCOPE_I_ID2(__i__, line)
+#define SCOPE_S_ID(line) SCOPE_I_ID2(__s__, line)
+#define WITH_ARENA_(line, arena) for (HeapArenaSave SCOPE_S_ID(line) = heap_arena_save(arena), *SCOPE_I_ID(line) = (HeapArenaSave*)1; SCOPE_I_ID(line); heap_arena_restore(arena, SCOPE_S_ID(line)), SCOPE_I_ID(line) = 0)
+#define WITH_ARENA(arena) WITH_ARENA_(__COUNTER__,arena)
+
 typedef struct {
     VdScratch scratch;
     VdProcLog *log;
@@ -2427,6 +2469,12 @@ extern int VdReleaseSemaphore(void *hSemaphore, int lReleaseCount, int lpPreviou
 extern int VdCloseHandle(void *hObject);
 #pragma comment(linker, "/alternatename:VdSleep=Sleep")
 extern void VdSleep(uint32_t dwMilliseconds);
+#pragma comment(linker, "/alternatename:VdTlsAlloc=TlsAlloc")
+extern uint32_t VdTlsAlloc();
+#pragma comment(linker, "/alternatename:VdTlsGetValue=TlsGetValue")
+extern void* VdTlsGetValue(uint32_t);
+#pragma comment(linker, "/alternatename:VdTlsSetValue=TlsSetValue")
+extern int VdTlsSetValue(uint32_t, void*);
 
 #if VD_CPP
 }
@@ -2434,6 +2482,21 @@ extern void VdSleep(uint32_t dwMilliseconds);
 
 #define VD__WIN32_INFINITE    0xFFFFFFFFu
 #define VD__WIN32_WAIT_FAILED 0xFFFFFFFFu
+
+VD_API uint32_t vd_tls_alloc(void)
+{
+    return VdTlsAlloc();
+}
+
+VD_API void vd_tls_set(uint32_t id, void *p)
+{
+    VdTlsSetValue(id, p);
+}
+
+VD_API void *vd_tls_get(uint32_t id)
+{
+    return VdTlsGetValue(id);
+}
 
 VdThread vd_thread_make(VdThreadProc *proc, void *param)
 {
@@ -2499,7 +2562,7 @@ VD_API VdSystemHeap *vd_system_heap_global(void)
 
 VD_API void vd_system_heap_set_reserve_page_count(VdSystemHeap *h, size_t page_count)
 {
-    VD_ASSERT(h->buf != 0 && "Heap has already been allocated!");
+    VD_ASSERT(h->buf == 0 && "Heap has already been allocated!");
     if (h->page_size == 0) {
         h->page_size = vd_vm_get_page_size();
     }
@@ -2547,7 +2610,7 @@ VD_API void *vd_system_heap_alloc(VdSystemHeap *h, size_t size, size_t align)
     uintptr_t offset   = desired - (uintptr_t)h->buf;
 
     if (desired_end > end) {
-        VD_DEBUG_BREAK();
+        return 0;
     }
 
     if (desired_end <= now) {
@@ -2575,7 +2638,66 @@ VD_API void *vd_system_heap_alloc(VdSystemHeap *h, size_t size, size_t align)
 
 VD_API void vd_system_heap_empty(VdSystemHeap *h)
 {
-    vd_vm_release((void*)h->buf, h->reserved * h->page_size);
+    h->offset = 0;
+}
+
+static HeapArenaEntry *heap_arena_entry_make(size_t page_count)
+{
+    VdSystemHeap heap = {0};
+    vd_system_heap_set_reserve_page_count(&heap, page_count);
+    HeapArenaEntry *result = (HeapArenaEntry*)vd_system_heap_alloc(&heap, sizeof(HeapArenaEntry), 1);
+    result->next = 0;
+    result->heap = heap;
+    return result;
+}
+
+VD_API HeapArena heap_arena_make(size_t reserve_size)
+{
+    size_t page_size = vd_vm_get_page_size();
+    size_t page_count = (reserve_size / page_size) + 1;
+
+    HeapArenaEntry *first_entry = heap_arena_entry_make(page_count);
+    HeapArena result;
+    result.first = first_entry;
+    result.last = first_entry;
+    result.page_count = page_count;
+    return result;
+}
+
+VD_API void *heap_arena_alloc(HeapArena *arena, size_t size)
+{
+    void *result = vd_system_heap_alloc(&arena->last->heap, size, 1);
+    if (result == 0) {
+        if (!arena->last->next) {
+            arena->last->next = heap_arena_entry_make(arena->page_count);
+        }
+        arena->last = arena->last->next;
+
+        result = vd_system_heap_alloc(&arena->last->heap, size, 1);
+    }
+
+    return result;
+}
+
+VD_API HeapArenaSave heap_arena_save(HeapArena *arena)
+{
+    HeapArenaSave result;
+    result.last = arena->last;    
+    result.offset = arena->last->heap.offset;
+    return result;
+}
+
+VD_API void heap_arena_restore(HeapArena *arena, HeapArenaSave save)
+{
+    HeapArenaEntry *cur = save.last;
+    arena->last = save.last;
+    cur->heap.offset = save.offset;
+
+    cur = cur->next;
+    while (cur) {
+        cur->heap.offset = 0;
+        cur = cur->next;
+    }
 }
 
 /* ----ARENA IMPL---------------------------------------------------------------------------------------------------- */
@@ -2673,6 +2795,29 @@ void vd_scratch_init(VdScratch *scratch)
         VD_MEMSET(a, 0, VD_SCRATCH_PAGE_SIZE);
         vd_arena_init(&scratch->arenas[i], a, VD_SCRATCH_PAGE_SIZE);
     }
+}
+
+static uint32_t Vd__Thread_Ctx_Idx = 0;
+
+VD_API void vd_ctx_setup_main_thread(size_t max_alloc_size)
+{
+    Vd__Thread_Ctx_Idx = vd_tls_alloc();
+    vd_ctx_alloc_for_thread(max_alloc_size);
+}
+
+VD_API void vd_ctx_alloc_for_thread(size_t max_alloc_size)
+{
+    HeapArena h = heap_arena_make(max_alloc_size);
+    ThreadCtx *ctx = (ThreadCtx*)heap_arena_alloc(&h, sizeof(ThreadCtx));
+    ctx->heap = h;
+    ctx->usr = 0;
+    vd_tls_set(Vd__Thread_Ctx_Idx, ctx);
+}
+
+VD_API ThreadCtx *thread_ctx_get(void)
+{
+    ThreadCtx *ctx = (ThreadCtx*)vd_tls_get(Vd__Thread_Ctx_Idx);
+    return ctx;
 }
 
 VdArena *vd_scratch_get_arena(VdScratch *scratch)
@@ -3708,7 +3853,7 @@ void vd_test_main(void)
     }
 #endif // VD_USE_CRT
 
-    VD_ARENA_FROM_SYSTEM(Test_Arena, VD_MEGABYTES(64));
+    VD_ARENA_FROM_SYSTEM(Test_Arena, MEGABYTES(64));
 
     int passed = 0, total = 0;
 #if !VD_HOST_COMPILER_UNKNOWN 
