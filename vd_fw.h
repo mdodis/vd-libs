@@ -11496,6 +11496,8 @@ typedef VdFw__MacID              (*VdFw__MacBytesLengthMsg)(VdFw__MacID, VdFw__M
 typedef const void*              (*VdFw__MacBytesMsg)(VdFw__MacID, VdFw__MacSEL);
 typedef void                     (*VdFw__MacPerformOnMainMsg)(VdFw__MacID, VdFw__MacSEL, VdFw__MacSEL, VdFw__MacID, BOOL);
 typedef VdFw__MacCGLError        (*VdFw__MacCGLSetParameterProc)(VdFw__MacCGLContextObj, int, const GLint *);
+typedef void                     (*VdFw__MacUnsignedLongArgMsg)(VdFw__MacID, VdFw__MacSEL, unsigned long);
+typedef VdFw__MacID              (*VdFw__MacWindowButtonMsg)(VdFw__MacID, VdFw__MacSEL, unsigned long);
 
 #define SEND(type)               ((type)msg_send)
 #define C(name)                  ((VdFw__MacID)get_class(name))
@@ -11512,6 +11514,10 @@ static VdFw__MacAllocateClassProc   allocate_class;
 static VdFw__MacAddMethodProc       add_method;
 static VdFw__MacRegisterClassProc   register_class;
 
+enum {
+    VD_FW_MAC_MESSAGE_BUFFER_SIZE = 256,
+};
+
 typedef struct {
     int                         initialized;
     pthread_t                   render_thread;
@@ -11522,6 +11528,10 @@ typedef struct {
     VdFw__MacID                 app;
     int                         (*main_callback)(int argc, const char *argv[]);
     int                         is_live_resizing;
+
+    VdFwEvent                   msgbuf[VD_FW_MAC_MESSAGE_BUFFER_SIZE];
+    volatile int                msgbuf_r;
+    volatile int                msgbuf_w;
 
 /* -OPENGL STUFF----------------------------------------------------------------------------------------------------- */
     VdFw__MacID                 gl_context;
@@ -11536,6 +11546,7 @@ typedef enum {
 
 typedef struct {
     VdFw__MacRequestType type;
+    void                 *ptr;
 } VdFw__MacRequest;
 
 static VdFw__MacInternalData Vd_Fw_G = {0};
@@ -11552,11 +11563,16 @@ static void             vd_fw__mac_delegate_handle_request(VdFw__MacID self, VdF
 static void*            vd_fw__mac_thread_proc(void *arg);
 static VdFw__MacID      vd_fw__mac_nsstring(const char *text);
 static void*            vd_fw__gl_get_proc_address(const char *name);
+static int              vd_fw__mac_msgbuf_r(VdFwEvent *message);
+static int              vd_fw__mac_msgbuf_w(VdFwEvent *message);
+
+
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
     VdFw__MacRequest rq;
     rq.type = VD_FW__MAC_REQUEST_TYPE_INIT;
+    rq.ptr = (void*)info;
     id data = SEND(VdFw__MacBytesLengthMsg)(C("NSData"),  S("dataWithBytes:length:"), &rq, sizeof(rq));
 
     SEND(VdFw__MacPerformOnMainMsg)(Vd_Fw_G.delegate,
@@ -11763,16 +11779,54 @@ static void vd_fw__mac_delegate_handle_request(VdFw__MacID self, VdFw__MacSEL cm
     switch (request->type) {
         default: break;
         case VD_FW__MAC_REQUEST_TYPE_INIT: {
+            int borderless = 0;
 
+            VdFwInitInfo *init_info = (VdFwInitInfo*)request->ptr;
+            if (init_info && init_info->window_options.borderless) {
+                borderless = 1;
+            }
+
+            unsigned int style_mask = 1UL | 2UL | 8UL;
             CGRect rect = {{0,0}, {640, 480}};
             VdFw__MacID window = SEND(VdFw__MacWindowInitMsg)(ALLOC("NSWindow"),
                                                               S("initWithContentRect:styleMask:backing:defer:"),
                                                               rect,
-                                                              1UL | 2UL | 8UL,
-                                                              2UL,
+                                                              style_mask,
+                                                              2UL, // NSBackingStoreBuffered
                                                               NO);
             SEND(VdFw__MacBoolArgMsg)(window, S("setReleasedWhenClosed:"), NO);
             SEND(VdFw__MacObjectArgMsg)(window, S("setDelegate:"), Vd_Fw_G.delegate);
+
+            if (borderless) {
+                style_mask |= 1 << 15; // NSWindowStyleMaskFullSizeContentView
+
+                // window.titleVisibility = NSWindowTitleHidden;
+                SEND(VdFw__MacUnsignedLongArgMsg)(window, S("setTitleVisibility:"), 1UL);
+                // window.titlebarAppearsTransparent = YES;
+                SEND(VdFw__MacBoolArgMsg)(window, S("setTitlebarAppearsTransparent:"), YES);
+                // window.styleMask = style_mask;
+                SEND(VdFw__MacUnsignedLongArgMsg)(window, S("setStyleMask:"), style_mask);
+                // [window setMovable:NO];
+                SEND(VdFw__MacBoolArgMsg)(window, S("setMovable:"), NO);
+                // [window setMovableByWindowBackground:NO];
+                SEND(VdFw__MacBoolArgMsg)(window, S("setMovableByWindowBackground:"), NO);
+
+                // [[window standardWindowButton:NSWindowCloseButton] setHidden:YES];
+                SEND(VdFw__MacBoolArgMsg)(SEND(VdFw__MacWindowButtonMsg)(window, S("standardWindowButton:"), 0UL),
+                                          S("setHidden:"),
+                                          YES);
+
+                // [[window standardWindowButton:NSWindowMiniaturizeButton] setHidden:YES];
+                SEND(VdFw__MacBoolArgMsg)(SEND(VdFw__MacWindowButtonMsg)(window, S("standardWindowButton:"), 1UL),
+                                          S("setHidden:"),
+                                          YES);
+
+                // [[window standardWindowButton:NSWindowZoomButton] setHidden:YES];
+                SEND(VdFw__MacBoolArgMsg)(SEND(VdFw__MacWindowButtonMsg)(window, S("standardWindowButton:"), 2UL),
+                                          S("setHidden:"),
+                                          YES);
+
+            }
 
             Vd_Fw_G.window = window;
             unsigned int attributes[] = {99, 0x3200, 5, 8, 24, 0};
@@ -11868,6 +11922,41 @@ VD_FW_API char *vd_fw__debug_dump_file_text(const char *path, size_t *sz)
 
     result[size] = 0;
     return result;
+}
+
+static int vd_fw__mac_msgbuf_r(VdFwEvent *message)
+{
+    int r = Vd_Fw_G.msgbuf_r;
+    int w;
+    __atomic_load(&Vd_Fw_G.msgbuf_w, &w, __ATOMIC_SEQ_CST);
+
+    if (r == w) {
+        return 0;
+    }
+
+    *message = Vd_Fw_G.msgbuf[r];
+
+    int nr = (r + 1) % VD_FW_MAC_MESSAGE_BUFFER_SIZE;
+    __atomic_exchange_n(&Vd_Fw_G.msgbuf_r, nr, __ATOMIC_SEQ_CST);
+
+    return 1;
+}
+
+static int vd_fw__mac_msgbuf_w(VdFwEvent *message)
+{
+    int w = Vd_Fw_G.msgbuf_w;
+    int r;
+    __atomic_load(&Vd_Fw_G.msgbuf_r, &r, __ATOMIC_SEQ_CST);
+
+    if ((w + 1) % VD_FW_MAC_MESSAGE_BUFFER_SIZE == r) {
+        return 0;
+    }
+
+    Vd_Fw_G.msgbuf[w] = *message;
+    int nw = (w + 1) % VD_FW_MAC_MESSAGE_BUFFER_SIZE;
+    __atomic_exchange_n(&Vd_Fw_G.msgbuf_w, nw, __ATOMIC_SEQ_CST);
+
+    return 1;
 }
 
 #elif defined(__linux__)
