@@ -49,20 +49,11 @@ if [ -n "$SAMPLE_TO_COMPILE" ]; then
     echo "Compiling sample: $SAMPLE_TO_COMPILE..."
     cc \
         -pthread \
-        -x objective-c \
         $CFLAGS \
-        -fsanitize=address \
         -I $PRJ_DIR/ext \
         $PRJ_DIR/samples/$SAMPLE_TO_COMPILE.c \
         -o $SAMPLE_TO_COMPILE \
-        -framework Cocoa \
-        -framework Metal \
-        -framework QuartzCore \
-        -framework CoreGraphics \
-        -framework IOSurface \
-        -framework IOKit \
-        -framework Foundation \
-        -framework OpenGL
+        -ldl
 fi
 
 
