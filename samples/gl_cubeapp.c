@@ -78,7 +78,16 @@ static void map_stick_deadzone(float input[2], float deadzone, float output[2])
     output[1] = norm_y * norm_magnitude;
 }
 
+#if VD_FW_DEFER_MAIN
+int defer_main(int argc, char const *argv[]);
 int main(int argc, char const *argv[])
+{
+    return vd_fw_main(argc, argv, defer_main);
+}
+int defer_main(int argc, char const *argv[])
+#else
+int main(int argc, char const *argv[])
+#endif
 {
     (void)argc;
     (void)argv;

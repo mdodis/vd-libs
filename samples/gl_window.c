@@ -1,8 +1,18 @@
 #define VD_FW_NO_CRT 0
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_CONSOLE
 #include "vd_fw.h"
+#include <stdio.h>
 
+#if VD_FW_DEFER_MAIN
+int defer_main(int argc, char const *argv[]);
 int main(int argc, char const *argv[])
+{
+    return vd_fw_main(argc, argv, defer_main);
+}
+int defer_main(int argc, char const *argv[])
+#else
+int main(int argc, char const *argv[])
+#endif
 {
     (void)argc;
     (void)argv;
@@ -28,6 +38,11 @@ int main(int argc, char const *argv[])
 
         if (vd_fw_close_requested()) {
             vd_fw_quit();
+        }
+
+        float scale;
+        if (vd_fw_get_scale(&scale)) {
+            printf("New Scale: %f\n", scale);
         }
 
         vd_fw_lock();

@@ -68,7 +68,6 @@
  * - X11: Fix moveresize leaving window unfocused
  * - X11: Fix dbl-click on borderless with ncrects initiating move instead of maximizing
  * - MacOS: simple flag to disable cocoa main thread requirement workaround
- * - MacOS: vd_fw_get_last_key_pressed
  * - MacOS: vd_fw_get_executable_dir()
  * - MacOS: Gamepad Support
  * - MacOS: Metal Sample
@@ -193,6 +192,11 @@
 #ifndef VD_FW_EVENT_COUNT_MAX
 #   define VD_FW_EVENT_COUNT_MAX 32
 #endif // !VD_FW_EVENT_COUNT_MAX
+
+// How much of the previous frame's mouse delta carries into this one. 0 is the raw per-frame movement.
+#ifndef VD_FW_MOUSE_DELTA_SMOOTHING
+#   define VD_FW_MOUSE_DELTA_SMOOTHING 0.2f
+#endif // !VD_FW_MOUSE_DELTA_SMOOTHING
 
 #define VD_FW_ARRAY_COUNT(x) (sizeof(x)/sizeof(x[0]))
 
@@ -737,7 +741,9 @@ typedef struct {
     VdFwPlatform platform;
 #ifdef _WIN32
     uint8_t      data[44];
-#endif // _WIN32
+#elif defined(__APPLE__)
+    uint8_t      data[32];
+#endif // _WIN32, __APPLE__
 } VdFwPlacement;
 #pragma pack(pop)
 
@@ -11502,6 +11508,36 @@ typedef VdFw__MacID              (*VdFw__MacWindowButtonMsg)(VdFw__MacID, VdFw__
 typedef CGRect                   (*VdFw__MacRectMsg)(VdFw__MacID, VdFw__MacSEL);
 typedef BOOL                     (*VdFw__MacBoolMsg)(VdFw__MacID, VdFw__MacSEL);
 typedef double                   (*VdFw__MacDoubleMsg)(VdFw__MacID, VdFw__MacSEL);
+typedef CGPoint                  (*VdFw__MacPointMsg)(VdFw__MacID, VdFw__MacSEL);
+typedef unsigned long            (*VdFw__MacUnsignedLongMsg)(VdFw__MacID, VdFw__MacSEL);
+typedef unsigned int             (*VdFw__MacUnsignedIntMsg)(VdFw__MacID, VdFw__MacSEL);
+typedef unsigned short           (*VdFw__MacUnsignedShortMsg)(VdFw__MacID, VdFw__MacSEL);
+typedef long                     (*VdFw__MacIntegerMsg)(VdFw__MacID, VdFw__MacSEL);
+typedef const char*              (*VdFw__MacUTF8StringMsg)(VdFw__MacID, VdFw__MacSEL);
+typedef unsigned char*           (*VdFw__MacBitmapDataMsg)(VdFw__MacID, VdFw__MacSEL);
+typedef VdFw__MacID              (*VdFw__MacObjectAtIndexMsg)(VdFw__MacID, VdFw__MacSEL, unsigned long);
+typedef VdFw__MacID              (*VdFw__MacObjectForKeyMsg)(VdFw__MacID, VdFw__MacSEL, VdFw__MacID);
+typedef VdFw__MacID              (*VdFw__MacViewInitMsg)(VdFw__MacID, VdFw__MacSEL, CGRect);
+typedef VdFw__MacID              (*VdFw__MacImageInitMsg)(VdFw__MacID, VdFw__MacSEL, CGSize);
+typedef VdFw__MacID              (*VdFw__MacBitmapRepInitMsg)(VdFw__MacID, VdFw__MacSEL, unsigned char **, long, long, long, long, BOOL, BOOL, VdFw__MacID, long, long);
+typedef void                     (*VdFw__MacSizeArgMsg)(VdFw__MacID, VdFw__MacSEL, CGSize);
+typedef void                     (*VdFw__MacSetFrameMsg)(VdFw__MacID, VdFw__MacSEL, CGRect, BOOL);
+
+typedef int                      (*VdFw__MacCGAssociateMouseProc)(int);
+typedef int                      (*VdFw__MacCGWarpCursorProc)(CGPoint);
+typedef VdFw__MacID              (*VdFw__MacCGEventCreateProc)(VdFw__MacID);
+typedef CGPoint                  (*VdFw__MacCGEventGetLocationProc)(VdFw__MacID);
+typedef const void*              (*VdFw__MacCGDisplayCopyModesProc)(unsigned int, const void *);
+typedef size_t                   (*VdFw__MacCGDisplayModeSizeProc)(const void *);
+typedef double                   (*VdFw__MacCGDisplayModeRateProc)(const void *);
+typedef long                     (*VdFw__MacCFArrayCountProc)(const void *);
+typedef const void*              (*VdFw__MacCFArrayValueProc)(const void *, long);
+typedef void                     (*VdFw__MacCFReleaseProc)(const void *);
+
+typedef void*                    VdFw__MacDispatchSemaphore;
+typedef VdFw__MacDispatchSemaphore (*VdFw__MacSemaphoreCreateProc)(long);
+typedef long                     (*VdFw__MacSemaphoreWaitProc)(VdFw__MacDispatchSemaphore, uint64_t);
+typedef long                     (*VdFw__MacSemaphoreSignalProc)(VdFw__MacDispatchSemaphore);
 
 #define SEND(type)               ((type)msg_send)
 #define C(name)                  ((VdFw__MacID)get_class(name))
@@ -11518,75 +11554,175 @@ static VdFw__MacAllocateClassProc   allocate_class;
 static VdFw__MacAddMethodProc       add_method;
 static VdFw__MacRegisterClassProc   register_class;
 
+static VdFw__MacCGAssociateMouseProc      cg_associate_mouse;
+static VdFw__MacCGWarpCursorProc          cg_warp_cursor;
+static VdFw__MacCGEventCreateProc         cg_event_create;
+static VdFw__MacCGEventGetLocationProc    cg_event_get_location;
+static VdFw__MacCGDisplayCopyModesProc    cg_display_copy_all_modes;
+static VdFw__MacCGDisplayModeSizeProc     cg_display_mode_get_width, cg_display_mode_get_height;
+static VdFw__MacCGDisplayModeRateProc     cg_display_mode_get_refresh_rate;
+static VdFw__MacCFArrayCountProc          cf_array_get_count;
+static VdFw__MacCFArrayValueProc          cf_array_get_value_at_index;
+static VdFw__MacCFReleaseProc             cf_release;
+static VdFw__MacSemaphoreCreateProc       dispatch_semaphore_make;
+static VdFw__MacSemaphoreWaitProc         dispatch_semaphore_take;
+static VdFw__MacSemaphoreSignalProc       dispatch_semaphore_post;
+
 enum {
     VD_FW_MAC_MESSAGE_BUFFER_SIZE = 256,
+    VD_FW_MAC_DEFERRED_REQUEST_MAX = 16,
+};
+
+#define VD_FW__MAC_FOREVER (~0ull)      // DISPATCH_TIME_FOREVER
+
+enum {
+    VD_FW__MAC_STYLE_TITLED            = 1 << 0,
+    VD_FW__MAC_STYLE_CLOSABLE          = 1 << 1,
+    VD_FW__MAC_STYLE_MINIATURIZABLE    = 1 << 2,
+    VD_FW__MAC_STYLE_RESIZABLE         = 1 << 3,
+    VD_FW__MAC_STYLE_FULL_SIZE_CONTENT = 1 << 15,
+
+    VD_FW__MAC_COLLECT_FULLSCREEN      = 1 << 7,                        // NSWindowCollectionBehaviorFullScreenPrimary
+};
+
+enum {
+    VD_FW__MAC_MODIFIER_CAPS_LOCK = 1 << 16,
+    VD_FW__MAC_MODIFIER_SHIFT     = 1 << 17,
+    VD_FW__MAC_MODIFIER_CONTROL   = 1 << 18,
+    VD_FW__MAC_MODIFIER_OPTION    = 1 << 19,
+    VD_FW__MAC_MODIFIER_COMMAND   = 1 << 20,
+    VD_FW__MAC_MODIFIER_FUNCTION  = 1 << 23,
+
+    // Device-dependent bits. flagsChanged: only reports the whole modifier set, so these are the only way to tell
+    // which side of the keyboard the key that changed was on.
+    VD_FW__MAC_MODIFIER_LCONTROL  = 0x0001,
+    VD_FW__MAC_MODIFIER_LSHIFT    = 0x0002,
+    VD_FW__MAC_MODIFIER_RSHIFT    = 0x0004,
+    VD_FW__MAC_MODIFIER_LCOMMAND  = 0x0008,
+    VD_FW__MAC_MODIFIER_RCOMMAND  = 0x0010,
+    VD_FW__MAC_MODIFIER_LOPTION   = 0x0020,
+    VD_FW__MAC_MODIFIER_ROPTION   = 0x0040,
+    VD_FW__MAC_MODIFIER_RCONTROL  = 0x2000,
 };
 
 typedef struct {
-    int                         initialized;
-    pthread_t                   render_thread;
-    int                         argc;
-    const char**                argv;
-    VdFw__MacID                 delegate;
-    VdFw__MacID                 window;
-    VdFw__MacID                 app;
-    int                         (*main_callback)(int argc, const char *argv[]);
-    int                         is_live_resizing;
-
-    VdFwEvent                   msgbuf[VD_FW_MAC_MESSAGE_BUFFER_SIZE];
-    volatile int                msgbuf_r;
-    volatile int                msgbuf_w;
-    volatile int                running;
-
-    int                         scale_changed;
-    int                         wheel_moved;
-    float                       wheel[2];
-    int                         focus_changed;
-    int                         window_state_changed;
-    int                         prev_mouse_state;
-    int                         mouse_state;
-    int                         close_request;
-    int                         num_codepoints;
-    VdFwKey                     last_key;
-    float                       mouse_delta[2];
-    VdFwKey                     prev_key_states[VD_FW_KEY_MAX];
-    VdFwKey                     curr_key_states[VD_FW_KEY_MAX];
-    int                         size_changed;
-    int                         num_evts;
-    VdFwEvent                   evtbuf[VD_FW_EVENT_COUNT_MAX];
-    unsigned int                codepoints[VD_FW_CODEPOINT_BUFFER_COUNT];
-    int                         width, height;
-    int                         mouse[2];
-    int                         focused;
-    VdFwWindowState             window_state;
-    float                       scale;
-    int                         first_codepoint_index;
-    int                         w,h;
-    int                         is_zoomed;
-    mach_timebase_info_data_t   time_base;
-    uint64_t                    last_time;
-    uint64_t                    delta_ns;
-    VdFwGraphicsApi             current_api;
-
-
-/* -OPENGL STUFF----------------------------------------------------------------------------------------------------- */
-    VdFw__MacID                 gl_context;
-    VdFw__MacCGLContextObj      cgl;
-    void*                       gl;
-} VdFw__MacInternalData;
+    unsigned int                display_id;                             // CGDirectDisplayID, from NSScreenNumber
+    char                        friendly_name[32];
+    VdFwDisplayMode             *display_modes;
+    int                         display_modes_len;
+    int                         display_modes_cap;
+} VdFw__MacMonitor;
 
 typedef enum {
     VD_FW__MAC_REQUEST_TYPE_INIT,
     VD_FW__MAC_REQUEST_TYPE_QUIT,
     VD_FW__MAC_REQUEST_TYPE_KILL,
     VD_FW__MAC_REQUEST_TYPE_SET_GRAPHICS,
+    VD_FW__MAC_REQUEST_TYPE_SET_TITLE,
+    VD_FW__MAC_REQUEST_TYPE_SET_SIZE,
+    VD_FW__MAC_REQUEST_TYPE_SET_SIZE_MIN,
+    VD_FW__MAC_REQUEST_TYPE_SET_SIZE_MAX,
+    VD_FW__MAC_REQUEST_TYPE_SET_RESIZABLE,
+    VD_FW__MAC_REQUEST_TYPE_SET_MINIMIZED,
+    VD_FW__MAC_REQUEST_TYPE_SET_MAXIMIZED,
+    VD_FW__MAC_REQUEST_TYPE_NORMALIZE,
+    VD_FW__MAC_REQUEST_TYPE_SET_FULLSCREEN,
+    VD_FW__MAC_REQUEST_TYPE_SET_APP_ICON,
+    VD_FW__MAC_REQUEST_TYPE_SET_MOUSE_LOCKED,
+    VD_FW__MAC_REQUEST_TYPE_MOVE_TO_MONITOR,
+    VD_FW__MAC_REQUEST_TYPE_SET_PLACEMENT,
 } VdFw__MacRequestType;
 
 typedef struct {
     VdFw__MacRequestType type;
     void                 *ptr;
     VdFwGraphicsApi      api;
+    int                  x, y;                                          // Generic payload: size, flag or monitor index
+    CGRect               rect;                                          // Deferred requests outlive the caller's stack
 } VdFw__MacRequest;
+
+typedef struct {
+/* ----MAIN THREAD ONLY---------------------------------------------------------------------------------------------- */
+    pthread_t                   render_thread;
+    int                         argc;
+    const char**                argv;
+    int                         (*main_callback)(int argc, const char *argv[]);
+    VdFw__MacID                 delegate;
+    VdFw__MacID                 window;
+    VdFw__MacID                 view;
+    VdFw__MacID                 app;
+    VdFw__MacClass              view_class;
+    int                         is_zoomed;
+    int                         w,h;
+    CGPoint                     mouse_before_lock;                      // Global (CG) position, restored on unlock
+
+    VdFw__MacMonitor            *monitor_buffer;
+    int                         monitor_buffer_len;
+    int                         monitor_buffer_cap;
+    int                         monitor_count;
+
+/* ----RENDER THREAD ONLY-------------------------------------------------------------------------------------------- */
+    mach_timebase_info_data_t   time_base;
+    uint64_t                    last_time;
+    uint64_t                    delta_ns;
+    VdFwGraphicsApi             current_api;
+    int                         width, height;
+    int                         size_changed;
+    int                         scale_changed;
+    int                         wheel_moved;
+    float                       wheel[2];
+    int                         focus_changed;
+    int                         focused;
+    int                         window_state_changed;
+    VdFwWindowState             window_state;
+    int                         prev_mouse_state;
+    int                         mouse_state;
+    int                         mouse[2];
+    float                       mouse_delta[2];
+    int                         mouse_is_locked;
+    int                         mouse_capture_on;
+    int                         close_request;
+    int                         num_codepoints;
+    int                         first_codepoint_index;
+    unsigned int                codepoints[VD_FW_CODEPOINT_BUFFER_COUNT];
+    VdFwKey                     last_key;
+    VdFwKey                     prev_key_states[VD_FW_KEY_MAX];
+    VdFwKey                     curr_key_states[VD_FW_KEY_MAX];
+    int                         num_evts;
+    VdFwEvent                   evtbuf[VD_FW_EVENT_COUNT_MAX];
+    int                         resizable;
+    VdFw__MacRequest            deferred[VD_FW_MAC_DEFERRED_REQUEST_MAX];   // Flushed outside the CGL lock
+    int                         deferred_count;
+
+/* ----RENDER THREAD - MAIN THREAD DATA------------------------------------------------------------------------------ */
+    int                         initialized;
+    VdFwEvent                   msgbuf[VD_FW_MAC_MESSAGE_BUFFER_SIZE];
+    volatile int                msgbuf_r;
+    volatile int                msgbuf_w;
+    char                        title[128];
+    int                         title_len;
+    float                       scale;                                  // Seeded by the main thread, re-read by poll
+    CGRect                      window_frame;                           // Cached: the getters must never block on
+    int                         window_monitor;                         // the main thread, see vd_fw_get_placement
+    int                         is_live_resizing;
+    int                         is_fullscreen;
+    int                         block_while_sizing;
+    int                         ncrect_count;
+    int                         ncrects[VD_FW_NCRECTS_MAX][4];
+    int                         nccaption[4];
+    int                         nccaption_set;
+    int                         receive_ncmouse_on;
+
+/* ----RENDER THREAD - MAIN THREAD SYNC------------------------------------------------------------------------------ */
+    volatile int                running;
+    VdFw__MacDispatchSemaphore  wait_semaphore;
+    volatile int                wait_pending;                           // Caps the semaphore's count at one
+
+/* -OPENGL STUFF----------------------------------------------------------------------------------------------------- */
+    VdFw__MacID                 gl_context;
+    VdFw__MacCGLContextObj      cgl;
+    void*                       gl;
+} VdFw__MacInternalData;
 
 static VdFw__MacInternalData Vd_Fw_G = {0};
 
@@ -11606,12 +11742,37 @@ static void             vd_fw__mac_delegate_window_did_resize(VdFw__MacID self, 
 static BOOL             vd_fw__mac_delegate_window_should_close(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification);
 static void             vd_fw__mac_delegate_backing_changed(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification);
 static void             vd_fw__mac_delegate_handle_request(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID data);
+static void             vd_fw__mac_delegate_window_did_enter_fullscreen(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification);
+static void             vd_fw__mac_delegate_window_did_exit_fullscreen(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification);
+static void             vd_fw__mac_delegate_screen_parameters_changed(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification);
+static BOOL             vd_fw__mac_view_accepts_first_responder(VdFw__MacID self, VdFw__MacSEL cmd);
+static void             vd_fw__mac_view_key_down(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID event);
+static void             vd_fw__mac_view_key_up(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID event);
+static void             vd_fw__mac_view_flags_changed(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID event);
+static void             vd_fw__mac_view_mouse_down(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID event);
+static void             vd_fw__mac_view_mouse_up(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID event);
+static void             vd_fw__mac_view_mouse_moved(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID event);
+static void             vd_fw__mac_view_scroll_wheel(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID event);
 static void*            vd_fw__mac_thread_proc(void *arg);
 static VdFw__MacID      vd_fw__mac_nsstring(const char *text);
 static void*            vd_fw__gl_get_proc_address(const char *name);
 static int              vd_fw__mac_msgbuf_r(VdFwEvent *message);
 static int              vd_fw__mac_msgbuf_w(VdFwEvent *message);
 static VdFwKey          vd_fw__mac_translate_keycode(unsigned short keycode);
+static int              vd_fw__mac_translate_button(long button_number);
+static int              vd_fw__mac_translate_modifiers(unsigned long flags);
+static unsigned long    vd_fw__mac_modifier_device_mask(unsigned short keycode);
+static void             vd_fw__mac_emit_codepoints(VdFw__MacID string);
+static void             vd_fw__mac_event_position(VdFw__MacID view, VdFw__MacID event, int *x, int *y);
+static int              vd_fw__mac_hit_nccaption(int x, int y);
+static void             vd_fw__mac_send_request(VdFw__MacRequest *request);
+static int              vd_fw__mac_defer_request(VdFw__MacRequest *request);
+static void             vd_fw__mac_flush_requests(void);
+static void             vd_fw__mac_update_window_placement(void);
+static float            vd_fw__mac_window_scale(void);
+static void             vd_fw__mac_update_monitors(void);
+static void             vd_fw__mac_update_monitor_display_modes(VdFw__MacMonitor *monitor);
+static unsigned int     vd_fw__mac_screen_display_id(VdFw__MacID screen);
 static void             vd_fw__mac_set_graphics(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_options);
 
 VD_FW_API int vd_fw_set_vsync_on(int on)
@@ -11624,17 +11785,13 @@ VD_FW_API int vd_fw_set_vsync_on(int on)
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
     Vd_Fw_G.current_api = VD_FW_GRAPHICS_API_INVALID;
+    Vd_Fw_G.resizable = 1;          // Matches the style mask the INIT request builds the window with.
 
-    VdFw__MacRequest rq;
+    VdFw__MacRequest rq = {0};
     rq.type = VD_FW__MAC_REQUEST_TYPE_INIT;
     rq.ptr = (void*)info;
-    id data = SEND(VdFw__MacBytesLengthMsg)(C("NSData"),  S("dataWithBytes:length:"), &rq, sizeof(rq));
+    vd_fw__mac_send_request(&rq);
 
-    SEND(VdFw__MacPerformOnMainMsg)(Vd_Fw_G.delegate,
-                                    S("performSelectorOnMainThread:withObject:waitUntilDone:"),
-                                    S("handleRequest:"),
-                                    data,
-                                    YES);
     Vd_Fw_G.running = 1;
 
     mach_timebase_info(&Vd_Fw_G.time_base);
@@ -11646,32 +11803,24 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 
 VD_FW_API void vd_fw_quit(void)
 {
-    VdFw__MacRequest rq;
+    VdFw__MacRequest rq = {0};
     rq.type = VD_FW__MAC_REQUEST_TYPE_QUIT;
-    id data = SEND(VdFw__MacBytesLengthMsg)(C("NSData"),  S("dataWithBytes:length:"), &rq, sizeof(rq));
-
-    SEND(VdFw__MacPerformOnMainMsg)(Vd_Fw_G.delegate,
-                                    S("performSelectorOnMainThread:withObject:waitUntilDone:"),
-                                    S("handleRequest:"),
-                                    data,
-                                    YES);
+    vd_fw__mac_send_request(&rq);
 }
 
 VD_FW_API void vd_fw_exit(void)
 {
-    VdFw__MacRequest rq;
+    VdFw__MacRequest rq = {0};
     rq.type = VD_FW__MAC_REQUEST_TYPE_KILL;
-    id data = SEND(VdFw__MacBytesLengthMsg)(C("NSData"),  S("dataWithBytes:length:"), &rq, sizeof(rq));
-
-    SEND(VdFw__MacPerformOnMainMsg)(Vd_Fw_G.delegate,
-                                    S("performSelectorOnMainThread:withObject:waitUntilDone:"),
-                                    S("handleRequest:"),
-                                    data,
-                                    YES);
+    vd_fw__mac_send_request(&rq);
 }
 
 VD_FW_API void vd_fw_lock(void)
 {
+    // @todo(mdodis): Determine if deferred requests are only required on opengl.
+    // Flush requests before and after the "context" is locked.
+    vd_fw__mac_flush_requests();
+
     cgl_lock(Vd_Fw_G.cgl);
 }
 
@@ -11684,9 +11833,21 @@ VD_FW_API void vd_fw_unlock(void)
 {
     cgl_unlock(Vd_Fw_G.cgl);
 
-    if (Vd_Fw_G.is_live_resizing) {   // Add a 800us sleep so as not to contend too much with CGLLock/Unlock.
-        usleep(800);
+    vd_fw__mac_flush_requests();        // Now that the CGL lock is free. See vd_fw__mac_defer_request.
+
+    if (Vd_Fw_G.is_live_resizing) {     // Add a small sleep to make window resizing a tad smoother
+        usleep(100);
     }
+}
+
+VD_FW_API int vd_fw_get_block_while_sizing(void)
+{
+    return Vd_Fw_G.block_while_sizing;
+}
+
+VD_FW_API void vd_fw_set_block_while_sizing(int on)
+{
+    Vd_Fw_G.block_while_sizing = on;
 }
 
 VD_FW_API int vd_fw_get_size(int *w, int *h)
@@ -11721,18 +11882,362 @@ VD_FW_API int vd_fw_get_scale(float *scale)
 
 VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_options)
 {
-    VdFw__MacRequest rq;
+    VdFw__MacRequest rq = {0};
     rq.type = VD_FW__MAC_REQUEST_TYPE_SET_GRAPHICS;
     rq.ptr = gl_options;
     rq.api = api;
-    id data = SEND(VdFw__MacBytesLengthMsg)(C("NSData"),  S("dataWithBytes:length:"), &rq, sizeof(rq));
-
-    SEND(VdFw__MacPerformOnMainMsg)(Vd_Fw_G.delegate,
-                                    S("performSelectorOnMainThread:withObject:waitUntilDone:"),
-                                    S("handleRequest:"),
-                                    data,
-                                    YES);
+    vd_fw__mac_send_request(&rq);
     return 1;
+}
+
+VD_FW_API VdFwPlatform vd_fw_get_platform(void)
+{
+    return VD_FW_PLATFORM_MACOS;
+}
+
+VD_FW_API void *vd_fw_get_internal_window_handle(void)
+{
+    return &Vd_Fw_G.window;
+}
+
+/* ----WINDOW-------------------------------------------------------------------------------------------------------- */
+VD_FW_API void vd_fw_set_title(const char *title)
+{
+    int len = 0;
+    const char *t = title;
+    while (*t++) len++;
+
+    if (len > 127) {
+        len = 127;
+    }
+
+    for (int i = 0; i < len; ++i) {
+        Vd_Fw_G.title[i] = title[i];
+    }
+    Vd_Fw_G.title_len = len;
+    Vd_Fw_G.title[len] = 0;
+
+    VdFw__MacRequest rq = {0};
+    rq.type = VD_FW__MAC_REQUEST_TYPE_SET_TITLE;
+    vd_fw__mac_defer_request(&rq);
+}
+
+VD_FW_API void vd_fw_set_size(int w, int h)
+{
+    VdFw__MacRequest rq = {0};
+    rq.type = VD_FW__MAC_REQUEST_TYPE_SET_SIZE;
+    rq.x = w;
+    rq.y = h;
+    vd_fw__mac_defer_request(&rq);
+}
+
+VD_FW_API void vd_fw_set_size_min(int w, int h)
+{
+    VdFw__MacRequest rq = {0};
+    rq.type = VD_FW__MAC_REQUEST_TYPE_SET_SIZE_MIN;
+    rq.x = w;
+    rq.y = h;
+    vd_fw__mac_defer_request(&rq);
+}
+
+VD_FW_API void vd_fw_set_size_max(int w, int h)
+{
+    VdFw__MacRequest rq = {0};
+    rq.type = VD_FW__MAC_REQUEST_TYPE_SET_SIZE_MAX;
+    rq.x = w;
+    rq.y = h;
+    vd_fw__mac_defer_request(&rq);
+}
+
+VD_FW_API int vd_fw_get_resizable(void)
+{
+    return Vd_Fw_G.resizable;
+}
+
+VD_FW_API void vd_fw_set_resizable(int on)
+{
+    if (Vd_Fw_G.resizable == on) {
+        return;
+    }
+
+    Vd_Fw_G.resizable = on;
+
+    VdFw__MacRequest rq = {0};
+    rq.type = VD_FW__MAC_REQUEST_TYPE_SET_RESIZABLE;
+    rq.x = on;
+    vd_fw__mac_defer_request(&rq);
+}
+
+VD_FW_API int vd_fw_get_minimized(int *minimized)
+{
+    *minimized = Vd_Fw_G.window_state & VD_FW_WINDOW_STATE_MINIMIZED;
+    return Vd_Fw_G.window_state_changed & VD_FW_WINDOW_STATE_MINIMIZED;
+}
+
+VD_FW_API void vd_fw_set_minimized(void)
+{
+    VdFw__MacRequest rq = {0};
+    rq.type = VD_FW__MAC_REQUEST_TYPE_SET_MINIMIZED;
+    vd_fw__mac_defer_request(&rq);
+}
+
+VD_FW_API int vd_fw_get_maximized(int *maximized)
+{
+    *maximized = Vd_Fw_G.window_state & VD_FW_WINDOW_STATE_MAXIMIZED;
+    return Vd_Fw_G.window_state_changed & VD_FW_WINDOW_STATE_MAXIMIZED;
+}
+
+VD_FW_API void vd_fw_set_maximized(void)
+{
+    VdFw__MacRequest rq = {0};
+    rq.type = VD_FW__MAC_REQUEST_TYPE_SET_MAXIMIZED;
+    vd_fw__mac_defer_request(&rq);
+}
+
+VD_FW_API void vd_fw_normalize(void)
+{
+    VdFw__MacRequest rq = {0};
+    rq.type = VD_FW__MAC_REQUEST_TYPE_NORMALIZE;
+    vd_fw__mac_defer_request(&rq);
+}
+
+VD_FW_API void vd_fw_set_fullscreen(int on)
+{
+    if (Vd_Fw_G.is_fullscreen == on) {
+        return;
+    }
+
+    Vd_Fw_G.is_fullscreen = on;
+
+    VdFw__MacRequest rq = {0};
+    rq.type = VD_FW__MAC_REQUEST_TYPE_SET_FULLSCREEN;
+    rq.x = on;
+    vd_fw__mac_defer_request(&rq);
+}
+
+VD_FW_API int vd_fw_get_fullscreen(void)
+{
+    return Vd_Fw_G.is_fullscreen;
+}
+
+VD_FW_API int vd_fw_get_focused(int *focused)
+{
+    *focused = Vd_Fw_G.focused;
+    return Vd_Fw_G.focus_changed;
+}
+
+VD_FW_API void vd_fw_set_ncrects(int caption[4], int count, int (*rects)[4])
+{
+    Vd_Fw_G.nccaption_set = 1;
+    Vd_Fw_G.nccaption[0] = caption[0];
+    Vd_Fw_G.nccaption[1] = caption[1];
+    Vd_Fw_G.nccaption[2] = caption[2];
+    Vd_Fw_G.nccaption[3] = caption[3];
+
+    if (count > VD_FW_NCRECTS_MAX) {
+        count = VD_FW_NCRECTS_MAX;
+    }
+
+    for (int i = 0; i < count; ++i) {
+        Vd_Fw_G.ncrects[i][0] = rects[i][0];
+        Vd_Fw_G.ncrects[i][1] = rects[i][1];
+        Vd_Fw_G.ncrects[i][2] = rects[i][2];
+        Vd_Fw_G.ncrects[i][3] = rects[i][3];
+    }
+
+    Vd_Fw_G.ncrect_count = count;
+}
+
+VD_FW_API void vd_fw_set_receive_ncmouse(int on)
+{
+    Vd_Fw_G.receive_ncmouse_on = on;
+}
+
+VD_FW_API void vd_fw_set_app_icon(void *pixels, int width, int height)
+{
+    size_t size = (size_t)width * (size_t)height * 4;
+
+    // NSBitmapImageRep wants R8G8B8A8, the public buffer is packed A8R8G8B8 (B,G,R,A in memory).
+    unsigned char *rgba = (unsigned char*)VD_FW_REALLOC(0, 0, size);
+    if (!rgba) {
+        return;
+    }
+
+    const unsigned char *src = (const unsigned char*)pixels;
+    for (int i = 0; i < (width * height); ++i) {
+        rgba[i * 4 + 0] = src[i * 4 + 2];
+        rgba[i * 4 + 1] = src[i * 4 + 1];
+        rgba[i * 4 + 2] = src[i * 4 + 0];
+        rgba[i * 4 + 3] = src[i * 4 + 3];
+    }
+
+    VdFw__MacRequest rq = {0};
+    rq.type = VD_FW__MAC_REQUEST_TYPE_SET_APP_ICON;
+    rq.ptr = rgba;
+    rq.x = width;
+    rq.y = height;
+    if (!vd_fw__mac_defer_request(&rq)) {       // Otherwise the flush owns rgba, and frees it once the icon is set.
+        VD_FW_FREE(rgba, size);
+    }
+}
+
+/* ----MONITORS------------------------------------------------------------------------------------------------------ */
+VD_FW_API int vd_fw_get_monitor_count(void)
+{
+    return Vd_Fw_G.monitor_count;
+}
+
+VD_FW_API const char *vd_fw_get_monitor_name(int index)
+{
+    if ((index < 0) || (index >= Vd_Fw_G.monitor_buffer_len)) {
+        return "";
+    }
+
+    return Vd_Fw_G.monitor_buffer[index].friendly_name;
+}
+
+VD_FW_API VdFwDisplayMode *vd_fw_get_monitor_display_modes(int index, int *count)
+{
+    if ((index < 0) || (index >= Vd_Fw_G.monitor_buffer_len)) {
+        if (count) *count = 0;
+        return 0;
+    }
+
+    vd_fw__mac_update_monitor_display_modes(&Vd_Fw_G.monitor_buffer[index]);
+    *count = Vd_Fw_G.monitor_buffer[index].display_modes_len;
+
+    return Vd_Fw_G.monitor_buffer[index].display_modes;
+}
+
+VD_FW_API int vd_fw_get_window_monitor(void)
+{
+    return Vd_Fw_G.window_monitor;
+}
+
+VD_FW_API void vd_fw_move_to_monitor(int index)
+{
+    if ((index < 0) || (index >= Vd_Fw_G.monitor_buffer_len)) {
+        return;
+    }
+
+    VdFw__MacRequest rq = {0};
+    rq.type = VD_FW__MAC_REQUEST_TYPE_MOVE_TO_MONITOR;
+    rq.x = index;
+    vd_fw__mac_defer_request(&rq);
+}
+
+// Reads the frame the main thread last cached rather than asking for it: these get called from inside
+// vd_fw_lock/vd_fw_unlock (gl_monitor does, every frame), where blocking on the main thread can deadlock.
+VD_FW_API VdFwPlacement vd_fw_get_placement(void)
+{
+    VdFwPlacement result;
+    result.platform = VD_FW_PLATFORM_MACOS;
+
+    VD_FW_MEMCPY(result.data, &Vd_Fw_G.window_frame, sizeof(Vd_Fw_G.window_frame));
+    return result;
+}
+
+VD_FW_API int vd_fw_set_placement(VdFwPlacement *placement)
+{
+    if (placement->platform != vd_fw_get_platform()) {
+        return 0;
+    }
+
+    VdFw__MacRequest rq = {0};
+    rq.type = VD_FW__MAC_REQUEST_TYPE_SET_PLACEMENT;
+    VD_FW_MEMCPY(&rq.rect, placement->data, sizeof(rq.rect));
+    vd_fw__mac_defer_request(&rq);
+
+    return 1;
+}
+
+/* ----MOUSE--------------------------------------------------------------------------------------------------------- */
+VD_FW_API int vd_fw_get_mouse_state(int *x, int *y)
+{
+    if (x) *x = Vd_Fw_G.mouse[0];
+    if (y) *y = Vd_Fw_G.mouse[1];
+
+    return Vd_Fw_G.mouse_state;
+}
+
+VD_FW_API int vd_fw_get_mouse_clicked(int button)
+{
+    return !(Vd_Fw_G.prev_mouse_state & button) && (Vd_Fw_G.mouse_state & button);
+}
+
+VD_FW_API int vd_fw_get_mouse_released(int button)
+{
+    return (Vd_Fw_G.prev_mouse_state & button) && !(Vd_Fw_G.mouse_state & button);
+}
+
+VD_FW_API void vd_fw_get_mouse_delta(float *dx, float *dy)
+{
+    if (dx) *dx = Vd_Fw_G.mouse_delta[0];
+    if (dy) *dy = Vd_Fw_G.mouse_delta[1];
+}
+
+VD_FW_API int vd_fw_get_mouse_wheel(float *dx, float *dy)
+{
+    if (dx) *dx = Vd_Fw_G.wheel[0];
+    if (dy) *dy = Vd_Fw_G.wheel[1];
+    return Vd_Fw_G.wheel_moved;
+}
+
+VD_FW_API void vd_fw_set_mouse_capture(int on)
+{
+    // @note(mdodis) Appkit always captures mouse so i guess there's nothing to do here.
+    Vd_Fw_G.mouse_capture_on = on;
+}
+
+VD_FW_API void vd_fw_set_mouse_locked(int locked)
+{
+    if (Vd_Fw_G.mouse_is_locked == locked) {
+        return;
+    }
+
+    Vd_Fw_G.mouse_is_locked = locked;
+
+    VdFw__MacRequest rq = {0};
+    rq.type = VD_FW__MAC_REQUEST_TYPE_SET_MOUSE_LOCKED;
+    rq.x = locked;
+    vd_fw__mac_defer_request(&rq);
+}
+
+VD_FW_API int vd_fw_get_mouse_locked(void)
+{
+    return Vd_Fw_G.mouse_is_locked;
+}
+
+/* ----KEYBOARD------------------------------------------------------------------------------------------------------ */
+VD_FW_API int vd_fw_get_key_pressed(int key)
+{
+    return !Vd_Fw_G.prev_key_states[key] && Vd_Fw_G.curr_key_states[key];
+}
+
+VD_FW_API int vd_fw_get_key_released(int key)
+{
+    return Vd_Fw_G.prev_key_states[key] && !Vd_Fw_G.curr_key_states[key];
+}
+
+VD_FW_API int vd_fw_get_key_down(int key)
+{
+    return Vd_Fw_G.curr_key_states[key];
+}
+
+VD_FW_API int vd_fw_get_last_key_pressed(void)
+{
+    return Vd_Fw_G.last_key;
+}
+
+/* ----TEXT INPUT---------------------------------------------------------------------------------------------------- */
+VD_FW_API unsigned short vd_fw_get_num_codepoints(void)
+{
+    return Vd_Fw_G.num_codepoints;
+}
+
+VD_FW_API unsigned int vd_fw_get_codepoint(unsigned short index)
+{
+    return Vd_Fw_G.codepoints[(Vd_Fw_G.first_codepoint_index + index) % VD_FW_CODEPOINT_BUFFER_COUNT];
 }
 
 VD_FW_API VdFwEvent *vd_fw_poll(int *count)
@@ -11749,7 +12254,7 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
     Vd_Fw_G.num_codepoints = 0;
     Vd_Fw_G.last_key = VD_FW_KEY_UNKNOWN;
     VdFwU16 num_codepoints = 0;
-    Vd_Fw_G.mouse_delta[0] = Vd_Fw_G.mouse_delta[1] = 0.f;
+    float raw_delta[2] = {0.f, 0.f};
 
     for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
         Vd_Fw_G.prev_key_states[i] = Vd_Fw_G.curr_key_states[i];
@@ -11759,8 +12264,12 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
     Vd_Fw_G.size_changed = 0;
 
     VdFwEvent mm;
-    while (vd_fw__mac_msgbuf_r(&mm) && (Vd_Fw_G.num_evts < VD_FW_EVENT_COUNT_MAX)) {
-        Vd_Fw_G.evtbuf[Vd_Fw_G.num_evts++] = mm;
+    while (vd_fw__mac_msgbuf_r(&mm)) {
+        // Drained to the end even once evtbuf is full. Stopping early would leave the remainder queued, and with
+        // coalescing off a fast mouse out-produces one frame's worth of slots, so the backlog would never clear.
+        if (Vd_Fw_G.num_evts < VD_FW_EVENT_COUNT_MAX) {
+            Vd_Fw_G.evtbuf[Vd_Fw_G.num_evts++] = mm;
+        }
 
         switch (mm.type) {
             case VD_FW_EVENT_TYPE_CHARACTER: {
@@ -11783,13 +12292,14 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
             } break;
 
             case VD_FW_EVENT_TYPE_MOUSE_DELTA: {
-                Vd_Fw_G.mouse_delta[0] = Vd_Fw_G.mouse_delta[0] * 0.8f + mm.data.mouse_delta.dx * 0.2f;
-                Vd_Fw_G.mouse_delta[1] = Vd_Fw_G.mouse_delta[1] * 0.8f + mm.data.mouse_delta.dy * 0.2f;
+                raw_delta[0] += mm.data.mouse_delta.dx;
+                raw_delta[1] += mm.data.mouse_delta.dy;
             } break;
 
             case VD_FW_EVENT_TYPE_MOUSE_SCROLL: {
                 Vd_Fw_G.wheel[0] += mm.data.mouse_scroll.dx;
                 Vd_Fw_G.wheel[1] += mm.data.mouse_scroll.dy;
+                Vd_Fw_G.wheel_moved = 1;
             } break;
 
             case VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN: {
@@ -11817,6 +12327,7 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
 
             case VD_FW_EVENT_TYPE_KEY_DOWN: {
                 Vd_Fw_G.curr_key_states[mm.data.key_down.key] = 1;
+                Vd_Fw_G.last_key = mm.data.key_down.key;
             } break;
 
             case VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE: {
@@ -11843,7 +12354,11 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
         }
     }
 
-    Vd_Fw_G.num_codepoints = (num_codepoints < VD_FW_CODEPOINT_BUFFER_COUNT) 
+    float smoothing = VD_FW_MOUSE_DELTA_SMOOTHING;
+    Vd_Fw_G.mouse_delta[0] = Vd_Fw_G.mouse_delta[0] * smoothing + raw_delta[0] * (1.f - smoothing);
+    Vd_Fw_G.mouse_delta[1] = Vd_Fw_G.mouse_delta[1] * smoothing + raw_delta[1] * (1.f - smoothing);
+
+    Vd_Fw_G.num_codepoints = (num_codepoints < VD_FW_CODEPOINT_BUFFER_COUNT)
                              ? num_codepoints
                              : VD_FW_CODEPOINT_BUFFER_COUNT;
     if (num_codepoints > 0) {
@@ -11864,6 +12379,27 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
     return Vd_Fw_G.evtbuf;
 }
 
+VD_FW_API VdFwEvent *vd_fw_wait(int *count)
+{
+    dispatch_semaphore_take(Vd_Fw_G.wait_semaphore, VD_FW__MAC_FOREVER);
+
+    int none = 0;
+    __atomic_store(&Vd_Fw_G.wait_pending, &none, __ATOMIC_SEQ_CST);
+
+    return vd_fw_poll(count);
+}
+
+VD_FW_API void vd_fw_queue_wait_exit(void)
+{
+    if (!Vd_Fw_G.wait_semaphore) {
+        return;
+    }
+
+    if (__atomic_exchange_n(&Vd_Fw_G.wait_pending, 1, __ATOMIC_SEQ_CST) == 0) {
+        dispatch_semaphore_post(Vd_Fw_G.wait_semaphore);
+    }
+}
+
 VD_FW_API int vd_fw_main(int argc, const char *argv[], int (*callback)(int argc, const char *argv[]))
 {
     VdFw__MacID pool, app;
@@ -11875,7 +12411,19 @@ VD_FW_API int vd_fw_main(int argc, const char *argv[], int (*callback)(int argc,
     Vd_Fw_G.main_callback = callback;
 
     const char *resize_methods[] = {
-        "windowDidMove:", "windowDidChangeScreen:", "windowDidChangeBackingProperties:",
+        "windowDidMove:", "windowDidChangeScreen:",
+    };
+
+    const char *mouse_down_methods[] = {
+        "mouseDown:", "rightMouseDown:", "otherMouseDown:",
+    };
+
+    const char *mouse_up_methods[] = {
+        "mouseUp:", "rightMouseUp:", "otherMouseUp:",
+    };
+
+    const char *mouse_move_methods[] = {
+        "mouseMoved:", "mouseDragged:", "rightMouseDragged:", "otherMouseDragged:",
     };
 
     vd_fw__mac_init();
@@ -11929,11 +12477,42 @@ VD_FW_API int vd_fw_main(int argc, const char *argv[], int (*callback)(int argc,
     add_method(delegate_class, S("backingChanged:"),
                                (VdFw__MacIMP)vd_fw__mac_delegate_backing_changed,
                                "v@:@");
-
-    
-
+    add_method(delegate_class, S("windowDidChangeBackingProperties:"),
+                               (VdFw__MacIMP)vd_fw__mac_delegate_backing_changed,
+                               "v@:@");
+    add_method(delegate_class, S("windowDidEnterFullScreen:"),
+                               (VdFw__MacIMP)vd_fw__mac_delegate_window_did_enter_fullscreen,
+                               "v@:@");
+    add_method(delegate_class, S("windowDidExitFullScreen:"),
+                               (VdFw__MacIMP)vd_fw__mac_delegate_window_did_exit_fullscreen,
+                               "v@:@");
+    add_method(delegate_class, S("applicationDidChangeScreenParameters:"),
+                               (VdFw__MacIMP)vd_fw__mac_delegate_screen_parameters_changed,
+                               "v@:@");
 
     register_class(delegate_class);
+
+    // Setup content view. NSWindow's stock content view swallows input, so every event we care about comes from here.
+    Vd_Fw_G.view_class = allocate_class(get_class("NSView"), "VdFwContentView", 0);
+    for (int i = 0; i < (sizeof(mouse_down_methods) / sizeof(mouse_down_methods[0])); ++i) {
+        add_method(Vd_Fw_G.view_class, S(mouse_down_methods[i]), (VdFw__MacIMP)vd_fw__mac_view_mouse_down, "v@:@");
+    }
+    for (int i = 0; i < (sizeof(mouse_up_methods) / sizeof(mouse_up_methods[0])); ++i) {
+        add_method(Vd_Fw_G.view_class, S(mouse_up_methods[i]), (VdFw__MacIMP)vd_fw__mac_view_mouse_up, "v@:@");
+    }
+    for (int i = 0; i < (sizeof(mouse_move_methods) / sizeof(mouse_move_methods[0])); ++i) {
+        add_method(Vd_Fw_G.view_class, S(mouse_move_methods[i]), (VdFw__MacIMP)vd_fw__mac_view_mouse_moved, "v@:@");
+    }
+
+    add_method(Vd_Fw_G.view_class, S("keyDown:"),      (VdFw__MacIMP)vd_fw__mac_view_key_down,      "v@:@");
+    add_method(Vd_Fw_G.view_class, S("keyUp:"),        (VdFw__MacIMP)vd_fw__mac_view_key_up,        "v@:@");
+    add_method(Vd_Fw_G.view_class, S("flagsChanged:"), (VdFw__MacIMP)vd_fw__mac_view_flags_changed, "v@:@");
+    add_method(Vd_Fw_G.view_class, S("scrollWheel:"),  (VdFw__MacIMP)vd_fw__mac_view_scroll_wheel,  "v@:@");
+    add_method(Vd_Fw_G.view_class, S("acceptsFirstResponder"),
+                                   (VdFw__MacIMP)vd_fw__mac_view_accepts_first_responder,
+                                   OBJC_BOOL_IS_BOOL ? "B@:" : "c@:");
+
+    register_class(Vd_Fw_G.view_class);
 
     delegate = SEND(VdFw__MacObjectMsg)((VdFw__MacID)delegate_class, S("new"));
     Vd_Fw_G.delegate = delegate;
@@ -11990,6 +12569,27 @@ static void vd_fw__mac_init(void)
         dlopen("/System/Library/Frameworks/Cocoa.framework/Cocoa", RTLD_NOW | RTLD_GLOBAL);
     }
 
+    // CoreGraphics
+    {
+        void *handle = dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", RTLD_NOW | RTLD_GLOBAL);
+        cg_associate_mouse               = (VdFw__MacCGAssociateMouseProc)dlsym(handle, "CGAssociateMouseAndMouseCursorPosition");
+        cg_warp_cursor                   = (VdFw__MacCGWarpCursorProc)dlsym(handle, "CGWarpMouseCursorPosition");
+        cg_event_create                  = (VdFw__MacCGEventCreateProc)dlsym(handle, "CGEventCreate");
+        cg_event_get_location            = (VdFw__MacCGEventGetLocationProc)dlsym(handle, "CGEventGetLocation");
+        cg_display_copy_all_modes        = (VdFw__MacCGDisplayCopyModesProc)dlsym(handle, "CGDisplayCopyAllDisplayModes");
+        cg_display_mode_get_width        = (VdFw__MacCGDisplayModeSizeProc)dlsym(handle, "CGDisplayModeGetWidth");
+        cg_display_mode_get_height       = (VdFw__MacCGDisplayModeSizeProc)dlsym(handle, "CGDisplayModeGetHeight");
+        cg_display_mode_get_refresh_rate = (VdFw__MacCGDisplayModeRateProc)dlsym(handle, "CGDisplayModeGetRefreshRate");
+    }
+
+    // CoreFoundation
+    {
+        void *handle = dlopen("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", RTLD_NOW | RTLD_GLOBAL);
+        cf_array_get_count          = (VdFw__MacCFArrayCountProc)dlsym(handle, "CFArrayGetCount");
+        cf_array_get_value_at_index = (VdFw__MacCFArrayValueProc)dlsym(handle, "CFArrayGetValueAtIndex");
+        cf_release                  = (VdFw__MacCFReleaseProc)dlsym(handle, "CFRelease");
+    }
+
     // OpenGL
     {
         void *handle = dlopen("/System/Library/Frameworks/OpenGL.framework/OpenGL", RTLD_NOW | RTLD_GLOBAL);
@@ -12001,6 +12601,14 @@ static void vd_fw__mac_init(void)
         Vd_Fw_G.gl          = handle;
     }
 
+    // libdispatch lives in libSystem, so it is already mapped - there is nothing to dlopen, only to look up.
+    dispatch_semaphore_make = (VdFw__MacSemaphoreCreateProc)dlsym(RTLD_DEFAULT, "dispatch_semaphore_create");
+    dispatch_semaphore_take = (VdFw__MacSemaphoreWaitProc)dlsym(RTLD_DEFAULT, "dispatch_semaphore_wait");
+    dispatch_semaphore_post = (VdFw__MacSemaphoreSignalProc)dlsym(RTLD_DEFAULT, "dispatch_semaphore_signal");
+
+    // Starts at one, like win32's: the first vd_fw_wait falls straight through.
+    Vd_Fw_G.wait_semaphore = dispatch_semaphore_make(1);
+    Vd_Fw_G.wait_pending = 1;
 }
 
 static void vd_fw__mac_delegate_drawable_changed(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification)
@@ -12011,6 +12619,39 @@ static void vd_fw__mac_delegate_drawable_changed(VdFw__MacID self, VdFw__MacSEL 
         cgl_lock(Vd_Fw_G.cgl);
         SEND(VdFw__MacVoidMsg)(Vd_Fw_G.gl_context, S("update"));
         cgl_unlock(Vd_Fw_G.cgl);
+    }
+
+    // Everything that moves the window to a new frame or a new screen routes through here.
+    vd_fw__mac_update_window_placement();
+}
+
+// [window screen] is nil while the window is still offscreen, and messaging nil answers 0.0, which would otherwise
+// get latched as the backing scale and turn every point/pixel conversion into a divide by zero.
+static float vd_fw__mac_window_scale(void)
+{
+    VdFw__MacID screen = SEND(VdFw__MacObjectMsg)(Vd_Fw_G.window, S("screen"));
+    if (!screen) {
+        screen = SEND(VdFw__MacObjectMsg)(C("NSScreen"), S("mainScreen"));
+    }
+
+    float scale = (float)SEND(VdFw__MacDoubleMsg)(screen, S("backingScaleFactor"));
+    return (scale > 0.f) ? scale : 1.f;
+}
+
+static void vd_fw__mac_update_window_placement(void)
+{
+    if (!Vd_Fw_G.window) {
+        return;
+    }
+
+    Vd_Fw_G.window_frame = SEND(VdFw__MacRectMsg)(Vd_Fw_G.window, S("frame"));
+
+    unsigned int display_id = vd_fw__mac_screen_display_id(SEND(VdFw__MacObjectMsg)(Vd_Fw_G.window, S("screen")));
+    for (int i = 0; i < Vd_Fw_G.monitor_buffer_len; ++i) {
+        if (Vd_Fw_G.monitor_buffer[i].display_id == display_id) {
+            Vd_Fw_G.window_monitor = i;
+            break;
+        }
     }
 }
 
@@ -12045,22 +12686,65 @@ static void vd_fw__mac_delegate_window_did_end_live_resize(VdFw__MacID self, VdF
 
 static void vd_fw__mac_delegate_window_did_become_key(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification)
 {
+    (void)self; (void)cmd; (void)notification;
 
+    VdFwEvent evt;
+    evt.type = VD_FW_EVENT_TYPE_FOCUS_CHANGE;
+    evt.data.focus_change.got_focus = 1;
+    vd_fw__mac_msgbuf_w(&evt);
 }
 
 static void vd_fw__mac_delegate_window_did_resign_key(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification)
 {
+    (void)self; (void)cmd; (void)notification;
 
+    VdFwEvent evt;
+    evt.type = VD_FW_EVENT_TYPE_FOCUS_CHANGE;
+    evt.data.focus_change.got_focus = 0;
+    vd_fw__mac_msgbuf_w(&evt);
 }
 
 static void vd_fw__mac_delegate_window_did_miniaturize(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification)
 {
+    (void)self; (void)cmd; (void)notification;
 
+    VdFwEvent evt;
+    evt.type = VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE;
+    evt.data.window_state_change.flag = VD_FW_WINDOW_STATE_MINIMIZED;
+    evt.data.window_state_change.value = 1;
+    vd_fw__mac_msgbuf_w(&evt);
 }
 
 static void vd_fw__mac_delegate_window_did_deminiaturize(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification)
 {
+    (void)self; (void)cmd; (void)notification;
 
+    VdFwEvent evt;
+    evt.type = VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE;
+    evt.data.window_state_change.flag = VD_FW_WINDOW_STATE_MINIMIZED;
+    evt.data.window_state_change.value = 0;
+    vd_fw__mac_msgbuf_w(&evt);
+}
+
+static void vd_fw__mac_delegate_window_did_enter_fullscreen(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification)
+{
+    (void)self; (void)cmd; (void)notification;
+
+    Vd_Fw_G.is_fullscreen = 1;
+}
+
+static void vd_fw__mac_delegate_window_did_exit_fullscreen(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification)
+{
+    (void)self; (void)cmd; (void)notification;
+
+    Vd_Fw_G.is_fullscreen = 0;
+}
+
+static void vd_fw__mac_delegate_screen_parameters_changed(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification)
+{
+    (void)self; (void)cmd; (void)notification;
+
+    vd_fw__mac_update_monitors();
 }
 
 static void vd_fw__mac_delegate_window_did_resize(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification)
@@ -12073,11 +12757,15 @@ static void vd_fw__mac_delegate_window_did_resize(VdFw__MacID self, VdFw__MacSEL
     Vd_Fw_G.w = (int)rect.size.width * Vd_Fw_G.scale;
     Vd_Fw_G.h = (int)rect.size.height * Vd_Fw_G.scale;
 
-    VdFwEvent evt;
-    evt.type = VD_FW_EVENT_TYPE_RESIZE;
-    evt.data.resize.w = Vd_Fw_G.w;
-    evt.data.resize.h = Vd_Fw_G.h;
-    vd_fw__mac_msgbuf_w(&evt);
+    // setStyleMask: (the borderless path) and miniaturizing both land here with an empty content frame part-way
+    // through. Reporting that would leave callers sizing their layout against 0x0 - win32 skips it too, via IsIconic.
+    if ((Vd_Fw_G.w > 0) && (Vd_Fw_G.h > 0)) {
+        VdFwEvent evt;
+        evt.type = VD_FW_EVENT_TYPE_RESIZE;
+        evt.data.resize.w = Vd_Fw_G.w;
+        evt.data.resize.h = Vd_Fw_G.h;
+        vd_fw__mac_msgbuf_w(&evt);
+    }
 
     BOOL is_zoomed = SEND(VdFw__MacBoolMsg)(Vd_Fw_G.window, S("isZoomed"));
     if (Vd_Fw_G.is_zoomed != is_zoomed) {
@@ -12102,8 +12790,18 @@ static BOOL vd_fw__mac_delegate_window_should_close(VdFw__MacID self, VdFw__MacS
 
 static void vd_fw__mac_delegate_backing_changed(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification)
 {
-    VdFw__MacID screen = SEND(VdFw__MacObjectMsg)(Vd_Fw_G.window, S("screen"));
-    float new_scale = (float)SEND(VdFw__MacDoubleMsg)(screen, S("backingScaleFactor"));
+    vd_fw__mac_delegate_drawable_changed(self, cmd, notification);
+
+    float new_scale = vd_fw__mac_window_scale();
+
+    if (new_scale == Vd_Fw_G.scale) {
+        return;
+    }
+
+    // Kept in sync here as well as in poll, so that the event handlers that convert points to pixels don't lag a
+    // frame behind the window moving to a monitor with a different backing scale.
+    Vd_Fw_G.scale = new_scale;
+
     VdFwEvent evt;
     evt.type = VD_FW_EVENT_TYPE_SCALE_CHANGE;
     evt.data.scale_change.new_scale = new_scale;
@@ -12132,7 +12830,10 @@ static void vd_fw__mac_delegate_handle_request(VdFw__MacID self, VdFw__MacSEL cm
                 gl_options = &init_info->gl;
             }
 
-            unsigned int style_mask = 1UL | 2UL | 4UL | 8UL;
+            unsigned int style_mask = VD_FW__MAC_STYLE_TITLED
+                                    | VD_FW__MAC_STYLE_CLOSABLE
+                                    | VD_FW__MAC_STYLE_MINIATURIZABLE
+                                    | VD_FW__MAC_STYLE_RESIZABLE;
             CGRect rect = {{0,0}, {640, 480}};
             VdFw__MacID window = SEND(VdFw__MacWindowInitMsg)(ALLOC("NSWindow"),
                                                               S("initWithContentRect:styleMask:backing:defer:"),
@@ -12141,34 +12842,28 @@ static void vd_fw__mac_delegate_handle_request(VdFw__MacID self, VdFw__MacSEL cm
                                                               2UL, // NSBackingStoreBuffered
                                                               NO);
 
-            VdFw__MacID screen = SEND(VdFw__MacObjectMsg)(window, S("screen"));
-            Vd_Fw_G.scale = (float)SEND(VdFw__MacDoubleMsg)(screen, S("backingScaleFactor"));
+            SEND(VdFw__MacObjectArgMsg)(window, S("setTitle:"), vd_fw__mac_nsstring("FW Window"));
 
-            {
-                VdFwEvent evt;
-                evt.type = VD_FW_EVENT_TYPE_SCALE_CHANGE;
-                evt.data.scale_change.new_scale = Vd_Fw_G.scale;
-                vd_fw__mac_msgbuf_w(&evt);
-            }
+            Vd_Fw_G.window = window;
+            Vd_Fw_G.scale = vd_fw__mac_window_scale();
 
-            {
-                VdFwEvent evt;
-                evt.type = VD_FW_EVENT_TYPE_RESIZE;
+            VdFw__MacID view = SEND(VdFw__MacViewInitMsg)(SEND(VdFw__MacObjectMsg)((VdFw__MacID)Vd_Fw_G.view_class,
+                                                          S("alloc")),
+                                                          S("initWithFrame:"),
+                                                          rect);
+            SEND(VdFw__MacObjectArgMsg)(window, S("setContentView:"), view);
+            SEND(VdFw__MacObjectArgMsg)(window, S("makeFirstResponder:"), view);
+            SEND(VdFw__MacBoolArgMsg)(window, S("setAcceptsMouseMovedEvents:"), YES);
 
-                VdFw__MacID content_view = SEND(VdFw__MacObjectMsg)(window, S("contentView"));
-                CGRect rect = SEND(VdFw__MacRectMsg)(content_view, S("frame"));
-                Vd_Fw_G.w = (int)rect.size.width * Vd_Fw_G.scale;
-                Vd_Fw_G.h = (int)rect.size.height * Vd_Fw_G.scale;
-                evt.data.resize.w = Vd_Fw_G.w;
-                evt.data.resize.h = Vd_Fw_G.h;
-                vd_fw__mac_msgbuf_w(&evt);
-            }
+            SEND(VdFw__MacBoolArgMsg)(C("NSEvent"), S("setMouseCoalescingEnabled:"), NO);
+            SEND(VdFw__MacUnsignedLongArgMsg)(window, S("setCollectionBehavior:"), VD_FW__MAC_COLLECT_FULLSCREEN);
+            Vd_Fw_G.view = view;
 
             SEND(VdFw__MacBoolArgMsg)(window, S("setReleasedWhenClosed:"), NO);
             SEND(VdFw__MacObjectArgMsg)(window, S("setDelegate:"), Vd_Fw_G.delegate);
 
             if (borderless) {
-                style_mask |= 1 << 15; // NSWindowStyleMaskFullSizeContentView
+                style_mask |= VD_FW__MAC_STYLE_FULL_SIZE_CONTENT;
 
                 // window.titleVisibility = NSWindowTitleHidden;
                 SEND(VdFw__MacUnsignedLongArgMsg)(window, S("setTitleVisibility:"), 1UL);
@@ -12200,7 +12895,32 @@ static void vd_fw__mac_delegate_handle_request(VdFw__MacID self, VdFw__MacSEL cm
 
             SEND(VdFw__MacVoidMsg)(window, S("center"));
             SEND(VdFw__MacObjectArgMsg)(window, S("makeKeyAndOrderFront:"), nil);
-            Vd_Fw_G.window = window;
+
+            // Only now is [window screen] real, so this is the first point the backing scale - and therefore the
+            // pixel size - can be trusted. Anything the notifications emitted on the way here was provisional.
+            Vd_Fw_G.scale = vd_fw__mac_window_scale();
+
+            {
+                VdFwEvent evt;
+                evt.type = VD_FW_EVENT_TYPE_SCALE_CHANGE;
+                evt.data.scale_change.new_scale = Vd_Fw_G.scale;
+                vd_fw__mac_msgbuf_w(&evt);
+            }
+
+            {
+                VdFwEvent evt;
+                evt.type = VD_FW_EVENT_TYPE_RESIZE;
+
+                CGRect frame = SEND(VdFw__MacRectMsg)(view, S("frame"));
+                Vd_Fw_G.w = (int)frame.size.width * Vd_Fw_G.scale;
+                Vd_Fw_G.h = (int)frame.size.height * Vd_Fw_G.scale;
+                evt.data.resize.w = Vd_Fw_G.w;
+                evt.data.resize.h = Vd_Fw_G.h;
+                vd_fw__mac_msgbuf_w(&evt);
+            }
+
+            vd_fw__mac_update_monitors();
+            vd_fw__mac_update_window_placement();
             vd_fw__mac_set_graphics(graphics_api, gl_options);
         } break;
 
@@ -12209,15 +12929,153 @@ static void vd_fw__mac_delegate_handle_request(VdFw__MacID self, VdFw__MacSEL cm
             __atomic_exchange_n(&Vd_Fw_G.running, new_running, __ATOMIC_SEQ_CST);
 
             SEND(VdFw__MacVoidMsg)(Vd_Fw_G.window, S("close"));
+            vd_fw_queue_wait_exit();
         } break;
 
         case VD_FW__MAC_REQUEST_TYPE_KILL: {
             SEND(VdFw__MacVoidMsg)(Vd_Fw_G.app, S("stop:"));
             Vd_Fw_G.initialized = 0;
+            vd_fw_queue_wait_exit();
         } break;
-        
+
         case VD_FW__MAC_REQUEST_TYPE_SET_GRAPHICS: {
             vd_fw__mac_set_graphics(request->api, (VdFwOpenGLOptions*)request->ptr);
+        } break;
+
+        case VD_FW__MAC_REQUEST_TYPE_SET_TITLE: {
+            SEND(VdFw__MacObjectArgMsg)(Vd_Fw_G.window, S("setTitle:"), vd_fw__mac_nsstring(Vd_Fw_G.title));
+        } break;
+
+        case VD_FW__MAC_REQUEST_TYPE_SET_SIZE: {
+            CGSize size = { (double)request->x / Vd_Fw_G.scale, (double)request->y / Vd_Fw_G.scale };
+            SEND(VdFw__MacSizeArgMsg)(Vd_Fw_G.window, S("setContentSize:"), size);
+        } break;
+
+        case VD_FW__MAC_REQUEST_TYPE_SET_SIZE_MIN: {
+            CGSize size = { (double)request->x / Vd_Fw_G.scale, (double)request->y / Vd_Fw_G.scale };
+            SEND(VdFw__MacSizeArgMsg)(Vd_Fw_G.window, S("setContentMinSize:"), size);
+        } break;
+
+        case VD_FW__MAC_REQUEST_TYPE_SET_SIZE_MAX: {
+            CGSize size = { 1.0e7, 1.0e7 };
+            if (request->x) size.width  = (double)request->x / Vd_Fw_G.scale;
+            if (request->y) size.height = (double)request->y / Vd_Fw_G.scale;
+            SEND(VdFw__MacSizeArgMsg)(Vd_Fw_G.window, S("setContentMaxSize:"), size);
+        } break;
+
+        case VD_FW__MAC_REQUEST_TYPE_SET_RESIZABLE: {
+            unsigned long style_mask = SEND(VdFw__MacUnsignedLongMsg)(Vd_Fw_G.window, S("styleMask"));
+            if (request->x) {
+                style_mask |= VD_FW__MAC_STYLE_RESIZABLE;
+            } else {
+                style_mask &= ~(unsigned long)VD_FW__MAC_STYLE_RESIZABLE;
+            }
+            SEND(VdFw__MacUnsignedLongArgMsg)(Vd_Fw_G.window, S("setStyleMask:"), style_mask);
+        } break;
+
+        case VD_FW__MAC_REQUEST_TYPE_SET_MINIMIZED: {
+            SEND(VdFw__MacObjectArgMsg)(Vd_Fw_G.window, S("miniaturize:"), nil);
+        } break;
+
+        case VD_FW__MAC_REQUEST_TYPE_SET_MAXIMIZED: {
+            if (!SEND(VdFw__MacBoolMsg)(Vd_Fw_G.window, S("isZoomed"))) {
+                SEND(VdFw__MacObjectArgMsg)(Vd_Fw_G.window, S("zoom:"), nil);
+            }
+        } break;
+
+        case VD_FW__MAC_REQUEST_TYPE_NORMALIZE: {
+            if (SEND(VdFw__MacBoolMsg)(Vd_Fw_G.window, S("isMiniaturized"))) {
+                SEND(VdFw__MacObjectArgMsg)(Vd_Fw_G.window, S("deminiaturize:"), nil);
+            }
+
+            if (SEND(VdFw__MacBoolMsg)(Vd_Fw_G.window, S("isZoomed"))) {
+                SEND(VdFw__MacObjectArgMsg)(Vd_Fw_G.window, S("zoom:"), nil);
+            }
+        } break;
+
+        case VD_FW__MAC_REQUEST_TYPE_SET_FULLSCREEN: {
+            unsigned long style_mask = SEND(VdFw__MacUnsignedLongMsg)(Vd_Fw_G.window, S("styleMask"));
+            int is_fullscreen = (style_mask & (1UL << 14)/*NSWindowStyleMaskFullScreen*/) != 0;
+
+            if (is_fullscreen != (request->x != 0)) {
+                SEND(VdFw__MacObjectArgMsg)(Vd_Fw_G.window, S("toggleFullScreen:"), nil);
+            }
+        } break;
+
+        case VD_FW__MAC_REQUEST_TYPE_SET_APP_ICON: {
+            unsigned char *planes = 0;
+            VdFw__MacID rep = SEND(VdFw__MacBitmapRepInitMsg)(ALLOC("NSBitmapImageRep"),
+                                                              S("initWithBitmapDataPlanes:pixelsWide:pixelsHigh:"
+                                                                "bitsPerSample:samplesPerPixel:hasAlpha:isPlanar:"
+                                                                "colorSpaceName:bytesPerRow:bitsPerPixel:"),
+                                                              &planes,
+                                                              request->x,
+                                                              request->y,
+                                                              8,
+                                                              4,
+                                                              YES,
+                                                              NO,
+                                                              vd_fw__mac_nsstring("NSDeviceRGBColorSpace"),
+                                                              request->x * 4,
+                                                              32);
+
+            if (rep) {
+                CGSize size = { (double)request->x, (double)request->y };
+                unsigned char *bitmap = SEND(VdFw__MacBitmapDataMsg)(rep, S("bitmapData"));
+                VD_FW_MEMCPY(bitmap, request->ptr, (size_t)request->x * (size_t)request->y * 4);
+
+                VdFw__MacID image = SEND(VdFw__MacImageInitMsg)(ALLOC("NSImage"), S("initWithSize:"), size);
+                SEND(VdFw__MacObjectArgMsg)(image, S("addRepresentation:"), rep);
+                SEND(VdFw__MacObjectArgMsg)(Vd_Fw_G.app, S("setApplicationIconImage:"), image);
+
+                SEND(VdFw__MacVoidMsg)(image, S("release"));
+                SEND(VdFw__MacVoidMsg)(rep, S("release"));
+            }
+        } break;
+
+        case VD_FW__MAC_REQUEST_TYPE_SET_MOUSE_LOCKED: {
+            if (request->x) {
+                VdFw__MacID event = cg_event_create(nil);
+                Vd_Fw_G.mouse_before_lock = cg_event_get_location(event);
+                cf_release(event);
+
+                CGRect frame = SEND(VdFw__MacRectMsg)(Vd_Fw_G.window, S("frame"));
+                CGRect screen = SEND(VdFw__MacRectMsg)(SEND(VdFw__MacObjectMsg)(Vd_Fw_G.window, S("screen")), S("frame"));
+
+                CGPoint center;
+                center.x = frame.origin.x + frame.size.width * 0.5;
+                center.y = screen.size.height - (frame.origin.y + frame.size.height * 0.5);
+
+                SEND(VdFw__MacVoidMsg)(C("NSCursor"), S("hide"));
+                cg_warp_cursor(center);
+                cg_associate_mouse(0);
+            } else {
+                cg_associate_mouse(1);
+                cg_warp_cursor(Vd_Fw_G.mouse_before_lock);
+                SEND(VdFw__MacVoidMsg)(C("NSCursor"), S("unhide"));
+            }
+        } break;
+
+        case VD_FW__MAC_REQUEST_TYPE_MOVE_TO_MONITOR: {
+            VdFw__MacID screens = SEND(VdFw__MacObjectMsg)(C("NSScreen"), S("screens"));
+            if ((unsigned long)request->x >= SEND(VdFw__MacUnsignedLongMsg)(screens, S("count"))) {
+                break;
+            }
+
+            VdFw__MacID target = SEND(VdFw__MacObjectAtIndexMsg)(screens, S("objectAtIndex:"), (unsigned long)request->x);
+            VdFw__MacID current = SEND(VdFw__MacObjectMsg)(Vd_Fw_G.window, S("screen"));
+
+            CGRect from = SEND(VdFw__MacRectMsg)(current, S("visibleFrame"));
+            CGRect to = SEND(VdFw__MacRectMsg)(target, S("visibleFrame"));
+            CGRect frame = SEND(VdFw__MacRectMsg)(Vd_Fw_G.window, S("frame"));
+
+            frame.origin.x = to.origin.x + (frame.origin.x - from.origin.x);
+            frame.origin.y = to.origin.y + (frame.origin.y - from.origin.y);
+            SEND(VdFw__MacSetFrameMsg)(Vd_Fw_G.window, S("setFrame:display:"), frame, YES);
+        } break;
+
+        case VD_FW__MAC_REQUEST_TYPE_SET_PLACEMENT: {
+            SEND(VdFw__MacSetFrameMsg)(Vd_Fw_G.window, S("setFrame:display:"), request->rect, YES);
         } break;
     }
 }
@@ -12325,7 +13183,437 @@ static int vd_fw__mac_msgbuf_w(VdFwEvent *message)
     int nw = (w + 1) % VD_FW_MAC_MESSAGE_BUFFER_SIZE;
     __atomic_exchange_n(&Vd_Fw_G.msgbuf_w, nw, __ATOMIC_SEQ_CST);
 
+    vd_fw_queue_wait_exit();        // An event is exactly what vd_fw_wait is parked for.
     return 1;
+}
+
+static void vd_fw__mac_send_request(VdFw__MacRequest *request)
+{
+    VdFw__MacID data = SEND(VdFw__MacBytesLengthMsg)(C("NSData"), S("dataWithBytes:length:"), request, sizeof(*request));
+
+    SEND(VdFw__MacPerformOnMainMsg)(Vd_Fw_G.delegate,
+                                    S("performSelectorOnMainThread:withObject:waitUntilDone:"),
+                                    S("handleRequest:"),
+                                    data,
+                                    YES);
+}
+
+// Stuff called during lock - unlock can result in both threads waiting on cgl_lock. Queue 'em.
+static int vd_fw__mac_defer_request(VdFw__MacRequest *request)
+{
+    if (Vd_Fw_G.deferred_count >= VD_FW_MAC_DEFERRED_REQUEST_MAX) {
+        return 0;
+    }
+
+    Vd_Fw_G.deferred[Vd_Fw_G.deferred_count++] = *request;
+    return 1;
+}
+
+static void vd_fw__mac_flush_requests(void)
+{
+    int count = Vd_Fw_G.deferred_count;
+    Vd_Fw_G.deferred_count = 0;
+
+    for (int i = 0; i < count; ++i) {
+        VdFw__MacRequest *request = &Vd_Fw_G.deferred[i];
+        vd_fw__mac_send_request(request);
+
+        if (request->type == VD_FW__MAC_REQUEST_TYPE_SET_APP_ICON) {
+            VD_FW_FREE(request->ptr, (size_t)request->x * (size_t)request->y * 4);
+        }
+    }
+}
+
+static int vd_fw__mac_translate_button(long button_number)
+{
+    int result = 0;
+    switch (button_number) {
+        case 0: result = VD_FW_MOUSE_BUTTON_LEFT; break;
+        case 1: result = VD_FW_MOUSE_BUTTON_RIGHT; break;
+        case 2: result = VD_FW_MOUSE_BUTTON_MIDDLE; break;
+        case 3: result = VD_FW_MOUSE_BUTTON_M1; break;
+        case 4: result = VD_FW_MOUSE_BUTTON_M2; break;
+        default: break;
+    }
+    return result;
+}
+
+static int vd_fw__mac_translate_modifiers(unsigned long flags)
+{
+    int result = 0;
+    if (flags & VD_FW__MAC_MODIFIER_SHIFT)   { result |= VD_FW_MOD_SHIFT; }
+    if (flags & VD_FW__MAC_MODIFIER_CONTROL) { result |= VD_FW_MOD_CONTROL; }
+    if (flags & (VD_FW__MAC_MODIFIER_COMMAND | VD_FW__MAC_MODIFIER_OPTION)) { result |= VD_FW_MOD_ALT; }
+    return result;
+}
+
+static unsigned long vd_fw__mac_modifier_device_mask(unsigned short keycode)
+{
+    unsigned long result = 0;
+    switch (keycode) {
+        case 54: result = VD_FW__MAC_MODIFIER_RCOMMAND; break;
+        case 55: result = VD_FW__MAC_MODIFIER_LCOMMAND; break;
+        case 56: result = VD_FW__MAC_MODIFIER_LSHIFT; break;
+        case 57: result = VD_FW__MAC_MODIFIER_CAPS_LOCK; break;
+        case 58: result = VD_FW__MAC_MODIFIER_LOPTION; break;
+        case 59: result = VD_FW__MAC_MODIFIER_LCONTROL; break;
+        case 60: result = VD_FW__MAC_MODIFIER_RSHIFT; break;
+        case 61: result = VD_FW__MAC_MODIFIER_ROPTION; break;
+        case 62: result = VD_FW__MAC_MODIFIER_RCONTROL; break;
+        case 63: result = VD_FW__MAC_MODIFIER_FUNCTION; break;
+        default: break;
+    }
+    return result;
+}
+
+static void vd_fw__mac_emit_codepoints(VdFw__MacID string)
+{
+    if (!string) {
+        return;
+    }
+
+    const char *text = SEND(VdFw__MacUTF8StringMsg)(string, S("UTF8String"));
+    if (!text) {
+        return;
+    }
+
+    const unsigned char *p = (const unsigned char*)text;
+    while (*p) {
+        unsigned int codepoint;
+        int continuations;
+
+        if (*p < 0x80)        { codepoint = *p;          continuations = 0; }
+        else if (*p < 0xE0)   { codepoint = *p & 0x1Fu;  continuations = 1; }
+        else if (*p < 0xF0)   { codepoint = *p & 0x0Fu;  continuations = 2; }
+        else                  { codepoint = *p & 0x07u;  continuations = 3; }
+        p++;
+
+        while (continuations-- && ((*p & 0xC0) == 0x80)) {
+            codepoint = (codepoint << 6) | (*p & 0x3Fu);
+            p++;
+        }
+
+        // Arrow keys
+        if ((codepoint < 0x20) || (codepoint == 0x7F) || ((codepoint >= 0xF700) && (codepoint <= 0xF8FF))) {
+            continue;
+        }
+
+        VdFwEvent evt;
+        evt.type = VD_FW_EVENT_TYPE_CHARACTER;
+        evt.data.character.codepoint = codepoint;
+        vd_fw__mac_msgbuf_w(&evt);
+    }
+}
+
+static void vd_fw__mac_event_position(VdFw__MacID view, VdFw__MacID event, int *x, int *y)
+{
+    CGPoint point = SEND(VdFw__MacPointMsg)(event, S("locationInWindow"));
+    CGRect frame = SEND(VdFw__MacRectMsg)(view, S("frame"));
+
+    *x = (int)(point.x * Vd_Fw_G.scale);
+    *y = (int)((frame.size.height - point.y) * Vd_Fw_G.scale);
+}
+
+static int vd_fw__mac_hit_nccaption(int x, int y)
+{
+    if (!Vd_Fw_G.nccaption_set) {
+        return 0;
+    }
+
+    int inside_caption =
+        ((x >= Vd_Fw_G.nccaption[0]) && (x <= Vd_Fw_G.nccaption[2])) &&
+        ((y >= Vd_Fw_G.nccaption[1]) && (y <= Vd_Fw_G.nccaption[3]));
+
+    if (!inside_caption) {
+        return 0;
+    }
+
+    for (int i = 0; i < Vd_Fw_G.ncrect_count; ++i) {
+        const int *rect = Vd_Fw_G.ncrects[i];
+
+        int inside =
+            ((x >= rect[0]) && (x <= rect[2])) &&
+            ((y >= rect[1]) && (y <= rect[3]));
+
+        if (inside) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+static unsigned int vd_fw__mac_screen_display_id(VdFw__MacID screen)
+{
+    if (!screen) {
+        return 0;
+    }
+
+    VdFw__MacID description = SEND(VdFw__MacObjectMsg)(screen, S("deviceDescription"));
+    VdFw__MacID number = SEND(VdFw__MacObjectForKeyMsg)(description,
+                                                        S("objectForKey:"),
+                                                        vd_fw__mac_nsstring("NSScreenNumber"));
+    if (!number) {
+        return 0;
+    }
+
+    return SEND(VdFw__MacUnsignedIntMsg)(number, S("unsignedIntValue"));
+}
+
+static void vd_fw__mac_update_monitors(void)
+{
+    VdFw__MacID screens = SEND(VdFw__MacObjectMsg)(C("NSScreen"), S("screens"));
+    int count = (int)SEND(VdFw__MacUnsignedLongMsg)(screens, S("count"));
+
+    int previous_cap = Vd_Fw_G.monitor_buffer_cap;
+
+    Vd_Fw_G.monitor_count = count;
+    Vd_Fw_G.monitor_buffer = (VdFw__MacMonitor*)vd_fw__resize_buffer(Vd_Fw_G.monitor_buffer,
+                                                                     sizeof(*Vd_Fw_G.monitor_buffer),
+                                                                     count, &Vd_Fw_G.monitor_buffer_cap);
+
+    for (int i = 0; i < count; ++i) {
+        VdFw__MacID screen = SEND(VdFw__MacObjectAtIndexMsg)(screens, S("objectAtIndex:"), (unsigned long)i);
+        VdFw__MacMonitor *monitor = &Vd_Fw_G.monitor_buffer[i];
+
+        if (i >= previous_cap) {
+            monitor->display_modes = 0;
+            monitor->display_modes_cap = 0;
+        }
+
+        monitor->display_id = vd_fw__mac_screen_display_id(screen);
+        monitor->display_modes_len = 0;
+        monitor->friendly_name[0] = 0;
+
+        VdFw__MacID name = SEND(VdFw__MacObjectMsg)(screen, S("localizedName"));
+        const char *text = name ? SEND(VdFw__MacUTF8StringMsg)(name, S("UTF8String")) : 0;
+        if (text) {
+            int len = 0;
+            while (text[len] && (len < (int)sizeof(monitor->friendly_name) - 1)) {
+                monitor->friendly_name[len] = text[len];
+                len++;
+            }
+            monitor->friendly_name[len] = 0;
+        }
+    }
+
+    Vd_Fw_G.monitor_buffer_len = count;
+}
+
+static void vd_fw__mac_update_monitor_display_modes(VdFw__MacMonitor *monitor)
+{
+    if (monitor->display_modes_len != 0) {
+        return;
+    }
+
+    const void *modes = cg_display_copy_all_modes(monitor->display_id, 0);
+    if (!modes) {
+        return;
+    }
+
+    int mode_count = (int)cf_array_get_count(modes);
+    monitor->display_modes = (VdFwDisplayMode*)vd_fw__resize_buffer(monitor->display_modes,
+                                                                    sizeof(*monitor->display_modes),
+                                                                    mode_count, &monitor->display_modes_cap);
+
+    for (int i = 0; i < mode_count; ++i) {
+        const void *mode = cf_array_get_value_at_index(modes, i);
+
+        VdFwDisplayMode candidate_mode;
+        candidate_mode.width = (int)cg_display_mode_get_width(mode);
+        candidate_mode.height = (int)cg_display_mode_get_height(mode);
+        candidate_mode.frequency = (int)cg_display_mode_get_refresh_rate(mode);
+
+        // @todo(mdodis): ??????
+        if (candidate_mode.frequency == 0) {
+            candidate_mode.frequency = 60;
+        }
+
+        int skip_mode = 0;
+
+        for (int j = 0; j < monitor->display_modes_len; ++j) {
+
+            VdFwDisplayMode *display_mode = &monitor->display_modes[j];
+
+            if ((display_mode->width == candidate_mode.width) &&
+                (display_mode->height == candidate_mode.height) &&
+                (display_mode->frequency == candidate_mode.frequency))
+            {
+                skip_mode = 1;
+                break;
+            }
+        }
+
+        if (skip_mode) {
+            continue;
+        }
+
+        VdFwU32 gcd = vd_fw__gcd(candidate_mode.width, candidate_mode.height);
+
+        VdFwDisplayMode *display_mode = &monitor->display_modes[monitor->display_modes_len++];
+        *display_mode = candidate_mode;
+        display_mode->aspect.numerator = candidate_mode.width / gcd;
+        display_mode->aspect.denominator = candidate_mode.height / gcd;
+    }
+
+    cf_release(modes);
+
+    vd_fw__sort_display_modes(monitor->display_modes, monitor->display_modes_len);
+}
+
+static BOOL vd_fw__mac_view_accepts_first_responder(VdFw__MacID self, VdFw__MacSEL cmd)
+{
+    (void)self; (void)cmd;
+    return YES;
+}
+
+static void vd_fw__mac_view_key_down(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID event)
+{
+    (void)self; (void)cmd;
+
+    unsigned short keycode = SEND(VdFw__MacUnsignedShortMsg)(event, S("keyCode"));
+    unsigned long flags = SEND(VdFw__MacUnsignedLongMsg)(event, S("modifierFlags"));
+
+    VdFwEvent evt;
+    evt.type = VD_FW_EVENT_TYPE_KEY_DOWN;
+    evt.data.key_down.key = vd_fw__mac_translate_keycode(keycode);
+    evt.data.key_down.repeat = SEND(VdFw__MacBoolMsg)(event, S("isARepeat")) ? 1 : 0;
+    evt.data.key_down.modifiers = vd_fw__mac_translate_modifiers(flags);
+    vd_fw__mac_msgbuf_w(&evt);
+
+    if (!(flags & VD_FW__MAC_MODIFIER_COMMAND)) {
+        vd_fw__mac_emit_codepoints(SEND(VdFw__MacObjectMsg)(event, S("characters")));
+    }
+}
+
+static void vd_fw__mac_view_key_up(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID event)
+{
+    (void)self; (void)cmd;
+
+    unsigned short keycode = SEND(VdFw__MacUnsignedShortMsg)(event, S("keyCode"));
+    unsigned long flags = SEND(VdFw__MacUnsignedLongMsg)(event, S("modifierFlags"));
+
+    VdFwEvent evt;
+    evt.type = VD_FW_EVENT_TYPE_KEY_UP;
+    evt.data.key_up.key = vd_fw__mac_translate_keycode(keycode);
+    evt.data.key_up.modifiers = vd_fw__mac_translate_modifiers(flags);
+    vd_fw__mac_msgbuf_w(&evt);
+}
+
+static void vd_fw__mac_view_flags_changed(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID event)
+{
+    (void)self; (void)cmd;
+
+    unsigned short keycode = SEND(VdFw__MacUnsignedShortMsg)(event, S("keyCode"));
+    VdFwKey key = vd_fw__mac_translate_keycode(keycode);
+    if (key == VD_FW_KEY_UNKNOWN) {
+        return;
+    }
+
+    unsigned long flags = SEND(VdFw__MacUnsignedLongMsg)(event, S("modifierFlags"));
+    unsigned long mask = vd_fw__mac_modifier_device_mask(keycode);
+
+    VdFwEvent evt;
+    if (flags & mask) {
+        evt.type = VD_FW_EVENT_TYPE_KEY_DOWN;
+        evt.data.key_down.key = key;
+        evt.data.key_down.repeat = 0;
+        evt.data.key_down.modifiers = vd_fw__mac_translate_modifiers(flags);
+    } else {
+        evt.type = VD_FW_EVENT_TYPE_KEY_UP;
+        evt.data.key_up.key = key;
+        evt.data.key_up.modifiers = vd_fw__mac_translate_modifiers(flags);
+    }
+    vd_fw__mac_msgbuf_w(&evt);
+}
+
+static void vd_fw__mac_view_mouse_down(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID event)
+{
+    (void)cmd;
+
+    int button = vd_fw__mac_translate_button(SEND(VdFw__MacIntegerMsg)(event, S("buttonNumber")));
+
+    if (button == VD_FW_MOUSE_BUTTON_LEFT) {
+        int x, y;
+        vd_fw__mac_event_position(self, event, &x, &y);
+
+        if (vd_fw__mac_hit_nccaption(x, y)) {
+            BOOL was_movable = SEND(VdFw__MacBoolMsg)(Vd_Fw_G.window, S("isMovable"));
+            if (!was_movable) {
+                SEND(VdFw__MacBoolArgMsg)(Vd_Fw_G.window, S("setMovable:"), YES);
+            }
+
+            SEND(VdFw__MacObjectArgMsg)(Vd_Fw_G.window, S("performWindowDragWithEvent:"), event);
+
+            if (!was_movable) {
+                SEND(VdFw__MacBoolArgMsg)(Vd_Fw_G.window, S("setMovable:"), NO);
+            }
+            return;
+        }
+    }
+
+    VdFwEvent evt;
+    evt.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN;
+    evt.data.mouse_button_down.button = button;
+    vd_fw__mac_msgbuf_w(&evt);
+}
+
+static void vd_fw__mac_view_mouse_up(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID event)
+{
+    (void)self; (void)cmd;
+
+    VdFwEvent evt;
+    evt.type = VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP;
+    evt.data.mouse_button_up.button = vd_fw__mac_translate_button(
+        SEND(VdFw__MacIntegerMsg)(event, S("buttonNumber")));
+    vd_fw__mac_msgbuf_w(&evt);
+}
+
+static void vd_fw__mac_view_mouse_moved(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID event)
+{
+    (void)cmd;
+
+    int x, y;
+    vd_fw__mac_event_position(self, event, &x, &y);
+
+    if (!Vd_Fw_G.receive_ncmouse_on && vd_fw__mac_hit_nccaption(x, y)) {
+        return;
+    }
+
+    VdFwEvent evt;
+    evt.type = VD_FW_EVENT_TYPE_MOUSE_MOVE;
+    evt.data.mouse_move.x = x;
+    evt.data.mouse_move.y = y;
+    vd_fw__mac_msgbuf_w(&evt);
+
+    VdFwEvent delta;
+    delta.type = VD_FW_EVENT_TYPE_MOUSE_DELTA;
+    delta.data.mouse_delta.dx = (float)SEND(VdFw__MacDoubleMsg)(event, S("deltaX"));
+    delta.data.mouse_delta.dy = (float)SEND(VdFw__MacDoubleMsg)(event, S("deltaY"));
+    vd_fw__mac_msgbuf_w(&delta);
+}
+
+static void vd_fw__mac_view_scroll_wheel(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID event)
+{
+    (void)self; (void)cmd;
+
+    double dx = SEND(VdFw__MacDoubleMsg)(event, S("scrollingDeltaX"));
+    double dy = SEND(VdFw__MacDoubleMsg)(event, S("scrollingDeltaY"));
+
+    if (SEND(VdFw__MacBoolMsg)(event, S("hasPreciseScrollingDeltas"))) {
+        dx *= 0.1;
+        dy *= 0.1;
+    }
+
+    if ((dx == 0.0) && (dy == 0.0)) {
+        return;
+    }
+
+    VdFwEvent evt;
+    evt.type = VD_FW_EVENT_TYPE_MOUSE_SCROLL;
+    evt.data.mouse_scroll.dx = (float)dx;
+    evt.data.mouse_scroll.dy = (float)dy;
+    vd_fw__mac_msgbuf_w(&evt);
 }
 
 static VdFwKey vd_fw__mac_translate_keycode(unsigned short keycode)
@@ -12391,16 +13679,16 @@ static VdFwKey vd_fw__mac_translate_keycode(unsigned short keycode)
         VD_FW_KEY_BACKSPACE,         // 51,    KEY_BACKSPACE
         VD_FW_KEY_UNKNOWN,           // 52,    ----
         VD_FW_KEY_ESCAPE,            // 53,    KEY_ESCAPE
-        VD_FW_KEY_UNKNOWN,           // 54,    ----
-        VD_FW_KEY_UNKNOWN,           // 55,    ----
-        VD_FW_KEY_UNKNOWN,           // 56,    ----
-        VD_FW_KEY_UNKNOWN,           // 57,    ----
-        VD_FW_KEY_UNKNOWN,           // 58,    ----
-        VD_FW_KEY_UNKNOWN,           // 59,    ----
-        VD_FW_KEY_UNKNOWN,           // 60,    ----
-        VD_FW_KEY_UNKNOWN,           // 61,    ----
-        VD_FW_KEY_UNKNOWN,           // 62,    ----
-        VD_FW_KEY_UNKNOWN,           // 63,    ----
+        VD_FW_KEY_RALT,              // 54,    KEY_COMMAND_RIGHT
+        VD_FW_KEY_LALT,              // 55,    KEY_COMMAND_LEFT
+        VD_FW_KEY_LSHIFT,            // 56,    KEY_SHIFT_LEFT
+        VD_FW_KEY_CAPITAL,           // 57,    KEY_CAPSLOCK
+        VD_FW_KEY_UNKNOWN,           // 58,    KEY_OPTION_LEFT
+        VD_FW_KEY_LCONTROL,          // 59,    KEY_CTRL_LEFT
+        VD_FW_KEY_RSHIFT,            // 60,    KEY_SHIFT_RIGHT
+        VD_FW_KEY_UNKNOWN,           // 61,    KEY_OPTION_RIGHT
+        VD_FW_KEY_RCONTROL,          // 62,    KEY_CTRL_RIGHT
+        VD_FW_KEY_UNKNOWN,           // 63,    KEY_FN
         VD_FW_KEY_F17,               // 64,    KEY_F17
         VD_FW_KEY_UNKNOWN,           // 65,    KEY_PAD_DOT
         VD_FW_KEY_UNKNOWN,           // 66,    ----

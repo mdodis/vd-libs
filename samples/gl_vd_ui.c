@@ -7,17 +7,26 @@
 #define VD_FW_NO_CRT 0
 #define VD_FW_WIN32_SUBSYSTEM VD_FW_WIN32_SUBSYSTEM_CONSOLE
 #include "vd_fw.h"
-#include "vd.h"
 
 #include "vd_cg.h"
 #include "vd_ui.h"
 #include "vd_ui_demo.c"
 
 #include <stdio.h>
+#include <assert.h>
 
 #define GL_CHECK(expr) do { (expr); int _e_ = glGetError(); if (_e_ != 0) { printf("Check at " __FILE__ ":%d failed with 0x%x\n", __LINE__, _e_); assert(0); }} while(0)
 
+#if VD_FW_DEFER_MAIN
+int defer_main(int argc, char const *argv[]);
 int main(int argc, char const *argv[])
+{
+    return vd_fw_main(argc, argv, defer_main);
+}
+int defer_main(int argc, char const *argv[])
+#else
+int main(int argc, char const *argv[])
+#endif
 {
     (void)argc;
     (void)argv;
@@ -329,9 +338,6 @@ int main(int argc, char const *argv[])
 
 #define VD_UI_IMPL
 #include "vd_ui.h"
-
-#define VD_IMPL
-#include "vd.h"
 
 #if defined(__clang__)
 #pragma clang diagnostic pop
