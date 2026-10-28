@@ -11464,6 +11464,7 @@ VD_FW_API int vd_fw_vk_wsi_surface_create(void *p_instance, void *p_allocation_c
 #include <sys/stat.h>
 #include <string.h>
 #include <unistd.h>
+#include <mach/mach_time.h>
 
 // @todo(mdodis): Pull these classes in here.
 typedef Class           VdFw__MacClass;
@@ -11500,6 +11501,7 @@ typedef void                     (*VdFw__MacUnsignedLongArgMsg)(VdFw__MacID, VdF
 typedef VdFw__MacID              (*VdFw__MacWindowButtonMsg)(VdFw__MacID, VdFw__MacSEL, unsigned long);
 typedef CGRect                   (*VdFw__MacRectMsg)(VdFw__MacID, VdFw__MacSEL);
 typedef BOOL                     (*VdFw__MacBoolMsg)(VdFw__MacID, VdFw__MacSEL);
+typedef double                   (*VdFw__MacDoubleMsg)(VdFw__MacID, VdFw__MacSEL);
 
 #define SEND(type)               ((type)msg_send)
 #define C(name)                  ((VdFw__MacID)get_class(name))
@@ -11561,6 +11563,11 @@ typedef struct {
     int                         first_codepoint_index;
     int                         w,h;
     int                         is_zoomed;
+    mach_timebase_info_data_t   time_base;
+    uint64_t                    last_time;
+    uint64_t                    delta_ns;
+    VdFwGraphicsApi             current_api;
+
 
 /* -OPENGL STUFF----------------------------------------------------------------------------------------------------- */
     VdFw__MacID                 gl_context;
@@ -11572,11 +11579,13 @@ typedef enum {
     VD_FW__MAC_REQUEST_TYPE_INIT,
     VD_FW__MAC_REQUEST_TYPE_QUIT,
     VD_FW__MAC_REQUEST_TYPE_KILL,
+    VD_FW__MAC_REQUEST_TYPE_SET_GRAPHICS,
 } VdFw__MacRequestType;
 
 typedef struct {
     VdFw__MacRequestType type;
     void                 *ptr;
+    VdFwGraphicsApi      api;
 } VdFw__MacRequest;
 
 static VdFw__MacInternalData Vd_Fw_G = {0};
@@ -11595,6 +11604,7 @@ static void             vd_fw__mac_delegate_window_did_miniaturize(VdFw__MacID s
 static void             vd_fw__mac_delegate_window_did_deminiaturize(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification);
 static void             vd_fw__mac_delegate_window_did_resize(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification);
 static BOOL             vd_fw__mac_delegate_window_should_close(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification);
+static void             vd_fw__mac_delegate_backing_changed(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification);
 static void             vd_fw__mac_delegate_handle_request(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID data);
 static void*            vd_fw__mac_thread_proc(void *arg);
 static VdFw__MacID      vd_fw__mac_nsstring(const char *text);
@@ -11602,9 +11612,19 @@ static void*            vd_fw__gl_get_proc_address(const char *name);
 static int              vd_fw__mac_msgbuf_r(VdFwEvent *message);
 static int              vd_fw__mac_msgbuf_w(VdFwEvent *message);
 static VdFwKey          vd_fw__mac_translate_keycode(unsigned short keycode);
+static void             vd_fw__mac_set_graphics(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_options);
+
+VD_FW_API int vd_fw_set_vsync_on(int on)
+{
+    GLint swap_interval = on;
+    cgl_set_parameter(Vd_Fw_G.cgl, 222, &swap_interval);
+    return on;
+}
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
+    Vd_Fw_G.current_api = VD_FW_GRAPHICS_API_INVALID;
+
     VdFw__MacRequest rq;
     rq.type = VD_FW__MAC_REQUEST_TYPE_INIT;
     rq.ptr = (void*)info;
@@ -11616,6 +11636,10 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
                                     data,
                                     YES);
     Vd_Fw_G.running = 1;
+
+    mach_timebase_info(&Vd_Fw_G.time_base);
+    Vd_Fw_G.last_time = mach_absolute_time();
+
     cgl_set_current(Vd_Fw_G.cgl);
     return 1;
 }
@@ -11665,6 +11689,13 @@ VD_FW_API void vd_fw_unlock(void)
     }
 }
 
+VD_FW_API int vd_fw_get_size(int *w, int *h)
+{
+    *w = Vd_Fw_G.width;
+    *h = Vd_Fw_G.height;
+    return Vd_Fw_G.size_changed;
+}
+
 VD_FW_API int vd_fw_running(void)
 {
     int ret;
@@ -11672,9 +11703,36 @@ VD_FW_API int vd_fw_running(void)
     return ret;
 }
 
+VD_FW_API unsigned long long vd_fw_delta_ns(void)
+{
+    return Vd_Fw_G.delta_ns;
+}
+
 VD_FW_API int vd_fw_close_requested(void)
 {
     return Vd_Fw_G.close_request;
+}
+
+VD_FW_API int vd_fw_get_scale(float *scale)
+{
+    if (scale) *scale = Vd_Fw_G.scale;
+    return Vd_Fw_G.scale_changed;
+}
+
+VD_FW_API int vd_fw_set_graphics_api(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_options)
+{
+    VdFw__MacRequest rq;
+    rq.type = VD_FW__MAC_REQUEST_TYPE_SET_GRAPHICS;
+    rq.ptr = gl_options;
+    rq.api = api;
+    id data = SEND(VdFw__MacBytesLengthMsg)(C("NSData"),  S("dataWithBytes:length:"), &rq, sizeof(rq));
+
+    SEND(VdFw__MacPerformOnMainMsg)(Vd_Fw_G.delegate,
+                                    S("performSelectorOnMainThread:withObject:waitUntilDone:"),
+                                    S("handleRequest:"),
+                                    data,
+                                    YES);
+    return 1;
 }
 
 VD_FW_API VdFwEvent *vd_fw_poll(int *count)
@@ -11798,6 +11856,11 @@ VD_FW_API VdFwEvent *vd_fw_poll(int *count)
         *count = Vd_Fw_G.num_evts;
     }
 
+    uint64_t now = mach_absolute_time();
+    uint64_t ns = (now - Vd_Fw_G.last_time) * Vd_Fw_G.time_base.numer / Vd_Fw_G.time_base.denom;
+    Vd_Fw_G.delta_ns = ns;
+    Vd_Fw_G.last_time = now;
+
     return Vd_Fw_G.evtbuf;
 }
 
@@ -11863,6 +11926,11 @@ VD_FW_API int vd_fw_main(int argc, const char *argv[], int (*callback)(int argc,
     add_method(delegate_class, S("windowShouldClose:"),
                                (VdFw__MacIMP)vd_fw__mac_delegate_window_should_close,
                                OBJC_BOOL_IS_BOOL ? "B@:@" : "c@:@");
+    add_method(delegate_class, S("backingChanged:"),
+                               (VdFw__MacIMP)vd_fw__mac_delegate_backing_changed,
+                               "v@:@");
+
+    
 
 
     register_class(delegate_class);
@@ -12032,6 +12100,16 @@ static BOOL vd_fw__mac_delegate_window_should_close(VdFw__MacID self, VdFw__MacS
     return NO;
 }
 
+static void vd_fw__mac_delegate_backing_changed(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification)
+{
+    VdFw__MacID screen = SEND(VdFw__MacObjectMsg)(Vd_Fw_G.window, S("screen"));
+    float new_scale = (float)SEND(VdFw__MacDoubleMsg)(screen, S("backingScaleFactor"));
+    VdFwEvent evt;
+    evt.type = VD_FW_EVENT_TYPE_SCALE_CHANGE;
+    evt.data.scale_change.new_scale = new_scale;
+    vd_fw__mac_msgbuf_w(&evt);
+}
+
 static void vd_fw__mac_delegate_handle_request(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID data)
 {
     const void *bytes = SEND(VdFw__MacBytesMsg)(data, S("bytes"));
@@ -12040,14 +12118,21 @@ static void vd_fw__mac_delegate_handle_request(VdFw__MacID self, VdFw__MacSEL cm
     switch (request->type) {
         default: break;
         case VD_FW__MAC_REQUEST_TYPE_INIT: {
+            VdFwGraphicsApi graphics_api = VD_FW_GRAPHICS_API_OPENGL;
             int borderless = 0;
+            VdFwOpenGLOptions *gl_options = 0;
 
             VdFwInitInfo *init_info = (VdFwInitInfo*)request->ptr;
             if (init_info && init_info->window_options.borderless) {
                 borderless = 1;
             }
 
-            unsigned int style_mask = 1UL | 2UL | 8UL;
+            if (init_info) {
+                graphics_api = init_info->api;
+                gl_options = &init_info->gl;
+            }
+
+            unsigned int style_mask = 1UL | 2UL | 4UL | 8UL;
             CGRect rect = {{0,0}, {640, 480}};
             VdFw__MacID window = SEND(VdFw__MacWindowInitMsg)(ALLOC("NSWindow"),
                                                               S("initWithContentRect:styleMask:backing:defer:"),
@@ -12055,6 +12140,30 @@ static void vd_fw__mac_delegate_handle_request(VdFw__MacID self, VdFw__MacSEL cm
                                                               style_mask,
                                                               2UL, // NSBackingStoreBuffered
                                                               NO);
+
+            VdFw__MacID screen = SEND(VdFw__MacObjectMsg)(window, S("screen"));
+            Vd_Fw_G.scale = (float)SEND(VdFw__MacDoubleMsg)(screen, S("backingScaleFactor"));
+
+            {
+                VdFwEvent evt;
+                evt.type = VD_FW_EVENT_TYPE_SCALE_CHANGE;
+                evt.data.scale_change.new_scale = Vd_Fw_G.scale;
+                vd_fw__mac_msgbuf_w(&evt);
+            }
+
+            {
+                VdFwEvent evt;
+                evt.type = VD_FW_EVENT_TYPE_RESIZE;
+
+                VdFw__MacID content_view = SEND(VdFw__MacObjectMsg)(window, S("contentView"));
+                CGRect rect = SEND(VdFw__MacRectMsg)(content_view, S("frame"));
+                Vd_Fw_G.w = (int)rect.size.width * Vd_Fw_G.scale;
+                Vd_Fw_G.h = (int)rect.size.height * Vd_Fw_G.scale;
+                evt.data.resize.w = Vd_Fw_G.w;
+                evt.data.resize.h = Vd_Fw_G.h;
+                vd_fw__mac_msgbuf_w(&evt);
+            }
+
             SEND(VdFw__MacBoolArgMsg)(window, S("setReleasedWhenClosed:"), NO);
             SEND(VdFw__MacObjectArgMsg)(window, S("setDelegate:"), Vd_Fw_G.delegate);
 
@@ -12089,31 +12198,10 @@ static void vd_fw__mac_delegate_handle_request(VdFw__MacID self, VdFw__MacSEL cm
 
             }
 
-            Vd_Fw_G.window = window;
-            unsigned int attributes[] = {99, 0x3200, 5, 8, 24, 0};
-            VdFw__MacID format = SEND(VdFw__MacPixelFormatInitMsg)(ALLOC("NSOpenGLPixelFormat"),
-                                                                   S("initWithAttributes:"),
-                                                                   attributes);
-
-            Vd_Fw_G.gl_context = SEND(VdFw__MacContextInitMsg)(ALLOC("NSOpenGLContext"),
-                                                               S("initWithFormat:shareContext:"),
-                                                               format,
-                                                               nil);
-
-            VdFw__MacID view = SEND(VdFw__MacObjectMsg)(window, S("contentView"));
-            Vd_Fw_G.cgl = SEND(VdFw__MacCGLContextMsg)(Vd_Fw_G.gl_context, S("CGLContextObj"));
-            SEND(VdFw__MacObjectArgMsg)(Vd_Fw_G.gl_context, S("setView:"), view);
             SEND(VdFw__MacVoidMsg)(window, S("center"));
             SEND(VdFw__MacObjectArgMsg)(window, S("makeKeyAndOrderFront:"), nil);
-            vd_fw__mac_delegate_drawable_changed(nil, NULL, nil);
-
-            VdFwGlConfig config = {0};
-            config.version = VD_FW_GL_VERSION_3_2;
-            vd_fw__load_opengl(&config);
-
-            GLint swap_interval = 1;
-            cgl_set_parameter(Vd_Fw_G.cgl, 222, &swap_interval);
-
+            Vd_Fw_G.window = window;
+            vd_fw__mac_set_graphics(graphics_api, gl_options);
         } break;
 
         case VD_FW__MAC_REQUEST_TYPE_QUIT: {
@@ -12126,6 +12214,10 @@ static void vd_fw__mac_delegate_handle_request(VdFw__MacID self, VdFw__MacSEL cm
         case VD_FW__MAC_REQUEST_TYPE_KILL: {
             SEND(VdFw__MacVoidMsg)(Vd_Fw_G.app, S("stop:"));
             Vd_Fw_G.initialized = 0;
+        } break;
+        
+        case VD_FW__MAC_REQUEST_TYPE_SET_GRAPHICS: {
+            vd_fw__mac_set_graphics(request->api, (VdFwOpenGLOptions*)request->ptr);
         } break;
     }
 }
@@ -12520,6 +12612,100 @@ static VdFwKey vd_fw__mac_translate_keycode(unsigned short keycode)
     }
 }
 
+static void vd_fw__mac_set_graphics(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_options)
+{
+    if (api == Vd_Fw_G.current_api) {
+        return;
+    }
+
+    switch (Vd_Fw_G.current_api) {
+        default: break;
+        case VD_FW_GRAPHICS_API_OPENGL: {
+
+            SEND(VdFw__MacVoidMsg)(Vd_Fw_G.gl_context, S("clearDrawable"));
+            SEND(VdFw__MacVoidMsg)(Vd_Fw_G.gl_context, S("release"));
+
+        } break;
+    }
+
+    switch (api) {
+        default: break;
+        case VD_FW_GRAPHICS_API_OPENGL: {
+
+            VdFwGlConfig default_configs[2];
+            VD_FW_MEMSET(default_configs, 0, sizeof(default_configs));
+            default_configs[0].version = VD_FW_GL_VERSION_3_3;
+            int selected_config = -1;
+
+            VdFwOpenGLOptions default_options = {0};
+            default_options.configs = default_configs;
+
+            if (!gl_options || (gl_options->configs == 0) || (gl_options->configs[0].version == VD_FW_GL_VERSION_BASIC)) {
+                gl_options = &default_options;
+            }
+
+            int index = 0;
+            while ((selected_config == -1) && (gl_options->configs && gl_options->configs[index].version != 0)) {
+                int minor        = gl_options->configs[index].version % 10;
+                int major        = gl_options->configs[index].version / 10;
+                int debug        = gl_options->configs[index].debug;
+                int compat       = gl_options->configs[index].compat;
+                int pixel_format = gl_options->configs[index].pixel_format;
+                int depth_format = gl_options->configs[index].depth_format;
+                int msaa         = gl_options->configs[index].msaa;
+
+                const uint32_t version_legacy = 0x1000;
+                const uint32_t version_core32 = 0x3200;
+                const uint32_t version_core41 = 0x4100;
+
+                uint32_t profile_version = version_legacy;
+
+                if ((major >= 3) && (minor >= 2)) {
+                    profile_version = version_core32;
+                }
+
+                if ((major == 4) && (minor == 1)) {
+                    profile_version = version_core41;
+                }
+
+                if ((major == 4) && (minor > 1)) {
+                    index++;
+                    continue;
+                }
+
+                uint32_t attributes[] = {
+                    99 /*NSOpenGLProfile*/,         profile_version,
+                    8  /*NSOpenGLPFAColorSize*/,    24,
+                    11 /*NSOpenGLPFAAlphaSize*/,    8,
+                    12 /*NSOpenGLPFADepthSize*/,    24,
+                    5  /*NSOpenGLPFADoubleBuffer*/,
+                    73 /*NSOpenGLPFAAccelerated*/,
+                    0
+                };
+
+                VdFw__MacID format = SEND(VdFw__MacPixelFormatInitMsg)(ALLOC("NSOpenGLPixelFormat"),
+                                                                       S("initWithAttributes:"),
+                                                                       attributes);
+
+                Vd_Fw_G.gl_context = SEND(VdFw__MacContextInitMsg)(ALLOC("NSOpenGLContext"),
+                                                                   S("initWithFormat:shareContext:"),
+                                                                   format,
+                                                                   nil);
+                vd_fw__load_opengl(&gl_options->configs[index]);
+
+                VdFw__MacID view = SEND(VdFw__MacObjectMsg)(Vd_Fw_G.window, S("contentView"));
+                Vd_Fw_G.cgl = SEND(VdFw__MacCGLContextMsg)(Vd_Fw_G.gl_context, S("CGLContextObj"));
+                SEND(VdFw__MacObjectArgMsg)(Vd_Fw_G.gl_context, S("setView:"), view);
+                vd_fw__mac_delegate_drawable_changed(nil, NULL, nil);
+
+                selected_config = index;
+                break;
+            }
+
+        } break;
+    }
+    Vd_Fw_G.current_api = api;
+}
 
 #elif defined(__linux__)
 #ifndef VD_FW_X11_MESSAGE_BUFFER_SIZE
