@@ -11498,6 +11498,8 @@ typedef void                     (*VdFw__MacPerformOnMainMsg)(VdFw__MacID, VdFw_
 typedef VdFw__MacCGLError        (*VdFw__MacCGLSetParameterProc)(VdFw__MacCGLContextObj, int, const GLint *);
 typedef void                     (*VdFw__MacUnsignedLongArgMsg)(VdFw__MacID, VdFw__MacSEL, unsigned long);
 typedef VdFw__MacID              (*VdFw__MacWindowButtonMsg)(VdFw__MacID, VdFw__MacSEL, unsigned long);
+typedef CGRect                   (*VdFw__MacRectMsg)(VdFw__MacID, VdFw__MacSEL);
+typedef BOOL                     (*VdFw__MacBoolMsg)(VdFw__MacID, VdFw__MacSEL);
 
 #define SEND(type)               ((type)msg_send)
 #define C(name)                  ((VdFw__MacID)get_class(name))
@@ -11532,6 +11534,33 @@ typedef struct {
     VdFwEvent                   msgbuf[VD_FW_MAC_MESSAGE_BUFFER_SIZE];
     volatile int                msgbuf_r;
     volatile int                msgbuf_w;
+    volatile int                running;
+
+    int                         scale_changed;
+    int                         wheel_moved;
+    float                       wheel[2];
+    int                         focus_changed;
+    int                         window_state_changed;
+    int                         prev_mouse_state;
+    int                         mouse_state;
+    int                         close_request;
+    int                         num_codepoints;
+    VdFwKey                     last_key;
+    float                       mouse_delta[2];
+    VdFwKey                     prev_key_states[VD_FW_KEY_MAX];
+    VdFwKey                     curr_key_states[VD_FW_KEY_MAX];
+    int                         size_changed;
+    int                         num_evts;
+    VdFwEvent                   evtbuf[VD_FW_EVENT_COUNT_MAX];
+    unsigned int                codepoints[VD_FW_CODEPOINT_BUFFER_COUNT];
+    int                         width, height;
+    int                         mouse[2];
+    int                         focused;
+    VdFwWindowState             window_state;
+    float                       scale;
+    int                         first_codepoint_index;
+    int                         w,h;
+    int                         is_zoomed;
 
 /* -OPENGL STUFF----------------------------------------------------------------------------------------------------- */
     VdFw__MacID                 gl_context;
@@ -11542,6 +11571,7 @@ typedef struct {
 typedef enum {
     VD_FW__MAC_REQUEST_TYPE_INIT,
     VD_FW__MAC_REQUEST_TYPE_QUIT,
+    VD_FW__MAC_REQUEST_TYPE_KILL,
 } VdFw__MacRequestType;
 
 typedef struct {
@@ -11559,14 +11589,19 @@ static void             vd_fw__mac_delegate_application_will_terminate(VdFw__Mac
 static void             vd_fw__mac_application_did_finish_launching(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification);
 static void             vd_fw__mac_delegate_window_will_start_live_resize(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification);
 static void             vd_fw__mac_delegate_window_did_end_live_resize(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification);
+static void             vd_fw__mac_delegate_window_did_become_key(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification);
+static void             vd_fw__mac_delegate_window_did_resign_key(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification);
+static void             vd_fw__mac_delegate_window_did_miniaturize(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification);
+static void             vd_fw__mac_delegate_window_did_deminiaturize(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification);
+static void             vd_fw__mac_delegate_window_did_resize(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification);
+static BOOL             vd_fw__mac_delegate_window_should_close(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification);
 static void             vd_fw__mac_delegate_handle_request(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID data);
 static void*            vd_fw__mac_thread_proc(void *arg);
 static VdFw__MacID      vd_fw__mac_nsstring(const char *text);
 static void*            vd_fw__gl_get_proc_address(const char *name);
 static int              vd_fw__mac_msgbuf_r(VdFwEvent *message);
 static int              vd_fw__mac_msgbuf_w(VdFwEvent *message);
-
-
+static VdFwKey          vd_fw__mac_translate_keycode(unsigned short keycode);
 
 VD_FW_API int vd_fw_init(VdFwInitInfo *info)
 {
@@ -11580,8 +11615,35 @@ VD_FW_API int vd_fw_init(VdFwInitInfo *info)
                                     S("handleRequest:"),
                                     data,
                                     YES);
+    Vd_Fw_G.running = 1;
     cgl_set_current(Vd_Fw_G.cgl);
     return 1;
+}
+
+VD_FW_API void vd_fw_quit(void)
+{
+    VdFw__MacRequest rq;
+    rq.type = VD_FW__MAC_REQUEST_TYPE_QUIT;
+    id data = SEND(VdFw__MacBytesLengthMsg)(C("NSData"),  S("dataWithBytes:length:"), &rq, sizeof(rq));
+
+    SEND(VdFw__MacPerformOnMainMsg)(Vd_Fw_G.delegate,
+                                    S("performSelectorOnMainThread:withObject:waitUntilDone:"),
+                                    S("handleRequest:"),
+                                    data,
+                                    YES);
+}
+
+VD_FW_API void vd_fw_exit(void)
+{
+    VdFw__MacRequest rq;
+    rq.type = VD_FW__MAC_REQUEST_TYPE_KILL;
+    id data = SEND(VdFw__MacBytesLengthMsg)(C("NSData"),  S("dataWithBytes:length:"), &rq, sizeof(rq));
+
+    SEND(VdFw__MacPerformOnMainMsg)(Vd_Fw_G.delegate,
+                                    S("performSelectorOnMainThread:withObject:waitUntilDone:"),
+                                    S("handleRequest:"),
+                                    data,
+                                    YES);
 }
 
 VD_FW_API void vd_fw_lock(void)
@@ -11605,16 +11667,138 @@ VD_FW_API void vd_fw_unlock(void)
 
 VD_FW_API int vd_fw_running(void)
 {
-    return 1;
+    int ret;
+    __atomic_load(&Vd_Fw_G.running, &ret, __ATOMIC_RELAXED);
+    return ret;
 }
 
-VD_FW_API VdFwEvent *vd_fw_poll(int *num_events)
+VD_FW_API int vd_fw_close_requested(void)
 {
-    if (num_events) {
-        *num_events = 0;
+    return Vd_Fw_G.close_request;
+}
+
+VD_FW_API VdFwEvent *vd_fw_poll(int *count)
+{
+    Vd_Fw_G.scale_changed = 0;
+    Vd_Fw_G.wheel_moved = 0;
+    Vd_Fw_G.wheel[0] = 0.f;
+    Vd_Fw_G.wheel[1] = 0.f;
+    Vd_Fw_G.focus_changed = 0;
+    Vd_Fw_G.window_state_changed = 0;
+    Vd_Fw_G.prev_mouse_state = Vd_Fw_G.mouse_state;
+    Vd_Fw_G.close_request = 0;
+
+    Vd_Fw_G.num_codepoints = 0;
+    Vd_Fw_G.last_key = VD_FW_KEY_UNKNOWN;
+    VdFwU16 num_codepoints = 0;
+    Vd_Fw_G.mouse_delta[0] = Vd_Fw_G.mouse_delta[1] = 0.f;
+
+    for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
+        Vd_Fw_G.prev_key_states[i] = Vd_Fw_G.curr_key_states[i];
     }
 
-    return 0;
+    Vd_Fw_G.num_evts = 0;
+    Vd_Fw_G.size_changed = 0;
+
+    VdFwEvent mm;
+    while (vd_fw__mac_msgbuf_r(&mm) && (Vd_Fw_G.num_evts < VD_FW_EVENT_COUNT_MAX)) {
+        Vd_Fw_G.evtbuf[Vd_Fw_G.num_evts++] = mm;
+
+        switch (mm.type) {
+            case VD_FW_EVENT_TYPE_CHARACTER: {
+                Vd_Fw_G.codepoints[(num_codepoints++) % VD_FW_CODEPOINT_BUFFER_COUNT] = mm.data.character.codepoint;
+            } break;
+
+            case VD_FW_EVENT_TYPE_RESIZE: {
+                Vd_Fw_G.width = mm.data.resize.w;
+                Vd_Fw_G.height = mm.data.resize.h;
+                Vd_Fw_G.size_changed = 1;
+            } break;
+
+            case VD_FW_EVENT_TYPE_CLOSE_REQUEST: {
+                Vd_Fw_G.close_request = 1;
+            } break;
+
+            case VD_FW_EVENT_TYPE_MOUSE_MOVE: {
+                Vd_Fw_G.mouse[0] = mm.data.mouse_move.x;
+                Vd_Fw_G.mouse[1] = mm.data.mouse_move.y;
+            } break;
+
+            case VD_FW_EVENT_TYPE_MOUSE_DELTA: {
+                Vd_Fw_G.mouse_delta[0] = Vd_Fw_G.mouse_delta[0] * 0.8f + mm.data.mouse_delta.dx * 0.2f;
+                Vd_Fw_G.mouse_delta[1] = Vd_Fw_G.mouse_delta[1] * 0.8f + mm.data.mouse_delta.dy * 0.2f;
+            } break;
+
+            case VD_FW_EVENT_TYPE_MOUSE_SCROLL: {
+                Vd_Fw_G.wheel[0] += mm.data.mouse_scroll.dx;
+                Vd_Fw_G.wheel[1] += mm.data.mouse_scroll.dy;
+            } break;
+
+            case VD_FW_EVENT_TYPE_MOUSE_BUTTON_DOWN: {
+                Vd_Fw_G.mouse_state |= mm.data.mouse_button_down.button;
+            } break;
+
+            case VD_FW_EVENT_TYPE_MOUSE_BUTTON_UP: {
+                Vd_Fw_G.mouse_state &= ~mm.data.mouse_button_up.button;
+            } break;
+
+            case VD_FW_EVENT_TYPE_FOCUS_CHANGE: {
+                Vd_Fw_G.focus_changed = 1;
+                Vd_Fw_G.focused = mm.data.focus_change.got_focus;
+
+                if (!Vd_Fw_G.focused) {
+                    for (int i = 0; i < VD_FW_KEY_MAX; ++i) {
+                        Vd_Fw_G.curr_key_states[i] = 0;
+                    }
+                }
+            } break;
+
+            case VD_FW_EVENT_TYPE_KEY_UP: {
+                Vd_Fw_G.curr_key_states[mm.data.key_up.key] = 0;
+            } break;
+
+            case VD_FW_EVENT_TYPE_KEY_DOWN: {
+                Vd_Fw_G.curr_key_states[mm.data.key_down.key] = 1;
+            } break;
+
+            case VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE: {
+                int prev_state = Vd_Fw_G.window_state;
+                int change_flag = mm.data.window_state_change.flag;
+                if (mm.data.window_state_change.value) {
+                    Vd_Fw_G.window_state |= change_flag;
+                } else {
+                    Vd_Fw_G.window_state &= ~change_flag;
+                }
+
+                if (prev_state != Vd_Fw_G.window_state) {
+                    Vd_Fw_G.window_state_changed |= change_flag;
+                }
+
+            } break;
+
+            case VD_FW_EVENT_TYPE_SCALE_CHANGE: {
+                Vd_Fw_G.scale = mm.data.scale_change.new_scale;
+                Vd_Fw_G.scale_changed = 1;
+            } break;
+
+            default: break;
+        }
+    }
+
+    Vd_Fw_G.num_codepoints = (num_codepoints < VD_FW_CODEPOINT_BUFFER_COUNT) 
+                             ? num_codepoints
+                             : VD_FW_CODEPOINT_BUFFER_COUNT;
+    if (num_codepoints > 0) {
+        Vd_Fw_G.first_codepoint_index = (num_codepoints - 1) % VD_FW_CODEPOINT_BUFFER_COUNT;
+    } else {
+        Vd_Fw_G.first_codepoint_index = 0;
+    }
+
+    if (count) {
+        *count = Vd_Fw_G.num_evts;
+    }
+
+    return Vd_Fw_G.evtbuf;
 }
 
 VD_FW_API int vd_fw_main(int argc, const char *argv[], int (*callback)(int argc, const char *argv[]))
@@ -11628,7 +11812,7 @@ VD_FW_API int vd_fw_main(int argc, const char *argv[], int (*callback)(int argc,
     Vd_Fw_G.main_callback = callback;
 
     const char *resize_methods[] = {
-        "windowDidResize:", "windowDidMove:", "windowDidChangeScreen:", "windowDidChangeBackingProperties:",
+        "windowDidMove:", "windowDidChangeScreen:", "windowDidChangeBackingProperties:",
     };
 
     vd_fw__mac_init();
@@ -11661,6 +11845,25 @@ VD_FW_API int vd_fw_main(int argc, const char *argv[], int (*callback)(int argc,
     add_method(delegate_class, S("windowDidEndLiveResize:"),
                                (VdFw__MacIMP)vd_fw__mac_delegate_window_did_end_live_resize,
                                "v@:@");
+    add_method(delegate_class, S("windowDidBecomeKey:"),
+                               (VdFw__MacIMP)vd_fw__mac_delegate_window_did_become_key,
+                               "v@:@");
+    add_method(delegate_class, S("windowDidResignKey:"),
+                               (VdFw__MacIMP)vd_fw__mac_delegate_window_did_resign_key,
+                               "v@:@");
+    add_method(delegate_class, S("windowDidMiniaturize:"),
+                               (VdFw__MacIMP)vd_fw__mac_delegate_window_did_miniaturize,
+                               "v@:@");
+    add_method(delegate_class, S("windowDidDeminiaturize:"),
+                               (VdFw__MacIMP)vd_fw__mac_delegate_window_did_deminiaturize,
+                               "v@:@");
+    add_method(delegate_class, S("windowDidResize:"),
+                               (VdFw__MacIMP)vd_fw__mac_delegate_window_did_resize,
+                               "v@:@");
+    add_method(delegate_class, S("windowShouldClose:"),
+                               (VdFw__MacIMP)vd_fw__mac_delegate_window_should_close,
+                               OBJC_BOOL_IS_BOOL ? "B@:@" : "c@:@");
+
 
     register_class(delegate_class);
 
@@ -11754,6 +11957,7 @@ static BOOL vd_fw__mac_delegate_quit_after_last_window(VdFw__MacID self, VdFw__M
 
 static void vd_fw__mac_delegate_application_will_terminate(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification)
 {
+    // @note(mdodis): never called.
 }
 
 static void vd_fw__mac_application_did_finish_launching(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification)
@@ -11769,6 +11973,63 @@ static void vd_fw__mac_delegate_window_will_start_live_resize(VdFw__MacID self, 
 static void vd_fw__mac_delegate_window_did_end_live_resize(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification)
 {
     Vd_Fw_G.is_live_resizing = 0;
+}
+
+static void vd_fw__mac_delegate_window_did_become_key(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification)
+{
+
+}
+
+static void vd_fw__mac_delegate_window_did_resign_key(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification)
+{
+
+}
+
+static void vd_fw__mac_delegate_window_did_miniaturize(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification)
+{
+
+}
+
+static void vd_fw__mac_delegate_window_did_deminiaturize(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification)
+{
+
+}
+
+static void vd_fw__mac_delegate_window_did_resize(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification)
+{
+    vd_fw__mac_delegate_drawable_changed(self, cmd, notification);
+
+    VdFw__MacID content_view = SEND(VdFw__MacObjectMsg)(Vd_Fw_G.window, S("contentView"));
+    CGRect rect = SEND(VdFw__MacRectMsg)(content_view, S("frame"));
+
+    Vd_Fw_G.w = (int)rect.size.width * Vd_Fw_G.scale;
+    Vd_Fw_G.h = (int)rect.size.height * Vd_Fw_G.scale;
+
+    VdFwEvent evt;
+    evt.type = VD_FW_EVENT_TYPE_RESIZE;
+    evt.data.resize.w = Vd_Fw_G.w;
+    evt.data.resize.h = Vd_Fw_G.h;
+    vd_fw__mac_msgbuf_w(&evt);
+
+    BOOL is_zoomed = SEND(VdFw__MacBoolMsg)(Vd_Fw_G.window, S("isZoomed"));
+    if (Vd_Fw_G.is_zoomed != is_zoomed) {
+        Vd_Fw_G.is_zoomed = is_zoomed;
+
+        VdFwEvent evt;
+        evt.type = VD_FW_EVENT_TYPE_WINDOW_STATE_CHANGE;
+        evt.data.window_state_change.flag = VD_FW_WINDOW_STATE_MAXIMIZED;
+        evt.data.window_state_change.value = Vd_Fw_G.is_zoomed;
+        vd_fw__mac_msgbuf_w(&evt);
+    }
+}
+
+static BOOL vd_fw__mac_delegate_window_should_close(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID notification)
+{
+    VdFwEvent evt;
+    evt.type = VD_FW_EVENT_TYPE_CLOSE_REQUEST;
+    vd_fw__mac_msgbuf_w(&evt);
+
+    return NO;
 }
 
 static void vd_fw__mac_delegate_handle_request(VdFw__MacID self, VdFw__MacSEL cmd, VdFw__MacID data)
@@ -11854,12 +12115,28 @@ static void vd_fw__mac_delegate_handle_request(VdFw__MacID self, VdFw__MacSEL cm
             cgl_set_parameter(Vd_Fw_G.cgl, 222, &swap_interval);
 
         } break;
+
+        case VD_FW__MAC_REQUEST_TYPE_QUIT: {
+            int new_running = 0;
+            __atomic_exchange_n(&Vd_Fw_G.running, new_running, __ATOMIC_SEQ_CST);
+
+            SEND(VdFw__MacVoidMsg)(Vd_Fw_G.window, S("close"));
+        } break;
+
+        case VD_FW__MAC_REQUEST_TYPE_KILL: {
+            SEND(VdFw__MacVoidMsg)(Vd_Fw_G.app, S("stop:"));
+            Vd_Fw_G.initialized = 0;
+        } break;
     }
 }
 
 static void *vd_fw__mac_thread_proc(void *arg)
 {
     int result = Vd_Fw_G.main_callback(Vd_Fw_G.argc, Vd_Fw_G.argv);
+    if (Vd_Fw_G.initialized) {
+        vd_fw_exit();
+    }
+
     return (void*)result;
 }
 
@@ -11958,6 +12235,291 @@ static int vd_fw__mac_msgbuf_w(VdFwEvent *message)
 
     return 1;
 }
+
+static VdFwKey vd_fw__mac_translate_keycode(unsigned short keycode)
+{
+                    // Escape: F17: 53
+                    // Up: 126
+                    // Down: 125
+                    // Right: 124
+                    // Left: 123
+                    // 
+    static VdFwKey translation_table[280] = {
+        VD_FW_KEY_A,                 // 0,     KEY_A
+        VD_FW_KEY_S,                 // 1,     KEY_S
+        VD_FW_KEY_D,                 // 2,     KEY_D
+        VD_FW_KEY_F,                 // 3,     KEY_F
+        VD_FW_KEY_H,                 // 4,     KEY_H
+        VD_FW_KEY_G,                 // 5,     KEY_G
+        VD_FW_KEY_Z,                 // 6,     KEY_Z
+        VD_FW_KEY_X,                 // 7,     KEY_X
+        VD_FW_KEY_C,                 // 8,     KEY_C
+        VD_FW_KEY_V,                 // 9,     KEY_V
+        VD_FW_KEY_UNKNOWN,           // 10,    -----
+        VD_FW_KEY_B,                 // 11,    KEY_B
+        VD_FW_KEY_Q,                 // 12,    KEY_Q
+        VD_FW_KEY_W,                 // 13,    KEY_W
+        VD_FW_KEY_E,                 // 14,    KEY_E
+        VD_FW_KEY_R,                 // 15,    KEY_R
+        VD_FW_KEY_Y,                 // 16,    KEY_Y
+        VD_FW_KEY_T,                 // 17,    KEY_T
+        VD_FW_KEY_1,                 // 18,    KEY_1
+        VD_FW_KEY_2,                 // 19,    KEY_2
+        VD_FW_KEY_3,                 // 20,    KEY_3
+        VD_FW_KEY_4,                 // 21,    KEY_4
+        VD_FW_KEY_6,                 // 22,    KEY_6
+        VD_FW_KEY_5,                 // 23,    KEY_5
+        VD_FW_KEY_EQUALS,            // 24,    KEY_EQUAL
+        VD_FW_KEY_9,                 // 25,    KEY_9
+        VD_FW_KEY_7,                 // 26,    KEY_7
+        VD_FW_KEY_MINUS,             // 27,    KEY_MINUS
+        VD_FW_KEY_8,                 // 28,    KEY_8
+        VD_FW_KEY_0,                 // 29,    KEY_0
+        VD_FW_KEY_BRACKET_CLOSE,     // 30,    KEY_CLOSE_BRACE/KEY_CLOSE_BRACKET
+        VD_FW_KEY_O,                 // 31,    KEY_O
+        VD_FW_KEY_U,                 // 32,    KEY_U
+        VD_FW_KEY_BRACKET_OPEN,      // 33,    KEY_OPEN_BRACE/KEY_OPEN_BRACKET
+        VD_FW_KEY_I,                 // 34,    KEY_I
+        VD_FW_KEY_P,                 // 35,    KEY_P
+        VD_FW_KEY_ENTER,             // 36,    KEY_ENTER
+        VD_FW_KEY_L,                 // 37,    KEY_L
+        VD_FW_KEY_J,                 // 38,    KEY_J
+        VD_FW_KEY_QUOTE,             // 39,    KEY_DOUBLE_QUOTES/KEY_SIMPLE_QUOTE
+        VD_FW_KEY_K,                 // 40,    KEY_K
+        VD_FW_KEY_SEMICOLON,         // 41,    KEY_COLON/KEY_SEMI_COLON
+        VD_FW_KEY_SLASH_BACK,        // 42,    KEY_BACKSLASH/KEY_PIPE
+        VD_FW_KEY_COMMA,             // 43,    KEY_COMMA/KEY_LESS_THAN
+        VD_FW_KEY_SLASH_FORWARD,     // 44,    KEY_QUESTION_MARK/KEY_SLASH
+        VD_FW_KEY_N,                 // 45,    KEY_N
+        VD_FW_KEY_M,                 // 46,    KEY_M
+        VD_FW_KEY_DOT,               // 47,    KEY_DOT/KEY_GREATER_THAN
+        VD_FW_KEY_TAB,               // 48,    KEY_TAB
+        VD_FW_KEY_SPACE,             // 49,    KEY_SPACEBAR
+        VD_FW_KEY_BACKTICK,          // 50,    KEY_TILDE
+        VD_FW_KEY_BACKSPACE,         // 51,    KEY_BACKSPACE
+        VD_FW_KEY_UNKNOWN,           // 52,    ----
+        VD_FW_KEY_ESCAPE,            // 53,    KEY_ESCAPE
+        VD_FW_KEY_UNKNOWN,           // 54,    ----
+        VD_FW_KEY_UNKNOWN,           // 55,    ----
+        VD_FW_KEY_UNKNOWN,           // 56,    ----
+        VD_FW_KEY_UNKNOWN,           // 57,    ----
+        VD_FW_KEY_UNKNOWN,           // 58,    ----
+        VD_FW_KEY_UNKNOWN,           // 59,    ----
+        VD_FW_KEY_UNKNOWN,           // 60,    ----
+        VD_FW_KEY_UNKNOWN,           // 61,    ----
+        VD_FW_KEY_UNKNOWN,           // 62,    ----
+        VD_FW_KEY_UNKNOWN,           // 63,    ----
+        VD_FW_KEY_F17,               // 64,    KEY_F17
+        VD_FW_KEY_UNKNOWN,           // 65,    KEY_PAD_DOT
+        VD_FW_KEY_UNKNOWN,           // 66,    ----
+        VD_FW_KEY_UNKNOWN,           // 67,    KEY_PAD_MULTIPLY
+        VD_FW_KEY_UNKNOWN,           // 68,    ----
+        VD_FW_KEY_UNKNOWN,           // 69,    KEY_PAD_ADD
+        VD_FW_KEY_UNKNOWN,           // 70,    ----
+        VD_FW_KEY_UNKNOWN,           // 71,    KEY_CLEAR
+        VD_FW_KEY_UNKNOWN,           // 72,    ----
+        VD_FW_KEY_UNKNOWN,           // 73,    ----
+        VD_FW_KEY_UNKNOWN,           // 74,    ----
+        VD_FW_KEY_UNKNOWN,           // 75,    KEY_PAD_DIVIDE
+        VD_FW_KEY_UNKNOWN,           // 76,    KEY_PAD_ENTER
+        VD_FW_KEY_UNKNOWN,           // 77,    ----
+        VD_FW_KEY_UNKNOWN,           // 78,    KEY_PAD_SUB
+        VD_FW_KEY_F18,               // 79,    KEY_F18
+        VD_FW_KEY_F19,               // 80,    KEY_F19
+        VD_FW_KEY_UNKNOWN,           // 81,    KEY_PAD_EQUAL
+        VD_FW_KEY_NUMPAD_0,          // 82,    KEY_PAD_0
+        VD_FW_KEY_NUMPAD_1,          // 83,    KEY_PAD_1
+        VD_FW_KEY_NUMPAD_2,          // 84,    KEY_PAD_2
+        VD_FW_KEY_NUMPAD_3,          // 85,    KEY_PAD_3
+        VD_FW_KEY_NUMPAD_4,          // 86,    KEY_PAD_4
+        VD_FW_KEY_NUMPAD_5,          // 87,    KEY_PAD_5
+        VD_FW_KEY_NUMPAD_6,          // 88,    KEY_PAD_6
+        VD_FW_KEY_NUMPAD_7,          // 89,    KEY_PAD_7
+        VD_FW_KEY_UNKNOWN,           // 90,    ----
+        VD_FW_KEY_NUMPAD_8,          // 91,    KEY_PAD_8
+        VD_FW_KEY_NUMPAD_9,          // 92,    KEY_PAD_9
+        VD_FW_KEY_UNKNOWN,           // 93,    ----
+        VD_FW_KEY_UNKNOWN,           // 94,    ----
+        VD_FW_KEY_UNKNOWN,           // 95,    ----
+        VD_FW_KEY_F5,                // 96,    KEY_F5
+        VD_FW_KEY_F6,                // 97,    KEY_F6
+        VD_FW_KEY_F7,                // 98,    KEY_F7
+        VD_FW_KEY_F3,                // 99,    KEY_F3
+        VD_FW_KEY_F8,                // 100,   KEY_F8
+        VD_FW_KEY_F9,                // 101,   KEY_F9
+        VD_FW_KEY_UNKNOWN,           // 102,    ----
+        VD_FW_KEY_F11,               // 103,   KEY_F11
+        VD_FW_KEY_UNKNOWN,           // 104,    ----
+        VD_FW_KEY_F13,               // 105,   KEY_F13
+        VD_FW_KEY_F16,               // 106,   KEY_F16
+        VD_FW_KEY_F14,               // 107,   KEY_F14
+        VD_FW_KEY_UNKNOWN,           // 108,    ----
+        VD_FW_KEY_F10,               // 109,   KEY_F10
+        VD_FW_KEY_UNKNOWN,           // 110,    ----
+        VD_FW_KEY_F12,               // 111,   KEY_F12
+        VD_FW_KEY_UNKNOWN,           // 112,    ----
+        VD_FW_KEY_F15,               // 113,   KEY_F15
+        VD_FW_KEY_UNKNOWN,           // 114,    ----
+        VD_FW_KEY_HOME,              // 115,   KEY_HOME
+        VD_FW_KEY_PGUP,              // 116,   KEY_PAGE_UP
+        VD_FW_KEY_DEL,               // 117,   KEY_DEL
+        VD_FW_KEY_F4,                // 118,   KEY_F4
+        VD_FW_KEY_END,               // 119,   KEY_END
+        VD_FW_KEY_F2,                // 120,   KEY_F2
+        VD_FW_KEY_PGDN,              // 121,   KEY_PAGE_DOWN
+        VD_FW_KEY_F1,                // 122,   KEY_F1
+        VD_FW_KEY_ARROW_LEFT,        // 123,   KEY_LEFT
+        VD_FW_KEY_ARROW_RIGHT,       // 124,   KEY_RIGHT
+        VD_FW_KEY_ARROW_DOWN,        // 125,   KEY_DOWN
+        VD_FW_KEY_ARROW_UP,          // 126,   KEY_UP
+        VD_FW_KEY_UNKNOWN,           // 127,    ----
+        VD_FW_KEY_UNKNOWN,           // 128,    ----
+        VD_FW_KEY_UNKNOWN,           // 129,    ----
+        VD_FW_KEY_UNKNOWN,           // 130,    ----
+        VD_FW_KEY_UNKNOWN,           // 131,    ----
+        VD_FW_KEY_UNKNOWN,           // 132,    ----
+        VD_FW_KEY_UNKNOWN,           // 133,    ----
+        VD_FW_KEY_UNKNOWN,           // 134,    ----
+        VD_FW_KEY_UNKNOWN,           // 135,    ----
+        VD_FW_KEY_UNKNOWN,           // 136,    ----
+        VD_FW_KEY_UNKNOWN,           // 137,    ----
+        VD_FW_KEY_UNKNOWN,           // 138,    ----
+        VD_FW_KEY_UNKNOWN,           // 139,    ----
+        VD_FW_KEY_UNKNOWN,           // 140,    ----
+        VD_FW_KEY_UNKNOWN,           // 141,    ----
+        VD_FW_KEY_UNKNOWN,           // 142,    ----
+        VD_FW_KEY_UNKNOWN,           // 143,    ----
+        VD_FW_KEY_UNKNOWN,           // 144,    ----
+        VD_FW_KEY_UNKNOWN,           // 145,    ----
+        VD_FW_KEY_UNKNOWN,           // 146,    ----
+        VD_FW_KEY_UNKNOWN,           // 147,    ----
+        VD_FW_KEY_UNKNOWN,           // 148,    ----
+        VD_FW_KEY_UNKNOWN,           // 149,    ----
+        VD_FW_KEY_UNKNOWN,           // 150,    ----
+        VD_FW_KEY_UNKNOWN,           // 151,    ----
+        VD_FW_KEY_UNKNOWN,           // 152,    ----
+        VD_FW_KEY_UNKNOWN,           // 153,    ----
+        VD_FW_KEY_UNKNOWN,           // 154,    ----
+        VD_FW_KEY_UNKNOWN,           // 155,    ----
+        VD_FW_KEY_UNKNOWN,           // 156,    ----
+        VD_FW_KEY_UNKNOWN,           // 157,    ----
+        VD_FW_KEY_UNKNOWN,           // 158,    ----
+        VD_FW_KEY_UNKNOWN,           // 159,    ----
+        VD_FW_KEY_UNKNOWN,           // 160,    ----
+        VD_FW_KEY_UNKNOWN,           // 161,    ----
+        VD_FW_KEY_UNKNOWN,           // 162,    ----
+        VD_FW_KEY_UNKNOWN,           // 163,    ----
+        VD_FW_KEY_UNKNOWN,           // 164,    ----
+        VD_FW_KEY_UNKNOWN,           // 165,    ----
+        VD_FW_KEY_UNKNOWN,           // 166,    ----
+        VD_FW_KEY_UNKNOWN,           // 167,    ----
+        VD_FW_KEY_UNKNOWN,           // 168,    ----
+        VD_FW_KEY_UNKNOWN,           // 169,    ----
+        VD_FW_KEY_UNKNOWN,           // 170,    ----
+        VD_FW_KEY_UNKNOWN,           // 171,    ----
+        VD_FW_KEY_UNKNOWN,           // 172,    ----
+        VD_FW_KEY_UNKNOWN,           // 173,    ----
+        VD_FW_KEY_UNKNOWN,           // 174,    ----
+        VD_FW_KEY_UNKNOWN,           // 175,    ----
+        VD_FW_KEY_UNKNOWN,           // 176,    ----
+        VD_FW_KEY_UNKNOWN,           // 177,    ----
+        VD_FW_KEY_UNKNOWN,           // 178,    ----
+        VD_FW_KEY_UNKNOWN,           // 179,    ----
+        VD_FW_KEY_UNKNOWN,           // 180,    ----
+        VD_FW_KEY_UNKNOWN,           // 181,    ----
+        VD_FW_KEY_UNKNOWN,           // 182,    ----
+        VD_FW_KEY_UNKNOWN,           // 183,    ----
+        VD_FW_KEY_UNKNOWN,           // 184,    ----
+        VD_FW_KEY_UNKNOWN,           // 185,    ----
+        VD_FW_KEY_UNKNOWN,           // 186,    ----
+        VD_FW_KEY_UNKNOWN,           // 187,    ----
+        VD_FW_KEY_UNKNOWN,           // 188,    ----
+        VD_FW_KEY_UNKNOWN,           // 189,    ----
+        VD_FW_KEY_UNKNOWN,           // 190,    ----
+        VD_FW_KEY_UNKNOWN,           // 191,    ----
+        VD_FW_KEY_UNKNOWN,           // 192,    ----
+        VD_FW_KEY_UNKNOWN,           // 193,    ----
+        VD_FW_KEY_UNKNOWN,           // 194,    ----
+        VD_FW_KEY_UNKNOWN,           // 195,    ----
+        VD_FW_KEY_UNKNOWN,           // 196,    ----
+        VD_FW_KEY_UNKNOWN,           // 197,    ----
+        VD_FW_KEY_UNKNOWN,           // 198,    ----
+        VD_FW_KEY_UNKNOWN,           // 199,    ----
+        VD_FW_KEY_UNKNOWN,           // 200,    ----
+        VD_FW_KEY_UNKNOWN,           // 201,    ----
+        VD_FW_KEY_UNKNOWN,           // 202,    ----
+        VD_FW_KEY_UNKNOWN,           // 203,    ----
+        VD_FW_KEY_UNKNOWN,           // 204,    ----
+        VD_FW_KEY_UNKNOWN,           // 205,    ----
+        VD_FW_KEY_UNKNOWN,           // 206,    ----
+        VD_FW_KEY_UNKNOWN,           // 207,    ----
+        VD_FW_KEY_UNKNOWN,           // 208,    ----
+        VD_FW_KEY_UNKNOWN,           // 209,    ----
+        VD_FW_KEY_UNKNOWN,           // 210,    ----
+        VD_FW_KEY_UNKNOWN,           // 211,    ----
+        VD_FW_KEY_UNKNOWN,           // 212,    ----
+        VD_FW_KEY_UNKNOWN,           // 213,    ----
+        VD_FW_KEY_UNKNOWN,           // 214,    ----
+        VD_FW_KEY_UNKNOWN,           // 215,    ----
+        VD_FW_KEY_UNKNOWN,           // 216,    ----
+        VD_FW_KEY_UNKNOWN,           // 217,    ----
+        VD_FW_KEY_UNKNOWN,           // 218,    ----
+        VD_FW_KEY_UNKNOWN,           // 219,    ----
+        VD_FW_KEY_UNKNOWN,           // 220,    ----
+        VD_FW_KEY_UNKNOWN,           // 221,    ----
+        VD_FW_KEY_UNKNOWN,           // 222,    ----
+        VD_FW_KEY_UNKNOWN,           // 223,    ----
+        VD_FW_KEY_UNKNOWN,           // 224,    ----
+        VD_FW_KEY_UNKNOWN,           // 225,    ----
+        VD_FW_KEY_UNKNOWN,           // 226,    ----
+        VD_FW_KEY_UNKNOWN,           // 227,    ----
+        VD_FW_KEY_UNKNOWN,           // 228,    ----
+        VD_FW_KEY_UNKNOWN,           // 229,    ----
+        VD_FW_KEY_UNKNOWN,           // 230,    ----
+        VD_FW_KEY_UNKNOWN,           // 231,    ----
+        VD_FW_KEY_UNKNOWN,           // 232,    ----
+        VD_FW_KEY_UNKNOWN,           // 233,    ----
+        VD_FW_KEY_UNKNOWN,           // 234,    ----
+        VD_FW_KEY_UNKNOWN,           // 235,    ----
+        VD_FW_KEY_UNKNOWN,           // 236,    ----
+        VD_FW_KEY_UNKNOWN,           // 237,    ----
+        VD_FW_KEY_UNKNOWN,           // 238,    ----
+        VD_FW_KEY_UNKNOWN,           // 239,    ----
+        VD_FW_KEY_UNKNOWN,           // 240,    ----
+        VD_FW_KEY_UNKNOWN,           // 241,    ----
+        VD_FW_KEY_UNKNOWN,           // 242,    ----
+        VD_FW_KEY_UNKNOWN,           // 243,    ----
+        VD_FW_KEY_UNKNOWN,           // 244,    ----
+        VD_FW_KEY_UNKNOWN,           // 245,    ----
+        VD_FW_KEY_UNKNOWN,           // 246,    ----
+        VD_FW_KEY_UNKNOWN,           // 247,    ----
+        VD_FW_KEY_UNKNOWN,           // 248,    ----
+        VD_FW_KEY_UNKNOWN,           // 249,    ----
+        VD_FW_KEY_UNKNOWN,           // 250,    ----
+        VD_FW_KEY_UNKNOWN,           // 251,    ----
+        VD_FW_KEY_UNKNOWN,           // 252,    ----
+        VD_FW_KEY_UNKNOWN,           // 253,    ----
+        VD_FW_KEY_UNKNOWN,           // 254,    ----
+        VD_FW_KEY_UNKNOWN,           // 255,    ----
+        VD_FW_KEY_LCONTROL,          // 256,   KEY_CTRL_LEFT
+        VD_FW_KEY_LSHIFT,            // 257,   KEY_SHIFT_LEFT
+        VD_FW_KEY_RSHIFT,            // 258,   KEY_SHIFT_RIGHT
+        VD_FW_KEY_LALT,              // 259,   KEY_COMMAND_LEFT
+        VD_FW_KEY_RALT,              // 260,   KEY_COMMAND_RIGHT
+        VD_FW_KEY_UNKNOWN,           // 261,   KEY_OPTION_LEFT
+        VD_FW_KEY_UNKNOWN,           // 262,   KEY_ALT_GR
+        VD_FW_KEY_RCONTROL,          // 269,   KEY_CTRL_RIGHT
+        VD_FW_KEY_CAPITAL,           // 272,   KEY_CAPSLOCK
+        VD_FW_KEY_UNKNOWN,           // 279,   KEY_FN
+    };
+
+    if (keycode < 280) {
+        return translation_table[keycode];
+    } else {
+        return VD_FW_KEY_UNKNOWN;
+    }
+}
+
 
 #elif defined(__linux__)
 #ifndef VD_FW_X11_MESSAGE_BUFFER_SIZE
