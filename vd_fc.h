@@ -396,7 +396,6 @@ static VdFc__CommonDeviceData   vd_fc__device_get_common_data(uint16_t vendor_id
 static uint32_t                 vd_fc__make_reflected_crc32(uint8_t *data, uint32_t count);
 
 #ifdef _WIN32
-#ifndef _MINWINDEF_
 #define VD_FC_DECLARE_HANDLE(name) struct name##__{int unused;}; typedef struct name##__ *name
 
 typedef unsigned long        VdFcDWORD;
@@ -464,7 +463,6 @@ typedef short               VdFcSHORT;
 typedef VdFcDWORD           VdFcCOLORREF;
 typedef VdFcDWORD*          VdFcLPCOLORREF;
 
-VD_FC_DECLARE_HANDLE(VdFcHWND);
 VD_FC_DECLARE_HANDLE(VdFcHINSTANCE);
 VD_FC_DECLARE_HANDLE(VdFcHDC);
 VD_FC_DECLARE_HANDLE(VdFcHMONITOR);
@@ -472,6 +470,7 @@ VD_FC_DECLARE_HANDLE(VdFcHGDIOBJ);
 VD_FC_DECLARE_HANDLE(VdFcHWND);
 VD_FC_DECLARE_HANDLE(VdFcHICON);
 VD_FC_DECLARE_HANDLE(VdFcHBITMAP);
+VD_FC_DECLARE_HANDLE(VdFcHCURSOR);
 VD_FC_DECLARE_HANDLE(VdFcHBRUSH);
 VD_FC_DECLARE_HANDLE(VdFcHMENU);
 
@@ -503,6 +502,11 @@ typedef union VdFc_LARGE_INTEGER {
   VdFcLONGLONG QuadPart;
 } VdFcLARGE_INTEGER;
 
+#ifdef __cplusplus
+#define VD_FC_EXPORT_C "C"
+#else
+#define VD_FC_EXPORT_C
+#endif
 extern VdFcHMODULE LoadLibraryA(VdFcLPCSTR path);
 extern void*       HeapAlloc(VdFcHANDLE hHeap, VdFcDWORD dwFlags, VdFcSIZE_T dwBytes);
 extern VdFcHANDLE  GetProcessHeap();
@@ -517,64 +521,18 @@ extern VdFcBOOL    DeviceIoControl(VdFcHANDLE hDevice, VdFcDWORD dwIoControlCode
 extern VdFcBOOL    CancelIo(VdFcHANDLE hFile);
 extern int         QueryPerformanceCounter(VdFcLARGE_INTEGER *perf_count);
 extern int         QueryPerformanceFrequency(VdFcLARGE_INTEGER *perf_freq);
-#else
-typedef HWND            VdFcHWND;
-typedef DWORD           VdFcDWORD;
-typedef WORD            VdFcWORD;
-typedef LPWSTR          VdFcLPWSTR;
-typedef LPCWSTR         VdFcLPCWSTR;
-typedef LPCSTR          VdFcLPCSTR;
-typedef DWORD           VdFcDWORD;
-typedef UINT            VdFcUINT;
-typedef UINT64          VdFcUINT64;
-typedef UINT32          VdFcUINT32;
-typedef INT32           VdFcINT32;
-typedef UINT16          VdFcUINT16;
-typedef UINT8           VdFcUINT8;
-typedef INT16           VdFcINT16;
-typedef HMODULE         VdFcHMODULE;
-typedef HRESULT         VdFcHRESULT;
-typedef ULONG           VdFcULONG;
-typedef HDC             VdFcHDC;
-typedef HMONITOR        VdFcHMONITOR;
-typedef HANDLE          VdFcHANDLE;
-typedef HGDIOBJ         VdFcHGDIOBJ;
-typedef HBITMAP         VdFcHBITMAP;
-typedef LPARAM          VdFcLPARAM;
-typedef BOOL            VdFcPBOOL;
-typedef LONG            VdFcLONG;
-typedef BYTE            VdFcBYTE;
-typedef WCHAR           VdFcWCHAR;
-typedef BOOL            VdFcBOOL;
-typedef LPVOID          VdFcLPVOID;
-typedef FLOAT           VdFcFLOAT;
-typedef LPLONG          VdFcLPLONG;
-typedef VdFcDWORD       VdFcCOLORREF;
-typedef VdFcDWORD*      VdFcLPCOLORREF;
-typedef LPDWORD         VdFcLPDWORD;
-typedef HINSTANCE       VdFcHINSTANCE;
-typedef UINT_PTR        VdFcUINT_PTR, * VdFcPUINT_PTR;
-typedef FILETIME        VdFcFILETIME;
-typedef LONG_PTR        VdFcLONG_PTR;
-typedef LRESULT         VdFcLRESULT;
-typedef HICON           VdFcHICON;
-typedef HCURSOR         VdFcHCURSOR;
-typedef HBITMAP         VdFcHBITMAP;
-typedef HBRUSH          VdFcHBRUSH;
-typedef ATOM            VdFcATOM;
-typedef HMENU           VdFcHMENU;
-typedef USHORT          VdFcUSHORT;
-typedef BOOLEAN         VdFcBOOLEAN;
-typedef PUINT           VdFcPUINT;
-typedef UCHAR           VdFcUCHAR;
-typedef PUSHORT         VdFcPUSHORT;
-typedef PULONG          VdFcPULONG;
-typedef PCHAR           VdFcPCHAR;
-typedef SHORT           VdFcSHORT;
-typedef DWORD_PTR       VdFcDWORD_PTR;
-typedef OVERLAPPED      VdFcOVERLAPPED;
-typedef LARGE_INTEGER   VdFcLARGE_INTEGER;
-#endif // !_MINWINDEF_
+#pragma comment(linker, "/alternatename:VdFcCreateFileA=CreateFileA")
+extern VD_FC_EXPORT_C VdFcHANDLE  VdFcCreateFileA(VdFcLPCSTR lpFileName, VdFcDWORD dwDesiredAccess, VdFcDWORD dwShareMode, void *lpSecurityAttributes, VdFcDWORD dwCreationDisposition, VdFcDWORD dwFlagsAndAttributes, VdFcHANDLE hTemplateFile);
+#pragma comment(linker, "/alternatename:VdFcGetLastError=GetLastError")
+extern VD_FC_EXPORT_C VdFcDWORD   VdFcGetLastError(void);
+#pragma comment(linker, "/alternatename:VdFcFreeLibrary=FreeLibrary")
+extern VdFcBOOL VdFcFreeLibrary(VdFcHMODULE m);
+#pragma comment(linker, "/alternatename:VdFcGetOverlappedResult=GetOverlappedResult")
+VdFcBOOL VdFcGetOverlappedResult(VdFcHANDLE hFile, VdFcLPOVERLAPPED lpOverlapped, VdFcLPDWORD lpNumberOfBytesTransferred, VdFcBOOL bWait);
+#pragma comment(linker, "/alternatename:VdFcWriteFile=WriteFile")
+VdFcBOOL VdFcWriteFile(VdFcHANDLE hFile, VdFcLPCVOID lpBuffer, VdFcDWORD nNumberOfBytesToWrite, VdFcLPDWORD lpNumberOfBytesWritten, VdFcLPOVERLAPPED lpOverlapped);
+#pragma comment(linker, "/alternatename:VdFcCloseHandle=CloseHandle")
+extern VD_FC_EXPORT_C VdFcBOOL    VdFcCloseHandle(VdFcHANDLE hObject);
 
 typedef struct VdFc_GUID {
     unsigned long  Data1;
@@ -893,7 +851,7 @@ typedef         VdFcDEV_BROADCAST_HDR       *VdFcPDEV_BROADCAST_HDR;
     V("User32.dll") \
     X(VdFcATOM,     RegisterClassW, (const VdFc__Win32_WNDCLASSW*)) \
     X(VdFcBOOL,     UnregisterClassW, (VdFcLPCWSTR lpClassName, VdFcHINSTANCE hInstance)) \
-    X(VdFcHWND,     CreateWindowExW, (DWORD dwExStyle, VdFcLPCWSTR lpClassName, VdFcLPCWSTR lpWindowName, VdFcDWORD dwStyle, int X, int Y, int nWidth, int nHeight, VdFcHWND hWndParent, VdFcHMENU hMenu, VdFcHINSTANCE hInstance, VdFcLPVOID lpParam)) \
+    X(VdFcHWND,     CreateWindowExW, (VdFcDWORD dwExStyle, VdFcLPCWSTR lpClassName, VdFcLPCWSTR lpWindowName, VdFcDWORD dwStyle, int X, int Y, int nWidth, int nHeight, VdFcHWND hWndParent, VdFcHMENU hMenu, VdFcHINSTANCE hInstance, VdFcLPVOID lpParam)) \
     X(VdFcLRESULT,  DefWindowProcW, (VdFcHWND hWnd, VdFcUINT Msg, VdFcWPARAM wParam, VdFcLPARAM lParam)) \
     X(VdFcBOOL,     GetMessageW, (VdFcLPMSG lpMsg, VdFcHWND hWnd, VdFcUINT wMsgFilterMin, VdFcUINT wMsgFilterMax)) \
     X(VdFcBOOL,     TranslateMessage, (const VdFcMSG* lpMsg)) \
@@ -1002,8 +960,8 @@ typedef struct VdFc__Win32_DIDEVICEINSTANCEW {
     VdFcGUID    guidInstance;
     VdFcGUID    guidProduct;
     VdFcDWORD   dwDevType;
-    VdFcWCHAR   tszInstanceName[MAX_PATH];
-    VdFcWCHAR   tszProductName[MAX_PATH];
+    VdFcWCHAR   tszInstanceName[260];
+    VdFcWCHAR   tszProductName[260];
     VdFcGUID    guidFFDriver;
     VdFcWORD    wUsagePage;
     VdFcWORD    wUsage;
@@ -1036,7 +994,7 @@ typedef struct VdFc__Win32_DIACTIONFORMATW {
    VdFcHINSTANCE   hInstString;
    VdFcFILETIME    ftTimeStamp;
    VdFcDWORD       dwCRC;
-   VdFcWCHAR       tszActionMap[MAX_PATH];
+   VdFcWCHAR       tszActionMap[260];
 } VdFc__Win32_DIACTIONFORMATW, *VdFc__Win32_LPDIACTIONFORMATW;
 
 typedef struct VdFc__Win32_DICOLORSET{
@@ -1096,7 +1054,7 @@ typedef struct VdFc__Win32_DIDEVICEOBJECTINSTANCEW {
     VdFcDWORD   dwOfs;
     VdFcDWORD   dwType;
     VdFcDWORD   dwFlags;
-    VdFcWCHAR   tszName[MAX_PATH];
+    VdFcWCHAR   tszName[260];
     VdFcDWORD   dwFFMaxForce;
     VdFcDWORD   dwFFForceResolution;
     VdFcWORD    wCollectionNumber;
@@ -1126,11 +1084,11 @@ typedef struct VdFc__Win32_DIOBJECTDATAFORMAT {
 typedef const VdFc__Win32_DIOBJECTDATAFORMAT *VdFc__Win32_LPCDIOBJECTDATAFORMAT;
 
 typedef struct VdFc__Win32_DIDATAFORMAT {
-    DWORD   dwSize;
-    DWORD   dwObjSize;
-    DWORD   dwFlags;
-    DWORD   dwDataSize;
-    DWORD   dwNumObjs;
+    VdFcDWORD   dwSize;
+    VdFcDWORD   dwObjSize;
+    VdFcDWORD   dwFlags;
+    VdFcDWORD   dwDataSize;
+    VdFcDWORD   dwNumObjs;
     VdFc__Win32_LPDIOBJECTDATAFORMAT rgodf;
 } VdFc__Win32_DIDATAFORMAT, *VdFc__Win32_LPDIDATAFORMAT;
 typedef const VdFc__Win32_DIDATAFORMAT *VdFc__Win32_LPCDIDATAFORMAT;
@@ -1577,6 +1535,16 @@ static VdFc__Win32_DIDATAFORMAT Vd_Fc__Win32_DIJOYSTATE2_Data_Format = {
     Vd_Fc__Win32_DIJOYSTATE2_Data_Formats,
 };
 
+
+#define VD_FC_GENERIC_READ                     (0x80000000L)
+
+#define VD_FC_OPEN_EXISTING 3
+#define VD_FC_GENERIC_WRITE                    (0x40000000L)
+#define VD_FC_GENERIC_EXECUTE                  (0x20000000L)
+#define VD_FC_GENERIC_ALL                      (0x10000000L)
+#define VD_FC_FILE_SHARE_READ                 0x00000001  
+#define VD_FC_FILE_SHARE_WRITE                0x00000002  
+#define VD_FC_FILE_FLAG_OVERLAPPED            0x40000000
 typedef enum {
     VD_FC__WIN32_DEVICE_DRIVER_NONE,
 
@@ -1733,7 +1701,7 @@ VD_FC_API void vd_fc_init(void)
 
     QueryPerformanceFrequency(&Vd_Fc_G.perf_freq);
 
-#define V(dllpath) { HMODULE m = LoadLibraryA(dllpath);
+#define V(dllpath) { VdFcHMODULE m = LoadLibraryA(dllpath);
 #define _X2(s, e) s##e
 #define X(retval, name, params) _X2(VdFc,name) = (_X2(VdFcProc,name))GetProcAddress(m, #name);
 #define VE()       }
@@ -1825,7 +1793,7 @@ VD_FC_API void vd_fc_quit(void)
     vd_fc__win32_remove_dropped_devices();
 
     if (Vd_Fc_G.xinput != 0) {
-        FreeLibrary(Vd_Fc_G.xinput);
+        VdFcFreeLibrary(Vd_Fc_G.xinput);
     }
 
     Vd_Fc_G.dinput->lpVtbl->Release(Vd_Fc_G.dinput);
@@ -1930,7 +1898,7 @@ VD_FC_API void vd_fc_poll(void)
                     if (dev->write_handle != 0) {
 
                         VdFcDWORD bytes_transferred;
-                        VdFcBOOL finished = GetOverlappedResult(dev->write_handle, &dev->overlapped,
+                        VdFcBOOL finished = VdFcGetOverlappedResult(dev->write_handle, &dev->overlapped,
                                                                 &bytes_transferred, 0);
 
                         if (!finished) {
@@ -1994,14 +1962,14 @@ VD_FC_API void vd_fc_poll(void)
                     if (dev->write_handle != 0) {
 
                         VdFcDWORD bytes_transferred;
-                        VdFcBOOL finished = GetOverlappedResult(dev->write_handle, &dev->overlapped,
+                        VdFcBOOL finished = VdFcGetOverlappedResult(dev->write_handle, &dev->overlapped,
                                                                 &bytes_transferred, 0);
 
                         if (!finished) {
                             CancelIo(dev->write_handle);
                         }
 
-                        WriteFile(dev->write_handle, (void*)(output_report + header_size), output_report_size, 0,
+                        VdFcWriteFile(dev->write_handle, (void*)(output_report + header_size), output_report_size, 0,
                                   &dev->overlapped);
                     }
 
@@ -2265,10 +2233,10 @@ static VdFcBOOL vd_fc__win32_dinput_enum_devices(VdFc__Win32_LPDIDEVICEINSTANCEW
                                                                                           -1);
                         fc_device->ff_gain = 1.f;
 
-                        fc_device->write_handle = CreateFileA(instance_path,
-                                                              GENERIC_READ | GENERIC_WRITE,
-                                                              FILE_SHARE_READ | FILE_SHARE_WRITE,
-                                                              NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
+                        fc_device->write_handle = VdFcCreateFileA(instance_path,
+                                                              VD_FC_GENERIC_READ | VD_FC_GENERIC_WRITE,
+                                                              VD_FC_FILE_SHARE_READ | VD_FC_FILE_SHARE_WRITE,
+                                                              NULL, VD_FC_OPEN_EXISTING, VD_FC_FILE_FLAG_OVERLAPPED, NULL);
 
                         vd_fc_device_classify_auto(fc_device);
                         success = 1;
@@ -2401,7 +2369,7 @@ static int vd_fc__win32_xinput_supported(VdFcGUID *guid, uint32_t *out_opt_repor
 
     VdFcUINT r = VdFcGetRawInputDeviceList(0, &device_count, sizeof(*raw_input_device_list));
     if (r == ((VdFcUINT)-1)) {
-        VD_FC_LOG("Error. GetRawInputDeviceList failed with %d", GetLastError());
+        VD_FC_LOG("Error. GetRawInputDeviceList failed with %d", VdFcGetLastError());
         return 0;
     }
 
@@ -2445,9 +2413,9 @@ static int vd_fc__win32_xinput_supported(VdFcGUID *guid, uint32_t *out_opt_repor
                                            VD_FC_RIDI_DEVICENAME,
                                            device_instance_path, &device_instance_path_len) != ((VdFcUINT)-1))
             {
-                HANDLE device_file = CreateFileA(device_instance_path,
-                                                 GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                                                 NULL, OPEN_EXISTING, 0, NULL);
+                VdFcHANDLE device_file = VdFcCreateFileA(device_instance_path,
+                                                 VD_FC_GENERIC_READ, VD_FC_FILE_SHARE_READ | VD_FC_FILE_SHARE_WRITE,
+                                                 NULL, VD_FC_OPEN_EXISTING, 0, NULL);
                 VdFcPHIDP_PREPARSED_DATA ppd = 0;
                 *out_opt_report_size = 0;
                 if (VdFcHidD_GetPreparsedData(device_file, &ppd)) {
@@ -2460,9 +2428,9 @@ static int vd_fc__win32_xinput_supported(VdFcGUID *guid, uint32_t *out_opt_repor
 
                 vd_fc__strlcpy(instance_path, device_instance_path, 256);
 
-                CloseHandle(device_file);
+                VdFcCloseHandle(device_file);
             } else {
-                VD_FC_LOG("Error. GetRawInputDeviceInfoA for RIDI_DEVICENAME failed with %d", GetLastError());
+                VD_FC_LOG("Error. GetRawInputDeviceInfoA for RIDI_DEVICENAME failed with %d", VdFcGetLastError());
             }
 
         }
@@ -2557,12 +2525,12 @@ static int vd_fc__win32_rawinput_handle_gidc_arrival(VdFcHANDLE devhandle)
         return 0;
     }
 
-    UINT ppd_req_size = 0;
+    VdFcUINT ppd_req_size = 0;
     if (VdFcGetRawInputDeviceInfoA(
         devhandle,
         VD_FC_RIDI_PREPARSEDDATA,
         NULL,
-        &ppd_req_size) == ((UINT)-1))
+        &ppd_req_size) == ((VdFcUINT)-1))
     {
         VD_FC_LOG("Error. GetRawInputDeviceInfoA for RIDI_PREPARSEDDATA");
         return 0;
@@ -2572,7 +2540,7 @@ static int vd_fc__win32_rawinput_handle_gidc_arrival(VdFcHANDLE devhandle)
     device->ppd_size = ppd_req_size;
     if (VdFcGetRawInputDeviceInfoA(devhandle, VD_FC_RIDI_PREPARSEDDATA,
                                    device->ppd,
-                                   &ppd_req_size) == ((UINT)-1))
+                                   &ppd_req_size) == ((VdFcUINT)-1))
     {
         VD_FC_LOG("Error. GetRawInputDeviceInfoA for RIDI_PREPARSEDDATA");
         return 0;
@@ -2598,9 +2566,9 @@ static int vd_fc__win32_rawinput_handle_gidc_arrival(VdFcHANDLE devhandle)
     {
         static wchar_t temp_wstring[128];
 
-        HANDLE device_file = CreateFileA(device_instance_path,
-                                         GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                                         NULL, OPEN_EXISTING, 0, NULL);
+        VdFcHANDLE device_file = VdFcCreateFileA(device_instance_path,
+                                         VD_FC_GENERIC_READ, VD_FC_FILE_SHARE_READ | VD_FC_FILE_SHARE_WRITE,
+                                         NULL, VD_FC_OPEN_EXISTING, 0, NULL);
 
         temp_wstring[0] = 0;
         if (VdFcHidD_GetManufacturerString(device_file, temp_wstring, sizeof(temp_wstring))) {
@@ -2623,12 +2591,12 @@ static int vd_fc__win32_rawinput_handle_gidc_arrival(VdFcHANDLE devhandle)
             vd_fc__strlcpy(device->name, product_string, VD_FC_DEVICE_NAME_MAX);
         }
 
-        CloseHandle(device_file);
+        VdFcCloseHandle(device_file);
 
-        write_handle = CreateFileA(device_instance_path,
-                                   GENERIC_READ | GENERIC_WRITE,
-                                   FILE_SHARE_READ | FILE_SHARE_WRITE,
-                                   NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
+        write_handle = VdFcCreateFileA(device_instance_path,
+                                   VD_FC_GENERIC_READ | VD_FC_GENERIC_WRITE,
+                                   VD_FC_FILE_SHARE_READ | VD_FC_FILE_SHARE_WRITE,
+                                   NULL, VD_FC_OPEN_EXISTING, VD_FC_FILE_FLAG_OVERLAPPED, NULL);
     }
 
     VdFcGuid guid = vd_fc__make_gamepad_guid(0x03, vendor_id, product_id, version, manufacturer_string, product_string, 'r', 0);
@@ -3220,7 +3188,7 @@ static void vd_fc__win32_remove_dropped_devices(void)
                 write_index++;
             } else {
 
-                CloseHandle(dev->write_handle);
+                VdFcCloseHandle(dev->write_handle);
                 if (dev->driver == VD_FC__WIN32_DEVICE_DRIVER_DINPUT) {
                     if (dev->dinput_device) {
                         dev->dinput_device->lpVtbl->Unacquire(dev->dinput_device);
@@ -3385,7 +3353,7 @@ static uint16_t vd_fc__crc16(unsigned short crc, void *data, unsigned int len)
 {
     unsigned int i;
     for (i = 0; i < len; ++i) {
-        crc = vd_fw__crc16_byte((VdFwU8)crc ^ ((VdFwU8*)data)[i]) ^ crc >> 8;
+        crc = vd_fc__crc16_byte((uint8_t)crc ^ ((uint8_t*)data)[i]) ^ crc >> 8;
     }
     return crc;
 }
