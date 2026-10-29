@@ -7547,7 +7547,7 @@ static void vd_ui__render_div(VdUiContext *ctx, VdUiDiv *curr, float rect[4])
             vd_ui__push_pass(ctx);
         }
 
-        if (curr->draw_proc_order >= VD_UI_FLAG_BACKGROUND) {
+        if (curr->draw_proc_order == VD_UI_FLAG_BACKGROUND) {
             if (curr->draw_proc != 0) {
                 curr->draw_proc(curr, rect, curr->draw_proc_data);
             }
@@ -7558,7 +7558,7 @@ static void vd_ui__render_div(VdUiContext *ctx, VdUiDiv *curr, float rect[4])
             vd_ui_push_rectgrad(rect, grad.e, curr->style.background.corner_radius.e, curr->style.background.edge_softness, 0.f);
         }
 
-        if (curr->draw_proc_order >= VD_UI_FLAG_BORDER) {
+        if (curr->draw_proc_order == VD_UI_FLAG_BORDER) {
             if (curr->draw_proc != 0) {
                 curr->draw_proc(curr, rect, curr->draw_proc_data);
             }
@@ -7569,7 +7569,7 @@ static void vd_ui__render_div(VdUiContext *ctx, VdUiDiv *curr, float rect[4])
             vd_ui_push_rectgrad(rect, grad.e, curr->style.border.corner_radius.e, curr->style.border.edge_softness, curr->style.border.border_thickness);
         }
 
-        if (curr->draw_proc_order >= VD_UI_FLAG_TEXT) {
+        if (curr->draw_proc_order == VD_UI_FLAG_TEXT) {
             if (curr->draw_proc != 0) {
                 curr->draw_proc(curr, rect, curr->draw_proc_data);
             }
@@ -7645,7 +7645,7 @@ static void vd_ui__render_div(VdUiContext *ctx, VdUiDiv *curr, float rect[4])
 
         }
 
-        if (curr->draw_proc_order >= VD_UI_FLAG_DRAW_PROC_LAST) {
+        if (curr->draw_proc_order == VD_UI_FLAG_DRAW_PROC_LAST) {
             if (curr->draw_proc != 0) {
                 curr->draw_proc(curr, rect, curr->draw_proc_data);
             }
