@@ -229,13 +229,69 @@ VD_FC_API VdFcRumbleState   vd_fc_ff_rumble_get(int id);
 VD_FC_API int               vd_fc_ff_rumble_any(int id);
 
 /* ----SYMBOLIC INPUTS----------------------------------------------------------------------------------------------- */
+#define VD_FC_STATE_AXIS_COUNT      34
+#define VD_FC_STATE_BUTTON_COUNT    144
+
+typedef enum {
+    VD_FC_BUTTON_SOUTH = 0,         /* a */
+    VD_FC_BUTTON_EAST,              /* b */
+    VD_FC_BUTTON_WEST,              /* x */
+    VD_FC_BUTTON_NORTH,             /* y */
+    VD_FC_BUTTON_BACK,              /* back */
+    VD_FC_BUTTON_GUIDE,             /* guide */
+    VD_FC_BUTTON_START,             /* start */
+    VD_FC_BUTTON_LEFT_STICK,        /* leftstick */
+    VD_FC_BUTTON_RIGHT_STICK,       /* rightstick */
+    VD_FC_BUTTON_LEFT_SHOULDER,     /* leftshoulder */
+    VD_FC_BUTTON_RIGHT_SHOULDER,    /* rightshoulder */
+    VD_FC_BUTTON_DPAD_UP,           /* dpup */
+    VD_FC_BUTTON_DPAD_DOWN,         /* dpdown */
+    VD_FC_BUTTON_DPAD_LEFT,         /* dpleft */
+    VD_FC_BUTTON_DPAD_RIGHT,        /* dpright */
+    VD_FC_BUTTON_MISC1,             /* misc1 */
+    VD_FC_BUTTON_PADDLE1,           /* paddle1, upper right */
+    VD_FC_BUTTON_PADDLE2,           /* paddle2, upper left */
+    VD_FC_BUTTON_PADDLE3,           /* paddle3, lower right */
+    VD_FC_BUTTON_PADDLE4,           /* paddle4, lower left */
+    VD_FC_BUTTON_TOUCHPAD,          /* touchpad */
+    VD_FC_BUTTON_MISC2,             /* misc2 */
+    VD_FC_BUTTON_MISC3,             /* misc3 */
+    VD_FC_BUTTON_MISC4,             /* misc4 */
+    VD_FC_BUTTON_MISC5,             /* misc5 */
+    VD_FC_BUTTON_MISC6,             /* misc6 */
+    VD_FC_BUTTON_MAX,
+} VdFcButton;
+
+typedef enum {
+    VD_FC_AXIS_LEFT_X = 0,          /* leftx,        [-1, 1], -1 is left */
+    VD_FC_AXIS_LEFT_Y,              /* lefty,        [-1, 1], -1 is up */
+    VD_FC_AXIS_RIGHT_X,             /* rightx,       [-1, 1], -1 is left */
+    VD_FC_AXIS_RIGHT_Y,             /* righty,       [-1, 1], -1 is up */
+    VD_FC_AXIS_LEFT_TRIGGER,        /* lefttrigger,  [ 0, 1] */
+    VD_FC_AXIS_RIGHT_TRIGGER,       /* righttrigger, [ 0, 1] */
+    VD_FC_AXIS_MAX,
+} VdFcAxis;
+
+// Slots from VD_FC_BUTTON_MAX / VD_FC_AXIS_MAX onwards are free for custom mappings
 typedef struct {
-    float         axes[34];
-    unsigned char buttons[144]; // 128 Buttons + 4 hats of 8 directions
+    float         axes[VD_FC_STATE_AXIS_COUNT];
+    unsigned char buttons[VD_FC_STATE_BUTTON_COUNT]; // 128 Buttons + 4 hats of 8 directions
 } VdFcState;
 
+/**
+ * @brief Get whether a symbolic button is held down
+ * @param  id            The device index
+ * @param  sym_button_id A VdFcButton, or a custom slot below VD_FC_STATE_BUTTON_COUNT
+ * @return               1 if held down, 0 if not or if the device has no mapping
+ */
 VD_FC_API int               vd_fc_button_down(int id, int sym_button_id);
-VD_FC_API unsigned int      vd_fc_button_press_count(int id, int sym_button_id);
+
+/**
+ * @brief Get the value of a symbolic axis
+ * @param  id      The device index
+ * @param  axis_id A VdFcAxis, or a custom slot below VD_FC_STATE_AXIS_COUNT
+ * @return         [-1, 1] for sticks, [0, 1] for triggers, 0 if the device has no mapping
+ */
 VD_FC_API float             vd_fc_axis_value(int id, int axis_id);
 
 /* ----RAW INPUTS---------------------------------------------------------------------------------------------------- */
@@ -244,36 +300,47 @@ VD_FC_API unsigned int      vd_fc_raw_hat_value(int id, int hat_id);
 VD_FC_API long long         vd_fc_raw_axis_value(int id, int axis_id);
 
 /* ----MAPPINGS------------------------------------------------------------------------------------------------------ */
+#define VD_FC_MAPPING_ENTRY_COUNT   170
+
 typedef enum {
     VD_FC_INPUT_TYPE_INVALID,
 
-    // Read as 0 - 1, Written as 0 - 1
+    // Read as 0 - 1, Written as down when the reading is >= 0.5
     VD_FC_INPUT_TYPE_BUTTON,
 
-    // Read as [min, max], Written as 0.f - 1.f
+    // Read as [min_value, max_value] -> 0 - 1, Written as 0 - 1 -> [min_value, max_value]
     VD_FC_INPUT_TYPE_AXIS,
 
-    // Read based on op
+    // Read as 0 - 1 based on the VD_FC_OP_HAT_* directions in op
     // We only ever get input from here, and put it in the other two
     VD_FC_INPUT_TYPE_HAT,
 } VdFcInputType;
 
-typedef enum {
-    VD_FC_OP_NONE = 0,
-    VD_FC_OP_INVERT = 1 << 0,
-} VdFcOp;
+enum {
+    VD_FC_OP_NONE      = 0,
+    VD_FC_OP_INVERT    = 1 << 0, // Read as 1 - reading
+    VD_FC_OP_CLIP      = 1 << 1, // Axis readings outside [min_value, max_value] are dropped instead of clamped
+    VD_FC_OP_HAT_UP    = 1 << 2, // Hat reads as 1 when any of the VD_FC_OP_HAT_* directions are held
+    VD_FC_OP_HAT_RIGHT = 1 << 3,
+    VD_FC_OP_HAT_DOWN  = 1 << 4,
+    VD_FC_OP_HAT_LEFT  = 1 << 5,
+    VD_FC_OP_HAT_MASK  = VD_FC_OP_HAT_UP | VD_FC_OP_HAT_RIGHT | VD_FC_OP_HAT_DOWN | VD_FC_OP_HAT_LEFT,
+};
+typedef uint32_t VdFcOp;
 
 typedef struct {
-    VdFcInputType type;       // Where to get/put the input (button, hat, axis)
-    int           index;      // At which index to get/put the input [0, 128)
-    long long     min_value;  // Min value of the reading
-    long long     max_value;  // Max value of the reading
+    VdFcInputType type;       // Where to get the input (button, hat, axis)
+    int           index;      // Raw index of the input, same as vd_fc_raw_*
+    long long     min_value;  // (Axis) Raw value that reads as 0. May be greater than max_value
+    long long     max_value;  // (Axis) Raw value that reads as 1
     VdFcOp        op;         // Additional processing
 } VdFcInputDesc;
 
 typedef struct {
-    VdFcInputType type;       // Where to get/put the input (button, hat, axis)
-    int           index;      // At which index to get/put the input [0, 128)
+    VdFcInputType type;       // Where to put the input (button, axis)
+    int           index;      // VdFcButton / VdFcAxis, or a custom slot below VD_FC_STATE_*_COUNT
+    float         min_value;  // (Axis) Value written when the input reads 0
+    float         max_value;  // (Axis) Value written when the input reads 1
 } VdFcOutputDesc;
 
 typedef struct {
@@ -281,9 +348,10 @@ typedef struct {
     VdFcOutputDesc dst;
 } VdFcMappingEntry;
 
+// Entries sharing an output are combined: buttons are OR'd, axes are summed and clamped to [-1, 1]
 typedef struct {
     int              num_entries;
-    VdFcMappingEntry entries[170];
+    VdFcMappingEntry entries[VD_FC_MAPPING_ENTRY_COUNT];
 } VdFcMapping;
 
 typedef struct {
@@ -291,7 +359,35 @@ typedef struct {
     VdFcMapping map;
 } VdFcDbMapping;
 
-VD_FC_API void              vd_fc_mapping_add(VdFcMapping *mapping);
+/**
+ * @brief Parse a single gamecontrollerdb.txt line, regardless of its platform
+ * @param  line    The line, e.g. "03000000...,Name,a:b1,leftx:a0,dpup:h0.1,platform:Windows,"
+ * @param  len     The length of the line, or -1 if null terminated
+ * @param  mapping The parsed mapping. Unrecognized fields are skipped
+ * @return         1 on success, 0 if the GUID could not be parsed
+ */
+VD_FC_API int               vd_fc_mapping_parse(const char *line, int len, VdFcDbMapping *mapping);
+
+/**
+ * @brief Add a mapping. Can be called before vd_fc_init. Connected devices are remapped immediately
+ * @param  mapping The mapping. Takes precedence over mappings for the same GUID added before it
+ */
+VD_FC_API void              vd_fc_mapping_add(VdFcDbMapping *mapping);
+
+/**
+ * @brief Add every mapping of a gamecontrollerdb.txt that applies to the current platform
+ * @param  text The contents of gamecontrollerdb.txt
+ * @param  len  The length of text, or -1 if null terminated
+ * @return      The number of mappings added
+ */
+VD_FC_API int               vd_fc_mapping_add_db(const char *text, int len);
+
+/**
+ * @brief Get whether a device has a mapping, and so whether its symbolic inputs are meaningful
+ * @param  id The device index
+ * @return    1 if the device has a mapping, 0 otherwise
+ */
+VD_FC_API int               vd_fc_has_mapping(int id);
 
 #endif // !VD_FC_H
 
@@ -343,6 +439,11 @@ VD_FC_API void              vd_fc_mapping_add(VdFcMapping *mapping);
 #   define VD_FC_REALLOC(prev, prev_sz, new_sz) realloc(prev, new_sz)
 #endif // !VD_FC_REALLOC
 
+#ifndef VD_FC_FREE
+#   include <stdlib.h>
+#   define VD_FC_FREE(ptr, sz) free(ptr)
+#endif // !VD_FC_FREE
+
 #ifndef VD_FC_ASSERT
 #   include <assert.h>
 #   define VD_FC_ASSERT(expr) assert(expr)
@@ -379,6 +480,25 @@ struct VdFc__CommonDeviceData {
     const char              *identified_name;
 };
 
+typedef struct {
+    VdFcGuid    guid;
+    int         first_entry;    // Into Vd_Fc_G.mapping_entries
+    int         num_entries;
+} VdFc__MappingRecord;
+
+#if defined(_WIN32)
+#   define VD_FC__PLATFORM_NAME "Windows"
+#elif defined(__APPLE__)
+#   define VD_FC__PLATFORM_NAME "Mac OS X"
+#elif defined(__linux__)
+#   define VD_FC__PLATFORM_NAME "Linux"
+#else
+#   define VD_FC__PLATFORM_NAME ""
+#endif // _WIN32, __APPLE__, __linux__
+
+// VD_FC_OP_HAT_* are the vd_fc_raw_hat_value bits, shifted
+#define VD_FC__OP_HAT_SHIFT 2
+
 static int                      vd_fc_device_classify_auto(VdFc__Device *device);
 static const char*              vd_fc_class_str(VdFcClass klass);
 static uint16_t                 vd_fc__crc16(unsigned short crc, void *data, unsigned int len);
@@ -394,6 +514,16 @@ static int                      vd_fc__approxeq(float a, float b);
 static int                      vd_fc__approxeq_rumble(VdFcRumbleState *a, VdFcRumbleState *b);
 static VdFc__CommonDeviceData   vd_fc__device_get_common_data(uint16_t vendor_id, uint16_t product_id, uint32_t output_report_size);
 static uint32_t                 vd_fc__make_reflected_crc32(uint8_t *data, uint32_t count);
+static int                      vd_fc__hexval(char c);
+static int                      vd_fc__parse_uint(const char *s, int len, int *out);
+static int                      vd_fc__streq(const char *s, int len, const char *lit);
+static int                      vd_fc__mapping_parse(const char *line, int len, VdFcDbMapping *mapping, int *out_platform_match);
+static int                      vd_fc__mapping_parse_element(const char *key, int key_len, const char *val, int val_len, VdFcMapping *map);
+static int                      vd_fc__mapping_find_name(const char **names, int count, const char *s, int len);
+static int                      vd_fc__mapping_store(VdFcDbMapping *mapping);
+static VdFc__MappingRecord*     vd_fc__mapping_find(VdFcGuid guid);
+static void                     vd_fc__mapping_apply(int id);
+static void                     vd_fc__device_bind_mapping(VdFc__Device *device);
 
 #ifdef _WIN32
 #define VD_FC_DECLARE_HANDLE(name) struct name##__{int unused;}; typedef struct name##__ *name
@@ -1034,6 +1164,12 @@ typedef struct VdFc__Win32_DIPROPDWORD {
     VdFcDWORD   dwData;
 } VdFc__Win32_DIPROPDWORD, *VdFc__Win32_LPDIPROPDWORD;
 
+typedef struct VdFc__Win32_DIPROPRANGE {
+    VdFc__Win32_DIPROPHEADER diph;
+    VdFcLONG    lMin;
+    VdFcLONG    lMax;
+} VdFc__Win32_DIPROPRANGE, *VdFc__Win32_LPDIPROPRANGE;
+
 typedef struct VdFc__Win32_DIDEVCAPS {
     VdFcDWORD   dwSize;
     VdFcDWORD   dwFlags;
@@ -1491,41 +1627,6 @@ static VdFc__Win32_DIOBJECTDATAFORMAT Vd_Fc__Win32_DIJOYSTATE2_Data_Formats[] = 
     { &Vd_Fc__Win32_Guid_Slider,VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,rglFSlider[1]),VD_FC__WIN32_DIDFT_OPTIONAL|VD_FC__WIN32_DIDFT_AXIS|VD_FC__WIN32_DIDFT_ANYINSTANCE,0},
 };
 
-static unsigned int Vd_Fc__Win32_DIJOYSTATE2_AxisOffsets[] = {
-    VD_FC__WIN32_DIJOFS_X,
-    VD_FC__WIN32_DIJOFS_Y,
-    VD_FC__WIN32_DIJOFS_Z,
-    VD_FC__WIN32_DIJOFS_RX,
-    VD_FC__WIN32_DIJOFS_RY,
-    VD_FC__WIN32_DIJOFS_RZ,
-    VD_FC__WIN32_DIJOFS_SLIDER(0),
-    VD_FC__WIN32_DIJOFS_SLIDER(1),
-    VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lVX),
-    VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lVY),
-    VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lVZ),
-    VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lVRx),
-    VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lVRy),
-    VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lVRz),
-    VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,rglVSlider[0]),
-    VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,rglVSlider[1]),
-    VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lAX),
-    VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lAY),
-    VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lAZ),
-    VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lARx),
-    VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lARy),
-    VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lARz),
-    VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,rglASlider[0]),
-    VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,rglASlider[1]),
-    VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lFX),
-    VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lFY),
-    VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lFZ),
-    VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lFRx),
-    VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lFRy),
-    VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,lFRz),
-    VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,rglFSlider[0]),
-    VD_FC__WIN32_FIELD_OFFSET(VdFc__Win32_DIJOYSTATE2,rglFSlider[1]),
-};
-
 static VdFc__Win32_DIDATAFORMAT Vd_Fc__Win32_DIJOYSTATE2_Data_Format = {
     sizeof(VdFc__Win32_DIDATAFORMAT),
     sizeof(VdFc__Win32_DIOBJECTDATAFORMAT),
@@ -1570,8 +1671,16 @@ typedef struct {
 typedef struct {
     VdFc__Win32_DIJOYSTATE2 state;
     VdFcGUID                instance_guid;
+    VdFcDWORD               axis_offsets[32];   // Into state, sorted so axis indices match gamecontrollerdb.txt
     uint8_t                 output_report[128];
 } VdFc__Win32DeviceDirectInputData;
+
+typedef struct {
+    VdFc__Win32_IDirectInputDevice8W    *device;
+    int                                 num_axes;
+    int                                 num_sliders;
+    VdFcDWORD                           axis_offsets[32];
+} VdFc__Win32DirectInputAxisEnum;
 
 typedef struct {
     uint16_t data_index;
@@ -1641,6 +1750,9 @@ struct VdFc__Device {
     float                               ff_gain;
     VdFcRumbleState                     ff_rumble;
     int                                 ff_rumble_resubmit;
+    int                                 has_mapping;
+    VdFcMapping                         mapping;
+    VdFcState                           sym_state;
 };
 
 typedef struct {
@@ -1674,6 +1786,14 @@ typedef struct {
     VdFcIndexUID                        devices_arrived[VD_FC_DEVICE_COUNT_MAX];
     uint64_t                            uid_next;
 
+    // Mappings - Same declarations across platforms
+    VdFc__MappingRecord                 *mappings;
+    int                                 num_mappings;
+    int                                 cap_mappings;
+    VdFcMappingEntry                    *mapping_entries;
+    int                                 num_mapping_entries;
+    int                                 cap_mapping_entries;
+
 } VdFc__Win32InternalData;
 static VdFc__Win32InternalData Vd_Fc_G = {0};
 
@@ -1681,6 +1801,7 @@ static VdFc__Device*            vd_fc__win32_alloc_device(int *id);
 static VdFcLRESULT              vd_fc__win32_wndproc(VdFcHWND hwnd, VdFcUINT msg, VdFcWPARAM wparam, VdFcLPARAM lparam);
 static void                     vd_fc__win32_remove_dropped_devices(void);
 static VdFcBOOL                 vd_fc__win32_dinput_enum_devices(VdFc__Win32_LPDIDEVICEINSTANCEW inst, void *usr);
+static VdFcBOOL                 vd_fc__win32_dinput_enum_axes(VdFc__Win32_LPCDIDEVICEOBJECTINSTANCEW obj, void *usr);
 static int                      vd_fc__win32_xinput_supported(VdFcGUID *guid, uint32_t *out_opt_report_size, char *instance_path);
 static int                      vd_fc__win32_xinput_supported_handle(VdFcHANDLE devhandle);
 static int                      vd_fc__win32_xinput_supported_instance_path(const char *name, VdFcUINT len);
@@ -1800,6 +1921,15 @@ VD_FC_API void vd_fc_quit(void)
 
     VdFcDestroyWindow(Vd_Fc_G.hwnd);
     VdFcUnregisterClassW(L"vd_fc_class", GetModuleHandleA(NULL));
+
+    VD_FC_FREE(Vd_Fc_G.mappings, sizeof(*Vd_Fc_G.mappings) * Vd_Fc_G.cap_mappings);
+    VD_FC_FREE(Vd_Fc_G.mapping_entries, sizeof(*Vd_Fc_G.mapping_entries) * Vd_Fc_G.cap_mapping_entries);
+    Vd_Fc_G.mappings            = 0;
+    Vd_Fc_G.num_mappings        = 0;
+    Vd_Fc_G.cap_mappings        = 0;
+    Vd_Fc_G.mapping_entries     = 0;
+    Vd_Fc_G.num_mapping_entries = 0;
+    Vd_Fc_G.cap_mapping_entries = 0;
 }
 
 VD_FC_API void vd_fc_poll(void)
@@ -1858,13 +1988,15 @@ VD_FC_API void vd_fc_poll(void)
         }
     }
 
-    // Poll DirectInput Devices & Apply FF
+    // Poll DirectInput Devices, Apply Mappings & FF
     for (int i = 0; i < Vd_Fc_G.num_devices; ++i) {
         VdFc__Device *dev = &Vd_Fc_G.devices[i];
         if (dev->driver == VD_FC__WIN32_DEVICE_DRIVER_DINPUT) {
             dev->dinput_device->lpVtbl->GetDeviceState(dev->dinput_device,
                                                        sizeof(dev->data.dinput.state), (void*)&dev->data.dinput.state);
         }
+
+        vd_fc__mapping_apply(i);
 
         if (dev->ff_rumble_resubmit) {
             dev->ff_rumble_resubmit = 0;
@@ -2117,7 +2249,7 @@ VD_FC_API long long vd_fc_raw_axis_value(int id, int axis_id)
 
         if (dev->driver == VD_FC__WIN32_DEVICE_DRIVER_DINPUT) {
             if (axis_id < dev->num_axes) {
-                VdFcLONG *rd_value = (VdFcLONG*)(((unsigned char*)&dev->data.dinput.state) + Vd_Fc__Win32_DIJOYSTATE2_AxisOffsets[axis_id]);
+                VdFcLONG *rd_value = (VdFcLONG*)(((unsigned char*)&dev->data.dinput.state) + dev->data.dinput.axis_offsets[axis_id]);
                 return *rd_value;
             } else {
                 return 0x8000;
@@ -2179,16 +2311,24 @@ static VdFcBOOL vd_fc__win32_dinput_enum_devices(VdFc__Win32_LPDIDEVICEINSTANCEW
                     caps.dwSize = sizeof(caps);
                     device->lpVtbl->GetCapabilities(device, &caps);
 
+                    // Ranges can only be set while unacquired
+                    VdFc__Win32DirectInputAxisEnum axis_enum;
+                    VD_FC_MEMSET(&axis_enum, 0, sizeof(axis_enum));
+                    axis_enum.device = device;
+                    device->lpVtbl->EnumObjects(device, vd_fc__win32_dinput_enum_axes, &axis_enum, VD_FC__WIN32_DIDFT_AXIS);
+
                     if (device->lpVtbl->Acquire(device) == 0) {
                         int id;
                         VdFcGuid guid;
+                        VD_FC_MEMSET(&guid, 0, sizeof(guid));
                         VdFc__Device *fc_device              = vd_fc__win32_alloc_device(&id);
                         fc_device->dinput_device             = device;
                         fc_device->num_buttons               = caps.dwButtons;
                         fc_device->num_hats                  = caps.dwPOVs;
-                        fc_device->num_axes                  = caps.dwAxes;
+                        fc_device->num_axes                  = axis_enum.num_axes;
                         fc_device->present                   = 1;
                         fc_device->data.dinput.instance_guid = inst->guidInstance;
+                        VD_FC_MEMCPY(fc_device->data.dinput.axis_offsets, axis_enum.axis_offsets, sizeof(axis_enum.axis_offsets));
 
                         fc_device->num_name = WideCharToMultiByte(65001 /*CP_UTF8*/, 0,
                                                                   inst->tszInstanceName, -1,
@@ -2224,6 +2364,7 @@ static VdFcBOOL vd_fc__win32_dinput_enum_devices(VdFc__Win32_LPDIDEVICEINSTANCEW
                             fc_device->common = vd_fc__device_get_common_data(0, 0, output_report_size);
                         }
                         fc_device->guid = guid;
+                        vd_fc__device_bind_mapping(fc_device);
 
                         fc_device->driver = VD_FC__WIN32_DEVICE_DRIVER_DINPUT;
                         fc_device->just_arrived = 1;
@@ -2246,8 +2387,9 @@ static VdFcBOOL vd_fc__win32_dinput_enum_devices(VdFc__Win32_LPDIDEVICEINSTANCEW
                         VD_FC_LOG("            Driver: %s", "Direct Input");
                         VD_FC_LOG("           Buttons: %d", caps.dwButtons);
                         VD_FC_LOG("              Hats: %d", caps.dwPOVs);
-                        VD_FC_LOG("              Axes: %d", caps.dwAxes);
+                        VD_FC_LOG("              Axes: %d", fc_device->num_axes);
                         VD_FC_LOG("             class: %s", vd_fc_class_str(fc_device->klass));
+                        VD_FC_LOG("           Mapping: %s", fc_device->has_mapping ? "Yes" : "No");
                         VD_FC_LOG("     Instance GUID: %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
                                                        inst_guid[0],  inst_guid[1],  inst_guid[2],  inst_guid[3],
                                                        inst_guid[4],  inst_guid[5],  inst_guid[6],  inst_guid[7],
@@ -2271,6 +2413,66 @@ static VdFcBOOL vd_fc__win32_dinput_enum_devices(VdFc__Win32_LPDIDEVICEINSTANCEW
             printf("Error. Failed to create device");
         }
     }
+
+    return 1;
+}
+
+// Mirrors SDL's DirectInput backend: only position axes, numbered by their offset into DIJOYSTATE2, so that
+// gamecontrollerdb.txt axis indices refer to the same axes here. That includes duplicates (e.g. a second Y
+// reported as "Accelerator"), which read the same field but still take up an index.
+static VdFcBOOL vd_fc__win32_dinput_enum_axes(VdFc__Win32_LPCDIDEVICEOBJECTINSTANCEW obj, void *usr)
+{
+    VdFc__Win32DirectInputAxisEnum *axis_enum = (VdFc__Win32DirectInputAxisEnum*)usr;
+    VdFcDWORD offset;
+    int is_slider = 0;
+
+    int max_axes = sizeof(axis_enum->axis_offsets) / sizeof(axis_enum->axis_offsets[0]);
+    if (axis_enum->num_axes == max_axes) {
+        return 0;
+    }
+
+    if (VD_FC_MEMCMP(&obj->guidType, &Vd_Fc__Win32_Guid_XAxis, sizeof(VdFcGUID)) == 0) {
+        offset = VD_FC__WIN32_DIJOFS_X;
+    } else if (VD_FC_MEMCMP(&obj->guidType, &Vd_Fc__Win32_Guid_YAxis, sizeof(VdFcGUID)) == 0) {
+        offset = VD_FC__WIN32_DIJOFS_Y;
+    } else if (VD_FC_MEMCMP(&obj->guidType, &Vd_Fc__Win32_Guid_ZAxis, sizeof(VdFcGUID)) == 0) {
+        offset = VD_FC__WIN32_DIJOFS_Z;
+    } else if (VD_FC_MEMCMP(&obj->guidType, &Vd_Fc__Win32_Guid_RxAxis, sizeof(VdFcGUID)) == 0) {
+        offset = VD_FC__WIN32_DIJOFS_RX;
+    } else if (VD_FC_MEMCMP(&obj->guidType, &Vd_Fc__Win32_Guid_RyAxis, sizeof(VdFcGUID)) == 0) {
+        offset = VD_FC__WIN32_DIJOFS_RY;
+    } else if (VD_FC_MEMCMP(&obj->guidType, &Vd_Fc__Win32_Guid_RzAxis, sizeof(VdFcGUID)) == 0) {
+        offset = VD_FC__WIN32_DIJOFS_RZ;
+    } else if ((VD_FC_MEMCMP(&obj->guidType, &Vd_Fc__Win32_Guid_Slider, sizeof(VdFcGUID)) == 0) &&
+               (axis_enum->num_sliders < 2))
+    {
+        offset = (VdFcDWORD)VD_FC__WIN32_DIJOFS_SLIDER(axis_enum->num_sliders);
+        is_slider = 1;
+    } else {
+        return 1;
+    }
+
+    VdFc__Win32_DIPROPRANGE range;
+    VD_FC_MEMSET(&range, 0, sizeof(range));
+    range.diph.dwSize       = sizeof(range);
+    range.diph.dwHeaderSize = sizeof(range.diph);
+    range.diph.dwObj        = obj->dwType;
+    range.diph.dwHow        = VD_FC__WIN32_DIPH_BYID;
+    range.lMin              = -32768;
+    range.lMax              = +32767;
+
+    if (axis_enum->device->lpVtbl->SetProperty(axis_enum->device, VD_FC__WIN32_DIPROP_RANGE, &range.diph) != 0) {
+        return 1;
+    }
+
+    axis_enum->num_sliders += is_slider;
+
+    int at = axis_enum->num_axes++;
+    while ((at > 0) && (axis_enum->axis_offsets[at - 1] > offset)) {
+        axis_enum->axis_offsets[at] = axis_enum->axis_offsets[at - 1];
+        at--;
+    }
+    axis_enum->axis_offsets[at] = offset;
 
     return 1;
 }
@@ -3592,6 +3794,435 @@ static uint32_t vd_fc__make_reflected_crc32(uint8_t *data, uint32_t count)
     return ~crc;
 }
 
+static int vd_fc__hexval(char c)
+{
+    if ((c >= '0') && (c <= '9')) return c - '0';
+    if ((c >= 'a') && (c <= 'f')) return c - 'a' + 10;
+    if ((c >= 'A') && (c <= 'F')) return c - 'A' + 10;
+    return -1;
+}
+
+static int vd_fc__parse_uint(const char *s, int len, int *out)
+{
+    int result = 0;
+
+    if ((len <= 0) || (len > 9)) {
+        return 0;
+    }
+
+    for (int i = 0; i < len; ++i) {
+        if ((s[i] < '0') || (s[i] > '9')) {
+            return 0;
+        }
+        result = result * 10 + (s[i] - '0');
+    }
+
+    *out = result;
+    return 1;
+}
+
+static int vd_fc__streq(const char *s, int len, const char *lit)
+{
+    int i = 0;
+    for (; i < len; ++i) {
+        if (lit[i] != s[i]) {
+            return 0;
+        }
+    }
+    return lit[i] == 0;
+}
+
+static const char *Vd_Fc__Mapping_Button_Names[VD_FC_BUTTON_MAX] = {
+    "a",            "b",            "x",            "y",
+    "back",         "guide",        "start",
+    "leftstick",    "rightstick",   "leftshoulder", "rightshoulder",
+    "dpup",         "dpdown",       "dpleft",       "dpright",
+    "misc1",
+    "paddle1",      "paddle2",      "paddle3",      "paddle4",
+    "touchpad",
+    "misc2",        "misc3",        "misc4",        "misc5",        "misc6",
+};
+
+static const char *Vd_Fc__Mapping_Axis_Names[VD_FC_AXIS_MAX] = {
+    "leftx",        "lefty",        "rightx",       "righty",
+    "lefttrigger",  "righttrigger",
+};
+
+static int vd_fc__mapping_parse(const char *line, int len, VdFcDbMapping *mapping, int *out_platform_match)
+{
+    VD_FC_MEMSET(mapping, 0, sizeof(*mapping));
+    *out_platform_match = 1;
+
+    if (len < 0) {
+        len = vd_fc__strlen(line);
+    }
+
+    while ((len > 0) && ((line[len - 1] == '\r') || (line[len - 1] == '\n') || (line[len - 1] == ' '))) {
+        len--;
+    }
+
+    if ((len < 33) || (line[32] != ',')) {
+        return 0;
+    }
+
+    for (int i = 0; i < 16; ++i) {
+        int hi = vd_fc__hexval(line[i * 2 + 0]);
+        int lo = vd_fc__hexval(line[i * 2 + 1]);
+        if ((hi < 0) || (lo < 0)) {
+            return 0;
+        }
+        mapping->guid.dat[i] = (uint8_t)((hi << 4) | lo);
+    }
+
+    // Skip name
+    int at = 33;
+    while ((at < len) && (line[at] != ',')) {
+        at++;
+    }
+
+    while (at < len) {
+        int field_begin = ++at;
+        while ((at < len) && (line[at] != ',')) {
+            at++;
+        }
+
+        int colon = field_begin;
+        while ((colon < at) && (line[colon] != ':')) {
+            colon++;
+        }
+
+        if (colon == at) {
+            continue;
+        }
+
+        const char *key     = line + field_begin;
+        int         key_len = colon - field_begin;
+        const char *val     = line + colon + 1;
+        int         val_len = at - colon - 1;
+
+        if (vd_fc__streq(key, key_len, "platform")) {
+            *out_platform_match = vd_fc__streq(val, val_len, VD_FC__PLATFORM_NAME);
+        } else if (vd_fc__streq(key, key_len, "crc")) {
+            // Mapping GUIDs never carry a CRC, so its slot holds the one the device must have, if any
+            uint16_t crc = 0;
+            for (int i = 0; i < val_len; ++i) {
+                int digit = vd_fc__hexval(val[i]);
+                if (digit < 0) {
+                    break;
+                }
+                crc = (uint16_t)((crc << 4) | digit);
+            }
+            mapping->guid.parts.crc = VD_FC_SWAP16LE(crc);
+        } else {
+            vd_fc__mapping_parse_element(key, key_len, val, val_len, &mapping->map);
+        }
+    }
+
+    return 1;
+}
+
+static int vd_fc__mapping_parse_element(const char *key, int key_len, const char *val, int val_len, VdFcMapping *map)
+{
+    VdFcMappingEntry entry;
+    VD_FC_MEMSET(&entry, 0, sizeof(entry));
+
+    if (map->num_entries >= VD_FC_MAPPING_ENTRY_COUNT) {
+        return 0;
+    }
+
+    // Output: [+|-]name
+    char half_output = 0;
+    if ((key_len > 0) && ((key[0] == '+') || (key[0] == '-'))) {
+        half_output = key[0];
+        key++;
+        key_len--;
+    }
+
+    int symbol = vd_fc__mapping_find_name(Vd_Fc__Mapping_Axis_Names, VD_FC_AXIS_MAX, key, key_len);
+    if (symbol != -1) {
+        entry.dst.type      = VD_FC_INPUT_TYPE_AXIS;
+        entry.dst.index     = symbol;
+        entry.dst.min_value = -1.f;
+        entry.dst.max_value = +1.f;
+
+        if ((symbol == VD_FC_AXIS_LEFT_TRIGGER) || (symbol == VD_FC_AXIS_RIGHT_TRIGGER) || (half_output == '+')) {
+            entry.dst.min_value = 0.f;
+        } else if (half_output == '-') {
+            entry.dst.min_value = 0.f;
+            entry.dst.max_value = -1.f;
+        }
+    } else {
+        symbol = vd_fc__mapping_find_name(Vd_Fc__Mapping_Button_Names, VD_FC_BUTTON_MAX, key, key_len);
+        if (symbol == -1) {
+            return 0;
+        }
+
+        entry.dst.type  = VD_FC_INPUT_TYPE_BUTTON;
+        entry.dst.index = symbol;
+    }
+
+    // Input: [+|-]aN[~], bN, hN.M
+    char half_input = 0;
+    if ((val_len > 0) && ((val[0] == '+') || (val[0] == '-'))) {
+        half_input = val[0];
+        val++;
+        val_len--;
+    }
+
+    if ((val_len > 0) && (val[val_len - 1] == '~')) {
+        entry.src.op |= VD_FC_OP_INVERT;
+        val_len--;
+    }
+
+    if (val_len < 2) {
+        return 0;
+    }
+
+    switch (val[0]) {
+        case 'a': {
+            if (!vd_fc__parse_uint(val + 1, val_len - 1, &entry.src.index)) {
+                return 0;
+            }
+
+            // Symmetric, so that a centered axis reads exactly 0.5
+            entry.src.type      = VD_FC_INPUT_TYPE_AXIS;
+            entry.src.min_value = -32767;
+            entry.src.max_value = +32767;
+
+            // Half axes share their raw axis with another entry, which should take over past the center
+            if (half_input == '+') {
+                entry.src.min_value = 0;
+                entry.src.op       |= VD_FC_OP_CLIP;
+            } else if (half_input == '-') {
+                entry.src.min_value = 0;
+                entry.src.max_value = -32768;
+                entry.src.op       |= VD_FC_OP_CLIP;
+            }
+        } break;
+
+        case 'b': {
+            if (!vd_fc__parse_uint(val + 1, val_len - 1, &entry.src.index)) {
+                return 0;
+            }
+
+            entry.src.type = VD_FC_INPUT_TYPE_BUTTON;
+        } break;
+
+        case 'h': {
+            int dot = 1;
+            while ((dot < val_len) && (val[dot] != '.')) {
+                dot++;
+            }
+
+            int mask;
+            if (!vd_fc__parse_uint(val + 1, dot - 1, &entry.src.index) ||
+                !vd_fc__parse_uint(val + dot + 1, val_len - dot - 1, &mask) ||
+                (mask > 0xF))
+            {
+                return 0;
+            }
+
+            entry.src.type  = VD_FC_INPUT_TYPE_HAT;
+            entry.src.op   |= (VdFcOp)mask << VD_FC__OP_HAT_SHIFT;
+        } break;
+
+        default: return 0;
+    }
+
+    map->entries[map->num_entries++] = entry;
+    return 1;
+}
+
+static int vd_fc__mapping_find_name(const char **names, int count, const char *s, int len)
+{
+    for (int i = 0; i < count; ++i) {
+        if (vd_fc__streq(s, len, names[i])) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static int vd_fc__mapping_store(VdFcDbMapping *mapping)
+{
+    int num_entries = mapping->map.num_entries;
+    if ((num_entries < 0) || (num_entries > VD_FC_MAPPING_ENTRY_COUNT)) {
+        return 0;
+    }
+
+    if (Vd_Fc_G.num_mappings == Vd_Fc_G.cap_mappings) {
+        int new_cap = Vd_Fc_G.cap_mappings ? Vd_Fc_G.cap_mappings * 2 : 64;
+        void *p = VD_FC_REALLOC(Vd_Fc_G.mappings,
+                                sizeof(*Vd_Fc_G.mappings) * Vd_Fc_G.cap_mappings,
+                                sizeof(*Vd_Fc_G.mappings) * new_cap);
+        if (!p) {
+            return 0;
+        }
+
+        Vd_Fc_G.mappings     = (VdFc__MappingRecord*)p;
+        Vd_Fc_G.cap_mappings = new_cap;
+    }
+
+    if ((Vd_Fc_G.num_mapping_entries + num_entries) > Vd_Fc_G.cap_mapping_entries) {
+        int new_cap = Vd_Fc_G.cap_mapping_entries ? Vd_Fc_G.cap_mapping_entries * 2 : 1024;
+        while (new_cap < (Vd_Fc_G.num_mapping_entries + num_entries)) {
+            new_cap *= 2;
+        }
+
+        void *p = VD_FC_REALLOC(Vd_Fc_G.mapping_entries,
+                                sizeof(*Vd_Fc_G.mapping_entries) * Vd_Fc_G.cap_mapping_entries,
+                                sizeof(*Vd_Fc_G.mapping_entries) * new_cap);
+        if (!p) {
+            return 0;
+        }
+
+        Vd_Fc_G.mapping_entries     = (VdFcMappingEntry*)p;
+        Vd_Fc_G.cap_mapping_entries = new_cap;
+    }
+
+    VdFc__MappingRecord *record = &Vd_Fc_G.mappings[Vd_Fc_G.num_mappings++];
+    record->guid        = mapping->guid;
+    record->first_entry = Vd_Fc_G.num_mapping_entries;
+    record->num_entries = num_entries;
+
+    if (num_entries > 0) {
+        VD_FC_MEMCPY(Vd_Fc_G.mapping_entries + record->first_entry, mapping->map.entries,
+                     sizeof(*Vd_Fc_G.mapping_entries) * num_entries);
+    }
+    Vd_Fc_G.num_mapping_entries += num_entries;
+
+    return 1;
+}
+
+static VdFc__MappingRecord *vd_fc__mapping_find(VdFcGuid guid)
+{
+    VdFcGuid zero_guid;
+    VD_FC_MEMSET(&zero_guid, 0, sizeof(zero_guid));
+    if (VD_FC_MEMCMP(&guid, &zero_guid, sizeof(guid)) == 0) {
+        return 0;
+    }
+
+    uint16_t crc = guid.parts.crc;
+    guid.parts.crc = 0;
+
+    // Newest first, so mappings override the ones added before them. Like SDL, retry ignoring the version.
+    for (int match_version = 1; match_version >= 0; --match_version) {
+        for (int i = Vd_Fc_G.num_mappings - 1; i >= 0; --i) {
+            VdFc__MappingRecord *record = &Vd_Fc_G.mappings[i];
+            VdFcGuid record_guid = record->guid;
+            VdFcGuid device_guid = guid;
+
+            if ((record_guid.parts.crc != 0) && (record_guid.parts.crc != crc)) {
+                continue;
+            }
+            record_guid.parts.crc = 0;
+
+            if (!match_version) {
+                record_guid.parts.version = 0;
+                device_guid.parts.version = 0;
+            }
+
+            if (VD_FC_MEMCMP(&record_guid, &device_guid, sizeof(VdFcGuid)) == 0) {
+                return record;
+            }
+        }
+    }
+
+    return 0;
+}
+
+static void vd_fc__device_bind_mapping(VdFc__Device *device)
+{
+    VdFc__MappingRecord *record = vd_fc__mapping_find(device->guid);
+
+    device->has_mapping         = 0;
+    device->mapping.num_entries = 0;
+
+    if (record) {
+        device->has_mapping         = 1;
+        device->mapping.num_entries = record->num_entries;
+        if (record->num_entries > 0) {
+            VD_FC_MEMCPY(device->mapping.entries, Vd_Fc_G.mapping_entries + record->first_entry,
+                         sizeof(device->mapping.entries[0]) * record->num_entries);
+        }
+    }
+}
+
+static void vd_fc__mapping_apply(int id)
+{
+    VdFc__Device *device = &Vd_Fc_G.devices[id];
+    VdFcState    *state  = &device->sym_state;
+
+    VD_FC_MEMSET(state, 0, sizeof(*state));
+
+    for (int i = 0; i < device->mapping.num_entries; ++i) {
+        VdFcInputDesc  *src = &device->mapping.entries[i].src;
+        VdFcOutputDesc *dst = &device->mapping.entries[i].dst;
+        float reading;
+
+        switch (src->type) {
+            case VD_FC_INPUT_TYPE_BUTTON: {
+                if ((src->index < 0) || (src->index >= device->num_buttons)) {
+                    continue;
+                }
+
+                reading = vd_fc_raw_button_down(id, src->index) ? 1.f : 0.f;
+            } break;
+
+            case VD_FC_INPUT_TYPE_HAT: {
+                if ((src->index < 0) || (src->index >= device->num_hats)) {
+                    continue;
+                }
+
+                unsigned int mask = (src->op & VD_FC_OP_HAT_MASK) >> VD_FC__OP_HAT_SHIFT;
+                reading = (vd_fc_raw_hat_value(id, src->index) & mask) ? 1.f : 0.f;
+            } break;
+
+            case VD_FC_INPUT_TYPE_AXIS: {
+                if ((src->index < 0) || (src->index >= device->num_axes) || (src->min_value == src->max_value)) {
+                    continue;
+                }
+
+                long long raw = vd_fc_raw_axis_value(id, src->index);
+                reading = (float)((double)(raw - src->min_value) / (double)(src->max_value - src->min_value));
+
+                if ((reading < 0.f) || (reading > 1.f)) {
+                    if (src->op & VD_FC_OP_CLIP) {
+                        continue;
+                    }
+                    reading = vd_fc__clampf(reading, 0.f, 1.f);
+                }
+            } break;
+
+            default: continue;
+        }
+
+        if (src->op & VD_FC_OP_INVERT) {
+            reading = 1.f - reading;
+        }
+
+        switch (dst->type) {
+            case VD_FC_INPUT_TYPE_BUTTON: {
+                if ((dst->index >= 0) && (dst->index < VD_FC_STATE_BUTTON_COUNT) && (reading >= 0.5f)) {
+                    state->buttons[dst->index] = 1;
+                }
+            } break;
+
+            case VD_FC_INPUT_TYPE_AXIS: {
+                if ((dst->index >= 0) && (dst->index < VD_FC_STATE_AXIS_COUNT)) {
+                    state->axes[dst->index] += dst->min_value + reading * (dst->max_value - dst->min_value);
+                }
+            } break;
+
+            default: break;
+        }
+    }
+
+    for (int i = 0; i < VD_FC_STATE_AXIS_COUNT; ++i) {
+        state->axes[i] = vd_fc__clampf(state->axes[i], -1.f, 1.f);
+    }
+}
+
 VD_FC_API int vd_fc_button_count(int id)
 {
     if (id < Vd_Fc_G.num_devices) {
@@ -3662,6 +4293,89 @@ VD_FC_API int vd_fc_ff_rumble_any(int id)
     }
 
     return 0;
+}
+
+VD_FC_API int vd_fc_button_down(int id, int sym_button_id)
+{
+    if ((id < Vd_Fc_G.num_devices) && (sym_button_id >= 0) && (sym_button_id < VD_FC_STATE_BUTTON_COUNT)) {
+        return Vd_Fc_G.devices[id].sym_state.buttons[sym_button_id];
+    } else {
+        return 0;
+    }
+}
+
+VD_FC_API float vd_fc_axis_value(int id, int axis_id)
+{
+    if ((id < Vd_Fc_G.num_devices) && (axis_id >= 0) && (axis_id < VD_FC_STATE_AXIS_COUNT)) {
+        return Vd_Fc_G.devices[id].sym_state.axes[axis_id];
+    } else {
+        return 0.f;
+    }
+}
+
+VD_FC_API int vd_fc_mapping_parse(const char *line, int len, VdFcDbMapping *mapping)
+{
+    int platform_match;
+    return vd_fc__mapping_parse(line, len, mapping, &platform_match);
+}
+
+VD_FC_API void vd_fc_mapping_add(VdFcDbMapping *mapping)
+{
+    if (vd_fc__mapping_store(mapping)) {
+        for (int i = 0; i < Vd_Fc_G.num_devices; ++i) {
+            vd_fc__device_bind_mapping(&Vd_Fc_G.devices[i]);
+        }
+    }
+}
+
+VD_FC_API int vd_fc_mapping_add_db(const char *text, int len)
+{
+    VdFcDbMapping mapping;
+    int result = 0;
+
+    if (len < 0) {
+        len = vd_fc__strlen(text);
+    }
+
+    int at = 0;
+    while (at < len) {
+        int line_begin = at;
+        while ((at < len) && (text[at] != '\n')) {
+            at++;
+        }
+        int line_end = at++;
+
+        while ((line_begin < line_end) && ((text[line_begin] == ' ') || (text[line_begin] == '\t'))) {
+            line_begin++;
+        }
+
+        if ((line_begin == line_end) || (text[line_begin] == '#')) {
+            continue;
+        }
+
+        int platform_match;
+        if (vd_fc__mapping_parse(text + line_begin, line_end - line_begin, &mapping, &platform_match) &&
+            platform_match &&
+            vd_fc__mapping_store(&mapping))
+        {
+            result++;
+        }
+    }
+
+    for (int i = 0; i < Vd_Fc_G.num_devices; ++i) {
+        vd_fc__device_bind_mapping(&Vd_Fc_G.devices[i]);
+    }
+
+    return result;
+}
+
+VD_FC_API int vd_fc_has_mapping(int id)
+{
+    if (id < Vd_Fc_G.num_devices) {
+        return Vd_Fc_G.devices[id].has_mapping;
+    } else {
+        return 0;
+    }
 }
 
 #endif // VD_FC_IMPL
