@@ -1752,6 +1752,8 @@ struct VdFc__Device {
     int                                 ff_rumble_resubmit;
     int                                 has_mapping;
     VdFcMapping                         mapping;
+    // Bound instead when no added mapping matches guid
+    const VdFcMapping                   *default_mapping;
     VdFcState                           sym_state;
 };
 
@@ -1774,6 +1776,7 @@ typedef struct {
     int                                 xinput_correlation_cleared_this_frame;
     int                                 xinput_polled_this_frame;
     VdFc__Win32XInputState              xinput_states[4];
+    VdFcDbMapping                       xinput_default_mapping;
 
     // Devices - Same declarations across platforms
     VdFc__Device                        devices[VD_FC_DEVICE_COUNT_MAX];
@@ -1796,6 +1799,14 @@ typedef struct {
 
 } VdFc__Win32InternalData;
 static VdFc__Win32InternalData Vd_Fc_G = {0};
+
+// Raw Input sees every XInput device with the same HID layout, whatever its vendor/product: buttons in this order (no
+// guide), X/Y/Rx/Ry sticks, and Z split into the triggers as the last two axes. Bound when nothing better matches
+static const char *Vd_Fc__Win32_XInput_Default_Mapping =
+    "00000000000000000000000000000000,XInput Controller,"
+    "a:b0,b:b1,x:b2,y:b3,leftshoulder:b4,rightshoulder:b5,back:b6,start:b7,leftstick:b8,rightstick:b9,"
+    "dpup:h0.1,dpright:h0.2,dpdown:h0.4,dpleft:h0.8,"
+    "leftx:a0,lefty:a1,rightx:a2,righty:a3,lefttrigger:a4,righttrigger:a5,";
 
 static VdFc__Device*            vd_fc__win32_alloc_device(int *id);
 static VdFcLRESULT              vd_fc__win32_wndproc(VdFcHWND hwnd, VdFcUINT msg, VdFcWPARAM wparam, VdFcLPARAM lparam);
@@ -1862,6 +1873,9 @@ VD_FC_API void vd_fc_init(void)
             VdFcXInputGetState = (VdFcProcXInputGetState*)GetProcAddress(m, "XInputGetState");
             VdFcXInputSetState = (VdFcProcXInputSetState*)GetProcAddress(m, "XInputSetState");
         }
+
+        int platform_match;
+        vd_fc__mapping_parse(Vd_Fc__Win32_XInput_Default_Mapping, -1, &Vd_Fc_G.xinput_default_mapping, &platform_match);
     }
 
     // Raw Input
@@ -2993,7 +3007,10 @@ static int vd_fc__win32_rawinput_handle_gidc_arrival(VdFcHANDLE devhandle)
     device->present                      = 1;
     device->just_arrived                 = 1;
     device->ff_gain                      = 1.f;
+    device->default_mapping              = is_xinput_device ? &Vd_Fc_G.xinput_default_mapping.map : 0;
     VD_FC_MEMSET(&device->ff_rumble, 0, sizeof(device->ff_rumble));
+
+    vd_fc__device_bind_mapping(device);
 
     device->output_method = vd_fc__win32_output_method_from_device(device->driver, &device->common, -1);
 
@@ -3005,6 +3022,7 @@ static int vd_fc__win32_rawinput_handle_gidc_arrival(VdFcHANDLE devhandle)
     VD_FC_LOG("              Hats: %d", num_hats);
     VD_FC_LOG("              Axes: %d", num_axes);
     VD_FC_LOG("             class: %s", vd_fc_class_str(device->klass));
+    VD_FC_LOG("           Mapping: %s", device->has_mapping ? "Yes" : "No");
     VD_FC_LOG("              GUID: %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
                                    guid.dat[0],  guid.dat[1],  guid.dat[2],  guid.dat[3],
                                    guid.dat[4],  guid.dat[5],  guid.dat[6],  guid.dat[7],
@@ -4145,6 +4163,11 @@ static void vd_fc__device_bind_mapping(VdFc__Device *device)
             VD_FC_MEMCPY(device->mapping.entries, Vd_Fc_G.mapping_entries + record->first_entry,
                          sizeof(device->mapping.entries[0]) * record->num_entries);
         }
+    } else if (device->default_mapping) {
+        device->has_mapping         = 1;
+        device->mapping.num_entries = device->default_mapping->num_entries;
+        VD_FC_MEMCPY(device->mapping.entries, device->default_mapping->entries,
+                     sizeof(device->mapping.entries[0]) * device->default_mapping->num_entries);
     }
 }
 

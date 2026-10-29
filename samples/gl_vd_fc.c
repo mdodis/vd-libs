@@ -10,6 +10,7 @@
 #include "vd.h"
 #include "vd_ui.h"
 #include "vd_fc.h"
+#include "ext/stb_image.h"
 
 #include <stdio.h>
 
@@ -201,6 +202,275 @@ static int expander(int *on, const char *label)
     return *on;
 }
 
+/** Controller layout is in units of a 107.32x74.94 reference (assets/controller.png is 1201x673) */
+#define PREVIEW_REF_W           107.32f
+#define PREVIEW_REF_H           74.94f
+#define PREVIEW_STICK_BASE_DIM  13.86f
+#define PREVIEW_STICK_DIM       8.61f
+#define PREVIEW_TRIGGER_W       2.21f
+#define PREVIEW_TRIGGER_H       12.99f
+#define PREVIEW_INSET           16.f
+#define PREVIEW_HEIGHT          320.f
+
+enum {
+    PREVIEW_TEX_CONTROLLER = 0,
+    PREVIEW_TEX_A,
+    PREVIEW_TEX_B,
+    PREVIEW_TEX_X,
+    PREVIEW_TEX_Y,
+    PREVIEW_TEX_DUP,
+    PREVIEW_TEX_DRIGHT,
+    PREVIEW_TEX_DDOWN,
+    PREVIEW_TEX_DLEFT,
+    PREVIEW_TEX_SELECT,
+    PREVIEW_TEX_START,
+    PREVIEW_TEX_L1,
+    PREVIEW_TEX_R1,
+    PREVIEW_TEX_STICK_BASE,
+    PREVIEW_TEX_STICK,
+    PREVIEW_TEX_TRIGGER,
+    PREVIEW_TEX_RADGRAD,
+    PREVIEW_TEX_COUNT,
+};
+
+static const char *Preview_Texture_Files[PREVIEW_TEX_COUNT] = {
+    [PREVIEW_TEX_CONTROLLER] = "assets/controller.png",
+    [PREVIEW_TEX_A]          = "assets/controller_a.png",
+    [PREVIEW_TEX_B]          = "assets/controller_b.png",
+    [PREVIEW_TEX_X]          = "assets/controller_x.png",
+    [PREVIEW_TEX_Y]          = "assets/controller_y.png",
+    [PREVIEW_TEX_DUP]        = "assets/controller_dup.png",
+    [PREVIEW_TEX_DRIGHT]     = "assets/controller_dright.png",
+    [PREVIEW_TEX_DDOWN]      = "assets/controller_ddown.png",
+    [PREVIEW_TEX_DLEFT]      = "assets/controller_dleft.png",
+    [PREVIEW_TEX_SELECT]     = "assets/controller_select.png",
+    [PREVIEW_TEX_START]      = "assets/controller_start.png",
+    [PREVIEW_TEX_L1]         = "assets/controller_l1.png",
+    [PREVIEW_TEX_R1]         = "assets/controller_r1.png",
+    [PREVIEW_TEX_STICK_BASE] = "assets/controller_stick_l_base.png",
+    [PREVIEW_TEX_STICK]      = "assets/controller_stick_l.png",
+    [PREVIEW_TEX_TRIGGER]    = "assets/controller_lt.png",
+    [PREVIEW_TEX_RADGRAD]    = "assets/radgrad.png",
+};
+
+typedef struct {
+    int   button;   // VdFcButton
+    int   texture;
+    float pos[2];
+    float dim[2];
+    float off[4];
+    float on[4];
+    float glow[4];
+} PreviewButton;
+
+static const PreviewButton Preview_Buttons[] = {
+    {VD_FC_BUTTON_SOUTH,          PREVIEW_TEX_A,      {77.68f, 24.38f}, { 7.61f, 7.61f}, {0.2f, 0.2f, 0.2f, 1.f}, {0.2f, 0.9f, 0.2f, 1.f}, {0.2f, 0.9f, 0.2f, 0.4f}},
+    {VD_FC_BUTTON_EAST,           PREVIEW_TEX_B,      {85.08f, 17.44f}, { 7.61f, 7.61f}, {0.2f, 0.2f, 0.2f, 1.f}, {0.9f, 0.2f, 0.2f, 1.f}, {0.9f, 0.2f, 0.2f, 0.4f}},
+    {VD_FC_BUTTON_WEST,           PREVIEW_TEX_X,      {70.35f, 16.89f}, { 7.61f, 7.61f}, {0.2f, 0.2f, 0.2f, 1.f}, {0.4f, 0.8f, 1.0f, 1.f}, {0.4f, 0.8f, 0.9f, 0.4f}},
+    {VD_FC_BUTTON_NORTH,          PREVIEW_TEX_Y,      {77.86f,  9.91f}, { 7.61f, 7.61f}, {0.2f, 0.2f, 0.2f, 1.f}, {0.9f, 0.9f, 0.2f, 1.f}, {0.9f, 0.9f, 0.2f, 0.4f}},
+    {VD_FC_BUTTON_DPAD_UP,        PREVIEW_TEX_DUP,    {36.75f, 29.94f}, { 5.16f, 8.19f}, {0.3f, 0.3f, 0.3f, 1.f}, {0.7f, 0.7f, 0.7f, 1.f}, {1.0f, 1.0f, 1.0f, 0.125f}},
+    {VD_FC_BUTTON_DPAD_RIGHT,     PREVIEW_TEX_DRIGHT, {39.33f, 35.56f}, { 8.19f, 5.16f}, {0.3f, 0.3f, 0.3f, 1.f}, {0.7f, 0.7f, 0.7f, 1.f}, {1.0f, 1.0f, 1.0f, 0.125f}},
+    {VD_FC_BUTTON_DPAD_DOWN,      PREVIEW_TEX_DDOWN,  {36.75f, 38.14f}, { 5.16f, 8.19f}, {0.3f, 0.3f, 0.3f, 1.f}, {0.7f, 0.7f, 0.7f, 1.f}, {1.0f, 1.0f, 1.0f, 0.125f}},
+    {VD_FC_BUTTON_DPAD_LEFT,      PREVIEW_TEX_DLEFT,  {31.14f, 35.56f}, { 8.19f, 5.16f}, {0.3f, 0.3f, 0.3f, 1.f}, {0.7f, 0.7f, 0.7f, 1.f}, {1.0f, 1.0f, 1.0f, 0.125f}},
+    {VD_FC_BUTTON_START,          PREVIEW_TEX_START,  {59.01f, 18.06f}, { 4.95f, 4.95f}, {0.3f, 0.3f, 0.3f, 1.f}, {0.7f, 0.7f, 0.7f, 1.f}, {1.0f, 1.0f, 1.0f, 0.125f}},
+    {VD_FC_BUTTON_BACK,           PREVIEW_TEX_SELECT, {43.15f, 18.06f}, { 4.95f, 4.95f}, {0.3f, 0.3f, 0.3f, 1.f}, {0.7f, 0.7f, 0.7f, 1.f}, {1.0f, 1.0f, 1.0f, 0.125f}},
+    {VD_FC_BUTTON_LEFT_SHOULDER,  PREVIEW_TEX_L1,     {16.34f,  0.00f}, {22.34f, 8.53f}, {0.3f, 0.3f, 0.3f, 1.f}, {0.7f, 0.7f, 0.7f, 1.f}, {1.0f, 1.0f, 1.0f, 0.125f}},
+    {VD_FC_BUTTON_RIGHT_SHOULDER, PREVIEW_TEX_R1,     {68.56f,  0.00f}, {22.34f, 8.53f}, {0.3f, 0.3f, 0.3f, 1.f}, {0.7f, 0.7f, 0.7f, 1.f}, {1.0f, 1.0f, 1.0f, 0.125f}},
+};
+
+typedef struct {
+    int   axis[2];  // VdFcAxis
+    int   button;   // VdFcButton
+    float base_pos[2];
+    float stick_pos[2];
+} PreviewStick;
+
+static const PreviewStick Preview_Sticks[] = {
+    {{VD_FC_AXIS_LEFT_X,  VD_FC_AXIS_LEFT_Y},  VD_FC_BUTTON_LEFT_STICK,  {18.94f, 13.86f}, {21.56f, 16.20f}},
+    {{VD_FC_AXIS_RIGHT_X, VD_FC_AXIS_RIGHT_Y}, VD_FC_BUTTON_RIGHT_STICK, {61.02f, 29.99f}, {63.64f, 32.61f}},
+};
+
+typedef struct {
+    int   axis;     // VdFcAxis
+    float pos[2];
+} PreviewTrigger;
+
+static const PreviewTrigger Preview_Triggers[] = {
+    {VD_FC_AXIS_LEFT_TRIGGER,  {38.98f, 57.19f}},
+    {VD_FC_AXIS_RIGHT_TRIGGER, {67.00f, 57.19f}},
+};
+
+typedef struct {
+    VdUiTextureId textures[PREVIEW_TEX_COUNT];
+    float         glow[VD_FC_BUTTON_MAX];
+    int           device_id;
+    // Recomputed by controller_preview_draw for the div's rect
+    float         origin[2];
+    float         scale;
+} ControllerPreview;
+
+static ControllerPreview The_Preview;
+
+static void controller_preview_load(void)
+{
+    for (int i = 0; i < PREVIEW_TEX_COUNT; ++i) {
+        int w, h, nc;
+        unsigned char *data = stbi_load(Preview_Texture_Files[i], &w, &h, &nc, 4);
+        if (data == 0) {
+            printf("Failed to load %s\n", Preview_Texture_Files[i]);
+            continue;
+        }
+
+        GLuint texture;
+        glGenTextures(1, &texture);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+        // The preview is drawn at a fraction of the source resolution
+        glGenerateMipmap(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        stbi_image_free(data);
+
+        The_Preview.textures[i].id = (uintptr_t)texture;
+    }
+}
+
+static void preview_put_uv(ControllerPreview *p, int texture, const float pos[2], const float dim[2], float uv[4], const float color[4])
+{
+    float rect[4] = {
+        p->origin[0] + pos[0] * p->scale,
+        p->origin[1] + pos[1] * p->scale,
+        p->origin[0] + (pos[0] + dim[0]) * p->scale,
+        p->origin[1] + (pos[1] + dim[1]) * p->scale,
+    };
+    float colors[16] = {
+        color[0], color[1], color[2], color[3],
+        color[0], color[1], color[2], color[3],
+        color[0], color[1], color[2], color[3],
+        color[0], color[1], color[2], color[3],
+    };
+    float corner_radius[4] = {0.f, 0.f, 0.f, 0.f};
+    vd_ui_push_texslice(rect, uv, colors, p->textures[texture], corner_radius, 0.f, 0.f);
+}
+
+static void preview_put(ControllerPreview *p, int texture, const float pos[2], const float dim[2], const float color[4])
+{
+    float uv[4] = {0.f, 0.f, 1.f, 1.f};
+    preview_put_uv(p, texture, pos, dim, uv, color);
+}
+
+static void preview_put_glow(ControllerPreview *p, const float pos[2], const float dim[2], const float color[4], float t)
+{
+    if (t < 0.001f) {
+        return;
+    }
+
+    float glow_pos[2]   = {pos[0] - dim[0] * 1.5f, pos[1] - dim[1] * 1.5f};
+    float glow_dim[2]   = {dim[0] * 4.f, dim[1] * 4.f};
+    float glow_color[4] = {color[0], color[1], color[2], color[3] * t};
+    preview_put(p, PREVIEW_TEX_RADGRAD, glow_pos, glow_dim, glow_color);
+}
+
+static VD_UI_DRAW_PROC(controller_preview_draw)
+{
+    VD_UNUSED(div);
+    ControllerPreview *p = (ControllerPreview*)usr;
+    int id = p->device_id;
+
+    float w = (rect[2] - rect[0]) - 2.f * PREVIEW_INSET;
+    float h = (rect[3] - rect[1]) - 2.f * PREVIEW_INSET;
+    if ((w <= 0.f) || (h <= 0.f)) {
+        return;
+    }
+
+    float sw = w / PREVIEW_REF_W;
+    float sh = h / PREVIEW_REF_H;
+    p->scale     = sw < sh ? sw : sh;
+    p->origin[0] = rect[0] + PREVIEW_INSET + (w - PREVIEW_REF_W * p->scale) * 0.5f;
+    p->origin[1] = rect[1] + PREVIEW_INSET + (h - PREVIEW_REF_H * p->scale) * 0.5f;
+
+    const float body_pos[2]   = {0.f, 0.f};
+    const float body_dim[2]   = {PREVIEW_REF_W, PREVIEW_REF_H};
+    const float body_color[4] = {0.15f, 0.15f, 0.15f, 1.f};
+    preview_put(p, PREVIEW_TEX_CONTROLLER, body_pos, body_dim, body_color);
+
+    for (int i = 0; i < (int)VD_ARRAY_COUNT(Preview_Buttons); ++i) {
+        const PreviewButton *b = &Preview_Buttons[i];
+        preview_put_glow(p, b->pos, b->dim, b->glow, p->glow[b->button]);
+    }
+
+    for (int i = 0; i < (int)VD_ARRAY_COUNT(Preview_Buttons); ++i) {
+        const PreviewButton *b = &Preview_Buttons[i];
+        preview_put(p, b->texture, b->pos, b->dim, vd_fc_button_down(id, b->button) ? b->on : b->off);
+    }
+
+    const float stick_base_dim[2] = {PREVIEW_STICK_BASE_DIM, PREVIEW_STICK_BASE_DIM};
+    const float stick_dim[2]      = {PREVIEW_STICK_DIM, PREVIEW_STICK_DIM};
+    const float stick_off[4]      = {0.7f, 0.7f, 0.7f, 1.f};
+    const float stick_on[4]       = {0.9f, 0.2f, 0.2f, 1.f};
+    const float stick_glow[4]     = {0.9f, 0.2f, 0.2f, 0.4f};
+    for (int i = 0; i < (int)VD_ARRAY_COUNT(Preview_Sticks); ++i) {
+        const PreviewStick *s = &Preview_Sticks[i];
+        preview_put(p, PREVIEW_TEX_STICK_BASE, s->base_pos, stick_base_dim, stick_off);
+    }
+
+    for (int i = 0; i < (int)VD_ARRAY_COUNT(Preview_Sticks); ++i) {
+        const PreviewStick *s = &Preview_Sticks[i];
+        float stick_pos[2] = {
+            s->stick_pos[0] + vd_fc_axis_value(id, s->axis[0]) * 0.25f * PREVIEW_STICK_DIM,
+            s->stick_pos[1] + vd_fc_axis_value(id, s->axis[1]) * 0.25f * PREVIEW_STICK_DIM,
+        };
+        preview_put_glow(p, stick_pos, stick_dim, stick_glow, p->glow[s->button]);
+        preview_put(p, PREVIEW_TEX_STICK, stick_pos, stick_dim, vd_fc_button_down(id, s->button) ? stick_on : stick_off);
+    }
+
+    const float trigger_dim[2]  = {PREVIEW_TRIGGER_W, PREVIEW_TRIGGER_H};
+    const float trigger_bar[4]  = {0.2f, 0.2f, 0.2f, 1.f};
+    const float trigger_fill[4] = {0.7f, 0.7f, 0.7f, 1.f};
+    for (int i = 0; i < (int)VD_ARRAY_COUNT(Preview_Triggers); ++i) {
+        const PreviewTrigger *t = &Preview_Triggers[i];
+        float value = vd_fc_axis_value(id, t->axis);
+        preview_put(p, PREVIEW_TEX_TRIGGER, t->pos, trigger_dim, trigger_bar);
+
+        // Slice the bottom of the bar texture instead of squashing all of it into the fill
+        float fill_pos[2] = {t->pos[0], t->pos[1] + (1.f - value) * PREVIEW_TRIGGER_H};
+        float fill_dim[2] = {PREVIEW_TRIGGER_W, value * PREVIEW_TRIGGER_H};
+        float fill_uv[4]  = {0.f, 1.f - value, 1.f, 1.f};
+        preview_put_uv(p, PREVIEW_TEX_TRIGGER, fill_pos, fill_dim, fill_uv, trigger_fill);
+    }
+}
+
+static void do_controller_preview(int id)
+{
+    float t = vd_fw_delta_s() * 7.f;
+    if (t > 1.f) {
+        t = 1.f;
+    }
+
+    for (int i = 0; i < VD_FC_BUTTON_MAX; ++i) {
+        The_Preview.glow[i] = vd_ui_lerp(The_Preview.glow[i], vd_fc_button_down(id, i) ? 1.f : 0.f, t);
+    }
+    The_Preview.device_id = id;
+
+    vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f);
+    vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_ABSOLUTE, PREVIEW_HEIGHT, 0.f);
+    vd_ui_style_coloring_push(VD_UI_FLAG_BACKGROUND, vd_ui_coloring_all4(vd_ui_f4(0.1f, 0.1f, 0.1f, 1.f)));
+    VdUiDiv *div;
+    VD_UI_WITH_STYLE_ROUNDING_ALL(VD_UI_FLAG_BACKGROUND, 8.f)
+    {
+        div = vd_ui_div_new(VD_UI_FLAG_BACKGROUND, VD_UI_LIT("##controller-preview"));
+    }
+    div->style.background.edge_softness = 0.002f;
+    vd_ui_style_coloring_pop(VD_UI_FLAG_BACKGROUND);
+    vd_ui_style_size_pop(VD_UI_AXISV);
+    vd_ui_style_size_pop(VD_UI_AXISH);
+
+    vd_ui_set_draw_proc(div, controller_preview_draw, &The_Preview);
+}
+
 static void do_device_info(void)
 {
     static float scroll_x = 0.f;
@@ -220,8 +490,11 @@ static void do_device_info(void)
     name_div->style.text.halign = VD_UI_TEXT_HALIGN_CENTER;
     // vd_ui_style_size_pop(VD_UI_AXISH);
 
+    do_controller_preview(curr_device_id);
+
     static int exp_device_raw = 0;
     static int exp_device_rmb = 0;
+    static int exp_device_map = 0;
 
     if (expander(&exp_device_raw, "Raw Data Properties")) {
         int button_column_count = 8;
@@ -281,6 +554,10 @@ static void do_device_info(void)
         for (int i = 0; i < vd_fc_axis_count(curr_device_id); ++i) {
             vd_ui_labelf("Axis[%d]: %lld##Axis%d", i, vd_fc_raw_axis_value(curr_device_id, i), i);
         }
+    }
+
+    if (expander(&exp_device_map, "Mapping")) {
+        vd_ui_labelf("Has Mapping: %d", vd_fc_has_mapping(curr_device_id));
     }
 
 
@@ -390,7 +667,7 @@ static void do_content_area(void)
             d->style.text.halign = VD_UI_TEXT_HALIGN_CENTER;
             d->style.text.valign = VD_UI_TEXT_VALIGN_MIDDLE;
         } else {
-            vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_CONTAIN_CHILDREN, 1.f, 1.f);
+            vd_ui_style_size_push(VD_UI_AXISH, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f);
             vd_ui_style_size_push(VD_UI_AXISV, VD_UI_SIZE_MODE_PERCENT_OF_PARENT, 1.f, 1.f);
 
             vd_ui_parent_newf(VD_UI_FLAG_FLEX_HORIZONTAL, "##at-least-one-in");
@@ -447,6 +724,18 @@ int main(int argc, char const *argv[])
     The_State.sidebar_overlaid = 1;
 
     vd_fc_init();
+    {
+
+        size_t len;
+        FILE *f = fopen("gamecontrollerdb.txt", "rb");
+        fseek(f, 0, SEEK_END);
+        len = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        char *file = malloc(len);
+        fclose(f);
+        vd_fc_mapping_add_db(file, len);
+        free(file);
+    }
 
     vd_ui_init();
     vd_ui_debug_set_draw_cursor_on(0);
@@ -517,6 +806,8 @@ int main(int argc, char const *argv[])
         glAttachShader(program, fshd);
         vd_fw_link_program(program);
     }
+
+    controller_preview_load();
 
     vd_fw_set_vsync_on(0);
     while (vd_fw_running()) {
@@ -698,7 +989,7 @@ int main(int argc, char const *argv[])
         // Loop through render passes
         for (unsigned int i = 0; i < num_passes; ++i) {
             VdUiRenderPass *pass = &passes[i];
-            GLuint texture_id = (GLuint)pass->selected_texture->id;
+            GLuint texture_id = (GLuint)pass->selected_texture.id;
             GLint clip_width   = (GLint)pass->clip[2] - (GLint)pass->clip[0];
             GLint clip_height  = (GLint)pass->clip[3] - (GLint)pass->clip[1];
             GLint clip_x       = (GLint)pass->clip[0];
@@ -747,6 +1038,9 @@ int main(int argc, char const *argv[])
 
 #define VD_FC_IMPL
 #include "vd_fc.h"
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "ext/stb_image.h"
 
 #if defined(__clang__)
 #pragma clang diagnostic pop
