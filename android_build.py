@@ -19,6 +19,7 @@ import re
 import subprocess
 import sys
 import os
+import shlex
 import shutil
 import stat
 import sys
@@ -28,6 +29,14 @@ import xml.etree.ElementTree as ET
 ANDROID_NS = "http://schemas.android.com/apk/res/android"
 ET.register_namespace("android", ANDROID_NS)
 _CLANG_API_RE = re.compile(r"^\w+-linux-android(?:eabi)?(\d+)-clang")
+
+# NDK clang target arch -> the lib/<abi>/ folder name the APK installer looks in
+ANDROID_ABIS = {
+    "aarch64": "arm64-v8a",
+    "armv7a":  "armeabi-v7a",
+    "i686":    "x86",
+    "x86_64":  "x86_64",
+}
 
 def android_attr(name):
     return f"{{{ANDROID_NS}}}{name}"
@@ -113,6 +122,9 @@ def make_clean_dir(path):
     path.mkdir(parents=True)
     return path
 
+def ndk_toolchain_path(ndk):
+    return Path(ndk) / "toolchains" / "llvm" / "prebuilt" / hostname_arch() / "bin"
+
 def ndk_api_range(bin_path):
     """Return (min_api, max_api) from the target-prefixed clang wrappers in an NDK bin folder."""
     apis = {
@@ -150,11 +162,86 @@ def hostname_arch():
         raise RuntimeError(f"Unsupported architecture: {arch}")
     return f"{os_name}-{arch}"
 
-def run_command(args):
+def env_paths(*names):
+    """Return the paths held by whichever of the given environment variables are set."""
+    return [Path(os.environ[n]) for n in names if os.environ.get(n)]
+
+def version_key(name):
+    """Sort key for versioned dir names (36.1.0, 35.0.0-rc1, android-36), with release candidates below their release."""
+    release, _, prerelease = name.partition("-rc")
+    return tuple(int(n) for n in re.findall(r"\d+", release)), not prerelease
+
+def latest_subdir(path, required):
+    """Return the highest-versioned subdirectory of path that contains required, or None."""
+    path = Path(path)
+    if not path.is_dir():
+        return None
+    candidates = [d for d in path.iterdir() if (d / required).exists()]
+    return max(candidates, key=lambda d: version_key(d.name), default=None)
+
+def android_sdk_roots():
+    """Candidate SDK roots: $ANDROID_HOME, $ANDROID_SDK_ROOT, then where Android Studio installs the SDK by default."""
+    home = Path.home()
+    system = platform.system()
+    if system == "Windows":
+        defaults = [Path(os.environ.get("LOCALAPPDATA", home / "AppData" / "Local")) / "Android" / "Sdk"]
+    elif system == "Darwin":
+        defaults = [home / "Library" / "Android" / "sdk"]
+    else:
+        defaults = [home / "Android" / "Sdk"]
+    return env_paths("ANDROID_HOME", "ANDROID_SDK_ROOT") + defaults
+
+def find_android_sdk_build_tools():
+    aapt = "aapt.exe" if is_windows() else "aapt"
+    for sdk in android_sdk_roots():
+        if found := latest_subdir(sdk / "build-tools", aapt):
+            return found
+    return None
+
+def find_android_sdk_ndk():
+    marker = Path("toolchains") / "llvm" / "prebuilt"
+    for ndk in env_paths("ANDROID_NDK_HOME", "ANDROID_NDK_ROOT", "ANDROID_NDK"):
+        if (ndk / marker).is_dir():
+            return ndk
+    for sdk in android_sdk_roots():
+        if found := latest_subdir(sdk / "ndk", marker):
+            return found
+        # Pre side-by-side NDK installs
+        if (sdk / "ndk-bundle" / marker).is_dir():
+            return sdk / "ndk-bundle"
+    return None
+
+def find_android_studio_tools():
+    keytool = "keytool.exe" if is_windows() else "keytool"
+    home = Path.home()
+    system = platform.system()
+    if system == "Windows":
+        program_files = Path(os.environ.get("ProgramFiles", "C:/Program Files"))
+        local_app_data = Path(os.environ.get("LOCALAPPDATA", home / "AppData" / "Local"))
+        defaults = [
+            program_files / "Android" / "Android Studio" / "jbr" / "bin",
+            local_app_data / "Programs" / "Android Studio" / "jbr" / "bin",
+        ]
+    elif system == "Darwin":
+        defaults = [Path(apps) / "Android Studio.app" / "Contents" / "jbr" / "Contents" / "Home" / "bin" for apps in ("/Applications", home / "Applications")]
+    else:
+        defaults = [Path(d) / "jbr" / "bin" for d in ("/opt/android-studio", "/usr/local/android-studio", home / "android-studio", "/snap/android-studio/current")]
+    for tools in [p / "bin" for p in env_paths("JAVA_HOME")] + defaults:
+        if (tools / keytool).is_file():
+            return tools
+    return None
+
+def find_android_sdk_platforms():
+    for sdk in android_sdk_roots():
+        if found := latest_subdir(sdk / "platforms", "android.jar"):
+            return found
+    return None
+
+def run_command(args, env=None):
     """Run a command with stdout and stderr both sent to stderr. Return True if it succeeded."""
     sys.stdout.flush()
     try:
-        return subprocess.run([str(a) for a in args], stdout=sys.stderr, stderr=sys.stderr).returncode == 0
+        return subprocess.run([str(a) for a in args], stdout=sys.stderr, stderr=sys.stderr, env=env).returncode == 0
     except OSError as e:
         print(f"Failed to run \"{args[0]}\": {e}", file=sys.stderr)
         return False
@@ -172,31 +259,75 @@ def copy_file(src, dest_dir, new_name):
 def remove_file_if_exists(path):
     Path(path).unlink(missing_ok=True)
 
-def build(app_name, package_name, output_apk, filename, cpp, cflags, lflags, build_number, version, arch, minver, tgtver, intermediate, data, keystore, dname, alias, theme, icons, opt_env):
+def split_flags(flags):
+    """Split a flags string into separate arguments like a shell would: '-lfoo -DNAME="a b"' -> ['-lfoo', '-DNAME=a b']."""
+    lexer = shlex.shlex(flags, posix=True)
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    # Backslashes are path separators on Windows, not escapes
+    if is_windows():
+        lexer.escape = ""
+    return list(lexer)
 
-    # Language
-    target_language = "C"
-    target_compiler_name = "clang"
+def quote_args(args):
+    return " ".join(f'"{a}"' for a in args)
+
+def build_arch(arch, ndk, minver, cpp, filename, cflags, lflags, output):
+    """Compile filename and the NDK's native app glue into a shared library for one architecture. Return True if it succeeded."""
+    compiler_name = "clang"
     if cpp:
-        target_language = "C++"
-        target_compiler_name = "clang++"
-
+        compiler_name = "clang++"
     script_extension = ""
     if is_windows():
         script_extension = ".cmd"
+
+    # NDK uses "androidVER" for everything except for armv7a, which is "androideabiVER"
+    android_abi_prefix = "android"
+    if arch == "armv7a":
+        android_abi_prefix = "androideabi"
+
+    compiler_path = ndk_toolchain_path(ndk) / f"{arch}-linux-{android_abi_prefix}{minver}-{compiler_name}{script_extension}"
+    app_glue_path = Path(ndk) / "sources" / "android" / "native_app_glue"
+
+    mkdir_p(Path(output).parent)
+    print(f"Building shared library for {arch} ({ANDROID_ABIS[arch]}) with \"{compiler_path}\"...")
+    return run_command([compiler_path, "-shared", *cflags, "-I", app_glue_path, app_glue_path / "android_native_app_glue.c", filename, *lflags, "-fPIC", "-o", output])
+
+def build(app_name, package_name, output_apk, filename, cpp, cflags, lflags, build_number, version, archs, minver, tgtver, intermediate, data, keystore, dname, alias, theme, icons, opt_env):
+
+    finders = {
+        "sdk_build_tools": find_android_sdk_build_tools,
+        "sdk_ndk":         find_android_sdk_ndk,
+        "studio_tools":    find_android_studio_tools,
+        "sdk_platforms":   find_android_sdk_platforms,
+    }
+    missing = []
+    for key, finder in finders.items():
+        if not opt_env[key]:
+            opt_env[key] = finder()
+        if not opt_env[key]:
+            missing.append(f"--{key.replace('_', '-')}")
+    if missing:
+        print(f"Could not find {', '.join(missing)} from environment variables or default install paths. Pass them explicitly.", file=sys.stderr)
+        sys.exit(1)
+
+    # Language
+    target_language = "C"
+    if cpp:
+        target_language = "C++"
 
     executable_extension = ""
     if is_windows():
         executable_extension = ".exe"
 
-    batch_extension = ".sh"
+    batch_extension = ""
     if is_windows():
         batch_extension = ".bat"
 
     if intermediate == None:
         intermediate = f"{package_name}_i"
 
-    llvm_toolchain_path = Path(opt_env["sdk_ndk"]) / "toolchains" / "llvm" / "prebuilt" / hostname_arch() / "bin" 
+    llvm_toolchain_path = ndk_toolchain_path(opt_env["sdk_ndk"])
 
     # Choose smallest minver if not set, highest for tgtver if not set
     if minver==-1 or tgtver==-1:
@@ -206,25 +337,14 @@ def build(app_name, package_name, output_apk, filename, cpp, cflags, lflags, bui
         if tgtver==-1:
             tgtver=max
 
-    # NDK uses "androidVER" for everything except for armv7a, which is "androideabiVER"
-    android_abi_prefix = "android"
-    if arch == "armv7a":
-        android_abi_prefix = "androideabi"
-
-    compiler_path = llvm_toolchain_path / f"{arch}-linux-{android_abi_prefix}{minver}-{target_compiler_name}{script_extension}"
-    compiler_flags = cflags.replace("\n", " ").replace("\r", "")
-    compiler_links = lflags.replace("\n", " ").replace("\r", "")
-    shared_lib = Path(intermediate) / Path(f"lib{app_name}.so")
+    compiler_flags = split_flags(cflags)
+    compiler_links = split_flags(lflags)
 
     manifest_path = Path(intermediate) / "AndroidManifest.xml"
-
-    app_glue_include_path = Path(opt_env["sdk_ndk"]) / "sources" / "android" / "native_app_glue"
-    app_glue_compile_path = Path(opt_env["sdk_ndk"]) / "sources" / "android" / "native_app_glue" / "android_native_app_glue.c"
 
     aapt        = Path(opt_env['sdk_build_tools']) / f"aapt{executable_extension}"
     zipalign    = Path(opt_env['sdk_build_tools']) / f"zipalign{executable_extension}"
     keytool     = Path(opt_env['studio_tools']) / f"keytool{executable_extension}"
-    jarsigner   = Path(opt_env['studio_tools']) / f"jarsigner{executable_extension}"
     apksigner   = Path(opt_env['sdk_build_tools']) / f"apksigner{batch_extension}"
     android_jar = Path(opt_env['sdk_platforms']) / "android.jar"
 
@@ -233,22 +353,27 @@ def build(app_name, package_name, output_apk, filename, cpp, cflags, lflags, bui
     print(f"Min SDK Version:    {minver}")
     print(f"Target SDK Version: {tgtver}")
     print(f"SDK Build Tools:    \"{opt_env['sdk_build_tools']}\"")
-    print(f"Compiler:           \"{compiler_path}\"")
-    print(f"C Flags:            \"{compiler_flags}\"")
-    print(f"Link Flags:         \"{compiler_links}\"")
+    print(f"Architectures:      {', '.join(f'{a} ({ANDROID_ABIS[a]})' for a in archs)}")
+    print(f"NDK Toolchain:      \"{llvm_toolchain_path}\"")
+    print(f"C Flags:            {quote_args(compiler_flags)}")
+    print(f"Link Flags:         {quote_args(compiler_links)}")
     print(f"Intermediate:       \"{intermediate}\"")
     print(f"aapt:               \"{aapt}\"")
     print(f"zipalign:           \"{zipalign}\"")
     print(f"keytool:            \"{keytool}\"")
-    print(f"jarsigner:          \"{jarsigner}\"")
     print(f"apksigner:          \"{apksigner}\"")
     print(f"android.jar:        \"{android_jar}\"")
     print(f"----------------------------------------------------------------------------------------")
 
     mkdir_p(intermediate)
 
-    print(f"Building shared library...")
-    run_command([compiler_path, "-shared" , compiler_flags, "-I", app_glue_include_path, app_glue_compile_path, filename, compiler_links, "-fPIC", "-o", shared_lib])
+    # Laid out like the APK root, since aapt adds everything under it as-is. Cleaned so ABIs from older builds don't linger.
+    apk_root = make_clean_dir(Path(intermediate) / "apk")
+    for arch in archs:
+        shared_lib = apk_root / "lib" / ANDROID_ABIS[arch] / f"lib{app_name}.so"
+        if not build_arch(arch, opt_env["sdk_ndk"], minver, cpp, filename, compiler_flags, compiler_links, shared_lib):
+            print(f"Failed to build shared library for {arch}", file=sys.stderr)
+            sys.exit(1)
 
     resources_directory = Path(intermediate) / "res"
 
@@ -275,7 +400,9 @@ def build(app_name, package_name, output_apk, filename, cpp, cflags, lflags, bui
     print(f"Packaging with aapt...")
     aapt_cmd = [aapt, "package", "--debug-mode", "-f", "-M", f'{manifest_path}', "-S", f'{resources_directory}', "-I", f'{android_jar}', "-F", f'{output_apk}.unaligned.apk']
     if data is not None:
-        aapt_cmd += ["-A", f'"{data}"']
+        aapt_cmd += ["-A", data]
+    # Raw files dir is positional, so it goes after every option
+    aapt_cmd += [apk_root]
     run_command(aapt_cmd)
 
     keystore_is_debug = False
@@ -297,18 +424,17 @@ def build(app_name, package_name, output_apk, filename, cpp, cflags, lflags, bui
     run_command([zipalign, "4", f'{output_apk}.unaligned.apk', f'{output_apk}.aligned.apk'])
 
     print(f"Signing package...")
-    apksigner_cmd = [apksigner, "--ks", keystore, "--ks-key-alias", alias, "--out", f'{output_apk}.apk', f'{output_apk}.aligned.apk']
+    apksigner_cmd = [apksigner, "sign", "--ks", keystore, "--ks-key-alias", alias]
     if keystore_is_debug:
-        apksigner_cmd += ["-storepass", "android", "-keypass", "android"]
-    run_command(apksigner_cmd)
+        apksigner_cmd += ["--ks-pass", "pass:android", "--key-pass", "pass:android"]
+    # apksigner stops parsing options at the first positional, so the input apk must come last
+    apksigner_cmd += ["--out", f'{output_apk}.apk', f'{output_apk}.aligned.apk']
+    # apksigner is a wrapper script that needs a JVM; point it at the same JDK keytool comes from
+    apksigner_env = {**os.environ, "JAVA_HOME": str(Path(opt_env['studio_tools']).parent)}
+    run_command(apksigner_cmd, env=apksigner_env)
 
-    # print(f"Signing package...")
-    # jarsigner_cmd = [jarsigner, "-sigalg", "SHA1withRSA", "-digestalg", "SHA1", "-keystore", keystore, "-signedjar", f'{output_apk}.signed.apk', f'{output_apk}.unsigned.apk', alias]
-    # if keystore_is_debug:
-    #     jarsigner_cmd += ["-storepass", "android", "-keypass", "android"]
-    # run_command(jarsigner_cmd)
-
-    remove_file_if_exists(f'{output_apk}.apk')
+    remove_file_if_exists(f'{output_apk}.unaligned.apk')
+    remove_file_if_exists(f'{output_apk}.aligned.apk')
 
     print(f"Done")
     pass
@@ -327,17 +453,17 @@ if __name__=="__main__":
     comp.add_argument("-o", "--output",         type=str,  required=False, default="./native_android_app",                help="Output file (APK without .apk extension)")
     comp.add_argument("-b", "--build-number",   type=int,  required=False, default=1,                                     help="Internal build number")
     comp.add_argument("-v", "--version",        type=str,  required=False, default="1.0",                                 help="Version")
-    comp.add_argument("-a", "--architecture",   type=str,  required=False, default="aarch64",                             help="Architecture", choices=["aarch64", "i686", "armv7a", "x86_64"])
+    comp.add_argument("-a", "--architecture",   type=str,  required=False, default=None,                                  help="Architectures to build for, e.g. -a aarch64 x86_64. Defaults to aarch64", choices=list(ANDROID_ABIS), action="extend", nargs="+")
     comp.add_argument("--cpp",                  action="store_true",                                                      help="Use C++ compiler")
-    comp.add_argument("--cflags",               type=str,  required=False, default="",                                    help="Additional compiler flags")
-    comp.add_argument("--lflags",               type=str,  required=False, default="",                                    help="Additional linker flags")
+    comp.add_argument("--cflags",               type=str,  required=False, default="",                                    help="Additional compiler flags, split like a shell command line, e.g. --cflags \"-O2 -DNAME='a b'\". A single flag needs =, e.g. --cflags=-O2")
+    comp.add_argument("--lflags",               type=str,  required=False, default="",                                    help="Additional linker flags, split like a shell command line, e.g. --lflags \"-landroid -llog\". A single flag needs =, e.g. --lflags=-landroid")
     comp.add_argument("--min-sdk-version",      type=int,  required=False, default=-1,                                    help="Min SDK Version (by default uses lowest available)")
     comp.add_argument("--target-sdk-version",   type=int,  required=False, default=-1,                                    help="Target SDK Version (by default uses max available)")
     comp.add_argument("-i", "--intermediate",   type=str,  required=False, default=None,                                  help="Intermediate directory for building. Defaults to Package Name_i")
     comp.add_argument("-d", "--data",           type=str,  required=False, default=None,                                  help="Optional data directory to bundle")
     comp.add_argument("-k", "--keystore",       type=str,  required=False, default=None,                                  help="Pass this to sign with key. It may prompt for password. By default it generates a debug keystore")
     comp.add_argument("--dname",                type=str,  required=False, default="CN=Developer, C=AA",                  help="-dname passed to keytool")
-    comp.add_argument("--alias",                type=str,  required=False, default="androiddebugkey",                     help="-alias passed to keytool and jarsigner")
+    comp.add_argument("--alias",                type=str,  required=False, default="androiddebugkey",                     help="-alias passed to keytool and apksigner")
     comp.add_argument("--theme",                type=str,  required=False, default="Theme.Holo.NoActionBar.Fullscreen",   help="The theme. Defaults to Theme.NoActionBar.Fullscreen (fullscreen with no action bar)")
 
     # Icons
@@ -350,10 +476,10 @@ if __name__=="__main__":
 
     # Environment Settings
     env = parser.add_argument_group("Environment")
-    env.add_argument("--studio-tools",          type=str, required=False, default=None,                                   help="Studio Tools path (<Android Studio Installation>/jbr/bin). Needed for keytool & jarsigner. Uses default paths if not set")
-    env.add_argument("--sdk-build-tools",       type=str, required=False, default=None,                                   help="SDK Build Tools path (Android/Sdk/build-tools/<version>/). Needed for aapt2, zipalign). Uses env if not set")
-    env.add_argument("--sdk-ndk",               type=str, required=False, default=None,                                   help="NDK root path (Android/Sdk/ndk/<version>/). Needed for compiler. Uses env if not set")
-    env.add_argument("--sdk-platforms",         type=str, required=False, default=None,                                   help="Platforms path (Android/Sdk/platforms/android-<version>). Needed for the android.jar file. Tries some bullshit if not set")
+    env.add_argument("--studio-tools",          type=str, required=False, default=None,                                   help="Studio Tools path (<Android Studio Installation>/jbr/bin). Needed for keytool, and as JAVA_HOME for apksigner. Uses $JAVA_HOME/bin, then the default Android Studio install if not set")
+    env.add_argument("--sdk-build-tools",       type=str, required=False, default=None,                                   help="SDK Build Tools path (Android/Sdk/build-tools/<version>/). Needed for aapt, zipalign, apksigner. Uses the latest in $ANDROID_HOME, $ANDROID_SDK_ROOT, then the default SDK path if not set")
+    env.add_argument("--sdk-ndk",               type=str, required=False, default=None,                                   help="NDK root path (Android/Sdk/ndk/<version>/). Needed for compiler. Uses $ANDROID_NDK_HOME, $ANDROID_NDK_ROOT, $ANDROID_NDK, then the latest in the SDK if not set")
+    env.add_argument("--sdk-platforms",         type=str, required=False, default=None,                                   help="Platforms path (Android/Sdk/platforms/android-<version>). Needed for the android.jar file. Uses the latest in the SDK if not set")
     args = parser.parse_args()
 
     opt_env = dict()
@@ -369,10 +495,13 @@ if __name__=="__main__":
         args.icon_xxhdpi,
         args.icon_xxxhdpi,
     ]
+    # Not an argparse default: "extend" would append to it instead of replacing it
+    archs = list(dict.fromkeys(args.architecture or ["aarch64"]))
+
     build(args.app_name, args.package_name, args.output,
           args.filename, args.cpp, args.cflags, args.lflags,
           args.build_number, args.version,
-          args.architecture,
+          archs,
           args.min_sdk_version, args.target_sdk_version,
           args.intermediate,
           args.data,
