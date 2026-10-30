@@ -32,11 +32,10 @@ _CLANG_API_RE = re.compile(r"^\w+-linux-android(?:eabi)?(\d+)-clang")
 def android_attr(name):
     return f"{{{ANDROID_NS}}}{name}"
 
-def android_manifest(app_name, package_name, build_number, version, native_library, has_icon):
+def android_manifest(app_name, package_name, build_number, version, native_library, has_icon, theme, minver, tgtver):
 
     allow_backup = "false"
     has_code = "false"
-    theme = ""
     activity_name = "android.app.NativeActivity"
     config_changes = "orientation|keyboardHidden"
 
@@ -51,11 +50,16 @@ def android_manifest(app_name, package_name, build_number, version, native_libra
     #     android_attr("required"): str(gl_es_required).lower(),
     # })
 
+    ET.SubElement(manifest, "uses-sdk", {
+        android_attr("minSdkVersion"): str(minver),
+        android_attr("targetSdkVersion"): str(tgtver),
+    })
+
     application_attrs = {
         android_attr("allowBackup"): str(allow_backup).lower(),
         android_attr("hasCode"): str(has_code).lower(),
         android_attr("label"): f"{app_name}",
-        # android_attr("theme"): theme,
+        android_attr("theme"): f"@android:style/{theme}",
     }
 
     if has_icon:
@@ -66,6 +70,7 @@ def android_manifest(app_name, package_name, build_number, version, native_libra
     activity = ET.SubElement(application, "activity", {
         android_attr("name"): activity_name,
         android_attr("configChanges"): config_changes,
+        android_attr("exported"): "true",
     })
 
     ET.SubElement(activity, "meta-data", {
@@ -167,7 +172,7 @@ def copy_file(src, dest_dir, new_name):
 def remove_file_if_exists(path):
     Path(path).unlink(missing_ok=True)
 
-def build(app_name, package_name, output_apk, filename, cpp, cflags, lflags, build_number, version, arch, minver, tgtver, intermediate, data, keystore, dname, alias, icons, opt_env):
+def build(app_name, package_name, output_apk, filename, cpp, cflags, lflags, build_number, version, arch, minver, tgtver, intermediate, data, keystore, dname, alias, theme, icons, opt_env):
 
     # Language
     target_language = "C"
@@ -183,6 +188,10 @@ def build(app_name, package_name, output_apk, filename, cpp, cflags, lflags, bui
     executable_extension = ""
     if is_windows():
         executable_extension = ".exe"
+
+    batch_extension = ".sh"
+    if is_windows():
+        batch_extension = ".bat"
 
     if intermediate == None:
         intermediate = f"{package_name}_i"
@@ -216,6 +225,7 @@ def build(app_name, package_name, output_apk, filename, cpp, cflags, lflags, bui
     zipalign    = Path(opt_env['sdk_build_tools']) / f"zipalign{executable_extension}"
     keytool     = Path(opt_env['studio_tools']) / f"keytool{executable_extension}"
     jarsigner   = Path(opt_env['studio_tools']) / f"jarsigner{executable_extension}"
+    apksigner   = Path(opt_env['sdk_build_tools']) / f"apksigner{batch_extension}"
     android_jar = Path(opt_env['sdk_platforms']) / "android.jar"
 
     print(f"Building {target_language} \"{app_name}\" ({package_name}), v{version}b{build_number}")
@@ -231,6 +241,7 @@ def build(app_name, package_name, output_apk, filename, cpp, cflags, lflags, bui
     print(f"zipalign:           \"{zipalign}\"")
     print(f"keytool:            \"{keytool}\"")
     print(f"jarsigner:          \"{jarsigner}\"")
+    print(f"apksigner:          \"{apksigner}\"")
     print(f"android.jar:        \"{android_jar}\"")
     print(f"----------------------------------------------------------------------------------------")
 
@@ -258,11 +269,11 @@ def build(app_name, package_name, output_apk, filename, cpp, cflags, lflags, bui
     has_icon = has_icon or make_icon_path_and_copy_if_exists("mipmap-xxxhdpi", icons[4])
 
     print(f"Writing manifest...")
-    manifest = android_manifest(app_name, package_name, build_number, version, app_name, has_icon)
+    manifest = android_manifest(app_name, package_name, build_number, version, app_name, has_icon, theme, minver, tgtver)
     dumpstr_to_file(manifest_path, manifest)
 
     print(f"Packaging with aapt...")
-    aapt_cmd = [aapt, "package", "--debug-mode", "-f", "-M", f'{manifest_path}', "-S", f'{resources_directory}', "-I", f'{android_jar}', "-F", f'{output_apk}.unsigned.apk']
+    aapt_cmd = [aapt, "package", "--debug-mode", "-f", "-M", f'{manifest_path}', "-S", f'{resources_directory}', "-I", f'{android_jar}', "-F", f'{output_apk}.unaligned.apk']
     if data is not None:
         aapt_cmd += ["-A", f'"{data}"']
     run_command(aapt_cmd)
@@ -282,16 +293,23 @@ def build(app_name, package_name, output_apk, filename, cpp, cflags, lflags, bui
             exit()
         print(f"Using provided keystore: {keystore}...")
 
+    print(f"Aligning package...")
+    run_command([zipalign, "4", f'{output_apk}.unaligned.apk', f'{output_apk}.aligned.apk'])
+
     print(f"Signing package...")
-    jarsigner_cmd = [jarsigner, "-sigalg", "SHA1withRSA", "-digestalg", "SHA1", "-keystore", keystore, "-signedjar", f'{output_apk}.signed.apk', f'{output_apk}.unsigned.apk', alias]
+    apksigner_cmd = [apksigner, "--ks", keystore, "--ks-key-alias", alias, "--out", f'{output_apk}.apk', f'{output_apk}.aligned.apk']
     if keystore_is_debug:
-        jarsigner_cmd += ["-storepass", "android", "-keypass", "android"]
-    run_command(jarsigner_cmd)
+        apksigner_cmd += ["-storepass", "android", "-keypass", "android"]
+    run_command(apksigner_cmd)
+
+    # print(f"Signing package...")
+    # jarsigner_cmd = [jarsigner, "-sigalg", "SHA1withRSA", "-digestalg", "SHA1", "-keystore", keystore, "-signedjar", f'{output_apk}.signed.apk', f'{output_apk}.unsigned.apk', alias]
+    # if keystore_is_debug:
+    #     jarsigner_cmd += ["-storepass", "android", "-keypass", "android"]
+    # run_command(jarsigner_cmd)
 
     remove_file_if_exists(f'{output_apk}.apk')
 
-    print(f"Aligning package...")
-    run_command([zipalign, "4", f'{output_apk}.signed.apk', f'{output_apk}.apk'])
     print(f"Done")
     pass
 
@@ -300,37 +318,42 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser(prog="android_build.py",
                                      description="Builds android NativeActivities")
 
-    # Build Settings
     parser.add_argument("filename")
-    parser.add_argument("-n", "--app-name",     type=str,  required=False, default="Native Android App",                  help="Application Name")
-    parser.add_argument("-p", "--package-name", type=str,  required=False, default="com.contoso.test.native_android_app", help="Package Name")
-    parser.add_argument("-o", "--output",       type=str,  required=False, default="./native_android_app",                help="Output file (APK without .apk extension)")
-    parser.add_argument("-b", "--build-number", type=int,  required=False, default=1,                                     help="Internal build number")
-    parser.add_argument("-v", "--version",      type=str,  required=False, default="1.0",                                 help="Version")
-    parser.add_argument("-a", "--architecture", type=str,  required=False, default="aarch64",                             help="Architecture", choices=["aarch64", "i686", "armv7a", "x86_64"])
-    parser.add_argument("--cpp",                action="store_true",                                                      help="Use C++ compiler")
-    parser.add_argument("--cflags",             type=str,  required=False, default="",                                    help="Additional compiler flags")
-    parser.add_argument("--lflags",             type=str,  required=False, default="",                                    help="Additional linker flags")
-    parser.add_argument("--min-sdk-version",    type=int,  required=False, default=-1,                                    help="Min SDK Version (by default uses lowest available)")
-    parser.add_argument("--target-sdk-version", type=int,  required=False, default=-1,                                    help="Target SDK Version (by default uses max available)")
-    parser.add_argument("-i", "--intermediate", type=str,  required=False, default=None,                                  help="Intermediate directory for building. Defaults to Package Name_i")
-    parser.add_argument("-d", "--data",         type=str,  required=False, default=None,                                  help="Optional data directory to bundle")
-    parser.add_argument("-k", "--keystore",     type=str,  required=False, default=None,                                  help="Pass this to sign with key. It may prompt for password. By default it generates a debug keystore")
-    parser.add_argument("--dname",              type=str,  required=False, default="CN=Developer, C=AA",                  help="-dname passed to keytool")
-    parser.add_argument("--alias",              type=str,  required=False, default="androiddebugkey",                     help="-alias passed to keytool and jarsigner")
+
+    # Build Settings
+    comp = parser.add_argument_group("Build Options")
+    comp.add_argument("-n", "--app-name",       type=str,  required=False, default="Native Android App",                  help="Application Name")
+    comp.add_argument("-p", "--package-name",   type=str,  required=False, default="com.contoso.test.native_android_app", help="Package Name")
+    comp.add_argument("-o", "--output",         type=str,  required=False, default="./native_android_app",                help="Output file (APK without .apk extension)")
+    comp.add_argument("-b", "--build-number",   type=int,  required=False, default=1,                                     help="Internal build number")
+    comp.add_argument("-v", "--version",        type=str,  required=False, default="1.0",                                 help="Version")
+    comp.add_argument("-a", "--architecture",   type=str,  required=False, default="aarch64",                             help="Architecture", choices=["aarch64", "i686", "armv7a", "x86_64"])
+    comp.add_argument("--cpp",                  action="store_true",                                                      help="Use C++ compiler")
+    comp.add_argument("--cflags",               type=str,  required=False, default="",                                    help="Additional compiler flags")
+    comp.add_argument("--lflags",               type=str,  required=False, default="",                                    help="Additional linker flags")
+    comp.add_argument("--min-sdk-version",      type=int,  required=False, default=-1,                                    help="Min SDK Version (by default uses lowest available)")
+    comp.add_argument("--target-sdk-version",   type=int,  required=False, default=-1,                                    help="Target SDK Version (by default uses max available)")
+    comp.add_argument("-i", "--intermediate",   type=str,  required=False, default=None,                                  help="Intermediate directory for building. Defaults to Package Name_i")
+    comp.add_argument("-d", "--data",           type=str,  required=False, default=None,                                  help="Optional data directory to bundle")
+    comp.add_argument("-k", "--keystore",       type=str,  required=False, default=None,                                  help="Pass this to sign with key. It may prompt for password. By default it generates a debug keystore")
+    comp.add_argument("--dname",                type=str,  required=False, default="CN=Developer, C=AA",                  help="-dname passed to keytool")
+    comp.add_argument("--alias",                type=str,  required=False, default="androiddebugkey",                     help="-alias passed to keytool and jarsigner")
+    comp.add_argument("--theme",                type=str,  required=False, default="Theme.Holo.NoActionBar.Fullscreen",   help="The theme. Defaults to Theme.NoActionBar.Fullscreen (fullscreen with no action bar)")
 
     # Icons
-    parser.add_argument("--icon-mdpi",          type=str,  required=False, default=None,                                  help="mdpi icon png (copied to <intermediate>/res/mipmap-mdpi/ic_launcher.png)")
-    parser.add_argument("--icon-hdpi",          type=str,  required=False, default=None,                                  help="hdpi icon png (copied to <intermediate>/res/mipmap-hdpi/ic_launcher.png)")
-    parser.add_argument("--icon-xhdpi",         type=str,  required=False, default=None,                                  help="xhdpi icon png (copied to <intermediate>/res/mipmap-xhdpi/ic_launcher.png)")
-    parser.add_argument("--icon-xxhdpi",        type=str,  required=False, default=None,                                  help="xxhdpi icon png (copied to <intermediate>/res/mipmap-xxhdpi/ic_launcher.png)")
-    parser.add_argument("--icon-xxxhdpi",       type=str,  required=False, default=None,                                  help="xxxhdpi icon png (copied to <intermediate>/res/mipmap-xxxhdpi/ic_launcher.png)")
+    icon = parser.add_argument_group("Icons")
+    icon.add_argument("--icon-mdpi",            type=str,  required=False, default=None,                                  help="mdpi icon png (copied to <intermediate>/res/mipmap-mdpi/ic_launcher.png)")
+    icon.add_argument("--icon-hdpi",            type=str,  required=False, default=None,                                  help="hdpi icon png (copied to <intermediate>/res/mipmap-hdpi/ic_launcher.png)")
+    icon.add_argument("--icon-xhdpi",           type=str,  required=False, default=None,                                  help="xhdpi icon png (copied to <intermediate>/res/mipmap-xhdpi/ic_launcher.png)")
+    icon.add_argument("--icon-xxhdpi",          type=str,  required=False, default=None,                                  help="xxhdpi icon png (copied to <intermediate>/res/mipmap-xxhdpi/ic_launcher.png)")
+    icon.add_argument("--icon-xxxhdpi",         type=str,  required=False, default=None,                                  help="xxxhdpi icon png (copied to <intermediate>/res/mipmap-xxxhdpi/ic_launcher.png)")
 
     # Environment Settings
-    parser.add_argument("--studio-tools",       type=str, required=False, default=None,                                   help="Studio Tools path (<Android Studio Installation>/jbr/bin). Needed for keytool & jarsigner. Uses default paths if not set")
-    parser.add_argument("--sdk-build-tools",    type=str, required=False, default=None,                                   help="SDK Build Tools path (Android/Sdk/build-tools/<version>/). Needed for aapt2, zipalign). Uses env if not set")
-    parser.add_argument("--sdk-ndk",            type=str, required=False, default=None,                                   help="NDK root path (Android/Sdk/ndk/<version>/). Needed for compiler. Uses env if not set")
-    parser.add_argument("--sdk-platforms",      type=str, required=False, default=None,                                   help="Platforms path (Android/Sdk/platforms/android-<version>). Needed for the android.jar file. Tries some bullshit if not set")
+    env = parser.add_argument_group("Environment")
+    env.add_argument("--studio-tools",          type=str, required=False, default=None,                                   help="Studio Tools path (<Android Studio Installation>/jbr/bin). Needed for keytool & jarsigner. Uses default paths if not set")
+    env.add_argument("--sdk-build-tools",       type=str, required=False, default=None,                                   help="SDK Build Tools path (Android/Sdk/build-tools/<version>/). Needed for aapt2, zipalign). Uses env if not set")
+    env.add_argument("--sdk-ndk",               type=str, required=False, default=None,                                   help="NDK root path (Android/Sdk/ndk/<version>/). Needed for compiler. Uses env if not set")
+    env.add_argument("--sdk-platforms",         type=str, required=False, default=None,                                   help="Platforms path (Android/Sdk/platforms/android-<version>). Needed for the android.jar file. Tries some bullshit if not set")
     args = parser.parse_args()
 
     opt_env = dict()
@@ -356,5 +379,6 @@ if __name__=="__main__":
           args.keystore,
           args.dname,
           args.alias,
+          args.theme,
           icons,
           opt_env)
