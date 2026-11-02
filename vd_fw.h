@@ -7062,6 +7062,10 @@ VD_FW_OPENGL_CORE_FUNCTIONS
 #   define VD_FW_PROFILE_ZONE(name)
 #endif // !VD_FW_PROFILE_ZONE
 
+#ifndef VD_FW_MESSAGE_BUFFER_SIZE
+#   define VD_FW_MESSAGE_BUFFER_SIZE 512
+#endif // !VD_FW_MESSAGE_BUFFER_SIZE
+
 static int vd_fw__load_opengl(VdFwGlConfig *config);
 static int vd_fw__lookup_gl_extension(const char *q, VdFwGlConfig *config);
 
@@ -8223,7 +8227,7 @@ enum {
     VD_FW_WIN32_FLAGS_WAKE_COND_VAR = 1 << 0,
     VD_FW_WIN32_FLAGS_SIZE_CHANGED  = 1 << 1,
 
-    VD_FW_WIN32_MESSAGE_BUFFER_SIZE = 256,
+    VD_FW_WIN32_MESSAGE_BUFFER_SIZE = VD_FW_MESSAGE_BUFFER_SIZE,
     VD_FW_WIN32_RAW_INPUT_BUFFER_COUNT = 1024,
 
     VD_FW_WIN32_SHOW_CURSOR     = VD_FW_WM_USER + 1,
@@ -8235,6 +8239,7 @@ enum {
     VD_FW_WIN32_KILL            = VD_FW_WM_USER + 10,
     VD_FW_WIN32_RESIZABLE       = VD_FW_WM_USER + 11,
     VD_FW_WIN32_BLOCKMODE       = VD_FW_WM_USER + 12,
+    VD_FW_WIN32_NMX             = VD_FW_WM_USER + 13,
 
     VD_FW_WIN32_WINDOW_STATE_MINIMIZED = 1 << 0,
     VD_FW_WIN32_WINDOW_STATE_MAXIMIZED = 1 << 1,
@@ -9533,7 +9538,12 @@ VD_FW_API int vd_fw_get_minimized(int *minimized)
 
 VD_FW_API void vd_fw_set_minimized(void)
 {
-    VdFwShowWindow(Vd_Fw_G.hwnd, 6/*SW_MINIMIZE*/);
+    VD_FW__CHECK_TRUE(VdFwPostMessage(
+        Vd_Fw_G.hwnd,
+        VD_FW_WIN32_NMX,
+        6, /* WPARAM SW_MINIMIZE */
+        0 /* LPARAM*/));
+    Vd_Fw_G.window_state |= VD_FW_WIN32_WINDOW_STATE_MINIMIZED;
 }
 
 VD_FW_API int vd_fw_get_maximized(int *maximized)
@@ -9544,13 +9554,21 @@ VD_FW_API int vd_fw_get_maximized(int *maximized)
 
 VD_FW_API void vd_fw_set_maximized(void)
 {
-    VdFwShowWindow(Vd_Fw_G.hwnd, 3/*SW_MAXIMIZE*/);
+    VD_FW__CHECK_TRUE(VdFwPostMessage(
+        Vd_Fw_G.hwnd,
+        VD_FW_WIN32_NMX,
+        3, /* WPARAM SW_MAXIMIZE */
+        0 /* LPARAM*/));
     Vd_Fw_G.window_state |= VD_FW_WIN32_WINDOW_STATE_MAXIMIZED;
 }
 
 VD_FW_API void vd_fw_normalize(void)
 {
-    VdFwShowWindow(Vd_Fw_G.hwnd, 1/*SW_NORMAL*/);
+    VD_FW__CHECK_TRUE(VdFwPostMessage(
+        Vd_Fw_G.hwnd,
+        VD_FW_WIN32_NMX,
+        1, /* WPARAM SW_NORMAL */
+        0 /* LPARAM*/));
 }
 
 VD_FW_API void vd_fw_set_fullscreen(int on)
@@ -11067,6 +11085,10 @@ static VdFwLRESULT vd_fw__wndproc(VdFwHWND hwnd, VdFwUINT msg, VdFwWPARAM wparam
             VdFwDestroyWindow(Vd_Fw_G.hwnd);
         } break;
 
+        case VD_FW_WIN32_NMX: {
+            VdFwShowWindow(Vd_Fw_G.hwnd, (int)wparam);
+        } break;
+
         case VD_FW_WM_GETMINMAXINFO: {
             VdFwMINMAXINFO *min_max_info = (VdFwMINMAXINFO*)lparam;
             min_max_info->ptMinTrackSize.x = Vd_Fw_G.window_min[0] <= 0 ? Vd_Fw_G.def_window_min[0] : Vd_Fw_G.window_min[0];
@@ -11131,14 +11153,13 @@ static int vd_fw__msgbuf_r(VdFwEvent *message)
 static int vd_fw__msgbuf_w(VdFwEvent *message)
 {
     VdFwLONG w = Vd_Fw_G.msgbuf_w;
+
     VdFwLONG r = _InterlockedCompareExchange(&Vd_Fw_G.msgbuf_r, Vd_Fw_G.msgbuf_r, Vd_Fw_G.msgbuf_r);
+    while (((w + 1) % VD_FW_WIN32_MESSAGE_BUFFER_SIZE) == r) {
+        r = _InterlockedCompareExchange(&Vd_Fw_G.msgbuf_r, Vd_Fw_G.msgbuf_r, Vd_Fw_G.msgbuf_r);
+    }
 
     __faststorefence();
-
-    // @note(mdodis): If we're blocking while sizing, we'll allow the buffer to completely overflow
-    // if ((w + 1) % VD_FW_WIN32_MESSAGE_BUFFER_SIZE == r) {
-    //     return 0;
-    // }
 
     Vd_Fw_G.msgbuf[w] = *message;
     VdFwLONG nw = (w + 1) % VD_FW_WIN32_MESSAGE_BUFFER_SIZE;
@@ -11569,7 +11590,7 @@ static VdFw__MacSemaphoreWaitProc         dispatch_semaphore_take;
 static VdFw__MacSemaphoreSignalProc       dispatch_semaphore_post;
 
 enum {
-    VD_FW_MAC_MESSAGE_BUFFER_SIZE = 256,
+    VD_FW_MAC_MESSAGE_BUFFER_SIZE = VD_FW_MESSAGE_BUFFER_SIZE,
     VD_FW_MAC_DEFERRED_REQUEST_MAX = 16,
 };
 
@@ -13996,9 +14017,7 @@ static void vd_fw__mac_set_graphics(VdFwGraphicsApi api, VdFwOpenGLOptions *gl_o
 }
 
 #elif defined(__linux__)
-#ifndef VD_FW_X11_MESSAGE_BUFFER_SIZE
-#   define VD_FW_X11_MESSAGE_BUFFER_SIZE 256
-#endif // !VD_FW_X11_MESSAGE_BUFFER_SIZE
+#define VD_FW_X11_MESSAGE_BUFFER_SIZE VD_FW_MESSAGE_BUFFER_SIZE
 
 #define GL_NO_PROTOTYPES
 #define GL_GLEXT_PROTOTYPES 0
