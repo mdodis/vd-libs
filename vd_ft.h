@@ -452,7 +452,7 @@ typedef struct {
     int hit;
     int text_pos;
     float px, py;
-    float caret[4];
+    float glyph[4];
 } VdFtHitResult;
 
 VD_FT_API VdFtHitResult     vd_ft_box_hit(float x, float y);
@@ -3550,10 +3550,10 @@ VD_FT_API VdFtHitResult vd_ft_box_hit(float x, float y)
 
     VD_FT__WIN32_CHECK_HRESULT(Vd_Ft_G.curr_text_layout->lpVtbl->HitTestPoint(Vd_Ft_G.curr_text_layout, x, y,
                                                                               &trailing, &inside, &metrics));
-    result.caret[0] = metrics.left;
-    result.caret[1] = metrics.top;
-    result.caret[2] = metrics.left + metrics.width;
-    result.caret[3] = metrics.top + metrics.height;
+    result.glyph[0] = metrics.left;
+    result.glyph[1] = metrics.top;
+    result.glyph[2] = metrics.left + metrics.width;
+    result.glyph[3] = metrics.top + metrics.height;
     result.hit = inside;
 
     if (inside) {
@@ -3564,6 +3564,7 @@ VD_FT_API VdFtHitResult vd_ft_box_hit(float x, float y)
                                                                                          trailing, &result.px, &result.py,
                                                                                          &metrics));
 
+        text_position = metrics.textPosition;
         // Find cluster closest to where we hit
         VdFt__Cluster *cluster = 0;
 

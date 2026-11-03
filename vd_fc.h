@@ -354,9 +354,19 @@ typedef struct {
     VdFcMappingEntry entries[VD_FC_MAPPING_ENTRY_COUNT];
 } VdFcMapping;
 
+typedef enum {
+    VD_FC_PLATFORM_WINDOWS,
+    VD_FC_PLATFORM_LINUX,
+    VD_FC_PLATFORM_MAC_OS_X,
+    VD_FC_PLATFORM_MAX,
+} VdFcPlatform;
+
 typedef struct {
-    VdFcGuid    guid;
-    VdFcMapping map;
+    VdFcGuid        guid;
+    VdFcMapping     map;
+    VdFcPlatform    platform;
+    const char      *name;      // Not null terminated, may be null. Copied by vd_fc_mapping_add
+    int             name_len;
 } VdFcDbMapping;
 
 /**
@@ -388,6 +398,8 @@ VD_FC_API int               vd_fc_mapping_add_db(const char *text, int len);
  * @return    1 if the device has a mapping, 0 otherwise
  */
 VD_FC_API int               vd_fc_has_mapping(int id);
+
+VD_FC_API VdFcPlatform      vd_fc_platform(void);
 
 #endif // !VD_FC_H
 
@@ -484,6 +496,8 @@ typedef struct {
     VdFcGuid    guid;
     int         first_entry;    // Into Vd_Fc_G.mapping_entries
     int         num_entries;
+    int         first_name;     // Into Vd_Fc_G.mapping_names
+    int         name_len;
 } VdFc__MappingRecord;
 
 #if defined(_WIN32)
@@ -1752,6 +1766,8 @@ struct VdFc__Device {
     int                                 ff_rumble_resubmit;
     int                                 has_mapping;
     VdFcMapping                         mapping;
+    // Empty unless an added mapping matched guid and had a name
+    char                                mapping_name[VD_FC_DEVICE_NAME_MAX];
     // Bound instead when no added mapping matches guid
     const VdFcMapping                   *default_mapping;
     VdFcState                           sym_state;
@@ -1796,6 +1812,9 @@ typedef struct {
     VdFcMappingEntry                    *mapping_entries;
     int                                 num_mapping_entries;
     int                                 cap_mapping_entries;
+    char                                *mapping_names;
+    int                                 num_mapping_names;
+    int                                 cap_mapping_names;
 
 } VdFc__Win32InternalData;
 static VdFc__Win32InternalData Vd_Fc_G = {0};
@@ -1938,12 +1957,16 @@ VD_FC_API void vd_fc_quit(void)
 
     VD_FC_FREE(Vd_Fc_G.mappings, sizeof(*Vd_Fc_G.mappings) * Vd_Fc_G.cap_mappings);
     VD_FC_FREE(Vd_Fc_G.mapping_entries, sizeof(*Vd_Fc_G.mapping_entries) * Vd_Fc_G.cap_mapping_entries);
+    VD_FC_FREE(Vd_Fc_G.mapping_names, sizeof(*Vd_Fc_G.mapping_names) * Vd_Fc_G.cap_mapping_names);
     Vd_Fc_G.mappings            = 0;
     Vd_Fc_G.num_mappings        = 0;
     Vd_Fc_G.cap_mappings        = 0;
     Vd_Fc_G.mapping_entries     = 0;
     Vd_Fc_G.num_mapping_entries = 0;
     Vd_Fc_G.cap_mapping_entries = 0;
+    Vd_Fc_G.mapping_names       = 0;
+    Vd_Fc_G.num_mapping_names   = 0;
+    Vd_Fc_G.cap_mapping_names   = 0;
 }
 
 VD_FC_API void vd_fc_poll(void)
@@ -2562,8 +2585,8 @@ static VdFcLRESULT vd_fc__win32_wndproc(VdFcHWND hwnd, VdFcUINT msg, VdFcWPARAM 
                 }
 
                 if (gamepad_index != -1) {
-                    for (VdFwDWORD ri = 0; ri < raw->data.hid.dwCount; ++ri) {
-                        VdFwBYTE *bytes = &raw->data.hid.bRawData[0] + ri * (raw->data.hid.dwSizeHid);
+                    for (VdFcDWORD ri = 0; ri < raw->data.hid.dwCount; ++ri) {
+                        VdFcBYTE *bytes = &raw->data.hid.bRawData[0] + ri * (raw->data.hid.dwSizeHid);
                         vd_fc__win32_rawinput_handle_state(&Vd_Fc_G.devices[gamepad_index], bytes, raw->data.hid.dwSizeHid);
                     }
                 }
@@ -2821,7 +2844,7 @@ static int vd_fc__win32_rawinput_handle_gidc_arrival(VdFcHANDLE devhandle)
     int num_hats = 0;
     int num_axes = 0;
 
-    VdFwULONG data_count = VdFcHidP_MaxDataListLength(VdFcHidP_Input, device->ppd);
+    VdFcULONG data_count = VdFcHidP_MaxDataListLength(VdFcHidP_Input, device->ppd);
     if (data_count > sizeof(device->data.rinput.hidp_data)/sizeof(device->data.rinput.hidp_data[0])) {
         VD_FC_LOG("Warning. HidP_MaxDataListLength reported %lu data indices, which are more than max supported (%llu)",
                   data_count, sizeof(device->data.rinput.hidp_data)/sizeof(device->data.rinput.hidp_data[0]));
@@ -2937,7 +2960,7 @@ static int vd_fc__win32_rawinput_handle_gidc_arrival(VdFcHANDLE devhandle)
         }
 
         if (button_caps[i].IsRange) {
-            VdFwUSHORT usage_count = 1 + button_caps[i].v.Range.DataIndexMax - button_caps[i].v.Range.DataIndexMin;
+            VdFcUSHORT usage_count = 1 + button_caps[i].v.Range.DataIndexMax - button_caps[i].v.Range.DataIndexMin;
             for (int j = 0; j < usage_count; ++j) {
                 if (count_buttons == num_buttons) {
                     break;
@@ -3509,6 +3532,11 @@ VD_FC_API VdFcRumbleState vd_fc_ff_rumble_get(int id)
     return state;
 }
 
+VD_FC_API VdFcPlatform vd_fc_platform(void)
+{
+    return VD_FC_PLATFORM_WINDOWS;
+}
+
 #endif // _WIN32
 
 /* ----CROSS PLATFORM PROCEDURES IMPL-------------------------------------------------------------------------------- */
@@ -3599,14 +3627,14 @@ static VdFcGuid vd_fc__make_gamepad_guid(uint16_t bus, uint16_t vendor, uint16_t
     uint16_t *guid16 = (uint16_t*)result.dat;
     uint16_t crc = 0;
 
-    VD_FW_MEMSET(&result, 0, sizeof(result));
+    VD_FC_MEMSET(&result, 0, sizeof(result));
 
     if (vendor_name && *vendor_name && product_name && *product_name) {
-        crc = vd_fc__crc16(crc, vendor_name,  vd_fw__strlen(vendor_name));
+        crc = vd_fc__crc16(crc, vendor_name,  vd_fc__strlen(vendor_name));
         crc = vd_fc__crc16(crc, " ", 1);
-        crc = vd_fc__crc16(crc, product_name, vd_fw__strlen(product_name));
+        crc = vd_fc__crc16(crc, product_name, vd_fc__strlen(product_name));
     } else if (product_name) {
-        crc = vd_fc__crc16(crc, product_name, vd_fw__strlen(product_name));
+        crc = vd_fc__crc16(crc, product_name, vd_fc__strlen(product_name));
     }
 
     *guid16++ = VD_FC_SWAP16LE(bus);
@@ -3630,7 +3658,7 @@ static VdFcGuid vd_fc__make_gamepad_guid(uint16_t bus, uint16_t vendor, uint16_t
         }
 
         if (product_name) {
-            vd_fw__strlcpy((char*)guid16, product_name, avail);
+            vd_fc__strlcpy((char*)guid16, product_name, avail);
         }
     }
 
@@ -3866,10 +3894,16 @@ static const char *Vd_Fc__Mapping_Axis_Names[VD_FC_AXIS_MAX] = {
     "lefttrigger",  "righttrigger",
 };
 
+static const char *Vd_Fc__Platform_Name[VD_FC_PLATFORM_MAX] = {
+    "Windows",
+    "Linux",
+    "Mac OS X",
+};
+
 static int vd_fc__mapping_parse(const char *line, int len, VdFcDbMapping *mapping, int *out_platform_match)
 {
     VD_FC_MEMSET(mapping, 0, sizeof(*mapping));
-    *out_platform_match = 1;
+    *out_platform_match = 0;
 
     if (len < 0) {
         len = vd_fc__strlen(line);
@@ -3892,11 +3926,12 @@ static int vd_fc__mapping_parse(const char *line, int len, VdFcDbMapping *mappin
         mapping->guid.dat[i] = (uint8_t)((hi << 4) | lo);
     }
 
-    // Skip name
     int at = 33;
     while ((at < len) && (line[at] != ',')) {
         at++;
     }
+    mapping->name     = line + 33;
+    mapping->name_len = at - 33;
 
     while (at < len) {
         int field_begin = ++at;
@@ -3919,7 +3954,20 @@ static int vd_fc__mapping_parse(const char *line, int len, VdFcDbMapping *mappin
         int         val_len = at - colon - 1;
 
         if (vd_fc__streq(key, key_len, "platform")) {
-            *out_platform_match = vd_fc__streq(val, val_len, VD_FC__PLATFORM_NAME);
+
+            VdFcPlatform plat = VD_FC_PLATFORM_MAX;
+            for (int p = VD_FC_PLATFORM_WINDOWS; p < VD_FC_PLATFORM_MAX; ++p) {
+                if (vd_fc__streq(val, val_len, Vd_Fc__Platform_Name[p])) {
+                    plat = (VdFcPlatform)p;
+                    break;
+                }
+            }
+
+            if (vd_fc_platform() == plat) {
+                *out_platform_match = 1;
+            }
+
+            mapping->platform = plat;
         } else if (vd_fc__streq(key, key_len, "crc")) {
             // Mapping GUIDs never carry a CRC, so its slot holds the one the device must have, if any
             uint16_t crc = 0;
@@ -4068,6 +4116,14 @@ static int vd_fc__mapping_store(VdFcDbMapping *mapping)
         return 0;
     }
 
+    // Truncated to what a device can hold anyway
+    int name_len = mapping->name ? mapping->name_len : 0;
+    if (name_len < 0) {
+        name_len = 0;
+    } else if (name_len > (VD_FC_DEVICE_NAME_MAX - 1)) {
+        name_len = VD_FC_DEVICE_NAME_MAX - 1;
+    }
+
     if (Vd_Fc_G.num_mappings == Vd_Fc_G.cap_mappings) {
         int new_cap = Vd_Fc_G.cap_mappings ? Vd_Fc_G.cap_mappings * 2 : 64;
         void *p = VD_FC_REALLOC(Vd_Fc_G.mappings,
@@ -4098,16 +4154,40 @@ static int vd_fc__mapping_store(VdFcDbMapping *mapping)
         Vd_Fc_G.cap_mapping_entries = new_cap;
     }
 
+    if ((Vd_Fc_G.num_mapping_names + name_len) > Vd_Fc_G.cap_mapping_names) {
+        int new_cap = Vd_Fc_G.cap_mapping_names ? Vd_Fc_G.cap_mapping_names * 2 : 4096;
+        while (new_cap < (Vd_Fc_G.num_mapping_names + name_len)) {
+            new_cap *= 2;
+        }
+
+        void *p = VD_FC_REALLOC(Vd_Fc_G.mapping_names,
+                                sizeof(*Vd_Fc_G.mapping_names) * Vd_Fc_G.cap_mapping_names,
+                                sizeof(*Vd_Fc_G.mapping_names) * new_cap);
+        if (!p) {
+            return 0;
+        }
+
+        Vd_Fc_G.mapping_names     = (char*)p;
+        Vd_Fc_G.cap_mapping_names = new_cap;
+    }
+
     VdFc__MappingRecord *record = &Vd_Fc_G.mappings[Vd_Fc_G.num_mappings++];
     record->guid        = mapping->guid;
     record->first_entry = Vd_Fc_G.num_mapping_entries;
     record->num_entries = num_entries;
+    record->first_name  = Vd_Fc_G.num_mapping_names;
+    record->name_len    = name_len;
 
     if (num_entries > 0) {
         VD_FC_MEMCPY(Vd_Fc_G.mapping_entries + record->first_entry, mapping->map.entries,
                      sizeof(*Vd_Fc_G.mapping_entries) * num_entries);
     }
     Vd_Fc_G.num_mapping_entries += num_entries;
+
+    if (name_len > 0) {
+        VD_FC_MEMCPY(Vd_Fc_G.mapping_names + record->first_name, mapping->name, name_len);
+    }
+    Vd_Fc_G.num_mapping_names += name_len;
 
     return 1;
 }
@@ -4155,6 +4235,7 @@ static void vd_fc__device_bind_mapping(VdFc__Device *device)
 
     device->has_mapping         = 0;
     device->mapping.num_entries = 0;
+    device->mapping_name[0]     = 0;
 
     if (record) {
         device->has_mapping         = 1;
@@ -4162,6 +4243,11 @@ static void vd_fc__device_bind_mapping(VdFc__Device *device)
         if (record->num_entries > 0) {
             VD_FC_MEMCPY(device->mapping.entries, Vd_Fc_G.mapping_entries + record->first_entry,
                          sizeof(device->mapping.entries[0]) * record->num_entries);
+        }
+
+        if (record->name_len > 0) {
+            VD_FC_MEMCPY(device->mapping_name, Vd_Fc_G.mapping_names + record->first_name, record->name_len);
+            device->mapping_name[record->name_len] = 0;
         }
     } else if (device->default_mapping) {
         device->has_mapping         = 1;
@@ -4295,7 +4381,9 @@ VD_FC_API int vd_fc_id_from_uid(uint64_t uid)
 VD_FC_API const char *vd_fc_name(int id)
 {
     if (id < Vd_Fc_G.num_devices) {
-        if (Vd_Fc_G.devices[id].common.identified_name != 0) {
+        if (Vd_Fc_G.devices[id].mapping_name[0] != 0) {
+            return Vd_Fc_G.devices[id].mapping_name;
+        } else if (Vd_Fc_G.devices[id].common.identified_name != 0) {
             return Vd_Fc_G.devices[id].common.identified_name;
         } else {
             return Vd_Fc_G.devices[id].name;

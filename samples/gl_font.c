@@ -3,10 +3,10 @@
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #endif // defined(__clang__)
 
-// #ifdef VD_SAMPLES_FREETYPE
+#ifdef VD_SAMPLES_FREETYPE
 // #   define VD_FT_RASTER_BACKEND VD_FT_RASTER_BACKEND_FREETYPE
 // #   define VD_FT_SHAPE_BACKEND VD_FT_SHAPE_BACKEND_KB_TEXT_SHAPE
-// #endif
+#endif
 
 #define VD_USE_CRT 1
 #define VD_FW_NO_CRT 0
@@ -104,6 +104,7 @@ static int cache_needs_resubmit = 0;
 static GLuint cache_atlas;
 static int atlas_width = 2048;
 static int atlas_height = 2048;
+
 Glyph get_or_create_glyph(VdFtFace face, float size, uint16_t index)
 {
     GlyphKey key;
@@ -238,7 +239,7 @@ int main(int argc, char const *argv[])
 
     vd_init(0);
 
-    VdArena arena = vd_arena_from_malloc(VD_KILOBYTES(128));
+    VdArena arena = vd_arena_from_malloc(KILOBYTES(128));
     VD_KVMAP_INIT_DEFAULT(glyph_map, &arena);
 
     atlas = malloc(atlas_width * atlas_height);
@@ -572,13 +573,16 @@ int main(int argc, char const *argv[])
         // vd_ft_box_font_style_set(VD_FT_STYLE_ITALIC);
         // vd_ft_box_push(LITERAL_AND_LENGTH(" but now also italic! Oooooh!"));
 
-        // vd_ft_box_font_size_set(16.f);
-        // vd_ft_box_font_style_set(VD_FT_STYLE_ITALIC);
-        // vd_ft_box_push(LITERAL_AND_LENGTH(" but now also smol! Oooooh!"));
+        vd_ft_box_font_size_set(16.f);
+        vd_ft_box_font_style_set(VD_FT_STYLE_ITALIC);
+        vd_ft_box_push(LITERAL_AND_LENGTH(" but now also smol! Oooooh!"));
 
         vd_ft_box_end();
         vd_ft_box_wrap(VD_FT_WRAP_WORD);
-        vd_ft_box_max_width_set(w);
+        vd_ft_box_max_width_set((float)w);
+
+        VdFtHitResult hit = vd_ft_box_hit(mx, my);
+
 
         VdFtRunResult run_result = vd_ft_box_run();
         VdFtRun *runs = run_result.runs;
@@ -656,6 +660,36 @@ int main(int argc, char const *argv[])
             rects_push(&r);
             rects_render();
         }
+
+        rects_begin(Mask1_Texture);
+        if (hit.hit) {
+
+            // Rect r = {
+            //     {hit.caret[0], hit.caret[1]},
+            //     {hit.caret[2], hit.caret[3]},
+            //     {0, 0},
+            //     {1, 1},
+            //     {1, 0, 0, 1},
+            // };
+            Rect r = {
+                {hit.px - 1, hit.py},
+                {hit.px + 1, hit.py + hit.glyph[3] - hit.glyph[1]},
+                {0, 0},
+                {1, 1},
+                {1, 0, 0, 1},
+            };
+            rects_push(&r);
+        } else {
+            Rect r = {
+                {mx - 4, my - 4},
+                {mx + 4, my + 4},
+                {0, 0},
+                {1, 1},
+                {1, 0, 0, 1},
+            };
+            rects_push(&r);
+        }
+        rects_render();
 
         vd_fw_swap();
         vd_fw_unlock();
