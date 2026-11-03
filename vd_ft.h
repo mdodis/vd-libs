@@ -3081,7 +3081,7 @@ VD_FT_API unsigned int vd_ft_collection_family_count(VdFtCollection collection)
     unsigned int count = 0;
     VdFtIDWriteFontCollection *fc = (VdFtIDWriteFontCollection*)collection.hnd;
 
-    if (collection.source == 0) {
+    if (collection.source == VD_FT_SOURCE_SYSTEM) {
         fc = Vd_Ft_G.system_font_collection;
     }
     
@@ -3098,7 +3098,7 @@ VD_FT_API VdFtFamily vd_ft_collection_family_from_index(VdFtCollection collectio
     int family_source = VD_FT_SOURCE_MEMORY;
     void *family_mem_file = 0;
     size_t family_mem_file_size = 0;
-    if (collection.source == 0) {
+    if (collection.source == VD_FT_SOURCE_SYSTEM) {
         fc = Vd_Ft_G.system_font_collection;
         family_source = VD_FT_SOURCE_SYSTEM;
     } else {
@@ -3550,92 +3550,96 @@ VD_FT_API VdFtHitResult vd_ft_box_hit(float x, float y)
 
     VD_FT__WIN32_CHECK_HRESULT(Vd_Ft_G.curr_text_layout->lpVtbl->HitTestPoint(Vd_Ft_G.curr_text_layout, x, y,
                                                                               &trailing, &inside, &metrics));
-    result.glyph[0] = metrics.left;
-    result.glyph[1] = metrics.top;
-    result.glyph[2] = metrics.left + metrics.width;
-    result.glyph[3] = metrics.top + metrics.height;
+    if (trailing) {
+        result.glyph[0] = metrics.left + metrics.width;
+        result.glyph[1] = metrics.top;
+        result.glyph[2] = metrics.left + metrics.width * 2;
+        result.glyph[3] = metrics.top + metrics.height;
+    } else {
+        result.glyph[0] = metrics.left;
+        result.glyph[1] = metrics.top;
+        result.glyph[2] = metrics.left + metrics.width;
+        result.glyph[3] = metrics.top + metrics.height;
+    }
+
     result.hit = inside;
 
-    if (inside) {
-        uint32_t text_position;
+    uint32_t text_position;
 
-        VD_FT__WIN32_CHECK_HRESULT(Vd_Ft_G.curr_text_layout->lpVtbl->HitTestTextPosition(Vd_Ft_G.curr_text_layout,
-                                                                                         metrics.textPosition,
-                                                                                         trailing, &result.px, &result.py,
-                                                                                         &metrics));
+    VD_FT__WIN32_CHECK_HRESULT(Vd_Ft_G.curr_text_layout->lpVtbl->HitTestTextPosition(Vd_Ft_G.curr_text_layout,
+                                                                                     metrics.textPosition,
+                                                                                     trailing, &result.px, &result.py,
+                                                                                     &metrics));
 
-        text_position = metrics.textPosition;
-        // Find cluster closest to where we hit
-        VdFt__Cluster *cluster = 0;
+    text_position = metrics.textPosition;
+    // Find cluster closest to where we hit
+    VdFt__Cluster *cluster = 0;
 
-        for (int i = 0; i < Vd_Ft_G.cluster_buffer.clusters_len; ++i) {
-            VdFt__Cluster *c = &Vd_Ft_G.cluster_buffer.clusters[i];
+    for (int i = 0; i < Vd_Ft_G.cluster_buffer.clusters_len; ++i) {
+        VdFt__Cluster *c = &Vd_Ft_G.cluster_buffer.clusters[i];
 
-            uint32_t begin = c->start;
-            uint32_t end   = c->start + c->count;
+        uint32_t begin = c->start;
+        uint32_t end   = c->start + c->count;
 
-            if ((begin <= text_position) && (text_position <= end)) {
-                // Found cluster
-                cluster = c;
-                break;
-            }
+        if ((begin <= text_position) && (text_position <= end)) {
+            // Found cluster
+            cluster = c;
+            break;
         }
+    }
 
-        // We need to determine which byte of source text we hit
-        if (cluster) {
-            uint32_t buff_i = cluster->start;
-            uint32_t buff_p = buff_i;
-            uint32_t u8_i   = cluster->source_start;
-            uint32_t u8_p   = u8_i;
+    // We need to determine which byte of source text we hit
+    if (cluster) {
+        uint16_t *text    = (uint16_t*)Vd_Ft_G.cluster_buffer.curr_text_buffer;
+        uint32_t text_len = Vd_Ft_G.cluster_buffer.curr_text_len;
+        uint32_t buff_i   = cluster->start;
+        uint32_t u8_i     = cluster->source_start;
 
-            // @note(mdodis): omg we're gonna waste so much time with this
-            while (buff_i < text_position) {
-                uint16_t *p = (uint16_t*)((uint8_t*)Vd_Ft_G.cluster_buffer.curr_text_buffer + buff_i);
-                uint32_t c = p[0];
-                uint32_t codepoint;
-                uint32_t utf16_bytes;
+        // @note(mdodis): omg we're gonna waste so much time with this
+        // buff_i/text_position are UTF-16 code unit indices, u8_i is a UTF-8 byte offset.
+        while (buff_i < text_position) {
+            uint32_t c = text[buff_i];
+            uint32_t codepoint;
+            uint32_t utf16_units;
 
-                if (c >= 0xD800 && c <= 0xDBFF) {
-                    uint32_t next = p[1];
+            if (c >= 0xD800 && c <= 0xDBFF && (buff_i + 1) < text_len) {
+                uint32_t next = text[buff_i + 1];
 
-                    if (next >= 0xDC00 && next <= 0xDFFF) {
-                        codepoint =
-                            0x10000 +
-                            ((c - 0xD800) << 10) +
-                            (next - 0xDC00);
+                if (next >= 0xDC00 && next <= 0xDFFF) {
+                    codepoint =
+                        0x10000 +
+                        ((c - 0xD800) << 10) +
+                        (next - 0xDC00);
 
-                        utf16_bytes = 4;
-                    } else {
-                        // Invalid UTF-16
-                        codepoint = 0xFFFD;
-                        utf16_bytes = 2;
-                    }
+                    utf16_units = 2;
                 } else {
-                    codepoint = c;
-                    utf16_bytes = 2;
+                    // Invalid UTF-16
+                    codepoint = 0xFFFD;
+                    utf16_units = 1;
                 }
-
-                // How many UTF-8 bytes this codepoint occupies
-                uint32_t utf8_bytes;
-
-                if (codepoint <= 0x7F) {
-                    utf8_bytes = 1;
-                } else if (codepoint <= 0x7FF) {
-                    utf8_bytes = 2;
-                } else if (codepoint <= 0xFFFF) {
-                    utf8_bytes = 3;
-                } else {
-                    utf8_bytes = 4;
-                }
-
-                buff_p = buff_i;
-                buff_i += utf16_bytes;
-                u8_p = u8_i;
-                u8_i += utf8_bytes;
+            } else {
+                codepoint = c;
+                utf16_units = 1;
             }
 
-            result.text_pos = (int)u8_i;
+            // How many UTF-8 bytes this codepoint occupies
+            uint32_t utf8_bytes;
+
+            if (codepoint <= 0x7F) {
+                utf8_bytes = 1;
+            } else if (codepoint <= 0x7FF) {
+                utf8_bytes = 2;
+            } else if (codepoint <= 0xFFFF) {
+                utf8_bytes = 3;
+            } else {
+                utf8_bytes = 4;
+            }
+
+            buff_i += utf16_units;
+            u8_i += utf8_bytes;
         }
+
+        result.text_pos = (int)u8_i;
     }
 
     return result;
